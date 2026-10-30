@@ -176,7 +176,34 @@ fn select_best_positive_work_contact(
                 };
                 // Fixture-only filtering: production may correctly select a
                 // zero-work contact when the reactants are already touching.
-                if !formation_work.is_finite() || formation_work <= 1e-9 {
+                if !formation_work.is_finite()
+                    || formation_work <= 1e-9
+                    || evaluation.candidate.distance > 0.25
+                    || evaluation.candidate.facing <= 0.5
+                {
+                    continue;
+                }
+                let name_a = structure.units[unit_a]
+                    .material
+                    .parts
+                    .first()
+                    .map(|part| part.0.as_str());
+                let name_b = structure.units[unit_b]
+                    .material
+                    .parts
+                    .first()
+                    .map(|part| part.0.as_str());
+                let live_interface = name_a.zip(name_b).and_then(|(name_a, name_b)| {
+                    crate::geometry_reference_library::resolve_live_contact_candidate(
+                        name_a,
+                        &structure.units[unit_a],
+                        name_b,
+                        &structure.units[unit_b],
+                        evaluation.candidate,
+                        catalog,
+                    )
+                });
+                if live_interface.is_none() {
                     continue;
                 }
                 return Some(SelectedContact {
