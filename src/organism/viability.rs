@@ -162,7 +162,7 @@ mod tests {
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("fixture begins with a sealed cavity");
