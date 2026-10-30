@@ -585,6 +585,25 @@ pub(crate) struct Environment {
     #[serde(default)]
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalChemistryTickDiagnostics {
+    pub(crate) tick: u64,
+    pub(crate) break_ready_candidates: usize,
+    pub(crate) break_scheduled: usize,
+    pub(crate) break_committed: usize,
+    pub(crate) break_rejected: usize,
+    pub(crate) break_discovery_work_remaining: usize,
+    pub(crate) break_realization_work_remaining: usize,
+    pub(crate) combine_ready_candidates: usize,
+    pub(crate) combine_scheduled: usize,
+    pub(crate) combine_committed: usize,
+    pub(crate) combine_rejected: usize,
+    pub(crate) combine_discovery_work_remaining: usize,
+    pub(crate) combine_realization_work_remaining: usize,
+    pub(crate) accumulation_entries: usize,
+    pub(crate) hotspot_settlement_succeeded: Option<bool>,
+}
+
 #[derive(Clone)]
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
@@ -611,6 +630,8 @@ pub(crate) struct Simulation {
     pub(crate) world_tone_cycle: Option<crate::world_tone::WorldToneCycle>,
     /// Localized radial energy source for the environmental chemistry experiment.
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
+    /// Last-tick environmental reaction counters for UI and headless diagnostics.
+    pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
