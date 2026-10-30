@@ -362,8 +362,12 @@ pub(crate) fn accumulate(
             accumulation.remove(&key);
             continue;
         }
-        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
-        else {
+        let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
+            bond.strength,
+            a.reactivity,
+            b.reactivity,
+            baselines.reactivity,
+        ) else {
             continue;
         };
 
@@ -386,19 +390,18 @@ pub(crate) fn accumulate(
         // Activation is an independent signal threshold. Compatible
         // resonance may fund disruption work at settlement, but it cannot
         // lower the activation threshold or be counted in the accumulator.
-        let effective_barrier = barrier;
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
             continue;
         };
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(activation_signal, effective_barrier) {
+        if crate::chemistry::activated(activation_signal, disruption_cost) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
                 activation_signal,
-                disruption_cost: barrier,
+                disruption_cost,
                 reaction_frequency_hz,
                 accumulation_key: key.clone(),
                 accumulated_reaction: next,
@@ -684,8 +687,12 @@ pub(crate) fn accumulate_environmental(
             continue;
         }
         let strength = crate::combine::bond_strength(a, b);
-        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(strength)
-        else {
+        let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
+            strength,
+            a.reactivity,
+            b.reactivity,
+            baselines.reactivity,
+        ) else {
             continue;
         };
         let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
@@ -710,7 +717,7 @@ pub(crate) fn accumulate_environmental(
         // prior environmental progress. Mark a key current only after the
         // candidate completes a valid reaction evaluation.
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(activation_signal, barrier) {
+        if crate::chemistry::activated(activation_signal, disruption_cost) {
             operations.push(EnvironmentalChemicalBreakOperation {
                 cell_index,
                 material_index,
@@ -718,7 +725,7 @@ pub(crate) fn accumulate_environmental(
                 source_material: instance.clone(),
                 bond: connection.clone(),
                 activation_signal,
-                disruption_cost: barrier,
+                disruption_cost,
                 reaction_frequency_hz,
                 accumulation_key: key,
                 accumulated_reaction: next,
