@@ -370,8 +370,10 @@ fn advance_pair_approach(
         }
     }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-    let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+    let reaction_properties_a = source_a.material.weighted_properties(&environment.catalog);
+    let reaction_properties_b = source_b.material.weighted_properties(&environment.catalog);
+    let frequency_a = crate::harmonics::natural_frequency_hz(reaction_properties_a, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_hz(reaction_properties_b, baselines);
     if !frequency_a.is_finite()
         || frequency_a <= 0.0
         || !frequency_b.is_finite()
