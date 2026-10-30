@@ -128,6 +128,7 @@ fn approach_stage(
     structure: &OrganismStructure,
     indices_a: &[usize],
     indices_b: &[usize],
+    obstacle_indices: &[usize],
     selected: SelectedContact,
     step: f64,
     mass_a: f64,
@@ -217,6 +218,21 @@ fn approach_stage(
             &staged,
             &staged.units[index],
             indices_b,
+            &environment.catalog,
+        ) || crate::construction_runtime::placed_unit_overlaps(
+            &staged,
+            &staged.units[index],
+            obstacle_indices,
+            &environment.catalog,
+        ) {
+            return None;
+        }
+    }
+    for &index in indices_b {
+        if crate::construction_runtime::placed_unit_overlaps(
+            &staged,
+            &staged.units[index],
+            obstacle_indices,
             &environment.catalog,
         ) {
             return None;
@@ -311,6 +327,38 @@ fn advance_pair_approach(
     if static_potential <= 0.0 {
         return false;
     }
+    let Some(body) =
+        crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(structure)
+    else {
+        return false;
+    };
+    let nearby_cells = environment.field.cells_intersecting_bounds_limited(
+        body.min_x - BOUNDS_PADDING,
+        body.max_x + BOUNDS_PADDING,
+        body.min_y - BOUNDS_PADDING,
+        body.max_y + BOUNDS_PADDING,
+        FIELD_TARGET_CELL_INSPECTION_LIMIT,
+        cell_a.wrapping_add(cell_b),
+    );
+    let mut collision_structure = structure.clone();
+    let mut obstacle_indices = Vec::new();
+    for nearby_cell in nearby_cells {
+        for physical in &environment.field.cells[nearby_cell].physical_materials {
+            if physical.instance_id == source_a.instance_id
+                || physical.instance_id == source_b.instance_id
+            {
+                continue;
+            }
+            if let Some(indices) = crate::material_restoration::restore_material(
+                &mut collision_structure,
+                physical,
+                origin(),
+                &environment.catalog,
+            ) {
+                obstacle_indices.extend(indices);
+            }
+        }
+    }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
     let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
@@ -365,9 +413,10 @@ fn advance_pair_approach(
             break;
         }
         let Some(staged) = approach_stage(
-            structure,
+            &collision_structure,
             indices_a,
             indices_b,
+            &obstacle_indices,
             selected,
             step,
             properties_a.mass,
