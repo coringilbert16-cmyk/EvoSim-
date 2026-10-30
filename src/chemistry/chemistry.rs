@@ -391,16 +391,12 @@ mod tests {
 
     #[test]
     fn bond_property_barrier_is_symmetric_and_reactivity_reduces_tolerance() {
-        let low_reactivity =
-            activation_barrier_from_bond_properties(0.8, 0.0, 0.0, 2.0).unwrap();
+        let low_reactivity = activation_barrier_from_bond_properties(0.8, 0.0, 0.0, 2.0).unwrap();
         let baseline_reactivity =
             activation_barrier_from_bond_properties(0.8, 2.0, 2.0, 2.0).unwrap();
-        let high_reactivity =
-            activation_barrier_from_bond_properties(0.8, 4.0, 4.0, 2.0).unwrap();
-        let mixed_ab =
-            activation_barrier_from_bond_properties(0.8, 0.0, 4.0, 2.0).unwrap();
-        let mixed_ba =
-            activation_barrier_from_bond_properties(0.8, 4.0, 0.0, 2.0).unwrap();
+        let high_reactivity = activation_barrier_from_bond_properties(0.8, 4.0, 4.0, 2.0).unwrap();
+        let mixed_ab = activation_barrier_from_bond_properties(0.8, 0.0, 4.0, 2.0).unwrap();
+        let mixed_ba = activation_barrier_from_bond_properties(0.8, 4.0, 0.0, 2.0).unwrap();
 
         assert!(low_reactivity > baseline_reactivity);
         assert!(baseline_reactivity > high_reactivity);
@@ -410,10 +406,8 @@ mod tests {
 
     #[test]
     fn bond_property_barrier_scales_with_intrinsic_bond_strength() {
-        let weak =
-            activation_barrier_from_bond_properties(0.25, 1.0, 1.0, 2.0).unwrap();
-        let strong =
-            activation_barrier_from_bond_properties(0.75, 1.0, 1.0, 2.0).unwrap();
+        let weak = activation_barrier_from_bond_properties(0.25, 1.0, 1.0, 2.0).unwrap();
+        let strong = activation_barrier_from_bond_properties(0.75, 1.0, 1.0, 2.0).unwrap();
 
         assert!((strong / weak - 3.0).abs() < 1e-12);
     }
