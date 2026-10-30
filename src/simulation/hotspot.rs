@@ -21,7 +21,7 @@ pub(crate) struct RadialHotspot {
 
 impl RadialHotspot {
     /// Place one hotspot in the right-hand bend, between the right eddy center
-    /// and the adjacent S-flow spine. The radius scales with the world height.
+    /// and the adjacent S-flow spine. The radius scales with the smaller world dimension.
     pub(crate) fn right_bend_for_world(width: f64, height: f64) -> Option<Self> {
         if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
             return None;
