@@ -1271,4 +1271,180 @@ mod shape_tests {
             assert_eq!(restored.physical_state, resource.physical_state);
         }
     }
+
+    #[test]
+    fn molecular_characterization_preserves_constituents_and_derives_extensive_properties() {
+        let catalog = default_catalog();
+        let parts = vec![
+            ("Carbon".to_owned(), 1.0),
+            ("Hydrogen".to_owned(), 1.0),
+            ("Oxygen".to_owned(), 1.0),
+            ("Nitrogen".to_owned(), 1.0),
+        ];
+        let molecule = Material {
+            parts: parts.clone(),
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+                InternalBond {
+                    part_a: 2,
+                    part_b: 3,
+                },
+            ],
+        };
+
+        assert!(molecule.is_valid_for_catalog(&catalog));
+        assert_eq!(
+            molecule.parts, parts,
+            "constituent identities and ordering remain explicit"
+        );
+        assert_eq!(
+            molecule.internal_bonds.len(),
+            3,
+            "the molecular bond graph remains explicit"
+        );
+
+        let expected_mass: f64 = molecule
+            .parts
+            .iter()
+            .map(|(name, amount)| {
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .unwrap()
+                    .properties
+                    .mass
+                    * amount
+            })
+            .sum();
+        let expected_capacity: f64 = molecule
+            .parts
+            .iter()
+            .map(|(name, amount)| {
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .unwrap()
+                    .properties
+                    .potential_energy
+                    * amount
+            })
+            .sum();
+        assert!((molecule.mass(&catalog) - expected_mass).abs() < 1e-12);
+        assert!((molecule.potential_energy(&catalog) - expected_capacity).abs() < 1e-12);
+
+        let aggregate = molecule.weighted_properties(&catalog);
+        let total_amount = molecule.total_amount();
+        let expected_reactivity: f64 = molecule
+            .parts
+            .iter()
+            .map(|(name, amount)| {
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .unwrap()
+                    .properties
+                    .reactivity
+                    * amount
+            })
+            .sum::<f64>()
+            / total_amount;
+        let expected_cohesion: f64 = molecule
+            .parts
+            .iter()
+            .map(|(name, amount)| {
+                catalog
+                    .iter()
+                    .find(|resource| resource.name == *name)
+                    .unwrap()
+                    .properties
+                    .cohesion
+                    * amount
+            })
+            .sum::<f64>()
+            / total_amount;
+        assert!((aggregate.reactivity - expected_reactivity).abs() < 1e-12);
+        assert!((aggregate.cohesion - expected_cohesion).abs() < 1e-12);
+        assert_eq!(
+            aggregate.chemical_position, None,
+            "mixed chemical position must remain constituent-specific, never averaged"
+        );
+        assert_eq!(aggregate.mass, expected_mass / total_amount);
+        assert_eq!(aggregate.potential_energy, expected_capacity / total_amount);
+    }
+
+    #[test]
+    fn molecular_topology_changes_identity_without_changing_composition_descriptors() {
+        let catalog = default_catalog();
+        let parts = vec![
+            ("Carbon".to_owned(), 1.0),
+            ("Hydrogen".to_owned(), 1.0),
+            ("Oxygen".to_owned(), 1.0),
+            ("Nitrogen".to_owned(), 1.0),
+        ];
+        let linear = Material {
+            parts: parts.clone(),
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+                InternalBond {
+                    part_a: 2,
+                    part_b: 3,
+                },
+            ],
+        };
+        let branched = Material {
+            parts,
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 0,
+                    part_b: 2,
+                },
+                InternalBond {
+                    part_a: 0,
+                    part_b: 3,
+                },
+            ],
+        };
+
+        assert!(linear.is_valid_for_catalog(&catalog));
+        assert!(branched.is_valid_for_catalog(&catalog));
+        assert_ne!(
+            linear, branched,
+            "same composition with a different bond graph is a different molecule"
+        );
+        assert_eq!(linear.parts, branched.parts);
+        assert_eq!(linear.mass(&catalog), branched.mass(&catalog));
+        assert_eq!(
+            linear.potential_energy(&catalog),
+            branched.potential_energy(&catalog)
+        );
+        assert_eq!(
+            linear.weighted_properties(&catalog).reactivity,
+            branched.weighted_properties(&catalog).reactivity
+        );
+        assert_eq!(
+            linear.weighted_properties(&catalog).cohesion,
+            branched.weighted_properties(&catalog).cohesion
+        );
+        assert_eq!(linear.internal_bonds.len(), 3);
+        assert_eq!(branched.internal_bonds.len(), 3);
+        assert_ne!(linear.internal_bonds, branched.internal_bonds);
+    }
 }
