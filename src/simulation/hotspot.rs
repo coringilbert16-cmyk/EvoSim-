@@ -225,7 +225,9 @@ pub(crate) fn settle_environment_inputs(
                     return false;
                 };
 
-                let Some(before) = staged_reservoir.total_energy() else {\n                    return false;\n                };
+                let Some(before) = staged_reservoir.total_energy() else {
+                    return false;
+                };
                 let mut candidate = staged_reservoir.clone();
                 let mut deposit_ok = true;
                 for component in &retained.components {
@@ -238,7 +240,9 @@ pub(crate) fn settle_environment_inputs(
                     }
                 }
                 let captured = if deposit_ok {
-                    let Some(after) = candidate.total_energy() else {\n                        return false;\n                    };
+                    let Some(after) = candidate.total_energy() else {
+                        return false;
+                    };
                     let delta = after - before;
                     if !delta.is_finite() || delta < 0.0 || delta > response_energy + 1e-9 {
                         return false;
