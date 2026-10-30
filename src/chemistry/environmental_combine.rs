@@ -134,7 +134,7 @@ fn approach_stage(
     mass_a: f64,
     mass_b: f64,
     environment: &Environment,
-) -> Option<(OrganismStructure, f64, f64, f64)> {
+) -> Option<(f64, f64, f64)> {
     if !step.is_finite() || step <= 0.0 || !mass_a.is_finite() || !mass_b.is_finite() {
         return None;
     }
@@ -257,7 +257,7 @@ fn approach_stage(
     let moved_distance = (moved_b.x - moved_a.x).hypot(moved_dy);
     moved_distance
         .is_finite()
-        .then_some((staged, moved_distance, dx_a, dy_a))
+        .then_some((moved_distance, dx_a, dy_a))
 }
 
 /// Let chemical attraction perform real approach work. The force advances the
@@ -406,7 +406,7 @@ fn advance_pair_approach(
     }
     let mut low = 0.0;
     let mut high = requested_step;
-    let mut best: Option<(OrganismStructure, f64, f64, f64)> = None;
+    let mut best: Option<(f64, f64, f64)> = None;
     for _ in 0..28 {
         let step = 0.5 * (low + high);
         if step <= 1e-10 {
@@ -434,12 +434,12 @@ fn advance_pair_approach(
         }
         if work <= available + 1e-9 {
             low = step;
-            best = Some((staged.0, staged.1, staged.2, staged.3));
+            best = Some((staged.0, staged.1, staged.2));
         } else {
             high = step;
         }
     }
-    let Some((_, new_distance, dx_a, dy_a)) = best else {
+    let Some((new_distance, dx_a, dy_a)) = best else {
         return false;
     };
     let work = old_remaining
