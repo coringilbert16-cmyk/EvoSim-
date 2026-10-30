@@ -87,6 +87,10 @@ impl Genome {
     }
 
     pub fn mutate(&mut self, rng: &mut ChaCha8Rng) {
+        // Remove the retired serialized trait from genomes created by older
+        // simulation versions; it no longer represents a physical pathway.
+        self.traits
+            .retain(|trait_def| trait_def.name != "processing_efficiency");
         if !self
             .traits
             .iter()
@@ -153,6 +157,23 @@ pub fn initial_genome() -> Genome {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::SeedableRng;
+    #[test]
+    fn mutation_discards_retired_processing_efficiency_from_legacy_genomes() {
+        let mut genome = initial_genome();
+        genome.traits.push(trait_def("processing_efficiency", 0.8, 0.05));
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+
+        genome.mutate(&mut rng);
+
+        assert!(
+            genome
+                .traits
+                .iter()
+                .all(|trait_def| trait_def.name != "processing_efficiency")
+        );
+    }
+
     #[test]
     fn developmental_blueprint_is_the_serialized_structural_authority() {
         let genome = initial_genome();
