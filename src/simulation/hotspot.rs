@@ -145,7 +145,7 @@ pub(crate) fn settle_environment_inputs(
     let mut total_incident = 0.0;
     let mut total_captured = 0.0;
     let mut total_heat = 0.0;
-    let mut total_escaped = 0.0;
+    let total_escaped;
 
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
