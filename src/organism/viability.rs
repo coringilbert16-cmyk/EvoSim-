@@ -162,8 +162,33 @@ mod tests {
     fn unsealed_genome_fails_viability() {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
-        structure.bonds.clear();
+        let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("fixture begins with a sealed cavity");
+        let boundary_unit = *cavity
+            .boundary_units
+            .first()
+            .expect("sealed cavity must have a boundary unit");
+        let removed_id = structure.units[boundary_unit].physical_id;
+
+        // Cavity closure is geometric, not a graph-bond property. Removing a
+        // bond alone leaves the same physical boundary in place, so remove one
+        // boundary constituent and its incident bonds to create a real opening.
+        structure.units.remove(boundary_unit);
+        structure.bonds.retain(|bond| {
+            bond.endpoint_a.constituent_id != removed_id
+                && bond.endpoint_b.constituent_id != removed_id
+        });
+
+        assert_eq!(
+            structure.connected_components().len(),
+            1,
+            "opening the cavity must leave the remaining physical structure connected"
+        );
+        assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
         assert!(validate_realized_organism(
             &structure,
             &catalog,

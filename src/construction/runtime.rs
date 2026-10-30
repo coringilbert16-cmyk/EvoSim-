@@ -2093,6 +2093,26 @@ fn construct_blueprint_bond_driven_internal(
         }
     }
 
+    // Inventory remains untouched throughout speculative construction. Once
+    // every required bond has committed, consume the exact stored entries that
+    // supplied the realized structure. Validate the complete reservation set
+    // before mutating storage so a failed construction cannot partially spend it.
+    if let Some(storage) = available_materials.as_deref_mut() {
+        reserved_storage_indices.sort_unstable();
+        reserved_storage_indices.dedup();
+        if reserved_storage_indices
+            .iter()
+            .any(|&index| index >= storage.entries.len())
+        {
+            return Err("reserved construction material disappeared before commit".to_string());
+        }
+        for index in reserved_storage_indices.into_iter().rev() {
+            storage.entries.remove(index);
+        }
+    }
+
+    *ledger = construction_ledger;
+    *energy = remaining_energy;
     Ok((structure, total_heat))
 }
 

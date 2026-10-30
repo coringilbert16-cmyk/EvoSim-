@@ -114,6 +114,48 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
     normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
 }
 
+/// Derive a bond's disruption tolerance from its cohesion-derived strength
+/// and the two materials' existing reactivity values.
+///
+/// Reactivity is normalized against the catalog mean so the modifier is
+/// dimensionless and remains stable when the catalog's native scale changes.
+/// The arithmetic pair mean lets either reactive constituent increase the
+/// pair's response. Higher reactivity lowers the activation/disruption
+/// tolerance; it does not create energy or alter chemical attraction.
+pub fn activation_barrier_from_bond_properties(
+    bond_strength: f64,
+    reactivity_a: f64,
+    reactivity_b: f64,
+    reactivity_baseline: f64,
+) -> Option<f64> {
+    if !bond_strength.is_finite()
+        || bond_strength < 0.0
+        || !reactivity_a.is_finite()
+        || reactivity_a < 0.0
+        || !reactivity_b.is_finite()
+        || reactivity_b < 0.0
+        || !reactivity_baseline.is_finite()
+        || reactivity_baseline < 0.0
+    {
+        return None;
+    }
+
+    let pair_reactivity = (reactivity_a + reactivity_b) * 0.5;
+    if !pair_reactivity.is_finite() {
+        return None;
+    }
+    let response_factor = if reactivity_baseline <= f64::EPSILON {
+        if pair_reactivity <= f64::EPSILON {
+            1.0
+        } else {
+            return None;
+        }
+    } else {
+        reactivity_baseline / (reactivity_baseline + pair_reactivity)
+    };
+    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0) * response_factor)
+}
+
 /// Convert the normalized accumulated chemistry quantity into physical energy.
 ///
 /// The conversion is derived from the approved force and characteristic contact
@@ -345,6 +387,37 @@ mod tests {
     fn activation_barrier_is_existing_bond_strength() {
         assert_eq!(activation_barrier_from_bond_strength(0.75), Some(0.75));
         assert_eq!(activation_barrier_from_bond_strength(2.0), Some(1.0));
+    }
+
+    #[test]
+    fn bond_property_barrier_is_symmetric_and_reactivity_reduces_tolerance() {
+        let low_reactivity = activation_barrier_from_bond_properties(0.8, 0.0, 0.0, 2.0).unwrap();
+        let baseline_reactivity =
+            activation_barrier_from_bond_properties(0.8, 2.0, 2.0, 2.0).unwrap();
+        let high_reactivity = activation_barrier_from_bond_properties(0.8, 4.0, 4.0, 2.0).unwrap();
+        let mixed_ab = activation_barrier_from_bond_properties(0.8, 0.0, 4.0, 2.0).unwrap();
+        let mixed_ba = activation_barrier_from_bond_properties(0.8, 4.0, 0.0, 2.0).unwrap();
+
+        assert!(low_reactivity > baseline_reactivity);
+        assert!(baseline_reactivity > high_reactivity);
+        assert!((mixed_ab - mixed_ba).abs() < 1e-12);
+        assert!((mixed_ab - baseline_reactivity).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bond_property_barrier_scales_with_intrinsic_bond_strength() {
+        let weak = activation_barrier_from_bond_properties(0.25, 1.0, 1.0, 2.0).unwrap();
+        let strong = activation_barrier_from_bond_properties(0.75, 1.0, 1.0, 2.0).unwrap();
+
+        assert!((strong / weak - 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn bond_property_barrier_rejects_invalid_material_inputs() {
+        assert!(activation_barrier_from_bond_properties(0.5, f64::NAN, 1.0, 1.0).is_none());
+        assert!(activation_barrier_from_bond_properties(0.5, 1.0, -1.0, 1.0).is_none());
+        assert!(activation_barrier_from_bond_properties(0.5, 1.0, 1.0, f64::INFINITY).is_none());
+        assert!(activation_barrier_from_bond_properties(0.5, 1.0, 1.0, 0.0).is_none());
     }
 
     #[test]
