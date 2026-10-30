@@ -608,6 +608,8 @@ pub(crate) struct Simulation {
     pub(crate) world_tone: Option<crate::world_tone::WorldToneRuntimeConfig>,
     /// Precomputed deterministic source samples for short cycles; long cycles fall back to direct sampling.
     pub(crate) world_tone_cycle: Option<crate::world_tone::WorldToneCycle>,
+    /// Localized radial energy source for the environmental chemistry experiment.
+    pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
