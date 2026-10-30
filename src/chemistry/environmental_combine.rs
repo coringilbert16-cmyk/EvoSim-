@@ -2742,6 +2742,24 @@ mod tests {
         );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
+        // With neither compatible resonance nor a usable reserve, COMBINE
+        // must reject without consuming energy or changing either source.
+        let original_resonance = simulation.environment.resonant_energy.clone();
+        simulation.environment.resonant_energy = Default::default();
+        assert!(!resolve_environmental(
+            operation.clone(),
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(
+            simulation.environment.field.cells[cell].physical_materials,
+            original_materials
+        );
+        assert_eq!(simulation.environment.chemistry_usable_energy, original_usable);
+        assert_eq!(simulation.energy_ledger, original_ledger);
+        assert!(simulation.environment.resonant_energy.components.is_empty());
+        simulation.environment.resonant_energy = original_resonance;
+
         let resonant_before = simulation
             .environment
             .resonant_energy
