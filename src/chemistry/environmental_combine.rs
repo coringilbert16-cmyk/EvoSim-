@@ -3044,36 +3044,19 @@ mod tests {
         )
         .expect("selected environmental candidate must remain evaluable");
         assert!(
-            formation_work > 1e-9,
-            "empty-energy rejection requires positive formation work; got {formation_work}"
+            formation_work <= 1e-8,
+            "COMBINE must arrive only after approach work has been settled; remaining={formation_work}"
         );
 
-        // With neither compatible resonance nor a usable reserve, COMBINE
-        // must reject without consuming energy or changing either source.
-        let original_resonance = simulation.environment.resonant_energy.clone();
-        simulation.environment.resonant_energy = Default::default();
-        assert!(!resolve_environmental(
-            operation.clone(),
-            &mut simulation.environment,
-            &mut simulation.energy_ledger,
-        ));
-        assert_eq!(
-            simulation.environment.field.cells[cell].physical_materials,
-            original_materials
-        );
-        assert_eq!(
-            simulation.environment.chemistry_usable_energy,
-            original_usable
-        );
-        assert_eq!(simulation.energy_ledger, original_ledger);
-        assert!(simulation.environment.resonant_energy.components.is_empty());
-        simulation.environment.resonant_energy = original_resonance;
-
-        let resonant_before = simulation
+        let resonant_before_commit = simulation
             .environment
             .resonant_energy
             .total_energy()
             .expect("test resonance inventory must be valid");
+        assert!(
+            resonant_before_commit < baseline.current_resonant_energy - 1e-9,
+            "the physical approach must already have withdrawn compatible resonance"
+        );
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
@@ -3081,16 +3064,16 @@ mod tests {
         ));
         assert!(
             simulation.environment.chemistry_usable_energy <= 1e-9,
-            "resonance-only COMBINE must not rely on a usable-energy grant"
+            "resonance-funded approach must not rely on a usable-energy grant"
         );
+        let resonant_after_commit = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("post-COMBINE resonance inventory must be valid");
         assert!(
-            simulation
-                .environment
-                .resonant_energy
-                .total_energy()
-                .expect("post-COMBINE resonance inventory must be valid")
-                < resonant_before,
-            "successful COMBINE must withdraw compatible resonant energy"
+            (resonant_after_commit - resonant_before_commit).abs() <= 1e-8,
+            "COMBINE must not charge approach work a second time"
         );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
