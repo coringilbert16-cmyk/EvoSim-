@@ -479,6 +479,32 @@ mod tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
+    fn physical_instance_identity_survives_translation_and_intrinsic_framing() {
+        let catalog = crate::resources::default_catalog();
+        let mut instance = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog,
+        )
+        .expect("carbon should be physically realizable");
+        let identity = instance.instance_id;
+        assert_ne!(identity, 0);
+
+        instance.placements.as_mut().unwrap()[0].x += 3.0;
+        instance.placements.as_mut().unwrap()[0].y -= 2.0;
+        assert_eq!(instance.instance_id, identity);
+
+        let intrinsic = instance
+            .into_intrinsic_frame()
+            .expect("realized material should have an intrinsic frame");
+        assert_eq!(intrinsic.instance_id, identity);
+    }
+
+    #[test]
     fn realized_fluid_shape_area_scales_with_material_amount() {
         let catalog = crate::resources::default_catalog();
         let water = catalog
