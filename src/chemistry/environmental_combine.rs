@@ -204,10 +204,13 @@ fn approach_stage(
         unit.placement.y = (unit.placement.y + dy_b).rem_euclid(environment.height);
         let shape = unit.shape(&environment.catalog)?;
         let radius = shape.form.bounding_radius();
-        if !unit.placement.x.is_finite() || !unit.placement.y.is_finite()
+        if !unit.placement.x.is_finite()
+            || !unit.placement.y.is_finite()
             || unit.placement.x - radius < 0.0
             || unit.placement.x + radius > environment.width
-        { return None; }
+        {
+            return None;
+        }
     }
     for &index in indices_a {
         if crate::construction_runtime::placed_unit_overlaps(
@@ -1674,10 +1677,7 @@ mod tests {
             available_b: true,
         };
         let original = source_pair_key(&a, &b, 0, 0, candidate);
-        assert_ne!(
-            original,
-            source_pair_key(&a, &b, 1, 0, candidate)
-        );
+        assert_ne!(original, source_pair_key(&a, &b, 1, 0, candidate));
         let moved = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
@@ -1688,10 +1688,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert_ne!(
-            original,
-            source_pair_key(&moved, &b, 0, 0, candidate)
-        );
+        assert_ne!(original, source_pair_key(&moved, &b, 0, 0, candidate));
     }
 
     #[test]
@@ -2946,7 +2943,8 @@ mod tests {
                             continue;
                         };
                         if selected.candidate.distance <= 1e-6
-                            || selected.candidate.distance >= crate::chemistry::CHEMICAL_CONTACT_RADIUS
+                            || selected.candidate.distance
+                                >= crate::chemistry::CHEMICAL_CONTACT_RADIUS
                             || selected.candidate.facing <= 0.5
                         {
                             continue;
