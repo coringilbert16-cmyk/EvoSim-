@@ -9,15 +9,28 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut target_births = DEFAULT_TARGET_BIRTHS;
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
+    let mut environment_chemistry_experiment = false;
+    let mut seed = 42_u64;
+    let mut max_ticks_provided = false;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--environment-chemistry-experiment" => {
+                environment_chemistry_experiment = true;
+            }
+            "--seed" => {
+                seed = args
+                    .next()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(42);
+            }
             "--ticks" => {
                 max_ticks = args
                     .next()
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(DEFAULT_MAX_TICKS);
+                max_ticks_provided = true;
             }
             "--births" => {
                 target_births = args
@@ -36,6 +49,23 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             _ => {}
         }
+    }
+
+    if environment_chemistry_experiment {
+        let ticks = if max_ticks_provided {
+            max_ticks
+        } else {
+            24_000
+        };
+        run_environment_chemistry_experiment(
+            seed,
+            ticks,
+            diagnostics_path
+                .as_deref()
+                .unwrap_or("environment-chemistry-diagnostics.jsonl"),
+            diagnostic_interval,
+        );
+        return;
     }
 
     let mut simulation = Simulation::new(42, 10.0);
@@ -148,5 +178,85 @@ fn report(simulation: &Simulation, label: &str) {
         simulation.decomposing_bodies.len(),
         simulation.active_transformations.len(),
         simulation.next_organism_id.saturating_sub(2),
+    );
+}
+
+
+fn run_environment_chemistry_experiment(
+    seed: u64,
+    max_ticks: u64,
+    diagnostics_path: &str,
+    diagnostic_interval: u64,
+) {
+    let fixture = crate::environment_chemistry_experiment::build(seed);
+    let mut simulation = fixture.simulation;
+    let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
+        diagnostics_path,
+        diagnostic_interval,
+        seed,
+        &simulation,
+        &fixture.pile_sizes,
+    )
+    .unwrap_or_else(|error| {
+        panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
+    });
+
+    println!(
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=128 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        simulation.organisms.len(),
+        fixture.pile_sizes,
+        simulation.hotspot
+    );
+
+    for _ in 0..max_ticks {
+        simulation.step();
+        diagnostics
+            .observe(&simulation)
+            .expect("failed to write environmental chemistry diagnostics");
+        if simulation.tick % 1_000 == 0 {
+            let counters = simulation.environmental_chemistry_diagnostics;
+            let energy = simulation.energy_inventory_snapshot();
+            println!(
+                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                simulation.tick,
+                counters.combine_ready_candidates,
+                counters.combine_scheduled,
+                counters.combine_committed,
+                counters.combine_rejected,
+                counters.break_ready_candidates,
+                counters.break_scheduled,
+                counters.break_committed,
+                counters.break_rejected,
+                simulation.environment.field.cells.iter()
+                    .map(|cell| cell.physical_materials.len())
+                    .sum::<usize>(),
+                simulation.environment.field.cells.iter()
+                    .flat_map(|cell| cell.physical_materials.iter())
+                    .map(|material| material.material.parts.len())
+                    .sum::<usize>(),
+                simulation.environment.resonant_energy.total_energy().unwrap_or(f64::NAN),
+                simulation.environment.chemistry_usable_energy,
+                energy.residual()
+            );
+        }
+    }
+
+    diagnostics
+        .finish(&simulation)
+        .expect("failed to finalize environmental chemistry diagnostics");
+    let final_inventory = simulation.energy_inventory_snapshot();
+    println!(
+        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        simulation.tick,
+        simulation.environment.field.cells.iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>(),
+        simulation.environment.field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>(),
+        simulation.environmental_chemistry_diagnostics.combine_committed,
+        simulation.environmental_chemistry_diagnostics.break_committed,
+        final_inventory.residual()
     );
 }

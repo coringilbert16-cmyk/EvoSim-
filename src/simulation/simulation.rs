@@ -198,6 +198,8 @@ impl Simulation {
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
             hotspot: None,
+            environmental_chemistry_diagnostics: Default::default(),
+            environmental_chemistry_events: Vec::new(),
         }
     }
     /// Enable the localized source only for an explicitly configured chemistry
@@ -747,7 +749,14 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        self.environmental_chemistry_diagnostics =
+            crate::state::EnvironmentalChemistryTickDiagnostics {
+                tick: self.tick,
+                ..Default::default()
+            };
+        self.environmental_chemistry_events.clear();
         self.tick += 1;
+        self.environmental_chemistry_diagnostics.tick = self.tick;
 
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
@@ -858,11 +867,12 @@ impl Simulation {
             );
         }
         if let Some(hotspot) = self.hotspot {
-            let _ = crate::hotspot::settle_environment_inputs(
-                hotspot,
-                &mut self.environment,
-                &mut self.energy_ledger,
-            );
+            self.environmental_chemistry_diagnostics.hotspot_settlement_succeeded =
+                Some(crate::hotspot::settle_environment_inputs(
+                    hotspot,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                ));
         }
         // Environmental chemistry is a first-class owner and must run
         // even when the world contains no organisms. Reserve half of the
@@ -877,6 +887,10 @@ impl Simulation {
             self.tick,
             &mut environmental_break_discovery_remaining,
         );
+        self.environmental_chemistry_diagnostics.break_ready_candidates =
+            environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics.break_discovery_work_remaining =
+            environmental_break_discovery_remaining;
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
@@ -887,6 +901,10 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
             );
+        self.environmental_chemistry_diagnostics.combine_ready_candidates =
+            environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics.combine_discovery_work_remaining =
+            environmental_combine_discovery_remaining;
 
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -897,12 +915,65 @@ impl Simulation {
                 &mut environmental_break_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+        self.environmental_chemistry_diagnostics.break_scheduled =
+            environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics.break_realization_work_remaining =
+            environmental_break_work_remaining;
         for operation in environmental_break_operations {
-            let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+            let source_cell = operation.cell_index;
+            let source_material_index = operation.material_index;
+            let source_materials = vec![operation.source_material.material.parts.clone()];
+            let work_required = operation.disruption_cost;
+            let reaction_frequency_hz = Some(operation.reaction_frequency_hz);
+            let activation_signal = Some(operation.activation_signal);
+            let accumulated_reaction = Some(operation.accumulated_reaction);
+            let broken_bond_index = Some(operation.bond_index);
+            let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
+            );
+            if committed {
+                self.environmental_chemistry_diagnostics.break_committed += 1;
+            } else {
+                self.environmental_chemistry_diagnostics.break_rejected += 1;
+            }
+            let post_commit_source_cell_materials = if committed {
+                self.environment
+                    .field
+                    .cells
+                    .get(source_cell)
+                    .map(|cell| {
+                        cell.physical_materials
+                            .iter()
+                            .map(|material| material.material.parts.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            self.environmental_chemistry_events.push(
+                crate::state::EnvironmentalChemistryEvent {
+                    tick: self.tick,
+                    reaction: "BREAK".to_string(),
+                    source_cells: vec![source_cell],
+                    source_material_indices: vec![source_material_index],
+                    source_materials,
+                    work_required,
+                    reaction_frequency_hz,
+                    activation_signal,
+                    accumulated_reaction,
+                    broken_bond_index,
+                    outcome: if committed { "committed" } else { "rejected" }.to_string(),
+                    failure_reason: (!committed).then(|| {
+                        "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
+                    }),
+                    product_material: None,
+                    product_internal_bond_count: None,
+                    post_commit_source_cell_materials,
+                },
             );
         }
 
@@ -918,12 +989,77 @@ impl Simulation {
                 &mut environmental_combine_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+        self.environmental_chemistry_diagnostics.combine_scheduled =
+            environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics.combine_realization_work_remaining =
+            environmental_combine_work_remaining;
         for operation in environmental_combine_operations {
-            let _ = crate::environmental_combine::resolve_environmental_preserving_accumulation(
+            let source_cells = vec![operation.cell_a, operation.cell_b];
+            let source_material_indices = vec![operation.material_a, operation.material_b];
+            let source_materials = vec![
+                operation.source_a.material.parts.clone(),
+                operation.source_b.material.parts.clone(),
+            ];
+            let work_required = operation.investment;
+            let accumulated_reaction = Some(operation.accumulated_reaction);
+            let product_cell = operation.cell_a;
+            let product_material_index = operation.material_a;
+            let committed = crate::environmental_combine::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
+            );
+            if committed {
+                self.environmental_chemistry_diagnostics.combine_committed += 1;
+            } else {
+                self.environmental_chemistry_diagnostics.combine_rejected += 1;
+            }
+            let product = if committed {
+                self.environment
+                    .field
+                    .cells
+                    .get(product_cell)
+                    .and_then(|cell| cell.physical_materials.get(product_material_index))
+            } else {
+                None
+            };
+            let product_material = product.map(|material| material.material.parts.clone());
+            let product_internal_bond_count = product.map(|material| {
+                material.internal_connections.as_ref().map_or(0, Vec::len)
+            });
+            let mut post_commit_source_cell_materials = Vec::new();
+            if committed {
+                for cell_index in source_cells.iter().copied() {
+                    if let Some(cell) = self.environment.field.cells.get(cell_index) {
+                        post_commit_source_cell_materials.extend(
+                            cell.physical_materials
+                                .iter()
+                                .map(|material| material.material.parts.clone()),
+                        );
+                    }
+                }
+            }
+            self.environmental_chemistry_events.push(
+                crate::state::EnvironmentalChemistryEvent {
+                    tick: self.tick,
+                    reaction: "COMBINE".to_string(),
+                    source_cells,
+                    source_material_indices,
+                    source_materials,
+                    work_required,
+                    reaction_frequency_hz: None,
+                    activation_signal: None,
+                    accumulated_reaction,
+                    broken_bond_index: None,
+                    outcome: if committed { "committed" } else { "rejected" }.to_string(),
+                    failure_reason: (!committed).then(|| {
+                        "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
+                    }),
+                    product_material,
+                    product_internal_bond_count,
+                    post_commit_source_cell_materials,
+                },
             );
         }
 
@@ -1566,6 +1702,8 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
                 + Self::environmental_structural_energy_held(&self.environment);
+        self.environmental_chemistry_diagnostics.accumulation_entries =
+            self.chemical_reaction_accumulation.len();
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
@@ -1708,11 +1846,10 @@ impl Simulation {
             })
             .sum()
     }
-    /// Independent test oracle: recompute current stores from their owning state,
+    /// Independent diagnostic oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
     /// Cumulative flows and tick-zero baselines still come from the ledger because
     /// those are transaction history, not a current-state inventory.
-    #[cfg(test)]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
