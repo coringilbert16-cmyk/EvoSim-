@@ -385,9 +385,34 @@
       ctx.restore();
     }
 
+    function renderHotspot(hotspot, viewport) {
+      if (!hotspot || !Number.isFinite(hotspot.center_x) || !Number.isFinite(hotspot.center_y) ||
+          !Number.isFinite(hotspot.radius) || hotspot.radius <= 0) return;
+      const point = camera.worldToScreen(hotspot.center_x, hotspot.center_y, viewport.width, viewport.height);
+      const radius = hotspot.radius * camera.scale;
+      if (!Number.isFinite(radius) || radius <= 0) return;
+      ctx.save();
+      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+      gradient.addColorStop(0, 'rgba(255, 112, 0, 0.48)');
+      gradient.addColorStop(0.55, 'rgba(255, 170, 0, 0.20)');
+      gradient.addColorStop(1, 'rgba(255, 80, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 150, 40, 0.72)';
+      ctx.lineWidth = Math.max(1, camera.scale * 0.5);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 245, 220, 0.95)';
+      ctx.font = '11px sans-serif';
+      ctx.fillText('Hotspot · 100 energy/tick', point.x + 7, point.y - 7);
+      ctx.restore();
+    }
+
     function renderWorld() {
       const world = worldPayload(), viewport = viewportSize(); if (!world) return;
       renderWaterField(world, viewport);
+      renderHotspot(world.hotspot, viewport);
       for (const organism of world.organisms || []) {
         const physical = organism.physical;
         if (!physical) continue;
