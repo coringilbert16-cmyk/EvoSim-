@@ -128,7 +128,7 @@ impl MolecularLayoutSnapshot {
                 if !radius.is_finite() || radius <= f64::EPSILON {
                     return None;
                 }
-                endpoints.push((bond_index, dx.atan2(dy), point.x, point.y));
+                endpoints.push((bond_index, dy.atan2(dx), point.x, point.y));
             }
             for left in 0..endpoints.len() {
                 for right in (left + 1)..endpoints.len() {
