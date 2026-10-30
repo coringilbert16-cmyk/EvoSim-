@@ -62,18 +62,12 @@ fn source_pair_key(
     if source_a.instance_id <= source_b.instance_id {
         format!(
             "{ENVIRONMENT_PREFIX}{}:{unit_a}|{}:{unit_b}|{:?}|{:?}",
-            source_a.instance_id,
-            source_b.instance_id,
-            candidate.endpoint_a,
-            candidate.endpoint_b,
+            source_a.instance_id, source_b.instance_id, candidate.endpoint_a, candidate.endpoint_b,
         )
     } else {
         format!(
             "{ENVIRONMENT_PREFIX}{}:{unit_b}|{}:{unit_a}|{:?}|{:?}",
-            source_b.instance_id,
-            source_a.instance_id,
-            candidate.endpoint_b,
-            candidate.endpoint_a,
+            source_b.instance_id, source_a.instance_id, candidate.endpoint_b, candidate.endpoint_a,
         )
     }
 }
@@ -152,15 +146,20 @@ fn approach_stage(
     let a = structure.units.get(selected.unit_a)?;
     let b = structure.units.get(selected.unit_b)?;
     let point_a = crate::contact::endpoint_world_point(
-        selected.candidate.endpoint_a, a, &environment.catalog,
+        selected.candidate.endpoint_a,
+        a,
+        &environment.catalog,
     )?;
     let point_b = crate::contact::endpoint_world_point(
-        selected.candidate.endpoint_b, b, &environment.catalog,
+        selected.candidate.endpoint_b,
+        b,
+        &environment.catalog,
     )?;
     let dx = point_b.x - point_a.x;
     let raw_dy = point_b.y - point_a.y;
     let dy = if environment.height.is_finite() && environment.height > 0.0 {
-        (raw_dy + environment.height * 0.5).rem_euclid(environment.height) - environment.height * 0.5
+        (raw_dy + environment.height * 0.5).rem_euclid(environment.height)
+            - environment.height * 0.5
     } else {
         raw_dy
     };
@@ -191,10 +190,13 @@ fn approach_stage(
         unit.placement.y = (unit.placement.y + dy_a).rem_euclid(environment.height);
         let shape = unit.shape(&environment.catalog)?;
         let radius = shape.form.bounding_radius();
-        if !unit.placement.x.is_finite() || !unit.placement.y.is_finite()
+        if !unit.placement.x.is_finite()
+            || !unit.placement.y.is_finite()
             || unit.placement.x - radius < 0.0
             || unit.placement.x + radius > environment.width
-        { return None; }
+        {
+            return None;
+        }
     }
     for &index in indices_b {
         let unit = staged.units.get_mut(index)?;
@@ -209,20 +211,34 @@ fn approach_stage(
     }
     for &index in indices_a {
         if crate::construction_runtime::placed_unit_overlaps(
-            &staged, &staged.units[index], indices_b, &environment.catalog,
-        ) { return None; }
+            &staged,
+            &staged.units[index],
+            indices_b,
+            &environment.catalog,
+        ) {
+            return None;
+        }
     }
     let moved_a = crate::contact::endpoint_world_point(
-        selected.candidate.endpoint_a, &staged.units[selected.unit_a], &environment.catalog,
+        selected.candidate.endpoint_a,
+        &staged.units[selected.unit_a],
+        &environment.catalog,
     )?;
     let moved_b = crate::contact::endpoint_world_point(
-        selected.candidate.endpoint_b, &staged.units[selected.unit_b], &environment.catalog,
+        selected.candidate.endpoint_b,
+        &staged.units[selected.unit_b],
+        &environment.catalog,
     )?;
     let moved_dy = if environment.height.is_finite() && environment.height > 0.0 {
-        (moved_b.y - moved_a.y + environment.height * 0.5).rem_euclid(environment.height) - environment.height * 0.5
-    } else { moved_b.y - moved_a.y };
+        (moved_b.y - moved_a.y + environment.height * 0.5).rem_euclid(environment.height)
+            - environment.height * 0.5
+    } else {
+        moved_b.y - moved_a.y
+    };
     let moved_distance = (moved_b.x - moved_a.x).hypot(moved_dy);
-    moved_distance.is_finite().then_some((staged, moved_distance, dx_a, dy_a))
+    moved_distance
+        .is_finite()
+        .then_some((staged, moved_distance, dx_a, dy_a))
 }
 
 /// Let chemical attraction perform real approach work. The force advances the
@@ -245,33 +261,72 @@ fn advance_pair_approach(
 ) -> bool {
     let distance = selected.candidate.distance;
     let radius = crate::chemistry::CHEMICAL_CONTACT_RADIUS;
-    if !distance.is_finite() || distance <= 1e-9 || distance >= radius
-        || !ticks_per_second.is_finite() || ticks_per_second <= 0.0
-        || cell_a >= environment.field.cells.len() || cell_b >= environment.field.cells.len()
-        || environment.field.cells[cell_a].physical_materials.get(material_a) != Some(source_a)
-        || environment.field.cells[cell_b].physical_materials.get(material_b) != Some(source_b)
-    { return false; }
+    if !distance.is_finite()
+        || distance <= 1e-9
+        || distance >= radius
+        || !ticks_per_second.is_finite()
+        || ticks_per_second <= 0.0
+        || cell_a >= environment.field.cells.len()
+        || cell_b >= environment.field.cells.len()
+        || environment.field.cells[cell_a]
+            .physical_materials
+            .get(material_a)
+            != Some(source_a)
+        || environment.field.cells[cell_b]
+            .physical_materials
+            .get(material_b)
+            != Some(source_b)
+    {
+        return false;
+    }
     let (Some(properties_a), Some(properties_b)) = (
-        structure.units.get(selected.unit_a).and_then(|unit| unit.properties(&environment.catalog)),
-        structure.units.get(selected.unit_b).and_then(|unit| unit.properties(&environment.catalog)),
-    ) else { return false; };
-    let (Some(position_a), Some(position_b)) = (properties_a.chemical_position, properties_b.chemical_position) else {
+        structure
+            .units
+            .get(selected.unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog)),
+        structure
+            .units
+            .get(selected.unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog)),
+    ) else {
+        return false;
+    };
+    let (Some(position_a), Some(position_b)) = (
+        properties_a.chemical_position,
+        properties_b.chemical_position,
+    ) else {
         return false;
     };
     let Some(static_potential) = crate::chemistry::interaction_potential(
-        position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
-    ) else { return false; };
-    if static_potential <= 0.0 { return false; }
+        position_a,
+        position_b,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+    ) else {
+        return false;
+    };
+    if static_potential <= 0.0 {
+        return false;
+    }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
     let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-    if !frequency_a.is_finite() || frequency_a <= 0.0 || !frequency_b.is_finite() || frequency_b <= 0.0 {
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
         return false;
     }
     let reaction_frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-    if !reaction_frequency.is_finite() || reaction_frequency <= 0.0 { return false; }
-    let reduced_mass = properties_a.mass * properties_b.mass / (properties_a.mass + properties_b.mass);
-    if !reduced_mass.is_finite() || reduced_mass <= 0.0 { return false; }
+    if !reaction_frequency.is_finite() || reaction_frequency <= 0.0 {
+        return false;
+    }
+    let reduced_mass =
+        properties_a.mass * properties_b.mass / (properties_a.mass + properties_b.mass);
+    if !reduced_mass.is_finite() || reduced_mass <= 0.0 {
+        return false;
+    }
     let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing) else {
         return false;
     };
@@ -282,11 +337,19 @@ fn advance_pair_approach(
         * engagement;
     let dt = 1.0 / ticks_per_second;
     let requested_step = (0.5 * force / reduced_mass * dt * dt).min(distance);
-    if !requested_step.is_finite() || requested_step <= 1e-9 { return false; }
+    if !requested_step.is_finite() || requested_step <= 1e-9 {
+        return false;
+    }
     let old_remaining = crate::combine::formation_work_cost(properties_a, properties_b, distance);
-    let compatible_available = environment.resonant_energy.compatible_energy(reaction_frequency);
+    let compatible_available = environment
+        .resonant_energy
+        .compatible_energy(reaction_frequency);
     let available = compatible_available + environment.chemistry_usable_energy;
-    if !old_remaining.is_finite() || old_remaining <= 0.0 || !available.is_finite() || available <= 0.0 {
+    if !old_remaining.is_finite()
+        || old_remaining <= 0.0
+        || !available.is_finite()
+        || available <= 0.0
+    {
         return false;
     }
     let mut low = 0.0;
@@ -294,16 +357,28 @@ fn advance_pair_approach(
     let mut best: Option<(OrganismStructure, f64, f64, f64)> = None;
     for _ in 0..28 {
         let step = 0.5 * (low + high);
-        if step <= 1e-10 { break; }
+        if step <= 1e-10 {
+            break;
+        }
         let Some(staged) = approach_stage(
-            structure, indices_a, indices_b, selected, step, properties_a.mass, properties_b.mass, environment,
+            structure,
+            indices_a,
+            indices_b,
+            selected,
+            step,
+            properties_a.mass,
+            properties_b.mass,
+            environment,
         ) else {
             high = step;
             continue;
         };
-        let new_remaining = crate::combine::formation_work_cost(properties_a, properties_b, staged.1);
+        let new_remaining =
+            crate::combine::formation_work_cost(properties_a, properties_b, staged.1);
         let work = old_remaining - new_remaining;
-        if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 { return false; }
+        if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 {
+            return false;
+        }
         if work <= available + 1e-9 {
             low = step;
             best = Some((staged.0, staged.1, staged.2, staged.3));
@@ -311,15 +386,25 @@ fn advance_pair_approach(
             high = step;
         }
     }
-    let Some((_, new_distance, dx_a, dy_a)) = best else { return false; };
-    let work = old_remaining - crate::combine::formation_work_cost(properties_a, properties_b, new_distance);
-    if !work.is_finite() || work <= 1e-12 { return false; }
+    let Some((_, new_distance, dx_a, dy_a)) = best else {
+        return false;
+    };
+    let work = old_remaining
+        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance);
+    if !work.is_finite() || work <= 1e-12 {
+        return false;
+    }
     let mut staged_resonance = environment.resonant_energy.clone();
     let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency, work);
     let usable_work = work - resonant_work;
-    if !resonant_work.is_finite() || resonant_work < 0.0 || !usable_work.is_finite()
-        || usable_work < 0.0 || usable_work > environment.chemistry_usable_energy + 1e-9
-    { return false; }
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !usable_work.is_finite()
+        || usable_work < 0.0
+        || usable_work > environment.chemistry_usable_energy + 1e-9
+    {
+        return false;
+    }
     let dx_b = -dx_a * properties_a.mass / properties_b.mass;
     let dy_b = -dy_a * properties_a.mass / properties_b.mass;
     let mut moved_a = source_a.clone();
@@ -332,35 +417,80 @@ fn advance_pair_approach(
         placement.x += dx_b;
         placement.y = (placement.y + dy_b).rem_euclid(environment.height);
     }
-    if !moved_a.is_realized() || !moved_b.is_realized() { return false; }
-    let Some(anchor_a) = moved_a.placements.as_ref().and_then(|placements| placements.first()) else { return false; };
-    let Some(anchor_b) = moved_b.placements.as_ref().and_then(|placements| placements.first()) else { return false; };
-    let Some(destination_a) = environment.field.index_for_position(anchor_a.x, anchor_a.y) else { return false; };
-    let Some(destination_b) = environment.field.index_for_position(anchor_b.x, anchor_b.y) else { return false; };
+    if !moved_a.is_realized() || !moved_b.is_realized() {
+        return false;
+    }
+    let Some(anchor_a) = moved_a
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    else {
+        return false;
+    };
+    let Some(anchor_b) = moved_b
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    else {
+        return false;
+    };
+    let Some(destination_a) = environment.field.index_for_position(anchor_a.x, anchor_a.y) else {
+        return false;
+    };
+    let Some(destination_b) = environment.field.index_for_position(anchor_b.x, anchor_b.y) else {
+        return false;
+    };
     let mut staged_ledger = *ledger;
     let next_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
     let next_usable = staged_ledger.total_usable_energy_held - usable_work;
     let next_work = staged_ledger.total_work_expended + work;
     let next_environment_usable = environment.chemistry_usable_energy - usable_work;
-    if !next_resonant.is_finite() || next_resonant < -1e-9 || !next_usable.is_finite()
-        || next_usable < -1e-9 || !next_work.is_finite() || !next_environment_usable.is_finite()
+    if !next_resonant.is_finite()
+        || next_resonant < -1e-9
+        || !next_usable.is_finite()
+        || next_usable < -1e-9
+        || !next_work.is_finite()
+        || !next_environment_usable.is_finite()
         || next_environment_usable < -1e-9
-    { return false; }
+    {
+        return false;
+    }
     staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
     staged_ledger.total_usable_energy_held = next_usable.max(0.0);
     staged_ledger.total_work_expended = next_work;
     let mut removals = vec![(cell_a, material_a), (cell_b, material_b)];
-    if removals[0] == removals[1] { return false; }
+    if removals[0] == removals[1] {
+        return false;
+    }
     removals.sort_unstable_by(|a, b| b.cmp(a));
     for (cell, index) in &removals {
-        if environment.field.cells[*cell].physical_materials.get(*index).is_none() { return false; }
+        if environment.field.cells[*cell]
+            .physical_materials
+            .get(*index)
+            .is_none()
+        {
+            return false;
+        }
     }
-    for (cell, index) in removals { environment.field.cells[cell].physical_materials.remove(index); }
-    environment.field.cells[destination_a].physical_materials.push(moved_a);
-    environment.field.cells[destination_b].physical_materials.push(moved_b);
+    for (cell, index) in removals {
+        environment.field.cells[cell]
+            .physical_materials
+            .remove(index);
+    }
+    environment.field.cells[destination_a]
+        .physical_materials
+        .push(moved_a);
+    environment.field.cells[destination_b]
+        .physical_materials
+        .push(moved_b);
     let mut changed = BTreeSet::new();
-    changed.insert(cell_a); changed.insert(cell_b); changed.insert(destination_a); changed.insert(destination_b);
-    for index in changed { environment.field.mark_changed_at_index(index); }
+    changed.insert(cell_a);
+    changed.insert(cell_b);
+    changed.insert(destination_a);
+    changed.insert(destination_b);
+    for index in changed {
+        environment.field.mark_changed_at_index(index);
+    }
     environment.chemistry_usable_energy = next_environment_usable.max(0.0);
     *ledger = staged_ledger;
     true
@@ -764,15 +894,29 @@ pub(crate) fn accumulate_environmental(
                     };
                     if selected.candidate.distance > 1e-9
                         && advance_pair_approach(
-                            environment, ledger, &trial_structure, &indices_a, &indices_b, selected,
-                            cell_a, material_a, &source_a, cell_b, material_b, &source_b,
+                            environment,
+                            ledger,
+                            &trial_structure,
+                            &indices_a,
+                            &indices_b,
+                            selected,
+                            cell_a,
+                            material_a,
+                            &source_a,
+                            cell_b,
+                            material_b,
+                            &source_b,
                             ticks_per_second,
                         )
                     {
                         // Preserve this encounter's accumulated chemistry while
                         // restarting discovery against the new field snapshot.
                         let key = source_pair_key(
-                            &source_a, &source_b, selected.unit_a, selected.unit_b, selected.candidate,
+                            &source_a,
+                            &source_b,
+                            selected.unit_a,
+                            selected.unit_b,
+                            selected.candidate,
                         );
                         updated_keys.insert(key);
                         dissipate_unupdated_accumulations(accumulation, &updated_keys);
@@ -989,8 +1133,14 @@ pub(crate) fn resolve_environmental(
     // Approach work has already been paid incrementally as the reactants
     // physically moved together. COMBINE must not charge it a second time.
     let Some((_, work_cost, _, _)) = crate::combine_runtime::selected_candidate_evaluation(
-        &trial_structure, unit_a, unit_b, operation.candidate, &environment.catalog,
-    ) else { return false; };
+        &trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        &environment.catalog,
+    ) else {
+        return false;
+    };
     if !work_cost.is_finite() || work_cost > 1e-8 {
         return false;
     }
@@ -1107,14 +1257,24 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let first = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).unwrap();
+        )
+        .unwrap();
         let second = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
-            vec![Placement { x: 11.0, y: 10.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 11.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).unwrap();
+        )
+        .unwrap();
         let candidate = ConnectionPairCandidate {
             endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
             endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 1 },
@@ -2697,53 +2857,141 @@ mod tests {
     fn environmental_approach_without_energy_leaves_geometry_and_ledgers_unchanged() {
         let mut simulation = crate::state::Simulation::new(941, 10.0);
         let catalog = simulation.environment.catalog.clone();
-        for cell in &mut simulation.environment.field.cells { cell.physical_materials.clear(); }
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         simulation.environment.width = 30.0;
         simulation.environment.height = 30.0;
-        simulation.environment.field = crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
         simulation.environment.chemistry_usable_energy = 0.0;
-        let cell = simulation.environment.field.index_for_position(10.0, 10.0).unwrap();
+        let cell = simulation
+            .environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .unwrap();
         let mut fixture = None;
         'search: for resource_a in &catalog {
-            if resource_a.physical_state == crate::resources::PhysicalState::Fluid { continue; }
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
             for resource_b in &catalog {
-                if resource_b.physical_state == crate::resources::PhysicalState::Fluid { continue; }
-                let (Some(position_a), Some(position_b)) = (resource_a.properties.chemical_position, resource_b.properties.chemical_position) else { continue; };
-                if crate::chemistry::interaction_potential(position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX).unwrap_or(0.0) <= 0.0 { continue; }
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
+                    continue;
+                }
+                let (Some(position_a), Some(position_b)) = (
+                    resource_a.properties.chemical_position,
+                    resource_b.properties.chemical_position,
+                ) else {
+                    continue;
+                };
+                if crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+                .unwrap_or(0.0)
+                    <= 0.0
+                {
+                    continue;
+                }
                 for step in 1..=18 {
                     let separation = step as f64 * 0.05;
                     for rotation_step in 0..12 {
                         let source_a = PhysicalMaterial::realized(
                             Material::free_base(resource_a.name.clone(), 1.0),
-                            vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }], &catalog,
+                            vec![Placement {
+                                x: 10.0,
+                                y: 10.0,
+                                rotation_radians: 0.0,
+                            }],
+                            &catalog,
                         );
                         let source_b = PhysicalMaterial::realized(
                             Material::free_base(resource_b.name.clone(), 1.0),
-                            vec![Placement { x: 10.0 + separation, y: 10.0, rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0 }], &catalog,
+                            vec![Placement {
+                                x: 10.0 + separation,
+                                y: 10.0,
+                                rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
+                            }],
+                            &catalog,
                         );
-                        let (Some(source_a), Some(source_b)) = (source_a, source_b) else { continue; };
-                        let Some((mut structure, indices_a)) = restored_source(&source_a, &simulation.environment) else { continue; };
-                        let Some(indices_b) = crate::material_restoration::restore_material(&mut structure, &source_b, origin(), &catalog) else { continue; };
+                        let (Some(source_a), Some(source_b)) = (source_a, source_b) else {
+                            continue;
+                        };
+                        let Some((mut structure, indices_a)) =
+                            restored_source(&source_a, &simulation.environment)
+                        else {
+                            continue;
+                        };
+                        let Some(indices_b) = crate::material_restoration::restore_material(
+                            &mut structure,
+                            &source_b,
+                            origin(),
+                            &catalog,
+                        ) else {
+                            continue;
+                        };
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut budget = FIELD_COMPONENT_PAIR_LIMIT;
-                        let Some(selected) = select_best_contact(&structure, &indices_a, &indices_b, &catalog, &mut cache, &mut budget) else { continue; };
-                        if selected.candidate.distance <= 1e-6 || selected.candidate.distance >= crate::chemistry::CHEMICAL_CONTACT_RADIUS || selected.candidate.facing <= 0.5 { continue; }
-                        fixture = Some((source_a, source_b, structure, indices_a, indices_b, selected));
+                        let Some(selected) = select_best_contact(
+                            &structure,
+                            &indices_a,
+                            &indices_b,
+                            &catalog,
+                            &mut cache,
+                            &mut budget,
+                        ) else {
+                            continue;
+                        };
+                        if selected.candidate.distance <= 1e-6
+                            || selected.candidate.distance >= crate::chemistry::CHEMICAL_CONTACT_RADIUS
+                            || selected.candidate.facing <= 0.5
+                        {
+                            continue;
+                        }
+                        fixture = Some((
+                            source_a, source_b, structure, indices_a, indices_b, selected,
+                        ));
                         break 'search;
                     }
                 }
             }
         }
-        let (source_a, source_b, structure, indices_a, indices_b, selected) = fixture.expect("catalog must provide a chemically attractive separated pair");
-        assert!(simulation.environment.field.deposit_physical_at_index(cell, source_a.clone(), &catalog));
-        assert!(simulation.environment.field.deposit_physical_at_index(cell, source_b.clone(), &catalog));
+        let (source_a, source_b, structure, indices_a, indices_b, selected) =
+            fixture.expect("catalog must provide a chemically attractive separated pair");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_a.clone(),
+            &catalog
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_b.clone(),
+            &catalog
+        ));
         let before_cells = simulation.environment.field.cells.clone();
         let before_ledger = simulation.energy_ledger;
         let before_inventory = simulation.energy_inventory_snapshot();
-        assert!(!advance_pair_approach(
-            &mut simulation.environment, &mut simulation.energy_ledger, &structure, &indices_a, &indices_b, selected,
-            cell, 0, &source_a, cell, 1, &source_b, simulation.ticks_per_second,
-        ), "approach must not proceed without compatible resonance or usable reserve");
+        assert!(
+            !advance_pair_approach(
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
+                &structure,
+                &indices_a,
+                &indices_b,
+                selected,
+                cell,
+                0,
+                &source_a,
+                cell,
+                1,
+                &source_b,
+                simulation.ticks_per_second,
+            ),
+            "approach must not proceed without compatible resonance or usable reserve"
+        );
         assert_eq!(simulation.environment.field.cells, before_cells);
         assert_eq!(simulation.energy_ledger, before_ledger);
         assert_eq!(simulation.energy_inventory_snapshot(), before_inventory);
