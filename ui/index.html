@@ -9,10 +9,7 @@
     #app { width: 100%; height: 100%; display: flex; flex-direction: column; }
     header { padding: 8px 12px; background: #fff; border-bottom: 1px solid #bbb; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
     #status { font-size: 14px; flex:1 1 260px; }
-    #controls { display:flex; align-items:center; gap:6px; }
-    #controls button { padding:5px 9px; cursor:pointer; }
-    #controls button:disabled { cursor:not-allowed; opacity:.5; }
-    #controls input { width:140px; }
+    #keyboard-help { font-size:12px; color:#444; white-space:nowrap; }
     .speed-control { display:flex; align-items:center; gap:5px; white-space:nowrap; }
     #timeline { position:fixed; left:12px; right:12px; bottom:10px; display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.94); border:1px solid #999; border-radius:6px; z-index:20; }
     #history { flex:1; min-width:120px; }
@@ -26,16 +23,12 @@
   <div id="app">
     <header>
       <div id="status">Connecting to EvoSim…</div>
+      <div id="keyboard-help">Space: pause/play · &lt;: back one tick · &gt;: forward one tick · Esc: reset</div>
     </header>
     <div id="timeline">
-      <button id="play-toggle" type="button">Play</button>
-      <button id="step-back" type="button">Back 1 Tick</button>
-      <button id="step-forward" type="button">Forward 1 Tick</button>
-      <button id="live" type="button">Live</button>
       <input id="history" type="range" min="0" max="0" value="0" step="1">
       <span id="timeline-label">Live</span>
       <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
-      <button id="reset" type="button">Reset</button>
     </div>
     <main><canvas id="world"></canvas></main>
   </div>
@@ -160,19 +153,8 @@
     }
 
     function updateControls() {
-      const running = runtimeStatus?.running === true;
-      const currentTick = runtimeStatus?.tick ?? 0;
-      const firstTick = historyTicks.length ? historyTicks[0] : currentTick;
-      const play = document.getElementById('play-toggle');
-      const back = document.getElementById('step-back');
-      const forward = document.getElementById('step-forward');
       const speed = document.getElementById('speed');
       const speedValue = document.getElementById('speed-value');
-
-      play.textContent = running ? 'Pause' : 'Play';
-      play.disabled = false;
-      back.disabled = currentTick <= firstTick;
-      forward.disabled = false;
       if (runtimeStatus?.ticks_per_second != null) {
         speed.value = runtimeStatus.ticks_per_second;
         speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
@@ -208,12 +190,6 @@
       await loadObservation(observationLevel, focusedOrganismId);
     }
 
-    document.getElementById('play-toggle').addEventListener('click', async () => {
-      if (historyViewTick != null) await returnToLiveWorld();
-      await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
-    });
-    document.getElementById('step-back').addEventListener('click', stepBack);
-    document.getElementById('step-forward').addEventListener('click', stepForward);
     document.getElementById('speed').addEventListener('input', event => {
       const value = Number(event.target.value);
       if (!Number.isFinite(value) || value <= 0) return;
@@ -223,8 +199,6 @@
       const value = Number(event.target.value);
       if (Number.isFinite(value) && value > 0) await control('/control/speed/' + encodeURIComponent(value));
     });
-    document.getElementById('reset').addEventListener('click', resetSimulation);
-    document.getElementById('live').addEventListener('click', returnToLiveWorld);
     document.getElementById('history').addEventListener('input', event => {
       if (!historyTicks.length) return;
       const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
@@ -596,11 +570,12 @@
         historyTicks = [];
         clearWorldCache();
         selectedIds.clear();
-        focusedOrganismId = '1';
+        focusedOrganismId = null;
+        observationLevel = 'World';
         noLivingOrganisms = false;
         cameraInitialized = false;
         await refreshRuntimeStatus();
-        await loadObservation('Structure', '1');
+        await loadObservation('World');
       } catch (_) {
         status.textContent = 'Reset unavailable — simulation may be restarting…';
       }
@@ -674,9 +649,24 @@
     });
 
     window.addEventListener('keydown', async event => {
-      if (event.key === 'Escape') {
-        if (observationLevel === 'Structure') await returnToOrganism();
-        else if (observationLevel === 'Organism') await returnToWorld();
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+      if (isTyping || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+
+      if (event.code === 'Space') {
+        event.preventDefault();
+        if (historyViewTick != null) await returnToLiveWorld();
+        await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
+      } else if (event.key === '<' || (event.code === 'Comma' && event.shiftKey)) {
+        event.preventDefault();
+        await stepBack();
+      } else if (event.key === '>' || (event.code === 'Period' && event.shiftKey)) {
+        event.preventDefault();
+        await stepForward();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        await resetSimulation();
       } else if (observationLevel === 'Structure' && (event.key === '[' || event.key === ']')) {
         await cycleFocused(event.key === ']' ? 1 : -1);
       }
