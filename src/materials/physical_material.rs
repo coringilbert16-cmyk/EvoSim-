@@ -76,7 +76,7 @@ impl PhysicalMaterial {
             .map(|placements| {
                 placements
                     .iter()
-                    .map(|placement| placement.rotation_radians.to_bits())
+                    .map(|placement| placement.rotation_radians.rem_euclid(std::f64::consts::TAU).to_bits())
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
