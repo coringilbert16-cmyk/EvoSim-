@@ -35,3 +35,15 @@ Make death a transition out of biological activity, not an exception to physical
 This phase owns the **life-to-death lifecycle transition and continued eligibility for ordinary chemistry**, not a second decomposition/recycling engine. Dead-body constituents remain represented exactly once and become candidates for the same ordinary chemistry pathway available to other matter; biological behavior stops.
 
 **Dependency:** authoritative material ownership and energy settlement, plus shared chemistry runtime and transactional reaction realization. Keep biological death triggers distinct from chemistry execution. PR #213's temporary zero-stress setting is separate, temporary survival-first work and is not the final death contract.
+
+## Current dependency/status reconciliation — 2026-10-30
+
+- PR #214 shared chemistry runtime/scheduler is merged.
+- PR #223 bounded environmental COMBINE discovery/settlement is merged.
+- PR #226 flow/gradient/obstacle-aware transport is merged.
+- PRs #229–#240 have integrated the first base/compound chemistry characterization, committed multi-constituent COMBINE/BREAK round trip, heterogeneous constituent chemistry, fair bounded contact discovery, and geometry-derived molecular-layout inputs.
+- This plan remains planning-only. No death/lifecycle implementation is included or authorized by this document.
+
+Before implementation, audit the exact current `main` death triggers, post-death tick paths, physical-holder ownership, and chemistry eligibility. Preserve the approved invariant: death ends biological activity, not physical existence or material ownership. Dead material must enter the same ordinary chemistry policy/transaction path as other material; do not add a parallel decomposition engine.
+
+Use the latest accepted main-head workflow and named failure identities as the comparison baseline. The older PR #205 commit and failure totals above are historical references, not the current baseline. Keep this phase focused on the life-to-death transition and conservation through subsequent ordinary chemistry.
