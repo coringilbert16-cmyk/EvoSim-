@@ -756,6 +756,7 @@ impl Simulation {
         self.environmental_chemistry_diagnostics.accumulation_entries =
             self.chemical_reaction_accumulation.len();
         self.tick += 1;
+        self.environmental_chemistry_diagnostics.tick = self.tick;
 
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
@@ -1741,11 +1742,10 @@ impl Simulation {
             })
             .sum()
     }
-    /// Independent test oracle: recompute current stores from their owning state,
+    /// Independent diagnostic oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
     /// Cumulative flows and tick-zero baselines still come from the ledger because
     /// those are transaction history, not a current-state inventory.
-    #[cfg(test)]
     pub(crate) fn energy_inventory_snapshot(
         &self,
     ) -> crate::energy_ledger::EnergyInventorySnapshot {
