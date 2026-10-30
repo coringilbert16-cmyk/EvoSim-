@@ -891,6 +891,52 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
+    #[test]
+    fn environmental_encounter_key_survives_transport_and_pair_order_changes() {
+        let catalog = crate::resources::default_catalog();
+        let first = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+            &catalog,
+        ).unwrap();
+        let second = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement { x: 11.0, y: 10.0, rotation_radians: 0.0 }],
+            &catalog,
+        ).unwrap();
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            distance: 0.25,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let initial = source_pair_key(&first, &second, 0, 0, candidate);
+
+        let mut moved_first = first.clone();
+        let mut moved_second = second.clone();
+        moved_first.placements.as_mut().unwrap()[0].x += 0.4;
+        moved_second.placements.as_mut().unwrap()[0].x -= 0.2;
+        let moved = source_pair_key(&moved_first, &moved_second, 0, 0, candidate);
+        let reversed = source_pair_key(
+            &moved_second,
+            &moved_first,
+            0,
+            0,
+            ConnectionPairCandidate {
+                endpoint_a: candidate.endpoint_b,
+                endpoint_b: candidate.endpoint_a,
+                ..candidate
+            },
+        );
+
+        assert_eq!(initial, moved);
+        assert_eq!(moved, reversed);
+    }
+
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
