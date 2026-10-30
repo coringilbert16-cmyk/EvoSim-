@@ -2768,15 +2768,14 @@ mod tests {
         .expect("selected source B must restore for work-cost diagnostic");
         let work_unit_a = work_indices_a[operation.unit_a];
         let work_unit_b = work_indices_b[operation.unit_b];
-        let (_, formation_work, _, _) =
-            crate::combine_runtime::selected_candidate_evaluation(
-                &work_structure,
-                work_unit_a,
-                work_unit_b,
-                operation.candidate,
-                &catalog,
-            )
-            .expect("selected environmental candidate must remain evaluable");
+        let (_, formation_work, _, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &work_structure,
+            work_unit_a,
+            work_unit_b,
+            operation.candidate,
+            &catalog,
+        )
+        .expect("selected environmental candidate must remain evaluable");
         assert!(
             formation_work > 1e-9,
             "empty-energy rejection requires positive formation work; got {formation_work}"
