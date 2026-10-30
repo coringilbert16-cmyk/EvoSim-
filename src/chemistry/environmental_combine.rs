@@ -135,6 +135,70 @@ fn select_best_contact(
     )
 }
 
+#[cfg(test)]
+fn select_best_positive_work_contact(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    remaining_work: &mut usize,
+) -> Option<SelectedContact> {
+    let mut best: Option<SelectedContact> = None;
+    for &unit_a in indices_a {
+        for &unit_b in indices_b {
+            if *remaining_work == 0 {
+                return best;
+            }
+            *remaining_work = remaining_work.saturating_sub(1);
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                structure, unit_a, unit_b, catalog, cache,
+            );
+            for candidate in candidates {
+                let Some((evaluation, formation_work, investment, required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        structure, unit_a, unit_b, candidate, catalog,
+                    )
+                else {
+                    continue;
+                };
+                // Fixture-only filtering: production may correctly select a
+                // zero-work contact when the reactants are already touching.
+                if !formation_work.is_finite() || formation_work <= 1e-9 {
+                    continue;
+                }
+                let proposed = SelectedContact {
+                    unit_a,
+                    unit_b,
+                    candidate: evaluation.candidate,
+                    investment,
+                    required_energy,
+                };
+                let replace = best.map_or(true, |current| {
+                    proposed
+                        .required_energy
+                        .partial_cmp(&current.required_energy)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then_with(|| {
+                            proposed.candidate.distance
+                                .partial_cmp(&current.candidate.distance)
+                                .unwrap_or(std::cmp::Ordering::Equal)
+                        })
+                        .then_with(|| {
+                            format!("{:?}|{:?}", proposed.candidate.endpoint_a, proposed.candidate.endpoint_b)
+                                .cmp(&format!("{:?}|{:?}", current.candidate.endpoint_a, current.candidate.endpoint_b))
+                        })
+                        .is_lt()
+                });
+                if replace {
+                    best = Some(proposed);
+                }
+            }
+        }
+    }
+    best
+}
+
 fn approach_stage(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -591,6 +655,7 @@ fn advance_pair_approach(
     for index in changed {
         environment.field.mark_changed_at_index(index);
     }
+    environment.resonant_energy = staged_resonance;
     environment.chemistry_usable_energy = next_environment_usable.max(0.0);
     *ledger = staged_ledger;
     true
@@ -3209,27 +3274,9 @@ mod tests {
                         }
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
-                        if let Some(selected) = select_best_contact(
+                        if let Some(selected) = select_best_positive_work_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
-                            // The energy-rejection fixture must use a contact
-                            // that actually requires physical formation work.
-                            // Skip zero-work contacts during fixture discovery
-                            // rather than asserting after an arbitrary pair has
-                            // already been selected.
-                            let formation_work =
-                                crate::combine_runtime::selected_candidate_evaluation(
-                                    &structure,
-                                    selected.unit_a,
-                                    selected.unit_b,
-                                    selected.candidate,
-                                    &catalog,
-                                )
-                                .map(|(_, work, _, _)| work)
-                                .unwrap_or(0.0);
-                            if formation_work <= 1e-9 {
-                                continue;
-                            }
                             let material_name_a = structure.units[selected.unit_a]
                                 .material
                                 .parts
