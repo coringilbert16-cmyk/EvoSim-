@@ -443,7 +443,8 @@ fn advance_pair_approach(
         return false;
     };
     let work = old_remaining
-        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance) * engagement;
+        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance)
+            * engagement;
     if !work.is_finite() || work <= 1e-12 {
         return false;
     }
