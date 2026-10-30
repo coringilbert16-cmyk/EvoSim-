@@ -684,8 +684,23 @@ mod tests {
         );
         let endpoint = ConnectionEndpoint::Boundary { angle_radians: 0.1 };
         let point = endpoint_world_point(endpoint, &unit, &catalog).unwrap();
-        assert!(point.normal_x > 0.99);
-        assert!(point.normal_y.abs() < 1e-12);
+        let normal_length = point.normal_x.hypot(point.normal_y);
+        assert!(
+            (normal_length - 1.0).abs() < 1e-12,
+            "surface normal must remain normalized"
+        );
+
+        let rotated = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: std::f64::consts::FRAC_PI_2,
+            },
+        );
+        let rotated_point = endpoint_world_point(endpoint, &rotated, &catalog).unwrap();
+        assert!((rotated_point.normal_x + point.normal_y).abs() < 1e-12);
+        assert!((rotated_point.normal_y - point.normal_x).abs() < 1e-12);
     }
 
     #[test]
