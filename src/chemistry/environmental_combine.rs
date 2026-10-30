@@ -604,11 +604,13 @@ fn chemical_step(
 }
 
 pub(crate) fn accumulate_environmental(
-    environment: &Environment,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
     accumulation: &mut BTreeMap<String, f64>,
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
     tick: u64,
     remaining_discovery_work: &mut usize,
+    ticks_per_second: f64,
 ) -> Vec<EnvironmentalCombineOperation> {
     if *remaining_discovery_work == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
@@ -747,6 +749,18 @@ pub(crate) fn accumulate_environmental(
                     let Some(selected) = selected else {
                         continue;
                     };
+                    if selected.candidate.distance > 1e-9
+                        && advance_pair_approach(
+                            environment, ledger, &trial_structure, &indices_a, &indices_b, selected,
+                            cell_a, material_a, &source_a, cell_b, material_b, &source_b,
+                            ticks_per_second,
+                        )
+                    {
+                        // The field changed atomically. Restart discovery next tick
+                        // so no snapshot index from this pass can go stale.
+                        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+                        return Vec::new();
+                    }
                     chemical_step(
                         environment,
                         chemistry_library,
@@ -1576,11 +1590,13 @@ mod tests {
         let mut budget = 1;
 
         let operations = accumulate_environmental(
-            &simulation.environment,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
             &mut accumulation,
             &mut simulation.chemistry_library,
             0,
             &mut budget,
+            simulation.ticks_per_second,
         );
 
         assert!(operations.is_empty());
@@ -1953,6 +1969,7 @@ mod tests {
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
