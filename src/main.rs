@@ -7,12 +7,12 @@ mod developmental_blueprint;
 mod environment;
 #[path = "simulation/environment_flow.rs"]
 mod environment_flow;
-#[path = "simulation/hotspot.rs"]
-mod hotspot;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
 mod expulsion;
+#[path = "simulation/hotspot.rs"]
+mod hotspot;
 #[path = "geometry/material_geometry.rs"]
 mod material_geometry;
 #[path = "materials/material_restoration.rs"]
