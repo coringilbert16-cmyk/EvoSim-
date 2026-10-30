@@ -1104,6 +1104,33 @@ mod tests {
         state
     }
 
+    fn realized_water_boundary_unit(
+        catalog: &[crate::resources::BaseResource],
+        placement: Placement,
+    ) -> crate::structure::StructuralUnit {
+        let mut water = crate::structure::StructuralUnit::new("Water", placement);
+        let half_width = 1.0;
+        let half_height = 0.125;
+        let shape = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 0.5,
+                boundary: Some(vec![
+                    (-half_width, -half_height),
+                    (half_width, -half_height),
+                    (half_width, half_height),
+                    (-half_width, half_height),
+                ]),
+                arc_boundary: None,
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(
+            water.realize_fluid_geometry(shape, catalog),
+            "test Water must have an explicit, area-conserving fluid boundary"
+        );
+        water
+    }
+
     #[test]
     fn impermeable_boundary_blocks_environmental_material() {
         let simulation = Simulation::new(42, 1.0);
@@ -1138,33 +1165,36 @@ mod tests {
     fn water_boundary_permits_full_environmental_penetration() {
         let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
-        let moving = simulation.organisms.first().expect("default seed organism");
-
-        let water_unit = moving
-            .structure
-            .units
-            .iter()
-            .find(|unit| {
-                unit.material
-                    .parts
-                    .first()
-                    .map(|(name, _)| name == "Water")
-                    .unwrap_or(false)
-            })
-            .expect("seed boundary should contain Water");
+        let mut moving = simulation
+            .organisms
+            .first()
+            .expect("organism fixture")
+            .clone();
+        moving.structure = crate::structure::OrganismStructure::new();
+        let water_unit = realized_water_boundary_unit(
+            &environment.catalog,
+            Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let water_x = water_unit.placement.x;
+        let water_y = water_unit.placement.y;
+        moving.structure.add_unit(water_unit);
 
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: water_unit.placement.x + 1.0,
-                y: water_unit.placement.y,
+                x: water_x + 1.0,
+                y: water_y,
                 rotation_radians: 0.0,
             }],
             &environment.catalog,
         )
         .expect("valid carbon realization");
         assert!(environmental_penetration_allowed(
-            moving,
+            &moving,
             &environment,
             &carbon,
             1.0,
@@ -1176,29 +1206,24 @@ mod tests {
     fn fluid_boundary_is_contact_geometry_without_becoming_a_wall() {
         let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
-        let moving = simulation.organisms.first().expect("default seed organism");
-        let water_unit = moving
-            .structure
-            .units
-            .iter()
-            .find(|unit| {
-                unit.material
-                    .parts
-                    .first()
-                    .map(|(name, _)| name == "Water")
-                    .unwrap_or(false)
-            })
-            .expect("seed boundary should contain Water");
+        let water_unit = realized_water_boundary_unit(
+            &environment.catalog,
+            Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+        );
         let water = water_unit.shape(&environment.catalog).expect("water shape");
         let boundary_vertex = match &water.form {
             crate::resources::Form::Fluid {
                 boundary: Some(vertices),
                 ..
             } => vertices
-                .first()
+                .get(1)
                 .copied()
-                .expect("water boundary should have a vertex"),
-            _ => panic!("seed Water must have realized boundary geometry"),
+                .expect("water boundary should have a right-side vertex"),
+            _ => panic!("test Water must retain its realized boundary geometry"),
         };
         let carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
@@ -1298,14 +1323,16 @@ mod tests {
                 ..Default::default()
             },
         );
-        organism.decision_history.record(
-            crate::decision::ActionKind::Move,
-            Some(movement_context_key(8.0)),
-            crate::decision::ActionConsequence {
-                energy_delta: -0.08,
-                ..Default::default()
-            },
-        );
+        for (distance, energy_delta) in [(2.0, -0.02), (4.0, -0.04), (8.0, -0.08)] {
+            organism.decision_history.record(
+                crate::decision::ActionKind::Move,
+                Some(movement_context_key(distance)),
+                crate::decision::ActionConsequence {
+                    energy_delta,
+                    ..Default::default()
+                },
+            );
+        }
         let mut rng = ChaCha8Rng::seed_from_u64(1);
         assert_eq!(
             select_movement_distance(
