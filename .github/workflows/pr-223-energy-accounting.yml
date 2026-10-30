@@ -4,7 +4,7 @@ on:
   push:
     branches: [chemistry/environmental-combine-discovery]
   pull_request:
-    branches: [main, chemistry/reaction-energy-semantics]
+    branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-base-matrix-2026-10-29]
     paths:
       - "src/chemistry/**"
       - "src/materials/**"
@@ -33,6 +33,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Compound + base COMBINE transaction and energy conservation
+        run: timeout 5m cargo test --locked environmental_compound_base_combine_commits_three_part_product -- --nocapture
       - name: Canonical base-resource pair matrix
         run: timeout 5m cargo test --locked static_pair_matrix_characterizes_all_base_resource_pairs -- --nocapture
       - name: Controlled physical base-resource pair matrix
