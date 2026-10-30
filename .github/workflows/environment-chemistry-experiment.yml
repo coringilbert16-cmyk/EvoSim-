@@ -1,0 +1,55 @@
+name: Environmental Chemistry Experiment
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "src/chemistry/**"
+      - "src/simulation/**"
+      - "src/infrastructure/diagnostics.rs"
+      - ".github/workflows/environment-chemistry-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  environmental-chemistry:
+    name: 24,000-tick organism-free chemistry experiment
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run reproducible environmental chemistry experiment
+        run: |
+          cargo run --release -- --headless \
+            --environment-chemistry-experiment \
+            --seed 42 \
+            --ticks 24000 \
+            --diagnostic-interval 100 \
+            --diagnostics /tmp/environment-chemistry-diagnostics.jsonl
+
+      - name: Print experiment summary and final diagnostic records
+        if: always()
+        run: |
+          if [ -f /tmp/environment-chemistry-diagnostics.jsonl ]; then
+            grep '"event":"environmental_chemistry_summary"' /tmp/environment-chemistry-diagnostics.jsonl || true
+            tail -n 80 /tmp/environment-chemistry-diagnostics.jsonl
+          fi
+
+      - name: Upload full diagnostic record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-chemistry-diagnostics
+          path: /tmp/environment-chemistry-diagnostics.jsonl
+          if-no-files-found: warn
