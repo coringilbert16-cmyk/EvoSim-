@@ -1657,7 +1657,24 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 1_000.0;
+        // This case deliberately has no usable-energy reserve: the live
+        // environmental COMBINE must be funded by frequency-compatible field
+        // resonance alone.
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let properties_a = source_a.material.weighted_properties(&catalog);
+        let properties_b = source_b.material.weighted_properties(&catalog);
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency_hz =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .deposit(reaction_frequency_hz, 1_000.0),
+            "test resonance reservoir must accept the reactants' coupled frequency"
+        );
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -2725,11 +2742,29 @@ mod tests {
         );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
+        let resonant_before = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("test resonance inventory must be valid");
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
+        assert!(
+            simulation.environment.chemistry_usable_energy <= 1e-9,
+            "resonance-only COMBINE must not rely on a usable-energy grant"
+        );
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .expect("post-COMBINE resonance inventory must be valid")
+                < resonant_before,
+            "successful COMBINE must withdraw compatible resonant energy"
+        );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
@@ -2786,6 +2821,13 @@ mod tests {
                 .abs()
                 <= 1e-6,
             "COMBINE must keep the ledger structural-energy total aligned with its live bonds"
+        );
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held
+                - inventory.current_resonant_energy)
+                .abs()
+                <= 1e-6,
+            "COMBINE must keep the ledger resonant-energy total aligned with its live reservoir"
         );
         let residual = inventory.residual();
         assert!(
