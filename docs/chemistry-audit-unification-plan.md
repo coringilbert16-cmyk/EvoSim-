@@ -4839,7 +4839,7 @@ No production source or test changes were made during this audit. PR #204 remain
 
 This dated checkpoint supersedes older “next target” and open-PR status statements in historical entries above. Those entries remain for audit traceability; they are not current instructions.
 
-**Current `main` head:** `bca1561c137b825814bf7dd29a3b6fd9200f3488` (PR #240 integration merge).
+**Mainline integration anchor:** PR #240 merge `bca1561c137b825814bf7dd29a3b6fd9200f3488`, followed by documentation-only merges #204, #210, #215, and #216.
 
 ### Integrated chemistry progression
 
@@ -4864,12 +4864,12 @@ The completed #234 full-suite run reported **842 passed, 7 failed, 2 ignored**. 
 
 Thus the #234 run introduced no new failing identity and added eight passing tests relative to that earlier main checkpoint. The post-#240 exact-main workflow remains the current follow-up; do not claim the latest main full suite is green until that run completes. Clippy has not yet been re-established on the post-#240 main head.
 
-### Remaining open work and sequence
+### Remaining implementation work and sequence
 
-- **#225:** raw environmental reactant discovery. #226 is merged. Keep the first slice COMBINE-discovery-only; obtain owner approval for the exact deterministic integer fixture and energy source before implementation. Do not force reactions or use organism energy as an environmental source. BREAK discovery is deferred to a separate stage.
-- **#215:** bounded event inspection/environment-first experiments. #214 is merged; bind this work to the actual shared runtime event contract.
-- **#210:** death and continued ordinary chemistry. Keep biological death distinct from physical ownership and ordinary chemistry.
-- **#216:** sunlight/world-tone exact-reference validation. Keep it separate from cache validation and sequence after lifecycle integration.
-- **#204:** documentation-only handoff; no production code or tests.
+- **#225:** the only remaining open draft. Raw environmental reactant discovery is COMBINE-only for its first acceptance slice. Obtain owner approval for the exact whole-unit fixture, varied pile placement/randomization, flow conditions, and environmental energy source before implementation. Do not force reactions or use organism energy as an environmental source. Natural BREAK discovery is deferred.
+- **#215:** the environment-first event-inspection plan is merged; implementation remains unstarted. Bind it to the actual shared runtime event contract.
+- **#210:** the death/continued-chemistry plan is merged; lifecycle implementation remains unstarted. Keep biological death distinct from physical ownership and ordinary chemistry.
+- **#216:** the sunlight/world-tone validation plan is merged; implementation remains blocked on lifecycle integration. Keep it separate from cache validation.
+- **#204:** the documentation-only roadmap/handoff is merged.
 
 PR #196 and PR #179 remain closed. Do not reopen either wholesale. Do not create additional PRs without explicit owner authorization. Chemistry is still not “unified” until environmental, organism/cell-held, and dead material share one policy/transaction path and the independent material/energy, deterministic-work, sunlight, and whole-world conservation gates have evidence.
