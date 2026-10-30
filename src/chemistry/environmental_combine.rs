@@ -193,18 +193,22 @@ fn select_best_positive_work_contact(
                         .partial_cmp(&current.required_energy)
                         .unwrap_or(std::cmp::Ordering::Equal)
                         .then_with(|| {
-                            proposed.candidate.distance
+                            proposed
+                                .candidate
+                                .distance
                                 .partial_cmp(&current.candidate.distance)
                                 .unwrap_or(std::cmp::Ordering::Equal)
                         })
                         .then_with(|| {
                             format!(
                                 "{:?}|{:?}",
-                                proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
+                                proposed.candidate.endpoint_a,
+                                proposed.candidate.endpoint_b
                             )
                             .cmp(&format!(
                                 "{:?}|{:?}",
-                                current.candidate.endpoint_a, current.candidate.endpoint_b
+                                current.candidate.endpoint_a,
+                                current.candidate.endpoint_b
                             ))
                         })
                         .is_lt()
