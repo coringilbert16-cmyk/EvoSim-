@@ -30,6 +30,11 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
+    /// Stable deterministic identity for this physical instance. Unlike its
+    /// placements, this survives environmental transport and keeps ongoing
+    /// chemical encounters associated with the same reactants.
+    #[serde(default)]
+    pub(crate) instance_id: u64,
     pub(crate) material: Material,
     pub(crate) placements: Option<Vec<Placement>>,
     #[serde(default)]
@@ -43,6 +48,31 @@ pub(crate) struct PhysicalMaterial {
 }
 
 impl PhysicalMaterial {
+    fn hash_identity_bytes(bytes: impl IntoIterator<Item = u8>) -> u64 {
+        let hash = bytes.into_iter().fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        });
+        if hash == 0 { 1 } else { hash }
+    }
+
+    fn child_instance_identity(parent: u64, members: &[usize]) -> u64 {
+        let signature = format!("split:{parent}:{members:?}");
+        Self::hash_identity_bytes(signature.bytes())
+    }
+
+    /// Assign an identity to a legacy instance only. Ordinary movement keeps
+    /// the existing identity even as world-space placements change.
+    pub(crate) fn refresh_instance_identity(&mut self) {
+        if self.instance_id != 0 {
+            return;
+        }
+        let signature = format!(
+            "physical:{:?}|{:?}|{:?}|{:?}",
+            self.material, self.placements, self.internal_connections, self.realized_shapes
+        );
+        self.instance_id = Self::hash_identity_bytes(signature.bytes());
+    }
+
     pub(crate) fn realized(
         material: Material,
         placements: Vec<Placement>,
@@ -130,13 +160,16 @@ impl PhysicalMaterial {
             });
         }
 
-        Some(Self {
+        let mut instance = Self {
+            instance_id: 0,
             material,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
             owner_relative_origin: None,
             realized_shapes: None,
-        })
+        };
+        instance.refresh_instance_identity();
+        Some(instance)
     }
 
     /// Attach an exact fluid shape to a single-part acquired fluid material.
@@ -328,7 +361,8 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
-            pieces.push(Self {
+            let mut piece = Self {
+                instance_id: Self::child_instance_identity(self.instance_id, &members),
                 material: Material {
                     parts,
                     internal_bonds,
@@ -342,7 +376,11 @@ impl PhysicalMaterial {
                         .map(|&old_index| shapes[old_index].clone())
                         .collect()
                 }),
-            });
+            };
+            if piece.instance_id == 0 {
+                piece.refresh_instance_identity();
+            }
+            pieces.push(piece);
         }
         Some(pieces)
     }
@@ -467,6 +505,7 @@ mod tests {
             },
         };
         let physical = PhysicalMaterial {
+            instance_id: 0,
             material: Material::free_base("Water", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
@@ -496,6 +535,7 @@ mod tests {
             },
         };
         let underfilled = PhysicalMaterial {
+            instance_id: 0,
             material: Material::free_base("Water", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
