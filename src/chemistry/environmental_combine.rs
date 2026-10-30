@@ -338,49 +338,7 @@ fn advance_pair_approach(
     if static_potential <= 0.0 {
         return false;
     }
-    let Some(body) =
-        crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(structure)
-    else {
-        return false;
-    };
-    if *remaining_work == 0 {
-        return false;
-    }
-    let nearby_cells = environment.field.cells_intersecting_bounds_limited(
-        body.min_x - BOUNDS_PADDING,
-        body.max_x + BOUNDS_PADDING,
-        body.min_y - BOUNDS_PADDING,
-        body.max_y + BOUNDS_PADDING,
-        FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work),
-        cell_a.wrapping_add(cell_b),
-    );
-    let mut collision_structure = structure.clone();
-    let mut obstacle_indices = Vec::new();
-    for nearby_cell in nearby_cells {
-        if *remaining_work == 0 {
-            return false;
-        }
-        *remaining_work = remaining_work.saturating_sub(1);
-        for physical in &environment.field.cells[nearby_cell].physical_materials {
-            if *remaining_work == 0 {
-                return false;
-            }
-            *remaining_work = remaining_work.saturating_sub(1);
-            if physical.instance_id == source_a.instance_id
-                || physical.instance_id == source_b.instance_id
-            {
-                continue;
-            }
-            if let Some(indices) = crate::material_restoration::restore_material(
-                &mut collision_structure,
-                physical,
-                origin(),
-                &environment.catalog,
-            ) {
-                obstacle_indices.extend(indices);
-            }
-        }
-    }
+
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let reaction_properties_a = source_a.material.weighted_properties(&environment.catalog);
     let reaction_properties_b = source_b.material.weighted_properties(&environment.catalog);
@@ -427,6 +385,49 @@ fn advance_pair_approach(
         || available <= 0.0
     {
         return false;
+    }
+    let Some(body) =
+        crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(structure)
+    else {
+        return false;
+    };
+    if *remaining_work == 0 {
+        return false;
+    }
+    let nearby_cells = environment.field.cells_intersecting_bounds_limited(
+        body.min_x - BOUNDS_PADDING,
+        body.max_x + BOUNDS_PADDING,
+        body.min_y - BOUNDS_PADDING,
+        body.max_y + BOUNDS_PADDING,
+        FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work),
+        cell_a.wrapping_add(cell_b),
+    );
+    let mut collision_structure = structure.clone();
+    let mut obstacle_indices = Vec::new();
+    for nearby_cell in nearby_cells {
+        if *remaining_work == 0 {
+            return false;
+        }
+        *remaining_work = remaining_work.saturating_sub(1);
+        for physical in &environment.field.cells[nearby_cell].physical_materials {
+            if *remaining_work == 0 {
+                return false;
+            }
+            *remaining_work = remaining_work.saturating_sub(1);
+            if physical.instance_id == source_a.instance_id
+                || physical.instance_id == source_b.instance_id
+            {
+                continue;
+            }
+            if let Some(indices) = crate::material_restoration::restore_material(
+                &mut collision_structure,
+                physical,
+                origin(),
+                &environment.catalog,
+            ) {
+                obstacle_indices.extend(indices);
+            }
+        }
     }
     let mut low = 0.0;
     let mut high = requested_step;
