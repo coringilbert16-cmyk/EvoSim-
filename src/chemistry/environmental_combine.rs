@@ -1321,6 +1321,245 @@ mod tests {
         );
     }
 
+    /// Diagnostic matrix for bonded compound + bonded compound encounters.
+    /// Each side remains a physical constituent graph; chemistry is evaluated
+    /// only at the selected constituent interface, never on averaged molecules.
+    #[test]
+    fn compound_compound_matrix_exercises_constituent_level_chemistry() {
+        let mut simulation = crate::state::Simulation::new(23329, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        let carbon_compound = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+                internal_bonds: vec![InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 11.5,
+                    y: 10.0 + 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("carbon dimer must be a valid bonded compound");
+        let (carbon_structure, carbon_indices) =
+            restored_source(&carbon_compound, &simulation.environment)
+                .expect("carbon dimer must restore with its original bond");
+        assert_eq!(carbon_indices.len(), 2);
+        assert_eq!(carbon_structure.bonds.len(), 1);
+
+        let mut classified = 0usize;
+        let mut bonded_compounds = 0usize;
+        let mut eligible_contacts = 0usize;
+        let mut chemical_progress = 0usize;
+
+        for resource in &catalog {
+            let mut compound_b = None;
+            'internal_pose: for step in 1..=60 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                    let (sin, cos) = angle.sin_cos();
+                    let candidate = PhysicalMaterial::realized(
+                        Material {
+                            parts: vec![(resource.name.clone(), 1.0), (resource.name.clone(), 1.0)],
+                            internal_bonds: vec![InternalBond {
+                                part_a: 0,
+                                part_b: 1,
+                            }],
+                        },
+                        vec![
+                            Placement {
+                                x: 10.0,
+                                y: 10.0,
+                                rotation_radians: angle,
+                            },
+                            Placement {
+                                x: 10.0 + distance * cos,
+                                y: 10.0 + distance * sin,
+                                rotation_radians: angle,
+                            },
+                        ],
+                        &catalog,
+                    );
+                    let Some(candidate) = candidate else {
+                        continue;
+                    };
+                    if let Some((structure, indices)) =
+                        restored_source(&candidate, &simulation.environment)
+                    {
+                        if indices.len() == 2 && structure.bonds.len() == 1 {
+                            compound_b = Some(candidate);
+                            break 'internal_pose;
+                        }
+                    }
+                }
+            }
+
+            let Some(compound_b) = compound_b else {
+                println!(
+                    "COMPOUND_COMPOUND_MATRIX|Carbon+Carbon|{}+{}|contact=no_bonded_realization",
+                    resource.name, resource.name
+                );
+                classified += 1;
+                continue;
+            };
+            bonded_compounds += 1;
+            let relative = compound_b
+                .placements
+                .as_ref()
+                .expect("realized compound must retain placements");
+            let origin_b = relative[0];
+            let second_b = relative[1];
+            let local_x = second_b.x - origin_b.x;
+            let local_y = second_b.y - origin_b.y;
+            let mut selected_fixture = None;
+
+            'external_pose: for step in 1..=80 {
+                let distance = step as f64 * 0.05;
+                for rotation_step in 0..12 {
+                    let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
+                    let (sin, cos) = angle.sin_cos();
+                    let rotated_x = local_x * cos - local_y * sin;
+                    let rotated_y = local_x * sin + local_y * cos;
+                    let base = PhysicalMaterial::realized(
+                        compound_b.material.clone(),
+                        vec![
+                            Placement {
+                                x: 10.0 + distance,
+                                y: 10.0,
+                                rotation_radians: origin_b.rotation_radians + angle,
+                            },
+                            Placement {
+                                x: 10.0 + distance + rotated_x,
+                                y: 10.0 + rotated_y,
+                                rotation_radians: second_b.rotation_radians + angle,
+                            },
+                        ],
+                        &catalog,
+                    )
+                    .expect("translated bonded compound must retain its realization");
+                    let (mut structure, indices_a) =
+                        restored_source(&carbon_compound, &simulation.environment)
+                            .expect("carbon dimer must restore for each pose");
+                    let Some(indices_b) = crate::material_restoration::restore_material(
+                        &mut structure,
+                        &base,
+                        origin(),
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    if indices_b.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &structure,
+                            &structure.units[*index],
+                            &indices_b,
+                            &catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+                    let Some(selected) = select_best_contact(
+                        &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
+                    ) else {
+                        continue;
+                    };
+                    let name_a = structure.units[selected.unit_a].material.parts[0]
+                        .0
+                        .as_str();
+                    let name_b = structure.units[selected.unit_b].material.parts[0]
+                        .0
+                        .as_str();
+                    let interface =
+                        crate::geometry_reference_library::resolve_live_contact_candidate(
+                            name_a,
+                            &structure.units[selected.unit_a],
+                            name_b,
+                            &structure.units[selected.unit_b],
+                            selected.candidate,
+                            &catalog,
+                        );
+                    if selected.candidate.distance <= 0.25
+                        && selected.candidate.facing > 0.5
+                        && interface.is_some()
+                    {
+                        selected_fixture = Some((base, structure, indices_a, indices_b, selected));
+                        break 'external_pose;
+                    }
+                }
+            }
+
+            if let Some((base, structure, indices_a, indices_b, selected)) = selected_fixture {
+                eligible_contacts += 1;
+                let mut accumulation = BTreeMap::new();
+                let mut updated = BTreeSet::new();
+                let mut operations = Vec::new();
+                chemical_step(
+                    &simulation.environment,
+                    &mut simulation.chemistry_library,
+                    &structure,
+                    selected,
+                    &indices_a,
+                    &indices_b,
+                    &carbon_compound,
+                    &base,
+                    0,
+                    0,
+                    0,
+                    1,
+                    &mut accumulation,
+                    &mut updated,
+                    &mut operations,
+                );
+                let outcome = if !operations.is_empty() {
+                    chemical_progress += 1;
+                    "activated"
+                } else if !accumulation.is_empty() {
+                    chemical_progress += 1;
+                    "accumulating"
+                } else {
+                    "contact_no_progress"
+                };
+                println!(
+                    "COMPOUND_COMPOUND_MATRIX|Carbon+Carbon|{}+{}|contact=eligible|outcome={}",
+                    resource.name, resource.name, outcome
+                );
+            } else {
+                println!(
+                    "COMPOUND_COMPOUND_MATRIX|Carbon+Carbon|{}+{}|contact=no_eligible_pose",
+                    resource.name, resource.name
+                );
+            }
+            classified += 1;
+        }
+
+        assert_eq!(classified, catalog.len());
+        assert!(
+            bonded_compounds > 0,
+            "at least one canonical resource must form a bonded homodimer"
+        );
+        assert!(
+            eligible_contacts > 0,
+            "two bonded compounds must expose at least one eligible external interface"
+        );
+        assert!(
+            chemical_progress > 0,
+            "at least one compound/compound interface must advance existing chemistry"
+        );
+    }
+
     /// End-to-end transaction: a bonded molecule combines with a free base,
     /// retaining its original bond while adding one new bond and conserving
     /// material and energy through environmental discovery and settlement.
