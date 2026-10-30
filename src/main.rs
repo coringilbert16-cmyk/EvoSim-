@@ -58,6 +58,8 @@ mod initial_organism_constructor;
 mod interior_geometry;
 #[path = "organism/juvenile.rs"]
 mod juvenile;
+#[path = "geometry/molecular_layout.rs"]
+mod molecular_layout;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]

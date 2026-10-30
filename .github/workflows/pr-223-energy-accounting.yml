@@ -2,9 +2,9 @@ name: PR 223 energy accounting
 
 on:
   push:
-    branches: [chemistry/environmental-combine-discovery, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29]
+    branches: [chemistry/environmental-combine-discovery, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29]
   pull_request:
-    branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29]
+    branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29]
     paths:
       - "src/chemistry/**"
       - "src/materials/**"
@@ -33,11 +33,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Molecular layout stability geometry inputs
+        run: timeout 5m cargo test --locked molecular_layout::tests -- --nocapture
+      - name: Heterogeneous constituent reaction-key characterization
+        run: timeout 5m cargo test --locked heterogeneous_compound_contacts_retain_constituent_chemical_identity -- --nocapture
+      - name: Bounded component contact search rotates across ticks
+        run: timeout 5m cargo test --locked bounded_component_contact_search_rotates_to_late_constituent_pairs -- --nocapture
       - name: Compound + base COMBINE transaction and energy conservation
         run: timeout 5m cargo test --locked environmental_compound_base_combine_commits_three_part_product -- --nocapture
       - name: Compound + compound constituent chemistry matrix
         run: timeout 5m cargo test --locked compound_compound_matrix_exercises_constituent_level_chemistry -- --nocapture
-      - name: Compound + compound COMBINE transaction and energy conservation
+      - name: Four-part compound COMBINE/BREAK round trip
         run: timeout 5m cargo test --locked environmental_compound_compound_combine_commits_four_part_product -- --nocapture
       - name: Molecular composition and topology characterization
         run: timeout 5m cargo test --locked molecular_characterization_ -- --nocapture
