@@ -776,7 +776,7 @@ fn environmental_material_inventory(simulation: &Simulation) -> BTreeMap<String,
         }
         for material in &cell.physical_materials {
             for (name, amount) in &material.material.parts {
-                *inventory.entry(name.clone()).or_insert(0.0) += amount;
+                *inventory.entry(name.clone()).or_insert(0.0) += *amount;
             }
         }
     }
