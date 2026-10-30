@@ -1379,7 +1379,10 @@ mod tests {
 
         assert_eq!(initial, moved);
         assert_eq!(moved, reversed);
-        assert_ne!(moved, rotated, "a changed constituent orientation starts a new encounter");
+        assert_ne!(
+            moved, rotated,
+            "a changed constituent orientation starts a new encounter"
+        );
     }
 
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
