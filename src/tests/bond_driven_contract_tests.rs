@@ -370,7 +370,10 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
         let placements = crate::construction_runtime::candidate_placements(
             &anchor_structure,
             carbon,
@@ -388,11 +391,7 @@ mod tests {
             trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
             let mut cache = crate::contact::ConnectionCompatibilityCache::new();
             let candidates = crate::contact::connection_pair_candidates_cached(
-                &trial,
-                0,
-                1,
-                &catalog,
-                &mut cache,
+                &trial, 0, 1, &catalog, &mut cache,
             );
             for candidate in candidates.into_iter().filter(|candidate| {
                 candidate.available_a
@@ -401,11 +400,7 @@ mod tests {
             }) {
                 let Some((_, _, investment, _)) =
                     crate::combine_runtime::selected_candidate_evaluation(
-                        &trial,
-                        0,
-                        1,
-                        candidate,
-                        &catalog,
+                        &trial, 0, 1, candidate, &catalog,
                     )
                 else {
                     continue;
@@ -462,15 +457,14 @@ mod tests {
             &catalog,
         )
         .expect("COMBINE product must be a restorable physical material");
-        physical.internal_connections = Some(vec![
-            crate::physical_material::PhysicalMaterialBond {
+        physical.internal_connections =
+            Some(vec![crate::physical_material::PhysicalMaterialBond {
                 part_a: index_a,
                 endpoint_a: realized_bond.endpoint_a.location,
                 part_b: index_b,
                 endpoint_b: realized_bond.endpoint_b.location,
                 bond_energy: realized_bond.bond_energy,
-            },
-        ]);
+            }]);
         let expected_bond_energy = realized_bond.bond_energy;
 
         let mut storage = crate::material_storage::MaterialStorage::default();
@@ -494,9 +488,10 @@ mod tests {
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 2);
         assert!(
-            structure.bonds.iter().any(|bond| {
-                (bond.bond_energy - expected_bond_energy).abs() <= 1e-9
-            }),
+            structure
+                .bonds
+                .iter()
+                .any(|bond| { (bond.bond_energy - expected_bond_energy).abs() <= 1e-9 }),
             "construction must preserve the COMBINE product's allocated internal bond energy"
         );
         assert!(storage.is_empty());
