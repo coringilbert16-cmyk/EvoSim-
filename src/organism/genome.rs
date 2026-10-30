@@ -67,7 +67,6 @@ impl Genome {
         M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
     }
 
-
     pub fn movement_efficiency(&self) -> f64 {
         self.trait_value("movement_efficiency", 0.8)
             .clamp(0.05, 1.0)
@@ -161,17 +160,17 @@ mod tests {
     #[test]
     fn mutation_discards_retired_processing_efficiency_from_legacy_genomes() {
         let mut genome = initial_genome();
-        genome.traits.push(trait_def("processing_efficiency", 0.8, 0.05));
+        genome
+            .traits
+            .push(trait_def("processing_efficiency", 0.8, 0.05));
         let mut rng = ChaCha8Rng::seed_from_u64(42);
 
         genome.mutate(&mut rng);
 
-        assert!(
-            genome
-                .traits
-                .iter()
-                .all(|trait_def| trait_def.name != "processing_efficiency")
-        );
+        assert!(genome
+            .traits
+            .iter()
+            .all(|trait_def| trait_def.name != "processing_efficiency"));
     }
 
     #[test]
