@@ -274,7 +274,12 @@ pub(crate) fn settle_environment_inputs(
     if !total_escaped.is_finite() || total_escaped < 0.0 {
         return false;
     }
-    if !ledger.settle_world_tone_paths(total_incident, total_captured, total_heat, total_escaped) {
+    if !ledger.settle_world_tone_paths(
+        total_incident,
+        total_captured,
+        total_heat,
+        total_escaped,
+    ) {
         return false;
     }
     environment.resonant_energy = staged_reservoir;
@@ -289,10 +294,30 @@ mod tests {
     fn right_bend_hotspot_has_a_smooth_radial_gradient_and_100_unit_peak() {
         let hotspot = RadialHotspot::right_bend_for_world(1000.0, 1000.0)
             .expect("the default world should have a valid right-bend hotspot");
-        assert!((hotspot.intensity_at(hotspot.center_x, hotspot.center_y).unwrap() - 100.0).abs() < 1e-12);
-        assert!((hotspot.intensity_at(hotspot.center_x + hotspot.radius * 0.5, hotspot.center_y).unwrap() - 50.0).abs() < 1e-10);
-        assert_eq!(hotspot.intensity_at(hotspot.center_x + hotspot.radius, hotspot.center_y), Some(0.0));
-        assert_eq!(hotspot.intensity_at(hotspot.center_x + hotspot.radius * 1.1, hotspot.center_y), Some(0.0));
+        assert!(
+            (hotspot
+                .intensity_at(hotspot.center_x, hotspot.center_y)
+                .unwrap()
+                - 100.0)
+                .abs()
+                < 1e-12
+        );
+        assert!(
+            (hotspot
+                .intensity_at(hotspot.center_x + hotspot.radius * 0.5, hotspot.center_y)
+                .unwrap()
+                - 50.0)
+                .abs()
+                < 1e-10
+        );
+        assert_eq!(
+            hotspot.intensity_at(hotspot.center_x + hotspot.radius, hotspot.center_y),
+            Some(0.0)
+        );
+        assert_eq!(
+            hotspot.intensity_at(hotspot.center_x + hotspot.radius * 1.1, hotspot.center_y),
+            Some(0.0)
+        );
     }
 
     #[test]
@@ -311,7 +336,9 @@ mod tests {
         let mut simulation = crate::state::Simulation::new(911, 1.0);
         assert!(simulation.hotspot.is_none());
         assert!(simulation.enable_chemistry_experiment_hotspot());
-        let hotspot = simulation.hotspot.expect("explicit experiment setup should enable the source");
+        let hotspot = simulation
+            .hotspot
+            .expect("explicit experiment setup should enable the source");
         assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
         assert!((hotspot.center_x - 720.0).abs() < 1e-10);
     }
@@ -336,16 +363,33 @@ mod tests {
         };
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
-            vec![Placement { x: 500.0, y: 500.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 500.0,
+                y: 500.0,
+                rotation_radians: 0.0,
+            }],
             &simulation.environment.catalog,
-        ).expect("test material should have physical geometry");
+        )
+        .expect("test material should have physical geometry");
         assert!(simulation.environment.field.deposit_physical(
-            500.0, 500.0, physical, &simulation.environment.catalog
+            500.0,
+            500.0,
+            physical,
+            &simulation.environment.catalog
         ));
         let before = simulation.energy_inventory_snapshot();
-        assert!(settle_environment_inputs(hotspot, &mut simulation.environment, &mut simulation.energy_ledger));
+        assert!(settle_environment_inputs(
+            hotspot,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger
+        ));
         let after = simulation.energy_inventory_snapshot();
         assert!(simulation.environment.resonant_energy.total_energy().unwrap() > 0.0);
-        assert!(after.is_balanced(1e-7), "hotspot energy must reconcile: before={:?}, after={:?}", before.residual(), after.residual());
+        assert!(
+            after.is_balanced(1e-7),
+            "hotspot energy must reconcile: before={:?}, after={:?}",
+            before.residual(),
+            after.residual()
+        );
     }
 }
