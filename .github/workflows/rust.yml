@@ -7,7 +7,7 @@ on:
     branches: [main]
   pull_request:
     # Also validate stacked fix branches against their parent fix branch.
-    branches: [main, integration/unified-source-and-catalogue, 'fix/**', chemistry-compound-base-matrix-2026-10-29]
+    branches: [main, integration/unified-source-and-catalogue, 'fix/**', chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29]
 
 permissions:
   contents: read
