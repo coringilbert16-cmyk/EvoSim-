@@ -33,6 +33,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Molecular layout stability geometry inputs
+        run: timeout 5m cargo test --locked molecular_layout::tests -- --nocapture
       - name: Heterogeneous constituent reaction-key characterization
         run: timeout 5m cargo test --locked heterogeneous_compound_contacts_retain_constituent_chemical_identity -- --nocapture
       - name: Bounded component contact search rotates across ticks
