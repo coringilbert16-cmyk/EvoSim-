@@ -190,6 +190,16 @@ mod tests {
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
         assert_eq!(material_count, 128);
+        let mut represented_types = std::collections::BTreeSet::new();
+        for cell in &first.simulation.environment.field.cells {
+            for material in &cell.physical_materials {
+                for (name, amount) in &material.material.parts {
+                    assert_eq!(*amount, 1.0);
+                    represented_types.insert(name.clone());
+                }
+            }
+        }
+        assert_eq!(represented_types.len(), 7);
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
@@ -201,6 +211,10 @@ mod tests {
         }
         assert_eq!(simulation.tick, 4);
         assert_eq!(simulation.environmental_chemistry_diagnostics.tick, 4);
+        assert_eq!(
+            simulation.environmental_chemistry_diagnostics.hotspot_settlement_succeeded,
+            Some(true)
+        );
         let total_material = simulation
             .environment
             .field
