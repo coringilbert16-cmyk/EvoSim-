@@ -166,8 +166,8 @@ fn randomized_pile_centers(
             rng.gen_range(height * 0.08..height * 0.92),
         );
         let separated = centers.iter().all(|(x, y)| {
-            let vertical = (candidate.1 - y + height * 0.5).rem_euclid(height) - height * 0.5;
-            (candidate.0 - x).hypot(vertical) >= 70.0
+            let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
+            (candidate.0 - *x).hypot(vertical) >= 70.0
         });
         if separated {
             centers.push(candidate);
