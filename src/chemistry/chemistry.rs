@@ -114,6 +114,44 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
     normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
 }
 
+/// Derive a bond's disruption tolerance from its cohesion-derived strength
+/// and the two materials' existing reactivity values.
+///
+/// Reactivity is normalized against the catalog mean so the modifier is
+/// dimensionless and remains stable when the catalog's native scale changes.
+/// The arithmetic pair mean lets either reactive constituent increase the
+/// pair's response. Higher reactivity lowers the activation/disruption
+/// tolerance; it does not create energy or alter chemical attraction.
+pub fn activation_barrier_from_bond_properties(
+    bond_strength: f64,
+    reactivity_a: f64,
+    reactivity_b: f64,
+    reactivity_baseline: f64,
+) -> Option<f64> {
+    if !bond_strength.is_finite()
+        || bond_strength < 0.0
+        || !reactivity_a.is_finite()
+        || reactivity_a < 0.0
+        || !reactivity_b.is_finite()
+        || reactivity_b < 0.0
+        || !reactivity_baseline.is_finite()
+        || reactivity_baseline < 0.0
+    {
+        return None;
+    }
+
+    let pair_reactivity = (reactivity_a + reactivity_b) * 0.5;
+    if !pair_reactivity.is_finite() {
+        return None;
+    }
+    let response_factor = if reactivity_baseline <= f64::EPSILON {
+        if pair_reactivity <= f64::EPSILON { 1.0 } else { return None; }
+    } else {
+        reactivity_baseline / (reactivity_baseline + pair_reactivity)
+    };
+    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0) * response_factor)
+}
+
 /// Convert the normalized accumulated chemistry quantity into physical energy.
 ///
 /// The conversion is derived from the approved force and characteristic contact
