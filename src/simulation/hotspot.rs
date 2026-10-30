@@ -87,7 +87,9 @@ fn form_area(form: &Form) -> Option<f64> {
         Form::RegularPolygon { sides, radius }
             if *sides >= 3 && radius.is_finite() && *radius > 0.0 =>
         {
-            0.5 * f64::from(*sides) * radius * radius
+            0.5 * f64::from(*sides)
+                * radius
+                * radius
                 * (std::f64::consts::TAU / f64::from(*sides)).sin()
         }
         Form::Polygon { vertices } if vertices.len() >= 3 => {
@@ -231,9 +233,7 @@ pub(crate) fn settle_environment_inputs(
                 let mut deposit_ok = true;
                 for component in &retained.components {
                     let energy = component.amplitude * component.amplitude;
-                    if energy > f64::EPSILON
-                        && !candidate.deposit(component.frequency_hz, energy)
-                    {
+                    if energy > f64::EPSILON && !candidate.deposit(component.frequency_hz, energy) {
                         deposit_ok = false;
                         break;
                     }
@@ -274,12 +274,7 @@ pub(crate) fn settle_environment_inputs(
     if !total_escaped.is_finite() || total_escaped < 0.0 {
         return false;
     }
-    if !ledger.settle_world_tone_paths(
-        total_incident,
-        total_captured,
-        total_heat,
-        total_escaped,
-    ) {
+    if !ledger.settle_world_tone_paths(total_incident, total_captured, total_heat, total_escaped) {
         return false;
     }
     environment.resonant_energy = staged_reservoir;
@@ -384,7 +379,14 @@ mod tests {
             &mut simulation.energy_ledger
         ));
         let after = simulation.energy_inventory_snapshot();
-        assert!(simulation.environment.resonant_energy.total_energy().unwrap() > 0.0);
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap()
+                > 0.0
+        );
         assert!(
             after.is_balanced(1e-7),
             "hotspot energy must reconcile: before={:?}, after={:?}",
