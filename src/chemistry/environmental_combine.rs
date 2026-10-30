@@ -753,22 +753,35 @@ pub(crate) fn resolve_environmental(
     if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
         return false;
     }
-    let Some((_, _, _, required_energy)) = crate::combine_runtime::selected_candidate_evaluation(
-        &trial_structure,
-        unit_a,
-        unit_b,
-        operation.candidate,
-        &environment.catalog,
-    ) else {
+    let Some((_, work_cost, _, _)) =
+        crate::combine_runtime::selected_candidate_evaluation(
+            &trial_structure,
+            unit_a,
+            unit_b,
+            operation.candidate,
+            &environment.catalog,
+        )
+    else {
         return false;
     };
-    if !required_energy.is_finite() || required_energy < 0.0 {
+    if !work_cost.is_finite() || work_cost < 0.0 {
         return false;
     }
     let mut staged_resonance = environment.resonant_energy.clone();
-    let resonant_work =
-        staged_resonance.withdraw_compatible(reaction_frequency_hz, required_energy);
-    if !resonant_work.is_finite() || resonant_work < 0.0 {
+    // Resonance couples to the physical formation work itself, not merely to
+    // the net external deficit after structural potential is released. The
+    // reaction transaction separately accounts for that released potential.
+    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, work_cost);
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || resonant_work > work_cost
+    {
+        return false;
+    }
+    let remaining_work = work_cost - resonant_work;
+    if !remaining_work.is_finite()
+        || environment.chemistry_usable_energy + 1e-9 < remaining_work
+    {
         return false;
     }
     let mut staged_ledger = *ledger;
@@ -2535,19 +2548,9 @@ mod tests {
                                     )
                                 },
                             );
-                            let requires_external_energy =
-                                crate::combine_runtime::selected_candidate_evaluation(
-                                    &structure,
-                                    selected.unit_a,
-                                    selected.unit_b,
-                                    selected.candidate,
-                                    &catalog,
-                                )
-                                .is_some_and(|(_, _, _, required)| required > 1e-9);
                             if selected.candidate.distance <= 0.25
                                 && selected.candidate.facing > 0.5
                                 && live_interface.is_some()
-                                && requires_external_energy
                             {
                                 selected_pair = Some((source_a, source_b, selected));
                                 break 'search;
