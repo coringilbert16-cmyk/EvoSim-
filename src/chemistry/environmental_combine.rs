@@ -2624,7 +2624,10 @@ mod tests {
             &catalog,
         ));
         // Keep the usable reserve empty so this transaction is funded solely
-        // by the compatible resonance deposited above.
+        // by the compatible resonance deposited above. The simulation fixture
+        // starts with a nonzero reserve, so clear it explicitly before taking
+        // the inventory baseline used by the ledger assertions.
+        simulation.environment.chemistry_usable_energy = 0.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
