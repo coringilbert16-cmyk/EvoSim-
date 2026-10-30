@@ -198,6 +198,7 @@ impl Simulation {
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
             hotspot: None,
+            environmental_chemistry_diagnostics: Default::default(),
         }
     }
     /// Enable the localized source only for an explicitly configured chemistry
@@ -747,6 +748,13 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        self.environmental_chemistry_diagnostics =
+            crate::state::EnvironmentalChemistryTickDiagnostics {
+                tick: self.tick,
+                ..Default::default()
+            };
+        self.environmental_chemistry_diagnostics.accumulation_entries =
+            self.chemical_reaction_accumulation.len();
         self.tick += 1;
 
         // Divide the realization budget across owners; the remainder rotates by tick.
@@ -858,11 +866,12 @@ impl Simulation {
             );
         }
         if let Some(hotspot) = self.hotspot {
-            let _ = crate::hotspot::settle_environment_inputs(
-                hotspot,
-                &mut self.environment,
-                &mut self.energy_ledger,
-            );
+            self.environmental_chemistry_diagnostics.hotspot_settlement_succeeded =
+                Some(crate::hotspot::settle_environment_inputs(
+                    hotspot,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                ));
         }
         // Environmental chemistry is a first-class owner and must run
         // even when the world contains no organisms. Reserve half of the
@@ -877,6 +886,10 @@ impl Simulation {
             self.tick,
             &mut environmental_break_discovery_remaining,
         );
+        self.environmental_chemistry_diagnostics.break_ready_candidates =
+            environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics.break_discovery_work_remaining =
+            environmental_break_discovery_remaining;
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
@@ -887,6 +900,10 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
             );
+        self.environmental_chemistry_diagnostics.combine_ready_candidates =
+            environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics.combine_discovery_work_remaining =
+            environmental_combine_discovery_remaining;
 
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -897,13 +914,21 @@ impl Simulation {
                 &mut environmental_break_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+        self.environmental_chemistry_diagnostics.break_scheduled =
+            environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics.break_realization_work_remaining =
+            environmental_break_work_remaining;
         for operation in environmental_break_operations {
-            let _ = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+            if crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
-            );
+            ) {
+                self.environmental_chemistry_diagnostics.break_committed += 1;
+            } else {
+                self.environmental_chemistry_diagnostics.break_rejected += 1;
+            }
         }
 
         // Environmental COMBINE receives its own bounded share of the field's
@@ -918,13 +943,21 @@ impl Simulation {
                 &mut environmental_combine_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+        self.environmental_chemistry_diagnostics.combine_scheduled =
+            environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics.combine_realization_work_remaining =
+            environmental_combine_work_remaining;
         for operation in environmental_combine_operations {
-            let _ = crate::environmental_combine::resolve_environmental_preserving_accumulation(
+            if crate::environmental_combine::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
-            );
+            ) {
+                self.environmental_chemistry_diagnostics.combine_committed += 1;
+            } else {
+                self.environmental_chemistry_diagnostics.combine_rejected += 1;
+            }
         }
 
         let mut carried_chemistry_work = 0;
