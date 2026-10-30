@@ -4832,3 +4832,44 @@ This closes the exact-head validation uncertainty for the graph regression. The 
 4. Only after this contract is explicit, audit the next physical growth transition under real material, energy, collision, bond, and chemistry constraints. Consider alternate seed compositions only if evidence shows the current reference fixture cannot support the desired next milestone.
 
 No production source or test changes were made during this audit. PR #204 remains documentation-only; the implementation work belongs in PR #205 after the contract boundary is agreed. This audit does not claim aggregate ownership or whole-world conservation is complete.
+
+---
+
+## Current integration checkpoint — 2026-10-30
+
+This dated checkpoint supersedes older “next target” and open-PR status statements in historical entries above. Those entries remain for audit traceability; they are not current instructions.
+
+**Current `main` head:** `bca1561c137b825814bf7dd29a3b6fd9200f3488` (PR #240 integration merge).
+
+### Integrated chemistry progression
+
+- #214 shared chemistry runtime/scheduler, #223 bounded environmental COMBINE discovery/settlement, and #226 S-shaped flow/gradient/obstacle transport are merged.
+- #229–#234 are merged into main in dependency order: canonical base-pair equation matrix; controlled physical pair matrix; environmental product characterization; compound+base transaction; compound+compound constituent-contact matrix; and committed four-constituent compound COMBINE with original bond/energy preservation and inventory reconciliation.
+- #235–#239 had been merged into intermediate feature branches, not main. Their composition/topology, four-part BREAK round trip, heterogeneous constituent interface/reaction-key, and rotating bounded contact-discovery work was reconciled and integrated with #240. PR #240 also adds the read-only geometry-derived molecular-layout snapshot.
+- #240 does not implement a stability score, maximum valence, BREAK accumulation integration, or bond displacement/exchange. Those remain future design/implementation questions.
+
+### Verification
+
+The exact #240 branch workflow passed formatting and all focused chemistry/molecular-layout gates. Its full-suite step was cancelled by the subsequent merge-triggered main workflow.
+
+The completed #234 full-suite run reported **842 passed, 7 failed, 2 ignored**. The pre-characterization main run at `d38519d2b139ea8749c90b83fcc90cb931cd130e` reported **834 passed, 7 failed, 2 ignored**. The seven failing test identities were identical:
+
+- `bond_driven_contract_tests::tests::construction_uses_an_intact_composite_physical_material`
+- `cavity::tests::unbonded_structure_is_not_a_genome`
+- `contact::tests::boundary_endpoints_preserve_physical_surface_normals`
+- `movement::tests::fluid_boundary_is_contact_geometry_without_becoming_a_wall`
+- `movement::tests::movement_distance_history_prefers_non_dominated_consequence`
+- `movement::tests::water_boundary_permits_full_environmental_penetration`
+- `organism_viability::tests::unsealed_genome_fails_viability`
+
+Thus the #234 run introduced no new failing identity and added eight passing tests relative to that earlier main checkpoint. The post-#240 exact-main workflow remains the current follow-up; do not claim the latest main full suite is green until that run completes. Clippy has not yet been re-established on the post-#240 main head.
+
+### Remaining open work and sequence
+
+- **#225:** raw environmental reactant discovery. #226 is merged. Keep the first slice COMBINE-discovery-only; obtain owner approval for the exact deterministic integer fixture and energy source before implementation. Do not force reactions or use organism energy as an environmental source. BREAK discovery is deferred to a separate stage.
+- **#215:** bounded event inspection/environment-first experiments. #214 is merged; bind this work to the actual shared runtime event contract.
+- **#210:** death and continued ordinary chemistry. Keep biological death distinct from physical ownership and ordinary chemistry.
+- **#216:** sunlight/world-tone exact-reference validation. Keep it separate from cache validation and sequence after lifecycle integration.
+- **#204:** documentation-only handoff; no production code or tests.
+
+PR #196 and PR #179 remain closed. Do not reopen either wholesale. Do not create additional PRs without explicit owner authorization. Chemistry is still not “unified” until environmental, organism/cell-held, and dead material share one policy/transaction path and the independent material/energy, deterministic-work, sunlight, and whole-world conservation gates have evidence.
