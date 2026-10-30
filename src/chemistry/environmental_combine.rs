@@ -755,9 +755,13 @@ pub(crate) fn accumulate_environmental(
                             ticks_per_second,
                         )
                     {
-                        // The field changed atomically. Restart discovery next tick
-                        // so no snapshot index from this pass can go stale.
-                        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+                        // Preserve this encounter's accumulated chemistry while
+                        // restarting discovery against the new field snapshot.
+                        let key = source_pair_key(
+                            &source_a, &source_b, selected.unit_a, selected.unit_b, selected.candidate,
+                        );
+                        updated_keys.insert(key);
+                        dissipate_unupdated_accumulations(accumulation, &updated_keys);
                         return Vec::new();
                     }
                     chemical_step(
