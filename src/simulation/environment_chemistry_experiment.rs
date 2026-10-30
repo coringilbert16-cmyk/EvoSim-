@@ -194,5 +194,42 @@ mod tests {
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
         );
+
+        let mut simulation = first.simulation;
+        for _ in 0..4 {
+            simulation.step();
+        }
+        assert_eq!(simulation.tick, 4);
+        assert_eq!(simulation.environmental_chemistry_diagnostics.tick, 4);
+        let total_material = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.total_amount())
+            .sum::<f64>();
+        assert!((total_material - 128.0).abs() < 1e-6);
+        assert!(
+            simulation
+                .energy_inventory_snapshot()
+                .is_balanced(1e-7),
+            "environment-only chemistry ticks must conserve energy"
+        );
+        assert_eq!(
+            simulation
+                .environmental_chemistry_events
+                .iter()
+                .filter(|event| event.reaction == "COMBINE" && event.outcome == "committed")
+                .count(),
+            simulation.environmental_chemistry_diagnostics.combine_committed
+        );
+        assert_eq!(
+            simulation
+                .environmental_chemistry_events
+                .iter()
+                .filter(|event| event.reaction == "BREAK" && event.outcome == "committed")
+                .count(),
+            simulation.environmental_chemistry_diagnostics.break_committed
+        );
     }
 }
