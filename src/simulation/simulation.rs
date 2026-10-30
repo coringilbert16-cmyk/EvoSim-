@@ -200,6 +200,16 @@ impl Simulation {
             hotspot: None,
         }
     }
+    /// Enable the localized source only for an explicitly configured chemistry
+    /// experiment; the ordinary default simulation remains unchanged.
+    pub(crate) fn enable_chemistry_experiment_hotspot(&mut self) -> bool {
+        self.hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
+            self.environment.width,
+            self.environment.height,
+        );
+        self.hotspot.is_some()
+    }
+
     fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
         let width = 1000.0;
