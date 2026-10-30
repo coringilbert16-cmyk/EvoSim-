@@ -78,7 +78,7 @@ The workflow is still red overall because the full suite retains the nine known 
 - **Remaining scope:** generalize the existing resonance source/propagation path so reaction-released energy can be emitted as a funded local signal, absorbed by other physical aggregates, and retained in their resonance inventories. Then connect COMBINE surplus and other reaction releases to that source path.
 - Environmental/stored-material internal bonds still have no authoritative potential field, so their BREAK path must not claim a bond-energy credit. Fluid coalescence likewise does not claim a persistent bond-potential release. The intrinsic graph-bond potential is a model assumption, not a calibrated chemical free-energy table.
 
-Recommended next steps: (1) wait for exact-head CI on the first implementation; (2) fix any focused compile/test failures narrowly; (3) trace whether living-organism COMBINE can use the same resonance-funding rule without changing non-organism construction/reproduction paths; (4) add direct tests for efficiency-dependent funding and atomic rollback; (5) compare full-suite failure identities to the accepted baseline. Keep PR #222 draft until conservation and rollback are verified. Do not chase unrelated Clippy debt or baseline failures, and do not open PR B until this audit is closed.
+Recommended next steps after retiring the processing-efficiency scalar: (1) verify exact-head CI and compare full-suite failure identities against the accepted baseline; (2) generalize the existing world-tone propagation path to accept funded local reaction emissions; (3) add independent tests proving source debits, propagation losses, receiver credits, and escaped energy balance; (4) route favorable COMBINE surplus and other reaction releases through that shared resonance path; (5) remove remaining source-specific shortcuts only after their replacement paths are covered. Do not chase unrelated Clippy debt or baseline failures.
 
 ### Remaining physics/representation limits
 
@@ -95,9 +95,9 @@ PR A is mergeable only when all of the following are satisfied:
 - [ ] The shared reaction-energy equation and its terms are explicit, reviewed, and used consistently by COMBINE and BREAK.
 - [ ] A favorable COMBINE can commit without an arbitrary external energy grant when the modeled pathway is accessible; any net release is recorded exactly once.
 - [ ] An energetically unfavorable reaction cannot commit unless a legitimate energy source covers the deficit; failed attempts create no energy.
-- [ ] Organism `processing_efficiency` affects how effectively legitimate available energy is supplied to a desired reaction, without changing its thermodynamic delta, bond potential, activation threshold, or resonance capture.
-- [ ] Resonance-funded reaction energy debits the compatible reservoir by the efficiency-adjusted amount, credits only the usable energy actually delivered, and accounts for conversion loss explicitly; no energy is double-counted.
-- [ ] Tests demonstrate different processing efficiencies change reaction-funding effectiveness while leaving the same reaction's physical energy balance unchanged.
+- [ ] Resonance-funded reaction work is limited by physically compatible energy actually withdrawn from the owning reservoir; the remaining work and structural-potential increase are paid by a legitimate holder or the reaction rejects atomically.
+- [ ] Resonance withdrawal, usable-holder debit, structural-potential change, physical work, and heat are independently reconciled without double-counting.
+- [ ] Tests demonstrate frequency compatibility limits usable resonance and that the same physical reaction balance is independent of any inherited conversion scalar.
 - [ ] Activation barriers/work are accounted for separately from net reaction energy. Activation signals do not count as energy.
 - [ ] Stored bond energy has an authoritative representation or is explicitly absent from the model; resource maximum potential energy is not silently substituted for it.
 - [ ] Successful COMBINE and BREAK pass independent inventory/ledger reconciliation, including material/bond changes, released energy, work, and dissipation.
