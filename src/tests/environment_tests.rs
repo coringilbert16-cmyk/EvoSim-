@@ -269,6 +269,7 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     )
     .expect("carbon should be physically realizable");
     let malformed = PhysicalMaterial {
+        instance_id: 0,
         material: Material::free_base("Carbon", 1.0),
         placements: None,
         internal_connections: None,
