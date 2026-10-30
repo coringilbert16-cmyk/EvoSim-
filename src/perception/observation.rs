@@ -123,6 +123,7 @@ pub(crate) struct WorldObservation {
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
     pub(crate) chemistry_diagnostics: crate::state::EnvironmentalChemistryTickDiagnostics,
+    pub(crate) chemistry_events: Vec<crate::state::EnvironmentalChemistryEvent>,
 }
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
@@ -318,6 +319,7 @@ impl WorldObservation {
             decomposing_bodies,
             hotspot: simulation.hotspot,
             chemistry_diagnostics: simulation.environmental_chemistry_diagnostics,
+            chemistry_events: simulation.environmental_chemistry_events.clone(),
         }
     }
 }
