@@ -2681,6 +2681,61 @@ mod tests {
     }
 
     #[test]
+    fn environmental_approach_without_energy_leaves_geometry_and_ledgers_unchanged() {
+        let mut simulation = crate::state::Simulation::new(941, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells { cell.physical_materials.clear(); }
+        simulation.environment.width = 30.0;
+        simulation.environment.height = 30.0;
+        simulation.environment.field = crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let cell = simulation.environment.field.index_for_position(10.0, 10.0).unwrap();
+        let mut fixture = None;
+        'search: for resource_a in &catalog {
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid { continue; }
+            for resource_b in &catalog {
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid { continue; }
+                let (Some(position_a), Some(position_b)) = (resource_a.properties.chemical_position, resource_b.properties.chemical_position) else { continue; };
+                if crate::chemistry::interaction_potential(position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX).unwrap_or(0.0) <= 0.0 { continue; }
+                for step in 1..=18 {
+                    let separation = step as f64 * 0.05;
+                    for rotation_step in 0..12 {
+                        let source_a = PhysicalMaterial::realized(
+                            Material::free_base(resource_a.name.clone(), 1.0),
+                            vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }], &catalog,
+                        );
+                        let source_b = PhysicalMaterial::realized(
+                            Material::free_base(resource_b.name.clone(), 1.0),
+                            vec![Placement { x: 10.0 + separation, y: 10.0, rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0 }], &catalog,
+                        );
+                        let (Some(source_a), Some(source_b)) = (source_a, source_b) else { continue; };
+                        let Some((mut structure, indices_a)) = restored_source(&source_a, &simulation.environment) else { continue; };
+                        let Some(indices_b) = crate::material_restoration::restore_material(&mut structure, &source_b, origin(), &catalog) else { continue; };
+                        let mut cache = ConnectionCompatibilityCache::new();
+                        let mut budget = FIELD_COMPONENT_PAIR_LIMIT;
+                        let Some(selected) = select_best_contact(&structure, &indices_a, &indices_b, &catalog, &mut cache, &mut budget) else { continue; };
+                        if selected.candidate.distance <= 1e-6 || selected.candidate.distance >= crate::chemistry::CHEMICAL_CONTACT_RADIUS || selected.candidate.facing <= 0.5 { continue; }
+                        fixture = Some((source_a, source_b, structure, indices_a, indices_b, selected));
+                        break 'search;
+                    }
+                }
+            }
+        }
+        let (source_a, source_b, structure, indices_a, indices_b, selected) = fixture.expect("catalog must provide a chemically attractive separated pair");
+        assert!(simulation.environment.field.deposit_physical_at_index(cell, source_a.clone(), &catalog));
+        assert!(simulation.environment.field.deposit_physical_at_index(cell, source_b.clone(), &catalog));
+        let before_cells = simulation.environment.field.cells.clone();
+        let before_ledger = simulation.energy_ledger;
+        let before_inventory = simulation.energy_inventory_snapshot();
+        assert!(!advance_pair_approach(
+            &mut simulation.environment, &mut simulation.energy_ledger, &structure, &indices_a, &indices_b, selected,
+            cell, 0, &source_a, cell, 1, &source_b, simulation.ticks_per_second,
+        ), "approach must not proceed without compatible resonance or usable reserve");
+        assert_eq!(simulation.environment.field.cells, before_cells);
+        assert_eq!(simulation.energy_ledger, before_ledger);
+        assert_eq!(simulation.energy_inventory_snapshot(), before_inventory);
+    }
+    #[test]
     fn environmental_pair_combine_commits_a_realized_product() {
         let mut simulation = crate::state::Simulation::new(942, 10.0);
         let catalog = simulation.environment.catalog.clone();
