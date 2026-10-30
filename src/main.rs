@@ -46,8 +46,6 @@ mod construction_material_selection;
 mod construction_runtime;
 #[path = "geometry/contact.rs"]
 mod contact;
-#[path = "geometry/molecular_layout.rs"]
-mod molecular_layout;
 #[path = "bob/worker.rs"]
 mod geometry_library_worker;
 #[path = "bob/library.rs"]
@@ -60,6 +58,8 @@ mod initial_organism_constructor;
 mod interior_geometry;
 #[path = "organism/juvenile.rs"]
 mod juvenile;
+#[path = "geometry/molecular_layout.rs"]
+mod molecular_layout;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]
