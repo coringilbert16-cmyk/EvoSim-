@@ -733,8 +733,50 @@ pub(crate) fn resolve_environmental(
     else {
         return false;
     };
+
+    // COMBINE couples to the logarithmic midpoint of the reactants' natural
+    // frequencies, matching environmental and organism BREAK. Resonance is
+    // the first energy source; the existing usable reserve covers only the
+    // remaining work. Stage both stores so a failed bond/ledger commit spends
+    // neither.
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
+        return false;
+    }
+    let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+        return false;
+    }
+    let Some((_, _, _, required_energy)) =
+        crate::combine_runtime::selected_candidate_evaluation(
+            &trial_structure,
+            unit_a,
+            unit_b,
+            operation.candidate,
+            &environment.catalog,
+        )
+    else {
+        return false;
+    };
+    if !required_energy.is_finite() || required_energy < 0.0 {
+        return false;
+    }
+    let mut staged_resonance = environment.resonant_energy.clone();
+    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, required_energy);
+    if !resonant_work.is_finite() || resonant_work < 0.0 {
+        return false;
+    }
     let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = environment.chemistry_usable_energy;
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    if !staged_usable_energy.is_finite() || staged_usable_energy < 0.0 {
+        return false;
+    }
     let mut cache = ConnectionCompatibilityCache::new();
     if crate::combine_runtime::form_selected_bond_diagnostic(
         &mut trial_structure,
@@ -779,16 +821,20 @@ pub(crate) fn resolve_environmental(
     // many prior reactions and is not the physical state change itself.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_total_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
+        || !next_total_resonant.is_finite()
+        || next_total_resonant < 0.0
         || !structural_delta.is_finite()
         || !next_total_structural.is_finite()
     {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
+    staged_ledger.total_resonant_energy_held = next_total_resonant;
     staged_ledger.total_structural_energy_held = next_total_structural;
 
     // All fallible checks are complete. Remove in descending index order for a
@@ -818,6 +864,7 @@ pub(crate) fn resolve_environmental(
         environment.field.mark_changed_at_index(operation.cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
+    environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
     true
 }
