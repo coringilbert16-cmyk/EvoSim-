@@ -614,6 +614,7 @@ pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) work_required: f64,
     pub(crate) reaction_frequency_hz: Option<f64>,
     pub(crate) activation_signal: Option<f64>,
+    pub(crate) accumulated_reaction: Option<f64>,
     pub(crate) broken_bond_index: Option<usize>,
     pub(crate) outcome: String,
     /// The resolver currently exposes only a boolean. This label deliberately
