@@ -753,22 +753,21 @@ pub(crate) fn resolve_environmental(
     if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
         return false;
     }
-    let Some((_, _, _, required_energy)) =
-        crate::combine_runtime::selected_candidate_evaluation(
-            &trial_structure,
-            unit_a,
-            unit_b,
-            operation.candidate,
-            &environment.catalog,
-        )
-    else {
+    let Some((_, _, _, required_energy)) = crate::combine_runtime::selected_candidate_evaluation(
+        &trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        &environment.catalog,
+    ) else {
         return false;
     };
     if !required_energy.is_finite() || required_energy < 0.0 {
         return false;
     }
     let mut staged_resonance = environment.resonant_energy.clone();
-    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, required_energy);
+    let resonant_work =
+        staged_resonance.withdraw_compatible(reaction_frequency_hz, required_energy);
     if !resonant_work.is_finite() || resonant_work < 0.0 {
         return false;
     }
@@ -2559,8 +2558,7 @@ mod tests {
         let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
         let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-        let reaction_frequency_hz =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
         assert!(
             simulation
                 .environment
@@ -2757,7 +2755,10 @@ mod tests {
             simulation.environment.field.cells[cell].physical_materials,
             original_materials
         );
-        assert_eq!(simulation.environment.chemistry_usable_energy, original_usable);
+        assert_eq!(
+            simulation.environment.chemistry_usable_energy,
+            original_usable
+        );
         assert_eq!(simulation.energy_ledger, original_ledger);
         assert!(simulation.environment.resonant_energy.components.is_empty());
         simulation.environment.resonant_energy = original_resonance;
