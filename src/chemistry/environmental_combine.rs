@@ -1576,6 +1576,7 @@ mod tests {
             &mut simulation.chemistry_library,
             0,
             &mut budget,
+            simulation.ticks_per_second,
         );
 
         assert!(operations.is_empty());
