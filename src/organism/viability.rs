@@ -163,7 +163,40 @@ mod tests {
         let catalog = default_catalog();
         let blueprint = confirmed_seed_baseline(&catalog).unwrap();
         let mut structure = blueprint.realize(&catalog).unwrap();
-        structure.bonds.clear();
+        let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .expect("fixture begins with a sealed cavity");
+        let core_unit = *cavity
+            .boundary_units
+            .first()
+            .expect("sealed cavity must have a boundary unit");
+        let core_id = structure.units[core_unit].physical_id;
+        let mut opened = false;
+
+        for bond_index in cavity.boundary_bond_indices(&structure, &catalog) {
+            let mut trial = structure.clone();
+            trial.bonds.remove(bond_index);
+            let remains_connected = trial.connected_component_containing(core_unit).len()
+                == trial.units.len();
+            let cavity_is_open =
+                crate::cavity::analyze_genome_cavity(&trial, &catalog)
+                    .unwrap()
+                    .is_none();
+            if remains_connected && cavity_is_open {
+                structure = trial;
+                opened = true;
+                break;
+            }
+        }
+
+        assert!(
+            opened,
+            "fixture must admit removal of a boundary bond while retaining one connected structure"
+        );
+        assert!(structure.unit_index(core_id).is_some());
+        assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
+            .unwrap()
+            .is_none());
         assert!(validate_realized_organism(
             &structure,
             &catalog,
