@@ -740,6 +740,7 @@ mod tests {
         // rigid constituent even though the normal constructor rejects it.
         // Batch preflight must reject this malformed later member atomically.
         let fractional = PhysicalMaterial {
+            instance_id: 0,
             material: Material::free_base("Carbon", 1.5),
             placements: Some(vec![Placement {
                 x: 1.0,
