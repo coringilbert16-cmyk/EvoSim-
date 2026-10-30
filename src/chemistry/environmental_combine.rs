@@ -753,15 +753,13 @@ pub(crate) fn resolve_environmental(
     if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
         return false;
     }
-    let Some((_, work_cost, _, _)) =
-        crate::combine_runtime::selected_candidate_evaluation(
-            &trial_structure,
-            unit_a,
-            unit_b,
-            operation.candidate,
-            &environment.catalog,
-        )
-    else {
+    let Some((_, work_cost, _, _)) = crate::combine_runtime::selected_candidate_evaluation(
+        &trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        &environment.catalog,
+    ) else {
         return false;
     };
     if !work_cost.is_finite() || work_cost < 0.0 {
@@ -772,16 +770,11 @@ pub(crate) fn resolve_environmental(
     // the net external deficit after structural potential is released. The
     // reaction transaction separately accounts for that released potential.
     let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, work_cost);
-    if !resonant_work.is_finite()
-        || resonant_work < 0.0
-        || resonant_work > work_cost
-    {
+    if !resonant_work.is_finite() || resonant_work < 0.0 || resonant_work > work_cost {
         return false;
     }
     let remaining_work = work_cost - resonant_work;
-    if !remaining_work.is_finite()
-        || environment.chemistry_usable_energy + 1e-9 < remaining_work
-    {
+    if !remaining_work.is_finite() || environment.chemistry_usable_energy + 1e-9 < remaining_work {
         return false;
     }
     let mut staged_ledger = *ledger;
