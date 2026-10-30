@@ -1110,7 +1110,7 @@ mod tests {
     ) -> crate::structure::StructuralUnit {
         let mut water = crate::structure::StructuralUnit::new("Water", placement);
         let half_width = 1.0;
-        let half_height = 0.25;
+        let half_height = 0.125;
         let shape = crate::resources::Shape {
             form: crate::resources::Form::Fluid {
                 nominal_area: 0.5,
