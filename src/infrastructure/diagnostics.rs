@@ -631,6 +631,12 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
     }
 
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
+        for event in &simulation.environmental_chemistry_events {
+            self.write_event(json!({
+                "event": "environmental_reaction",
+                "reaction": event
+            }))?;
+        }
         let diagnostics = simulation.environmental_chemistry_diagnostics;
         self.totals.ticks_observed = self.totals.ticks_observed.saturating_add(1);
         self.totals.break_ready_candidates = self.totals.break_ready_candidates
