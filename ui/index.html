@@ -153,9 +153,6 @@
     }
 
     function updateControls() {
-      const running = runtimeStatus?.running === true;
-      const currentTick = runtimeStatus?.tick ?? 0;
-      const firstTick = historyTicks.length ? historyTicks[0] : currentTick;
       const speed = document.getElementById('speed');
       const speedValue = document.getElementById('speed-value');
       if (runtimeStatus?.ticks_per_second != null) {
