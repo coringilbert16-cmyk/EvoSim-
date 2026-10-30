@@ -1165,7 +1165,11 @@ mod tests {
     fn water_boundary_permits_full_environmental_penetration() {
         let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
-        let mut moving = simulation.organisms.first().expect("organism fixture").clone();
+        let mut moving = simulation
+            .organisms
+            .first()
+            .expect("organism fixture")
+            .clone();
         moving.structure = crate::structure::OrganismStructure::new();
         let water_unit = realized_water_boundary_unit(
             &environment.catalog,
