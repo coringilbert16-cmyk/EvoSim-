@@ -394,14 +394,19 @@ fn advance_pair_approach(
     if *remaining_work == 0 {
         return false;
     }
+    let cell_budget = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work);
     let nearby_cells = environment.field.cells_intersecting_bounds_limited(
         body.min_x - BOUNDS_PADDING,
         body.max_x + BOUNDS_PADDING,
         body.min_y - BOUNDS_PADDING,
         body.max_y + BOUNDS_PADDING,
-        FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work),
+        cell_budget.saturating_add(1),
         cell_a.wrapping_add(cell_b),
     );
+    if nearby_cells.len() > cell_budget {
+        *remaining_work = remaining_work.saturating_sub(cell_budget);
+        return false;
+    }
     let mut collision_structure = structure.clone();
     let mut obstacle_indices = Vec::new();
     for nearby_cell in nearby_cells {
