@@ -827,7 +827,6 @@ pub(crate) fn resolve_environmental(
         operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
-        1.0,
     ) else {
         return false;
     };
@@ -902,7 +901,6 @@ pub(crate) fn resolve(
     {
         return false;
     }
-    let processing_efficiency = organism.genome.processing_efficiency();
     // Activation is an independent threshold, not energy and not a substitute
     // for disruption work. Compatible resonance may pay that work, but the
     // required amount is determined by the physical barrier alone.
@@ -919,7 +917,6 @@ pub(crate) fn resolve(
         operation.activation_signal,
         operation.disruption_cost,
         resonant_work,
-        processing_efficiency,
         ledger,
     );
     if success {
