@@ -287,6 +287,7 @@ fn advance_pair_approach(
     material_b: usize,
     source_b: &PhysicalMaterial,
     ticks_per_second: f64,
+    remaining_work: &mut usize,
 ) -> bool {
     let distance = selected.candidate.distance;
     let radius = crate::chemistry::CHEMICAL_CONTACT_RADIUS;
@@ -342,18 +343,29 @@ fn advance_pair_approach(
     else {
         return false;
     };
+    if *remaining_work == 0 {
+        return false;
+    }
     let nearby_cells = environment.field.cells_intersecting_bounds_limited(
         body.min_x - BOUNDS_PADDING,
         body.max_x + BOUNDS_PADDING,
         body.min_y - BOUNDS_PADDING,
         body.max_y + BOUNDS_PADDING,
-        FIELD_TARGET_CELL_INSPECTION_LIMIT,
+        FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work),
         cell_a.wrapping_add(cell_b),
     );
     let mut collision_structure = structure.clone();
     let mut obstacle_indices = Vec::new();
     for nearby_cell in nearby_cells {
+        if *remaining_work == 0 {
+            return false;
+        }
+        *remaining_work = remaining_work.saturating_sub(1);
         for physical in &environment.field.cells[nearby_cell].physical_materials {
+            if *remaining_work == 0 {
+                return false;
+            }
+            *remaining_work = remaining_work.saturating_sub(1);
             if physical.instance_id == source_a.instance_id
                 || physical.instance_id == source_b.instance_id
             {
@@ -979,6 +991,7 @@ pub(crate) fn accumulate_environmental(
                             material_b,
                             &source_b,
                             ticks_per_second,
+                            remaining_discovery_work,
                         )
                     {
                         // Preserve this encounter's accumulated chemistry while
@@ -3061,6 +3074,7 @@ mod tests {
             .deposit(reaction_frequency * 1_000_000.0, 1_000.0));
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
+        let mut approach_work = FIELD_TARGET_CELL_INSPECTION_LIMIT;
         let before_cells = simulation.environment.field.cells.clone();
         let before_ledger = simulation.energy_ledger;
         let before_inventory = simulation.energy_inventory_snapshot();
@@ -3079,6 +3093,7 @@ mod tests {
                 1,
                 &source_b,
                 simulation.ticks_per_second,
+                &mut approach_work,
             ),
             "incompatible resonance must not fund approach when usable reserve is empty"
         );
