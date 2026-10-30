@@ -427,7 +427,7 @@ fn advance_pair_approach(
             continue;
         };
         let new_remaining =
-            crate::combine::formation_work_cost(properties_a, properties_b, staged.1) * engagement;
+            crate::combine::formation_work_cost(properties_a, properties_b, staged.0) * engagement;
         let work = old_remaining - new_remaining;
         if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 {
             return false;
