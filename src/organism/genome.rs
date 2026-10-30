@@ -67,10 +67,6 @@ impl Genome {
         M_MIN * (M_MAX / M_MIN).powf(self.size_preference())
     }
 
-    pub fn processing_efficiency(&self) -> f64 {
-        self.trait_value("processing_efficiency", 0.8)
-            .clamp(0.05, 1.0)
-    }
 
     pub fn movement_efficiency(&self) -> f64 {
         self.trait_value("movement_efficiency", 0.8)
@@ -145,7 +141,6 @@ pub fn initial_genome() -> Genome {
             trait_def("memory_strength", 0.5, 0.05),
             trait_def("curiosity", 0.5, 0.05),
             trait_def("size_preference", 0.5, 0.05),
-            trait_def("processing_efficiency", 0.8, 0.05),
             trait_def("movement_efficiency", 0.8, 0.05),
             trait_def("movement_speed", 1.0, 0.05),
             trait_def("reproductive_investment", 0.5, 0.05),
