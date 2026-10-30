@@ -232,7 +232,8 @@ pub(crate) struct EnergyLedger {
     /// inventory term; the remainder still needs explicit propagation/escape handling.
     #[serde(default)]
     pub(crate) total_world_tone_energy_unabsorbed: f64,
-    /// Residual world-tone energy that leaves the modeled world after propagation.
+    /// Residual external resonant-field energy that leaves the modeled world.
+    /// This includes the rotating world tone and localized radial hotspot sources.
     #[serde(default)]
     pub(crate) total_world_tone_energy_escaped: f64,
     pub(crate) total_usable_energy_gained: f64,
