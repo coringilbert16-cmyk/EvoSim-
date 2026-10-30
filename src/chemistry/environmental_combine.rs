@@ -1656,8 +1656,9 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
-        // Keep the usable reserve empty throughout the transaction checks;
-        // this proves the resolver can fund the operation from resonance alone.
+        // Preserve the established reserve for the compound/compound round-trip;
+        // the dedicated base-pair test below isolates resonance-only funding.
+        simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -2616,7 +2617,8 @@ mod tests {
             source_b.clone(),
             &catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 1_000.0;
+        // Keep the usable reserve empty so this transaction is funded solely
+        // by the compatible resonance deposited above.
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
