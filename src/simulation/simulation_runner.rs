@@ -246,7 +246,7 @@ fn run_environment_chemistry_experiment(
         .expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
-        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} COMBINE committed={} BREAK committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
         simulation.tick,
         simulation.environment.field.cells.iter()
             .map(|cell| cell.physical_materials.len())
