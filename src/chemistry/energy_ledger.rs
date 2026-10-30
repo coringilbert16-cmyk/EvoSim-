@@ -371,7 +371,7 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
     pub(crate) external_energy_input: f64,
-    /// Energy carried out of the modeled world by a continuing signal.
+    /// External resonant-field energy that leaves the modeled world after material response.
     pub(crate) world_tone_energy_escaped: f64,
     /// Reserved compatibility slot. Must be zero until an explicitly owned
     /// non-structural source type exists; bond breakdown is structural_delta.
