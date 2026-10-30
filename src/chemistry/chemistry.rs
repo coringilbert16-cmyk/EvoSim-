@@ -204,6 +204,77 @@ pub fn activated(accumulated_reaction: f64, barrier: f64) -> bool {
 mod tests {
     use super::*;
 
+    /// Diagnostic matrix for every unordered pair of canonical base resources.
+    ///
+    /// This characterizes the primitive chemistry equation only. A positive
+    /// static potential is necessary but not sufficient for environmental
+    /// COMBINE: geometry, contact, interface engagement, activation, and energy
+    /// settlement are tested separately by the environmental chemistry suite.
+    #[test]
+    fn static_pair_matrix_characterizes_all_base_resource_pairs() {
+        let catalog = crate::resources::default_catalog();
+        assert_eq!(
+            catalog.len(),
+            7,
+            "the canonical chemistry matrix must cover all seven base resources"
+        );
+
+        let mut pair_count = 0usize;
+        for i in 0..catalog.len() {
+            for j in i..catalog.len() {
+                let a = &catalog[i];
+                let b = &catalog[j];
+                let position_a = a
+                    .properties
+                    .chemical_position
+                    .expect("every canonical base resource must have a chemical position");
+                let position_b = b
+                    .properties
+                    .chemical_position
+                    .expect("every canonical base resource must have a chemical position");
+                let forward =
+                    interaction_potential(position_a, position_b, CHEMICAL_K, CHEMICAL_D_MAX)
+                        .expect("canonical positions must produce a finite potential");
+                let reverse =
+                    interaction_potential(position_b, position_a, CHEMICAL_K, CHEMICAL_D_MAX)
+                        .expect("reversed canonical positions must produce a finite potential");
+                let separation = (position_a - position_b).abs();
+
+                assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
+                assert!((forward - reverse).abs() <= 1e-12);
+                if i == j {
+                    assert_eq!(
+                        forward, 0.0,
+                        "same-resource pair {}/{} has zero separation",
+                        a.name, b.name
+                    );
+                }
+
+                println!(
+                    "PAIR_MATRIX|{}|{}|position_a={:.6}|position_b={:.6}|separation={:.6}|potential={:.9}|mass_a={:.6}|mass_b={:.6}|reactivity_a={:.6}|reactivity_b={:.6}|cohesion_a={:.6}|cohesion_b={:.6}|nonzero_static_potential={}",
+                    a.name,
+                    b.name,
+                    position_a,
+                    position_b,
+                    separation,
+                    forward,
+                    a.properties.mass,
+                    b.properties.mass,
+                    a.properties.reactivity,
+                    b.properties.reactivity,
+                    a.properties.cohesion,
+                    b.properties.cohesion,
+                    forward > f64::EPSILON
+                );
+                pair_count += 1;
+            }
+        }
+        assert_eq!(
+            pair_count, 28,
+            "seven resources yield 28 unordered pairs including self-pairs"
+        );
+    }
+
     #[test]
     fn approved_parameters_define_one_fixed_chemistry_scale() {
         assert_eq!(CHEMICAL_D_MAX, 13.0);
