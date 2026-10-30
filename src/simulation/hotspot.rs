@@ -1,6 +1,6 @@
 //! Localized radial energy source used by the environmental chemistry experiment.
 //!
-//! The hotspot contributes an ordinary 440 Hz resonant signal. Its spatial
+//! The hotspot contributes an ordinary 2,000 Hz resonant signal. Its spatial
 //! intensity is a smooth radial gradient; material properties determine the
 //! response, and only energy actually retained by the environmental resonance
 //! reservoir is made available to chemistry.
@@ -33,7 +33,7 @@ impl RadialHotspot {
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
             peak_energy_per_tick_per_area: 100.0,
-            frequency_hz: 440.0,
+            frequency_hz: 2_000.0,
         };
         hotspot.is_valid().then_some(hotspot)
     }
@@ -354,7 +354,7 @@ mod tests {
             center_y: 500.0,
             radius: 100.0,
             peak_energy_per_tick_per_area: 100.0,
-            frequency_hz: 440.0,
+            frequency_hz: 2_000.0,
         };
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
