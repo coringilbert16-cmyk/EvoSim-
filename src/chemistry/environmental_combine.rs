@@ -347,7 +347,6 @@ fn advance_pair_approach(
     let mut changed = BTreeSet::new();
     changed.insert(cell_a); changed.insert(cell_b); changed.insert(destination_a); changed.insert(destination_b);
     for index in changed { environment.field.mark_changed_at_index(index); }
-    environment.resonant_energy = staged_resonance;
     environment.chemistry_usable_energy = next_environment_usable.max(0.0);
     *ledger = staged_ledger;
     true
@@ -969,54 +968,16 @@ pub(crate) fn resolve_environmental(
         return false;
     };
 
-    // COMBINE couples to the logarithmic midpoint of the reactants' natural
-    // frequencies, matching environmental and organism BREAK. Resonance is
-    // the first energy source; the existing usable reserve covers only the
-    // remaining work. Stage both stores so a failed bond/ledger commit spends
-    // neither.
-    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-    let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-    if !frequency_a.is_finite()
-        || frequency_a <= 0.0
-        || !frequency_b.is_finite()
-        || frequency_b <= 0.0
-    {
-        return false;
-    }
-    let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-    if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
-        return false;
-    }
+    // Approach work has already been paid incrementally as the reactants
+    // physically moved together. COMBINE must not charge it a second time.
     let Some((_, work_cost, _, _)) = crate::combine_runtime::selected_candidate_evaluation(
-        &trial_structure,
-        unit_a,
-        unit_b,
-        operation.candidate,
-        &environment.catalog,
-    ) else {
-        return false;
-    };
-    if !work_cost.is_finite() || work_cost < 0.0 {
-        return false;
-    }
-    let mut staged_resonance = environment.resonant_energy.clone();
-    // Resonance couples to the physical formation work itself, not merely to
-    // the net external deficit after structural potential is released. The
-    // reaction transaction separately accounts for that released potential.
-    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, work_cost);
-    if !resonant_work.is_finite() || resonant_work < 0.0 || resonant_work > work_cost {
-        return false;
-    }
-    let remaining_work = work_cost - resonant_work;
-    if !remaining_work.is_finite() || environment.chemistry_usable_energy + 1e-9 < remaining_work {
+        &trial_structure, unit_a, unit_b, operation.candidate, &environment.catalog,
+    ) else { return false; };
+    if !work_cost.is_finite() || work_cost > 1e-8 {
         return false;
     }
     let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
-    if !staged_usable_energy.is_finite() || staged_usable_energy < 0.0 {
-        return false;
-    }
+    let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
     if crate::combine_runtime::form_selected_bond_diagnostic(
         &mut trial_structure,
@@ -1061,20 +1022,16 @@ pub(crate) fn resolve_environmental(
     // many prior reactions and is not the physical state change itself.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    let next_total_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
-        || !next_total_resonant.is_finite()
-        || next_total_resonant < 0.0
         || !structural_delta.is_finite()
         || !next_total_structural.is_finite()
     {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
-    staged_ledger.total_resonant_energy_held = next_total_resonant;
     staged_ledger.total_structural_energy_held = next_total_structural;
 
     // All fallible checks are complete. Remove in descending index order for a
