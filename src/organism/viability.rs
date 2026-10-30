@@ -166,33 +166,26 @@ mod tests {
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("fixture begins with a sealed cavity");
-        let core_unit = *cavity
+        let boundary_unit = *cavity
             .boundary_units
             .first()
             .expect("sealed cavity must have a boundary unit");
-        let core_id = structure.units[core_unit].physical_id;
-        let mut opened = false;
+        let removed_id = structure.units[boundary_unit].physical_id;
 
-        for bond_index in cavity.boundary_bond_indices(&structure, &catalog) {
-            let mut trial = structure.clone();
-            trial.bonds.remove(bond_index);
-            let remains_connected =
-                trial.connected_component_containing(core_unit).len() == trial.units.len();
-            let cavity_is_open = crate::cavity::analyze_genome_cavity(&trial, &catalog)
-                .unwrap()
-                .is_none();
-            if remains_connected && cavity_is_open {
-                structure = trial;
-                opened = true;
-                break;
-            }
-        }
+        // Cavity closure is geometric, not a graph-bond property. Removing a
+        // bond alone leaves the same physical boundary in place, so remove one
+        // boundary constituent and its incident bonds to create a real opening.
+        structure.units.remove(boundary_unit);
+        structure.bonds.retain(|bond| {
+            bond.endpoint_a.constituent_id != removed_id
+                && bond.endpoint_b.constituent_id != removed_id
+        });
 
-        assert!(
-            opened,
-            "fixture must admit removal of a boundary bond while retaining one connected structure"
+        assert_eq!(
+            structure.connected_components().len(),
+            1,
+            "opening the cavity must leave the remaining physical structure connected"
         );
-        assert!(structure.unit_index(core_id).is_some());
         assert!(crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .is_none());
