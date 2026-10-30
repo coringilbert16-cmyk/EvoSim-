@@ -202,6 +202,13 @@ impl Simulation {
     }
     /// Enable the localized source only for an explicitly configured chemistry
     /// experiment; the ordinary default simulation remains unchanged.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "The experiment setup will call this when environment-only run configuration is added"
+        )
+    )]
     pub(crate) fn enable_chemistry_experiment_hotspot(&mut self) -> bool {
         self.hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
             self.environment.width,
