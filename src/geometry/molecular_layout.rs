@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Staged API retained for chemistry stability integration")]
 //! Geometry-only descriptors used to evaluate molecular layout stability.
 //!
 //! This module deliberately does not assign a stability score or energy. It
