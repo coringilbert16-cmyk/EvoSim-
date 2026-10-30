@@ -144,6 +144,19 @@ fn select_best_positive_work_contact(
     cache: &mut ConnectionCompatibilityCache,
     remaining_work: &mut usize,
 ) -> Option<SelectedContact> {
+    // The fixture must represent two distinct, non-overlapping physical
+    // reactants; contact candidates alone do not establish that condition.
+    if indices_a.iter().any(|index| {
+        crate::construction_runtime::placed_unit_overlaps(
+            structure,
+            &structure.units[*index],
+            indices_b,
+            catalog,
+        )
+    }) {
+        return None;
+    }
+
     let mut best: Option<SelectedContact> = None;
     for &unit_a in indices_a {
         for &unit_b in indices_b {
@@ -185,8 +198,14 @@ fn select_best_positive_work_contact(
                                 .unwrap_or(std::cmp::Ordering::Equal)
                         })
                         .then_with(|| {
-                            format!("{:?}|{:?}", proposed.candidate.endpoint_a, proposed.candidate.endpoint_b)
-                                .cmp(&format!("{:?}|{:?}", current.candidate.endpoint_a, current.candidate.endpoint_b))
+                            format!(
+                                "{:?}|{:?}",
+                                proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
+                            )
+                            .cmp(&format!(
+                                "{:?}|{:?}",
+                                current.candidate.endpoint_a, current.candidate.endpoint_b
+                            ))
                         })
                         .is_lt()
                 });
