@@ -3026,6 +3026,22 @@ mod tests {
             source_b.clone(),
             &catalog
         ));
+        let properties_a = structure.units[selected.unit_a]
+            .properties(&catalog)
+            .expect("selected reactant must have catalog properties");
+        let properties_b = structure.units[selected.unit_b]
+            .properties(&catalog)
+            .expect("selected reactant must have catalog properties");
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(simulation
+            .environment
+            .resonant_energy
+            .deposit(reaction_frequency * 1_000_000.0, 1_000.0));
+        let baseline = simulation.energy_inventory_snapshot();
+        simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
         let before_cells = simulation.environment.field.cells.clone();
         let before_ledger = simulation.energy_ledger;
         let before_inventory = simulation.energy_inventory_snapshot();
@@ -3045,7 +3061,7 @@ mod tests {
                 &source_b,
                 simulation.ticks_per_second,
             ),
-            "approach must not proceed without compatible resonance or usable reserve"
+            "incompatible resonance must not fund approach when usable reserve is empty"
         );
         assert_eq!(simulation.environment.field.cells, before_cells);
         assert_eq!(simulation.energy_ledger, before_ledger);
