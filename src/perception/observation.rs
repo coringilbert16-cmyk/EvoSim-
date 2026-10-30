@@ -121,6 +121,7 @@ pub(crate) struct WorldObservation {
     pub(crate) organisms: Vec<WorldOrganismObservation>,
     pub(crate) field: Vec<WorldFieldObservation>,
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
+    pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
 }
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
@@ -314,6 +315,7 @@ impl WorldObservation {
             organisms,
             field,
             decomposing_bodies,
+            hotspot: simulation.hotspot,
         }
     }
 }

@@ -11,6 +11,8 @@ mod environment_flow;
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
 mod expulsion;
+#[path = "simulation/hotspot.rs"]
+mod hotspot;
 #[path = "geometry/material_geometry.rs"]
 mod material_geometry;
 #[path = "materials/material_restoration.rs"]
