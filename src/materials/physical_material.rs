@@ -463,6 +463,7 @@ impl PhysicalMaterial {
             })
             .collect();
         Some(Self {
+            instance_id: self.instance_id,
             material: self.material,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
