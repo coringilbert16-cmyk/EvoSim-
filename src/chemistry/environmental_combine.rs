@@ -1079,7 +1079,6 @@ pub(crate) fn resolve_environmental(
         environment.field.mark_changed_at_index(operation.cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
-    environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
     true
 }
@@ -1514,10 +1513,10 @@ mod tests {
             available_a: true,
             available_b: true,
         };
-        let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
+        let original = source_pair_key(&a, &b, 0, 0, candidate);
         assert_ne!(
             original,
-            source_pair_key(0, 0, &a, 0, 1, &b, 1, 0, candidate)
+            source_pair_key(&a, &b, 1, 0, candidate)
         );
         let moved = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
@@ -1531,7 +1530,7 @@ mod tests {
         .unwrap();
         assert_ne!(
             original,
-            source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate)
+            source_pair_key(&moved, &b, 0, 0, candidate)
         );
     }
 
