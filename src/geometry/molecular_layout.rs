@@ -20,6 +20,17 @@ pub(crate) struct BondLayout {
     pub bond_strength: f64,
 }
 
+/// Angular relationship between two realized bond endpoints on one
+/// constituent. This records actual layout; it does not assume an ideal angle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct LocalBondAngle {
+    pub constituent: PhysicalConstituentId,
+    pub bond_index_a: usize,
+    pub bond_index_b: usize,
+    pub angular_separation_radians: f64,
+    pub endpoint_separation: f64,
+}
+
 /// The closest currently available endpoint pair between two constituents
 /// that do not already share a bond. Distance is a live geometric gap, not a
 /// chemical attraction or an energy value.
@@ -40,6 +51,7 @@ pub(crate) struct UnbondedApproach {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct MolecularLayoutSnapshot {
     pub bonds: Vec<BondLayout>,
+    pub local_bond_angles: Vec<LocalBondAngle>,
     pub unbonded_approaches: Vec<UnbondedApproach>,
 }
 
@@ -92,6 +104,50 @@ impl MolecularLayoutSnapshot {
                 bond_energy: bond.bond_energy,
                 bond_strength: bond.strength,
             });
+        }
+
+        // Record the actual angular spacing of bonds attached to each physical
+        // constituent. No preferred angle or penalty is assumed.
+        for unit in &structure.units {
+            let mut endpoints = Vec::new();
+            for (bond_index, bond) in structure.bonds.iter().enumerate() {
+                let endpoint = if bond.endpoint_a.constituent_id == unit.physical_id {
+                    Some(bond.endpoint_a.location)
+                } else if bond.endpoint_b.constituent_id == unit.physical_id {
+                    Some(bond.endpoint_b.location)
+                } else {
+                    None
+                };
+                let Some(endpoint) = endpoint else {
+                    continue;
+                };
+                let point = endpoint_world_point(endpoint, unit, catalog)?;
+                let dx = point.x - unit.placement.x;
+                let dy = point.y - unit.placement.y;
+                let radius = dx.hypot(dy);
+                if !radius.is_finite() || radius <= f64::EPSILON {
+                    return None;
+                }
+                endpoints.push((bond_index, dx.atan2(dy), point.x, point.y));
+            }
+            for left in 0..endpoints.len() {
+                for right in (left + 1)..endpoints.len() {
+                    let raw = (endpoints[left].1 - endpoints[right].1).abs();
+                    let angular_separation = raw.min(std::f64::consts::TAU - raw);
+                    let endpoint_separation = (endpoints[left].2 - endpoints[right].2)
+                        .hypot(endpoints[left].3 - endpoints[right].3);
+                    if !angular_separation.is_finite() || !endpoint_separation.is_finite() {
+                        return None;
+                    }
+                    snapshot.local_bond_angles.push(LocalBondAngle {
+                        constituent: unit.physical_id,
+                        bond_index_a: endpoints[left].0,
+                        bond_index_b: endpoints[right].0,
+                        angular_separation_radians: angular_separation,
+                        endpoint_separation,
+                    });
+                }
+            }
         }
 
         // Chemistry's existing interaction radius defines the range in which
@@ -160,6 +216,13 @@ impl MolecularLayoutSnapshot {
             }
         }
 
+        snapshot.local_bond_angles.sort_by(|left, right| {
+            left.constituent
+                .0
+                .cmp(&right.constituent.0)
+                .then_with(|| left.bond_index_a.cmp(&right.bond_index_a))
+                .then_with(|| left.bond_index_b.cmp(&right.bond_index_b))
+        });
         snapshot.unbonded_approaches.sort_by(|left, right| {
             left.distance
                 .total_cmp(&right.distance)
@@ -216,6 +279,55 @@ mod tests {
         assert!(after.bonds[0].endpoint_distance > before_distance);
         assert_eq!(after.bonds[0].bond_energy, 1.25);
         assert_eq!(after.bonds[0].bond_strength, 0.6);
+    }
+
+    #[test]
+    fn local_bond_angles_report_actual_endpoint_spacing_without_an_ideal_angle() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let center = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 0.0)));
+        let first = structure.add_unit(StructuralUnit::new("Carbon", placement(2.0, 0.0)));
+        let second = structure.add_unit(StructuralUnit::new("Carbon", placement(0.0, 2.0)));
+        let center_id = structure.physical_id(center).unwrap();
+        let first_id = structure.physical_id(first).unwrap();
+        let second_id = structure.physical_id(second).unwrap();
+        structure.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                center_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                first_id,
+                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        structure.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                center_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::FRAC_PI_2,
+                },
+            ),
+            endpoint_b: BondEndpoint::new(
+                second_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: -std::f64::consts::FRAC_PI_2,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let snapshot = MolecularLayoutSnapshot::analyze(&structure, &catalog).unwrap();
+        let local = snapshot
+            .local_bond_angles
+            .iter()
+            .find(|angle| angle.constituent == center_id)
+            .unwrap();
+        assert!((local.angular_separation_radians - std::f64::consts::FRAC_PI_2).abs() < 1e-9);
+        assert!(local.endpoint_separation > 0.0);
     }
 
     #[test]
