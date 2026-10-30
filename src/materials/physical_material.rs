@@ -66,6 +66,24 @@ impl PhysicalMaterial {
         Self::hash_identity_bytes(signature.bytes())
     }
 
+    /// Translation-invariant geometry signature. It changes when a constituent
+    /// rotates or a deformable realized shape changes, but not when the whole
+    /// physical instance is transported through the field.
+    pub(crate) fn geometry_signature(&self) -> u64 {
+        let rotations = self
+            .placements
+            .as_ref()
+            .map(|placements| {
+                placements
+                    .iter()
+                    .map(|placement| placement.rotation_radians.to_bits())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let signature = format!("geometry:{rotations:?}|{:?}", self.realized_shapes);
+        Self::hash_identity_bytes(signature.bytes())
+    }
+
     /// Assign an identity to a legacy instance only. Ordinary movement keeps
     /// the existing identity even as world-space placements change.
     pub(crate) fn refresh_instance_identity(&mut self) {
