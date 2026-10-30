@@ -176,12 +176,11 @@ mod tests {
         for bond_index in cavity.boundary_bond_indices(&structure, &catalog) {
             let mut trial = structure.clone();
             trial.bonds.remove(bond_index);
-            let remains_connected = trial.connected_component_containing(core_unit).len()
-                == trial.units.len();
-            let cavity_is_open =
-                crate::cavity::analyze_genome_cavity(&trial, &catalog)
-                    .unwrap()
-                    .is_none();
+            let remains_connected =
+                trial.connected_component_containing(core_unit).len() == trial.units.len();
+            let cavity_is_open = crate::cavity::analyze_genome_cavity(&trial, &catalog)
+                .unwrap()
+                .is_none();
             if remains_connected && cavity_is_open {
                 structure = trial;
                 opened = true;
