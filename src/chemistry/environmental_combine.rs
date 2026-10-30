@@ -2753,6 +2753,35 @@ mod tests {
         );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
+        // Verify the selected operation actually has positive physical
+        // formation work. Otherwise an empty-energy rejection test would be
+        // vacuous because a zero-cost bond needs no funding.
+        let (mut work_structure, work_indices_a) =
+            restored_source(&operation.source_a, &simulation.environment)
+                .expect("selected source A must restore for work-cost diagnostic");
+        let work_indices_b = crate::material_restoration::restore_material(
+            &mut work_structure,
+            &operation.source_b,
+            origin(),
+            &catalog,
+        )
+        .expect("selected source B must restore for work-cost diagnostic");
+        let work_unit_a = work_indices_a[operation.unit_a];
+        let work_unit_b = work_indices_b[operation.unit_b];
+        let (_, formation_work, _, _) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                &work_structure,
+                work_unit_a,
+                work_unit_b,
+                operation.candidate,
+                &catalog,
+            )
+            .expect("selected environmental candidate must remain evaluable");
+        assert!(
+            formation_work > 1e-9,
+            "empty-energy rejection requires positive formation work; got {formation_work}"
+        );
+
         // With neither compatible resonance nor a usable reserve, COMBINE
         // must reject without consuming energy or changing either source.
         let original_resonance = simulation.environment.resonant_energy.clone();
