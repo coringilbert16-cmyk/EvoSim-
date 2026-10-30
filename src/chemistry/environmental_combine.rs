@@ -434,10 +434,15 @@ fn advance_pair_approach(
             }
         }
     }
+    const APPROACH_GEOMETRY_SEARCH_STEPS: usize = 28;
+    if *remaining_work < APPROACH_GEOMETRY_SEARCH_STEPS {
+        return false;
+    }
+    *remaining_work = remaining_work.saturating_sub(APPROACH_GEOMETRY_SEARCH_STEPS);
     let mut low = 0.0;
     let mut high = requested_step;
     let mut best: Option<(f64, f64, f64)> = None;
-    for _ in 0..28 {
+    for _ in 0..APPROACH_GEOMETRY_SEARCH_STEPS {
         let step = 0.5 * (low + high);
         if step <= 1e-10 {
             break;
