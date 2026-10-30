@@ -604,6 +604,26 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalChemistryEvent {
+    pub(crate) tick: u64,
+    pub(crate) reaction: String,
+    pub(crate) source_cells: Vec<usize>,
+    pub(crate) source_material_indices: Vec<usize>,
+    pub(crate) source_materials: Vec<Vec<(String, f64)>>,
+    pub(crate) work_required: f64,
+    pub(crate) reaction_frequency_hz: Option<f64>,
+    pub(crate) activation_signal: Option<f64>,
+    pub(crate) broken_bond_index: Option<usize>,
+    pub(crate) outcome: String,
+    /// The resolver currently exposes only a boolean. This label deliberately
+    /// avoids inventing a more specific cause until the commit API returns one.
+    pub(crate) failure_reason: Option<String>,
+    pub(crate) product_material: Option<Vec<(String, f64)>>,
+    pub(crate) product_internal_bond_count: Option<usize>,
+    pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
+}
+
 #[derive(Clone)]
 pub(crate) struct Simulation {
     pub(crate) tick: u64,
@@ -632,6 +652,8 @@ pub(crate) struct Simulation {
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
     /// Last-tick environmental reaction counters for UI and headless diagnostics.
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
+    /// Committed/rejected environmental reaction attempts from the last tick.
+    pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
