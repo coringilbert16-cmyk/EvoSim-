@@ -16,7 +16,7 @@ This is the first raw-resource-to-molecule experiment. The product and its const
 - **#229–#234** base-resource pair matrix, controlled physical-pair classification, product characterization, compound/base chemistry, compound/compound contacts, and committed multi-constituent COMBINE — merged.
 - **#235–#240** molecular composition/topology, multi-constituent COMBINE/BREAK round-trip evidence, heterogeneous interfaces/reaction keys, fair rotating contact discovery, and geometry-derived layout inputs — integrated into main through #240.
 
-PR #215 contains the separate environment-first event-inspection and benchmark plan. This PR must use real simulation outcomes and bounded test instrumentation; it does not implement the UI or 24,000-tick benchmarks.
+PR #215 is the merged environment-first observability/workflow plan. Its implementation should proceed as a **parallel companion workstream** to this chemistry experiment, not wait until after it. The GUI should render the same live environment being exercised here, with real resource positions, movement/flow, chemistry events, and inventory state; it must not synthesize reactions. Keep the chemistry proof and GUI implementation in separate, dependency-ordered PRs so each remains independently testable.
 
 ## Source audit to refresh before implementation
 
@@ -54,7 +54,7 @@ The #240 integration adds fair rotating component-pair discovery and heterogeneo
 - No organism or organism energy as an environmental source.
 - No fractional atoms, fractional material splitting, or reinterpretation of aggregate stock as a realized molecule.
 - No flow equations or duplicate transport implementation; #226 owns transport.
-- No UI, event-inspection UI, or long-run benchmarks; #215 owns those.
+- No GUI implementation in this chemistry PR. Build the environment visualization and event-inspection UI in a parallel companion PR against the merged #215 plan, sharing this experiment's environment-only mode and deterministic fixture. Long-run benchmarks remain separately scoped.
 - No changes to the default production seed helpers.
 
 ## Acceptance gate
