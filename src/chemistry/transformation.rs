@@ -2334,20 +2334,20 @@ mod tests {
     }
 
     #[test]
-    fn resonance_funding_efficiency_loss_is_heat_and_not_double_charged() {
+    fn withdrawn_resonance_funds_work_without_an_efficiency_multiplier() {
         let ledger = crate::state::EnergyLedger::default();
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
-        .expect("two reservoir units at 50% efficiency provide one unit of work");
+        .expect("two withdrawn resonance units fund two units of work");
 
         // The reaction needs four binding-energy units plus five work units.
-        // Resonance withdraws 2, supplies 1 work, and loses 1 as heat; the
-        // usable holder pays the remaining 8 units.
-        assert!((prepared.usable_energy - 12.0).abs() < 1e-12);
-        assert!((prepared.heat_dissipated - 1.0).abs() < 1e-12);
-        assert!((prepared.ledger.total_work_expended - 5.0).abs() < 1e-12);
-        assert!((prepared.ledger.total_heat_dissipated - 1.0).abs() < 1e-12);
+        // Resonance supplies two work units directly; the usable holder pays
+        // the remaining three work units and the four-unit structural increase.
+        assert_eq!(prepared.usable_energy, 13.0);
+        assert_eq!(prepared.heat_dissipated, 0.0);
+        assert_eq!(prepared.ledger.total_work_expended, 5.0);
+        assert_eq!(prepared.ledger.total_heat_dissipated, 0.0);
         let world_residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
             + prepared.ledger.total_work_expended
             + prepared.ledger.total_heat_dissipated;
