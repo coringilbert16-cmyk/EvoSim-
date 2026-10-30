@@ -45,3 +45,12 @@ Make chemistry understandable and testable before organism design is layered on 
 - [ ] Structured event inspection
 - [ ] 24,000-tick performance and conservation benchmarks
 - [ ] Exact-head verification and baseline comparison
+
+## Current dependency/status reconciliation — 2026-10-30
+
+- PR #214 shared chemistry runtime/scheduler is merged; this plan must consume its real candidate, activation, commit, and failure paths rather than inventing a parallel event system.
+- PR #223 environmental COMBINE discovery/settlement and PR #226 flow/obstacle-aware transport are merged.
+- PRs #229–#240 now provide the base/compound chemistry matrices, multi-constituent transaction and round-trip evidence, heterogeneous constituent identity, fair bounded contact discovery, and molecular-layout geometry inputs.
+- This PR remains planning-only. No UI, runtime instrumentation, or production code is authorized by this document.
+
+Before implementation, audit current-main initialization, event production, and world inventory inspection. Preserve the default world preset. Environment-only mode must not create an organism or use organism energy as a hidden environmental source. Events must distinguish candidates and activation from committed physical reactions, and retention/work must remain bounded and deterministic.
