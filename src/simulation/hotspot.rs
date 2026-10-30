@@ -145,7 +145,6 @@ pub(crate) fn settle_environment_inputs(
     let mut total_incident = 0.0;
     let mut total_captured = 0.0;
     let mut total_heat = 0.0;
-    let total_escaped;
 
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
@@ -256,8 +255,7 @@ pub(crate) fn settle_environment_inputs(
                 total_incident += incident;
                 total_captured += captured;
                 total_heat += response_energy - captured;
-                total_escaped += incident - response_energy;
-                if ![total_incident, total_captured, total_heat, total_escaped]
+                if ![total_incident, total_captured, total_heat]
                     .iter()
                     .all(|value| value.is_finite() && *value >= 0.0)
                 {
@@ -272,7 +270,7 @@ pub(crate) fn settle_environment_inputs(
     }
     // Derive escape as the final shared residual so the source and all sinks
     // reconcile from the same aggregate arithmetic.
-    total_escaped = total_incident - total_captured - total_heat;
+    let total_escaped = total_incident - total_captured - total_heat;
     if !total_escaped.is_finite() || total_escaped < 0.0 {
         return false;
     }
