@@ -808,6 +808,12 @@ pub(crate) fn accumulate_environmental(
     remaining_discovery_work: &mut usize,
     ticks_per_second: f64,
 ) -> Vec<EnvironmentalCombineOperation> {
+    // Ensure legacy snapshots have encounter identities before any geometry changes.
+    for cell in &mut environment.field.cells {
+        for physical in &mut cell.physical_materials {
+            physical.refresh_instance_identity();
+        }
+    }
     if *remaining_discovery_work == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
