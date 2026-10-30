@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged API retained for chemistry stability integration")]
+#![expect(
+    dead_code,
+    reason = "Staged API retained for chemistry stability integration"
+)]
 //! Geometry-only descriptors used to evaluate molecular layout stability.
 //!
 //! This module deliberately does not assign a stability score or energy. It
@@ -65,10 +68,7 @@ impl MolecularLayoutSnapshot {
     /// Resolve current bond endpoint geometry and nearby unbonded endpoint
     /// approaches. Invalid stored bond endpoints or non-finite geometry reject
     /// the snapshot instead of silently treating malformed geometry as stable.
-    pub(crate) fn analyze(
-        structure: &OrganismStructure,
-        catalog: &[BaseResource],
-    ) -> Option<Self> {
+    pub(crate) fn analyze(structure: &OrganismStructure, catalog: &[BaseResource]) -> Option<Self> {
         let mut snapshot = Self::default();
 
         for (bond_index, bond) in structure.bonds.iter().enumerate() {
@@ -179,9 +179,8 @@ impl MolecularLayoutSnapshot {
                 if !radius_b.is_finite() || radius_b < 0.0 {
                     return None;
                 }
-                let center_distance =
-                    (unit_a.placement.x - unit_b.placement.x)
-                        .hypot(unit_a.placement.y - unit_b.placement.y);
+                let center_distance = (unit_a.placement.x - unit_b.placement.x)
+                    .hypot(unit_a.placement.y - unit_b.placement.y);
                 if !center_distance.is_finite() {
                     return None;
                 }
@@ -299,7 +298,9 @@ mod tests {
             ),
             endpoint_b: BondEndpoint::new(
                 first_id,
-                ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::PI },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
             ),
             strength: 0.5,
             bond_energy: 1.0,
@@ -388,7 +389,9 @@ mod tests {
         structure.bonds.push(Bond {
             endpoint_a: BondEndpoint::new(
                 id_a,
-                ConnectionEndpoint::Boundary { angle_radians: f64::NAN },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: f64::NAN,
+                },
             ),
             endpoint_b: BondEndpoint::new(
                 id_b,
