@@ -43,3 +43,12 @@ Validate the performance-oriented directional first-hit/single-sweep sunlight ap
 - [ ] Source budget, occlusion, and duplicate-claim tests
 - [ ] Representative performance benchmarks
 - [ ] Exact-head verification and baseline comparison
+
+## Current dependency/status reconciliation — 2026-10-30
+
+- PR #208 independent energy accounting, PR #211 cache schema/fingerprint validation, and PR #214 shared chemistry runtime/scheduler are merged.
+- PR #226 flow/obstacle-aware transport and PRs #229–#240 chemistry/molecular characterization are merged.
+- PR #210's death/continued-chemistry **plan** is now merged, but its lifecycle implementation and conservation acceptance gate are not complete. This sunlight phase remains blocked on that implementation, not merely on the existence of the plan.
+- This PR remains planning-only. No sunlight equations, runtime, or production code are changed here.
+
+Before implementation, audit the current main source-frame, first-hit exposure, occlusion, frequency-shifted onward propagation, staged settlement, and independent world-energy inventory paths. Preserve the owner-approved deterministic rotating off-screen source and parallel-ray approximation. Compare it against an exact small-world reference; do not substitute mirror reflection or introduce all-pairs/per-object ray tracing.
