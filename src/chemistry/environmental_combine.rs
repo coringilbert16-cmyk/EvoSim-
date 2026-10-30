@@ -157,13 +157,12 @@ fn select_best_positive_work_contact(
         return None;
     }
 
-    let mut best: Option<SelectedContact> = None;
     for &unit_a in indices_a {
         for &unit_b in indices_b {
             if *remaining_work == 0 {
-                return best;
+                return None;
             }
-            *remaining_work = remaining_work.saturating_sub(1);
+            *remaining_work = (*remaining_work).saturating_sub(1);
             let candidates = crate::contact::connection_pair_candidates_cached(
                 structure, unit_a, unit_b, catalog, cache,
             );
@@ -180,44 +179,17 @@ fn select_best_positive_work_contact(
                 if !formation_work.is_finite() || formation_work <= 1e-9 {
                     continue;
                 }
-                let proposed = SelectedContact {
+                return Some(SelectedContact {
                     unit_a,
                     unit_b,
                     candidate: evaluation.candidate,
                     investment,
                     required_energy,
-                };
-                let replace = best.map_or(true, |current| {
-                    proposed
-                        .required_energy
-                        .partial_cmp(&current.required_energy)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                        .then_with(|| {
-                            proposed
-                                .candidate
-                                .distance
-                                .partial_cmp(&current.candidate.distance)
-                                .unwrap_or(std::cmp::Ordering::Equal)
-                        })
-                        .then_with(|| {
-                            format!(
-                                "{:?}|{:?}",
-                                proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
-                            )
-                            .cmp(&format!(
-                                "{:?}|{:?}",
-                                current.candidate.endpoint_a, current.candidate.endpoint_b
-                            ))
-                        })
-                        .is_lt()
                 });
-                if replace {
-                    best = Some(proposed);
-                }
             }
         }
     }
-    best
+    None
 }
 
 fn approach_stage(
