@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::resources::{BaseResource, InternalBond, Material};
 use crate::state::{EnergyLedger, Environment};
@@ -530,15 +531,26 @@ fn advance_pair_approach(
         return false;
     };
     let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    let Some(transaction) = EnergyTransaction::expenditure(EnergyReason::Move, 0.0, work, 0.0)
+    else {
+        return false;
+    };
+    if !staged_usable_energy.is_finite()
+        || staged_usable_energy < 0.0
+        || !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction)
+    {
+        return false;
+    }
+    let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
-    let next_usable = staged_ledger.total_usable_energy_held - usable_work;
-    let next_work = staged_ledger.total_work_expended + work;
-    let next_environment_usable = environment.chemistry_usable_energy - usable_work;
-    if !next_resonant.is_finite()
+    let next_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_environment_usable = staged_usable_energy;
+    if !usable_delta.is_finite()
+        || !next_resonant.is_finite()
         || next_resonant < -1e-9
         || !next_usable.is_finite()
         || next_usable < -1e-9
-        || !next_work.is_finite()
         || !next_environment_usable.is_finite()
         || next_environment_usable < -1e-9
     {
@@ -546,7 +558,6 @@ fn advance_pair_approach(
     }
     staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
     staged_ledger.total_usable_energy_held = next_usable.max(0.0);
-    staged_ledger.total_work_expended = next_work;
     let mut removals = vec![(cell_a, material_a), (cell_b, material_b)];
     if removals[0] == removals[1] {
         return false;
