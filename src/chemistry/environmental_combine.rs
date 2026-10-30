@@ -306,8 +306,6 @@ fn advance_pair_approach(
     if !resonant_work.is_finite() || resonant_work < 0.0 || !usable_work.is_finite()
         || usable_work < 0.0 || usable_work > environment.chemistry_usable_energy + 1e-9
     { return false; }
-    let Some(placements_a) = source_a.placements.as_ref() else { return false; };
-    let Some(anchor_a) = placements_a.first() else { return false; };
     let dx_b = -dx_a * properties_a.mass / properties_b.mass;
     let dy_b = -dy_a * properties_a.mass / properties_b.mass;
     let mut moved_a = source_a.clone();
@@ -352,7 +350,6 @@ fn advance_pair_approach(
     environment.resonant_energy = staged_resonance;
     environment.chemistry_usable_energy = next_environment_usable.max(0.0);
     *ledger = staged_ledger;
-    let _ = anchor_a;
     true
 }
 
