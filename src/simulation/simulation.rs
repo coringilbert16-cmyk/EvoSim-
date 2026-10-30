@@ -888,11 +888,13 @@ impl Simulation {
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
             crate::environmental_combine::accumulate_environmental(
-                &self.environment,
+                &mut self.environment,
+                &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
+                self.ticks_per_second,
             );
 
         let mut environmental_break_work_remaining =
