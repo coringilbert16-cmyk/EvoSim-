@@ -151,6 +151,11 @@ impl Simulation {
             environment.height,
         )
         .expect("default world tone cycle must be valid");
+        let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
+            environment.width,
+            environment.height,
+        )
+        .expect("default right-bend hotspot must be valid");
         // Treat the starting usable reserve as an explicit, one-time external
         // source transaction instead of silently declaring it as the baseline.
         let initial_usable_energy = organism.usable_energy;
@@ -197,6 +202,7 @@ impl Simulation {
             seed_scale_reference,
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
+            hotspot: Some(hotspot),
         }
     }
     fn create_environment() -> Environment {
@@ -844,6 +850,13 @@ impl Simulation {
                 self,
                 sample,
                 &living_ids,
+            );
+        }
+        if let Some(hotspot) = self.hotspot {
+            let _ = crate::hotspot::settle_environment_inputs(
+                hotspot,
+                &mut self.environment,
+                &mut self.energy_ledger,
             );
         }
         // Environmental chemistry is a first-class owner and must run
