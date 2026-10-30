@@ -165,7 +165,15 @@ fn approach_stage(
         raw_dy
     };
     let distance = dx.hypot(dy);
-    if !distance.is_finite() || distance <= 1e-12 || step > distance {
+    if !distance.is_finite()
+        || (distance - selected.candidate.distance).abs() > 1e-6
+        || distance <= 1e-12
+        || step > distance
+        || !environment.height.is_finite()
+        || environment.height <= 0.0
+        || !environment.width.is_finite()
+        || environment.width <= 0.0
+    {
         return None;
     }
     let ux = dx / distance;
@@ -264,8 +272,14 @@ fn advance_pair_approach(
     if !reaction_frequency.is_finite() || reaction_frequency <= 0.0 { return false; }
     let reduced_mass = properties_a.mass * properties_b.mass / (properties_a.mass + properties_b.mass);
     if !reduced_mass.is_finite() || reduced_mass <= 0.0 { return false; }
+    let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing) else {
+        return false;
+    };
     let normalized_gap = (distance / radius).clamp(0.0, 1.0);
-    let force = static_potential * crate::chemistry::CHEMICAL_MAX_FORCE * (1.0 - normalized_gap).powi(2);
+    let force = static_potential
+        * crate::chemistry::CHEMICAL_MAX_FORCE
+        * (1.0 - normalized_gap).powi(2)
+        * engagement;
     let dt = 1.0 / ticks_per_second;
     let requested_step = (0.5 * force / reduced_mass * dt * dt).min(distance);
     if !requested_step.is_finite() || requested_step <= 1e-9 { return false; }
