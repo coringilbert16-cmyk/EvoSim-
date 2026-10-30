@@ -1657,24 +1657,7 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
-        // This case deliberately has no usable-energy reserve: the live
-        // environmental COMBINE must be funded by frequency-compatible field
-        // resonance alone.
-        simulation.environment.chemistry_usable_energy = 0.0;
-        let properties_a = source_a.material.weighted_properties(&catalog);
-        let properties_b = source_b.material.weighted_properties(&catalog);
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
-        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
-        let reaction_frequency_hz =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        assert!(
-            simulation
-                .environment
-                .resonant_energy
-                .deposit(reaction_frequency_hz, 1_000.0),
-            "test resonance reservoir must accept the reactants' coupled frequency"
-        );
+        simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -2566,6 +2549,25 @@ mod tests {
 
         let (source_a, source_b, selected) =
             selected_pair.expect("catalog should contain a physically eligible material pair");
+
+        // This case deliberately has no usable-energy reserve: the live
+        // environmental COMBINE must be funded by frequency-compatible field
+        // resonance alone.
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let properties_a = source_a.material.weighted_properties(&catalog);
+        let properties_b = source_b.material.weighted_properties(&catalog);
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency_hz =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .deposit(reaction_frequency_hz, 1_000.0),
+            "test resonance reservoir must accept the reactants' coupled frequency"
+        );
 
         // Isolate chemical activation from spatial discovery. If this direct call
         // cannot accumulate, the rejection is inside chemical_step rather than
