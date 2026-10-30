@@ -49,10 +49,16 @@ pub(crate) struct PhysicalMaterial {
 
 impl PhysicalMaterial {
     fn hash_identity_bytes(bytes: impl IntoIterator<Item = u8>) -> u64 {
-        let hash = bytes.into_iter().fold(0xcbf29ce484222325_u64, |hash, byte| {
-            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
-        });
-        if hash == 0 { 1 } else { hash }
+        let hash = bytes
+            .into_iter()
+            .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+            });
+        if hash == 0 {
+            1
+        } else {
+            hash
+        }
     }
 
     fn child_instance_identity(parent: u64, members: &[usize]) -> u64 {
