@@ -202,13 +202,11 @@ fn select_best_positive_work_contact(
                         .then_with(|| {
                             format!(
                                 "{:?}|{:?}",
-                                proposed.candidate.endpoint_a,
-                                proposed.candidate.endpoint_b
+                                proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
                             )
                             .cmp(&format!(
                                 "{:?}|{:?}",
-                                current.candidate.endpoint_a,
-                                current.candidate.endpoint_b
+                                current.candidate.endpoint_a, current.candidate.endpoint_b
                             ))
                         })
                         .is_lt()
