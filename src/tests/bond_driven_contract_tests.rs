@@ -356,30 +356,125 @@ mod tests {
     fn construction_uses_an_intact_composite_physical_material() {
         let catalog = default_catalog();
         let blueprint = two_carbon_bond_blueprint();
-        let mut storage = crate::material_storage::MaterialStorage::default();
 
-        assert!(storage.store_physical(
-            Material {
-                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![crate::resources::InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
+        // Produce the stored molecule through the same live COMBINE transaction
+        // used by chemistry. Do not fabricate composition-only internal bonds:
+        // the stored product must carry the actual endpoints and allocated energy.
+        let mut product = None;
+        let mut anchor_structure = crate::structure::OrganismStructure::new();
+        anchor_structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
             },
-            vec![
-                crate::structure::Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                crate::structure::Placement {
-                    x: 1.5,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ],
-            &catalog,
         ));
+        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
+        let placements = crate::construction_runtime::candidate_placements(
+            &anchor_structure,
+            carbon,
+            crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+            &[0],
+            &catalog,
+        );
+
+        'placements: for placement in placements {
+            let mut trial = anchor_structure.clone();
+            trial.add_unit(crate::structure::StructuralUnit::new("Carbon", placement));
+            let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                &trial,
+                0,
+                1,
+                &catalog,
+                &mut cache,
+            );
+            for candidate in candidates.into_iter().filter(|candidate| {
+                candidate.available_a
+                    && candidate.available_b
+                    && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            }) {
+                let Some((_, _, investment, _)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &trial,
+                        0,
+                        1,
+                        candidate,
+                        &catalog,
+                    )
+                else {
+                    continue;
+                };
+                let mut formation_ledger = EnergyLedger::default();
+                let mut formation_energy = 1.0e6;
+                if crate::combine_runtime::form_selected_bond(
+                    &mut trial,
+                    0,
+                    1,
+                    candidate,
+                    investment,
+                    &catalog,
+                    &mut cache,
+                    &mut formation_ledger,
+                    &mut formation_energy,
+                )
+                .is_some()
+                {
+                    product = Some(trial);
+                    break 'placements;
+                }
+            }
+        }
+
+        let product = product.expect("live COMBINE must produce a bonded carbon molecule");
+        assert_eq!(product.units.len(), 2);
+        assert_eq!(product.bonds.len(), 1);
+        let realized_bond = product.bonds.first().unwrap();
+        let index_a = product
+            .units
+            .iter()
+            .position(|unit| unit.physical_id == realized_bond.endpoint_a.constituent_id)
+            .expect("COMBINE endpoint A must map to a product constituent");
+        let index_b = product
+            .units
+            .iter()
+            .position(|unit| unit.physical_id == realized_bond.endpoint_b.constituent_id)
+            .expect("COMBINE endpoint B must map to a product constituent");
+        let material = Material {
+            parts: product
+                .units
+                .iter()
+                .map(|unit| unit.material.parts[0].clone())
+                .collect(),
+            internal_bonds: vec![crate::resources::InternalBond {
+                part_a: index_a,
+                part_b: index_b,
+            }],
+        };
+        let mut physical = crate::physical_material::PhysicalMaterial::realized(
+            material,
+            product.units.iter().map(|unit| unit.placement).collect(),
+            &catalog,
+        )
+        .expect("COMBINE product must be a restorable physical material");
+        physical.internal_connections = Some(vec![
+            crate::physical_material::PhysicalMaterialBond {
+                part_a: index_a,
+                endpoint_a: realized_bond.endpoint_a.location,
+                part_b: index_b,
+                endpoint_b: realized_bond.endpoint_b.location,
+                bond_energy: realized_bond.bond_energy,
+            },
+        ]);
+        let expected_bond_energy = realized_bond.bond_energy;
+
+        let mut storage = crate::material_storage::MaterialStorage::default();
+        assert!(storage.store_physical_instance(physical, &catalog));
         assert!(storage.store_physical(
             Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
@@ -394,10 +489,16 @@ mod tests {
         let mut energy = 1.0e6;
         let (structure, _, _) = blueprint
             .realize_with_materials(&catalog, &mut storage, &mut ledger, &mut energy)
-            .expect("construction should use the stored composite material");
+            .expect("construction should use the stored COMBINE product");
 
         assert_eq!(structure.units.len(), 3);
         assert_eq!(structure.bonds.len(), 2);
+        assert!(
+            structure.bonds.iter().any(|bond| {
+                (bond.bond_energy - expected_bond_energy).abs() <= 1e-9
+            }),
+            "construction must preserve the COMBINE product's allocated internal bond energy"
+        );
         assert!(storage.is_empty());
     }
 
