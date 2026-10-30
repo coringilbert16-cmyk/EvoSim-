@@ -755,8 +755,6 @@ impl Simulation {
                 ..Default::default()
             };
         self.environmental_chemistry_events.clear();
-        self.environmental_chemistry_diagnostics.accumulation_entries =
-            self.chemical_reaction_accumulation.len();
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
@@ -1704,6 +1702,8 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
                 + Self::environmental_structural_energy_held(&self.environment);
+        self.environmental_chemistry_diagnostics.accumulation_entries =
+            self.chemical_reaction_accumulation.len();
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
