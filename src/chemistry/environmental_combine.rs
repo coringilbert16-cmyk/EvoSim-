@@ -1656,7 +1656,8 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 1_000.0;
+        // Keep the usable reserve empty throughout the transaction checks;
+        // this proves the resolver can fund the operation from resonance alone.
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -1863,7 +1864,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);
