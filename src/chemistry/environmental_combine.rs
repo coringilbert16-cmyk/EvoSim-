@@ -51,30 +51,31 @@ fn origin() -> Placement {
     }
 }
 
-fn material_signature(material: &PhysicalMaterial) -> String {
-    // The realized payload, rather than composition alone, distinguishes moved,
-    // reshaped, or differently bonded instances that happen to share a recipe.
-    format!("{material:?}")
-}
-
 fn source_pair_key(
-    cell_a: usize,
-    material_a: usize,
     source_a: &PhysicalMaterial,
-    cell_b: usize,
-    material_b: usize,
     source_b: &PhysicalMaterial,
     unit_a: usize,
     unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
-    format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|{:?}|{:?}",
-        material_signature(source_a),
-        material_signature(source_b),
-        candidate.endpoint_a,
-        candidate.endpoint_b,
-    )
+    // Stable instance identity survives transport and cell/index reordering.
+    if source_a.instance_id <= source_b.instance_id {
+        format!(
+            "{ENVIRONMENT_PREFIX}{}:{unit_a}|{}:{unit_b}|{:?}|{:?}",
+            source_a.instance_id,
+            source_b.instance_id,
+            candidate.endpoint_a,
+            candidate.endpoint_b,
+        )
+    } else {
+        format!(
+            "{ENVIRONMENT_PREFIX}{}:{unit_b}|{}:{unit_a}|{:?}|{:?}",
+            source_b.instance_id,
+            source_a.instance_id,
+            candidate.endpoint_b,
+            candidate.endpoint_a,
+        )
+    }
 }
 
 fn dissipate_unupdated_accumulations(
@@ -319,11 +320,7 @@ fn chemical_step(
         reject_step!();
     };
     let key = source_pair_key(
-        cell_a,
-        material_a,
         source_a,
-        cell_b,
-        material_b,
         source_b,
         selected.unit_a,
         selected.unit_b,
@@ -640,13 +637,15 @@ fn physical_material_from_structure(
     if !material.is_valid_for_catalog(catalog) {
         return None;
     }
-    let physical = PhysicalMaterial {
+    let mut physical = PhysicalMaterial {
+        instance_id: 0,
         material,
         placements: Some(placements),
         internal_connections: Some(internal_connections),
         owner_relative_origin: None,
         realized_shapes: Some(shapes),
     };
+    physical.refresh_instance_identity();
     physical.is_realized().then_some(physical)
 }
 
