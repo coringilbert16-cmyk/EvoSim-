@@ -145,7 +145,11 @@ pub fn activation_barrier_from_bond_properties(
         return None;
     }
     let response_factor = if reactivity_baseline <= f64::EPSILON {
-        if pair_reactivity <= f64::EPSILON { 1.0 } else { return None; }
+        if pair_reactivity <= f64::EPSILON {
+            1.0
+        } else {
+            return None;
+        }
     } else {
         reactivity_baseline / (reactivity_baseline + pair_reactivity)
     };
