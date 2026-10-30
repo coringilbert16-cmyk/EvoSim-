@@ -5,7 +5,7 @@
 //! response, and only energy actually retained by the environmental resonance
 //! reservoir is made available to chemistry.
 
-use crate::chemistry::energy_ledger::EnergyLedgerAuthority;
+use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::resources::Form;
 use crate::state::{EnergyLedger, Environment};
 
@@ -225,7 +225,7 @@ pub(crate) fn settle_environment_inputs(
                     return false;
                 };
 
-                let before = staged_reservoir.total_energy()?;
+                let Some(before) = staged_reservoir.total_energy() else {\n                    return false;\n                };
                 let mut candidate = staged_reservoir.clone();
                 let mut deposit_ok = true;
                 for component in &retained.components {
@@ -238,7 +238,7 @@ pub(crate) fn settle_environment_inputs(
                     }
                 }
                 let captured = if deposit_ok {
-                    let after = candidate.total_energy()?;
+                    let Some(after) = candidate.total_energy() else {\n                        return false;\n                    };
                     let delta = after - before;
                     if !delta.is_finite() || delta < 0.0 || delta > response_energy + 1e-9 {
                         return false;
