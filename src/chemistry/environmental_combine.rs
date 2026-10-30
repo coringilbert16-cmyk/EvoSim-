@@ -1570,7 +1570,8 @@ mod tests {
         let mut budget = 0;
 
         let operations = accumulate_environmental(
-            &simulation.environment,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
             &mut accumulation,
             &mut simulation.chemistry_library,
             0,
@@ -1921,7 +1922,8 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
@@ -2577,11 +2579,13 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -2907,11 +2911,13 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
