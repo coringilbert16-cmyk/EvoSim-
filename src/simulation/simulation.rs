@@ -2823,7 +2823,6 @@ mod decomposition_finalization_tests {
                 1.0e9,
                 0.0,
                 0.0,
-                1.0,
                 &mut simulation.energy_ledger,
             ),
             "structural BREAK must settle after world-tone input"
