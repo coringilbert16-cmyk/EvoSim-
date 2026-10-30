@@ -433,9 +433,19 @@ mod tests {
     #[test]
     fn unbonded_structure_is_not_a_genome() {
         let catalog = default_catalog();
-        let blueprint = crate::juvenile::confirmed_seed_baseline(&default_catalog()).unwrap();
-        let mut structure = blueprint.realize(&catalog).unwrap();
-        structure.bonds.clear();
+        let mut structure = OrganismStructure::new();
+        for x in [0.0, 10.0, 20.0] {
+            structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+
+        assert!(structure.bonds.is_empty());
         assert!(analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .is_none());
