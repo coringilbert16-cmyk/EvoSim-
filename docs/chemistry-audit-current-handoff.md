@@ -3,7 +3,7 @@
 **Last refreshed:** 2026-10-30  
 **Plan:** [Chemistry Audit and Unification Plan](chemistry-audit-unification-plan.md); historical audits remain intact, and the latest dated integration checkpoint is appended at the end of that plan  
 **Plan branch:** `docs/chemistry-audit-unification-plan-2026-10-22`  
-**Current `main` head:** `bca1561c137b825814bf7dd29a3b6fd9200f3488` (PR #240 integration merge)  
+**Mainline integration anchor:** PR #240 merge `bca1561c137b825814bf7dd29a3b6fd9200f3488`, followed by documentation-only merges #204, #210, #215, and #216  
 **Scope:** Documentation-only handoff. No production implementation or tests belong in PR #204.
 
 ## Current state
@@ -32,13 +32,11 @@ The shared chemistry runtime/scheduler and the first compound-chemistry characte
 - Clippy has not been re-established on the post-#240 main head. Preserve the previously recorded repository-wide lint debt as historical context, not as evidence about this new head.
 - These results do not prove whole-world conservation or full chemistry unification.
 
-## Current open planning work
+## Current implementation work and merged plans
 
-- [PR #225](https://github.com/coringilbert16-cmyk/EvoSim-/pull/225) — raw environmental reactant discovery. Keep it COMBINE-discovery-only for its first acceptance slice. #226 is already merged; the remaining prerequisite is an owner-approved, deterministic integer fixture and energy source. Do not force contacts, lower thresholds, or use an organism as a hidden energy source. BREAK discovery remains a later independent stage.
-- [PR #215](https://github.com/coringilbert16-cmyk/EvoSim-/pull/215) — bounded event inspection and environment-first experiments. Its shared-runtime dependency #214 is merged; implementation should consume the real candidate/activation/commit/failure event contract, not synthesize events.
-- [PR #210](https://github.com/coringilbert16-cmyk/EvoSim-/pull/210) — death and continued ordinary chemistry. Keep biological death distinct from physical ownership and ordinary chemistry; implement only after auditing the current merged paths.
-- [PR #216](https://github.com/coringilbert16-cmyk/EvoSim-/pull/216) — sunlight/world-tone validation against an exact small-world reference. Keep separate from cache validation and sequence it after lifecycle integration.
-- [PR #204](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204) remains documentation-only.
+- [PR #225](https://github.com/coringilbert16-cmyk/EvoSim-/pull/225) is the only remaining open draft. It is COMBINE-discovery-only for its first raw-reactant acceptance slice. #226 is merged; exact integer fixture, placement/randomization, flow conditions, and environmental energy source require owner approval before implementation. Do not force contacts, lower thresholds, or use organism energy as a hidden source. Natural BREAK discovery is deferred.
+- [PR #210](https://github.com/coringilbert16-cmyk/EvoSim-/pull/210), [PR #215](https://github.com/coringilbert16-cmyk/EvoSim-/pull/215), and [PR #216](https://github.com/coringilbert16-cmyk/EvoSim-/pull/216) are now merged as planning documents. Their implementation work remains unstarted and must follow their dependencies and acceptance gates.
+- [PR #204](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204) is merged as the documentation-only roadmap/handoff.
 - PR #196 constructor/Bob work and PR #179 geometry-storage practice are closed; do not reopen wholesale. Recover individual ideas only after a fresh audit against current main and the current organism definition.
 
 ## Next sequence
