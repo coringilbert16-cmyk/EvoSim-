@@ -2523,15 +2523,16 @@ mod tests {
                             // Skip zero-work contacts during fixture discovery
                             // rather than asserting after an arbitrary pair has
                             // already been selected.
-                            let formation_work = crate::combine_runtime::selected_candidate_evaluation(
-                                &structure,
-                                selected.unit_a,
-                                selected.unit_b,
-                                selected.candidate,
-                                &catalog,
-                            )
-                            .map(|(_, work, _, _)| work)
-                            .unwrap_or(0.0);
+                            let formation_work =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &structure,
+                                    selected.unit_a,
+                                    selected.unit_b,
+                                    selected.candidate,
+                                    &catalog,
+                                )
+                                .map(|(_, work, _, _)| work)
+                                .unwrap_or(0.0);
                             if formation_work <= 1e-9 {
                                 continue;
                             }
