@@ -130,6 +130,232 @@ fn select_best_contact(
     )
 }
 
+fn approach_stage(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    selected: SelectedContact,
+    step: f64,
+    mass_a: f64,
+    mass_b: f64,
+    environment: &Environment,
+) -> Option<(OrganismStructure, f64, f64, f64)> {
+    if !step.is_finite() || step <= 0.0 || !mass_a.is_finite() || !mass_b.is_finite() {
+        return None;
+    }
+    let total_mass = mass_a + mass_b;
+    if !total_mass.is_finite() || total_mass <= 0.0 {
+        return None;
+    }
+    let share_a = mass_b / total_mass;
+    let share_b = mass_a / total_mass;
+    let a = structure.units.get(selected.unit_a)?;
+    let b = structure.units.get(selected.unit_b)?;
+    let point_a = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_a, a, &environment.catalog,
+    )?;
+    let point_b = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_b, b, &environment.catalog,
+    )?;
+    let dx = point_b.x - point_a.x;
+    let raw_dy = point_b.y - point_a.y;
+    let dy = if environment.height.is_finite() && environment.height > 0.0 {
+        (raw_dy + environment.height * 0.5).rem_euclid(environment.height) - environment.height * 0.5
+    } else {
+        raw_dy
+    };
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() || distance <= 1e-12 || step > distance {
+        return None;
+    }
+    let ux = dx / distance;
+    let uy = dy / distance;
+    let move_a = step * share_a;
+    let move_b = step * share_b;
+    let dx_a = ux * move_a;
+    let dy_a = uy * move_a;
+    let dx_b = -ux * move_b;
+    let dy_b = -uy * move_b;
+    let mut staged = structure.clone();
+    for &index in indices_a {
+        let unit = staged.units.get_mut(index)?;
+        unit.placement.x += dx_a;
+        unit.placement.y = (unit.placement.y + dy_a).rem_euclid(environment.height);
+        let shape = unit.shape(&environment.catalog)?;
+        let radius = shape.form.bounding_radius();
+        if !unit.placement.x.is_finite() || !unit.placement.y.is_finite()
+            || unit.placement.x - radius < 0.0
+            || unit.placement.x + radius > environment.width
+        { return None; }
+    }
+    for &index in indices_b {
+        let unit = staged.units.get_mut(index)?;
+        unit.placement.x += dx_b;
+        unit.placement.y = (unit.placement.y + dy_b).rem_euclid(environment.height);
+        let shape = unit.shape(&environment.catalog)?;
+        let radius = shape.form.bounding_radius();
+        if !unit.placement.x.is_finite() || !unit.placement.y.is_finite()
+            || unit.placement.x - radius < 0.0
+            || unit.placement.x + radius > environment.width
+        { return None; }
+    }
+    for &index in indices_a {
+        if crate::construction_runtime::placed_unit_overlaps(
+            &staged, &staged.units[index], indices_b, &environment.catalog,
+        ) { return None; }
+    }
+    let moved_a = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_a, &staged.units[selected.unit_a], &environment.catalog,
+    )?;
+    let moved_b = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_b, &staged.units[selected.unit_b], &environment.catalog,
+    )?;
+    let moved_dy = if environment.height.is_finite() && environment.height > 0.0 {
+        (moved_b.y - moved_a.y + environment.height * 0.5).rem_euclid(environment.height) - environment.height * 0.5
+    } else { moved_b.y - moved_a.y };
+    let moved_distance = (moved_b.x - moved_a.x).hypot(moved_dy);
+    moved_distance.is_finite().then_some((staged, moved_distance, dx_a, dy_a))
+}
+
+/// Let chemical attraction perform real approach work. The force advances the
+/// two complete physical reactants toward one another; compatible resonance
+/// funds the work first and the environmental usable reserve covers any remainder.
+fn advance_pair_approach(
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    selected: SelectedContact,
+    cell_a: usize,
+    material_a: usize,
+    source_a: &PhysicalMaterial,
+    cell_b: usize,
+    material_b: usize,
+    source_b: &PhysicalMaterial,
+    ticks_per_second: f64,
+) -> bool {
+    let distance = selected.candidate.distance;
+    let radius = crate::chemistry::CHEMICAL_CONTACT_RADIUS;
+    if !distance.is_finite() || distance <= 1e-9 || distance >= radius
+        || !ticks_per_second.is_finite() || ticks_per_second <= 0.0
+        || cell_a >= environment.field.cells.len() || cell_b >= environment.field.cells.len()
+        || environment.field.cells[cell_a].physical_materials.get(material_a) != Some(source_a)
+        || environment.field.cells[cell_b].physical_materials.get(material_b) != Some(source_b)
+    { return false; }
+    let (Some(properties_a), Some(properties_b)) = (
+        structure.units.get(selected.unit_a).and_then(|unit| unit.properties(&environment.catalog)),
+        structure.units.get(selected.unit_b).and_then(|unit| unit.properties(&environment.catalog)),
+    ) else { return false; };
+    let (Some(position_a), Some(position_b)) = (properties_a.chemical_position, properties_b.chemical_position) else {
+        return false;
+    };
+    let Some(static_potential) = crate::chemistry::interaction_potential(
+        position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
+    ) else { return false; };
+    if static_potential <= 0.0 { return false; }
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+    if !frequency_a.is_finite() || frequency_a <= 0.0 || !frequency_b.is_finite() || frequency_b <= 0.0 {
+        return false;
+    }
+    let reaction_frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    if !reaction_frequency.is_finite() || reaction_frequency <= 0.0 { return false; }
+    let reduced_mass = properties_a.mass * properties_b.mass / (properties_a.mass + properties_b.mass);
+    if !reduced_mass.is_finite() || reduced_mass <= 0.0 { return false; }
+    let normalized_gap = (distance / radius).clamp(0.0, 1.0);
+    let force = static_potential * crate::chemistry::CHEMICAL_MAX_FORCE * (1.0 - normalized_gap).powi(2);
+    let dt = 1.0 / ticks_per_second;
+    let requested_step = (0.5 * force / reduced_mass * dt * dt).min(distance);
+    if !requested_step.is_finite() || requested_step <= 1e-9 { return false; }
+    let old_remaining = crate::combine::formation_work_cost(properties_a, properties_b, distance);
+    let compatible_available = environment.resonant_energy.compatible_energy(reaction_frequency);
+    let available = compatible_available + environment.chemistry_usable_energy;
+    if !old_remaining.is_finite() || old_remaining <= 0.0 || !available.is_finite() || available <= 0.0 {
+        return false;
+    }
+    let mut low = 0.0;
+    let mut high = requested_step;
+    let mut best: Option<(OrganismStructure, f64, f64, f64)> = None;
+    for _ in 0..28 {
+        let step = 0.5 * (low + high);
+        if step <= 1e-10 { break; }
+        let Some(staged) = approach_stage(
+            structure, indices_a, indices_b, selected, step, properties_a.mass, properties_b.mass, environment,
+        ) else {
+            high = step;
+            continue;
+        };
+        let new_remaining = crate::combine::formation_work_cost(properties_a, properties_b, staged.1);
+        let work = old_remaining - new_remaining;
+        if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 { return false; }
+        if work <= available + 1e-9 {
+            low = step;
+            best = Some((staged.0, staged.1, staged.2, staged.3));
+        } else {
+            high = step;
+        }
+    }
+    let Some((_, new_distance, dx_a, dy_a)) = best else { return false; };
+    let work = old_remaining - crate::combine::formation_work_cost(properties_a, properties_b, new_distance);
+    if !work.is_finite() || work <= 1e-12 { return false; }
+    let mut staged_resonance = environment.resonant_energy.clone();
+    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency, work);
+    let usable_work = work - resonant_work;
+    if !resonant_work.is_finite() || resonant_work < 0.0 || !usable_work.is_finite()
+        || usable_work < 0.0 || usable_work > environment.chemistry_usable_energy + 1e-9
+    { return false; }
+    let Some(placements_a) = source_a.placements.as_ref() else { return false; };
+    let Some(anchor_a) = placements_a.first() else { return false; };
+    let dx_b = -dx_a * properties_a.mass / properties_b.mass;
+    let dy_b = -dy_a * properties_a.mass / properties_b.mass;
+    let mut moved_a = source_a.clone();
+    let mut moved_b = source_b.clone();
+    for placement in moved_a.placements.as_mut().into_iter().flatten() {
+        placement.x += dx_a;
+        placement.y = (placement.y + dy_a).rem_euclid(environment.height);
+    }
+    for placement in moved_b.placements.as_mut().into_iter().flatten() {
+        placement.x += dx_b;
+        placement.y = (placement.y + dy_b).rem_euclid(environment.height);
+    }
+    if !moved_a.is_realized() || !moved_b.is_realized() { return false; }
+    let Some(anchor_a) = moved_a.placements.as_ref().and_then(|placements| placements.first()) else { return false; };
+    let Some(anchor_b) = moved_b.placements.as_ref().and_then(|placements| placements.first()) else { return false; };
+    let Some(destination_a) = environment.field.index_for_position(anchor_a.x, anchor_a.y) else { return false; };
+    let Some(destination_b) = environment.field.index_for_position(anchor_b.x, anchor_b.y) else { return false; };
+    let mut staged_ledger = *ledger;
+    let next_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
+    let next_usable = staged_ledger.total_usable_energy_held - usable_work;
+    let next_work = staged_ledger.total_work_expended + work;
+    let next_environment_usable = environment.chemistry_usable_energy - usable_work;
+    if !next_resonant.is_finite() || next_resonant < -1e-9 || !next_usable.is_finite()
+        || next_usable < -1e-9 || !next_work.is_finite() || !next_environment_usable.is_finite()
+        || next_environment_usable < -1e-9
+    { return false; }
+    staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
+    staged_ledger.total_usable_energy_held = next_usable.max(0.0);
+    staged_ledger.total_work_expended = next_work;
+    let mut removals = vec![(cell_a, material_a), (cell_b, material_b)];
+    if removals[0] == removals[1] { return false; }
+    removals.sort_unstable_by(|a, b| b.cmp(a));
+    for (cell, index) in &removals {
+        if environment.field.cells[*cell].physical_materials.get(*index).is_none() { return false; }
+    }
+    for (cell, index) in removals { environment.field.cells[cell].physical_materials.remove(index); }
+    environment.field.cells[destination_a].physical_materials.push(moved_a);
+    environment.field.cells[destination_b].physical_materials.push(moved_b);
+    let mut changed = BTreeSet::new();
+    changed.insert(cell_a); changed.insert(cell_b); changed.insert(destination_a); changed.insert(destination_b);
+    for index in changed { environment.field.mark_changed_at_index(index); }
+    environment.resonant_energy = staged_resonance;
+    environment.chemistry_usable_energy = next_environment_usable.max(0.0);
+    *ledger = staged_ledger;
+    let _ = anchor_a;
+    true
+}
+
 /// Advance the bounded constituent-pair window by one pair per tick.
 /// Every pair therefore becomes the first inspected pair once per full cycle,
 /// even when the available per-tick work budget varies.
