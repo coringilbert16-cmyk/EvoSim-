@@ -2518,6 +2518,23 @@ mod tests {
                         if let Some(selected) = select_best_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
+                            // The energy-rejection fixture must use a contact
+                            // that actually requires physical formation work.
+                            // Skip zero-work contacts during fixture discovery
+                            // rather than asserting after an arbitrary pair has
+                            // already been selected.
+                            let formation_work = crate::combine_runtime::selected_candidate_evaluation(
+                                &structure,
+                                selected.unit_a,
+                                selected.unit_b,
+                                selected.candidate,
+                                &catalog,
+                            )
+                            .map(|(_, work, _, _)| work)
+                            .unwrap_or(0.0);
+                            if formation_work <= 1e-9 {
+                                continue;
+                            }
                             let material_name_a = structure.units[selected.unit_a]
                                 .material
                                 .parts
