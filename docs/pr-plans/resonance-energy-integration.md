@@ -42,3 +42,23 @@ The current shared phase clock should also be tested for stationary relative pha
 - No duplicate application of a pair force and no hidden energy source/sink.
 
 **Dependency:** PR 3. Draft only until PR 3 is accepted.
+
+
+## Implementation audit against the current code
+
+The following constraints are confirmed by the current implementation and must shape the first coding pass:
+
+- `EnergyLedger` tracks cumulative work/heat and aggregate usable, resonant, and structural stores. `EnergyInventorySnapshot` is a test-only independent oracle. Neither currently has a signed pair-interaction-potential inventory term.
+- Current retained resonance is owned by organism reservoirs plus the environment reservoir. `ResonantEnergyReservoir` stores nonnegative energy by frequency, not phase; its compatible withdrawal/deposit operations are holder-local. A pair cross-term is symmetric and signed, so PR 4 must not silently assign all of its cost or release to whichever material happened to be called the receiver.
+- Movement currently charges its per-step cost entirely as heat (`work_expended = 0`) and has no pair-force work or kinetic-energy settlement. Adding a force without a corresponding energy transaction would create or destroy energy.
+- Live COMBINE still obtains approach work from `formation_work_cost`, the integral of the legacy nonnegative chemical attraction. Its intrinsic bond potential is a separate stored structural term. Environmental COMBINE also still reads/calculates the legacy static chemical potential. These are distinct consumers and must not be migrated in one unverified replacement.
+- PR 3's pair potential is available as signed frequency-resolved components. Its no-occluder force helper is valid only for an isolated pair. The occluder-aware potential can account for a blocker, but the current two-body force helper deliberately returns no force in that case because the blocker’s reaction force is not yet derived.
+
+### Required decisions before force consumers are activated
+
+1. **Pair-potential ownership and baseline:** define how the world records the signed current pair-potential inventory and its tick-zero baseline, including pairs that appear or disappear as physical materials enter, leave, or change geometry. The independent inventory oracle must recompute or otherwise independently verify the held term.
+2. **Energy source for ΔU:** determine how a positive pair-potential change is funded and how a negative change is returned. The two participants' frequency-compatible reservoirs are symmetric candidates, but an equal split or proportional split must not be hard-coded without a physical derivation. If a participant cannot retain released energy, the unretained remainder must become heat exactly once.
+3. **Mechanical work boundary:** distinguish conservative pair-potential change from genuinely dissipated movement work. If ΔU is included as a held inventory term, do not also count that same energy as `work_expended`. Until kinetic energy is modeled, movement against a repulsive potential must have an explicit approved energy source rather than an implicit free displacement.
+4. **Occluded systems:** do not apply the isolated-pair force helper when other physical bodies can occlude the pair. Either derive the full N-body potential gradient, including reaction forces on blockers, or keep those force consumers inactive.
+
+These are implementation gates, not reasons to add arbitrary efficiencies, polarity assignments, or a second energy field.
