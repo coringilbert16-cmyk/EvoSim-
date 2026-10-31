@@ -1073,8 +1073,7 @@ mod tests {
                 .expect("each pair should include the remaining bodies as blockers");
                 for component in pair {
                     if let Some(existing) = independently_summed.iter_mut().find(|existing| {
-                        (existing.frequency_cycles_per_day
-                            - component.frequency_cycles_per_day)
+                        (existing.frequency_cycles_per_day - component.frequency_cycles_per_day)
                             .abs()
                             <= 1e-9
                     }) {
@@ -1155,7 +1154,10 @@ mod tests {
             .map(|component| component.energy)
             .sum::<f64>()
             - initial_pair_potential;
-        assert!(expected_delta.abs() > 1e-10, "test movement must change pair potential");
+        assert!(
+            expected_delta.abs() > 1e-10,
+            "test movement must change pair potential"
+        );
         assert!(
             (delta_components
                 .iter()
@@ -1177,9 +1179,17 @@ mod tests {
             .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap())
             .sum::<f64>()
-            + simulation.environment.resonant_energy.total_energy().unwrap();
-        simulation.energy_ledger.initial_pair_interaction_potential_held = 0.0;
-        simulation.energy_ledger.total_pair_interaction_potential_held = 0.0;
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
+        simulation
+            .energy_ledger
+            .initial_pair_interaction_potential_held = 0.0;
+        simulation
+            .energy_ledger
+            .total_pair_interaction_potential_held = 0.0;
         simulation.energy_ledger.initial_resonant_energy_held = initial_resonant;
         simulation.energy_ledger.total_resonant_energy_held = initial_resonant;
 
@@ -1191,9 +1201,7 @@ mod tests {
             Some(&mut mover.resonant_energy),
             &delta_components,
         ));
-        assert!(
-            (ledger.total_pair_interaction_potential_held - expected_delta).abs() < 1e-9
-        );
+        assert!((ledger.total_pair_interaction_potential_held - expected_delta).abs() < 1e-9);
 
         let current_usable = simulation
             .organisms
