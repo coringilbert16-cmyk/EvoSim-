@@ -371,7 +371,8 @@
         const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * fraction);
         const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
         ctx.beginPath();
-        ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? -Math.PI * 0.2 : Math.PI * 0.8, fraction < 0.5 ? Math.PI * 1.45 : Math.PI * 2.8);
+        // Exchange the two eddy orientations between the left and right elbows.
+        ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? Math.PI * 0.8 : -Math.PI * 0.2, fraction < 0.5 ? Math.PI * 2.8 : Math.PI * 1.45);
         ctx.strokeStyle = 'rgba(186, 230, 253, 0.38)';
         ctx.lineWidth = 1.25;
         ctx.stroke();
