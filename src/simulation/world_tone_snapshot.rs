@@ -1231,7 +1231,7 @@ mod tests {
         assert!(crate::energy_ledger::settle_pair_potential_change(
             ledger,
             &mut mover.usable_energy,
-            Some(&mut mover.resonant_energy),
+            &mut [&mut mover.resonant_energy],
             &delta_components,
         ));
         assert!((ledger.total_pair_interaction_potential_held - expected_delta).abs() < 1e-9);
