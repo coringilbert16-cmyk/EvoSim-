@@ -217,6 +217,9 @@
     const world = worldPayload();
     const viewport = viewportSize();
     if (!world) return;
+    // Preserve the experiment's visible S-shaped environmental current as a
+    // backdrop; physical resource constituents are drawn above it.
+    renderWaterField(world, viewport);
     drawField(world, viewport);
     renderHotspot(world.hotspot, viewport);
     drawWorldPoints(world, viewport);
