@@ -88,3 +88,6 @@ Acceptance tests verify that the oracle enumerates the same physical body count 
 **Performance boundary:** this explicit oracle is not called from the simulation tick. The current implementation recomputes physical geometry for each pair and every occluder, so it is intentionally a correctness oracle for small/controlled worlds, not an acceptable tick-loop implementation. Geometry precomputation/caching and a measured world-scale benchmark are still required before any movement or chemistry consumer can use it.
 
 The energy snapshot continues to read the authoritative signed pair-potential ledger counter. The independent world oracle is used to verify the counter's expected ΔU in acceptance tests; it is not silently substituted as an expensive per-snapshot recalculation.
+## Movement/approach-work boundary
+
+Pair-potential settlement and mechanical approach work are separate terms. The signed ΔU_pair rule above records the change in conservative interaction potential and must not also be counted as work_expended. When movement is migrated, the mechanical work required to approach/translate under the interaction is to be withdrawn from compatible resonance storage and recorded once as work_expended. Do not silently charge that work to heat or usable energy, and reject/roll back a move if the required compatible resonance energy is unavailable.
