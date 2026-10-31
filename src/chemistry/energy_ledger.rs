@@ -413,8 +413,8 @@ impl EnergyInventorySnapshot {
         let usable_delta = self.current_usable_energy - self.initial_usable_energy;
         let resonant_delta = self.current_resonant_energy - self.initial_resonant_energy;
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
-        let pair_potential_delta = self.current_pair_interaction_potential
-            - self.initial_pair_interaction_potential;
+        let pair_potential_delta =
+            self.current_pair_interaction_potential - self.initial_pair_interaction_potential;
         let residual = usable_delta
             + resonant_delta
             + structural_delta
@@ -475,7 +475,10 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     }
 
-    let delta = components.iter().map(|component| component.energy).sum::<f64>();
+    let delta = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
     if !delta.is_finite() {
         return false;
     }
@@ -498,8 +501,7 @@ pub(crate) fn settle_pair_potential_change(
             return false;
         }
         let actual_usable_delta = next_usable - *active_mover_usable_energy;
-        let actual_pair_delta =
-            next_pair_potential - ledger.total_pair_interaction_potential_held;
+        let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
         let residual = actual_usable_delta + actual_pair_delta;
         if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
             return false;
@@ -563,8 +565,7 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     }
 
-    let actual_pair_delta =
-        next_pair_potential - ledger.total_pair_interaction_potential_held;
+    let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
     let actual_resonant_delta = next_resonant_held - ledger.total_resonant_energy_held;
     let mut actual_heat_delta = next_heat - ledger.total_heat_dissipated;
     let mut residual = actual_pair_delta + actual_resonant_delta + actual_heat_delta;
