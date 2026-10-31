@@ -637,7 +637,10 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 #[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
 pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
     let components = spectrum_cross_energy_components(a, b)?;
-    let energy = components.iter().map(|component| component.energy).sum::<f64>();
+    let energy = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
     energy.is_finite().then_some(energy)
 }
 
@@ -649,7 +652,7 @@ fn spectrum_cross_energy_components(
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
     spectrum_energy(a)?;
     spectrum_energy(b)?;
-    let mut components = Vec::new();
+    let mut components = Vec::<ResonancePairPotentialComponent>::new();
     for left in &a.components {
         for right in &b.components {
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
@@ -1237,8 +1240,7 @@ pub(crate) fn resonance_pair_potential_components(
     let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
     for component in a_to_b.iter().chain(b_to_a.iter()) {
         if let Some(existing) = symmetric.iter_mut().find(|existing| {
-            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
-                <= 1e-9
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs() <= 1e-9
         }) {
             existing.energy += 0.5 * component.energy;
             if !existing.energy.is_finite() {
@@ -1268,7 +1270,10 @@ pub(crate) fn resonance_pair_potential(
     tick: u64,
 ) -> Option<f64> {
     let components = resonance_pair_potential_components(a, b, catalog, tick)?;
-    let potential = components.iter().map(|component| component.energy).sum::<f64>();
+    let potential = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
     potential.is_finite().then_some(potential)
 }
 
