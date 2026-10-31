@@ -1055,6 +1055,19 @@ pub(crate) fn material_aura_receptions(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_occluders(source, receiver, &[], catalog, tick)
+}
+
+/// Pairwise reception with all other physical bodies retained as occluders.
+/// The caller supplies only bodies distinct from source and receiver; they
+/// block visibility but are not themselves sampled as receivers.
+pub(crate) fn material_aura_receptions_with_occluders(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
     if std::ptr::eq(source, receiver) {
         return Some(Vec::new());
     }
@@ -1068,18 +1081,34 @@ pub(crate) fn material_aura_receptions(
         return None;
     }
 
-    // Keep the receiver as the target body. The shared visibility solver
-    // resolves its actual exposed intervals rather than one representative
-    // point or a bounding-circle approximation.
-    let receiver_bodies = [receiver_geometry];
-    let straight_intervals = crate::source_exposure::visible_polygonal_intervals(
-        (source_x, source_y),
-        &receiver_bodies,
-    )?;
-    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals(
-        (source_x, source_y),
-        &receiver_bodies,
-    )?;
+    // Keep the receiver as the only target while every other body remains
+    // in the visibility set as a possible occluder. The source itself is
+    // deliberately excluded: its aura originates inside that body's geometry.
+    let mut receiver_bodies = Vec::with_capacity(1 + occluders.len());
+    receiver_bodies.push(receiver_geometry);
+    for occluder in occluders {
+        if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
+            continue;
+        }
+        receiver_bodies.push(
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                occluder, catalog,
+            )?,
+        );
+    }
+    let target_body_indices = [0];
+    let straight_intervals =
+        crate::source_exposure::visible_polygonal_intervals_for_targets(
+            (source_x, source_y),
+            &receiver_bodies,
+            &target_body_indices,
+        )?;
+    let curved_intervals =
+        crate::source_exposure::visible_circular_arc_intervals_for_targets(
+            (source_x, source_y),
+            &receiver_bodies,
+            &target_body_indices,
+        )?;
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1169,7 +1198,20 @@ fn directional_resonance_pair_potential_components(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
-    let receptions = material_aura_receptions(source, receiver, catalog, tick)?;
+    directional_resonance_pair_potential_components_with_occluders(
+        source, receiver, &[], catalog, tick,
+    )
+}
+
+fn directional_resonance_pair_potential_components_with_occluders(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let receptions =
+        material_aura_receptions_with_occluders(source, receiver, occluders, catalog, tick)?;
     if receptions.is_empty() {
         return Some(Vec::new());
     }
@@ -1232,11 +1274,27 @@ pub(crate) fn resonance_pair_potential_components(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
+    resonance_pair_potential_components_with_occluders(a, b, &[], catalog, tick)
+}
+
+/// Frequency-resolved symmetric pair potential with third-party physical
+/// bodies blocking the source-to-receiver boundary paths.
+pub(crate) fn resonance_pair_potential_components_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
     if std::ptr::eq(a, b) {
         return Some(Vec::new());
     }
-    let a_to_b = directional_resonance_pair_potential_components(a, b, catalog, tick)?;
-    let b_to_a = directional_resonance_pair_potential_components(b, a, catalog, tick)?;
+    let a_to_b = directional_resonance_pair_potential_components_with_occluders(
+        a, b, occluders, catalog, tick,
+    )?;
+    let b_to_a = directional_resonance_pair_potential_components_with_occluders(
+        b, a, occluders, catalog, tick,
+    )?;
     let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
     for component in a_to_b.iter().chain(b_to_a.iter()) {
         if let Some(existing) = symmetric.iter_mut().find(|existing| {
@@ -1269,7 +1327,18 @@ pub(crate) fn resonance_pair_potential(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<f64> {
-    let components = resonance_pair_potential_components(a, b, catalog, tick)?;
+    resonance_pair_potential_with_occluders(a, b, &[], catalog, tick)
+}
+
+pub(crate) fn resonance_pair_potential_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<f64> {
+    let components =
+        resonance_pair_potential_components_with_occluders(a, b, occluders, catalog, tick)?;
     let potential = components
         .iter()
         .map(|component| component.energy)
@@ -1306,19 +1375,33 @@ pub(crate) fn resonance_pair_force(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<((f64, f64), (f64, f64))> {
+    resonance_pair_force_with_occluders(a, b, &[], catalog, tick)
+}
+
+pub(crate) fn resonance_pair_force_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<((f64, f64), (f64, f64))> {
     const DIFFERENCE_STEP: f64 = 1.0e-4;
-    let potential = resonance_pair_potential(a, b, catalog, tick)?;
+    let potential = resonance_pair_potential_with_occluders(a, b, occluders, catalog, tick)?;
     let b_plus_x = translated_physical_material(b, DIFFERENCE_STEP, 0.0)?;
     let b_minus_x = translated_physical_material(b, -DIFFERENCE_STEP, 0.0)?;
     let b_plus_y = translated_physical_material(b, 0.0, DIFFERENCE_STEP)?;
     let b_minus_y = translated_physical_material(b, 0.0, -DIFFERENCE_STEP)?;
 
-    let gradient_x = (resonance_pair_potential(a, &b_plus_x, catalog, tick)?
-        - resonance_pair_potential(a, &b_minus_x, catalog, tick)?)
-        / (2.0 * DIFFERENCE_STEP);
-    let gradient_y = (resonance_pair_potential(a, &b_plus_y, catalog, tick)?
-        - resonance_pair_potential(a, &b_minus_y, catalog, tick)?)
-        / (2.0 * DIFFERENCE_STEP);
+    let gradient_x = (resonance_pair_potential_with_occluders(
+        a, &b_plus_x, occluders, catalog, tick,
+    )? - resonance_pair_potential_with_occluders(
+        a, &b_minus_x, occluders, catalog, tick,
+    )?) / (2.0 * DIFFERENCE_STEP);
+    let gradient_y = (resonance_pair_potential_with_occluders(
+        a, &b_plus_y, occluders, catalog, tick,
+    )? - resonance_pair_potential_with_occluders(
+        a, &b_minus_y, occluders, catalog, tick,
+    )?) / (2.0 * DIFFERENCE_STEP);
     if !gradient_x.is_finite() || !gradient_y.is_finite() || !potential.is_finite() {
         return None;
     }
