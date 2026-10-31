@@ -101,6 +101,8 @@ fn prepare_chemical_break_energy_with_structural_potentials(
         || !product_structural_potential.is_finite()
         || !resonance_withdrawal.is_finite()
         || resonance_withdrawal < 0.0
+        || !ledger.total_resonant_energy_held.is_finite()
+        || ledger.total_resonant_energy_held < 0.0
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
         || !activation_signal.is_finite()
@@ -118,13 +120,20 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     // unit actually withdrawn performs one unit of disruption work. No
     // inherited conversion multiplier or artificial conversion loss is used.
     // The caller requests no more than the reaction's physical work requirement.
-    if resonance_withdrawal > disruption_cost + 1e-9 {
+    if resonance_withdrawal > disruption_cost + 1e-9
+        || resonance_withdrawal > ledger.total_resonant_energy_held + 1e-9
+    {
         return None;
     }
     let resonant_work = resonance_withdrawal.min(disruption_cost);
     let bond_supplied_work = disruption_cost - resonant_work;
+    let next_total_resonant =
+        (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
     let next_total_work = ledger.total_work_expended + disruption_cost;
     let next_total_heat = ledger.total_heat_dissipated;
+    if !next_total_resonant.is_finite() {
+        return None;
+    }
     if !next_total_heat.is_finite() {
         return None;
     }
@@ -150,6 +159,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     }
     // The complete disruption cost is accounted once; resonance is debited by
     // the caller only after the corresponding physical mutation commits.
+    prepared_ledger.total_resonant_energy_held = next_total_resonant;
     prepared_ledger.total_work_expended = next_total_work;
     prepared_ledger.total_heat_dissipated = next_total_heat;
     Some(PreparedChemicalBreakEnergy {
