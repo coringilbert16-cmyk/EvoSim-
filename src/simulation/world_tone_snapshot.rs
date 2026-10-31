@@ -979,10 +979,7 @@ fn world_pair_potential_components_for_bodies(
 pub(crate) fn world_pair_potential_inventory_components(
     simulation: &Simulation,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    let (bodies, resonant_indices, _) =
-        world_physical_materials_for_pair_potential(
-            simulation,
-        )?;
+    let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
     world_pair_potential_components_for_bodies(
         &bodies,
         &resonant_indices,
