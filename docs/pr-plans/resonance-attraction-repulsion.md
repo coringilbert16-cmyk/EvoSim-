@@ -17,12 +17,12 @@ The source extent is currently recorded as metadata; the existing distance atten
 
 ## Implement
 
-- Generalize the existing aura source/receiver calculation so a realized physical material can receive another material's aura through its actual geometry.
+- Generalize the existing aura source/receiver calculation so a realized physical material can receive another material's aura through its actual geometry. Reuse `OrganismBodyGeometry::from_physical_material` and its constituent placements/realized shapes to resolve receiver boundaries; do not substitute bounding circles for the actual shape.
 - Preserve the existing aura's frequency-resolved amplitude and phase through reception; apply the receiver's oscillator response using the existing material-response model where appropriate.
 - Derive the pair interaction potential from the physically justified interaction of the received spectra. Do not assume that phase difference alone determines a force, and do not add arbitrary coupling constants, polarity assignments, or distance laws.
 - Use the existing spatial attenuation/geometric coupling as the spatial basis. Derive force from the spatial gradient of the resulting interaction potential.
 - Establish attractive, repulsive, neutral, and equilibrium cases from the derived model.
-- Require equal-and-opposite pair forces and ensure the same pair is not counted twice.
+- Define one symmetric pair interaction potential from the two materials' reciprocal aura reception, then derive the equal-and-opposite pair forces from that single potential. Do not calculate two unrelated one-sided forces or count the same pair twice.
 - Audit existing chemical attraction and define precisely where resonance becomes authoritative.
 
 ## Acceptance
