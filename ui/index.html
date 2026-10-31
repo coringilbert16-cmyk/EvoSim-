@@ -151,6 +151,7 @@
         observationLevel = 'World';
         historyViewTick = tick;
         cameraInitialized = false;
+        updateTimeline();
         render();
       } catch (_) {
         if (serial === requestSerial) status.textContent = 'Historical observation unavailable.';
