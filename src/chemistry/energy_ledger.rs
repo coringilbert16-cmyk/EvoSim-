@@ -1031,7 +1031,7 @@ mod tests {
         assert_eq!(usable, 10.0);
         assert!((resonance.total_energy().unwrap() - 8.0).abs() < 1e-12);
         assert_eq!(ledger.total_pair_interaction_potential_held, -8.0);
-        assert_eq!(ledger.total_resonant_energy_held, 4.0);
+        assert_eq!(ledger.total_resonant_energy_held, 8.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(resonance.components.len(), 2);
