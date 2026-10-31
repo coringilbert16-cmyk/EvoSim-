@@ -1061,12 +1061,7 @@ fn world_pair_potential_gradient_for_bodies(
     }
     const DIFFERENCE_STEP: f64 = 1.0e-4;
     let components =
-        world_pair_potential_components_for_bodies(
-            bodies,
-            resonant_indices,
-            catalog,
-            tick,
-        )?;
+        world_pair_potential_components_for_bodies(bodies, resonant_indices, catalog, tick)?;
     let base_potential = components
         .iter()
         .map(|component| component.energy)
