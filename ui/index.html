@@ -23,7 +23,7 @@
   <div id="app">
     <header>
       <div id="status">Connecting to EvoSim…</div>
-      <div id="keyboard-help">Space: pause/play · &lt;: back one tick · &gt;: forward one tick · Esc: reset</div>
+      <div id="keyboard-help">Space: pause/play · &lt;: previous checkpoint · &gt;: forward one tick · Esc: reset</div>
     </header>
     <div id="timeline">
       <input id="history" type="range" min="0" max="0" value="0" step="1">
@@ -175,8 +175,8 @@
       if (historyViewTick != null) await returnToLiveWorld();
       await refreshRuntimeStatus();
       const currentTick = runtimeStatus?.tick;
-      const previousTick = Number.isInteger(currentTick) ? currentTick - 1 : -1;
-      if (previousTick < 0 || !historyTicks.includes(previousTick)) return;
+      const previousTick = [...historyTicks].reverse().find(tick => tick < currentTick) ?? -1;
+      if (previousTick < 0) return;
       if (runtimeStatus?.running) await control('/control/pause');
       const response = await fetch('/control/restore/' + encodeURIComponent(previousTick), { method: 'POST', cache: 'no-store' });
       if (!response.ok) {
