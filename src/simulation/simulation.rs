@@ -1754,6 +1754,12 @@ impl Simulation {
             current_resonant_energy,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
             current_structural_energy,
+            initial_pair_interaction_potential: self
+                .energy_ledger
+                .initial_pair_interaction_potential_held,
+            current_pair_interaction_potential: self
+                .energy_ledger
+                .total_pair_interaction_potential_held,
             external_energy_input: self.energy_ledger.total_external_energy_input,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,

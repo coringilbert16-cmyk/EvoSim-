@@ -757,6 +757,382 @@ fn body_from_owner_relative_material(
     OrganismBodyGeometry::from_physical_material(&world_material, catalog)
 }
 
+/// Reconstruct every currently realized physical world body for the
+/// independent pair-potential inventory oracle. This intentionally mirrors
+/// the authoritative body classes assembled by WorldToneOccluderSnapshot.
+fn world_physical_materials_for_pair_potential(
+    simulation: &Simulation,
+) -> Option<(Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>)> {
+    let catalog = &simulation.environment.catalog;
+    let mut bodies = Vec::new();
+    let mut resonant_participant_indices = Vec::new();
+    // Attached physical bodies are translated with their owner. Their partial
+    // gradients must be summed into the owning organism's net force.
+    let mut force_owner_indices = Vec::new();
+
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        if !organism.structure.units.is_empty() {
+            resonant_participant_indices.push(bodies.len());
+            bodies.push(physical_material_from_structure(
+                &organism.structure,
+                catalog,
+            )?);
+            force_owner_indices.push(Some(organism_index));
+        }
+    }
+
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        let Some(construction) = &organism.reproductive_construction else {
+            continue;
+        };
+        if !construction.is_aggregate_owned_by(&organism.structure) {
+            return None;
+        }
+        if !construction.committed_material.entries.is_empty() {
+            let anchor = Placement {
+                x: construction.developmental_origin.x,
+                y: construction.developmental_origin.y,
+                rotation_radians: 0.0,
+            };
+            for entry in &construction.committed_material.entries {
+                let StoredMaterial::Physical(physical) = entry;
+                resonant_participant_indices.push(bodies.len());
+                bodies.push(owner_relative_physical_material(physical, anchor)?);
+                force_owner_indices.push(Some(organism_index));
+            }
+        }
+    }
+
+    for cell in &simulation.environment.field.cells {
+        for physical in &cell.physical_materials {
+            resonant_participant_indices.push(bodies.len());
+            bodies.push(physical.clone());
+            force_owner_indices.push(None);
+        }
+    }
+
+    for decomposing in &simulation.decomposing_bodies {
+        if !decomposing.structure.units.is_empty() {
+            resonant_participant_indices.push(bodies.len());
+            bodies.push(physical_material_from_structure(
+                &decomposing.structure,
+                catalog,
+            )?);
+            force_owner_indices.push(None);
+        }
+    }
+
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+        if organism.stored_material.entries.is_empty() {
+            continue;
+        }
+        let anchor = owner_anchor(organism)?;
+        for entry in &organism.stored_material.entries {
+            let StoredMaterial::Physical(physical) = entry;
+            // Stored material remains a physical blocker but is deliberately
+            // excluded as a resonance source or receiver until it is released.
+            bodies.push(owner_relative_physical_material(physical, anchor)?);
+            force_owner_indices.push(Some(organism_index));
+        }
+    }
+
+    for transformation in &simulation.active_transformations {
+        if transformation.stored_material.is_some()
+            && transformation.combine_environmental_source.is_some()
+        {
+            return None;
+        }
+        if transformation.stored_material.is_none()
+            && transformation.combine_environmental_source.is_none()
+        {
+            continue;
+        }
+        let (owner_index, owner) = simulation
+            .organisms
+            .iter()
+            .enumerate()
+            .find(|(_, organism)| organism.id == transformation.organism_id)?;
+        if owner.active_transformation_id != Some(transformation.id) {
+            return None;
+        }
+        if let Some(physical) = &transformation.stored_material {
+            bodies.push(owner_relative_physical_material(
+                physical,
+                owner_anchor(owner)?,
+            )?);
+            force_owner_indices.push(Some(owner_index));
+        }
+        if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
+            let _ = simulation.environment.field.cells.get(*cell_index)?;
+            resonant_participant_indices.push(bodies.len());
+            bodies.push(physical.clone());
+            force_owner_indices.push(None);
+        }
+    }
+
+    if bodies.len() != force_owner_indices.len() {
+        return None;
+    }
+    Some((bodies, resonant_participant_indices, force_owner_indices))
+}
+
+fn physical_material_from_structure(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<PhysicalMaterial> {
+    if structure.units.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::with_capacity(structure.units.len());
+    let mut placements = Vec::with_capacity(structure.units.len());
+    let mut realized_shapes = Vec::with_capacity(structure.units.len());
+    for unit in &structure.units {
+        if unit.material.parts.len() != 1 || !unit.material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        let (name, amount) = unit.material.parts.first()?;
+        parts.push((name.clone(), *amount));
+        placements.push(unit.placement);
+        realized_shapes.push(unit.shape(catalog)?.clone());
+    }
+    let material = crate::resources::Material {
+        parts,
+        internal_bonds: Vec::new(),
+    };
+    if !material.is_valid_for_catalog(catalog) {
+        return None;
+    }
+    Some(PhysicalMaterial {
+        material,
+        placements: Some(placements),
+        internal_connections: None,
+        owner_relative_origin: None,
+        realized_shapes: Some(realized_shapes),
+    })
+}
+
+fn owner_relative_physical_material(
+    physical: &PhysicalMaterial,
+    owner_anchor: Placement,
+) -> Option<PhysicalMaterial> {
+    let relative_origin = physical.owner_relative_origin?;
+    let world_origin = transform_relative(owner_anchor, relative_origin);
+    let placements = physical.placements.as_ref()?;
+    if placements.is_empty() || placements.len() != physical.material.parts.len() {
+        return None;
+    }
+    let mut world_material = physical.clone();
+    world_material.placements = Some(
+        placements
+            .iter()
+            .copied()
+            .map(|relative| transform_relative(world_origin, relative))
+            .collect(),
+    );
+    world_material.owner_relative_origin = None;
+    Some(world_material)
+}
+
+fn world_pair_potential_components_for_bodies(
+    bodies: &[PhysicalMaterial],
+    resonant_indices: &[usize],
+    catalog: &[BaseResource],
+    tick: u64,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
+    for (first_position, &first) in resonant_indices.iter().enumerate() {
+        for &second in resonant_indices.iter().skip(first_position + 1) {
+            let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                &bodies[first],
+                &bodies[second],
+                bodies,
+                catalog,
+                tick,
+            )?;
+            for component in pair {
+                if let Some(existing) = total.iter_mut().find(|existing| {
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                }) {
+                    existing.energy += component.energy;
+                    if !existing.energy.is_finite() {
+                        return None;
+                    }
+                } else {
+                    total.push(component);
+                }
+            }
+        }
+    }
+    total.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(total)
+}
+
+/// Recompute the signed world pair-potential inventory from the physical
+/// world, including every other body as an occluder for each pair. This is an
+/// intentionally independent oracle; it is not yet a tick-loop path.
+#[allow(dead_code)] // Staged for inventory verification before movement/chemistry use.
+pub(crate) fn world_pair_potential_inventory_components(
+    simulation: &Simulation,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
+    world_pair_potential_components_for_bodies(
+        &bodies,
+        &resonant_indices,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+}
+
+/// Translate one already world-resolved physical body without changing its
+/// material identity or shape. Stored/attached bodies are included because
+/// their positions can alter the visibility of other resonant pairs.
+fn translate_pair_potential_body(
+    body: &PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) -> Option<PhysicalMaterial> {
+    if !dx.is_finite() || !dy.is_finite() || body.owner_relative_origin.is_some() {
+        return None;
+    }
+    let mut translated = body.clone();
+    for placement in translated.placements.as_mut()? {
+        placement.x += dx;
+        placement.y += dy;
+        if !placement.x.is_finite() || !placement.y.is_finite() {
+            return None;
+        }
+    }
+    Some(translated)
+}
+
+/// Complete-world force oracle. Each component is the negative translational
+/// gradient of the *same* unordered-pair potential inventory. Forces are
+/// returned for every physical body, not just resonant participants, so a
+/// non-emitting blocker receives its reaction contribution when moving it
+/// changes the visibility of another pair.
+///
+/// This deliberately uses centered finite differences and rebuilds the world
+/// potential for each perturbation. It is a correctness oracle for small
+/// worlds, not a production tick-loop implementation; caching and a measured
+/// broad phase are required before applying it to the 128-body experiment.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WorldPairPotentialGradient {
+    pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
+    /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
+    pub(crate) body_forces: Vec<(f64, f64)>,
+    /// Owner organism index for attached/escrowed bodies; sum every partial
+    /// force with the same owner index before moving that organism. None means
+    /// the body moves independently. This mapping is stable with body_forces.
+    pub(crate) body_force_owners: Vec<Option<usize>>,
+}
+
+#[allow(dead_code)] // Correctness oracle; production use is gated on caching/benchmarking.
+pub(crate) fn world_pair_potential_gradient(
+    simulation: &Simulation,
+) -> Option<WorldPairPotentialGradient> {
+    let (bodies, resonant_indices, force_owners) =
+        world_physical_materials_for_pair_potential(simulation)?;
+    world_pair_potential_gradient_for_bodies(
+        &bodies,
+        &resonant_indices,
+        &force_owners,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+}
+
+fn world_pair_potential_gradient_for_bodies(
+    bodies: &[PhysicalMaterial],
+    resonant_indices: &[usize],
+    force_owners: &[Option<usize>],
+    catalog: &[BaseResource],
+    tick: u64,
+) -> Option<WorldPairPotentialGradient> {
+    if force_owners.len() != bodies.len() {
+        return None;
+    }
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let components =
+        world_pair_potential_components_for_bodies(bodies, resonant_indices, catalog, tick)?;
+    let base_potential = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+    if !base_potential.is_finite() {
+        return None;
+    }
+
+    let mut body_forces = vec![(0.0, 0.0); bodies.len()];
+    for body_index in 0..bodies.len() {
+        let mut translated = bodies.to_vec();
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], DIFFERENCE_STEP, 0.0)?;
+        let plus_x = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], -DIFFERENCE_STEP, 0.0)?;
+        let minus_x = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], 0.0, DIFFERENCE_STEP)?;
+        let plus_y = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], 0.0, -DIFFERENCE_STEP)?;
+        let minus_y = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        let force_x = -(plus_x - minus_x) / (2.0 * DIFFERENCE_STEP);
+        let force_y = -(plus_y - minus_y) / (2.0 * DIFFERENCE_STEP);
+        if !force_x.is_finite() || !force_y.is_finite() {
+            return None;
+        }
+        body_forces[body_index] = (force_x, force_y);
+    }
+
+    Some(WorldPairPotentialGradient {
+        components,
+        body_forces,
+        body_force_owners: force_owners.to_vec(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -803,6 +1179,355 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
+    }
+
+    #[test]
+    fn world_pair_potential_oracle_recomputes_all_bodies_with_complete_occlusion() {
+        let mut simulation = Simulation::new(77, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let stored = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("stored blocker should be physically realized");
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance_at_owner_anchor(
+                stored,
+                Placement {
+                    x: 5.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &catalog,
+            ));
+
+        for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                0.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+
+        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("the complete physical world should produce a valid exposure snapshot");
+        let (bodies, resonant_indices, force_owners) =
+            world_physical_materials_for_pair_potential(&simulation)
+                .expect("the independent oracle should reconstruct all physical body classes");
+        assert_eq!(
+            bodies.len(),
+            snapshot.occluder_count,
+            "the oracle and world-tone snapshot must enumerate the same realized bodies"
+        );
+        assert_eq!(
+            bodies.len(),
+            5,
+            "one organism, three field bodies, and one stored blocker are expected"
+        );
+        assert_eq!(
+            resonant_indices,
+            vec![0, 1, 2, 3],
+            "stored material must occlude but must not emit or receive resonance"
+        );
+        assert_eq!(
+            force_owners,
+            vec![Some(0), None, None, None, Some(0)],
+            "only organism-attached bodies move with their owner"
+        );
+
+        let oracle = world_pair_potential_inventory_components(&simulation)
+            .expect("every unordered pair should have a finite occlusion-aware potential");
+        assert!(
+            !oracle.is_empty(),
+            "the world pair inventory should retain frequency-resolved components"
+        );
+        assert!(oracle.iter().all(|component| {
+            component.frequency_cycles_per_day.is_finite()
+                && component.frequency_cycles_per_day > 0.0
+                && component.energy.is_finite()
+        }));
+        assert!(oracle
+            .windows(2)
+            .all(|pair| { pair[0].frequency_cycles_per_day < pair[1].frequency_cycles_per_day }));
+
+        let mut independently_summed =
+            Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
+        for (first_position, &first) in resonant_indices.iter().enumerate() {
+            for &second in resonant_indices.iter().skip(first_position + 1) {
+                let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                    &bodies[first],
+                    &bodies[second],
+                    &bodies,
+                    &catalog,
+                    simulation.tick,
+                )
+                .expect("each pair should include the remaining bodies as blockers");
+                for component in pair {
+                    if let Some(existing) = independently_summed.iter_mut().find(|existing| {
+                        (existing.frequency_cycles_per_day - component.frequency_cycles_per_day)
+                            .abs()
+                            <= 1e-9
+                    }) {
+                        existing.energy += component.energy;
+                    } else {
+                        independently_summed.push(component);
+                    }
+                }
+            }
+        }
+        independently_summed.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        assert_eq!(oracle, independently_summed);
+    }
+
+    #[test]
+    fn world_pair_gradient_matches_isolated_pair_and_balances_reaction_forces() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Hydrogen", 4.0, 0.0),
+        ];
+        let gradient =
+            world_pair_potential_gradient_for_bodies(&bodies, &[0, 1], &[None, None], &catalog, 0)
+                .expect("the isolated world pair should have a finite complete gradient");
+        let (force_on_a, force_on_b) =
+            crate::harmonics::resonance_pair_force(&bodies[0], &bodies[1], &catalog, 0)
+                .expect("the isolated pair should have a gradient-derived force");
+
+        assert_eq!(gradient.body_forces.len(), 2);
+        assert!((gradient.body_forces[0].0 - force_on_a.0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 - force_on_a.1).abs() < 1e-8);
+        assert!((gradient.body_forces[1].0 - force_on_b.0).abs() < 1e-8);
+        assert!((gradient.body_forces[1].1 - force_on_b.1).abs() < 1e-8);
+        assert!((gradient.body_forces[0].0 + gradient.body_forces[1].0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 + gradient.body_forces[1].1).abs() < 1e-8);
+    }
+
+    #[test]
+    fn non_resonant_occluding_body_receives_its_world_potential_reaction() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Carbon", 8.0, 0.0),
+            make_material("Nitrogen", 4.0, 0.4),
+        ];
+        // The blocker remains physical and occluding but is not a resonance
+        // source or receiver until released from storage.
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &[None, None, None],
+            &catalog,
+            0,
+        )
+        .expect("the complete world potential should have a finite gradient");
+
+        let blocker_force = gradient.body_forces[2];
+        assert!(
+            blocker_force.0.hypot(blocker_force.1) > 1e-8,
+            "moving the blocker changes visibility, so it must receive a reaction force"
+        );
+        let net_force = gradient
+            .body_forces
+            .iter()
+            .fold((0.0, 0.0), |sum, force| (sum.0 + force.0, sum.1 + force.1));
+        assert!(
+            net_force.0.abs() < 1e-6 && net_force.1.abs() < 1e-6,
+            "complete-world forces, including the blocker, must balance under translation"
+        );
+    }
+
+    #[test]
+    fn pair_potential_oracle_delta_settles_against_the_world_energy_inventory() {
+        let mut simulation = Simulation::new(78, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                0.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+
+        let initial_components = world_pair_potential_inventory_components(&simulation)
+            .expect("initial world pair potential should be computable");
+        let initial_pair_potential = initial_components
+            .iter()
+            .map(|component| component.energy)
+            .sum::<f64>();
+
+        simulation.organisms[0].structure.units[0].placement.x += 3.0;
+        simulation.organisms[0].occupied_cells[0].x += 3.0;
+        simulation.organisms[0].mark_structure_changed();
+        let current_components = world_pair_potential_inventory_components(&simulation)
+            .expect("moved world pair potential should be computable");
+
+        let mut delta_components = current_components.clone();
+        for before in &initial_components {
+            if let Some(current) = delta_components.iter_mut().find(|current| {
+                (current.frequency_cycles_per_day - before.frequency_cycles_per_day).abs() <= 1e-9
+            }) {
+                current.energy -= before.energy;
+            } else {
+                delta_components.push(crate::harmonics::ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: before.frequency_cycles_per_day,
+                    energy: -before.energy,
+                });
+            }
+        }
+        delta_components.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let expected_delta = current_components
+            .iter()
+            .map(|component| component.energy)
+            .sum::<f64>()
+            - initial_pair_potential;
+        assert!(
+            expected_delta.abs() > 1e-10,
+            "test movement must change pair potential"
+        );
+        assert!(
+            (delta_components
+                .iter()
+                .map(|component| component.energy)
+                .sum::<f64>()
+                - expected_delta)
+                .abs()
+                < 1e-9
+        );
+        simulation.organisms[0].usable_energy = 1_000.0;
+
+        let initial_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.usable_energy)
+            .sum::<f64>();
+        let initial_resonant = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum::<f64>()
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
+        simulation
+            .energy_ledger
+            .initial_pair_interaction_potential_held = 0.0;
+        simulation
+            .energy_ledger
+            .total_pair_interaction_potential_held = 0.0;
+        simulation.energy_ledger.initial_resonant_energy_held = initial_resonant;
+        simulation.energy_ledger.total_resonant_energy_held = initial_resonant;
+
+        let ledger = &mut simulation.energy_ledger;
+        let mover = &mut simulation.organisms[0];
+        assert!(crate::energy_ledger::settle_pair_potential_change(
+            ledger,
+            &mut mover.usable_energy,
+            &mut [&mut mover.resonant_energy],
+            &delta_components,
+        ));
+        assert!((ledger.total_pair_interaction_potential_held - expected_delta).abs() < 1e-9);
+
+        let current_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.usable_energy)
+            .sum::<f64>();
+        let current_resonant = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum::<f64>()
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
+        let inventory = crate::energy_ledger::EnergyInventorySnapshot {
+            initial_usable_energy: initial_usable,
+            current_usable_energy: current_usable,
+            initial_resonant_energy: initial_resonant,
+            current_resonant_energy: current_resonant,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: ledger.total_pair_interaction_potential_held,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: ledger.total_heat_dissipated,
+        };
+        assert!(
+            inventory.is_balanced_without_creation(1e-9),
+            "the independent world oracle delta must balance against usable energy, compatible resonance, or heat"
+        );
     }
 
     #[test]

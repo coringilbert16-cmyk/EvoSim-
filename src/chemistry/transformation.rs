@@ -101,6 +101,8 @@ fn prepare_chemical_break_energy_with_structural_potentials(
         || !product_structural_potential.is_finite()
         || !resonance_withdrawal.is_finite()
         || resonance_withdrawal < 0.0
+        || !ledger.total_resonant_energy_held.is_finite()
+        || ledger.total_resonant_energy_held < 0.0
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
         || !activation_signal.is_finite()
@@ -118,13 +120,19 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     // unit actually withdrawn performs one unit of disruption work. No
     // inherited conversion multiplier or artificial conversion loss is used.
     // The caller requests no more than the reaction's physical work requirement.
-    if resonance_withdrawal > disruption_cost + 1e-9 {
+    if resonance_withdrawal > disruption_cost + 1e-9
+        || resonance_withdrawal > ledger.total_resonant_energy_held + 1e-9
+    {
         return None;
     }
     let resonant_work = resonance_withdrawal.min(disruption_cost);
     let bond_supplied_work = disruption_cost - resonant_work;
+    let next_total_resonant = (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
     let next_total_work = ledger.total_work_expended + disruption_cost;
     let next_total_heat = ledger.total_heat_dissipated;
+    if !next_total_resonant.is_finite() {
+        return None;
+    }
     if !next_total_heat.is_finite() {
         return None;
     }
@@ -150,6 +158,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     }
     // The complete disruption cost is accounted once; resonance is debited by
     // the caller only after the corresponding physical mutation commits.
+    prepared_ledger.total_resonant_energy_held = next_total_resonant;
     prepared_ledger.total_work_expended = next_total_work;
     prepared_ledger.total_heat_dissipated = next_total_heat;
     Some(PreparedChemicalBreakEnergy {
@@ -792,11 +801,15 @@ impl Simulation {
                     - original_ledger.total_usable_energy_held,
                 total_resonant_energy_held: trial_ledger.total_resonant_energy_held
                     - original_ledger.total_resonant_energy_held,
+                total_pair_interaction_potential_held: trial_ledger
+                    .total_pair_interaction_potential_held
+                    - original_ledger.total_pair_interaction_potential_held,
                 // This value is a transaction delta, not a live inventory snapshot.
                 initial_usable_energy_held: 0.0,
                 initial_resonant_energy_held: 0.0,
                 total_structural_energy_held: 0.0,
                 initial_structural_energy_held: 0.0,
+                initial_pair_interaction_potential_held: 0.0,
                 // This is a transaction delta; the source-once guard is unchanged.
                 initial_condition_energy_settled: original_ledger.initial_condition_energy_settled,
             };
@@ -1385,6 +1398,8 @@ mod tests {
             initial_usable_energy_held: 12.875,
             total_structural_energy_held: 13.25,
             initial_structural_energy_held: 14.5,
+            total_pair_interaction_potential_held: 15.75,
+            initial_pair_interaction_potential_held: 16.5,
         };
         let mut usable_energy = before_energy + 0.1;
         let mut ledger = EnergyLedger {
@@ -1404,6 +1419,10 @@ mod tests {
             initial_usable_energy_held: 98.0,
             total_structural_energy_held: 97.0,
             initial_structural_energy_held: 96.0,
+            total_pair_interaction_potential_held: before_ledger
+                .total_pair_interaction_potential_held
+                + 1.2,
+            initial_pair_interaction_potential_held: -1.3,
         };
 
         rollback_prepared_combine(
@@ -2338,7 +2357,9 @@ mod tests {
 
     #[test]
     fn withdrawn_resonance_funds_work_without_an_efficiency_multiplier() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 2.0;
+        ledger.total_resonant_energy_held = 2.0;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2349,12 +2370,26 @@ mod tests {
         // the remaining three work units and the four-unit structural increase.
         assert_eq!(prepared.usable_energy, 13.0);
         assert_eq!(prepared.heat_dissipated, 0.0);
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
         assert_eq!(prepared.ledger.total_work_expended, 5.0);
         assert_eq!(prepared.ledger.total_heat_dissipated, 0.0);
         let world_residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
             + prepared.ledger.total_work_expended
             + prepared.ledger.total_heat_dissipated;
         assert!(world_residual.abs() < 1e-12);
+    }
+
+    #[test]
+    fn chemical_break_rejects_resonance_debit_exceeding_inventory() {
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 1.0;
+        ledger.total_resonant_energy_held = 1.0;
+        let original_ledger = ledger;
+        let prepared = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
+        );
+        assert!(prepared.is_none());
+        assert_eq!(ledger, original_ledger);
     }
 
     #[test]
@@ -2370,7 +2405,10 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 5.0;
+        ledger.total_resonant_energy_held = 5.0;
+        let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0)
                 .expect("the holder can pay the complete work for a zero-energy physical bond");
@@ -2381,19 +2419,23 @@ mod tests {
         assert_eq!(prepared.ledger.total_structural_energy_delta, 0.0);
         assert_eq!(prepared.ledger.total_potential_energy_released, 0.0);
         assert_eq!(
-            ledger,
-            crate::state::EnergyLedger::default(),
+            ledger, original_ledger,
             "preparing a transaction must not mutate the authoritative ledger"
         );
+        // The environmental caller commits this debit with the source mutation.
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 5.0);
     }
 
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 5.0;
+        ledger.total_resonant_energy_held = 5.0;
+        let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0);
         assert!(prepared.is_none());
-        assert_eq!(ledger, crate::state::EnergyLedger::default());
+        assert_eq!(ledger, original_ledger);
     }
 
     fn resonance_break_test_organism() -> (
@@ -2490,6 +2532,8 @@ mod tests {
         organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
         assert!(organism.resonant_energy.deposit(440.0, capacity + 1.0));
         let before_resonance = organism.resonant_energy.total_energy().unwrap();
+        ledger.initial_resonant_energy_held = before_resonance;
+        ledger.total_resonant_energy_held = before_resonance;
         assert!(resolve_resonance_overload_break(
             &mut organism,
             &environment,
@@ -2497,6 +2541,10 @@ mod tests {
         ));
         assert_eq!(organism.structure.bonds.len(), original_bond_count - 1);
         assert!(organism.resonant_energy.total_energy().unwrap() < before_resonance);
+        assert_eq!(
+            ledger.total_resonant_energy_held,
+            organism.resonant_energy.total_energy().unwrap()
+        );
     }
 
     #[test]
@@ -2540,6 +2588,12 @@ mod tests {
         );
         assert!(after.current_resonant_energy < before.current_resonant_energy);
         assert!(after.current_structural_energy > before.current_structural_energy);
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held - after.current_resonant_energy)
+                .abs()
+                < 1e-9,
+            "the ledger's retained-resonance counter must match the committed reservoirs"
+        );
     }
 
     #[test]
@@ -2599,7 +2653,9 @@ mod tests {
 
     #[test]
     fn withdrawn_compatible_resonance_funds_disruption_work_without_efficiency_trait() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 2.0;
+        ledger.total_resonant_energy_held = 2.0;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2610,6 +2666,7 @@ mod tests {
         // pays the remaining work plus the structural-potential increase.
         assert_eq!(prepared.ledger.total_structural_energy_delta, 4.0);
         assert_eq!(prepared.usable_energy, 13.0);
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
         assert_eq!(prepared.ledger.total_work_expended, 5.0);
         assert_eq!(prepared.heat_dissipated, 0.0);
         let residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
