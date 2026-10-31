@@ -1043,40 +1043,40 @@ pub(crate) fn material_aura_receptions(
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
     let mut receive_at =
         |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
-        if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
-            return Some(());
-        }
-        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
-        if !distance.is_finite() || distance <= f64::EPSILON {
-            return Some(());
-        }
-        let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
-        if !attenuation.is_finite() || attenuation <= f64::EPSILON {
-            return Some(());
-        }
-        let mut incident = ToneSpectrum::empty();
-        add_spectrum(&mut incident, &emitted, attenuation);
-        incident.retain_strongest();
-        let mut received =
-            material_response_spectrum(receiver_properties, baselines, &incident)?;
-        received.retain_strongest();
-        let magnitude = spectrum_magnitude(&received);
-        if magnitude > f64::EPSILON {
-            receptions.push(MaterialAuraReception {
-                source_x,
-                source_y,
-                source_extent,
-                receiver_x,
-                receiver_y,
-                receiver_normal_x: normal_x,
-                receiver_normal_y: normal_y,
-                projected_extent,
-                spectrum: received,
-                magnitude,
-            });
-        }
-        Some(())
-    };
+            if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+                return Some(());
+            }
+            let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return Some(());
+            }
+            let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
+            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+                return Some(());
+            }
+            let mut incident = ToneSpectrum::empty();
+            add_spectrum(&mut incident, &emitted, attenuation);
+            incident.retain_strongest();
+            let mut received =
+                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            received.retain_strongest();
+            let magnitude = spectrum_magnitude(&received);
+            if magnitude > f64::EPSILON {
+                receptions.push(MaterialAuraReception {
+                    source_x,
+                    source_y,
+                    source_extent,
+                    receiver_x,
+                    receiver_y,
+                    receiver_normal_x: normal_x,
+                    receiver_normal_y: normal_y,
+                    projected_extent,
+                    spectrum: received,
+                    magnitude,
+                });
+            }
+            Some(())
+        };
 
     for interval in straight_intervals {
         let projected_extent =
