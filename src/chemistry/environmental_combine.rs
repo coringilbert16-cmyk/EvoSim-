@@ -3222,16 +3222,6 @@ mod tests {
                         ) else {
                             continue;
                         };
-                        if indices_b.iter().any(|index| {
-                            crate::construction_runtime::placed_unit_overlaps(
-                                &structure,
-                                &structure.units[*index],
-                                &indices_b,
-                                &catalog,
-                            )
-                        }) {
-                            continue;
-                        }
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                         if let Some(selected) = select_best_positive_work_contact(
