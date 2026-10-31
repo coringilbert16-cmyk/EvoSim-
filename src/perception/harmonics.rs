@@ -1824,9 +1824,11 @@ mod tests {
             .components
             .iter()
             .all(|component| component.phase_radians.is_finite()));
-        assert!(material_aura_receptions(&left, &left, &catalog, 0)
-            .expect("self reception is a valid empty result")
-            .is_empty());
+        assert!(
+            material_aura_receptions(&left, &left, &catalog, 0)
+                .expect("self reception is a valid empty result")
+                .is_empty()
+        );
     }
 
     #[test]
