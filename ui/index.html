@@ -640,6 +640,16 @@
       if (event.button !== 0 || observationLevel !== 'World') return;
       const point = canvasPoint(event);
       canvas.setPointerCapture(event.pointerId);
+      // In the organism-free chemistry experiment, empty-world dragging must
+      // pan the camera. Keep click/drag selection for an organism hit target.
+      if (!organismAtScreenPoint(point.x, point.y)) {
+        interaction = {
+          pointerId: event.pointerId, panning: true, clearOnClick: true, moved: false,
+          lastX: event.clientX, lastY: event.clientY
+        };
+        canvas.classList.add('panning');
+        return;
+      }
       interaction = { pointerId: event.pointerId, selecting: true, startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
     });
     canvas.addEventListener('pointermove', event => {
@@ -647,7 +657,9 @@
       event.preventDefault();
       if (interaction.panning) {
         camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
-        interaction.lastX = event.clientX; interaction.lastY = event.clientY; render();
+        interaction.lastX = event.clientX; interaction.lastY = event.clientY;
+        interaction.moved = true;
+        render();
       } else if (interaction.selecting) {
         const point = canvasPoint(event); interaction.currentX = point.x; interaction.currentY = point.y; render();
       }
@@ -655,8 +667,15 @@
     function endPointer(event) {
       if (!interaction || interaction.pointerId !== event.pointerId) return;
       event.preventDefault();
-      if (interaction.panning) { interaction = null; canvas.classList.remove('panning'); }
-      else if (interaction.selecting) finishWorldSelection(canvasPoint(event));
+      if (interaction.panning) {
+        if (interaction.clearOnClick && !interaction.moved) {
+          selectedIds.clear();
+          focusedOrganismId = null;
+          render();
+        }
+        interaction = null;
+        canvas.classList.remove('panning');
+      } else if (interaction.selecting) finishWorldSelection(canvasPoint(event));
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     }
     canvas.addEventListener('pointerup', endPointer);
