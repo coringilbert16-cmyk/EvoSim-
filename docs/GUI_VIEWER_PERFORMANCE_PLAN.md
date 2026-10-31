@@ -135,3 +135,18 @@ Keep five responsibilities explicit:
 6. Measure and then decide whether batching/parallelism or a rendering dependency is justified.
 
 This sequence prioritizes correctness and immediate usability, then removes the confirmed rendering inefficiencies, and only then invests in larger performance architecture.
+
+## Live GUI acceptance failure and corrective pass (2026-10-31)
+
+The first manual run did not meet the core viewer acceptance criteria. The observed failures were traced to concrete integration gaps:
+
+- Startup selected the hard-coded Structure view for organism ID 1, even though the environmental chemistry experiment intentionally starts with zero organisms. Startup now requests the World observation.
+- The workspace script reparents the canvas after the original resize call. The canvas backing bitmap could therefore retain its old dimensions and be stretched into the new flex viewport. A ResizeObserver now keeps the backing dimensions synchronized with the displayed canvas.
+- Geometry outlines were assigned a world-space line width with a lower bound that grew in screen pixels as zoom increased. The line width is now inversely scaled so outlines remain visually stable.
+- World-field observations previously exposed only aggregate cell totals, and the renderer filled those cells as squares. Observations now include each physical constituent's resource identity, current position, rotation, and realized/catalog form. Incremental observations preserve unchanged physical geometry in the client cache.
+- The field renderer now draws those physical resource forms with their material palette; unstructured stock remains a small cell marker rather than a fabricated square atom.
+- Camera limits are now relative to the fitted view, and visible zoom-in, zoom-out, and fit controls supplement wheel zoom.
+
+A regression test verifies that the environmental experiment's world observation exposes all 128 realized resource constituents, with finite placements, valid forms, and all seven resource types.
+
+**Still required before merge:** rerun CI on the latest head and repeat live GUI acceptance. Confirm that the world field is visible on startup, resource positions visibly update during a sustained run, zoom limits work in both directions, pan/zoom no longer distort geometry, and close zoom reveals the resource-specific shapes. These code corrections are not a substitute for that manual verification.
