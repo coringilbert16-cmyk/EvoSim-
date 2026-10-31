@@ -76,7 +76,7 @@ impl CommandResponse {
 }
 
 pub(crate) async fn run_child(port: u16) {
-    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 10.0))));
+    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 32.0))));
     let (tick_sender, _) = tokio::sync::broadcast::channel::<String>(32);
     start_tick_loop(runtime.clone(), tick_sender.clone());
 
@@ -306,6 +306,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
                 return CommandResponse::error("invalid_speed");
             }
+            let ticks_per_second = ticks_per_second.min(32.0);
             let mut state = runtime.lock();
             state.simulation.ticks_per_second = ticks_per_second;
             CommandResponse::value(serde_json::json!({
