@@ -208,6 +208,7 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_y: f64,
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
+    pub(crate) projected_extent: f64,
     pub(crate) spectrum: ToneSpectrum,
     pub(crate) magnitude: f64,
 }
@@ -990,14 +991,14 @@ fn environmental_contribution(
 /// physical material's actual exposed constituent boundaries.
 ///
 /// The source uses the same aggregate oscillator and mass scaling as the
-/// environmental aura. Receiver probes, normals, and occlusion use the shared
-/// realized-shape surface geometry. Distance attenuation remains exactly the
-/// existing continuous 1/(1 + distance) law. The receiver's own oscillator
-/// response is applied after reception, just as it is for world-tone input.
+/// environmental aura. Receiver intervals, normals, and occlusion use the
+/// shared realized-shape visibility geometry for straight and curved boundaries.
+/// Distance attenuation remains the existing continuous 1/(1 + distance) law.
+/// The receiver's own oscillator response is applied after reception.
 ///
-/// The returned samples are not yet summed into a pair potential: each keeps
-/// its actual receiver point so a later interaction can derive spatial change
-/// without replacing the aura with a bounding-radius approximation.
+/// Each sample carries its exact projected boundary extent. Amplitude scales
+/// with the square root of that extent because the model's signal energy is
+/// amplitude squared. These samples are not yet a pair potential or force.
 #[allow(dead_code)] // Staged for the force/potential work in this PR.
 pub(crate) fn material_aura_receptions(
     source: &crate::physical_material::PhysicalMaterial,
@@ -1016,13 +1017,22 @@ pub(crate) fn material_aura_receptions(
     let source_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
         source, catalog,
     )?;
-    let receiver_points = crate::organism_geometry::visible_source_facing_points(
-        (source_x, source_y),
-        &[receiver_geometry],
-    );
-    if receiver_points.is_empty() {
-        return Some(Vec::new());
+    if source_geometry.parts.is_empty() {
+        return None;
     }
+
+    // Keep the receiver as the target body. The shared visibility solver
+    // resolves its actual exposed intervals rather than one representative
+    // point or a bounding-circle approximation.
+    let receiver_bodies = [receiver_geometry];
+    let straight_intervals = crate::source_exposure::visible_polygonal_intervals(
+        (source_x, source_y),
+        &receiver_bodies,
+    )?;
+    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals(
+        (source_x, source_y),
+        &receiver_bodies,
+    )?;
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1031,28 +1041,23 @@ pub(crate) fn material_aura_receptions(
         return Some(Vec::new());
     }
 
-    // Validate the source aggregate geometry as well as its placements; this
-    // rejects malformed realized shapes instead of allowing a center-only aura.
-    if source_geometry.parts.is_empty() {
-        return None;
-    }
-
-    let mut receptions = Vec::with_capacity(receiver_points.len());
-    for point in receiver_points {
-        let dx = source_x - point.x;
-        let dy = source_y - point.y;
-        let distance = dx.hypot(dy);
+    let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
+    let mut receive_at = |receiver_x: f64,
+                          receiver_y: f64,
+                          normal_x: f64,
+                          normal_y: f64,
+                          projected_extent: f64|
+     -> Option<()> {
+        if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+            return Some(());
+        }
+        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
         if !distance.is_finite() || distance <= f64::EPSILON {
-            continue;
+            return Some(());
         }
-        let directional_gain =
-            (point.normal_x * dx / distance + point.normal_y * dy / distance).max(0.0);
-        if directional_gain <= f64::EPSILON {
-            continue;
-        }
-        let attenuation = source_mass_scale * directional_gain / (1.0 + distance);
+        let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
         if !attenuation.is_finite() || attenuation <= f64::EPSILON {
-            continue;
+            return Some(());
         }
         let mut incident = ToneSpectrum::empty();
         add_spectrum(&mut incident, &emitted, attenuation);
@@ -1060,21 +1065,56 @@ pub(crate) fn material_aura_receptions(
         let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
         received.retain_strongest();
         let magnitude = spectrum_magnitude(&received);
-        if magnitude <= f64::EPSILON {
-            continue;
+        if magnitude > f64::EPSILON {
+            receptions.push(MaterialAuraReception {
+                source_x,
+                source_y,
+                source_extent,
+                receiver_x,
+                receiver_y,
+                receiver_normal_x: normal_x,
+                receiver_normal_y: normal_y,
+                projected_extent,
+                spectrum: received,
+                magnitude,
+            });
         }
-        receptions.push(MaterialAuraReception {
-            source_x,
-            source_y,
-            source_extent,
-            receiver_x: point.x,
-            receiver_y: point.y,
-            receiver_normal_x: point.normal_x,
-            receiver_normal_y: point.normal_y,
-            spectrum: received,
-            magnitude,
-        });
+        Some(())
+    };
+
+    for interval in straight_intervals {
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
+        let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
+        let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            interval.outward_normal.0,
+            interval.outward_normal.1,
+            projected_extent,
+        )?;
     }
+
+    for interval in curved_intervals {
+        let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
+            interval.arc,
+            (source_x, source_y),
+        )?;
+        let midpoint_angle =
+            interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
+        let (normal_y, normal_x) = midpoint_angle.sin_cos();
+        let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
+        let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            normal_x,
+            normal_y,
+            projected_extent,
+        )?;
+    }
+
     Some(receptions)
 }
 
