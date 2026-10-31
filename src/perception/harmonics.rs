@@ -1097,18 +1097,16 @@ pub(crate) fn material_aura_receptions_with_occluders(
         );
     }
     let target_body_indices = [0];
-    let straight_intervals =
-        crate::source_exposure::visible_polygonal_intervals_for_targets(
-            (source_x, source_y),
-            &receiver_bodies,
-            &target_body_indices,
-        )?;
-    let curved_intervals =
-        crate::source_exposure::visible_circular_arc_intervals_for_targets(
-            (source_x, source_y),
-            &receiver_bodies,
-            &target_body_indices,
-        )?;
+    let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?;
+    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1199,7 +1197,11 @@ fn directional_resonance_pair_potential_components(
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
     directional_resonance_pair_potential_components_with_occluders(
-        source, receiver, &[], catalog, tick,
+        source,
+        receiver,
+        &[],
+        catalog,
+        tick,
     )
 }
 
@@ -1392,16 +1394,14 @@ pub(crate) fn resonance_pair_force_with_occluders(
     let b_plus_y = translated_physical_material(b, 0.0, DIFFERENCE_STEP)?;
     let b_minus_y = translated_physical_material(b, 0.0, -DIFFERENCE_STEP)?;
 
-    let gradient_x = (resonance_pair_potential_with_occluders(
-        a, &b_plus_x, occluders, catalog, tick,
-    )? - resonance_pair_potential_with_occluders(
-        a, &b_minus_x, occluders, catalog, tick,
-    )?) / (2.0 * DIFFERENCE_STEP);
-    let gradient_y = (resonance_pair_potential_with_occluders(
-        a, &b_plus_y, occluders, catalog, tick,
-    )? - resonance_pair_potential_with_occluders(
-        a, &b_minus_y, occluders, catalog, tick,
-    )?) / (2.0 * DIFFERENCE_STEP);
+    let gradient_x =
+        (resonance_pair_potential_with_occluders(a, &b_plus_x, occluders, catalog, tick)?
+            - resonance_pair_potential_with_occluders(a, &b_minus_x, occluders, catalog, tick)?)
+            / (2.0 * DIFFERENCE_STEP);
+    let gradient_y =
+        (resonance_pair_potential_with_occluders(a, &b_plus_y, occluders, catalog, tick)?
+            - resonance_pair_potential_with_occluders(a, &b_minus_y, occluders, catalog, tick)?)
+            / (2.0 * DIFFERENCE_STEP);
     if !gradient_x.is_finite() || !gradient_y.is_finite() || !potential.is_finite() {
         return None;
     }
