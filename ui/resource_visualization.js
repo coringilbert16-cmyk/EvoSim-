@@ -23,6 +23,9 @@
   app?.insertBefore(topbar, app.firstChild);
 
   const main = document.querySelector('main');
+  // The workspace CSS relies on this flex container class. Without it the
+  // viewport can collapse to zero height after the canvas is reparented.
+  main?.classList.add('ev-main');
   const canvas = document.getElementById('world');
   const worldColumn = document.createElement('section');
   worldColumn.className = 'ev-world-column';
