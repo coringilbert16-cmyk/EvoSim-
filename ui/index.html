@@ -75,6 +75,7 @@
     let interaction = null;
     let requestSerial = 0;
     let runtimeStatus = null;
+    let speedControlActive = false;
     let noLivingOrganisms = false;
     let historyViewTick = null;
     let historyTicks = [];
@@ -155,7 +156,7 @@
     function updateControls() {
       const speed = document.getElementById('speed');
       const speedValue = document.getElementById('speed-value');
-      if (runtimeStatus?.ticks_per_second != null) {
+      if (runtimeStatus?.ticks_per_second != null && !speedControlActive) {
         speed.value = runtimeStatus.ticks_per_second;
         speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
       }
@@ -199,6 +200,8 @@
       const value = Number(event.target.value);
       if (Number.isFinite(value) && value > 0) await control('/control/speed/' + encodeURIComponent(value));
     });
+    document.getElementById('speed').addEventListener('focus', () => { speedControlActive = true; });
+    document.getElementById('speed').addEventListener('blur', () => { speedControlActive = false; });
     document.getElementById('history').addEventListener('input', event => {
       if (!historyTicks.length) return;
       const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
