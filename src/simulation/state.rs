@@ -587,7 +587,9 @@ pub(crate) struct Environment {
 }
 #[derive(Clone)]
 pub(crate) struct Simulation {
+    /// Monotonic physics-time step; oscillator phase is derived from this tick.
     pub(crate) tick: u64,
+    /// Runtime pacing only. This does not set the simulated duration of a tick.
     pub(crate) ticks_per_second: f64,
     pub(crate) running: bool,
     pub(crate) organisms: Vec<Organism>,

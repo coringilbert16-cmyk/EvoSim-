@@ -9,7 +9,8 @@
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 use std::f64::consts::TAU;
 
-pub(crate) const WORLD_TONE_FREQUENCY_HZ: f64 = 440.0;
+pub(crate) const WORLD_TONE_FREQUENCY_CYCLES_PER_DAY: f64 =
+    crate::harmonics::WORLD_TONE_CYCLES_PER_DAY;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EnvelopeCurve {
@@ -33,7 +34,7 @@ pub(crate) struct WorldToneRuntimeConfig {
 }
 
 impl WorldToneRuntimeConfig {
-    /// Default 440 Hz environmental source for a world with the supplied bounds.
+    /// Default 440-cycle-per-day environmental source for a world with the supplied bounds.
     /// Its orbit radius is derived from the world dimensions so the source remains
     /// outside the full rectangle rather than relying on a fixed scene size.
     pub(crate) fn default_for_world(world_width: f64, world_height: f64) -> Option<Self> {
@@ -134,7 +135,7 @@ impl WorldToneCycle {
 pub(crate) struct WorldToneSample {
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
-    pub(crate) frequency_hz: f64,
+    pub(crate) frequency_cycles_per_day: f64,
     /// Signal strength, expressed as energy per tick per unit of exposed projected width.
     /// This is the source budget before material interaction, not energy already captured.
     pub(crate) energy_intensity_per_tick_per_width: f64,
@@ -163,8 +164,8 @@ impl WorldToneSample {
     pub(crate) fn is_valid(self) -> bool {
         self.source_x.is_finite()
             && self.source_y.is_finite()
-            && self.frequency_hz.is_finite()
-            && self.frequency_hz > 0.0
+            && self.frequency_cycles_per_day.is_finite()
+            && self.frequency_cycles_per_day > 0.0
             && self.energy_intensity_per_tick_per_width.is_finite()
             && (1.0..=10.0).contains(&self.energy_intensity_per_tick_per_width)
             && self.orbital_phase.is_finite()
@@ -240,6 +241,7 @@ pub(crate) struct WorldToneSurfaceResponse {
 /// recomputed for every organism. A receiver can be settled only once per frame.
 #[derive(Debug)]
 pub(crate) struct WorldToneCaptureFrame {
+    tick: u64,
     sample: crate::world_tone::WorldToneSample,
     projected_widths: Vec<f64>,
     /// Exposure attributed to each constituent, preserving material provenance.
@@ -267,6 +269,15 @@ impl WorldToneCaptureFrame {
         sample: crate::world_tone::WorldToneSample,
         bodies: &[crate::organism_geometry::OrganismBodyGeometry],
         receiver_body_indices: &[usize],
+    ) -> Option<Self> {
+        Self::from_geometry_for_receivers_at_tick(sample, bodies, receiver_body_indices, 0)
+    }
+
+    pub(crate) fn from_geometry_for_receivers_at_tick(
+        sample: crate::world_tone::WorldToneSample,
+        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        receiver_body_indices: &[usize],
+        tick: u64,
     ) -> Option<Self> {
         if !sample.is_valid()
             || bodies
@@ -299,6 +310,7 @@ impl WorldToneCaptureFrame {
         }
 
         Some(Self {
+            tick,
             sample,
             projected_widths,
             projected_widths_by_unit,
@@ -344,7 +356,8 @@ impl WorldToneCaptureFrame {
         let incident_energy = self
             .sample
             .incident_energy_for_projected_width(projected_width)?;
-        let natural_frequency = crate::harmonics::natural_frequency_hz(properties, baselines);
+        let natural_frequency =
+            crate::harmonics::natural_frequency_cycles_per_day(properties, baselines);
         let damping = crate::harmonics::damping_ratio(properties, baselines);
         if !natural_frequency.is_finite()
             || natural_frequency <= 0.0
@@ -354,7 +367,7 @@ impl WorldToneCaptureFrame {
             return None;
         }
         let absorption_fraction = crate::harmonics::resonant_absorption_fraction(
-            self.sample.frequency_hz,
+            self.sample.frequency_cycles_per_day,
             natural_frequency,
             damping,
         );
@@ -467,7 +480,11 @@ impl WorldToneCaptureFrame {
         // Determine how much incident energy the existing material response
         // represents before damping partitions it into storage and heat.
         let incident_amplitude = response.incident_energy.sqrt();
-        let response_spectrum = crate::harmonics::material_response(properties, baselines, 0.0);
+        let response_spectrum = crate::harmonics::material_response(
+            properties,
+            baselines,
+            crate::harmonics::phase_at_tick(self.sample.frequency_cycles_per_day, self.tick),
+        );
         let mut response_energy: f64 = 0.0;
         for component in &response_spectrum.components {
             let amplitude = component.amplitude * incident_amplitude;
@@ -493,9 +510,12 @@ impl WorldToneCaptureFrame {
         let retained_budget = response_energy - damping_heat;
         let incoming_signal = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: self.sample.frequency_hz,
+                frequency_cycles_per_day: self.sample.frequency_cycles_per_day,
                 amplitude: incident_amplitude,
-                phase_radians: 0.0,
+                phase_radians: crate::harmonics::phase_at_tick(
+                    self.sample.frequency_cycles_per_day,
+                    self.tick,
+                ),
             }],
         };
         let spectrum = crate::harmonics::transform_signal_to_energy_budget(
@@ -511,7 +531,9 @@ impl WorldToneCaptureFrame {
         let mut deposit_ok = true;
         for component in &spectrum.components {
             let energy = component.amplitude * component.amplitude;
-            if energy > f64::EPSILON && !reservoir.deposit(component.frequency_hz, energy) {
+            if energy > f64::EPSILON
+                && !reservoir.deposit(component.frequency_cycles_per_day, energy)
+            {
                 deposit_ok = false;
                 break;
             }
@@ -677,11 +699,11 @@ impl WorldToneParameters {
         let envelope = match self.envelope_curve {
             EnvelopeCurve::Cosine => (1.0 + angle.cos()) * 0.5,
         };
-        let frequency_hz = WORLD_TONE_FREQUENCY_HZ;
+        let frequency_cycles_per_day = WORLD_TONE_FREQUENCY_CYCLES_PER_DAY;
         Some(WorldToneSample {
             source_x: center_x + orbit_radius * angle.sin(),
             source_y: center_y - orbit_radius * angle.cos(),
-            frequency_hz,
+            frequency_cycles_per_day,
             energy_intensity_per_tick_per_width: self.minimum_energy_intensity_per_tick_per_width
                 + (self.maximum_energy_intensity_per_tick_per_width
                     - self.minimum_energy_intensity_per_tick_per_width)
@@ -757,12 +779,24 @@ mod tests {
         let south = params.sample(1_200, 0.0, 0.0, 1.0).unwrap();
         let west = params.sample(1_800, 0.0, 0.0, 1.0).unwrap();
 
-        assert_eq!(north.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
+        assert_eq!(
+            north.frequency_cycles_per_day,
+            WORLD_TONE_FREQUENCY_CYCLES_PER_DAY
+        );
         assert_eq!(north.energy_intensity_per_tick_per_width, 10.0);
-        assert_eq!(south.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
+        assert_eq!(
+            south.frequency_cycles_per_day,
+            WORLD_TONE_FREQUENCY_CYCLES_PER_DAY
+        );
         assert_eq!(south.energy_intensity_per_tick_per_width, 1.0);
-        assert_eq!(east.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
-        assert_eq!(west.frequency_hz, WORLD_TONE_FREQUENCY_HZ);
+        assert_eq!(
+            east.frequency_cycles_per_day,
+            WORLD_TONE_FREQUENCY_CYCLES_PER_DAY
+        );
+        assert_eq!(
+            west.frequency_cycles_per_day,
+            WORLD_TONE_FREQUENCY_CYCLES_PER_DAY
+        );
         assert!((east.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
         assert!((west.energy_intensity_per_tick_per_width - 5.5).abs() < 1e-12);
     }
@@ -820,11 +854,11 @@ mod tests {
         assert!(valid.is_valid());
         for sample in [
             WorldToneSample {
-                frequency_hz: 0.0,
+                frequency_cycles_per_day: 0.0,
                 ..valid
             },
             WorldToneSample {
-                frequency_hz: f64::NAN,
+                frequency_cycles_per_day: f64::NAN,
                 ..valid
             },
             WorldToneSample {
@@ -988,7 +1022,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1028,7 +1062,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1073,7 +1107,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1129,7 +1163,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1149,7 +1183,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1183,7 +1217,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1200,7 +1234,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1235,7 +1269,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1297,7 +1331,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1334,7 +1368,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1411,7 +1445,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1475,7 +1509,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1540,7 +1574,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1623,7 +1657,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1665,7 +1699,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1705,7 +1739,7 @@ mod tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };

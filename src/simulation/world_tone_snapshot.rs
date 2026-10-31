@@ -228,10 +228,11 @@ impl WorldToneOccluderSnapshot {
             return None;
         }
         let occluder_count = relevant_bodies.len();
-        let frame = WorldToneCaptureFrame::from_geometry_for_receivers(
+        let frame = WorldToneCaptureFrame::from_geometry_for_receivers_at_tick(
             sample,
             &relevant_bodies,
             &receiver_body_indices,
+            simulation.tick,
         )?;
         Some(Self {
             frame,
@@ -380,9 +381,12 @@ impl WorldToneOccluderSnapshot {
             };
             let mut signal = crate::harmonics::ToneSpectrum {
                 components: vec![crate::harmonics::ToneComponent {
-                    frequency_hz: sample.frequency_hz,
+                    frequency_cycles_per_day: sample.frequency_cycles_per_day,
                     amplitude: incident_energy.sqrt(),
-                    phase_radians: 0.0,
+                    phase_radians: crate::harmonics::phase_at_tick(
+                        sample.frequency_cycles_per_day,
+                        simulation.tick,
+                    ),
                 }],
             };
             let mut path_captured = 0.0;
@@ -467,7 +471,7 @@ impl WorldToneOccluderSnapshot {
                     for component in &retained_spectrum.components {
                         let energy = component.amplitude * component.amplitude;
                         if energy > f64::EPSILON
-                            && !candidate.deposit(component.frequency_hz, energy)
+                            && !candidate.deposit(component.frequency_cycles_per_day, energy)
                         {
                             deposit_ok = false;
                             break;
@@ -663,8 +667,8 @@ fn heat_for_material_response(
 fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
     let mut energy = 0.0;
     for component in &spectrum.components {
-        if !component.frequency_hz.is_finite()
-            || component.frequency_hz <= 0.0
+        if !component.frequency_cycles_per_day.is_finite()
+            || component.frequency_cycles_per_day <= 0.0
             || !component.amplitude.is_finite()
             || component.amplitude < 0.0
             || !component.phase_radians.is_finite()
@@ -765,7 +769,7 @@ mod tests {
         WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         }
