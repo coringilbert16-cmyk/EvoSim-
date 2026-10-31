@@ -600,6 +600,30 @@ mod tests {
         assert_ne!(ObservationLevel::Organism, ObservationLevel::Structure)
     }
     #[test]
+    fn environmental_world_observation_exposes_each_physical_resource_shape() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let observation = WorldObservation::from_simulation(&fixture.simulation);
+        let parts = observation
+            .field
+            .iter()
+            .flat_map(|cell| cell.physical_parts.iter().flatten())
+            .collect::<Vec<_>>();
+
+        assert_eq!(parts.len(), 128);
+        assert!(parts.iter().all(|part| {
+            part.x.is_finite()
+                && part.y.is_finite()
+                && part.rotation_radians.is_finite()
+                && part.form.is_valid()
+        }));
+        let resources = parts
+            .iter()
+            .map(|part| part.resource.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(resources.len(), 7);
+    }
+
+    #[test]
     fn world_context_contains_no_selection() {
         let context = ObservationContext::world();
         assert_eq!(context.level, ObservationLevel::World);
