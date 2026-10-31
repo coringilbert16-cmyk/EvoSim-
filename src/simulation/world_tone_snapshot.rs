@@ -1213,7 +1213,11 @@ mod tests {
             .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap())
             .sum::<f64>()
-            + simulation.environment.resonant_energy.total_energy().unwrap();
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
         let inventory = crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: initial_usable,
             current_usable_energy: current_usable,
