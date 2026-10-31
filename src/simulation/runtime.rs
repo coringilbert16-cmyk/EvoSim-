@@ -90,7 +90,9 @@ impl RuntimeState {
         if tick > self.simulation.tick {
             return false;
         }
-        let Some(snapshot) = self.history.iter()
+        let Some(snapshot) = self
+            .history
+            .iter()
             .filter(|snapshot| snapshot.tick <= tick)
             .max_by_key(|snapshot| snapshot.tick)
             .cloned()
