@@ -30,7 +30,7 @@
     <div id="timeline">
       <button id="run-toggle" class="transport-button primary" type="button">Run</button>
       <button id="step-once" class="transport-button" type="button" title="Advance one simulation tick">Step</button>
-      <button id="live-follow" class="transport-button" type="button" hidden>Return to Live</button>
+      <button id="live-follow" class="transport-button" type="button" hidden>Continue from Here</button>
       <input id="history" type="range" min="0" max="0" value="0" step="1" aria-label="Simulation history">
       <span id="timeline-label">Live</span>
       <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
@@ -135,8 +135,10 @@
         noLivingOrganisms = runtimeStatus.population === 0;
         historyTicks = runtimeStatus.history_ticks || [];
         const slider = document.getElementById('history');
-        slider.max = Math.max(0, historyTicks.length - 1);
-        if (historyViewTick == null) slider.value = Math.max(0, historyTicks.length - 1);
+        slider.min = historyTicks.length ? historyTicks[0] : 0;
+        slider.max = runtimeStatus.tick ?? 0;
+        slider.step = 1;
+        slider.value = historyViewTick ?? runtimeStatus.tick ?? 0;
         updateTimeline();
         updateControls();
         return runtimeStatus;
@@ -152,10 +154,10 @@
       const liveButton = document.getElementById('live-follow');
       if (liveButton) liveButton.hidden = historyViewTick == null;
       if (!historyTicks.length) { label.textContent = 'No history'; return; }
-      const index = Math.max(0, Math.min(historyTicks.length - 1, Number(slider.value)));
-      const tick = historyTicks[index];
-      const liveTick = runtimeStatus?.tick;
-      label.textContent = (historyViewTick == null || tick === liveTick) ? 'Live — tick ' + (liveTick ?? tick) : 'History — tick ' + tick;
+      const tick = historyViewTick ?? runtimeStatus?.tick ?? Number(slider.value);
+      label.textContent = historyViewTick == null
+        ? (runtimeStatus?.running ? 'Playing — tick ' : 'Paused — tick ') + tick
+        : 'Paused at tick ' + tick;
     }
 
     function clearWorldCache() {
@@ -165,28 +167,32 @@
 
     async function loadHistoricalWorld(tick) {
       const serial = ++requestSerial;
-      clearWorldCache();
       try {
-        const response = await fetch('/observation/history/' + encodeURIComponent(tick) + '/world', { cache: 'no-store' });
+        // Seeking restores simulation state and replays from the nearest
+        // retained checkpoint; it does not display a detached old snapshot.
+        const response = await fetch('/control/restore/' + encodeURIComponent(tick), {
+          method: 'POST', cache: 'no-store'
+        });
         if (!response.ok) throw new Error();
         if (serial !== requestSerial) return;
-        observation = await response.json();
-        observationLevel = 'World';
         historyViewTick = tick;
+        observationLevel = 'World';
+        selectedIds.clear();
+        focusedOrganismId = null;
+        clearWorldCache();
         cameraInitialized = false;
+        await refreshRuntimeStatus();
+        await loadObservation('World');
         updateTimeline();
-        render();
       } catch (_) {
-        if (serial === requestSerial) status.textContent = 'Historical observation unavailable.';
+        if (serial === requestSerial) status.textContent = 'Could not seek to that simulation tick.';
       }
     }
 
-    async function returnToLiveWorld() {
-      clearWorldCache();
+    async function continueFromHere() {
       historyViewTick = null;
-      cameraInitialized = false;
-      await loadObservation('World');
-      await refreshRuntimeStatus();
+      await control('/control/resume');
+      updateTimeline();
     }
 
     function updateControls() {
@@ -205,37 +211,36 @@
     }
 
     document.getElementById('run-toggle').addEventListener('click', async () => {
-      await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
+      if (runtimeStatus?.running) await control('/control/pause');
+      else {
+        historyViewTick = null;
+        await control('/control/resume');
+      }
+      updateTimeline();
     });
     document.getElementById('step-once').addEventListener('click', stepForward);
 
     async function stepForward() {
-      if (historyViewTick != null) await returnToLiveWorld();
       if (runtimeStatus?.running) await control('/control/pause');
-      await control('/control/step');
+      const response = await fetch('/control/step', { method: 'POST', cache: 'no-store' });
+      if (!response.ok) return;
+      const state = await response.json();
+      historyViewTick = state.tick;
+      observationLevel = 'World';
+      selectedIds.clear();
+      focusedOrganismId = null;
+      clearWorldCache();
       await refreshRuntimeStatus();
-      if (runtimeStatus?.population > 0 && observationLevel === 'Structure' && focusedOrganismId != null) {
-        await loadObservation('Structure', focusedOrganismId);
-      }
+      await loadObservation('World');
+      updateTimeline();
     }
 
     async function stepBack() {
-      if (historyViewTick != null) await returnToLiveWorld();
       await refreshRuntimeStatus();
-      const currentTick = runtimeStatus?.tick;
-      const previousTick = [...historyTicks].reverse().find(tick => tick < currentTick) ?? -1;
-      if (previousTick < 0) return;
+      const currentTick = historyViewTick ?? runtimeStatus?.tick;
+      if (!Number.isFinite(currentTick) || currentTick <= Number(document.getElementById('history').min)) return;
       if (runtimeStatus?.running) await control('/control/pause');
-      const response = await fetch('/control/restore/' + encodeURIComponent(previousTick), { method: 'POST', cache: 'no-store' });
-      if (!response.ok) {
-        status.textContent = 'Could not restore the previous tick.';
-        return;
-      }
-      historyViewTick = null;
-      cameraInitialized = false;
-      clearWorldCache();
-      await refreshRuntimeStatus();
-      await loadObservation(observationLevel, focusedOrganismId);
+      await loadHistoricalWorld(currentTick - 1);
     }
 
     document.getElementById('speed').addEventListener('input', event => {
@@ -249,14 +254,17 @@
     });
     document.getElementById('speed').addEventListener('focus', () => { speedControlActive = true; });
     document.getElementById('speed').addEventListener('blur', () => { speedControlActive = false; });
-    // Scrub the history slider freely, then load one historical frame on
-    // release. Live playback remains a separate, explicit follow mode.
-    document.getElementById('history').addEventListener('change', event => {
-      if (!historyTicks.length) return;
-      const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
-      loadHistoricalWorld(tick);
+    // The playhead addresses every retained simulation tick. Seeking changes
+    // authoritative state; it does not merely display a stored screenshot.
+    document.getElementById('history').addEventListener('input', event => {
+      document.getElementById('timeline-label').textContent = 'Seek to tick ' + event.target.value;
     });
-    document.getElementById('live-follow').addEventListener('click', returnToLiveWorld);
+    document.getElementById('history').addEventListener('change', event => {
+      const tick = Number(event.target.value);
+      if (Number.isSafeInteger(tick)) loadHistoricalWorld(tick);
+    });
+    document.getElementById('live-follow').textContent = 'Continue from Here';
+    document.getElementById('live-follow').addEventListener('click', continueFromHere);
 
 
     function resize() {
@@ -782,8 +790,11 @@
 
       if (event.code === 'Space') {
         event.preventDefault();
-        if (historyViewTick != null) await returnToLiveWorld();
-        await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
+        if (runtimeStatus?.running) await control('/control/pause');
+        else {
+          historyViewTick = null;
+          await control('/control/resume');
+        }
       } else if (event.key === '<' || (event.code === 'Comma' && event.shiftKey)) {
         event.preventDefault();
         await stepBack();
