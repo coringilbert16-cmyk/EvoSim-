@@ -172,7 +172,7 @@
         ctx.fill();
         ctx.stroke();
       } else {
-        drawForm(part.form, 0, 0, part.rotation_radians);
+        drawForm(part.form, 0, 0, part.rotation_radians, appearance);
       }
     }
     ctx.restore();
