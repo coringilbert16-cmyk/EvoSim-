@@ -303,7 +303,7 @@
       }
       ctx.fillStyle = '#d9e2ec';
       ctx.strokeStyle = '#17202a';
-      ctx.lineWidth = Math.max(1 / Math.max(camera.scale, 1e-9), 0.75);
+      ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
