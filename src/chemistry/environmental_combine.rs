@@ -816,20 +816,9 @@ fn chemical_step(
     let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
-    let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-        material_name_a,
-        &structure.units[selected.unit_a],
-        material_name_b,
-        &structure.units[selected.unit_b],
-        selected.candidate,
-        &environment.catalog,
-    ) else {
-        reject_step!();
-    };
-    let cache_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+    let cache_key = crate::chemistry_library::ChemistryKey::from_material_pair(
         material_name_a,
         material_name_b,
-        &interface,
         position_a,
         position_b,
     );
@@ -3286,28 +3275,6 @@ mod tests {
                         if let Some(selected) = select_best_positive_work_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
-                            let material_name_a = structure.units[selected.unit_a]
-                                .material
-                                .parts
-                                .first()
-                                .map(|part| part.0.as_str());
-                            let material_name_b = structure.units[selected.unit_b]
-                                .material
-                                .parts
-                                .first()
-                                .map(|part| part.0.as_str());
-                            let live_interface = material_name_a.zip(material_name_b).and_then(
-                                |(name_a, name_b)| {
-                                    crate::geometry_reference_library::resolve_live_contact_candidate(
-                                        name_a,
-                                        &structure.units[selected.unit_a],
-                                        name_b,
-                                        &structure.units[selected.unit_b],
-                                        selected.candidate,
-                                        &catalog,
-                                    )
-                                },
-                            );
                             if selected.candidate.distance <= 0.25
                                 && selected.candidate.facing > 0.5
                                 && live_interface.is_some()
