@@ -1146,7 +1146,11 @@ pub(crate) fn material_aura_receptions_with_occluders(
                 material_response_spectrum(receiver_properties, baselines, &incident)?;
             received.retain_strongest();
             let magnitude = spectrum_magnitude(&received);
-            if magnitude > f64::EPSILON {
+            // Geometric reception is independent of whether this material can
+            // respond to the incident field. Preserve the raw incident sample
+            // for pair interaction even when (for example) cohesion is zero
+            // and the receiver's own response spectrum is empty.
+            if spectrum_magnitude(&incident) > f64::EPSILON {
                 receptions.push(MaterialAuraReception {
                     source_x,
                     source_y,
@@ -2241,6 +2245,11 @@ mod tests {
             !receptions.is_empty(),
             "the exposed circular boundary should produce curved reception samples"
         );
+        assert!(receptions.iter().all(|sample| {
+            !sample.incident_spectrum.components.is_empty()
+                && sample.spectrum.components.is_empty()
+                && sample.magnitude == 0.0
+        }), "zero-cohesion Water should retain geometric incident samples without inventing a material response");
         assert!(receptions.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
