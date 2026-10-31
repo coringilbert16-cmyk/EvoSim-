@@ -316,6 +316,37 @@ pub(crate) fn resonance_response(
     1.0 / denominator.max(f64::EPSILON)
 }
 
+/// Phase lag of a damped, driven harmonic oscillator's displacement response.
+///
+/// For frequency ratio r = drive / natural and damping ratio ζ, the
+/// steady-state transfer function has denominator
+/// (1 - r²) + i(2ζr). Its argument is the lag, so the response phase is
+/// the drive phase minus this value. This is the standard linear oscillator
+/// result; it introduces no propagation delay or arbitrary phase offset.
+pub(crate) fn oscillator_phase_lag(
+    drive_frequency_cycles_per_day: f64,
+    natural_frequency_cycles_per_day: f64,
+    damping: f64,
+) -> f64 {
+    if !drive_frequency_cycles_per_day.is_finite()
+        || !natural_frequency_cycles_per_day.is_finite()
+        || !damping.is_finite()
+        || drive_frequency_cycles_per_day <= 0.0
+        || natural_frequency_cycles_per_day <= 0.0
+        || damping < 0.0
+    {
+        return 0.0;
+    }
+
+    let ratio = drive_frequency_cycles_per_day / natural_frequency_cycles_per_day;
+    if !ratio.is_finite() || ratio <= 0.0 {
+        return 0.0;
+    }
+
+    let zeta = damping.max(f64::EPSILON);
+    (2.0 * zeta * ratio).atan2(1.0 - ratio * ratio)
+}
+
 /// Convert wave amplitude to normalized wave energy.
 ///
 /// The harmonic model uses a dimensionless normalization where energy is
@@ -511,11 +542,13 @@ fn material_response_to_drive(
     let damping = damping_ratio(properties, baselines);
     let fundamental =
         resonance_response(drive_frequency_cycles_per_day, natural, damping) * signal_level;
+    let response_phase =
+        phase_radians - oscillator_phase_lag(drive_frequency_cycles_per_day, natural, damping);
     let mut spectrum = ToneSpectrum {
         components: vec![ToneComponent {
             frequency_cycles_per_day: drive_frequency_cycles_per_day,
             amplitude: fundamental,
-            phase_radians,
+            phase_radians: response_phase,
         }],
     };
 
@@ -525,7 +558,7 @@ fn material_response_to_drive(
             spectrum.components.push(ToneComponent {
                 frequency_cycles_per_day: drive_frequency_cycles_per_day * order as f64,
                 amplitude,
-                phase_radians: phase_radians * order as f64,
+                phase_radians: response_phase * order as f64,
             });
         }
     }
@@ -1550,6 +1583,127 @@ mod tests {
     }
 
     #[test]
+    fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
+        let natural = 440.0;
+        let damping = 0.15;
+        let below = oscillator_phase_lag(220.0, natural, damping);
+        let at = oscillator_phase_lag(440.0, natural, damping);
+        let above = oscillator_phase_lag(880.0, natural, damping);
+
+        assert!(below > 0.0 && below < std::f64::consts::FRAC_PI_2);
+        assert!((at - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+        assert!(above > std::f64::consts::FRAC_PI_2 && above < std::f64::consts::PI);
+    }
+
+    #[test]
+    fn oscillator_phase_lag_changes_with_damping() {
+        let low = oscillator_phase_lag(352.0, 440.0, 0.05);
+        let high = oscillator_phase_lag(352.0, 440.0, 0.5);
+        assert!(high > low);
+    }
+
+    #[test]
+    fn material_response_applies_lag_to_fundamental_and_generated_harmonics() {
+        let input_phase = 0.7;
+        let spectrum = material_response(properties(1.0, 1.0, 1.0), baselines(), input_phase);
+        let expected_fundamental =
+            input_phase - oscillator_phase_lag(440.0, 440.0, BASELINE_DAMPING_RATIO);
+
+        let fundamental = spectrum
+            .components
+            .iter()
+            .find(|component| (component.frequency_cycles_per_day - 440.0).abs() < 1e-9)
+            .expect("fundamental response should be present");
+        assert!((fundamental.phase_radians - expected_fundamental).abs() < 1e-12);
+
+        for component in spectrum
+            .components
+            .iter()
+            .filter(|component| component.frequency_cycles_per_day > 440.0)
+        {
+            let order = component.frequency_cycles_per_day / 440.0;
+            assert!((component.phase_radians - expected_fundamental * order).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn successive_material_responses_accumulate_oscillator_phase_lag() {
+        let incoming = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.2,
+            }],
+        };
+        let first = material_response_spectrum(properties(1.0, 1.0, 1.0), baselines(), &incoming)
+            .expect("first material response should be valid");
+        let second = material_response_spectrum(properties(1.0, 1.0, 1.0), baselines(), &first)
+            .expect("second material response should be valid");
+
+        let fundamental = second
+            .components
+            .iter()
+            .find(|component| (component.frequency_cycles_per_day - 440.0).abs() < 1e-9)
+            .expect("fundamental should remain in the transmitted spectrum");
+        let one_material_lag = oscillator_phase_lag(440.0, 440.0, BASELINE_DAMPING_RATIO);
+        let expected_phase = 0.2 - 2.0 * one_material_lag;
+        assert!((fundamental.phase_radians - expected_phase).abs() < 1e-12);
+    }
+
+    #[test]
+    fn each_incoming_frequency_receives_its_own_oscillator_phase_lag() {
+        let incoming = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.5,
+                    phase_radians: 0.15,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 713.0,
+                    amplitude: 0.4,
+                    phase_radians: -0.4,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 997.0,
+                    amplitude: 0.3,
+                    phase_radians: 1.1,
+                },
+            ],
+        };
+        let material = properties(1.0, 1.0, 1.0);
+        let baseline = baselines();
+        let natural = natural_frequency_cycles_per_day(material, baseline);
+        let damping = damping_ratio(material, baseline);
+        let output = material_response_spectrum(material, baseline, &incoming)
+            .expect("valid mixed-frequency input should produce a response");
+
+        for incident in &incoming.components {
+            let response = output
+                .components
+                .iter()
+                .find(|component| {
+                    (component.frequency_cycles_per_day - incident.frequency_cycles_per_day).abs()
+                        < 1e-9
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "fundamental response at {} cycles/day should be retained",
+                        incident.frequency_cycles_per_day
+                    )
+                });
+            let expected_phase = incident.phase_radians
+                - oscillator_phase_lag(incident.frequency_cycles_per_day, natural, damping);
+            assert!(
+                (response.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
+                    && (response.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
+                "incoming frequency {} must receive its own phase lag",
+                incident.frequency_cycles_per_day
+            );
+        }
+    }
+
+    #[test]
     fn reactivity_sets_relative_damping_and_nonlinear_content() {
         let baseline = damping_ratio(properties(1.0, 1.0, 1.0), baselines());
         let high = damping_ratio(properties(1.0, 4.0, 1.0), baselines());
@@ -1723,12 +1877,20 @@ mod tests {
         let spectrum = material_response(properties(1.0, 4.0, 1.0), baselines(), drive_phase);
 
         assert!(!spectrum.components.is_empty());
+        let properties = properties(1.0, 4.0, 1.0);
+        let baselines = baselines();
+        let natural_frequency = natural_frequency_cycles_per_day(properties, baselines);
+        let damping = damping_ratio(properties, baselines);
+        let fundamental_lag = oscillator_phase_lag(drive_frequency, natural_frequency, damping);
+
         for component in &spectrum.components {
-            let expected_phase = phase_at_tick(component.frequency_cycles_per_day, tick);
+            let harmonic_order = component.frequency_cycles_per_day / drive_frequency;
+            let expected_phase = phase_at_tick(component.frequency_cycles_per_day, tick)
+                - harmonic_order * fundamental_lag;
             assert!(
                 (component.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
                     && (component.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
-                "harmonic at {} cycles/day did not follow the shared clock",
+                "harmonic at {} cycles/day did not follow the shared clock with its derived oscillator lag",
                 component.frequency_cycles_per_day
             );
         }
