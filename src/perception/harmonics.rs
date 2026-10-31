@@ -1387,6 +1387,13 @@ pub(crate) fn resonance_pair_force_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<((f64, f64), (f64, f64))> {
+    // A blocker makes this a three-body potential: translating only B while
+    // assigning the opposite gradient to A would violate the actual gradient
+    // with respect to A. Until the blocker also receives its derived force,
+    // fail closed rather than claim a false action/reaction pair.
+    if !occluders.is_empty() {
+        return None;
+    }
     const DIFFERENCE_STEP: f64 = 1.0e-4;
     let potential = resonance_pair_potential_with_occluders(a, b, occluders, catalog, tick)?;
     let b_plus_x = translated_physical_material(b, DIFFERENCE_STEP, 0.0)?;
@@ -2236,6 +2243,70 @@ mod tests {
         );
         assert!((force_on_left.0 + force_on_near.0).abs() < 1e-12);
         assert!((force_on_left.1 + force_on_near.1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn stationary_pair_potential_is_invariant_as_shared_phase_clock_advances() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0);
+        let right = make_material(4.0);
+
+        let initial = resonance_pair_potential_components(&left, &right, &catalog, 0)
+            .expect("initial pair should have frequency-resolved potential");
+        let advanced = resonance_pair_potential_components(&left, &right, &catalog, 137)
+            .expect("advanced pair should have frequency-resolved potential");
+
+        assert_eq!(initial.len(), advanced.len());
+        for (before, after) in initial.iter().zip(&advanced) {
+            assert!(
+                (before.frequency_cycles_per_day - after.frequency_cycles_per_day).abs() < 1e-10
+            );
+            assert!(
+                (before.energy - after.energy).abs() < 1e-9,
+                "shared phase advance must not change a stationary pair's potential"
+            );
+        }
+    }
+
+    #[test]
+    fn occluded_pair_does_not_claim_an_unbalanced_two_body_force() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0);
+        let receiver = make_material("Carbon", 8.0);
+        let blocker = make_material("Nitrogen", 4.0);
+
+        assert!(resonance_pair_force_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&blocker),
+            &catalog,
+            0,
+        )
+        .is_none());
     }
 
     #[test]
