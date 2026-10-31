@@ -980,7 +980,9 @@ pub(crate) fn world_pair_potential_inventory_components(
     simulation: &Simulation,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
     let (bodies, resonant_indices, _) =
-        world_physical_materials_for_pair_potential(simulation)?;
+        world_physical_materials_for_pair_potential(
+            simulation,
+        )?;
     world_pair_potential_components_for_bodies(
         &bodies,
         &resonant_indices,
@@ -1058,12 +1060,13 @@ fn world_pair_potential_gradient_for_bodies(
         return None;
     }
     const DIFFERENCE_STEP: f64 = 1.0e-4;
-    let components = world_pair_potential_components_for_bodies(
-        bodies,
-        resonant_indices,
-        catalog,
-        tick,
-    )?;
+    let components =
+        world_pair_potential_components_for_bodies(
+            bodies,
+            resonant_indices,
+            catalog,
+            tick,
+        )?;
     let base_potential = components
         .iter()
         .map(|component| component.energy)
