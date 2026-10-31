@@ -17,7 +17,7 @@ The source extent is currently recorded as metadata; the existing distance atten
 
 The first implementation pass now generalizes this path in `material_aura_receptions`:
 
-- It resolves both materials through `OrganismBodyGeometry::from_physical_material`.
+- It resolves both materials through `OrganismBodyGeometry::from_physical_material`. This API requires world-resolved placements and rejects stored materials with an unresolved `owner_relative_origin`; callers must resolve the owner's transform before asking for pair interactions.
 - It uses `visible_polygonal_intervals` and `visible_circular_arc_intervals` to obtain exposed straight and curved receiver boundaries, rather than one representative point per constituent.
 - It uses `point_source_projected_extent` and `point_source_projected_arc_extent` to retain each interval's projected extent.
 - It preserves each received spectrum and its actual receiver point/normal. Amplitude scales with the square root of projected extent, consistent with the existing amplitude-squared energy convention.
