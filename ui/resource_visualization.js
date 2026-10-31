@@ -29,6 +29,10 @@
   const worldToolbar = document.createElement('div');
   worldToolbar.className = 'ev-world-toolbar';
   worldToolbar.innerHTML = '<span>WORLD VIEW</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
+  const cameraControls = document.createElement('span');
+  cameraControls.className = 'ev-camera-controls';
+  cameraControls.innerHTML = '<button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit world" title="Fit current view">Fit</button>';
+  worldToolbar.append(cameraControls);
   const viewport = document.createElement('div');
   viewport.className = 'ev-world-viewport';
   canvas?.parentNode?.removeChild(canvas);
@@ -135,28 +139,67 @@
     return best?.name || null;
   }
 
+  function drawPhysicalFieldPart(part, viewport) {
+    const appearance = appearanceFor(part.resource);
+    const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+    const fluid = part.form?.Fluid;
+    const localBounds = formBounds(part.form, 0, 0, part.rotation_radians);
+    const radius = localBounds
+      ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
+      : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
+    const screenRadius = Math.max(1, radius * camera.scale);
+    if (point.x < -screenRadius || point.y < -screenRadius ||
+        point.x > viewport.width + screenRadius || point.y > viewport.height + screenRadius) return;
+
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    if (radius * camera.scale < 2.25) {
+      ctx.fillStyle = appearance.fill;
+      ctx.globalAlpha = Math.max(0.75, appearance.fill_opacity / 255);
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.scale(camera.scale, camera.scale);
+      ctx.fillStyle = appearance.fill;
+      ctx.strokeStyle = appearance.outline;
+      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+      if (fluid) {
+        // Fluid has no fixed polygon boundary. Use an equal-area disk only as
+        // a visual marker; the simulation's fluid geometry remains authoritative.
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        drawForm(part.form, 0, 0, part.rotation_radians);
+      }
+    }
+    ctx.restore();
+  }
+
   function drawField(world, viewport) {
     if (!world) return;
-    const size = paletteState.fieldCellSize;
     for (const cell of world.field || []) {
-      const name = dominantResource(cell);
-      if (!name) continue;
-      const appearance = appearanceFor(name);
-      const screen = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
-      const screenSize = size * camera.scale;
-      if (screen.x < -screenSize || screen.y < -screenSize ||
-          screen.x > viewport.width + screenSize || screen.y > viewport.height + screenSize) continue;
-      ctx.save();
-      ctx.fillStyle = appearance.fill;
-      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
-      if (screenSize < 3) {
+      const physicalParts = cell.physical_parts || [];
+      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport);
+
+      // Unstructured inventory has no constituent geometry or world-space
+      // placement. Show it as a small cell marker, never as fake square atoms.
+      if (!physicalParts.length && cell.materials?.length) {
+        const name = dominantResource(cell);
+        if (!name) continue;
+        const appearance = appearanceFor(name);
+        const point = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
+        if (point.x < -4 || point.y < -4 || point.x > viewport.width + 4 || point.y > viewport.height + 4) continue;
+        ctx.save();
+        ctx.fillStyle = appearance.fill;
+        ctx.globalAlpha = 0.7;
         ctx.beginPath();
-        ctx.arc(screen.x, screen.y, Math.max(0.75, screenSize * 0.35), 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
         ctx.fill();
-      } else {
-        ctx.fillRect(screen.x - screenSize / 2, screen.y - screenSize / 2, screenSize, screenSize);
+        ctx.restore();
       }
-      ctx.restore();
     }
   }
 
@@ -243,6 +286,22 @@
       drawForm(unit.form, 0, 0, rotation); ctx.restore();
     }
   };
+
+  cameraControls.querySelector('[data-zoom="out"]').addEventListener('click', () => {
+    const size = viewportSize();
+    camera.zoomAt(size.width / 2, size.height / 2, 1 / 1.5, size.width, size.height);
+    render();
+  });
+  cameraControls.querySelector('[data-zoom="in"]').addEventListener('click', () => {
+    const size = viewportSize();
+    camera.zoomAt(size.width / 2, size.height / 2, 1.5, size.width, size.height);
+    render();
+  });
+  cameraControls.querySelector('[data-zoom="fit"]').addEventListener('click', () => {
+    cameraInitialized = false;
+    fitCurrentObservation();
+    render();
+  });
 
   const originalFinishWorldSelection = finishWorldSelection;
   finishWorldSelection = function normalizedWorldSelection(point) {
