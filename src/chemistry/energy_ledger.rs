@@ -1029,6 +1029,8 @@ mod tests {
         for index in 0..8 {
             assert!(resonance.deposit(100.0 + index as f64 * 100.0, 1.0));
         }
+        ledger.total_resonant_energy_held = 8.0;
+        ledger.initial_resonant_energy_held = 8.0;
         let components = [crate::harmonics::ResonancePairPotentialComponent {
             frequency_cycles_per_day: 2_000.0,
             energy: -2.5,
