@@ -939,13 +939,65 @@ fn world_pair_potential_components_for_bodies(
     catalog: &[BaseResource],
     tick: u64,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    let geometries = bodies
+        .iter()
+        .map(|body| {
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(body, catalog)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    world_pair_potential_components_for_geometries(
+        bodies,
+        resonant_indices,
+        &geometries,
+        catalog,
+        tick,
+    )
+}
+
+/// Evaluate the same world inventory from a stable geometry snapshot. Bodies
+/// outside the conservative source-to-receiver AABB cannot intersect any ray
+/// to the receiver boundary, so they are safely omitted from that pair's
+/// occluder list. The bound is intentionally conservative, not a visibility
+/// approximation.
+fn world_pair_potential_components_for_geometries(
+    bodies: &[PhysicalMaterial],
+    resonant_indices: &[usize],
+    geometries: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[BaseResource],
+    tick: u64,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    if bodies.len() != geometries.len() {
+        return None;
+    }
     let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
     for (first_position, &first) in resonant_indices.iter().enumerate() {
+        let source_geometry = geometries.get(first)?;
         for &second in resonant_indices.iter().skip(first_position + 1) {
-            let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
+            let receiver_geometry = geometries.get(second)?;
+            let corridor_min_x = source_geometry.min_x.min(receiver_geometry.min_x);
+            let corridor_max_x = source_geometry.max_x.max(receiver_geometry.max_x);
+            let corridor_min_y = source_geometry.min_y.min(receiver_geometry.min_y);
+            let corridor_max_y = source_geometry.max_y.max(receiver_geometry.max_y);
+            let occluder_geometries = geometries
+                .iter()
+                .enumerate()
+                .filter_map(|(index, geometry)| {
+                    if index == first || index == second {
+                        return None;
+                    }
+                    let intersects_corridor = geometry.max_x >= corridor_min_x
+                        && geometry.min_x <= corridor_max_x
+                        && geometry.max_y >= corridor_min_y
+                        && geometry.min_y <= corridor_max_y;
+                    intersects_corridor.then(|| geometry.clone())
+                })
+                .collect::<Vec<_>>();
+            let pair = crate::harmonics::resonance_pair_potential_components_with_prebuilt_geometries(
                 &bodies[first],
                 &bodies[second],
-                bodies,
+                source_geometry,
+                receiver_geometry,
+                &occluder_geometries,
                 catalog,
                 tick,
             )?;
@@ -1006,6 +1058,38 @@ fn translate_pair_potential_body(
         if !placement.x.is_finite() || !placement.y.is_finite() {
             return None;
         }
+    }
+    Some(translated)
+}
+
+/// Translate a cached world-space geometry snapshot without resolving the
+/// material's constituent shapes again.
+fn translate_pair_potential_geometry(
+    geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    dx: f64,
+    dy: f64,
+) -> Option<crate::organism_geometry::OrganismBodyGeometry> {
+    if !dx.is_finite() || !dy.is_finite() {
+        return None;
+    }
+    let mut translated = geometry.clone();
+    for part in &mut translated.parts {
+        part.x += dx;
+        part.y += dy;
+        if !part.x.is_finite() || !part.y.is_finite() {
+            return None;
+        }
+    }
+    translated.min_x += dx;
+    translated.max_x += dx;
+    translated.min_y += dy;
+    translated.max_y += dy;
+    if !translated.min_x.is_finite()
+        || !translated.max_x.is_finite()
+        || !translated.min_y.is_finite()
+        || !translated.max_y.is_finite()
+    {
+        return None;
     }
     Some(translated)
 }
