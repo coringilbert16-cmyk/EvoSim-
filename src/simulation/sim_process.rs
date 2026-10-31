@@ -14,7 +14,9 @@ use crate::resource_visualization::appearance;
 use crate::runtime::RuntimeState;
 use crate::state::Simulation;
 
-const DEFAULT_TICKS_PER_SECOND: f64 = 32.0;
+const DEFAULT_TICKS_PER_SECOND: f64 = 10.0;
+const MIN_TICKS_PER_SECOND: f64 = 0.1;
+const MAX_TICKS_PER_SECOND: f64 = 100.0;
 const DISPLAY_EVENT_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Deserialize)]
@@ -112,26 +114,57 @@ fn start_tick_loop(
         let mut last_display_event = Instant::now();
         let mut last_rate_sample = Instant::now();
         let mut last_rate_tick = 0_u64;
+        let mut next_tick_deadline = Instant::now();
 
         loop {
-            let running = runtime.lock().simulation.running;
-            if !running {
-                tokio::time::sleep(Duration::from_millis(50)).await;
-                continue;
-            }
+            let (running, ticks_per_second) = {
+                let state = runtime.lock();
+                (
+                    state.simulation.running,
+                    state.simulation.ticks_per_second,
+                )
+            };
 
-            {
-                let mut state = runtime.lock();
-                if state.simulation.running {
-                    state.step();
-                    let now = Instant::now();
-                    if now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
-                        let elapsed = now.duration_since(last_rate_sample).as_secs_f64();
-                        state.measured_ticks_per_second =
-                            (state.simulation.tick - last_rate_tick) as f64 / elapsed;
-                        last_rate_tick = state.simulation.tick;
-                        last_rate_sample = now;
+            if !running {
+                next_tick_deadline = Instant::now();
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            } else {
+                let period = Duration::from_secs_f64(
+                    1.0 / ticks_per_second.clamp(MIN_TICKS_PER_SECOND, MAX_TICKS_PER_SECOND),
+                );
+                let now = Instant::now();
+                if next_tick_deadline < now {
+                    next_tick_deadline = now;
+                }
+                if next_tick_deadline > now {
+                    tokio::time::sleep_until(
+                        tokio::time::Instant::from_std(next_tick_deadline),
+                    )
+                    .await;
+                    continue;
+                }
+
+                {
+                    let mut state = runtime.lock();
+                    // Recheck after waiting: pause/speed commands may have arrived.
+                    if state.simulation.running {
+                        state.step();
+                        let sample_now = Instant::now();
+                        if sample_now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
+                            let elapsed = sample_now.duration_since(last_rate_sample).as_secs_f64();
+                            state.measured_ticks_per_second =
+                                (state.simulation.tick - last_rate_tick) as f64 / elapsed;
+                            last_rate_tick = state.simulation.tick;
+                            last_rate_sample = sample_now;
+                        }
                     }
+                }
+
+                let after_tick = Instant::now();
+                next_tick_deadline += period;
+                // Do not run catch-up bursts after a slow tick or a long pause.
+                if next_tick_deadline <= after_tick {
+                    next_tick_deadline = after_tick + period;
                 }
             }
 
@@ -150,7 +183,6 @@ fn start_tick_loop(
                 last_display_event = Instant::now();
             }
 
-            // Yield so control requests and websocket clients remain responsive.
             tokio::task::yield_now().await;
         }
     });
@@ -207,7 +239,8 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 "tick": state.simulation.tick,
                 "running": state.simulation.running,
                 "population": state.simulation.living_population(),
-                "ticks_per_second": state.measured_ticks_per_second,
+                "ticks_per_second": state.simulation.ticks_per_second,
+                "measured_ticks_per_second": state.measured_ticks_per_second,
                 "history_ticks": state.history_ticks(),
                 "observed_tick": state.observed_tick(),
                 "session_id": state.session_id,
@@ -326,7 +359,9 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             )
         }
         SimulationCommand::Speed { ticks_per_second } => {
-            if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
+            if !ticks_per_second.is_finite()
+                || !(MIN_TICKS_PER_SECOND..=MAX_TICKS_PER_SECOND).contains(&ticks_per_second)
+            {
                 return CommandResponse::error("invalid_speed");
             }
             let mut state = runtime.lock();
