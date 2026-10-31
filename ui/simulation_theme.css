@@ -21,7 +21,7 @@ header {
 }
 #status { color: var(--ev-text); font-size: 12px !important; letter-spacing: .01em; }
 #keyboard-help { color: var(--ev-muted) !important; font-size: 11px !important; }
-main { min-height: 0; padding: 12px; background: var(--ev-bg); }
+main { order: 2; min-height: 0; padding: 12px; background: var(--ev-bg); }
 #world {
   width: 100% !important; height: 100% !important; max-width: none !important;
   background: var(--ev-canvas) !important; border: 1px solid var(--ev-border) !important;
@@ -47,4 +47,21 @@ input[type="range"] { accent-color: #b8c9d8; }
   #timeline-label { text-align: left; }
   main { padding: 8px; }
   #timeline { margin: 0 8px 8px; }
+}
+
+/* The inspector is a docked, geometry-viewer-style detail surface. */
+#organism-inspector {
+  top: 70px !important; right: 24px !important; width: 286px !important;
+  max-height: calc(100vh - 150px) !important; overflow: auto;
+  padding: 13px !important; background: var(--ev-panel) !important;
+  border: 1px solid var(--ev-border-strong) !important; border-radius: 4px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.38) !important;
+  color: var(--ev-text) !important; font: 12px/1.45 ui-sans-serif, system-ui, sans-serif !important;
+}
+#organism-inspector > div:first-child { color: var(--ev-text); font-size: 14px !important; letter-spacing: .01em; }
+#organism-inspector > div { border-color: var(--ev-border) !important; }
+#organism-inspector span { color: var(--ev-muted); }
+#organism-inspector span:last-child { color: var(--ev-text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+@media (max-width: 800px) {
+  #organism-inspector { top: auto !important; right: 12px !important; bottom: 74px !important; width: min(286px, calc(100vw - 24px)) !important; max-height: 42vh !important; }
 }
