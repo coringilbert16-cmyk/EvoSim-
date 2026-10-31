@@ -1269,6 +1269,94 @@ mod tests {
     }
 
     #[test]
+    fn world_pair_gradient_matches_isolated_pair_and_balances_reaction_forces() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Hydrogen", 4.0, 0.0),
+        ];
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &catalog,
+            0,
+        )
+        .expect("the isolated world pair should have a finite complete gradient");
+        let (force_on_a, force_on_b) = crate::harmonics::resonance_pair_force(
+            &bodies[0],
+            &bodies[1],
+            &catalog,
+            0,
+        )
+        .expect("the isolated pair should have a gradient-derived force");
+
+        assert_eq!(gradient.body_forces.len(), 2);
+        assert!((gradient.body_forces[0].0 - force_on_a.0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 - force_on_a.1).abs() < 1e-8);
+        assert!((gradient.body_forces[1].0 - force_on_b.0).abs() < 1e-8);
+        assert!((gradient.body_forces[1].1 - force_on_b.1).abs() < 1e-8);
+        assert!((gradient.body_forces[0].0 + gradient.body_forces[1].0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 + gradient.body_forces[1].1).abs() < 1e-8);
+    }
+
+    #[test]
+    fn non_resonant_occluding_body_receives_its_world_potential_reaction() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Carbon", 8.0, 0.0),
+            make_material("Nitrogen", 4.0, 0.4),
+        ];
+        // The blocker remains physical and occluding but is not a resonance
+        // source or receiver until released from storage.
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &catalog,
+            0,
+        )
+        .expect("the complete world potential should have a finite gradient");
+
+        let blocker_force = gradient.body_forces[2];
+        assert!(
+            blocker_force.0.hypot(blocker_force.1) > 1e-8,
+            "moving the blocker changes the visible pair potential, so it must receive a reaction force"
+        );
+        let net_force = gradient
+            .body_forces
+            .iter()
+            .fold((0.0, 0.0), |sum, force| (sum.0 + force.0, sum.1 + force.1));
+        assert!(
+            net_force.0.abs() < 1e-6 && net_force.1.abs() < 1e-6,
+            "translational invariance requires the complete-world forces, including the blocker, to balance"
+        );
+    }
+
+    #[test]
     fn pair_potential_oracle_delta_settles_against_the_world_energy_inventory() {
         let mut simulation = Simulation::new(78, 1.0);
         clear_environment_physical_material(&mut simulation);
