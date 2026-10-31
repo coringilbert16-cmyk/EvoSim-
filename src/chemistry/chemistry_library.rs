@@ -149,6 +149,33 @@ impl ChemistryKey {
         key
     }
 
+    /// Key a static chemical potential by the two material identities and
+    /// their catalog chemical positions. Contact geometry is evaluated live
+    /// by the reaction path; it does not change this material-pair property.
+    pub fn from_material_pair(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> Self {
+        let material_a = a.into();
+        let material_b = b.into();
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            (chemical_position_b, chemical_position_a)
+        };
+        let mut key = Self::new(
+            material_a,
+            material_b,
+            "chemical_pair",
+            "static-potential-v1",
+        );
+        key.chemical_position_a = Some(quantize_chemical_position(position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(position_b));
+        key
+    }
+
     #[cfg(test)]
     pub fn from_geometry_rigid_contact(
         a: impl Into<String>,
@@ -544,6 +571,18 @@ mod tests {
         assert_eq!(key.interface_signature, interface.signature);
         assert_eq!(key.chemical_position_a, Some(10_500_000_000));
         assert_eq!(key.chemical_position_b, Some(5_500_000_000));
+    }
+
+    #[test]
+    fn material_pair_key_is_order_independent_and_tracks_chemical_positions() {
+        let canonical = ChemistryKey::from_material_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        let reversed = ChemistryKey::from_material_pair("Hydrogen", "Carbon", 5.5, 10.5);
+        let changed = ChemistryKey::from_material_pair("Carbon", "Hydrogen", 10.25, 5.5);
+        assert_eq!(canonical, reversed);
+        assert_ne!(canonical, changed);
+        assert_eq!(canonical.interface_class, "chemical_pair");
+        assert_eq!(canonical.chemical_position_a, Some(10_500_000_000));
+        assert_eq!(canonical.chemical_position_b, Some(5_500_000_000));
     }
 
     #[test]
