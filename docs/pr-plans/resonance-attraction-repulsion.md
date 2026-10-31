@@ -15,6 +15,16 @@ Important boundary: this is currently an environmental-material-to-genome-cavity
 
 The source extent is currently recorded as metadata; the existing distance attenuation uses center-to-receiver distance. Do not silently reinterpret extent as a new force radius.
 
+The first implementation pass now generalizes this path in `material_aura_receptions`:
+
+- It resolves both materials through `OrganismBodyGeometry::from_physical_material`.
+- It uses `visible_polygonal_intervals` and `visible_circular_arc_intervals` to obtain exposed straight and curved receiver boundaries, rather than one representative point per constituent.
+- It uses `point_source_projected_extent` and `point_source_projected_arc_extent` to retain each interval's projected extent.
+- It preserves each received spectrum and its actual receiver point/normal. Amplitude scales with the square root of projected extent, consistent with the existing amplitude-squared energy convention.
+- It applies the receiving material's existing oscillator response after the source aura attenuation.
+
+These are still reception samples, not a summed pair potential or force. The current call evaluates receiver self-occlusion within that material; it does not yet include unrelated world materials as intervening occluders. Force integration must use the weighted samples and establish a symmetric pair potential before any mechanical movement consumes them.
+
 ## Implement
 
 - Generalize the existing aura source/receiver calculation so a realized physical material can receive another material's aura through its actual geometry. Reuse `OrganismBodyGeometry::from_physical_material` and its constituent placements/realized shapes to resolve receiver boundaries; do not substitute bounding circles for the actual shape.
