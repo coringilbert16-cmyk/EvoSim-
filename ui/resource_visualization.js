@@ -159,6 +159,7 @@
   function drawWorldPoints(world, viewport) {
     for (const point of world.decomposing_bodies || []) {
       const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
+      if (p.x < -8 || p.y < -8 || p.x > viewport.width + 8 || p.y > viewport.height + 8) continue;
       ctx.save(); ctx.strokeStyle = '#8B8B8B'; ctx.setLineDash([3, 3]); ctx.beginPath();
       ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
@@ -176,8 +177,12 @@
       const physical = organism.physical;
       if (!physical) continue;
       for (const part of physical.silhouette || []) {
-        const p = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
-        if (p.x < -20 || p.y < -20 || p.x > viewport.width + 20 || p.y > viewport.height + 20) continue;
+        const bounds = formBounds(part.form, part.x, part.y, part.rotation_radians);
+        if (bounds) {
+          const a = camera.worldToScreen(bounds.minX, bounds.minY, viewport.width, viewport.height);
+          const b = camera.worldToScreen(bounds.maxX, bounds.maxY, viewport.width, viewport.height);
+          if (b.x < 0 || b.y < 0 || a.x > viewport.width || a.y > viewport.height) continue;
+        }
         drawObservedPart(part, viewport);
       }
       drawSelectionBounds(organism.id, physical, viewport);
