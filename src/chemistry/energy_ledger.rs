@@ -1044,6 +1044,69 @@ mod tests {
     }
 
     #[test]
+    fn pair_potential_inventory_balances_positive_change_against_usable_energy() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 10.0,
+            current_usable_energy: 7.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 3.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1e-12));
+    }
+
+    #[test]
+    fn pair_potential_inventory_balances_retained_release() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 0.0,
+            initial_resonant_energy: 2.0,
+            current_resonant_energy: 10.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: -8.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1e-12));
+    }
+
+    #[test]
+    fn pair_potential_inventory_balances_unretained_release_as_heat() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 0.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: -5.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 5.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1e-12));
+    }
+
+    #[test]
     fn favorable_reaction_can_fund_work_without_external_input() {
         let balance = ReactionEnergyBalance::calculate(10.0, 6.0, 2.0, 1.0).unwrap();
         assert_eq!(balance.net_reaction_change, -4.0);
