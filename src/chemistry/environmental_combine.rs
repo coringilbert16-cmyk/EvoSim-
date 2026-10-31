@@ -3230,7 +3230,7 @@ mod tests {
                     (Some(a), Some(b)) => (a - b).abs(),
                     _ => continue,
                 };
-                if chemistry_separation < 9.0 {
+                if chemistry_separation <= 1e-9 {
                     continue;
                 }
                 for step in 1..=60 {
