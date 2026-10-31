@@ -619,10 +619,7 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 /// only the interference term (combined energy minus the two separate
 /// energies); it is not by itself a mechanical potential or force.
 #[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
-pub(crate) fn spectrum_cross_energy(
-    a: &ToneSpectrum,
-    b: &ToneSpectrum,
-) -> Option<f64> {
+pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
     spectrum_energy(a)?;
     spectrum_energy(b)?;
     let mut cross_energy = 0.0;
@@ -1010,26 +1007,21 @@ pub(crate) fn material_aura_receptions(
 ) -> Option<Vec<MaterialAuraReception>> {
     let (source_x, source_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
-    let receiver_geometry =
-        crate::geometry::organism_geometry::OrganismBodyGeometry::from_physical_material(
-            receiver, catalog,
-        )?;
-    let source_geometry =
-        crate::geometry::organism_geometry::OrganismBodyGeometry::from_physical_material(
-            source, catalog,
-        )?;
-    let receiver_points = crate::geometry::organism_geometry::visible_source_facing_points(
-        (source_x, source_y),
-        &[receiver_geometry],
-    );
+    let receiver_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+        receiver, catalog,
+    )?;
+    let source_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+        source, catalog,
+    )?;
+    let receiver_points =
+        crate::organism_geometry::visible_source_facing_points((source_x, source_y), &[receiver_geometry]);
     if receiver_points.is_empty() {
         return Some(Vec::new());
     }
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
-    let source_mass_scale =
-        environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
     if source_mass_scale <= f64::EPSILON {
         return Some(Vec::new());
     }
@@ -1731,22 +1723,16 @@ mod tests {
                 phase_radians,
             }],
         };
-        let in_phase = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
-            .expect("valid in-phase spectra should be accepted");
-        let opposite = spectrum_cross_energy(
-            &make(0.0, 440.0),
-            &make(std::f64::consts::PI, 440.0),
-        )
+        let in_phase =
+            spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
+                .expect("valid in-phase spectra should be accepted");
+        let opposite = spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::PI, 440.0))
         .expect("valid opposite-phase spectra should be accepted");
-        let quadrature = spectrum_cross_energy(
-            &make(0.0, 440.0),
-            &make(std::f64::consts::FRAC_PI_2, 440.0),
-        )
+        let quadrature =
+            spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::FRAC_PI_2, 440.0))
         .expect("valid quadrature spectra should be accepted");
-        let different_frequency = spectrum_cross_energy(
-            &make(0.0, 440.0),
-            &make(0.0, 441.0),
-        )
+        let different_frequency =
+            spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
         .expect("valid distinct-frequency spectra should be accepted");
 
         assert!((in_phase - 0.5).abs() < 1e-12);
