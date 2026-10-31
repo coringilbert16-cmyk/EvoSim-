@@ -4108,30 +4108,15 @@ mod tests {
             !accumulation.is_empty() || !operations.is_empty(),
             "a positive, eligible heterogeneous interface must advance chemistry or schedule its activated transaction"
         );
-        let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-            selected_name,
-            selected_unit,
-            external_name,
-            &structure.units[selected.unit_b],
-            selected.candidate,
-            &catalog,
-        )
-        .expect("the selected live interface must remain resolvable");
-        let selected_position = constituent_chemical_position(selected_unit, &catalog)
-            .expect("selected constituent must retain its chemical position");
-        let external_position =
-            constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
-                .expect("external constituent must retain its chemical position");
-        let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+        let chemistry_key = crate::chemistry_library::ChemistryKey::from_material_pair(
             selected_name,
             external_name,
-            &interface,
             selected_position,
             external_position,
         );
         let cached = chemistry_library
             .get(&chemistry_key)
-            .expect("chemical step must key its record by the exact constituent interface");
+            .expect("chemical step must key its record by the contacting constituent pair");
         let expected_potential = crate::chemistry::interaction_potential(
             selected_position,
             external_position,
