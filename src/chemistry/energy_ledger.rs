@@ -370,6 +370,11 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) current_resonant_energy: f64,
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
+    /// Signed pair-interaction potential relative to the tick-zero reference.
+    pub(crate) initial_pair_interaction_potential: f64,
+    pub(crate) current_pair_interaction_potential: f64,
     pub(crate) external_energy_input: f64,
     /// External resonant-field energy that leaves the modeled world after material response.
     pub(crate) world_tone_energy_escaped: f64,
@@ -399,6 +404,8 @@ impl EnergyInventorySnapshot {
         if self.other_energy_released != 0.0
             || !self.initial_structural_energy.is_finite()
             || !self.current_structural_energy.is_finite()
+            || !self.initial_pair_interaction_potential.is_finite()
+            || !self.current_pair_interaction_potential.is_finite()
             || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
@@ -408,9 +415,12 @@ impl EnergyInventorySnapshot {
         let usable_delta = self.current_usable_energy - self.initial_usable_energy;
         let resonant_delta = self.current_resonant_energy - self.initial_resonant_energy;
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
+        let pair_potential_delta = self.current_pair_interaction_potential
+            - self.initial_pair_interaction_potential;
         let residual = usable_delta
             + resonant_delta
             + structural_delta
+            + pair_potential_delta
             + self.work_expended
             + self.heat_dissipated
             + self.world_tone_energy_escaped
@@ -1206,6 +1216,8 @@ mod tests {
             current_resonant_energy: 0.0,
             initial_structural_energy: 0.0,
             current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
@@ -1231,6 +1243,8 @@ mod tests {
             current_resonant_energy: 3.0,
             initial_structural_energy: 4.0,
             current_structural_energy: 4.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 5.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
@@ -1260,6 +1274,8 @@ mod tests {
             current_resonant_energy: 4.0,
             initial_structural_energy: 0.0,
             current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: ledger.total_external_energy_input,
             world_tone_energy_escaped: ledger.total_world_tone_energy_escaped,
             other_energy_released: 0.0,
@@ -1403,6 +1419,8 @@ mod tests {
             current_resonant_energy: 0.0,
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 7.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
@@ -1422,6 +1440,8 @@ mod tests {
             current_resonant_energy: 0.0,
             initial_structural_energy: 5.0,
             current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
@@ -1441,6 +1461,8 @@ mod tests {
             current_resonant_energy: 0.0,
             initial_structural_energy: 0.0,
             current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 1.0,
@@ -1460,6 +1482,8 @@ mod tests {
             current_resonant_energy: 0.0,
             initial_structural_energy: 8.0,
             current_structural_energy: 9.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
             external_energy_input: 7.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
