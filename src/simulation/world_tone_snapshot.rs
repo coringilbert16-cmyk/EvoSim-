@@ -919,25 +919,21 @@ fn owner_relative_physical_material(
     Some(world_material)
 }
 
-/// Recompute the signed world pair-potential inventory from the physical
-/// world, including every other body as an occluder for each pair. This is an
-/// intentionally independent oracle; it is not yet a tick-loop path.
-#[allow(dead_code)] // Staged for inventory verification before movement/chemistry use.
-pub(crate) fn world_pair_potential_inventory_components(
-    simulation: &Simulation,
+fn world_pair_potential_components_for_bodies(
+    bodies: &[PhysicalMaterial],
+    resonant_indices: &[usize],
+    catalog: &[BaseResource],
+    tick: u64,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
-    let catalog = &simulation.environment.catalog;
     let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
-
     for (first_position, &first) in resonant_indices.iter().enumerate() {
         for &second in resonant_indices.iter().skip(first_position + 1) {
             let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
                 &bodies[first],
                 &bodies[second],
-                &bodies,
+                bodies,
                 catalog,
-                simulation.tick,
+                tick,
             )?;
             for component in pair {
                 if let Some(existing) = total.iter_mut().find(|existing| {
@@ -960,6 +956,153 @@ pub(crate) fn world_pair_potential_inventory_components(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     Some(total)
+}
+
+/// Recompute the signed world pair-potential inventory from the physical
+/// world, including every other body as an occluder for each pair. This is an
+/// intentionally independent oracle; it is not yet a tick-loop path.
+#[allow(dead_code)] // Staged for inventory verification before movement/chemistry use.
+pub(crate) fn world_pair_potential_inventory_components(
+    simulation: &Simulation,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
+    world_pair_potential_components_for_bodies(
+        &bodies,
+        &resonant_indices,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+}
+
+/// Translate one already world-resolved physical body without changing its
+/// material identity or shape. Stored/attached bodies are included because
+/// their positions can alter the visibility of other resonant pairs.
+fn translate_pair_potential_body(
+    body: &PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) -> Option<PhysicalMaterial> {
+    if !dx.is_finite() || !dy.is_finite() || body.owner_relative_origin.is_some() {
+        return None;
+    }
+    let mut translated = body.clone();
+    for placement in translated.placements.as_mut()? {
+        placement.x += dx;
+        placement.y += dy;
+        if !placement.x.is_finite() || !placement.y.is_finite() {
+            return None;
+        }
+    }
+    Some(translated)
+}
+
+/// Complete-world force oracle. Each component is the negative translational
+/// gradient of the *same* unordered-pair potential inventory. Forces are
+/// returned for every physical body, not just resonant participants, so a
+/// non-emitting blocker receives its reaction contribution when moving it
+/// changes the visibility of another pair.
+///
+/// This deliberately uses centered finite differences and rebuilds the world
+/// potential for each perturbation. It is a correctness oracle for small
+/// worlds, not a production tick-loop implementation; caching and a measured
+/// broad phase are required before applying it to the 128-body experiment.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct WorldPairPotentialGradient {
+    pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
+    /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
+    pub(crate) body_forces: Vec<(f64, f64)>,
+}
+
+#[allow(dead_code)] // Correctness oracle; production use is gated on caching/benchmarking.
+pub(crate) fn world_pair_potential_gradient(
+    simulation: &Simulation,
+) -> Option<WorldPairPotentialGradient> {
+    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
+    world_pair_potential_gradient_for_bodies(
+        &bodies,
+        &resonant_indices,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+}
+
+fn world_pair_potential_gradient_for_bodies(
+    bodies: &[PhysicalMaterial],
+    resonant_indices: &[usize],
+    catalog: &[BaseResource],
+    tick: u64,
+) -> Option<WorldPairPotentialGradient> {
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let components =
+        world_pair_potential_components_for_bodies(bodies, resonant_indices, catalog, tick)?;
+    let base_potential = components.iter().map(|component| component.energy).sum::<f64>();
+    if !base_potential.is_finite() {
+        return None;
+    }
+
+    let mut body_forces = vec![(0.0, 0.0); bodies.len()];
+    for body_index in 0..bodies.len() {
+        let mut translated = bodies.to_vec();
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], DIFFERENCE_STEP, 0.0)?;
+        let plus_x = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], -DIFFERENCE_STEP, 0.0)?;
+        let minus_x = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], 0.0, DIFFERENCE_STEP)?;
+        let plus_y = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        translated[body_index] =
+            translate_pair_potential_body(&bodies[body_index], 0.0, -DIFFERENCE_STEP)?;
+        let minus_y = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        let force_x = -(plus_x - minus_x) / (2.0 * DIFFERENCE_STEP);
+        let force_y = -(plus_y - minus_y) / (2.0 * DIFFERENCE_STEP);
+        if !force_x.is_finite() || !force_y.is_finite() {
+            return None;
+        }
+        body_forces[body_index] = (force_x, force_y);
+    }
+
+    Some(WorldPairPotentialGradient {
+        components,
+        body_forces,
+    })
 }
 
 #[cfg(test)]
@@ -1123,6 +1266,94 @@ mod tests {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
         assert_eq!(oracle, independently_summed);
+    }
+
+    #[test]
+    fn world_pair_gradient_matches_isolated_pair_and_balances_reaction_forces() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Hydrogen", 4.0, 0.0),
+        ];
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &catalog,
+            0,
+        )
+        .expect("the isolated world pair should have a finite complete gradient");
+        let (force_on_a, force_on_b) = crate::harmonics::resonance_pair_force(
+            &bodies[0],
+            &bodies[1],
+            &catalog,
+            0,
+        )
+        .expect("the isolated pair should have a gradient-derived force");
+
+        assert_eq!(gradient.body_forces.len(), 2);
+        assert!((gradient.body_forces[0].0 - force_on_a.0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 - force_on_a.1).abs() < 1e-8);
+        assert!((gradient.body_forces[1].0 - force_on_b.0).abs() < 1e-8);
+        assert!((gradient.body_forces[1].1 - force_on_b.1).abs() < 1e-8);
+        assert!((gradient.body_forces[0].0 + gradient.body_forces[1].0).abs() < 1e-8);
+        assert!((gradient.body_forces[0].1 + gradient.body_forces[1].1).abs() < 1e-8);
+    }
+
+    #[test]
+    fn non_resonant_occluding_body_receives_its_world_potential_reaction() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should have valid realized geometry")
+        };
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Carbon", 8.0, 0.0),
+            make_material("Nitrogen", 4.0, 0.4),
+        ];
+        // The blocker remains physical and occluding but is not a resonance
+        // source or receiver until released from storage.
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &catalog,
+            0,
+        )
+        .expect("the complete world potential should have a finite gradient");
+
+        let blocker_force = gradient.body_forces[2];
+        assert!(
+            blocker_force.0.hypot(blocker_force.1) > 1e-8,
+            "moving the blocker changes the visible pair potential, so it must receive a reaction force"
+        );
+        let net_force = gradient
+            .body_forces
+            .iter()
+            .fold((0.0, 0.0), |sum, force| (sum.0 + force.0, sum.1 + force.1));
+        assert!(
+            net_force.0.abs() < 1e-6 && net_force.1.abs() < 1e-6,
+            "translational invariance requires the complete-world forces, including the blocker, to balance"
+        );
     }
 
     #[test]
