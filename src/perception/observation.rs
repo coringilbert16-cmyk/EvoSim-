@@ -323,23 +323,37 @@ impl WorldObservation {
                     .collect()
             }
         } else {
-            simulation
-                .environment
-                .field
+            let field = &simulation.environment.field;
+            field
                 .cells
                 .iter()
                 .enumerate()
                 .filter_map(|(cell_index, cell)| {
+                    let revision = field.cell_revisions[cell_index];
+                    let known_revision = known_cells
+                        .iter()
+                        .find(|(known_index, _)| *known_index == cell_index)
+                        .map(|(_, revision)| *revision);
+                    let (x, y) = field.cell_center(cell_index);
+                    if known_revision == Some(revision) {
+                        return Some(WorldFieldObservation {
+                            cell_index,
+                            x,
+                            y,
+                            revision,
+                            materials: None,
+                            physical_parts: None,
+                        });
+                    }
                     let materials = cell.total_material();
-                    if materials.is_empty() {
+                    if materials.is_empty() && known_revision.is_none() {
                         return None;
                     }
-                    let (x, y) = simulation.environment.field.cell_center(cell_index);
                     Some(WorldFieldObservation {
                         cell_index,
                         x,
                         y,
-                        revision: simulation.environment.field.cell_revisions[cell_index],
+                        revision,
                         materials: Some(materials),
                         physical_parts: Some(observe_field_physical_parts(
                             cell,
