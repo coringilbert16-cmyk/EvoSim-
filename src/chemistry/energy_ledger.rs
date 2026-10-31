@@ -1088,6 +1088,36 @@ mod tests {
     }
 
     #[test]
+    fn pair_release_uses_another_compatible_holder_before_dissipating() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let mut full_resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        for index in 0..8 {
+            assert!(full_resonance.deposit(100.0 + index as f64 * 100.0, 1.0));
+        }
+        let mut available_resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        ledger.total_resonant_energy_held = 8.0;
+        ledger.initial_resonant_energy_held = 8.0;
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 2_000.0,
+            energy: -2.5,
+        }];
+
+        let mut holders = [&mut full_resonance, &mut available_resonance];
+        assert!(settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            &mut holders,
+            &components,
+        ));
+        assert_eq!(full_resonance.total_energy(), Some(8.0));
+        assert_eq!(available_resonance.total_energy(), Some(2.5));
+        assert_eq!(ledger.total_resonant_energy_held, 10.5);
+        assert_eq!(ledger.total_pair_interaction_potential_held, -2.5);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
     fn invalid_pair_potential_components_are_rejected_without_mutation() {
         let mut ledger = EnergyLedger::default();
         let before = ledger;
