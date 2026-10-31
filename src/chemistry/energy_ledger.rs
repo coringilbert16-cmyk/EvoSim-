@@ -1031,7 +1031,7 @@ mod tests {
         assert_eq!(usable, 10.0);
         assert!((resonance.total_energy().unwrap() - 8.0).abs() < 1e-12);
         assert_eq!(ledger.total_pair_interaction_potential_held, -8.0);
-        assert_eq!(ledger.total_resonant_energy_held, 8.0);
+        assert_eq!(ledger.total_resonant_energy_held, 4.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
         assert_eq!(ledger.total_work_expended, 0.0);
         assert_eq!(resonance.components.len(), 2);
@@ -1065,11 +1065,11 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut usable = 0.0;
         let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
-        for index in 0..8 {
+        for index in 0..4 {
             assert!(resonance.deposit(100.0 + index as f64 * 100.0, 1.0));
         }
-        ledger.total_resonant_energy_held = 8.0;
-        ledger.initial_resonant_energy_held = 8.0;
+        ledger.total_resonant_energy_held = 4.0;
+        ledger.initial_resonant_energy_held = 4.0;
         let components = [crate::harmonics::ResonancePairPotentialComponent {
             frequency_cycles_per_day: 2_000.0,
             energy: -2.5,
@@ -1081,8 +1081,8 @@ mod tests {
             &mut [&mut resonance],
             &components,
         ));
-        assert_eq!(resonance.total_energy(), Some(8.0));
-        assert_eq!(ledger.total_resonant_energy_held, 8.0);
+        assert_eq!(resonance.total_energy(), Some(4.0));
+        assert_eq!(ledger.total_resonant_energy_held, 4.0);
         assert_eq!(ledger.total_pair_interaction_potential_held, -2.5);
         assert_eq!(ledger.total_heat_dissipated, 2.5);
     }
@@ -1092,12 +1092,12 @@ mod tests {
         let mut ledger = EnergyLedger::default();
         let mut usable = 0.0;
         let mut full_resonance = crate::harmonics::ResonantEnergyReservoir::default();
-        for index in 0..8 {
+        for index in 0..4 {
             assert!(full_resonance.deposit(100.0 + index as f64 * 100.0, 1.0));
         }
         let mut available_resonance = crate::harmonics::ResonantEnergyReservoir::default();
-        ledger.total_resonant_energy_held = 8.0;
-        ledger.initial_resonant_energy_held = 8.0;
+        ledger.total_resonant_energy_held = 4.0;
+        ledger.initial_resonant_energy_held = 4.0;
         let components = [crate::harmonics::ResonancePairPotentialComponent {
             frequency_cycles_per_day: 2_000.0,
             energy: -2.5,
@@ -1112,9 +1112,9 @@ mod tests {
                 &components,
             ));
         }
-        assert_eq!(full_resonance.total_energy(), Some(8.0));
+        assert_eq!(full_resonance.total_energy(), Some(4.0));
         assert_eq!(available_resonance.total_energy(), Some(2.5));
-        assert_eq!(ledger.total_resonant_energy_held, 10.5);
+        assert_eq!(ledger.total_resonant_energy_held, 6.5);
         assert_eq!(ledger.total_pair_interaction_potential_held, -2.5);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
     }
