@@ -1716,3 +1716,23 @@ mod tests {
         assert!(spectrum.components.len() <= MAX_SPECTRAL_COMPONENTS);
     }
 }
+
+    #[test]
+    fn every_generated_harmonic_advances_from_the_shared_phase_clock() {
+        let tick = 137;
+        let drive_frequency = WORLD_TONE_CYCLES_PER_DAY;
+        let drive_phase = phase_at_tick(drive_frequency, tick);
+        let spectrum = material_response(properties(1.0, 4.0, 1.0), baselines(), drive_phase);
+
+        assert!(!spectrum.components.is_empty());
+        for component in &spectrum.components {
+            let expected_phase = phase_at_tick(component.frequency_cycles_per_day, tick);
+            assert!(
+                (component.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
+                    && (component.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
+                "harmonic at {} cycles/day did not follow the shared clock",
+                component.frequency_cycles_per_day
+            );
+        }
+    }
+}
