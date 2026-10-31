@@ -193,6 +193,41 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// One material's existing resonance aura as received at a realized
+/// boundary point on another physical material.
+///
+/// This is a pairwise reception sample, not a force or energy transaction.
+/// It preserves the receiver geometry needed for a later spatial interaction
+/// calculation without inventing a second field or perception radius.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
+pub(crate) struct MaterialAuraReception {
+    pub(crate) source_x: f64,
+    pub(crate) source_y: f64,
+    pub(crate) source_extent: f64,
+    pub(crate) receiver_x: f64,
+    pub(crate) receiver_y: f64,
+    pub(crate) receiver_normal_x: f64,
+    pub(crate) receiver_normal_y: f64,
+    pub(crate) projected_extent: f64,
+    /// Incident field before the receiver's oscillator response. Pair
+    /// interference compares this with the receiver's own emitted field;
+    /// using the responded spectrum here would apply the receiver phase lag twice.
+    pub(crate) incident_spectrum: ToneSpectrum,
+    /// Receiver response retained for perception/diagnostics.
+    pub(crate) spectrum: ToneSpectrum,
+    pub(crate) magnitude: f64,
+}
+
+/// One signed frequency contribution to a material pair's interaction
+/// potential. Signed energy is required so PR 4 can settle attractive and
+/// repulsive work against the matching retained-resonance frequency.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonancePairPotentialComponent {
+    pub(crate) frequency_cycles_per_day: f64,
+    pub(crate) energy: f64,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -593,6 +628,66 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
     Some(energy)
 }
 
+/// Cross-energy contributed by same-frequency components when two
+/// spectra are superposed as the model's existing complex phasors.
+///
+/// Different frequencies have no cycle-averaged cross term. This returns
+/// only the interference term (combined energy minus the two separate
+/// energies); it is not by itself a mechanical potential or force.
+#[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
+pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
+    let components = spectrum_cross_energy_components(a, b)?;
+    let energy = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+    energy.is_finite().then_some(energy)
+}
+
+/// Preserve the cross-energy term by frequency so conservative work can
+/// be withdrawn from or returned to a compatible resonance component.
+fn spectrum_cross_energy_components(
+    a: &ToneSpectrum,
+    b: &ToneSpectrum,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    spectrum_energy(a)?;
+    spectrum_energy(b)?;
+    let mut components = Vec::<ResonancePairPotentialComponent>::new();
+    for left in &a.components {
+        for right in &b.components {
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            let energy = 2.0
+                * left.amplitude
+                * right.amplitude
+                * (left.phase_radians - right.phase_radians).cos();
+            if !energy.is_finite() {
+                return None;
+            }
+            if let Some(existing) = components.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - left.frequency_cycles_per_day).abs() <= 1e-9
+            }) {
+                existing.energy += energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                components.push(ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: left.frequency_cycles_per_day,
+                    energy,
+                });
+            }
+        }
+    }
+    components.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(components)
+}
+
 /// Apply the existing material resonance and nonlinear response to every
 /// component of an incoming spectrum. The returned response keeps its natural
 /// response amplitude, but total energy cannot exceed the incoming spectrum.
@@ -939,6 +1034,416 @@ fn environmental_contribution(
         },
         received,
     ))
+}
+
+/// Receive one realized physical material's aura at another realized
+/// physical material's actual exposed constituent boundaries.
+///
+/// The source uses the same aggregate oscillator and mass scaling as the
+/// environmental aura. Receiver intervals, normals, and occlusion use the
+/// shared realized-shape visibility geometry for straight and curved boundaries.
+/// Distance attenuation remains the existing continuous 1/(1 + distance) law.
+/// The receiver's own oscillator response is applied after reception.
+///
+/// Each sample carries its exact projected boundary extent. Amplitude scales
+/// with the square root of that extent because the model's signal energy is
+/// amplitude squared. These samples are not yet a pair potential or force.
+#[allow(dead_code)] // Staged for the force/potential work in this PR.
+pub(crate) fn material_aura_receptions(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_occluders(source, receiver, &[], catalog, tick)
+}
+
+/// Pairwise reception with all other physical bodies retained as occluders.
+/// The caller supplies only bodies distinct from source and receiver; they
+/// block visibility but are not themselves sampled as receivers.
+pub(crate) fn material_aura_receptions_with_occluders(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    // This API consumes world-resolved placements. Stored materials carrying
+    // an owner-relative origin must be transformed by their owner first.
+    if source.owner_relative_origin.is_some()
+        || receiver.owner_relative_origin.is_some()
+        || occluders
+            .iter()
+            .any(|material| material.owner_relative_origin.is_some())
+    {
+        return None;
+    }
+    if std::ptr::eq(source, receiver) {
+        return Some(Vec::new());
+    }
+    let (source_x, source_y, source_extent, emitted) =
+        environmental_material_resonance(source, catalog, tick)?;
+    let receiver_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
+    let source_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
+    if source_geometry.parts.is_empty() {
+        return None;
+    }
+
+    // Keep the receiver as the only target while every other body remains
+    // in the visibility set as a possible occluder. The source itself is
+    // deliberately excluded: its aura originates inside that body's geometry.
+    let mut receiver_bodies = Vec::with_capacity(1 + occluders.len());
+    receiver_bodies.push(receiver_geometry);
+    for occluder in occluders {
+        if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
+            continue;
+        }
+        receiver_bodies.push(
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                occluder, catalog,
+            )?,
+        );
+    }
+    let target_body_indices = [0];
+    let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?;
+    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?;
+
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_properties = receiver.material.weighted_properties(catalog);
+    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    if source_mass_scale <= f64::EPSILON {
+        return Some(Vec::new());
+    }
+
+    let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
+    let mut receive_at =
+        |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
+            if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+                return Some(());
+            }
+            let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return Some(());
+            }
+            let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
+            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+                return Some(());
+            }
+            let mut incident = ToneSpectrum::empty();
+            add_spectrum(&mut incident, &emitted, attenuation);
+            incident.retain_strongest();
+            let mut received =
+                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            received.retain_strongest();
+            let magnitude = spectrum_magnitude(&received);
+            // Geometric reception is independent of whether this material can
+            // respond to the incident field. Preserve the raw incident sample
+            // for pair interaction even when (for example) cohesion is zero
+            // and the receiver's own response spectrum is empty.
+            if spectrum_magnitude(&incident) > f64::EPSILON {
+                receptions.push(MaterialAuraReception {
+                    source_x,
+                    source_y,
+                    source_extent,
+                    receiver_x,
+                    receiver_y,
+                    receiver_normal_x: normal_x,
+                    receiver_normal_y: normal_y,
+                    projected_extent,
+                    incident_spectrum: incident,
+                    spectrum: received,
+                    magnitude,
+                });
+            }
+            Some(())
+        };
+
+    for interval in straight_intervals {
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
+        let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
+        let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            interval.outward_normal.0,
+            interval.outward_normal.1,
+            projected_extent,
+        )?;
+    }
+
+    for interval in curved_intervals {
+        let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
+            interval.arc,
+            (source_x, source_y),
+        )?;
+        let midpoint_angle = interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
+        let (normal_y, normal_x) = midpoint_angle.sin_cos();
+        let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
+        let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
+        receive_at(receiver_x, receiver_y, normal_x, normal_y, projected_extent)?;
+    }
+
+    Some(receptions)
+}
+
+/// Integrate the interference between an incoming aura and the receiver's
+/// own emitted aura over the receiver's exposed boundary samples.
+///
+/// The incident spectrum is intentionally used here, not the receiver-
+/// responded spectrum: the receiver's own emission already contains its
+/// oscillator phase lag. Comparing against the responded spectrum would apply
+/// that lag a second time and erase the expected same-material phase relation.
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
+fn directional_resonance_pair_potential_components(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    directional_resonance_pair_potential_components_with_occluders(
+        source,
+        receiver,
+        &[],
+        catalog,
+        tick,
+    )
+}
+
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
+fn directional_resonance_pair_potential_components_with_occluders(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let receptions =
+        material_aura_receptions_with_occluders(source, receiver, occluders, catalog, tick)?;
+    if receptions.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let (receiver_x, receiver_y, _, receiver_emission) =
+        environmental_material_resonance(receiver, catalog, tick)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_mass_scale =
+        environmental_mass_scale(receiver.material.mass(catalog), baselines.mass);
+    if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
+        return None;
+    }
+
+    let mut potential = Vec::<ResonancePairPotentialComponent>::new();
+    for sample in receptions {
+        let local_distance = (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
+        if !local_distance.is_finite() {
+            return None;
+        }
+        // Both fields are amplitudes, so the same square-root projected
+        // extent is applied to the receiver's own boundary field. The
+        // incident spectrum already contains its matching extent factor.
+        let local_scale =
+            receiver_mass_scale * sample.projected_extent.sqrt() / (1.0 + local_distance);
+        if !local_scale.is_finite() {
+            return None;
+        }
+        let mut local_field = ToneSpectrum::empty();
+        add_spectrum(&mut local_field, &receiver_emission, local_scale);
+        local_field.retain_strongest();
+        for contribution in
+            spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
+        {
+            if let Some(existing) = potential.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                existing.energy += contribution.energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                potential.push(contribution);
+            }
+        }
+    }
+    potential.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(potential)
+}
+
+/// One symmetric resonance-derived pair potential for an isolated pair,
+/// retained by frequency so energy settlement can use the same spectral
+/// compatibility as the reservoir. If third-party bodies can occlude the pair,
+/// use the occluder-aware variant instead.
+#[allow(dead_code)] // Staged for PR 4 frequency-resolved energy settlement.
+pub(crate) fn resonance_pair_potential_components(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    resonance_pair_potential_components_with_occluders(a, b, &[], catalog, tick)
+}
+
+/// Frequency-resolved symmetric pair potential with third-party physical
+/// bodies blocking the source-to-receiver boundary paths.
+#[allow(dead_code)] // Staged for PR 4 frequency-resolved energy settlement.
+pub(crate) fn resonance_pair_potential_components_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    if std::ptr::eq(a, b) {
+        return Some(Vec::new());
+    }
+    let a_to_b = directional_resonance_pair_potential_components_with_occluders(
+        a, b, occluders, catalog, tick,
+    )?;
+    let b_to_a = directional_resonance_pair_potential_components_with_occluders(
+        b, a, occluders, catalog, tick,
+    )?;
+    let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
+    for component in a_to_b.iter().chain(b_to_a.iter()) {
+        if let Some(existing) = symmetric.iter_mut().find(|existing| {
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs() <= 1e-9
+        }) {
+            existing.energy += 0.5 * component.energy;
+            if !existing.energy.is_finite() {
+                return None;
+            }
+        } else {
+            symmetric.push(ResonancePairPotentialComponent {
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
+                energy: 0.5 * component.energy,
+            });
+        }
+    }
+    symmetric.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(symmetric)
+}
+
+/// Scalar view of the isolated-pair potential. PR 4 should use the
+/// frequency-resolved form when settling energy into/out of resonance stores.
+/// If third-party bodies can occlude the pair, use the occluder-aware variant.
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
+pub(crate) fn resonance_pair_potential(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<f64> {
+    resonance_pair_potential_with_occluders(a, b, &[], catalog, tick)
+}
+
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
+pub(crate) fn resonance_pair_potential_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<f64> {
+    let components =
+        resonance_pair_potential_components_with_occluders(a, b, occluders, catalog, tick)?;
+    let potential = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+    potential.is_finite().then_some(potential)
+}
+
+#[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
+fn translated_physical_material(
+    physical: &crate::physical_material::PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) -> Option<crate::physical_material::PhysicalMaterial> {
+    if !dx.is_finite() || !dy.is_finite() {
+        return None;
+    }
+    let mut translated = physical.clone();
+    let placements = translated.placements.as_mut()?;
+    for placement in placements {
+        placement.x += dx;
+        placement.y += dy;
+        if !placement.x.is_finite() || !placement.y.is_finite() {
+            return None;
+        }
+    }
+    Some(translated)
+}
+
+/// Isolated-pair force derived from the spatial gradient of the single
+/// symmetric potential. The caller must ensure no third-party body can occlude
+/// the pair; use the occluder-aware variant otherwise. The centered difference
+/// is a numerical derivative only, not an additional physical force law.
+#[allow(dead_code)] // Staged for PR 4 movement and chemistry-force consumers.
+pub(crate) fn resonance_pair_force(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<((f64, f64), (f64, f64))> {
+    resonance_pair_force_with_occluders(a, b, &[], catalog, tick)
+}
+
+#[allow(dead_code)] // Staged for PR 4 movement and chemistry-force consumers.
+pub(crate) fn resonance_pair_force_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<((f64, f64), (f64, f64))> {
+    // A blocker makes this a three-body potential: translating only B while
+    // assigning the opposite gradient to A would violate the actual gradient
+    // with respect to A. Until the blocker also receives its derived force,
+    // fail closed rather than claim a false action/reaction pair.
+    if !occluders.is_empty() {
+        return None;
+    }
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let potential = resonance_pair_potential_with_occluders(a, b, occluders, catalog, tick)?;
+    let b_plus_x = translated_physical_material(b, DIFFERENCE_STEP, 0.0)?;
+    let b_minus_x = translated_physical_material(b, -DIFFERENCE_STEP, 0.0)?;
+    let b_plus_y = translated_physical_material(b, 0.0, DIFFERENCE_STEP)?;
+    let b_minus_y = translated_physical_material(b, 0.0, -DIFFERENCE_STEP)?;
+
+    let gradient_x =
+        (resonance_pair_potential_with_occluders(a, &b_plus_x, occluders, catalog, tick)?
+            - resonance_pair_potential_with_occluders(a, &b_minus_x, occluders, catalog, tick)?)
+            / (2.0 * DIFFERENCE_STEP);
+    let gradient_y =
+        (resonance_pair_potential_with_occluders(a, &b_plus_y, occluders, catalog, tick)?
+            - resonance_pair_potential_with_occluders(a, &b_minus_y, occluders, catalog, tick)?)
+            / (2.0 * DIFFERENCE_STEP);
+    if !gradient_x.is_finite() || !gradient_y.is_finite() || !potential.is_finite() {
+        return None;
+    }
+
+    // F_b = -grad_b(U); translational invariance gives F_a = -F_b.
+    let force_on_b = (-gradient_x, -gradient_y);
+    let force_on_a = (gradient_x, gradient_y);
+    Some((force_on_a, force_on_b))
 }
 
 fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
@@ -1579,6 +2084,548 @@ mod tests {
             material_response(properties(1.0, f64::NAN, 1.0), baselines(), 0.0,)
                 .components
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn spectrum_cross_energy_tracks_phase_and_ignores_distinct_frequencies() {
+        let make = |phase_radians: f64, frequency_cycles_per_day: f64| ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day,
+                amplitude: 0.5,
+                phase_radians,
+            }],
+        };
+        let in_phase = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
+            .expect("valid in-phase spectra should be accepted");
+        let opposite = spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::PI, 440.0))
+            .expect("valid opposite-phase spectra should be accepted");
+        let quadrature =
+            spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::FRAC_PI_2, 440.0))
+                .expect("valid quadrature spectra should be accepted");
+        let different_frequency = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
+            .expect("valid distinct-frequency spectra should be accepted");
+
+        assert!((in_phase - 0.5).abs() < 1e-12);
+        assert!((opposite + 0.5).abs() < 1e-12);
+        assert!(quadrature.abs() < 1e-12);
+        assert!(different_frequency.abs() < 1e-12);
+    }
+
+    #[test]
+    fn spectrum_cross_energy_is_symmetric_and_fails_closed_for_invalid_input() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.7,
+                phase_radians: 0.3,
+            }],
+        };
+        let b = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.2,
+                phase_radians: -0.4,
+            }],
+        };
+        let ab = spectrum_cross_energy(&a, &b).expect("valid spectra should be accepted");
+        let ba = spectrum_cross_energy(&b, &a).expect("valid spectra should be accepted");
+        assert!((ab - ba).abs() < 1e-12);
+
+        let invalid = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: f64::NAN,
+                phase_radians: 0.0,
+            }],
+        };
+        assert!(spectrum_cross_energy(&a, &invalid).is_none());
+    }
+
+    #[test]
+    fn material_aura_reception_uses_realized_geometry_and_is_reciprocal() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0);
+        let right = make_material(4.0);
+        let farther = make_material(8.0);
+
+        let left_to_right = material_aura_receptions(&left, &right, &catalog, 0)
+            .expect("valid pair should produce aura reception");
+        let right_to_left = material_aura_receptions(&right, &left, &catalog, 0)
+            .expect("reverse pair should produce aura reception");
+        let left_to_farther = material_aura_receptions(&left, &farther, &catalog, 0)
+            .expect("farther pair should produce attenuated aura reception");
+
+        assert!(!left_to_right.is_empty());
+        assert!(!right_to_left.is_empty());
+        assert!(!left_to_farther.is_empty());
+        assert!(left_to_right.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0).abs()
+                    < 1e-6
+        }));
+        assert!(right_to_left.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0).abs()
+                    < 1e-6
+        }));
+
+        let total_received_energy = |samples: &[MaterialAuraReception]| {
+            samples
+                .iter()
+                .map(|sample| {
+                    spectrum_energy(&sample.spectrum).expect("received spectrum is valid")
+                })
+                .sum::<f64>()
+        };
+        let near_energy = total_received_energy(&left_to_right);
+        let reverse_energy = total_received_energy(&right_to_left);
+        let far_energy = total_received_energy(&left_to_farther);
+        assert!(near_energy > far_energy);
+        assert!(
+            (near_energy - reverse_energy).abs() < 1e-9,
+            "identical materials at equal separation should receive reciprocal energy"
+        );
+        assert!(left_to_right
+            .iter()
+            .all(|sample| sample.projected_extent > 0.0));
+        assert!(left_to_right.iter().all(|sample| {
+            sample
+                .spectrum
+                .components
+                .iter()
+                .all(|component| component.phase_radians.is_finite())
+        }));
+        assert!(material_aura_receptions(&left, &left, &catalog, 0)
+            .expect("self reception is a valid empty result")
+            .is_empty());
+    }
+
+    #[test]
+    fn circular_water_boundary_contributes_to_pair_reception() {
+        let catalog = crate::resources::default_catalog();
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: -4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let receiver = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Water", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("water should have a valid realized circular physical shape");
+
+        let receptions = material_aura_receptions(&source, &receiver, &catalog, 0)
+            .expect("circular receiver should support aura reception");
+        assert!(
+            !receptions.is_empty(),
+            "the exposed circular boundary should produce curved reception samples"
+        );
+        assert!(receptions.iter().all(|sample| {
+            !sample.incident_spectrum.components.is_empty()
+                && sample.spectrum.components.is_empty()
+                && sample.magnitude == 0.0
+        }), "zero-cohesion Water should retain geometric incident samples without inventing a material response");
+        assert!(receptions.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && sample.projected_extent.is_finite()
+                && sample.projected_extent > 0.0
+        }));
+        let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("circular pair should have a finite interaction potential");
+        assert!(potential.is_finite());
+    }
+
+    #[test]
+    fn pair_potential_remains_finite_at_contact_and_shallow_overlap() {
+        let catalog = crate::resources::default_catalog();
+        let make_carbon = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let source = make_carbon(0.0);
+
+        for separation in [2.0, 1.9] {
+            let receiver = make_carbon(separation);
+            let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+                .expect("contact and shallow overlap should remain a valid pair geometry");
+            assert!(
+                potential.is_finite(),
+                "pair potential must remain finite at separation {separation}"
+            );
+        }
+    }
+
+    #[test]
+    fn pair_reception_rejects_unresolved_owner_relative_materials() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let source = make_material(0.0);
+        let mut stored_receiver = make_material(4.0);
+        stored_receiver.owner_relative_origin = Some(crate::structure::Placement {
+            x: 100.0,
+            y: 50.0,
+            rotation_radians: 0.0,
+        });
+
+        assert!(material_aura_receptions(&source, &stored_receiver, &catalog, 0).is_none());
+    }
+
+    #[test]
+    fn resonance_pair_potential_is_symmetric_and_derives_balanced_force() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0, 0.0);
+        let near = make_material(4.0, 0.0);
+        let far = make_material(8.0, 0.0);
+
+        let near_ab = resonance_pair_potential(&left, &near, &catalog, 0)
+            .expect("valid near pair should have a potential");
+        let near_ba = resonance_pair_potential(&near, &left, &catalog, 0)
+            .expect("reversed near pair should have a potential");
+        let far_energy = resonance_pair_potential(&left, &far, &catalog, 0)
+            .expect("valid far pair should have a potential");
+        assert!(
+            near_ab > 0.0,
+            "in-phase material fields should add positive cross-energy"
+        );
+        assert!((near_ab - near_ba).abs() < 1e-10);
+        assert!(
+            near_ab > far_energy,
+            "the positive pair potential should decay with separation"
+        );
+
+        let shifted_left = translated_physical_material(&left, -13.0, 7.0)
+            .expect("left material should translate");
+        let shifted_near = translated_physical_material(&near, -13.0, 7.0)
+            .expect("right material should translate");
+        let translated_energy = resonance_pair_potential(&shifted_left, &shifted_near, &catalog, 0)
+            .expect("translated pair should have a potential");
+        assert!((near_ab - translated_energy).abs() < 1e-9);
+
+        let (force_on_left, force_on_near) = resonance_pair_force(&left, &near, &catalog, 0)
+            .expect("valid pair should have a gradient-derived force");
+        assert!(
+            force_on_near.0 > 0.0,
+            "positive decaying potential should repel"
+        );
+        assert!(
+            force_on_near.1.abs() < 1e-6,
+            "the symmetric horizontal pair has no vertical force"
+        );
+        assert!((force_on_left.0 + force_on_near.0).abs() < 1e-12);
+        assert!((force_on_left.1 + force_on_near.1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn stationary_pair_potential_is_invariant_as_shared_phase_clock_advances() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0);
+        let right = make_material(4.0);
+
+        let initial = resonance_pair_potential_components(&left, &right, &catalog, 0)
+            .expect("initial pair should have frequency-resolved potential");
+        let advanced = resonance_pair_potential_components(&left, &right, &catalog, 137)
+            .expect("advanced pair should have frequency-resolved potential");
+
+        assert_eq!(initial.len(), advanced.len());
+        for (before, after) in initial.iter().zip(&advanced) {
+            assert!(
+                (before.frequency_cycles_per_day - after.frequency_cycles_per_day).abs() < 1e-10
+            );
+            assert!(
+                (before.energy - after.energy).abs() < 1e-9,
+                "shared phase advance must not change a stationary pair's potential"
+            );
+        }
+    }
+
+    #[test]
+    fn occluded_pair_does_not_claim_an_unbalanced_two_body_force() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0);
+        let receiver = make_material("Carbon", 8.0);
+        let blocker = make_material("Nitrogen", 4.0);
+
+        assert!(resonance_pair_force_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&blocker),
+            &catalog,
+            0,
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn different_material_phase_response_can_produce_attraction() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let hydrogen = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("hydrogen should have a valid realized physical shape");
+
+        let potential = resonance_pair_potential(&carbon, &hydrogen, &catalog, 0)
+            .expect("valid unlike-material pair should have a potential");
+        assert!(
+            potential < 0.0,
+            "the unlike oscillator phases should produce a negative cross-energy"
+        );
+        let (_, force_on_hydrogen) = resonance_pair_force(&carbon, &hydrogen, &catalog, 0)
+            .expect("valid unlike-material pair should have a gradient-derived force");
+        assert!(
+            force_on_hydrogen.0 < 0.0,
+            "a negative decaying potential should attract the receiver toward the source"
+        );
+    }
+
+    #[test]
+    fn quadrature_material_fields_produce_a_neutral_pair_potential() {
+        let mut catalog = crate::resources::default_catalog();
+        for resource in &mut catalog {
+            resource.properties.mass = 1.0;
+            resource.properties.cohesion = 1.0;
+            resource.properties.reactivity = 1.0;
+        }
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("default catalog contains Carbon");
+        carbon.properties.cohesion = 2.0;
+        carbon.properties.reactivity = 0.0;
+        let hydrogen = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Hydrogen")
+            .expect("default catalog contains Hydrogen");
+        hydrogen.properties.cohesion = 7.0 / 6.0;
+
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let receiver = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("hydrogen should have a valid realized physical shape");
+
+        let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("valid quadrature pair should have a potential");
+        assert!(
+            potential.abs() < 1e-8,
+            "quadrature fields should contribute no cycle-averaged cross-energy"
+        );
+        let (force_on_source, force_on_receiver) =
+            resonance_pair_force(&source, &receiver, &catalog, 0)
+                .expect("valid quadrature pair should have a force");
+        assert!(force_on_source.0.abs() < 1e-6);
+        assert!(force_on_source.1.abs() < 1e-6);
+        assert!(force_on_receiver.0.abs() < 1e-6);
+        assert!(force_on_receiver.1.abs() < 1e-6);
+    }
+
+    #[test]
+    fn third_party_material_occludes_resonance_pair_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.0);
+
+        let unobstructed = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("unobstructed pair should have a potential");
+        let occluded = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&blocker),
+            &catalog,
+            0,
+        )
+        .expect("occluded pair should have a potential");
+        assert!(unobstructed > 0.0);
+        assert!(
+            occluded < unobstructed,
+            "a third-party physical body must reduce exposed resonance reception"
+        );
+    }
+
+    #[test]
+    fn pair_potential_tracks_full_partial_and_clear_visibility_transitions() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let unobstructed = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("unobstructed pair should have a potential");
+
+        let centered_blocker = make_material("Nitrogen", 4.0, 0.0);
+        let offset_blocker = make_material("Nitrogen", 4.0, 0.35);
+        let clear_blocker = make_material("Nitrogen", 4.0, 5.0);
+        let centered = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&centered_blocker),
+            &catalog,
+            0,
+        )
+        .expect("centered blocker should produce a finite potential");
+        let partial = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&offset_blocker),
+            &catalog,
+            0,
+        )
+        .expect("offset blocker should produce a finite potential");
+        let clear = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&clear_blocker),
+            &catalog,
+            0,
+        )
+        .expect("nonblocking body should produce a finite potential");
+
+        assert!(centered >= 0.0 && partial >= 0.0 && clear >= 0.0);
+        assert!(
+            centered < partial,
+            "partially exposed receiver should capture more than a fully shadowed receiver"
+        );
+        assert!(
+            partial < clear,
+            "clearer receiver visibility should increase the pair potential"
+        );
+        assert!(
+            (clear - unobstructed).abs() < 1e-9,
+            "a body outside the source-receiver visibility path must not change the pair potential"
         );
     }
 
