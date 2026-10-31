@@ -196,29 +196,6 @@ fn select_best_positive_work_contact(
                 {
                     continue;
                 }
-                let name_a = structure.units[unit_a]
-                    .material
-                    .parts
-                    .first()
-                    .map(|part| part.0.as_str());
-                let name_b = structure.units[unit_b]
-                    .material
-                    .parts
-                    .first()
-                    .map(|part| part.0.as_str());
-                let live_interface = name_a.zip(name_b).and_then(|(name_a, name_b)| {
-                    crate::geometry_reference_library::resolve_live_contact_candidate(
-                        name_a,
-                        &structure.units[unit_a],
-                        name_b,
-                        &structure.units[unit_b],
-                        evaluation.candidate,
-                        catalog,
-                    )
-                });
-                if live_interface.is_none() {
-                    continue;
-                }
                 return Some(SelectedContact {
                     unit_a,
                     unit_b,
