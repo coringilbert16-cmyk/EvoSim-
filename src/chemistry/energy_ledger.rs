@@ -458,7 +458,7 @@ impl EnergyInventorySnapshot {
 pub(crate) fn settle_pair_potential_change(
     ledger: &mut EnergyLedger,
     active_mover_usable_energy: &mut f64,
-    mut biological_resonance: Option<&mut crate::harmonics::ResonantEnergyReservoir>,
+    biological_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
     components: &[crate::harmonics::ResonancePairPotentialComponent],
 ) -> bool {
     if !active_mover_usable_energy.is_finite()
@@ -531,32 +531,65 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     }
 
-    let mut staged_resonance = biological_resonance.as_deref().cloned();
-    let original_resonance_total = match biological_resonance.as_deref() {
-        Some(reservoir) => match reservoir.total_energy() {
-            Some(total) => total,
-            None => return false,
-        },
-        None => 0.0,
+    for (index, holder) in biological_resonance_holders.iter().enumerate() {
+        if biological_resonance_holders[..index]
+            .iter()
+            .any(|previous| std::ptr::eq(*previous, **holder))
+        {
+            return false;
+        }
+    }
+    let original_resonance_total = biological_resonance_holders
+        .iter()
+        .map(|reservoir| reservoir.total_energy())
+        .collect::<Option<Vec<_>>>()
+        .map(|totals| totals.into_iter().sum::<f64>());
+    let Some(original_resonance_total) = original_resonance_total else {
+        return false;
     };
-    if let Some(staged) = staged_resonance.as_mut() {
-        for component in components.iter().filter(|component| component.energy < 0.0) {
-            let share = released * (-component.energy / negative_component_total);
-            if !share.is_finite() || share < 0.0 {
+    if !original_resonance_total.is_finite() || original_resonance_total < 0.0 {
+        return false;
+    }
+    let mut staged_resonance = biological_resonance_holders
+        .iter()
+        .map(|reservoir| (**reservoir).clone())
+        .collect::<Vec<_>>();
+    for component in components.iter().filter(|component| component.energy < 0.0) {
+        let share = released * (-component.energy / negative_component_total);
+        if !share.is_finite() || share < 0.0 {
+            return false;
+        }
+        let mut remaining = share;
+        for reservoir in &mut staged_resonance {
+            let before = match reservoir.total_energy() {
+                Some(total) => total,
+                None => return false,
+            };
+            if !reservoir.deposit(component.frequency_cycles_per_day, remaining) {
+                continue;
+            }
+            let after = match reservoir.total_energy() {
+                Some(total) => total,
+                None => return false,
+            };
+            let accepted = after - before;
+            if !accepted.is_finite() || accepted < 0.0 || accepted > remaining + EPSILON {
                 return false;
             }
-            // A full/invalid frequency store rejects this component without
-            // mutation; its share remains available for the heat fallback.
-            let _ = staged.deposit(component.frequency_cycles_per_day, share);
+            remaining = (remaining - accepted).max(0.0);
+            if remaining <= f64::EPSILON {
+                break;
+            }
         }
     }
 
-    let retained_total = match staged_resonance.as_ref() {
-        Some(reservoir) => match reservoir.total_energy() {
-            Some(total) => total,
-            None => return false,
-        },
-        None => 0.0,
+    let retained_total = staged_resonance
+        .iter()
+        .map(|reservoir| reservoir.total_energy())
+        .collect::<Option<Vec<_>>>()
+        .map(|totals| totals.into_iter().sum::<f64>());
+    let Some(retained_total) = retained_total else {
+        return false;
     };
     let retained_delta = retained_total - original_resonance_total;
     if !retained_delta.is_finite() || retained_delta < 0.0 || retained_delta > released + EPSILON {
@@ -590,8 +623,11 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     }
 
-    if let (Some(target), Some(staged)) = (biological_resonance.as_deref_mut(), staged_resonance) {
-        *target = staged;
+    for (target, staged) in biological_resonance_holders
+        .iter_mut()
+        .zip(staged_resonance.into_iter())
+    {
+        **target = staged;
     }
     ledger.total_pair_interaction_potential_held = next_pair_potential;
     ledger.total_resonant_energy_held = next_resonant_held;
@@ -933,7 +969,7 @@ mod tests {
         assert!(settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            Some(&mut resonance),
+            &mut [&mut resonance],
             &components,
         ));
         assert_eq!(usable, 7.0);
@@ -958,7 +994,7 @@ mod tests {
         assert!(!settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            Some(&mut resonance),
+            &mut [&mut resonance],
             &components,
         ));
         assert_eq!(usable, 2.0);
@@ -1015,7 +1051,7 @@ mod tests {
         assert!(settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            None,
+            &mut [],
             &components,
         ));
         assert_eq!(ledger.total_pair_interaction_potential_held, -5.0);
