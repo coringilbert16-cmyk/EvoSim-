@@ -1142,8 +1142,7 @@ fn directional_resonance_pair_potential(
 
     let mut potential = 0.0;
     for sample in receptions {
-        let local_distance =
-            (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
+        let local_distance = (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
         if !local_distance.is_finite() {
             return None;
         }
@@ -2032,9 +2031,15 @@ mod tests {
             .expect("reversed near pair should have a potential");
         let far_energy = resonance_pair_potential(&left, &far, &catalog, 0)
             .expect("valid far pair should have a potential");
-        assert!(near_ab > 0.0, "in-phase material fields should add positive cross-energy");
+        assert!(
+            near_ab > 0.0,
+            "in-phase material fields should add positive cross-energy"
+        );
         assert!((near_ab - near_ba).abs() < 1e-10);
-        assert!(near_ab > far_energy, "the positive pair potential should decay with separation");
+        assert!(
+            near_ab > far_energy,
+            "the positive pair potential should decay with separation"
+        );
 
         let shifted_left = translated_physical_material(&left, -13.0, 7.0)
             .expect("left material should translate");
@@ -2044,10 +2049,12 @@ mod tests {
             .expect("translated pair should have a potential");
         assert!((near_ab - translated_energy).abs() < 1e-9);
 
-        let (force_on_left, force_on_near) =
-            resonance_pair_force(&left, &near, &catalog, 0)
-                .expect("valid pair should have a gradient-derived force");
-        assert!(force_on_near.0 > 0.0, "positive decaying potential should repel");
+        let (force_on_left, force_on_near) = resonance_pair_force(&left, &near, &catalog, 0)
+            .expect("valid pair should have a gradient-derived force");
+        assert!(
+            force_on_near.0 > 0.0,
+            "positive decaying potential should repel"
+        );
         assert!(
             force_on_near.1.abs() < 1e-6,
             "the symmetric horizontal pair has no vertical force"
