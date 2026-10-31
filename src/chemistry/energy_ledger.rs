@@ -370,8 +370,6 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) current_resonant_energy: f64,
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
-            initial_pair_interaction_potential: 0.0,
-            current_pair_interaction_potential: 0.0,
     /// Signed pair-interaction potential relative to the tick-zero reference.
     pub(crate) initial_pair_interaction_potential: f64,
     pub(crate) current_pair_interaction_potential: f64,
