@@ -631,11 +631,17 @@ mod tests {
     #[test]
     fn environmental_transport_updates_observed_resource_positions() {
         let mut fixture = crate::environment_chemistry_experiment::build(42);
-        let before = WorldObservation::from_simulation(&fixture.simulation)
+        let mut before = WorldObservation::from_simulation(&fixture.simulation)
             .field
             .into_iter()
             .flat_map(|cell| cell.physical_parts.unwrap_or_default())
             .collect::<Vec<_>>();
+        before.sort_by(|a, b| {
+            a.resource
+                .cmp(&b.resource)
+                .then_with(|| a.x.total_cmp(&b.x))
+                .then_with(|| a.y.total_cmp(&b.y))
+        });
         let catalog = fixture.simulation.environment.catalog.clone();
         let moved = crate::environment_flow::transport_field(
             &mut fixture.simulation.environment.field,
@@ -645,18 +651,25 @@ mod tests {
         );
         assert!(moved > 0, "the experiment's environmental current must transport resources");
 
-        let after = WorldObservation::from_simulation(&fixture.simulation)
+        let mut after = WorldObservation::from_simulation(&fixture.simulation)
             .field
             .into_iter()
             .flat_map(|cell| cell.physical_parts.unwrap_or_default())
             .collect::<Vec<_>>();
+        after.sort_by(|a, b| {
+            a.resource
+                .cmp(&b.resource)
+                .then_with(|| a.x.total_cmp(&b.x))
+                .then_with(|| a.y.total_cmp(&b.y))
+        });
         assert_eq!(before.len(), after.len());
-        assert!(before.iter().any(|previous| {
-            after.iter().any(|current| {
+        assert!(
+            before.iter().zip(&after).any(|(previous, current)| {
                 previous.resource == current.resource
                     && (previous.x - current.x).hypot(previous.y - current.y) > 1e-9
-            })
-        }), "the updated world observation must expose moved resource positions");
+            }),
+            "the updated world observation must expose moved resource positions"
+        );
     }
 
     #[test]
