@@ -2240,16 +2240,14 @@ mod tests {
                 &receiver, &catalog,
             )
             .expect("water receiver geometry should resolve");
-        let curved_intervals =
-            crate::source_exposure::visible_circular_arc_intervals_for_targets(
-                (-4.0, 0.0),
-                &[receiver_geometry],
-                &[0],
-            )
-            .expect("water circular boundary visibility should resolve");
-        let (_, _, _, emitted) =
-            environmental_material_resonance(&source, &catalog, 0)
-                .expect("carbon source should emit a valid spectrum");
+        let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
+            (-4.0, 0.0),
+            &[receiver_geometry],
+            &[0],
+        )
+        .expect("water circular boundary visibility should resolve");
+        let (_, _, _, emitted) = environmental_material_resonance(&source, &catalog, 0)
+            .expect("carbon source should emit a valid spectrum");
         let baselines = ResourceBaselines::from_catalog(&catalog);
         let source_mass_scale =
             environmental_mass_scale(source.material.mass(&catalog), baselines.mass);
