@@ -102,6 +102,7 @@
     let noLivingOrganisms = false;
     let historyViewTick = null;
     let historyTicks = [];
+    let timelineScrubbing = false;
     const worldCache = {
       organisms: new Map(),
       field: new Map()
@@ -138,7 +139,7 @@
         slider.min = historyTicks.length ? historyTicks[0] : 0;
         slider.max = runtimeStatus.tick ?? 0;
         slider.step = 1;
-        slider.value = historyViewTick ?? runtimeStatus.tick ?? 0;
+        if (!timelineScrubbing) slider.value = historyViewTick ?? runtimeStatus.tick ?? 0;
         updateTimeline();
         updateControls();
         return runtimeStatus;
@@ -153,6 +154,10 @@
       const label = document.getElementById('timeline-label');
       const liveButton = document.getElementById('live-follow');
       if (liveButton) liveButton.hidden = historyViewTick == null;
+      if (timelineScrubbing) {
+        label.textContent = 'Seek to tick ' + slider.value;
+        return;
+      }
       if (!historyTicks.length) { label.textContent = 'No history'; return; }
       const tick = historyViewTick ?? runtimeStatus?.tick ?? Number(slider.value);
       label.textContent = historyViewTick == null
@@ -258,9 +263,11 @@
     // The playhead addresses every retained simulation tick. Seeking changes
     // authoritative state; it does not merely display a stored screenshot.
     document.getElementById('history').addEventListener('input', event => {
+      timelineScrubbing = true;
       document.getElementById('timeline-label').textContent = 'Seek to tick ' + event.target.value;
     });
     document.getElementById('history').addEventListener('change', event => {
+      timelineScrubbing = false;
       const tick = Number(event.target.value);
       if (Number.isSafeInteger(tick)) loadHistoricalWorld(tick);
     });
