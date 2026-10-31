@@ -1001,6 +1001,94 @@ mod tests {
     }
 
     #[test]
+    fn world_pair_potential_oracle_recomputes_all_bodies_with_complete_occlusion() {
+        let mut simulation = Simulation::new(77, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                0.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+
+        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
+            .expect("the complete physical world should produce a valid exposure snapshot");
+        let bodies = world_physical_materials_for_oracle(&simulation)
+            .expect("the independent oracle should reconstruct all physical body classes");
+        assert_eq!(
+            bodies.len(),
+            snapshot.occluder_count,
+            "the oracle and world-tone snapshot must enumerate the same realized bodies"
+        );
+        assert_eq!(bodies.len(), 4, "one organism plus three field bodies are expected");
+
+        let oracle = world_pair_potential_inventory_components(&simulation)
+            .expect("every unordered pair should have a finite occlusion-aware potential");
+        assert!(
+            !oracle.is_empty(),
+            "the world pair inventory should retain frequency-resolved components"
+        );
+        assert!(oracle.iter().all(|component| {
+            component.frequency_cycles_per_day.is_finite()
+                && component.frequency_cycles_per_day > 0.0
+                && component.energy.is_finite()
+        }));
+        assert!(oracle.windows(2).all(|pair| {
+            pair[0].frequency_cycles_per_day < pair[1].frequency_cycles_per_day
+        }));
+
+        let mut independently_summed = Vec::<
+            crate::harmonics::ResonancePairPotentialComponent,
+        >::new();
+        for first in 0..bodies.len() {
+            for second in (first + 1)..bodies.len() {
+                let pair =
+                    crate::harmonics::resonance_pair_potential_components_with_occluders(
+                        &bodies[first],
+                        &bodies[second],
+                        &bodies,
+                        &catalog,
+                        simulation.tick,
+                    )
+                    .expect("each pair should include the remaining bodies as blockers");
+                for component in pair {
+                    if let Some(existing) = independently_summed.iter_mut().find(|existing| {
+                        (existing.frequency_cycles_per_day
+                            - component.frequency_cycles_per_day)
+                            .abs()
+                            <= 1e-9
+                    }) {
+                        existing.energy += component.energy;
+                    } else {
+                        independently_summed.push(component);
+                    }
+                }
+            }
+        }
+        independently_summed.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        assert_eq!(oracle, independently_summed);
+    }
+
+    #[test]
     fn snapshot_includes_environmental_physical_material_in_shadow_geometry() {
         let mut simulation = Simulation::new(71, 1.0);
         clear_environment_physical_material(&mut simulation);
