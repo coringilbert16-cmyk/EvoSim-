@@ -556,11 +556,10 @@
             worldCache.organisms.set(organism.id, organism);
           }
           for (const cell of world.field || []) {
-            if (cell.materials == null) {
-              const cached = worldCache.field.get(cell.cell_index);
-              if (cached) cell.materials = cached.materials;
-            }
-            if (cell.materials?.length) worldCache.field.set(cell.cell_index, cell);
+            const cached = worldCache.field.get(cell.cell_index);
+            if (cell.materials == null && cached) cell.materials = cached.materials;
+            if (cell.physical_parts == null && cached) cell.physical_parts = cached.physical_parts;
+            if (cell.materials?.length || cell.physical_parts?.length) worldCache.field.set(cell.cell_index, cell);
             else worldCache.field.delete(cell.cell_index);
           }
         }
