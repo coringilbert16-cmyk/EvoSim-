@@ -1835,15 +1835,13 @@ mod tests {
         assert!(left_to_right.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
-                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0)
-                    .abs()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0).abs()
                     < 1e-6
         }));
         assert!(right_to_left.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
-                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0)
-                    .abs()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0).abs()
                     < 1e-6
         }));
 
