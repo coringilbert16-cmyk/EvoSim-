@@ -1082,7 +1082,7 @@ mod tests {
             &components,
         ));
         assert_eq!(resonance.total_energy(), Some(8.0));
-        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_resonant_energy_held, 8.0);
         assert_eq!(ledger.total_pair_interaction_potential_held, -2.5);
         assert_eq!(ledger.total_heat_dissipated, 2.5);
     }
