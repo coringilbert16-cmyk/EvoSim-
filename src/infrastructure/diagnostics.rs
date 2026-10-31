@@ -5,7 +5,7 @@
 
 use crate::state::Simulation;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
@@ -573,4 +573,241 @@ fn write_range(
     max: Option<f64>,
 ) -> std::io::Result<()> {
     writeln!(file, "{name}: {:?} .. {:?}", min, max)
+}
+
+/// Machine-readable recorder for the organism-free environmental chemistry run.
+/// It records every tick with reaction activity and periodic full inventory
+/// snapshots, so the experiment can be evaluated without watching the canvas.
+pub(crate) struct EnvironmentalChemistryDiagnosticsRecorder {
+    writer: BufWriter<File>,
+    interval: u64,
+    totals: EnvironmentalChemistryDiagnosticTotals,
+}
+
+#[derive(Default)]
+struct EnvironmentalChemistryDiagnosticTotals {
+    ticks_observed: u64,
+    break_ready_candidates: u64,
+    break_scheduled: u64,
+    break_committed: u64,
+    break_rejected: u64,
+    combine_ready_candidates: u64,
+    combine_scheduled: u64,
+    combine_committed: u64,
+    combine_rejected: u64,
+}
+
+impl EnvironmentalChemistryDiagnosticsRecorder {
+    pub(crate) fn new(
+        path: &str,
+        interval: u64,
+        seed: u64,
+        simulation: &Simulation,
+        pile_sizes: &[usize],
+    ) -> std::io::Result<Self> {
+        let file = File::create(path)?;
+        let mut recorder = Self {
+            writer: BufWriter::new(file),
+            interval: interval.max(1),
+            totals: EnvironmentalChemistryDiagnosticTotals::default(),
+        };
+        recorder.write_event(json!({
+            "event": "environmental_chemistry_header",
+            "version": 1,
+            "seed": seed,
+            "tick_zero": 0,
+            "organism_count": simulation.organisms.len(),
+            "initial_physical_material_count": physical_material_count(simulation),
+            "initial_material_inventory": environmental_material_inventory(simulation),
+            "pile_sizes": pile_sizes,
+            "hotspot": simulation.hotspot,
+            "diagnostic_interval": recorder.interval,
+            "experiment_goal": "validate chemistry building blocks; no organism emergence criterion"
+        }))?;
+        recorder.write_snapshot(simulation, "initial")?;
+        recorder.writer.flush()?;
+        Ok(recorder)
+    }
+
+    pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
+        for event in &simulation.environmental_chemistry_events {
+            self.write_event(json!({
+                "event": "environmental_reaction",
+                "reaction": event
+            }))?;
+        }
+        let diagnostics = simulation.environmental_chemistry_diagnostics;
+        self.totals.ticks_observed = self.totals.ticks_observed.saturating_add(1);
+        self.totals.break_ready_candidates = self
+            .totals
+            .break_ready_candidates
+            .saturating_add(diagnostics.break_ready_candidates as u64);
+        self.totals.break_scheduled = self
+            .totals
+            .break_scheduled
+            .saturating_add(diagnostics.break_scheduled as u64);
+        self.totals.break_committed = self
+            .totals
+            .break_committed
+            .saturating_add(diagnostics.break_committed as u64);
+        self.totals.break_rejected = self
+            .totals
+            .break_rejected
+            .saturating_add(diagnostics.break_rejected as u64);
+        self.totals.combine_ready_candidates = self
+            .totals
+            .combine_ready_candidates
+            .saturating_add(diagnostics.combine_ready_candidates as u64);
+        self.totals.combine_scheduled = self
+            .totals
+            .combine_scheduled
+            .saturating_add(diagnostics.combine_scheduled as u64);
+        self.totals.combine_committed = self
+            .totals
+            .combine_committed
+            .saturating_add(diagnostics.combine_committed as u64);
+        self.totals.combine_rejected = self
+            .totals
+            .combine_rejected
+            .saturating_add(diagnostics.combine_rejected as u64);
+
+        if diagnostics.break_ready_candidates > 0
+            || diagnostics.break_scheduled > 0
+            || diagnostics.break_committed > 0
+            || diagnostics.break_rejected > 0
+            || diagnostics.combine_ready_candidates > 0
+            || diagnostics.combine_scheduled > 0
+            || diagnostics.combine_committed > 0
+            || diagnostics.combine_rejected > 0
+            || diagnostics.hotspot_settlement_succeeded == Some(false)
+        {
+            self.write_event(json!({
+                "event": "environmental_chemistry_tick",
+                "tick": diagnostics.tick,
+                "reaction_work": diagnostics,
+                "accumulation_entries": diagnostics.accumulation_entries
+            }))?;
+        }
+
+        if simulation.tick % self.interval == 0 {
+            self.write_snapshot(simulation, "periodic")?;
+            self.writer.flush()?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn finish(&mut self, simulation: &Simulation) -> std::io::Result<()> {
+        self.write_snapshot(simulation, "final")?;
+        self.write_event(json!({
+            "event": "environmental_chemistry_summary",
+            "ticks_observed": self.totals.ticks_observed,
+            "break_ready_candidates": self.totals.break_ready_candidates,
+            "break_scheduled": self.totals.break_scheduled,
+            "break_committed": self.totals.break_committed,
+            "break_rejected": self.totals.break_rejected,
+            "combine_ready_candidates": self.totals.combine_ready_candidates,
+            "combine_scheduled": self.totals.combine_scheduled,
+            "combine_committed": self.totals.combine_committed,
+            "combine_rejected": self.totals.combine_rejected,
+            "final_material_inventory": environmental_material_inventory(simulation),
+            "final_physical_material_count": physical_material_count(simulation),
+            "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
+        }))?;
+        self.writer.flush()
+    }
+
+    fn write_snapshot(&mut self, simulation: &Simulation, label: &str) -> std::io::Result<()> {
+        let inventory = simulation.energy_inventory_snapshot();
+        self.write_event(json!({
+            "event": "environmental_chemistry_snapshot",
+            "label": label,
+            "tick": simulation.tick,
+            "physical_material_count": physical_material_count(simulation),
+            "constituent_count": environmental_constituent_count(simulation),
+            "internal_bond_count": environmental_internal_bond_count(simulation),
+            "material_inventory": environmental_material_inventory(simulation),
+            "chemistry_usable_energy": simulation.environment.chemistry_usable_energy,
+            "environment_resonant_energy": simulation.environment.resonant_energy.total_energy(),
+            "energy": {
+                "initial_usable": inventory.initial_usable_energy,
+                "current_usable": inventory.current_usable_energy,
+                "initial_resonant": inventory.initial_resonant_energy,
+                "current_resonant": inventory.current_resonant_energy,
+                "initial_structural": inventory.initial_structural_energy,
+                "current_structural": inventory.current_structural_energy,
+                "external_input": inventory.external_energy_input,
+                "escaped_signal_energy": inventory.world_tone_energy_escaped,
+                "work_expended": inventory.work_expended,
+                "heat_dissipated": inventory.heat_dissipated,
+                "balance_residual": inventory.residual()
+            },
+            "ledger": {
+                "total_external_energy_input": simulation.energy_ledger.total_external_energy_input,
+                "total_resonant_energy_held": simulation.energy_ledger.total_resonant_energy_held,
+                "total_usable_energy_held": simulation.energy_ledger.total_usable_energy_held,
+                "total_structural_energy_held": simulation
+                    .energy_ledger
+                    .total_structural_energy_held,
+                "total_work_expended": simulation.energy_ledger.total_work_expended,
+                "total_heat_dissipated": simulation.energy_ledger.total_heat_dissipated,
+                "escaped_signal_energy": simulation.energy_ledger.total_world_tone_energy_escaped
+            },
+            "reaction_work": simulation.environmental_chemistry_diagnostics,
+            "hotspot": simulation.hotspot
+        }))
+    }
+
+    fn write_event(&mut self, event: Value) -> std::io::Result<()> {
+        serde_json::to_writer(&mut self.writer, &event)?;
+        self.writer.write_all(b"\n")
+    }
+}
+
+fn physical_material_count(simulation: &Simulation) -> usize {
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .map(|cell| cell.physical_materials.len())
+        .sum()
+}
+
+fn environmental_constituent_count(simulation: &Simulation) -> usize {
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.material.parts.len())
+        .sum()
+}
+
+fn environmental_internal_bond_count(simulation: &Simulation) -> usize {
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
+        .sum()
+}
+
+fn environmental_material_inventory(simulation: &Simulation) -> BTreeMap<String, f64> {
+    let mut inventory = BTreeMap::new();
+    for cell in &simulation.environment.field.cells {
+        for material in &cell.materials {
+            for (name, amount) in &material.parts {
+                *inventory.entry(name.clone()).or_insert(0.0) += *amount;
+            }
+        }
+        for material in &cell.physical_materials {
+            for (name, amount) in &material.material.parts {
+                *inventory.entry(name.clone()).or_insert(0.0) += *amount;
+            }
+        }
+    }
+    inventory
 }
