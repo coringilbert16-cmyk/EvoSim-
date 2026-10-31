@@ -14,6 +14,9 @@ use crate::resource_visualization::appearance;
 use crate::runtime::RuntimeState;
 use crate::state::Simulation;
 
+const DEFAULT_TICKS_PER_SECOND: f64 = 32.0;
+const MAX_TICKS_PER_SECOND: f64 = 32.0;
+
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 enum SimulationCommand {
@@ -76,7 +79,7 @@ impl CommandResponse {
 }
 
 pub(crate) async fn run_child(port: u16) {
-    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 32.0))));
+    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, DEFAULT_TICKS_PER_SECOND))));
     let (tick_sender, _) = tokio::sync::broadcast::channel::<String>(32);
     start_tick_loop(runtime.clone(), tick_sender.clone());
 
@@ -306,7 +309,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
                 return CommandResponse::error("invalid_speed");
             }
-            let ticks_per_second = ticks_per_second.min(32.0);
+            let ticks_per_second = ticks_per_second.min(MAX_TICKS_PER_SECOND);
             let mut state = runtime.lock();
             state.simulation.ticks_per_second = ticks_per_second;
             CommandResponse::value(serde_json::json!({
