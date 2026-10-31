@@ -2,6 +2,15 @@
 
 Status: approved direction for PR #255; implementation plan, not a claim that every optimization is already implemented.
 
+## Current implementation progress (2026-10-31)
+
+- Implemented a deadline-based tick scheduler with a 10 TPS default, a 0.1–100 TPS control range, and independent 100 ms display publication. The scheduler avoids catch-up bursts and remains responsive to pause/speed changes at low rates.
+- Restored the speed slider and report configured TPS separately from measured achieved TPS.
+- Added camera scale bounds (0.02–100), removed camera-triggered world observation requests, and made world observations full-world/incremental rather than viewport-scoped.
+- Replaced per-cell/per-material radial gradients and viewport-relative normalization with deterministic dominant-material cell rendering. The world render path now draws the field once, preserves hotspot/physical silhouettes, and culls off-screen field cells and geometry.
+- Automated validation is still pending on the latest commit. The first check exposed rustfmt-only differences in the new scheduler; those formatting changes have been applied and need a fresh CI result.
+- Remaining work: validate runtime behavior, add/verify zoom and pacing regression coverage, refine zoom-dependent field aggregation/LOD, and profile the live viewer before considering heavier batching or parallelism.
+
 ## Objective
 
 Make the environmental chemistry experiment comfortable to observe and interact with while preserving the simulation as the sole authority for physical and chemical state. Improve responsiveness by reducing redundant work, stabilizing observation data, and making rendering proportional to what is visible.
