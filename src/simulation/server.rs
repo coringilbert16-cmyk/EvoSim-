@@ -32,10 +32,7 @@ async fn index_handler() -> impl IntoResponse {
     let theme = include_str!("../../ui/simulation_theme.css");
     let resource_visualization = include_str!("../../ui/resource_visualization.js");
     let organism_inspector = include_str!("../../ui/organism_inspector.js");
-    let themed_page = page.replace(
-        "</head>",
-        &format!("<style>{theme}</style></head>"),
-    );
+    let themed_page = page.replace("</head>", &format!("<style>{theme}</style></head>"));
     Html(format!(
         "{themed_page}\n<script>
           const speedControl = document.getElementById('speed');
