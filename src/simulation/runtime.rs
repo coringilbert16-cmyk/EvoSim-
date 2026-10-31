@@ -39,6 +39,7 @@ impl RuntimeState {
         self.simulation = crate::environment_chemistry_experiment::build(42).simulation;
         self.simulation.ticks_per_second = ticks_per_second;
         self.simulation.running = true;
+        self.measured_ticks_per_second = 0.0;
         self.history.clear();
         self.history.push_back(self.simulation.clone());
     }
