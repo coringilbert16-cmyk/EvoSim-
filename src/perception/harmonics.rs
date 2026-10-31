@@ -1106,7 +1106,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
         (source_x, source_y),
         &receiver_bodies,
         &target_body_indices,
-    )?
+    )?;
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
