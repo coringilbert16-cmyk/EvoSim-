@@ -1193,6 +1193,123 @@ pub(crate) fn material_aura_receptions_with_occluders(
     Some(receptions)
 }
 
+pub(crate) fn material_aura_receptions_with_prebuilt_geometries(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    occluder_geometries: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    // This API consumes world-resolved placements. Stored materials carrying
+    // an owner-relative origin must be transformed by their owner first.
+    if source.owner_relative_origin.is_some() || receiver.owner_relative_origin.is_some() {
+        return None;
+    }
+    if std::ptr::eq(source, receiver) {
+        return Some(Vec::new());
+    }
+    let (source_x, source_y, source_extent, emitted) =
+        environmental_material_resonance(source, catalog, tick)?;
+    if source_geometry.parts.is_empty() {
+        return None;
+    }
+
+    // Keep the receiver as the only target while every other body remains
+    // in the visibility set as a possible occluder. The source itself is
+    // deliberately excluded: its aura originates inside that body's geometry.
+    let mut receiver_bodies = Vec::with_capacity(1 + occluder_geometries.len());
+    receiver_bodies.push(receiver_geometry.clone());
+    receiver_bodies.extend(occluder_geometries.iter().cloned());
+    let target_body_indices = [0];
+    let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?;
+    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
+        (source_x, source_y),
+        &receiver_bodies,
+        &target_body_indices,
+    )?;
+
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_properties = receiver.material.weighted_properties(catalog);
+    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    if source_mass_scale <= f64::EPSILON {
+        return Some(Vec::new());
+    }
+
+    let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
+    let mut receive_at =
+        |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
+            if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+                return Some(());
+            }
+            let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return Some(());
+            }
+            let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
+            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+                return Some(());
+            }
+            let mut incident = ToneSpectrum::empty();
+            add_spectrum(&mut incident, &emitted, attenuation);
+            incident.retain_strongest();
+            let mut received =
+                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            received.retain_strongest();
+            let magnitude = spectrum_magnitude(&received);
+            if magnitude > f64::EPSILON {
+                receptions.push(MaterialAuraReception {
+                    source_x,
+                    source_y,
+                    source_extent,
+                    receiver_x,
+                    receiver_y,
+                    receiver_normal_x: normal_x,
+                    receiver_normal_y: normal_y,
+                    projected_extent,
+                    incident_spectrum: incident,
+                    spectrum: received,
+                    magnitude,
+                });
+            }
+            Some(())
+        };
+
+    for interval in straight_intervals {
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
+        let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
+        let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            interval.outward_normal.0,
+            interval.outward_normal.1,
+            projected_extent,
+        )?;
+    }
+
+    for interval in curved_intervals {
+        let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
+            interval.arc,
+            (source_x, source_y),
+        )?;
+        let midpoint_angle = interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
+        let (normal_y, normal_x) = midpoint_angle.sin_cos();
+        let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
+        let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
+        receive_at(receiver_x, receiver_y, normal_x, normal_y, projected_extent)?;
+    }
+
+    Some(receptions)
+}
+
+
 /// Integrate the interference between an incoming aura and the receiver's
 /// own emitted aura over the receiver's exposed boundary samples.
 ///
@@ -1280,6 +1397,79 @@ fn directional_resonance_pair_potential_components_with_occluders(
     Some(potential)
 }
 
+fn directional_resonance_pair_potential_components_with_prebuilt_geometries(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    occluder_geometries: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let receptions = material_aura_receptions_with_prebuilt_geometries(
+        source,
+        receiver,
+        source_geometry,
+        receiver_geometry,
+        occluder_geometries,
+        catalog,
+        tick,
+    )?;
+    if receptions.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let (receiver_x, receiver_y, _, receiver_emission) =
+        environmental_material_resonance(receiver, catalog, tick)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_mass_scale =
+        environmental_mass_scale(receiver.material.mass(catalog), baselines.mass);
+    if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
+        return None;
+    }
+
+    let mut potential = Vec::<ResonancePairPotentialComponent>::new();
+    for sample in receptions {
+        let local_distance = (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
+        if !local_distance.is_finite() {
+            return None;
+        }
+        // Both fields are amplitudes, so the same square-root projected
+        // extent is applied to the receiver's own boundary field. The
+        // incident spectrum already contains its matching extent factor.
+        let local_scale =
+            receiver_mass_scale * sample.projected_extent.sqrt() / (1.0 + local_distance);
+        if !local_scale.is_finite() {
+            return None;
+        }
+        let mut local_field = ToneSpectrum::empty();
+        add_spectrum(&mut local_field, &receiver_emission, local_scale);
+        local_field.retain_strongest();
+        for contribution in
+            spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
+        {
+            if let Some(existing) = potential.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                existing.energy += contribution.energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                potential.push(contribution);
+            }
+        }
+    }
+    potential.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(potential)
+}
+
+
 /// One symmetric resonance-derived pair potential for an isolated pair,
 /// retained by frequency so energy settlement can use the same spectral
 /// compatibility as the reservoir. If third-party bodies can occlude the pair,
@@ -1336,6 +1526,61 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
     });
     Some(symmetric)
 }
+
+pub(crate) fn resonance_pair_potential_components_with_prebuilt_geometries(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    geometry_a: &crate::organism_geometry::OrganismBodyGeometry,
+    geometry_b: &crate::organism_geometry::OrganismBodyGeometry,
+    occluder_geometries: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    if std::ptr::eq(a, b) {
+        return Some(Vec::new());
+    }
+    let a_to_b = directional_resonance_pair_potential_components_with_prebuilt_geometries(
+        a,
+        b,
+        geometry_a,
+        geometry_b,
+        occluder_geometries,
+        catalog,
+        tick,
+    )?;
+    let b_to_a = directional_resonance_pair_potential_components_with_prebuilt_geometries(
+        b,
+        a,
+        geometry_b,
+        geometry_a,
+        occluder_geometries,
+        catalog,
+        tick,
+    )?;
+    let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
+    for component in a_to_b.iter().chain(b_to_a.iter()) {
+        if let Some(existing) = symmetric.iter_mut().find(|existing| {
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs() <= 1e-9
+        }) {
+            existing.energy += 0.5 * component.energy;
+            if !existing.energy.is_finite() {
+                return None;
+            }
+        } else {
+            symmetric.push(ResonancePairPotentialComponent {
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
+                energy: 0.5 * component.energy,
+            });
+        }
+    }
+    symmetric.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(symmetric)
+}
+
 
 /// Scalar view of the isolated-pair potential. PR 4 should use the
 /// frequency-resolved form when settling energy into/out of resonance stores.
