@@ -127,8 +127,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     }
     let resonant_work = resonance_withdrawal.min(disruption_cost);
     let bond_supplied_work = disruption_cost - resonant_work;
-    let next_total_resonant =
-        (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
+    let next_total_resonant = (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
     let next_total_work = ledger.total_work_expended + disruption_cost;
     let next_total_heat = ledger.total_heat_dissipated;
     if !next_total_resonant.is_finite() {
@@ -2420,8 +2419,7 @@ mod tests {
         assert_eq!(prepared.ledger.total_structural_energy_delta, 0.0);
         assert_eq!(prepared.ledger.total_potential_energy_released, 0.0);
         assert_eq!(
-            ledger,
-            original_ledger,
+            ledger, original_ledger,
             "preparing a transaction must not mutate the authoritative ledger"
         );
         assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
