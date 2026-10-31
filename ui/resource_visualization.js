@@ -102,7 +102,7 @@
       const configuredRate = Number.isFinite(state.ticks_per_second) ? state.ticks_per_second : null;
       const measuredRate = Number.isFinite(state.measured_ticks_per_second) ? state.measured_ticks_per_second : null;
       const rate = measuredRate == null ? '—' : `${measuredRate.toFixed(1)} t/s`;
-      const rateDetail = configuredRate == null ? '—' : `${configuredRate.toFixed(1)} target / ${measuredRate?.toFixed(1) ?? '—'} actual`;
+      const rateDetail = configuredRate == null ? '—' : `${configuredRate.toFixed(1)} / ${measuredRate?.toFixed(1) ?? '—'} t/s`;
       const history = String(state.history_ticks?.length ?? 0);
       for (const id of ['ev-top-tick', 'ev-side-tick']) { const node = document.getElementById(id); if (node) node.textContent = tick; }
       for (const id of ['ev-top-population', 'ev-side-population']) { const node = document.getElementById(id); if (node) node.textContent = population; }
