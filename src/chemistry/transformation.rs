@@ -2422,7 +2422,8 @@ mod tests {
             ledger, original_ledger,
             "preparing a transaction must not mutate the authoritative ledger"
         );
-        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
+        // The environmental caller commits this debit with the source mutation.
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 5.0);
     }
 
     #[test]
