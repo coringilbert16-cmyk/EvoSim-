@@ -463,9 +463,12 @@ pub(crate) fn settle_pair_potential_change(
     if !active_mover_usable_energy.is_finite()
         || *active_mover_usable_energy < 0.0
         || !ledger.total_pair_interaction_potential_held.is_finite()
+        || !ledger.initial_pair_interaction_potential_held.is_finite()
         || !ledger.total_usable_energy_gained.is_finite()
         || !ledger.total_resonant_energy_held.is_finite()
+        || ledger.total_resonant_energy_held < 0.0
         || !ledger.total_heat_dissipated.is_finite()
+        || ledger.total_heat_dissipated < 0.0
         || components.iter().any(|component| {
             !component.frequency_cycles_per_day.is_finite()
                 || component.frequency_cycles_per_day <= 0.0
