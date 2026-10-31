@@ -2566,7 +2566,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn pair_potential_tracks_full_partial_and_clear_visibility_transitions() {
         let catalog = crate::resources::default_catalog();
