@@ -2199,6 +2199,75 @@ mod tests {
     }
 
     #[test]
+    fn circular_water_boundary_contributes_to_pair_reception() {
+        let catalog = crate::resources::default_catalog();
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: -4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let receiver = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Water", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("water should have a valid realized circular physical shape");
+
+        let receptions = material_aura_receptions(&source, &receiver, &catalog, 0)
+            .expect("circular receiver should support aura reception");
+        assert!(
+            !receptions.is_empty(),
+            "the exposed circular boundary should produce curved reception samples"
+        );
+        assert!(receptions.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && sample.projected_extent.is_finite()
+                && sample.projected_extent > 0.0
+        }));
+        let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("circular pair should have a finite interaction potential");
+        assert!(potential.is_finite());
+    }
+
+    #[test]
+    fn pair_potential_remains_finite_at_contact_and_shallow_overlap() {
+        let catalog = crate::resources::default_catalog();
+        let make_carbon = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let source = make_carbon(0.0);
+
+        for separation in [2.0, 1.9] {
+            let receiver = make_carbon(separation);
+            let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+                .expect("contact and shallow overlap should remain a valid pair geometry");
+            assert!(
+                potential.is_finite(),
+                "pair potential must remain finite at separation {separation}"
+            );
+        }
+    }
+
+    #[test]
     fn pair_reception_rejects_unresolved_owner_relative_materials() {
         let catalog = crate::resources::default_catalog();
         let make_material = |x| {
