@@ -215,18 +215,8 @@
       render();
     }
     function viewportSize() { return { width: canvas.clientWidth, height: canvas.clientHeight }; }
-    function worldObservationBounds() {
-      if (!observation || observationLevel !== 'World' || !cameraInitialized) return null;
-      const viewport = viewportSize();
-      const a = camera.screenToWorld(0, 0, viewport.width, viewport.height);
-      const b = camera.screenToWorld(viewport.width, viewport.height, viewport.width, viewport.height);
-      const margin = Math.max(1, Math.min(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * 0.08);
-      return { min_x: Math.min(a.x, b.x) - margin, max_x: Math.max(a.x, b.x) + margin, min_y: Math.min(a.y, b.y) - margin, max_y: Math.max(a.y, b.y) + margin };
-    }
-    function observationViewKey() {
-      const b = worldObservationBounds();
-      return b ? [b.min_x, b.max_x, b.min_y, b.max_y].map(v => v.toFixed(3)).join(',') : 'full';
-    }
+    function observationViewKey() { return 'full-world-observation'; }
+
     function payload() { return observation?.payload || null; }
     function worldPayload() { return payload()?.World || null; }
     function organismPayload() { return payload()?.Organism || null; }
