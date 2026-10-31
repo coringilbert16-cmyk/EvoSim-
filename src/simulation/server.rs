@@ -39,7 +39,7 @@ async fn index_handler() -> impl IntoResponse {
     Html(format!(
         "{themed_page}\n<script>
           const speedControl = document.getElementById('speed');
-          if (speedControl) { speedControl.max = '32'; speedControl.value = '32'; }
+          if (speedControl) {{ speedControl.max = '32'; speedControl.value = '32'; }}
         </script>\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
