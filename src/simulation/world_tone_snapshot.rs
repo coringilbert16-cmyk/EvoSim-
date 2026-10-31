@@ -1377,7 +1377,7 @@ mod tests {
         let blocker_force = gradient.body_forces[2];
         assert!(
             blocker_force.0.hypot(blocker_force.1) > 1e-8,
-            "moving the blocker changes the visible pair potential, so it must receive a reaction force"
+            "moving the blocker changes visibility, so it must receive a reaction force"
         );
         let net_force = gradient
             .body_forces
@@ -1385,7 +1385,7 @@ mod tests {
             .fold((0.0, 0.0), |sum, force| (sum.0 + force.0, sum.1 + force.1));
         assert!(
             net_force.0.abs() < 1e-6 && net_force.1.abs() < 1e-6,
-            "translational invariance requires the complete-world forces, including the blocker, to balance"
+            "complete-world forces, including the blocker, must balance under translation"
         );
     }
 
