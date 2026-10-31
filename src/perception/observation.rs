@@ -649,7 +649,10 @@ mod tests {
             fixture.simulation.environment.width,
             fixture.simulation.environment.height,
         );
-        assert!(moved > 0, "the experiment's environmental current must transport resources");
+        assert!(
+            moved > 0,
+            "the experiment's environmental current must transport resources"
+        );
 
         let mut after = WorldObservation::from_simulation(&fixture.simulation)
             .field
