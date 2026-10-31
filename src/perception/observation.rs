@@ -629,6 +629,37 @@ mod tests {
     }
 
     #[test]
+    fn environmental_transport_updates_observed_resource_positions() {
+        let mut fixture = crate::environment_chemistry_experiment::build(42);
+        let before = WorldObservation::from_simulation(&fixture.simulation)
+            .field
+            .into_iter()
+            .flat_map(|cell| cell.physical_parts.unwrap_or_default())
+            .collect::<Vec<_>>();
+        let catalog = fixture.simulation.environment.catalog.clone();
+        let moved = crate::environment_flow::transport_field(
+            &mut fixture.simulation.environment.field,
+            &catalog,
+            fixture.simulation.environment.width,
+            fixture.simulation.environment.height,
+        );
+        assert!(moved > 0, "the experiment's environmental current must transport resources");
+
+        let after = WorldObservation::from_simulation(&fixture.simulation)
+            .field
+            .into_iter()
+            .flat_map(|cell| cell.physical_parts.unwrap_or_default())
+            .collect::<Vec<_>>();
+        assert_eq!(before.len(), after.len());
+        assert!(before.iter().any(|previous| {
+            after.iter().any(|current| {
+                previous.resource == current.resource
+                    && (previous.x - current.x).hypot(previous.y - current.y) > 1e-9
+            })
+        }), "the updated world observation must expose moved resource positions");
+    }
+
+    #[test]
     fn world_context_contains_no_selection() {
         let context = ObservationContext::world();
         assert_eq!(context.level, ObservationLevel::World);
