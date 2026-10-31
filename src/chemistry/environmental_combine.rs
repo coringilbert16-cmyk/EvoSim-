@@ -3277,7 +3277,6 @@ mod tests {
                         ) {
                             if selected.candidate.distance <= 0.25
                                 && selected.candidate.facing > 0.5
-                                && live_interface.is_some()
                             {
                                 selected_pair = Some((source_a, source_b, selected));
                                 break 'search;
