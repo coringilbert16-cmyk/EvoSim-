@@ -93,6 +93,16 @@
       organisms: new Map(),
       field: new Map()
     };
+    // Display interpolation is presentation-only. Simulation observations remain authoritative.
+    let displayAnimationStartedAt = 0;
+    let displayAnimationDurationMs = 100;
+    const displayPositionStarts = new WeakMap();
+    window.__evosimGetDisplayPosition = part => {
+      const start = displayPositionStarts.get(part);
+      if (!start) return { x: part.x, y: part.y };
+      const alpha = Math.max(0, Math.min(1, (performance.now() - displayAnimationStartedAt) / displayAnimationDurationMs));
+      return { x: start.x + (part.x - start.x) * alpha, y: start.y + (part.y - start.y) * alpha };
+    };
 
     async function control(path) {
       try {
@@ -453,7 +463,7 @@
       const width = Math.abs(interaction.currentX - interaction.startX), height = Math.abs(interaction.currentY - interaction.startY);
       ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height); ctx.restore();
     }
-    function render() {
+    function render(updateUi = true) {
       const viewport = viewportSize();
       ctx.clearRect(0, 0, viewport.width, viewport.height);
       if (!observation) return;
@@ -461,7 +471,7 @@
       if (observationLevel === 'World') renderWorld();
       else if (observationLevel === 'Organism') renderOrganism();
       else if (observationLevel === 'Structure') renderStructure();
-      drawSelectionRectangle(); updateStatus();
+      drawSelectionRectangle(); if (updateUi) updateStatus();
     }
     function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
     function updateStatus() {
@@ -572,6 +582,7 @@
         const next = await response.json();
         if (serial !== requestSerial) return;
         if (level === 'World' && next?.payload?.World) {
+          const previousParts = [...worldCache.field.values()].flatMap(cell => cell.physical_parts || []);
           const world = next.payload.World;
           for (const organism of world.organisms || []) {
             const cached = worldCache.organisms.get(organism.id);
@@ -587,6 +598,31 @@
             if (cell.materials?.length || cell.physical_parts?.length) worldCache.field.set(cell.cell_index, cell);
             else worldCache.field.delete(cell.cell_index);
           }
+          // Match constituents by resource and nearest prior position. The observation
+          // schema has no persistent constituent ID, so this is a display-only pairing.
+          const nextParts = [...worldCache.field.values()].flatMap(cell => cell.physical_parts || []);
+          const available = new Map();
+          for (const part of previousParts) {
+            const list = available.get(part.resource) || [];
+            list.push({ x: part.x, y: part.y, used: false });
+            available.set(part.resource, list);
+          }
+          for (const part of nextParts) {
+            const candidates = available.get(part.resource) || [];
+            let best = null, bestDistance = Infinity;
+            for (const candidate of candidates) {
+              if (candidate.used) continue;
+              const distance = (candidate.x - part.x) ** 2 + (candidate.y - part.y) ** 2;
+              if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+            }
+            if (best) {
+              best.used = true;
+              displayPositionStarts.set(part, { x: best.x, y: best.y });
+            }
+          }
+          displayAnimationStartedAt = performance.now();
+          const configuredTps = Number(runtimeStatus?.ticks_per_second) || 10;
+          displayAnimationDurationMs = Math.max(16, Math.min(250, 1000 / configuredTps));
         }
         if (
           level === 'Organism' &&
@@ -790,6 +826,14 @@
       };
       liveStream.onerror = () => liveStream?.close();
     }
+
+    // Draw continuously at the browser's refresh rate. New simulation observations
+    // update targets; interpolation above makes constituent motion continuous between them.
+    function animationFrame() {
+      if (historyViewTick == null) render(false);
+      requestAnimationFrame(animationFrame);
+    }
+    requestAnimationFrame(animationFrame);
 
     window.addEventListener('resize', resize);
     // Keep live playback attached to the newest simulation tick even if the
