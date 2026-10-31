@@ -643,6 +643,29 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_full_world_cells_omit_redundant_physical_payloads() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let full = WorldObservation::from_simulation(&fixture.simulation);
+        let known_cells = full
+            .field
+            .iter()
+            .map(|cell| (cell.cell_index, cell.revision))
+            .collect::<Vec<_>>();
+        let incremental = WorldObservation::from_simulation_in_bounds(
+            &fixture.simulation,
+            None,
+            &[],
+            &known_cells,
+        );
+
+        assert_eq!(incremental.field.len(), full.field.len());
+        assert!(incremental
+            .field
+            .iter()
+            .all(|cell| cell.materials.is_none() && cell.physical_parts.is_none()));
+    }
+
+    #[test]
     fn environmental_transport_updates_observed_resource_positions() {
         let mut fixture = crate::environment_chemistry_experiment::build(42);
         let mut before = WorldObservation::from_simulation(&fixture.simulation)
