@@ -14,6 +14,8 @@
     #timeline { position:fixed; left:12px; right:12px; bottom:10px; display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.94); border:1px solid #999; border-radius:6px; z-index:20; }
     #history { flex:1; min-width:120px; }
     #timeline-label { min-width:150px; font-size:12px; text-align:right; }
+    .transport-button { border:1px solid #777; border-radius:4px; padding:5px 10px; background:#fff; color:#111; cursor:pointer; white-space:nowrap; }
+    .transport-button.primary { background:#166534; color:#fff; border-color:#166534; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; }
     #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #fff; border: 1px solid #888; cursor: crosshair; touch-action: none; }
     #world.panning { cursor: grabbing; }
@@ -26,7 +28,9 @@
       <div id="keyboard-help">Space: pause/play · &lt;: previous checkpoint · &gt;: forward one tick · Esc: reset</div>
     </header>
     <div id="timeline">
-      <input id="history" type="range" min="0" max="0" value="0" step="1">
+      <button id="run-toggle" class="transport-button primary" type="button">Run</button>
+      <button id="step-once" class="transport-button" type="button" title="Advance one simulation tick">Step</button>
+      <input id="history" type="range" min="0" max="0" value="0" step="1" aria-label="Simulation history">
       <span id="timeline-label">Live</span>
       <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
     </div>
@@ -161,11 +165,22 @@
     function updateControls() {
       const speed = document.getElementById('speed');
       const speedValue = document.getElementById('speed-value');
+      const runToggle = document.getElementById('run-toggle');
+      if (runToggle) {
+        runToggle.textContent = runtimeStatus?.running ? 'Pause' : 'Run';
+        runToggle.classList.toggle('primary', !runtimeStatus?.running);
+        runToggle.setAttribute('aria-label', runtimeStatus?.running ? 'Pause simulation' : 'Run simulation');
+      }
       if (runtimeStatus?.ticks_per_second != null && !speedControlActive) {
         speed.value = runtimeStatus.ticks_per_second;
         speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
       }
     }
+
+    document.getElementById('run-toggle').addEventListener('click', async () => {
+      await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
+    });
+    document.getElementById('step-once').addEventListener('click', stepForward);
 
     async function stepForward() {
       if (historyViewTick != null) await returnToLiveWorld();
@@ -727,11 +742,16 @@
       setTimeout(async () => {
         liveRefreshQueued = false;
         if (historyViewTick != null) return;
+        const previousTick = runtimeStatus?.tick;
         await refreshRuntimeStatus();
-        if (historyViewTick != null) return;
+        if (historyViewTick != null || runtimeStatus?.tick == null) return;
+        // Fetch a new observation only when the authoritative simulation tick
+        // advances. WebSocket events provide the fast path; periodic status
+        // checks below keep live mode working if a tick event is missed.
+        if (runtimeStatus.tick === previousTick) return;
         if (observationLevel === 'World') await loadObservation('World');
         else if (focusedOrganismId != null) await loadObservation(observationLevel, focusedOrganismId);
-      }, 50);
+      }, 25);
     }
 
     function connectLiveStream() {
@@ -764,6 +784,10 @@
     }
 
     window.addEventListener('resize', resize);
+    // Keep live playback attached to the newest simulation tick even if the
+    // browser drops a WebSocket notification. This is status-only polling;
+    // observations are fetched only when the tick actually advances.
+    setInterval(queueLiveRefresh, 250);
     if (typeof ResizeObserver !== 'undefined') {
       const canvasResizeObserver = new ResizeObserver(() => resize());
       canvasResizeObserver.observe(canvas);
