@@ -1250,8 +1250,8 @@ mod tests {
         );
         assert_eq!(
             force_owners,
-            vec![Some(0), Some(0), None, None, Some(0)],
-            "attached stored material must remain attributed to its owner"
+            vec![Some(0), None, None, None, Some(0)],
+            "only organism-attached bodies move with their owner"
         );
 
         let oracle = world_pair_potential_inventory_components(&simulation)
