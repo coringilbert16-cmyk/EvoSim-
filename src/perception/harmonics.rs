@@ -210,6 +210,11 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    /// Incident field before the receiver's oscillator response. Pair
+    /// interference compares this with the receiver's own emitted field;
+    /// using the responded spectrum here would apply the receiver phase lag twice.
+    pub(crate) incident_spectrum: ToneSpectrum,
+    /// Receiver response retained for perception/diagnostics.
     pub(crate) spectrum: ToneSpectrum,
     pub(crate) magnitude: f64,
 }
@@ -1071,6 +1076,7 @@ pub(crate) fn material_aura_receptions(
                     receiver_normal_x: normal_x,
                     receiver_normal_y: normal_y,
                     projected_extent,
+                    incident_spectrum: incident,
                     spectrum: received,
                     magnitude,
                 });
@@ -1105,6 +1111,131 @@ pub(crate) fn material_aura_receptions(
     }
 
     Some(receptions)
+}
+
+/// Integrate the interference between an incoming aura and the receiver's
+/// own emitted aura over the receiver's exposed boundary samples.
+///
+/// The incident spectrum is intentionally used here, not the receiver-
+/// responded spectrum: the receiver's own emission already contains its
+/// oscillator phase lag. Comparing against the responded spectrum would apply
+/// that lag a second time and erase the expected same-material phase relation.
+fn directional_resonance_pair_potential(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<f64> {
+    let receptions = material_aura_receptions(source, receiver, catalog, tick)?;
+    if receptions.is_empty() {
+        return Some(0.0);
+    }
+
+    let (receiver_x, receiver_y, _, receiver_emission) =
+        environmental_material_resonance(receiver, catalog, tick)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_mass_scale =
+        environmental_mass_scale(receiver.material.mass(catalog), baselines.mass);
+    if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
+        return None;
+    }
+
+    let mut potential = 0.0;
+    for sample in receptions {
+        let local_distance =
+            (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
+        if !local_distance.is_finite() {
+            return None;
+        }
+        // Both fields are amplitudes, so the same square-root projected
+        // extent is applied to the receiver's own boundary field. The
+        // incident spectrum already contains its matching extent factor.
+        let local_scale =
+            receiver_mass_scale * sample.projected_extent.sqrt() / (1.0 + local_distance);
+        if !local_scale.is_finite() {
+            return None;
+        }
+        let mut local_field = ToneSpectrum::empty();
+        add_spectrum(&mut local_field, &receiver_emission, local_scale);
+        local_field.retain_strongest();
+        let contribution = spectrum_cross_energy(&sample.incident_spectrum, &local_field)?;
+        potential += contribution;
+        if !potential.is_finite() {
+            return None;
+        }
+    }
+    Some(potential)
+}
+
+/// One symmetric resonance-derived pair potential. Reciprocal boundary
+/// integrations are averaged so neither material is privileged as source or
+/// receiver. No chemical attraction, movement, or work transaction is
+/// modified by this staged calculation.
+pub(crate) fn resonance_pair_potential(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<f64> {
+    if std::ptr::eq(a, b) {
+        return Some(0.0);
+    }
+    let a_to_b = directional_resonance_pair_potential(a, b, catalog, tick)?;
+    let b_to_a = directional_resonance_pair_potential(b, a, catalog, tick)?;
+    let potential = 0.5 * (a_to_b + b_to_a);
+    potential.is_finite().then_some(potential)
+}
+
+fn translated_physical_material(
+    physical: &crate::physical_material::PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+) -> Option<crate::physical_material::PhysicalMaterial> {
+    if !dx.is_finite() || !dy.is_finite() {
+        return None;
+    }
+    let mut translated = physical.clone();
+    let placements = translated.placements.as_mut()?;
+    for placement in placements {
+        placement.x += dx;
+        placement.y += dy;
+        if !placement.x.is_finite() || !placement.y.is_finite() {
+            return None;
+        }
+    }
+    Some(translated)
+}
+
+/// Pair force derived from the spatial gradient of the single symmetric
+/// potential. The centered difference is a numerical derivative only; it
+/// introduces no additional physical force law or attenuation constant.
+pub(crate) fn resonance_pair_force(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<((f64, f64), (f64, f64))> {
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let potential = resonance_pair_potential(a, b, catalog, tick)?;
+    let b_plus_x = translated_physical_material(b, DIFFERENCE_STEP, 0.0)?;
+    let b_minus_x = translated_physical_material(b, -DIFFERENCE_STEP, 0.0)?;
+    let b_plus_y = translated_physical_material(b, 0.0, DIFFERENCE_STEP)?;
+    let b_minus_y = translated_physical_material(b, 0.0, -DIFFERENCE_STEP)?;
+
+    let gradient_x = (resonance_pair_potential(a, &b_plus_x, catalog, tick)?
+        - resonance_pair_potential(a, &b_minus_x, catalog, tick)?)
+        / (2.0 * DIFFERENCE_STEP);
+    let gradient_y = (resonance_pair_potential(a, &b_plus_y, catalog, tick)?
+        - resonance_pair_potential(a, &b_minus_y, catalog, tick)?)
+        / (2.0 * DIFFERENCE_STEP);
+    if !gradient_x.is_finite() || !gradient_y.is_finite() || !potential.is_finite() {
+        return None;
+    }
+
+    // F_b = -grad_b(U); translational invariance gives F_a = -F_b.
+    let force_on_b = (-gradient_x, -gradient_y);
+    let force_on_a = (gradient_x, gradient_y);
+    Some((force_on_a, force_on_b))
 }
 
 fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
