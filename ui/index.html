@@ -283,7 +283,7 @@
       cameraInitialized = true;
     }
 
-    function drawForm(form, x, y, rotation = 0) {
+    function drawForm(form, x, y, rotation = 0, appearance = null) {
       if (!form) return;
       ctx.save(); ctx.translate(x, y); ctx.rotate(rotation); ctx.beginPath();
       if (form.Circle) {
@@ -301,8 +301,8 @@
       } else {
         ctx.restore(); return; // Do not invent a boundary for Fluid.
       }
-      ctx.fillStyle = '#d9e2ec';
-      ctx.strokeStyle = '#17202a';
+      ctx.fillStyle = appearance?.fill || '#d9e2ec';
+      ctx.strokeStyle = appearance?.outline || '#17202a';
       ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
       ctx.fill();
       ctx.stroke();
