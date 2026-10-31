@@ -4108,6 +4108,11 @@ mod tests {
             !accumulation.is_empty() || !operations.is_empty(),
             "a positive, eligible heterogeneous interface must advance chemistry or schedule its activated transaction"
         );
+        let selected_position = constituent_chemical_position(selected_unit, &catalog)
+            .expect("selected constituent must retain its chemical position");
+        let external_position =
+            constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
+                .expect("external constituent must retain its chemical position");
         let chemistry_key = crate::chemistry_library::ChemistryKey::from_material_pair(
             selected_name,
             external_name,
