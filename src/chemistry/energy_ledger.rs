@@ -439,6 +439,153 @@ impl EnergyInventorySnapshot {
     }
 }
 
+/// Settle a signed change in the conservative resonance pair potential.
+///
+/// Positive changes are funded only by the active mover's usable energy.
+/// Negative changes are returned to the supplied biological resonance store
+/// in proportion to their negative frequency-resolved contributions; energy
+/// that cannot be retained is dissipated as heat. The pair-potential change
+/// is recorded as held energy and is never also counted as expended work.
+pub(crate) fn settle_pair_potential_change(
+    ledger: &mut EnergyLedger,
+    active_mover_usable_energy: &mut f64,
+    mut biological_resonance: Option<&mut crate::harmonics::ResonantEnergyReservoir>,
+    components: &[crate::harmonics::ResonancePairPotentialComponent],
+) -> bool {
+    if !active_mover_usable_energy.is_finite()
+        || *active_mover_usable_energy < 0.0
+        || !ledger.total_pair_interaction_potential_held.is_finite()
+        || !ledger.total_usable_energy_gained.is_finite()
+        || !ledger.total_resonant_energy_held.is_finite()
+        || !ledger.total_heat_dissipated.is_finite()
+        || components.iter().any(|component| {
+            !component.frequency_cycles_per_day.is_finite()
+                || component.frequency_cycles_per_day <= 0.0
+                || !component.energy.is_finite()
+        })
+    {
+        return false;
+    }
+
+    let delta = components.iter().map(|component| component.energy).sum::<f64>();
+    if !delta.is_finite() {
+        return false;
+    }
+    if delta.abs() <= f64::EPSILON {
+        return delta == 0.0;
+    }
+
+    let next_pair_potential = ledger.total_pair_interaction_potential_held + delta;
+    if !next_pair_potential.is_finite() {
+        return false;
+    }
+
+    if delta > 0.0 {
+        let next_usable = *active_mover_usable_energy - delta;
+        if !next_usable.is_finite() || next_usable < 0.0 {
+            return false;
+        }
+        let next_usable_gained = ledger.total_usable_energy_gained - delta;
+        if !next_usable_gained.is_finite() {
+            return false;
+        }
+        let actual_usable_delta = next_usable - *active_mover_usable_energy;
+        let actual_pair_delta =
+            next_pair_potential - ledger.total_pair_interaction_potential_held;
+        let residual = actual_usable_delta + actual_pair_delta;
+        if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
+            return false;
+        }
+
+        *active_mover_usable_energy = next_usable;
+        ledger.total_usable_energy_gained = next_usable_gained;
+        ledger.total_pair_interaction_potential_held = next_pair_potential;
+        return true;
+    }
+
+    let released = -delta;
+    let negative_component_total = components
+        .iter()
+        .filter(|component| component.energy < 0.0)
+        .map(|component| -component.energy)
+        .sum::<f64>();
+    if !released.is_finite()
+        || !negative_component_total.is_finite()
+        || negative_component_total < released
+        || negative_component_total <= 0.0
+    {
+        return false;
+    }
+
+    let mut staged_resonance = biological_resonance.as_deref().cloned();
+    let original_resonance_total = match biological_resonance.as_deref() {
+        Some(reservoir) => match reservoir.total_energy() {
+            Some(total) => total,
+            None => return false,
+        },
+        None => 0.0,
+    };
+    if let Some(staged) = staged_resonance.as_mut() {
+        for component in components.iter().filter(|component| component.energy < 0.0) {
+            let share = released * (-component.energy / negative_component_total);
+            if !share.is_finite() || share < 0.0 {
+                return false;
+            }
+            // A full/invalid frequency store rejects this component without
+            // mutation; its share remains available for the heat fallback.
+            let _ = staged.deposit(component.frequency_cycles_per_day, share);
+        }
+    }
+
+    let retained_total = match staged_resonance.as_ref() {
+        Some(reservoir) => match reservoir.total_energy() {
+            Some(total) => total,
+            None => return false,
+        },
+        None => 0.0,
+    };
+    let retained_delta = retained_total - original_resonance_total;
+    if !retained_delta.is_finite() || retained_delta < 0.0 || retained_delta > released + EPSILON {
+        return false;
+    }
+    let next_resonant_held = ledger.total_resonant_energy_held + retained_delta;
+    let heat_delta = released - retained_delta;
+    let mut next_heat = ledger.total_heat_dissipated + heat_delta;
+    if !next_resonant_held.is_finite() || !next_heat.is_finite() || heat_delta < 0.0 {
+        return false;
+    }
+
+    let actual_pair_delta =
+        next_pair_potential - ledger.total_pair_interaction_potential_held;
+    let actual_resonant_delta = next_resonant_held - ledger.total_resonant_energy_held;
+    let mut actual_heat_delta = next_heat - ledger.total_heat_dissipated;
+    let mut residual = actual_pair_delta + actual_resonant_delta + actual_heat_delta;
+    if !residual.is_finite() {
+        return false;
+    }
+    // If cumulative f64 counters round the allocation upward, debit only this
+    // settlement's new heat. Never disguise an over-allocation as tolerance.
+    if residual > 0.0 {
+        next_heat -= residual;
+        if !next_heat.is_finite() || next_heat < ledger.total_heat_dissipated {
+            return false;
+        }
+        actual_heat_delta = next_heat - ledger.total_heat_dissipated;
+        residual = actual_pair_delta + actual_resonant_delta + actual_heat_delta;
+    }
+    if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
+        return false;
+    }
+
+    if let (Some(target), Some(staged)) = (biological_resonance.as_deref_mut(), staged_resonance) {
+        *target = staged;
+    }
+    ledger.total_pair_interaction_potential_held = next_pair_potential;
+    ledger.total_resonant_energy_held = next_resonant_held;
+    ledger.total_heat_dissipated = next_heat;
+    true
+}
+
 /// Simulation-wide energy accounting infrastructure.
 /// Every subsystem calculates its physical transaction and submits the same
 /// transaction shape here. The ledger owns the accounting mutation; it does
@@ -759,6 +906,132 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn positive_pair_potential_change_is_paid_only_by_active_mover() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 10.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 3.0,
+        }];
+
+        assert!(settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            Some(&mut resonance),
+            &components,
+        ));
+        assert_eq!(usable, 7.0);
+        assert_eq!(resonance.total_energy(), Some(0.0));
+        assert_eq!(ledger.total_pair_interaction_potential_held, 3.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+    }
+
+    #[test]
+    fn unaffordable_positive_pair_potential_change_rolls_back_atomically() {
+        let mut ledger = EnergyLedger::default();
+        let before = ledger;
+        let mut usable = 2.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let resonance_before = resonance.clone();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 3.0,
+        }];
+
+        assert!(!settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            Some(&mut resonance),
+            &components,
+        ));
+        assert_eq!(usable, 2.0);
+        assert_eq!(resonance, resonance_before);
+        assert_eq!(ledger, before);
+    }
+
+    #[test]
+    fn negative_pair_potential_change_is_retained_by_frequency_without_work() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 10.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [
+            crate::harmonics::ResonancePairPotentialComponent {
+                frequency_cycles_per_day: 220.0,
+                energy: -6.0,
+            },
+            crate::harmonics::ResonancePairPotentialComponent {
+                frequency_cycles_per_day: 440.0,
+                energy: -4.0,
+            },
+            crate::harmonics::ResonancePairPotentialComponent {
+                frequency_cycles_per_day: 880.0,
+                energy: 2.0,
+            },
+        ];
+
+        assert!(settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            Some(&mut resonance),
+            &components,
+        ));
+        assert_eq!(usable, 10.0);
+        assert!((resonance.total_energy().unwrap() - 8.0).abs() < 1e-12);
+        assert_eq!(ledger.total_pair_interaction_potential_held, -8.0);
+        assert_eq!(ledger.total_resonant_energy_held, 8.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+        assert_eq!(resonance.components.len(), 2);
+        assert!((resonance.components[0].energy - 4.8).abs() < 1e-12);
+        assert!((resonance.components[1].energy - 3.2).abs() < 1e-12);
+    }
+
+    #[test]
+    fn unretained_pair_potential_release_becomes_heat_once() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: -5.0,
+        }];
+
+        assert!(settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            None,
+            &components,
+        ));
+        assert_eq!(ledger.total_pair_interaction_potential_held, -5.0);
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 5.0);
+        assert_eq!(ledger.total_work_expended, 0.0);
+    }
+
+    #[test]
+    fn invalid_pair_potential_components_are_rejected_without_mutation() {
+        let mut ledger = EnergyLedger::default();
+        let before = ledger;
+        let mut usable = 5.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: f64::NAN,
+            energy: -1.0,
+        }];
+
+        assert!(!settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            Some(&mut resonance),
+            &components,
+        ));
+        assert_eq!(ledger, before);
+        assert_eq!(usable, 5.0);
+        assert_eq!(resonance.total_energy(), Some(0.0));
+    }
 
     #[test]
     fn favorable_reaction_can_fund_work_without_external_input() {
