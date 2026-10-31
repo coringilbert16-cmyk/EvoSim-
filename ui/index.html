@@ -28,20 +28,20 @@
     <div id="timeline">
       <input id="history" type="range" min="0" max="0" value="0" step="1">
       <span id="timeline-label">Live</span>
-      <label class="speed-control">Run mode <input id="speed" type="range" min="100" max="100" value="100" disabled><span id="speed-value">FULL</span> speed</label>
+      <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
     </div>
     <main><canvas id="world"></canvas></main>
   </div>
   <script>
     // Browser-only camera transform. It owns view state, never simulation state.
     class Camera {
-      constructor() { this.x = 0; this.y = 0; this.scale = 1; }
+      constructor() { this.x = 0; this.y = 0; this.scale = 1; this.minScale = 0.02; this.maxScale = 100; }
       fitBounds(minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding = 0.82) {
         if (![minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding].every(Number.isFinite)) return;
         const width = Math.max(maxX - minX, 1e-9), height = Math.max(maxY - minY, 1e-9);
         if (viewportWidth <= 0 || viewportHeight <= 0 || padding <= 0) return;
         this.x = (minX + maxX) / 2; this.y = (minY + maxY) / 2;
-        this.scale = Math.min(viewportWidth / width, viewportHeight / height) * padding;
+        this.scale = Math.max(this.minScale, Math.min(this.maxScale, Math.min(viewportWidth / width, viewportHeight / height) * padding));
       }
       fitWorld(worldWidth, worldHeight, viewportWidth, viewportHeight, padding = 0.92) {
         this.fitBounds(0, worldWidth, 0, worldHeight, viewportWidth, viewportHeight, padding);
@@ -56,7 +56,7 @@
       zoomAt(screenX, screenY, factor, viewportWidth, viewportHeight) {
         if (!Number.isFinite(factor) || factor <= 0) return;
         const before = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
-        this.scale *= factor;
+        this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
         const after = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
         this.x += before.x - after.x; this.y += before.y - after.y;
       }
@@ -157,7 +157,7 @@
       const speedValue = document.getElementById('speed-value');
       if (runtimeStatus?.ticks_per_second != null) {
         speed.value = runtimeStatus.ticks_per_second;
-        speedValue.textContent = 'FULL';
+        speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
       }
     }
 
@@ -504,8 +504,7 @@
       const levelChanged = observationLevel !== level;
       let url = '/observation/world';
       if (level === 'World') {
-        const bounds = worldObservationBounds();
-        const params = new URLSearchParams(bounds || {});
+        const params = new URLSearchParams();
         if (worldCache.organisms.size) {
           params.set('known_organisms', JSON.stringify([...worldCache.organisms.entries()].map(([id, value]) => [
             id, value.structure_revision, value.position_revision
@@ -627,7 +626,6 @@
       event.preventDefault(); const point = canvasPoint(event), viewport = viewportSize();
       camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * 0.001), viewport.width, viewport.height);
       render();
-      if (observationLevel === 'World' && historyViewTick == null) loadObservation('World');
     }, { passive: false });
     canvas.addEventListener('pointerdown', event => {
       event.preventDefault();
@@ -648,7 +646,6 @@
       if (interaction.panning) {
         camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
         interaction.lastX = event.clientX; interaction.lastY = event.clientY; render();
-        if (observationLevel === 'World' && historyViewTick == null) queueViewportRefresh();
       } else if (interaction.selecting) {
         const point = canvasPoint(event); interaction.currentX = point.x; interaction.currentY = point.y; render();
       }
@@ -700,15 +697,6 @@
     let liveRefreshQueued = false;
     let liveStream = null;
 
-    let viewportRefreshQueued = false;
-    function queueViewportRefresh() {
-      if (viewportRefreshQueued || historyViewTick != null || observationLevel !== 'World') return;
-      viewportRefreshQueued = true;
-      setTimeout(async () => {
-        viewportRefreshQueued = false;
-        if (historyViewTick == null && observationLevel === 'World') await loadObservation('World');
-      }, 75);
-    }
 
     function queueLiveRefresh() {
       if (historyViewTick != null || liveRefreshQueued) return;
