@@ -102,12 +102,24 @@ pub(crate) struct WorldOrganismPhysicalObservation {
     pub(crate) silhouette: Vec<OrganismSilhouettePart>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct WorldFieldPartObservation {
+    pub(crate) resource: String,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) rotation_radians: f64,
+    pub(crate) form: crate::resources::Form,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
     pub(crate) cell_index: usize,
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) revision: u64,
     pub(crate) materials: Option<Vec<(String, f64)>>,
+    /// Individual realized constituents retain their physical shape and position.
+    /// None means unchanged in an incremental observation; Some(empty) means empty.
+    #[serde(default)]
+    pub(crate) physical_parts: Option<Vec<WorldFieldPartObservation>>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldPointObservation {
@@ -125,6 +137,40 @@ pub(crate) struct WorldObservation {
     pub(crate) chemistry_diagnostics: crate::state::EnvironmentalChemistryTickDiagnostics,
     pub(crate) chemistry_events: Vec<crate::state::EnvironmentalChemistryEvent>,
 }
+fn observe_field_physical_parts(
+    cell: &crate::environment::FieldCell,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<WorldFieldPartObservation> {
+    let mut parts = Vec::new();
+    for physical in &cell.physical_materials {
+        let Some(placements) = physical.placements.as_ref() else {
+            continue;
+        };
+        for (index, (resource, _)) in physical.material.parts.iter().enumerate() {
+            let Some(placement) = placements.get(index) else {
+                continue;
+            };
+            let form = physical
+                .realized_shapes
+                .as_ref()
+                .and_then(|shapes| shapes.get(index))
+                .or_else(|| catalog.iter().find(|entry| entry.name == *resource).map(|entry| &entry.shape))
+                .map(|shape| shape.form.clone());
+            let Some(form) = form else {
+                continue;
+            };
+            parts.push(WorldFieldPartObservation {
+                resource: resource.clone(),
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+                form,
+            });
+        }
+    }
+    parts
+}
+
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
         Self::from_simulation_in_bounds(simulation, None, &[], &[])
@@ -252,6 +298,7 @@ impl WorldObservation {
                                 y,
                                 revision,
                                 materials: None,
+                                physical_parts: None,
                             });
                         }
                         let materials = cell.total_material();
@@ -265,6 +312,7 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
+                            physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                         })
                     })
                     .collect()
@@ -288,6 +336,10 @@ impl WorldObservation {
                         y,
                         revision: simulation.environment.field.cell_revisions[cell_index],
                         materials: Some(materials),
+                        physical_parts: Some(observe_field_physical_parts(
+                            cell,
+                            &simulation.environment.catalog,
+                        )),
                     })
                 })
                 .collect()
