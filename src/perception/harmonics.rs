@@ -1278,8 +1278,10 @@ fn directional_resonance_pair_potential_components_with_occluders(
     Some(potential)
 }
 
-/// One symmetric resonance-derived pair potential, retained by frequency so
-/// energy settlement can use the same spectral compatibility as the reservoir.
+/// One symmetric resonance-derived pair potential for an isolated pair,
+/// retained by frequency so energy settlement can use the same spectral
+/// compatibility as the reservoir. If third-party bodies can occlude the pair,
+/// use the occluder-aware variant instead.
 pub(crate) fn resonance_pair_potential_components(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1331,8 +1333,9 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
     Some(symmetric)
 }
 
-/// Scalar view of the symmetric pair potential. PR 4 should use the
+/// Scalar view of the isolated-pair potential. PR 4 should use the
 /// frequency-resolved form when settling energy into/out of resonance stores.
+/// If third-party bodies can occlude the pair, use the occluder-aware variant.
 pub(crate) fn resonance_pair_potential(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1378,9 +1381,10 @@ fn translated_physical_material(
     Some(translated)
 }
 
-/// Pair force derived from the spatial gradient of the single symmetric
-/// potential. The centered difference is a numerical derivative only; it
-/// introduces no additional physical force law or attenuation constant.
+/// Isolated-pair force derived from the spatial gradient of the single
+/// symmetric potential. The caller must ensure no third-party body can occlude
+/// the pair; use the occluder-aware variant otherwise. The centered difference
+/// is a numerical derivative only, not an additional physical force law.
 pub(crate) fn resonance_pair_force(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
