@@ -2381,6 +2381,19 @@ mod tests {
     }
 
     #[test]
+    fn chemical_break_rejects_resonance_debit_exceeding_inventory() {
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.initial_resonant_energy_held = 1.0;
+        ledger.total_resonant_energy_held = 1.0;
+        let original_ledger = ledger;
+        let prepared = prepare_chemical_break_energy_with_structural_potentials(
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
+        );
+        assert!(prepared.is_none());
+        assert_eq!(ledger, original_ledger);
+    }
+
+    #[test]
     fn activation_signal_cannot_replace_disruption_work_or_lower_its_threshold() {
         let ledger = crate::state::EnergyLedger::default();
         // Even if a later caller can provide resonance, activation itself must
