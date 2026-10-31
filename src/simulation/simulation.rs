@@ -867,6 +867,7 @@ impl Simulation {
         if let Some(hotspot) = self.hotspot {
             let _ = crate::hotspot::settle_environment_inputs(
                 hotspot,
+                self.tick,
                 &mut self.environment,
                 &mut self.energy_ledger,
             );
@@ -1149,8 +1150,11 @@ impl Simulation {
                             }
                         }
                     } else if eligibility.can_move {
-                        let perceptions =
-                            crate::harmonics::organism_resonance_perceptions(organism, environment);
+                        let perceptions = crate::harmonics::organism_resonance_perceptions(
+                            organism,
+                            environment,
+                            self.tick,
+                        );
                         let before_energy = organism.usable_energy;
                         let before_stress = organism.stress;
                         let before_realization = developmental
@@ -1235,6 +1239,7 @@ impl Simulation {
                             let perceptions = crate::harmonics::organism_resonance_perceptions(
                                 &organisms[index],
                                 environment,
+                                self.tick,
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
@@ -1297,6 +1302,7 @@ impl Simulation {
                             let perceptions = crate::harmonics::organism_resonance_perceptions(
                                 &organisms[index],
                                 environment,
+                                self.tick,
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;
@@ -1345,6 +1351,7 @@ impl Simulation {
                             let perceptions = crate::harmonics::organism_resonance_perceptions(
                                 &organisms[index],
                                 environment,
+                                self.tick,
                             );
                             let before_energy = organisms[index].usable_energy;
                             let before_stress = organisms[index].stress;

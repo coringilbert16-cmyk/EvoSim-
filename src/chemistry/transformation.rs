@@ -271,8 +271,10 @@ pub(crate) fn resolve_resonance_overload_break(
         else {
             continue;
         };
-        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let frequency_a =
+            crate::harmonics::natural_frequency_cycles_per_day(properties_a, baselines);
+        let frequency_b =
+            crate::harmonics::natural_frequency_cycles_per_day(properties_b, baselines);
         if !frequency_a.is_finite()
             || frequency_a <= 0.0
             || !frequency_b.is_finite()
@@ -280,12 +282,13 @@ pub(crate) fn resolve_resonance_overload_break(
         {
             continue;
         }
-        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
         let compatible = organism
             .resonant_energy
-            .compatible_energy(reaction_frequency_hz);
-        if !reaction_frequency_hz.is_finite()
-            || reaction_frequency_hz <= 0.0
+            .compatible_energy(reaction_frequency_cycles_per_day);
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
             || !compatible.is_finite()
             || compatible <= 1e-9
         {
@@ -296,11 +299,11 @@ pub(crate) fn resolve_resonance_overload_break(
             continue;
         }
         if best.map_or(true, |(_, _, best_score)| score > best_score) {
-            best = Some((index, reaction_frequency_hz, score));
+            best = Some((index, reaction_frequency_cycles_per_day, score));
         }
     }
 
-    let Some((target_index, reaction_frequency_hz, _)) = best else {
+    let Some((target_index, reaction_frequency_cycles_per_day, _)) = best else {
         return false;
     };
     let Some(target) = organism.structure.bonds.get(target_index).copied() else {
@@ -313,7 +316,7 @@ pub(crate) fn resolve_resonance_overload_break(
     let required_resonance = barrier;
     let mut trial_reservoir = organism.resonant_energy.clone();
     let resonance_withdrawal =
-        trial_reservoir.withdraw_compatible(reaction_frequency_hz, required_resonance);
+        trial_reservoir.withdraw_compatible(reaction_frequency_cycles_per_day, required_resonance);
     if !resonance_withdrawal.is_finite() || resonance_withdrawal <= 1e-9 {
         return false;
     }

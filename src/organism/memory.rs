@@ -317,7 +317,9 @@ pub(crate) fn reinforce_spectral_memory(
             .map(|(index, candidate)| {
                 (
                     index,
-                    (candidate.frequency_hz / component.frequency_hz).ln().abs(),
+                    (candidate.frequency_cycles_per_day / component.frequency_cycles_per_day)
+                        .ln()
+                        .abs(),
                 )
             })
             .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
@@ -326,9 +328,9 @@ pub(crate) fn reinforce_spectral_memory(
             let frequency_similarity = (-distance / crate::harmonics::SPECTRAL_MATCH_SIGMA).exp();
             if frequency_similarity >= SPECTRAL_MEMORY_MATCH_FLOOR {
                 let existing_component = &mut existing.spectrum.components[component_index];
-                existing_component.frequency_hz = ((1.0 - blend)
-                    * existing_component.frequency_hz.ln()
-                    + blend * component.frequency_hz.ln())
+                existing_component.frequency_cycles_per_day = ((1.0 - blend)
+                    * existing_component.frequency_cycles_per_day.ln()
+                    + blend * component.frequency_cycles_per_day.ln())
                 .exp();
                 existing_component.amplitude =
                     existing_component.amplitude * (1.0 - blend) + component.amplitude * blend;
@@ -340,7 +342,7 @@ pub(crate) fn reinforce_spectral_memory(
             .spectrum
             .components
             .push(crate::harmonics::ToneComponent {
-                frequency_hz: component.frequency_hz,
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
                 amplitude: component.amplitude * blend,
                 phase_radians: component.phase_radians,
             });
@@ -629,14 +631,14 @@ mod tests {
         let mut memory = ExperienceMemory::default();
         let a = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 440.0,
+                frequency_cycles_per_day: 440.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],
         };
         let b = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 460.0,
+                frequency_cycles_per_day: 460.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],
@@ -646,7 +648,8 @@ mod tests {
         assert_eq!(memory.spectral.len(), 1);
         assert!(memory.spectral[0].association < 1.0);
         assert!(memory.spectral[0].association > -1.0);
-        let prototype_frequency = memory.spectral[0].spectrum.components[0].frequency_hz;
+        let prototype_frequency =
+            memory.spectral[0].spectrum.components[0].frequency_cycles_per_day;
         assert!(prototype_frequency > 440.0 && prototype_frequency < 460.0);
     }
 
@@ -655,14 +658,14 @@ mod tests {
         let mut memory = ExperienceMemory::default();
         let a = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 440.0,
+                frequency_cycles_per_day: 440.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],
         };
         let b = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 1760.0,
+                frequency_cycles_per_day: 1760.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],
@@ -676,7 +679,7 @@ mod tests {
     fn record_experience_keeps_location_and_spectrum_associations_independent() {
         let spectrum = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 440.0,
+                frequency_cycles_per_day: 440.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],
@@ -787,7 +790,7 @@ mod tests {
     fn encounter_reinforcement_preserves_transformed_material() {
         let spectrum = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
-                frequency_hz: 440.0,
+                frequency_cycles_per_day: 440.0,
                 amplitude: 1.0,
                 phase_radians: 0.0,
             }],

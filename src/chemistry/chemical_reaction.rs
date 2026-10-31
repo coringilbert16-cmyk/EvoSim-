@@ -12,7 +12,7 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) bond: Bond,
     pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
-    pub(crate) reaction_frequency_hz: f64,
+    pub(crate) reaction_frequency_cycles_per_day: f64,
     /// Preserve accumulated progress if settlement fails without changing the
     /// physical structure (for example, because the event became stale).
     pub(crate) accumulation_key: String,
@@ -28,7 +28,7 @@ pub(crate) struct EnvironmentalChemicalBreakOperation {
     pub(crate) bond: crate::physical_material::PhysicalMaterialBond,
     pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
-    pub(crate) reaction_frequency_hz: f64,
+    pub(crate) reaction_frequency_cycles_per_day: f64,
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
 }
@@ -371,8 +371,8 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
         if !frequency_a.is_finite()
             || frequency_a <= 0.0
             || !frequency_b.is_finite()
@@ -382,8 +382,11 @@ pub(crate) fn accumulate(
         }
         // The interface reaction couples to the logarithmic midpoint of
         // its two realized materials' natural frequencies.
-        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+        {
             continue;
         }
 
@@ -402,7 +405,7 @@ pub(crate) fn accumulate(
                 bond,
                 activation_signal,
                 disruption_cost,
-                reaction_frequency_hz,
+                reaction_frequency_cycles_per_day,
                 accumulation_key: key.clone(),
                 accumulated_reaction: next,
             });
@@ -695,8 +698,8 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        let frequency_a = crate::harmonics::natural_frequency_hz(a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_hz(b, baselines);
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
         if !frequency_a.is_finite()
             || frequency_a <= 0.0
             || !frequency_b.is_finite()
@@ -704,8 +707,11 @@ pub(crate) fn accumulate_environmental(
         {
             continue;
         }
-        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+        {
             continue;
         }
         let Some(activation_signal) =
@@ -726,7 +732,7 @@ pub(crate) fn accumulate_environmental(
                 bond: connection.clone(),
                 activation_signal,
                 disruption_cost,
-                reaction_frequency_hz,
+                reaction_frequency_cycles_per_day,
                 accumulation_key: key,
                 accumulated_reaction: next,
             });
@@ -792,8 +798,8 @@ pub(crate) fn resolve_environmental(
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
         || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
-        || !operation.reaction_frequency_hz.is_finite()
-        || operation.reaction_frequency_hz <= 0.0
+        || !operation.reaction_frequency_cycles_per_day.is_finite()
+        || operation.reaction_frequency_cycles_per_day <= 0.0
     {
         return false;
     }
@@ -822,8 +828,10 @@ pub(crate) fn resolve_environmental(
     // withdrawal first; any remainder must be covered by already-accounted
     // usable energy. A failed BREAK leaves the live reservoir untouched.
     let mut staged_resonance = environment.resonant_energy.clone();
-    let resonant_work = staged_resonance
-        .withdraw_compatible(operation.reaction_frequency_hz, operation.disruption_cost);
+    let resonant_work = staged_resonance.withdraw_compatible(
+        operation.reaction_frequency_cycles_per_day,
+        operation.disruption_cost,
+    );
     if !resonant_work.is_finite() || resonant_work < 0.0 {
         return false;
     }
@@ -903,8 +911,8 @@ pub(crate) fn resolve(
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
         || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
-        || !operation.reaction_frequency_hz.is_finite()
-        || operation.reaction_frequency_hz <= 0.0
+        || !operation.reaction_frequency_cycles_per_day.is_finite()
+        || operation.reaction_frequency_cycles_per_day <= 0.0
     {
         return false;
     }
@@ -916,8 +924,10 @@ pub(crate) fn resolve(
     // retained resonance; only a successfully settled structural transaction
     // commits the frequency-compatible withdrawal.
     let mut trial_reservoir = organism.resonant_energy.clone();
-    let resonant_work =
-        trial_reservoir.withdraw_compatible(operation.reaction_frequency_hz, required_resonance);
+    let resonant_work = trial_reservoir.withdraw_compatible(
+        operation.reaction_frequency_cycles_per_day,
+        required_resonance,
+    );
     let success = crate::transformation::settle_chemical_break_energy_with_resonance(
         organism,
         operation.bond,
@@ -1068,7 +1078,7 @@ mod material_identity_tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 0.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1091,18 +1101,18 @@ mod material_identity_tests {
             "sunlight capture must balance before chemistry spends the energy"
         );
 
-        let reaction_frequency_hz = simulation
+        let reaction_frequency_cycles_per_day = simulation
             .environment
             .resonant_energy
             .components
             .iter()
             .max_by(|left, right| left.energy.total_cmp(&right.energy))
-            .map(|component| component.frequency_hz)
+            .map(|component| component.frequency_cycles_per_day)
             .expect("sunlight must leave at least one resonant component");
         let compatible_energy = simulation
             .environment
             .resonant_energy
-            .compatible_energy(reaction_frequency_hz);
+            .compatible_energy(reaction_frequency_cycles_per_day);
         let disruption_cost = 0.5_f64.min(compatible_energy * 0.5);
         assert!(
             disruption_cost > f64::EPSILON,
@@ -1117,7 +1127,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost,
-            reaction_frequency_hz,
+            reaction_frequency_cycles_per_day,
             accumulation_key: "sunlight-powered-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -1329,7 +1339,7 @@ mod material_identity_tests {
         let sample = crate::world_tone::WorldToneSample {
             source_x: -5.0,
             source_y: 12.5,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
             energy_intensity_per_tick_per_width: 10.0,
             orbital_phase: 0.75,
         };
@@ -1365,7 +1375,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.1,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "sunlight-funded-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -1434,7 +1444,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "environmental-atomic-break-success".into(),
             accumulated_reaction: 1.0,
         };
@@ -1498,7 +1508,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "environmental-atomic-break-resonance".into(),
             accumulated_reaction: 1.0,
         };
@@ -1569,7 +1579,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "environmental-atomic-break-no-work".into(),
             accumulated_reaction: 1.0,
         };
@@ -1612,7 +1622,7 @@ mod material_identity_tests {
             },
             activation_signal: 0.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "invalid-environmental-activation".into(),
             accumulated_reaction: 0.0,
         };
@@ -1663,7 +1673,7 @@ mod material_identity_tests {
             },
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: f64::NAN,
+            reaction_frequency_cycles_per_day: f64::NAN,
             accumulation_key: "invalid-environmental-frequency".into(),
             accumulated_reaction: 1.0,
         };
@@ -1749,7 +1759,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -1788,7 +1798,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 0.5,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.5,
         };
@@ -1827,7 +1837,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 0.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.0,
         };
@@ -1873,7 +1883,7 @@ mod material_identity_tests {
             // an energy holder can fund the disruption work.
             activation_signal: disruption_cost,
             disruption_cost,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: disruption_cost,
         };
@@ -1915,7 +1925,7 @@ mod material_identity_tests {
             // physical bond and energy holders cannot pay the requested work.
             activation_signal: 1_000_000.0,
             disruption_cost: bond.bond_energy + 1.0,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 1_000_000.0,
         };
@@ -1956,7 +1966,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.0,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -2008,7 +2018,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 0.5,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.5,
         };
@@ -2049,7 +2059,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -2109,7 +2119,7 @@ mod material_identity_tests {
             bond,
             activation_signal,
             disruption_cost,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: activation_signal,
         };
@@ -2249,7 +2259,7 @@ mod material_identity_tests {
             bond,
             activation_signal: 1.0,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
             accumulated_reaction: 1.0,
         };
@@ -2300,7 +2310,7 @@ mod material_identity_tests {
                 bond: graph_bond,
                 activation_signal: 1.0,
                 disruption_cost: 0.5,
-                reaction_frequency_hz: 440.0,
+                reaction_frequency_cycles_per_day: 440.0,
                 accumulation_key: format!("graph|candidate-{index:02}"),
                 accumulated_reaction: 1.0 + index as f64,
             })
@@ -2314,7 +2324,7 @@ mod material_identity_tests {
                 bond: environmental_bond.clone(),
                 activation_signal: 1.0,
                 disruption_cost: 0.5,
-                reaction_frequency_hz: 440.0,
+                reaction_frequency_cycles_per_day: 440.0,
                 accumulation_key: format!("environment|candidate-{index:02}"),
                 accumulated_reaction: 100.0 + index as f64,
             })
@@ -2370,7 +2380,7 @@ mod material_identity_tests {
             bond,
             activation_signal: progress,
             disruption_cost: 0.5,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: key.into(),
             accumulated_reaction: progress,
         };
