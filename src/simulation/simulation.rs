@@ -1004,7 +1004,8 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
-            let committed = crate::environmental_combine::resolve_environmental_preserving_accumulation(
+            let committed =
+                crate::environmental_combine::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
