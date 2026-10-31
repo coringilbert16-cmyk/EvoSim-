@@ -23,3 +23,7 @@
 - Existing resonance and energy tests remain valid.
 
 **Dependency:** PR 1. Draft only until PR 1 is accepted.
+
+## Propagation audit result
+
+The current signal path orders geometry hits and transforms the spectrum through each material during the same simulation tick. Distance is used for geometric attenuation, but the model has no defined finite propagation speed, time-of-flight state, or distance-to-delay conversion. Therefore this PR implements oscillator response lag only. It does **not** add propagation phase delay; that remains blocked until the physical model establishes a propagation speed and its units.
