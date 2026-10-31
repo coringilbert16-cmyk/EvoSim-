@@ -1784,6 +1784,52 @@ mod tests {
     }
 
     #[test]
+    fn material_aura_reception_uses_realized_geometry_and_is_reciprocal() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0);
+        let right = make_material(4.0);
+        let farther = make_material(8.0);
+
+        let left_to_right = material_aura_receptions(&left, &right, &catalog, 0)
+            .expect("valid pair should produce aura reception");
+        let right_to_left = material_aura_receptions(&right, &left, &catalog, 0)
+            .expect("reverse pair should produce aura reception");
+        let left_to_farther = material_aura_receptions(&left, &farther, &catalog, 0)
+            .expect("farther pair should produce attenuated aura reception");
+
+        assert_eq!(left_to_right.len(), 1);
+        assert_eq!(right_to_left.len(), 1);
+        assert_eq!(left_to_farther.len(), 1);
+        assert!(left_to_right[0].receiver_x > 3.0);
+        assert!(right_to_left[0].receiver_x < 1.0);
+        assert!(left_to_right[0].magnitude > left_to_farther[0].magnitude);
+        assert!(
+            (left_to_right[0].magnitude - right_to_left[0].magnitude).abs() < 1e-9,
+            "identical materials at equal separation should receive reciprocal magnitudes"
+        );
+        assert!(left_to_right[0]
+            .spectrum
+            .components
+            .iter()
+            .all(|component| component.phase_radians.is_finite()));
+        assert!(material_aura_receptions(&left, &left, &catalog, 0)
+            .expect("self reception is a valid empty result")
+            .is_empty());
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
