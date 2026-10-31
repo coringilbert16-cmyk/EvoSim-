@@ -1597,6 +1597,7 @@ mod material_identity_tests {
             material_index: 0,
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
+                instance_id: 0,
                 material: Material::free_base("Carbon", 1.0),
                 placements: None,
                 internal_connections: None,
@@ -1648,6 +1649,7 @@ mod material_identity_tests {
             material_index: 0,
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
+                instance_id: 0,
                 material: Material::free_base("Carbon", 1.0),
                 placements: None,
                 internal_connections: None,

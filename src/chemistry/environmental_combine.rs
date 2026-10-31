@@ -6,6 +6,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::resources::{BaseResource, InternalBond, Material};
 use crate::state::{EnergyLedger, Environment};
@@ -51,30 +52,35 @@ fn origin() -> Placement {
     }
 }
 
-fn material_signature(material: &PhysicalMaterial) -> String {
-    // The realized payload, rather than composition alone, distinguishes moved,
-    // reshaped, or differently bonded instances that happen to share a recipe.
-    format!("{material:?}")
-}
-
 fn source_pair_key(
-    cell_a: usize,
-    material_a: usize,
     source_a: &PhysicalMaterial,
-    cell_b: usize,
-    material_b: usize,
     source_b: &PhysicalMaterial,
     unit_a: usize,
     unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
-    format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|{:?}|{:?}",
-        material_signature(source_a),
-        material_signature(source_b),
-        candidate.endpoint_a,
-        candidate.endpoint_b,
-    )
+    // Stable instance identity survives transport and cell/index reordering.
+    if source_a.instance_id <= source_b.instance_id {
+        format!(
+            "{ENVIRONMENT_PREFIX}{}:{}:{unit_a}|{}:{}:{unit_b}|{:?}|{:?}",
+            source_a.instance_id,
+            source_a.geometry_signature(),
+            source_b.instance_id,
+            source_b.geometry_signature(),
+            candidate.endpoint_a,
+            candidate.endpoint_b,
+        )
+    } else {
+        format!(
+            "{ENVIRONMENT_PREFIX}{}:{}:{unit_b}|{}:{}:{unit_a}|{:?}|{:?}",
+            source_b.instance_id,
+            source_b.geometry_signature(),
+            source_a.instance_id,
+            source_a.geometry_signature(),
+            candidate.endpoint_b,
+            candidate.endpoint_a,
+        )
+    }
 }
 
 fn dissipate_unupdated_accumulations(
@@ -127,6 +133,565 @@ fn select_best_contact(
         0,
         remaining_work,
     )
+}
+
+#[cfg(test)]
+fn select_best_positive_work_contact(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    remaining_work: &mut usize,
+) -> Option<SelectedContact> {
+    // The fixture must represent two distinct, non-overlapping physical
+    // reactants; contact candidates alone do not establish that condition.
+    if indices_a.iter().any(|index| {
+        // placed_unit_overlaps scans the complete structure, including the
+        // candidate itself, unless that unit is explicitly ignored. Restrict
+        // the scan to the opposite reactant group so this is a true A-vs-B
+        // penetration check rather than a unit-vs-itself check.
+        let ignored_units = structure
+            .units
+            .iter()
+            .enumerate()
+            .filter_map(|(other_index, _)| {
+                (other_index == *index || !indices_b.contains(&other_index))
+                    .then_some(other_index)
+            })
+            .collect::<Vec<_>>();
+        crate::construction_runtime::placed_unit_overlaps(
+            structure,
+            &structure.units[*index],
+            &ignored_units,
+            catalog,
+        )
+    }) {
+        return None;
+    }
+
+    for &unit_a in indices_a {
+        for &unit_b in indices_b {
+            if *remaining_work == 0 {
+                return None;
+            }
+            *remaining_work = (*remaining_work).saturating_sub(1);
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                structure, unit_a, unit_b, catalog, cache,
+            );
+            for candidate in candidates {
+                let Some((evaluation, formation_work, investment, required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        structure, unit_a, unit_b, candidate, catalog,
+                    )
+                else {
+                    continue;
+                };
+                // Fixture-only filtering: production may correctly select a
+                // zero-work contact when the reactants are already touching.
+                if !formation_work.is_finite()
+                    || formation_work <= 1e-9
+                    || evaluation.candidate.distance > 0.25
+                    || evaluation.candidate.facing <= 0.5
+                {
+                    continue;
+                }
+                let name_a = structure.units[unit_a]
+                    .material
+                    .parts
+                    .first()
+                    .map(|part| part.0.as_str());
+                let name_b = structure.units[unit_b]
+                    .material
+                    .parts
+                    .first()
+                    .map(|part| part.0.as_str());
+                let live_interface = name_a.zip(name_b).and_then(|(name_a, name_b)| {
+                    crate::geometry_reference_library::resolve_live_contact_candidate(
+                        name_a,
+                        &structure.units[unit_a],
+                        name_b,
+                        &structure.units[unit_b],
+                        evaluation.candidate,
+                        catalog,
+                    )
+                });
+                if live_interface.is_none() {
+                    continue;
+                }
+                return Some(SelectedContact {
+                    unit_a,
+                    unit_b,
+                    candidate: evaluation.candidate,
+                    investment,
+                    required_energy,
+                });
+            }
+        }
+    }
+    None
+}
+
+fn approach_stage(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    obstacle_indices: &[usize],
+    selected: SelectedContact,
+    step: f64,
+    mass_a: f64,
+    mass_b: f64,
+    environment: &Environment,
+) -> Option<(f64, f64, f64)> {
+    if !step.is_finite() || step <= 0.0 || !mass_a.is_finite() || !mass_b.is_finite() {
+        return None;
+    }
+    let total_mass = mass_a + mass_b;
+    if !total_mass.is_finite() || total_mass <= 0.0 {
+        return None;
+    }
+    let share_a = mass_b / total_mass;
+    let share_b = mass_a / total_mass;
+    let a = structure.units.get(selected.unit_a)?;
+    let b = structure.units.get(selected.unit_b)?;
+    let point_a = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_a,
+        a,
+        &environment.catalog,
+    )?;
+    let point_b = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_b,
+        b,
+        &environment.catalog,
+    )?;
+    let dx = point_b.x - point_a.x;
+    let raw_dy = point_b.y - point_a.y;
+    let dy = if environment.height.is_finite() && environment.height > 0.0 {
+        (raw_dy + environment.height * 0.5).rem_euclid(environment.height)
+            - environment.height * 0.5
+    } else {
+        raw_dy
+    };
+    let distance = dx.hypot(dy);
+    if !distance.is_finite()
+        || (distance - selected.candidate.distance).abs() > 1e-6
+        || distance <= 1e-12
+        || step > distance
+        || !environment.height.is_finite()
+        || environment.height <= 0.0
+        || !environment.width.is_finite()
+        || environment.width <= 0.0
+    {
+        return None;
+    }
+    let ux = dx / distance;
+    let uy = dy / distance;
+    let move_a = step * share_a;
+    let move_b = step * share_b;
+    let dx_a = ux * move_a;
+    let dy_a = uy * move_a;
+    let dx_b = -ux * move_b;
+    let dy_b = -uy * move_b;
+    let mut staged = structure.clone();
+    for &index in indices_a {
+        let unit = staged.units.get_mut(index)?;
+        unit.placement.x += dx_a;
+        unit.placement.y = (unit.placement.y + dy_a).rem_euclid(environment.height);
+        let shape = unit.shape(&environment.catalog)?;
+        let radius = shape.form.bounding_radius();
+        if !unit.placement.x.is_finite()
+            || !unit.placement.y.is_finite()
+            || unit.placement.x - radius < 0.0
+            || unit.placement.x + radius > environment.width
+        {
+            return None;
+        }
+    }
+    for &index in indices_b {
+        let unit = staged.units.get_mut(index)?;
+        unit.placement.x += dx_b;
+        unit.placement.y = (unit.placement.y + dy_b).rem_euclid(environment.height);
+        let shape = unit.shape(&environment.catalog)?;
+        let radius = shape.form.bounding_radius();
+        if !unit.placement.x.is_finite()
+            || !unit.placement.y.is_finite()
+            || unit.placement.x - radius < 0.0
+            || unit.placement.x + radius > environment.width
+        {
+            return None;
+        }
+    }
+    for &index in indices_a {
+        if crate::construction_runtime::placed_unit_overlaps(
+            &staged,
+            &staged.units[index],
+            indices_b,
+            &environment.catalog,
+        ) || crate::construction_runtime::placed_unit_overlaps(
+            &staged,
+            &staged.units[index],
+            obstacle_indices,
+            &environment.catalog,
+        ) {
+            return None;
+        }
+    }
+    for &index in indices_b {
+        if crate::construction_runtime::placed_unit_overlaps(
+            &staged,
+            &staged.units[index],
+            obstacle_indices,
+            &environment.catalog,
+        ) {
+            return None;
+        }
+    }
+    let moved_a = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_a,
+        &staged.units[selected.unit_a],
+        &environment.catalog,
+    )?;
+    let moved_b = crate::contact::endpoint_world_point(
+        selected.candidate.endpoint_b,
+        &staged.units[selected.unit_b],
+        &environment.catalog,
+    )?;
+    let moved_dy = if environment.height.is_finite() && environment.height > 0.0 {
+        (moved_b.y - moved_a.y + environment.height * 0.5).rem_euclid(environment.height)
+            - environment.height * 0.5
+    } else {
+        moved_b.y - moved_a.y
+    };
+    let moved_distance = (moved_b.x - moved_a.x).hypot(moved_dy);
+    moved_distance
+        .is_finite()
+        .then_some((moved_distance, dx_a, dy_a))
+}
+
+/// Let chemical attraction perform real approach work. The force advances the
+/// two complete physical reactants toward one another; compatible resonance
+/// funds the work first and the environmental usable reserve covers any remainder.
+fn advance_pair_approach(
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    selected: SelectedContact,
+    cell_a: usize,
+    material_a: usize,
+    source_a: &PhysicalMaterial,
+    cell_b: usize,
+    material_b: usize,
+    source_b: &PhysicalMaterial,
+    ticks_per_second: f64,
+    remaining_work: &mut usize,
+) -> bool {
+    let distance = selected.candidate.distance;
+    let radius = crate::chemistry::CHEMICAL_CONTACT_RADIUS;
+    if !distance.is_finite()
+        || distance <= 1e-9
+        || distance >= radius
+        || !ticks_per_second.is_finite()
+        || ticks_per_second <= 0.0
+        || cell_a >= environment.field.cells.len()
+        || cell_b >= environment.field.cells.len()
+        || environment.field.cells[cell_a]
+            .physical_materials
+            .get(material_a)
+            != Some(source_a)
+        || environment.field.cells[cell_b]
+            .physical_materials
+            .get(material_b)
+            != Some(source_b)
+    {
+        return false;
+    }
+    let (Some(properties_a), Some(properties_b)) = (
+        structure
+            .units
+            .get(selected.unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog)),
+        structure
+            .units
+            .get(selected.unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog)),
+    ) else {
+        return false;
+    };
+    let (Some(position_a), Some(position_b)) = (
+        properties_a.chemical_position,
+        properties_b.chemical_position,
+    ) else {
+        return false;
+    };
+    let Some(static_potential) = crate::chemistry::interaction_potential(
+        position_a,
+        position_b,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+    ) else {
+        return false;
+    };
+    if static_potential <= 0.0 {
+        return false;
+    }
+
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let reaction_properties_a = source_a.material.weighted_properties(&environment.catalog);
+    let reaction_properties_b = source_b.material.weighted_properties(&environment.catalog);
+    let frequency_a = crate::harmonics::natural_frequency_hz(reaction_properties_a, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_hz(reaction_properties_b, baselines);
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
+        return false;
+    }
+    let reaction_frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    if !reaction_frequency.is_finite() || reaction_frequency <= 0.0 {
+        return false;
+    }
+    let reduced_mass =
+        properties_a.mass * properties_b.mass / (properties_a.mass + properties_b.mass);
+    if !reduced_mass.is_finite() || reduced_mass <= 0.0 {
+        return false;
+    }
+    let Some(engagement) = crate::chemistry::interface_engagement(selected.candidate.facing) else {
+        return false;
+    };
+    let normalized_gap = (distance / radius).clamp(0.0, 1.0);
+    let force = static_potential
+        * crate::chemistry::CHEMICAL_MAX_FORCE
+        * (1.0 - normalized_gap).powi(2)
+        * engagement;
+    let dt = 1.0 / ticks_per_second;
+    let requested_step = (0.5 * force / reduced_mass * dt * dt).min(distance);
+    if !requested_step.is_finite() || requested_step <= 1e-9 {
+        return false;
+    }
+    let old_remaining =
+        crate::combine::formation_work_cost(properties_a, properties_b, distance) * engagement;
+    let compatible_available = environment
+        .resonant_energy
+        .compatible_energy(reaction_frequency);
+    let available = compatible_available + environment.chemistry_usable_energy;
+    if !old_remaining.is_finite()
+        || old_remaining <= 0.0
+        || !available.is_finite()
+        || available <= 0.0
+    {
+        return false;
+    }
+    let Some(body) =
+        crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(structure)
+    else {
+        return false;
+    };
+    if *remaining_work == 0 {
+        return false;
+    }
+    let cell_budget = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_work);
+    let nearby_cells = environment.field.cells_intersecting_bounds_limited(
+        body.min_x - BOUNDS_PADDING,
+        body.max_x + BOUNDS_PADDING,
+        body.min_y - BOUNDS_PADDING,
+        body.max_y + BOUNDS_PADDING,
+        cell_budget.saturating_add(1),
+        cell_a.wrapping_add(cell_b),
+    );
+    if nearby_cells.len() > cell_budget {
+        *remaining_work = remaining_work.saturating_sub(cell_budget);
+        return false;
+    }
+    let mut collision_structure = structure.clone();
+    let mut obstacle_indices = Vec::new();
+    for nearby_cell in nearby_cells {
+        if *remaining_work == 0 {
+            return false;
+        }
+        *remaining_work = remaining_work.saturating_sub(1);
+        for physical in &environment.field.cells[nearby_cell].physical_materials {
+            if *remaining_work == 0 {
+                return false;
+            }
+            *remaining_work = remaining_work.saturating_sub(1);
+            if physical.instance_id == source_a.instance_id
+                || physical.instance_id == source_b.instance_id
+            {
+                continue;
+            }
+            if let Some(indices) = crate::material_restoration::restore_material(
+                &mut collision_structure,
+                physical,
+                origin(),
+                &environment.catalog,
+            ) {
+                obstacle_indices.extend(indices);
+            }
+        }
+    }
+    const APPROACH_GEOMETRY_SEARCH_STEPS: usize = 28;
+    if *remaining_work < APPROACH_GEOMETRY_SEARCH_STEPS {
+        return false;
+    }
+    *remaining_work = remaining_work.saturating_sub(APPROACH_GEOMETRY_SEARCH_STEPS);
+    let mut low = 0.0;
+    let mut high = requested_step;
+    let mut best: Option<(f64, f64, f64)> = None;
+    for _ in 0..APPROACH_GEOMETRY_SEARCH_STEPS {
+        let step = 0.5 * (low + high);
+        if step <= 1e-10 {
+            break;
+        }
+        let Some(staged) = approach_stage(
+            &collision_structure,
+            indices_a,
+            indices_b,
+            &obstacle_indices,
+            selected,
+            step,
+            properties_a.mass,
+            properties_b.mass,
+            environment,
+        ) else {
+            high = step;
+            continue;
+        };
+        let new_remaining =
+            crate::combine::formation_work_cost(properties_a, properties_b, staged.0) * engagement;
+        let work = old_remaining - new_remaining;
+        if !new_remaining.is_finite() || !work.is_finite() || work < 0.0 {
+            return false;
+        }
+        if work <= available + 1e-9 {
+            low = step;
+            best = Some((staged.0, staged.1, staged.2));
+        } else {
+            high = step;
+        }
+    }
+    let Some((new_distance, dx_a, dy_a)) = best else {
+        return false;
+    };
+    let work = old_remaining
+        - crate::combine::formation_work_cost(properties_a, properties_b, new_distance)
+            * engagement;
+    if !work.is_finite() || work <= 1e-12 {
+        return false;
+    }
+    let mut staged_resonance = environment.resonant_energy.clone();
+    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency, work);
+    let usable_work = work - resonant_work;
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !usable_work.is_finite()
+        || usable_work < 0.0
+        || usable_work > environment.chemistry_usable_energy + 1e-9
+    {
+        return false;
+    }
+    let dx_b = -dx_a * properties_a.mass / properties_b.mass;
+    let dy_b = -dy_a * properties_a.mass / properties_b.mass;
+    let mut moved_a = source_a.clone();
+    let mut moved_b = source_b.clone();
+    for placement in moved_a.placements.as_mut().into_iter().flatten() {
+        placement.x += dx_a;
+        placement.y = (placement.y + dy_a).rem_euclid(environment.height);
+    }
+    for placement in moved_b.placements.as_mut().into_iter().flatten() {
+        placement.x += dx_b;
+        placement.y = (placement.y + dy_b).rem_euclid(environment.height);
+    }
+    if !moved_a.is_realized() || !moved_b.is_realized() {
+        return false;
+    }
+    let Some(anchor_a) = moved_a
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    else {
+        return false;
+    };
+    let Some(anchor_b) = moved_b
+        .placements
+        .as_ref()
+        .and_then(|placements| placements.first())
+    else {
+        return false;
+    };
+    let Some(destination_a) = environment.field.index_for_position(anchor_a.x, anchor_a.y) else {
+        return false;
+    };
+    let Some(destination_b) = environment.field.index_for_position(anchor_b.x, anchor_b.y) else {
+        return false;
+    };
+    let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    let Some(transaction) = EnergyTransaction::expenditure(EnergyReason::Move, 0.0, work, 0.0)
+    else {
+        return false;
+    };
+    if !staged_usable_energy.is_finite()
+        || staged_usable_energy < 0.0
+        || !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction)
+    {
+        return false;
+    }
+    let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
+    let next_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
+    let next_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_environment_usable = staged_usable_energy;
+    if !usable_delta.is_finite()
+        || !next_resonant.is_finite()
+        || next_resonant < -1e-9
+        || !next_usable.is_finite()
+        || next_usable < -1e-9
+        || !next_environment_usable.is_finite()
+        || next_environment_usable < -1e-9
+    {
+        return false;
+    }
+    staged_ledger.total_resonant_energy_held = next_resonant.max(0.0);
+    staged_ledger.total_usable_energy_held = next_usable.max(0.0);
+    let mut removals = vec![(cell_a, material_a), (cell_b, material_b)];
+    if removals[0] == removals[1] {
+        return false;
+    }
+    removals.sort_unstable_by(|a, b| b.cmp(a));
+    for (cell, index) in &removals {
+        if environment.field.cells[*cell]
+            .physical_materials
+            .get(*index)
+            .is_none()
+        {
+            return false;
+        }
+    }
+    for (cell, index) in removals {
+        environment.field.cells[cell]
+            .physical_materials
+            .remove(index);
+    }
+    environment.field.cells[destination_a]
+        .physical_materials
+        .push(moved_a);
+    environment.field.cells[destination_b]
+        .physical_materials
+        .push(moved_b);
+    let mut changed = BTreeSet::new();
+    changed.insert(cell_a);
+    changed.insert(cell_b);
+    changed.insert(destination_a);
+    changed.insert(destination_b);
+    for index in changed {
+        environment.field.mark_changed_at_index(index);
+    }
+    environment.resonant_energy = staged_resonance;
+    environment.chemistry_usable_energy = next_environment_usable.max(0.0);
+    *ledger = staged_ledger;
+    true
 }
 
 /// Advance the bounded constituent-pair window by one pair per tick.
@@ -319,11 +884,7 @@ fn chemical_step(
         reject_step!();
     };
     let key = source_pair_key(
-        cell_a,
-        material_a,
         source_a,
-        cell_b,
-        material_b,
         source_b,
         selected.unit_a,
         selected.unit_b,
@@ -384,12 +945,20 @@ fn chemical_step(
 }
 
 pub(crate) fn accumulate_environmental(
-    environment: &Environment,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
     accumulation: &mut BTreeMap<String, f64>,
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
     tick: u64,
     remaining_discovery_work: &mut usize,
+    ticks_per_second: f64,
 ) -> Vec<EnvironmentalCombineOperation> {
+    // Ensure legacy snapshots have encounter identities before any geometry changes.
+    for cell in &mut environment.field.cells {
+        for physical in &mut cell.physical_materials {
+            physical.refresh_instance_identity();
+        }
+    }
     if *remaining_discovery_work == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
@@ -462,14 +1031,13 @@ pub(crate) fn accumulate_environmental(
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
-            for target_offset in 0..target_cells.len() {
+            for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
@@ -528,6 +1096,37 @@ pub(crate) fn accumulate_environmental(
                     let Some(selected) = selected else {
                         continue;
                     };
+                    if selected.candidate.distance > 1e-9
+                        && advance_pair_approach(
+                            environment,
+                            ledger,
+                            &trial_structure,
+                            &indices_a,
+                            &indices_b,
+                            selected,
+                            cell_a,
+                            material_a,
+                            &source_a,
+                            cell_b,
+                            material_b,
+                            &source_b,
+                            ticks_per_second,
+                            remaining_discovery_work,
+                        )
+                    {
+                        // Preserve this encounter's accumulated chemistry while
+                        // restarting discovery against the new field snapshot.
+                        let key = source_pair_key(
+                            &source_a,
+                            &source_b,
+                            selected.unit_a,
+                            selected.unit_b,
+                            selected.candidate,
+                        );
+                        updated_keys.insert(key);
+                        dissipate_unupdated_accumulations(accumulation, &updated_keys);
+                        return Vec::new();
+                    }
                     chemical_step(
                         environment,
                         chemistry_library,
@@ -641,13 +1240,15 @@ fn physical_material_from_structure(
     if !material.is_valid_for_catalog(catalog) {
         return None;
     }
-    let physical = PhysicalMaterial {
+    let mut physical = PhysicalMaterial {
+        instance_id: 0,
         material,
         placements: Some(placements),
         internal_connections: Some(internal_connections),
         owner_relative_origin: None,
         realized_shapes: Some(shapes),
     };
+    physical.refresh_instance_identity();
     physical.is_realized().then_some(physical)
 }
 
@@ -733,6 +1334,21 @@ pub(crate) fn resolve_environmental(
     else {
         return false;
     };
+
+    // Approach work has already been paid incrementally as the reactants
+    // physically moved together. COMBINE must not charge it a second time.
+    let Some((_, work_cost, _, _)) = crate::combine_runtime::selected_candidate_evaluation(
+        &trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    if !work_cost.is_finite() || work_cost > 1e-8 {
+        return false;
+    }
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     let mut cache = ConnectionCompatibilityCache::new();
@@ -840,6 +1456,69 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn environmental_encounter_key_survives_transport_and_pair_order_changes() {
+        let catalog = crate::resources::default_catalog();
+        let first = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        let second = PhysicalMaterial::realized(
+            Material::free_base("Hydrogen", 1.0),
+            vec![Placement {
+                x: 11.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+            endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            distance: 0.25,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+        let initial = source_pair_key(&first, &second, 0, 0, candidate);
+
+        let mut moved_first = first.clone();
+        let mut moved_second = second.clone();
+        moved_first.placements.as_mut().unwrap()[0].x += 0.4;
+        moved_second.placements.as_mut().unwrap()[0].x -= 0.2;
+        let moved = source_pair_key(&moved_first, &moved_second, 0, 0, candidate);
+        let reversed = source_pair_key(
+            &moved_second,
+            &moved_first,
+            0,
+            0,
+            ConnectionPairCandidate {
+                endpoint_a: candidate.endpoint_b,
+                endpoint_b: candidate.endpoint_a,
+                ..candidate
+            },
+        );
+        let mut rotated_first = moved_first.clone();
+        rotated_first.placements.as_mut().unwrap()[0].rotation_radians += 0.1;
+        let rotated = source_pair_key(&rotated_first, &moved_second, 0, 0, candidate);
+
+        assert_eq!(initial, moved);
+        assert_eq!(moved, reversed);
+        assert_ne!(
+            moved, rotated,
+            "a changed constituent orientation starts a new encounter"
+        );
+    }
 
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///
@@ -1206,11 +1885,8 @@ mod tests {
             available_a: true,
             available_b: true,
         };
-        let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
-        assert_ne!(
-            original,
-            source_pair_key(0, 0, &a, 0, 1, &b, 1, 0, candidate)
-        );
+        let original = source_pair_key(&a, &b, 0, 0, candidate);
+        assert_ne!(original, source_pair_key(&a, &b, 1, 0, candidate));
         let moved = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
@@ -1221,10 +1897,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        assert_ne!(
-            original,
-            source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate)
-        );
+        assert_ne!(original, source_pair_key(&moved, &b, 0, 0, candidate));
     }
 
     #[test]
@@ -1257,11 +1930,13 @@ mod tests {
         let mut budget = 1;
 
         let operations = accumulate_environmental(
-            &simulation.environment,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
             &mut accumulation,
             &mut simulation.chemistry_library,
             0,
             &mut budget,
+            simulation.ticks_per_second,
         );
 
         assert!(operations.is_empty());
@@ -1278,11 +1953,13 @@ mod tests {
         let mut budget = 0;
 
         let operations = accumulate_environmental(
-            &simulation.environment,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
             &mut accumulation,
             &mut simulation.chemistry_library,
             0,
             &mut budget,
+            simulation.ticks_per_second,
         );
 
         assert!(operations.is_empty());
@@ -1490,7 +2167,7 @@ mod tests {
             let local_x = second.x - first.x;
             let local_y = second.y - first.y;
 
-            'external_pose: for step in 1..=80 {
+            for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
@@ -1610,6 +2287,8 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
+        // Preserve the established reserve for the compound/compound round-trip;
+        // the dedicated base-pair test below isolates resonance-only funding.
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -1627,11 +2306,13 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -1817,7 +2498,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);
@@ -2282,11 +2963,13 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -2377,6 +3060,168 @@ mod tests {
     }
 
     #[test]
+    fn environmental_approach_without_energy_leaves_geometry_and_ledgers_unchanged() {
+        let mut simulation = crate::state::Simulation::new(941, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        simulation.environment.width = 30.0;
+        simulation.environment.height = 30.0;
+        simulation.environment.field =
+            crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let cell = simulation
+            .environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .unwrap();
+        let mut fixture = None;
+        'search: for resource_a in &catalog {
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            for resource_b in &catalog {
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
+                    continue;
+                }
+                let (Some(position_a), Some(position_b)) = (
+                    resource_a.properties.chemical_position,
+                    resource_b.properties.chemical_position,
+                ) else {
+                    continue;
+                };
+                if crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+                .unwrap_or(0.0)
+                    <= 0.0
+                {
+                    continue;
+                }
+                for step in 1..=18 {
+                    let separation = step as f64 * 0.05;
+                    for rotation_step in 0..12 {
+                        let source_a = PhysicalMaterial::realized(
+                            Material::free_base(resource_a.name.clone(), 1.0),
+                            vec![Placement {
+                                x: 10.0,
+                                y: 10.0,
+                                rotation_radians: 0.0,
+                            }],
+                            &catalog,
+                        );
+                        let source_b = PhysicalMaterial::realized(
+                            Material::free_base(resource_b.name.clone(), 1.0),
+                            vec![Placement {
+                                x: 10.0 + separation,
+                                y: 10.0,
+                                rotation_radians: rotation_step as f64 * std::f64::consts::PI / 6.0,
+                            }],
+                            &catalog,
+                        );
+                        let (Some(source_a), Some(source_b)) = (source_a, source_b) else {
+                            continue;
+                        };
+                        let Some((mut structure, indices_a)) =
+                            restored_source(&source_a, &simulation.environment)
+                        else {
+                            continue;
+                        };
+                        let Some(indices_b) = crate::material_restoration::restore_material(
+                            &mut structure,
+                            &source_b,
+                            origin(),
+                            &catalog,
+                        ) else {
+                            continue;
+                        };
+                        let mut cache = ConnectionCompatibilityCache::new();
+                        let mut budget = FIELD_COMPONENT_PAIR_LIMIT;
+                        let Some(selected) = select_best_contact(
+                            &structure,
+                            &indices_a,
+                            &indices_b,
+                            &catalog,
+                            &mut cache,
+                            &mut budget,
+                        ) else {
+                            continue;
+                        };
+                        if selected.candidate.distance <= 1e-6
+                            || selected.candidate.distance
+                                >= crate::chemistry::CHEMICAL_CONTACT_RADIUS
+                            || selected.candidate.facing <= 0.5
+                        {
+                            continue;
+                        }
+                        fixture = Some((
+                            source_a, source_b, structure, indices_a, indices_b, selected,
+                        ));
+                        break 'search;
+                    }
+                }
+            }
+        }
+        let (source_a, source_b, structure, indices_a, indices_b, selected) =
+            fixture.expect("catalog must provide a chemically attractive separated pair");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_a.clone(),
+            &catalog
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell,
+            source_b.clone(),
+            &catalog
+        ));
+        let properties_a = structure.units[selected.unit_a]
+            .properties(&catalog)
+            .expect("selected reactant must have catalog properties");
+        let properties_b = structure.units[selected.unit_b]
+            .properties(&catalog)
+            .expect("selected reactant must have catalog properties");
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(simulation
+            .environment
+            .resonant_energy
+            .deposit(reaction_frequency * 1_000_000.0, 1_000.0));
+        let baseline = simulation.energy_inventory_snapshot();
+        simulation.energy_ledger.total_resonant_energy_held = baseline.current_resonant_energy;
+        let mut approach_work = FIELD_TARGET_CELL_INSPECTION_LIMIT;
+        let before_cells = simulation.environment.field.cells.clone();
+        let before_ledger = simulation.energy_ledger;
+        let before_inventory = simulation.energy_inventory_snapshot();
+        assert!(
+            !advance_pair_approach(
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
+                &structure,
+                &indices_a,
+                &indices_b,
+                selected,
+                cell,
+                0,
+                &source_a,
+                cell,
+                1,
+                &source_b,
+                simulation.ticks_per_second,
+                &mut approach_work,
+            ),
+            "incompatible resonance must not fund approach when usable reserve is empty"
+        );
+        assert_eq!(simulation.environment.field.cells, before_cells);
+        assert_eq!(simulation.energy_ledger, before_ledger);
+        assert_eq!(simulation.energy_inventory_snapshot(), before_inventory);
+    }
+    #[test]
     fn environmental_pair_combine_commits_a_realized_product() {
         let mut simulation = crate::state::Simulation::new(942, 10.0);
         let catalog = simulation.environment.catalog.clone();
@@ -2462,7 +3307,7 @@ mod tests {
                         }
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
-                        if let Some(selected) = select_best_contact(
+                        if let Some(selected) = select_best_positive_work_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
                             let material_name_a = structure.units[selected.unit_a]
@@ -2502,6 +3347,24 @@ mod tests {
 
         let (source_a, source_b, selected) =
             selected_pair.expect("catalog should contain a physically eligible material pair");
+
+        // This case deliberately has no usable-energy reserve: the live
+        // environmental COMBINE must be funded by frequency-compatible field
+        // resonance alone.
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let properties_a = source_a.material.weighted_properties(&catalog);
+        let properties_b = source_b.material.weighted_properties(&catalog);
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .deposit(reaction_frequency_hz, 1_000.0),
+            "test resonance reservoir must accept the reactants' coupled frequency"
+        );
 
         // Isolate chemical activation from spatial discovery. If this direct call
         // cannot accumulate, the rejection is inside chemical_step rather than
@@ -2551,7 +3414,11 @@ mod tests {
             source_b.clone(),
             &catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 1_000.0;
+        // Keep the usable reserve empty so this transaction is funded solely
+        // by the compatible resonance deposited above. The simulation fixture
+        // starts with a nonzero reserve, so clear it explicitly before taking
+        // the inventory baseline used by the ledger assertions.
+        simulation.environment.chemistry_usable_energy = 0.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -2572,11 +3439,13 @@ mod tests {
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut discovery_work,
+                simulation.ticks_per_second,
             );
             let mut realization_work =
                 crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -2678,11 +3547,61 @@ mod tests {
         );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
+        // Verify the selected operation actually has positive physical
+        // formation work. Otherwise an empty-energy rejection test would be
+        // vacuous because a zero-cost bond needs no funding.
+        let (mut work_structure, work_indices_a) =
+            restored_source(&operation.source_a, &simulation.environment)
+                .expect("selected source A must restore for work-cost diagnostic");
+        let work_indices_b = crate::material_restoration::restore_material(
+            &mut work_structure,
+            &operation.source_b,
+            origin(),
+            &catalog,
+        )
+        .expect("selected source B must restore for work-cost diagnostic");
+        let work_unit_a = work_indices_a[operation.unit_a];
+        let work_unit_b = work_indices_b[operation.unit_b];
+        let (_, formation_work, _, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &work_structure,
+            work_unit_a,
+            work_unit_b,
+            operation.candidate,
+            &catalog,
+        )
+        .expect("selected environmental candidate must remain evaluable");
+        assert!(
+            formation_work <= 1e-8,
+            "COMBINE must arrive only after approach work has been settled; remaining={formation_work}"
+        );
+
+        let resonant_before_commit = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("test resonance inventory must be valid");
+        assert!(
+            resonant_before_commit < baseline.current_resonant_energy - 1e-9,
+            "the physical approach must already have withdrawn compatible resonance"
+        );
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
+        assert!(
+            simulation.environment.chemistry_usable_energy <= 1e-9,
+            "resonance-funded approach must not rely on a usable-energy grant"
+        );
+        let resonant_after_commit = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("post-COMBINE resonance inventory must be valid");
+        assert!(
+            (resonant_after_commit - resonant_before_commit).abs() <= 1e-8,
+            "COMBINE must not charge approach work a second time"
+        );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
@@ -2739,6 +3658,13 @@ mod tests {
                 .abs()
                 <= 1e-6,
             "COMBINE must keep the ledger structural-energy total aligned with its live bonds"
+        );
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held
+                - inventory.current_resonant_energy)
+                .abs()
+                <= 1e-6,
+            "COMBINE must keep the ledger resonant-energy total aligned with its live reservoir"
         );
         let residual = inventory.residual();
         assert!(

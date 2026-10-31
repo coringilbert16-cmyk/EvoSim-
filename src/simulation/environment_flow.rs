@@ -554,6 +554,14 @@ pub(crate) fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
+    // Legacy serialized instances predate persistent identity. Assign it once
+    // before transport changes their placements, then preserve it thereafter.
+    for cell in &mut field.cells {
+        for material in &mut cell.physical_materials {
+            material.refresh_instance_identity();
+        }
+    }
+
     let width = world_width.min(field.width_cells as f64 * field.cell_size);
     let height = world_height.min(field.height_cells as f64 * field.cell_size);
     if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {

@@ -30,6 +30,11 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
+    /// Stable deterministic identity for this physical instance. Unlike its
+    /// placements, this survives environmental transport and keeps ongoing
+    /// chemical encounters associated with the same reactants.
+    #[serde(default)]
+    pub(crate) instance_id: u64,
     pub(crate) material: Material,
     pub(crate) placements: Option<Vec<Placement>>,
     #[serde(default)]
@@ -43,6 +48,60 @@ pub(crate) struct PhysicalMaterial {
 }
 
 impl PhysicalMaterial {
+    fn hash_identity_bytes(bytes: impl IntoIterator<Item = u8>) -> u64 {
+        let hash = bytes
+            .into_iter()
+            .fold(0xcbf29ce484222325_u64, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+            });
+        if hash == 0 {
+            1
+        } else {
+            hash
+        }
+    }
+
+    fn child_instance_identity(parent: u64, members: &[usize]) -> u64 {
+        let signature = format!("split:{parent}:{members:?}");
+        Self::hash_identity_bytes(signature.bytes())
+    }
+
+    /// Translation-invariant geometry signature. It changes when a constituent
+    /// rotates or a deformable realized shape changes, but not when the whole
+    /// physical instance is transported through the field.
+    pub(crate) fn geometry_signature(&self) -> u64 {
+        let rotations = self
+            .placements
+            .as_ref()
+            .map(|placements| {
+                placements
+                    .iter()
+                    .map(|placement| {
+                        placement
+                            .rotation_radians
+                            .rem_euclid(std::f64::consts::TAU)
+                            .to_bits()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let signature = format!("geometry:{rotations:?}|{:?}", self.realized_shapes);
+        Self::hash_identity_bytes(signature.bytes())
+    }
+
+    /// Assign an identity to a legacy instance only. Ordinary movement keeps
+    /// the existing identity even as world-space placements change.
+    pub(crate) fn refresh_instance_identity(&mut self) {
+        if self.instance_id != 0 {
+            return;
+        }
+        let signature = format!(
+            "physical:{:?}|{:?}|{:?}|{:?}",
+            self.material, self.placements, self.internal_connections, self.realized_shapes
+        );
+        self.instance_id = Self::hash_identity_bytes(signature.bytes());
+    }
+
     pub(crate) fn realized(
         material: Material,
         placements: Vec<Placement>,
@@ -130,13 +189,16 @@ impl PhysicalMaterial {
             });
         }
 
-        Some(Self {
+        let mut instance = Self {
+            instance_id: 0,
             material,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
             owner_relative_origin: None,
             realized_shapes: None,
-        })
+        };
+        instance.refresh_instance_identity();
+        Some(instance)
     }
 
     /// Attach an exact fluid shape to a single-part acquired fluid material.
@@ -328,7 +390,8 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
-            pieces.push(Self {
+            let mut piece = Self {
+                instance_id: Self::child_instance_identity(self.instance_id, &members),
                 material: Material {
                     parts,
                     internal_bonds,
@@ -342,7 +405,11 @@ impl PhysicalMaterial {
                         .map(|&old_index| shapes[old_index].clone())
                         .collect()
                 }),
-            });
+            };
+            if piece.instance_id == 0 {
+                piece.refresh_instance_identity();
+            }
+            pieces.push(piece);
         }
         Some(pieces)
     }
@@ -425,6 +492,7 @@ impl PhysicalMaterial {
             })
             .collect();
         Some(Self {
+            instance_id: self.instance_id,
             material: self.material,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
@@ -438,6 +506,32 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn physical_instance_identity_survives_translation_and_intrinsic_framing() {
+        let catalog = crate::resources::default_catalog();
+        let mut instance = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: 0.25,
+            }],
+            &catalog,
+        )
+        .expect("carbon should be physically realizable");
+        let identity = instance.instance_id;
+        assert_ne!(identity, 0);
+
+        instance.placements.as_mut().unwrap()[0].x += 3.0;
+        instance.placements.as_mut().unwrap()[0].y -= 2.0;
+        assert_eq!(instance.instance_id, identity);
+
+        let intrinsic = instance
+            .into_intrinsic_frame()
+            .expect("realized material should have an intrinsic frame");
+        assert_eq!(intrinsic.instance_id, identity);
+    }
 
     #[test]
     fn realized_fluid_shape_area_scales_with_material_amount() {
@@ -467,6 +561,7 @@ mod tests {
             },
         };
         let physical = PhysicalMaterial {
+            instance_id: 0,
             material: Material::free_base("Water", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
@@ -496,6 +591,7 @@ mod tests {
             },
         };
         let underfilled = PhysicalMaterial {
+            instance_id: 0,
             material: Material::free_base("Water", 2.0),
             placements: Some(vec![Placement {
                 x: 0.0,
