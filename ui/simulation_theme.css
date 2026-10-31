@@ -153,3 +153,13 @@ input[type="range"] { accent-color: #b8c9d8; }
   .ev-view-hint { display: none; }
   #organism-inspector { bottom: 76px !important; }
 }
+
+.ev-world-toolbar { position: relative; }
+.ev-camera-controls { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.ev-camera-controls button {
+  min-width: 27px; height: 23px; padding: 0 7px; border: 1px solid var(--ev-border-strong);
+  border-radius: 3px; background: var(--ev-panel); color: var(--ev-text);
+  font: 11px ui-monospace, monospace; cursor: pointer;
+}
+.ev-camera-controls button:hover { background: #303030; border-color: #718292; }
+.ev-camera-controls button:focus-visible { outline: 1px solid var(--ev-accent); outline-offset: 2px; }
