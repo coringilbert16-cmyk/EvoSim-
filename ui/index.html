@@ -40,7 +40,7 @@
   <script>
     // Browser-only camera transform. It owns view state, never simulation state.
     class Camera {
-      constructor() { this.x = 0; this.y = 0; this.scale = 1; this.minScale = 0.04; this.maxScale = 24; }
+      constructor() { this.x = 0; this.y = 0; this.scale = 1; this.minScale = 0.04; this.maxScale = 24; this.worldBounds = null; }
       fitBounds(minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding = 0.82) {
         if (![minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding].every(Number.isFinite)) return;
         const width = Math.max(maxX - minX, 1e-9), height = Math.max(maxY - minY, 1e-9);
@@ -54,7 +54,19 @@
         this.scale = fitScale;
       }
       fitWorld(worldWidth, worldHeight, viewportWidth, viewportHeight, padding = 0.92) {
+        this.worldBounds = { minX: 0, maxX: worldWidth, minY: 0, maxY: worldHeight };
         this.fitBounds(0, worldWidth, 0, worldHeight, viewportWidth, viewportHeight, padding);
+        this.clampView(viewportWidth, viewportHeight);
+      }
+      clampView(viewportWidth, viewportHeight) {
+        if (!this.worldBounds || this.scale <= 0 || viewportWidth <= 0 || viewportHeight <= 0) return;
+        const halfWidth = viewportWidth / (2 * this.scale), halfHeight = viewportHeight / (2 * this.scale);
+        const bounds = this.worldBounds;
+        const centerX = (bounds.minX + bounds.maxX) / 2, centerY = (bounds.minY + bounds.maxY) / 2;
+        this.x = halfWidth * 2 >= bounds.maxX - bounds.minX
+          ? centerX : Math.max(bounds.minX + halfWidth, Math.min(bounds.maxX - halfWidth, this.x));
+        this.y = halfHeight * 2 >= bounds.maxY - bounds.minY
+          ? centerY : Math.max(bounds.minY + halfHeight, Math.min(bounds.maxY - halfHeight, this.y));
       }
       worldToScreen(x, y, viewportWidth, viewportHeight) {
         return { x: (x - this.x) * this.scale + viewportWidth / 2, y: (y - this.y) * this.scale + viewportHeight / 2 };
@@ -62,13 +74,14 @@
       screenToWorld(x, y, viewportWidth, viewportHeight) {
         return { x: (x - viewportWidth / 2) / this.scale + this.x, y: (y - viewportHeight / 2) / this.scale + this.y };
       }
-      pan(dx, dy) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.x -= dx / this.scale; this.y -= dy / this.scale; } }
+      pan(dx, dy, viewportWidth, viewportHeight) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.x -= dx / this.scale; this.y -= dy / this.scale; this.clampView(viewportWidth, viewportHeight); } }
       zoomAt(screenX, screenY, factor, viewportWidth, viewportHeight) {
         if (!Number.isFinite(factor) || factor <= 0) return;
         const before = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
         this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
         const after = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
         this.x += before.x - after.x; this.y += before.y - after.y;
+        this.clampView(viewportWidth, viewportHeight);
       }
       centerOn(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { this.x = x; this.y = y; } }
     }
@@ -383,15 +396,18 @@
       }
 
       const vortexRadius = Math.max(2, height * 0.13 * camera.scale);
-      for (const fraction of [0.25, 0.75]) {
-        const x = width * fraction;
-        const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * fraction);
-        const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
+      // Place the left eddy on the lower bend and the right eddy on the upper
+      // bend. The right eddy sits beside the hotspot so their visual regions overlap.
+      const eddies = [
+        { x: width * 0.25, y: height * 0.73, start: Math.PI * 0.8, end: Math.PI * 2.8 },
+        { x: width * 0.75, y: height * 0.27, start: -Math.PI * 0.2, end: Math.PI * 1.45 }
+      ];
+      for (const eddy of eddies) {
+        const point = camera.worldToScreen(eddy.x, eddy.y, viewport.width, viewport.height);
         ctx.beginPath();
-        // Exchange the two eddy orientations between the left and right elbows.
-        ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? Math.PI * 0.8 : -Math.PI * 0.2, fraction < 0.5 ? Math.PI * 2.8 : Math.PI * 1.45);
-        ctx.strokeStyle = 'rgba(186, 230, 253, 0.38)';
-        ctx.lineWidth = 1.25;
+        ctx.arc(point.x, point.y, vortexRadius, eddy.start, eddy.end);
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.48)';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
       ctx.restore();
@@ -717,7 +733,8 @@
       if (!interaction || interaction.pointerId !== event.pointerId) return;
       event.preventDefault();
       if (interaction.panning) {
-        camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
+        const viewport = viewportSize();
+        camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY, viewport.width, viewport.height);
         interaction.lastX = event.clientX; interaction.lastY = event.clientY;
         interaction.moved = true;
         render();
