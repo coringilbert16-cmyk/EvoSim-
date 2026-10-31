@@ -18,14 +18,18 @@ pub(crate) struct RuntimeState {
     pub(crate) session_id: String,
 }
 
+fn new_session_id() -> String {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| format!("{}-{}", std::process::id(), duration.as_nanos()))
+        .unwrap_or_else(|_| "unknown".into())
+}
+
 impl RuntimeState {
     pub(crate) fn new(simulation: Simulation) -> Self {
         let mut history = VecDeque::with_capacity(HISTORY_CAPACITY);
         history.push_back(simulation.clone());
-        let session_id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|duration| format!("{}-{}", std::process::id(), duration.as_millis()))
-            .unwrap_or_else(|_| "unknown".into());
+        let session_id = new_session_id();
         Self {
             simulation,
             measured_ticks_per_second: 0.0,
@@ -40,6 +44,7 @@ impl RuntimeState {
         self.simulation.ticks_per_second = ticks_per_second;
         self.simulation.running = true;
         self.measured_ticks_per_second = 0.0;
+        self.session_id = new_session_id();
         self.history.clear();
         self.history.push_back(self.simulation.clone());
     }
@@ -205,6 +210,19 @@ mod tests {
         assert_eq!(runtime.history.len(), HISTORY_CAPACITY);
         assert_eq!(runtime.history_ticks().first(), Some(&600));
         assert_eq!(runtime.history_ticks().last(), Some(&3_500));
+    }
+
+    #[test]
+    fn reset_starts_a_new_session_and_restores_the_experiment() {
+        let mut runtime = RuntimeState::new(Simulation::new(42, 10.0));
+        let previous_session = runtime.session_id.clone();
+        runtime.simulation.tick = 250;
+        runtime.reset();
+
+        assert_ne!(runtime.session_id, previous_session);
+        assert_eq!(runtime.simulation.tick, 0);
+        assert!(runtime.simulation.running);
+        assert_eq!(runtime.history_ticks(), vec![0]);
     }
 
     #[test]
