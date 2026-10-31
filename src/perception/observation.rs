@@ -668,7 +668,13 @@ mod tests {
     #[test]
     fn environmental_transport_updates_observed_resource_positions() {
         let mut fixture = crate::environment_chemistry_experiment::build(42);
-        let mut before = WorldObservation::from_simulation(&fixture.simulation)
+        let before_observation = WorldObservation::from_simulation(&fixture.simulation);
+        let known_cells = before_observation
+            .field
+            .iter()
+            .map(|cell| (cell.cell_index, cell.revision))
+            .collect::<Vec<_>>();
+        let mut before = before_observation
             .field
             .into_iter()
             .flat_map(|cell| cell.physical_parts.unwrap_or_default())
@@ -689,6 +695,20 @@ mod tests {
         assert!(
             moved > 0,
             "the experiment's environmental current must transport resources"
+        );
+
+        let incremental = WorldObservation::from_simulation_in_bounds(
+            &fixture.simulation,
+            None,
+            &[],
+            &known_cells,
+        );
+        assert!(
+            incremental
+                .field
+                .iter()
+                .any(|cell| cell.physical_parts.as_ref().is_some_and(|parts| !parts.is_empty())),
+            "changed cells must publish their current physical resource geometry"
         );
 
         let mut after = WorldObservation::from_simulation(&fixture.simulation)
