@@ -119,7 +119,7 @@
   }
 
   function dominantResource(material) {
-    const parts = material?.parts || [];
+    const parts = material?.parts || material?.materials || [];
     if (!parts.length) return null;
     const totals = new Map();
     for (const [name, amount] of parts) {
