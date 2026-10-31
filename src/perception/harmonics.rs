@@ -1011,12 +1011,10 @@ pub(crate) fn material_aura_receptions(
     }
     let (source_x, source_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
-    let receiver_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-        receiver, catalog,
-    )?;
-    let source_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-        source, catalog,
-    )?;
+    let receiver_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
+    let source_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
     if source_geometry.parts.is_empty() {
         return None;
     }
@@ -1769,16 +1767,11 @@ mod tests {
         };
         let in_phase = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
             .expect("valid in-phase spectra should be accepted");
-        let opposite = spectrum_cross_energy(
-            &make(0.0, 440.0),
-            &make(std::f64::consts::PI, 440.0),
-        )
-        .expect("valid opposite-phase spectra should be accepted");
-        let quadrature = spectrum_cross_energy(
-            &make(0.0, 440.0),
-            &make(std::f64::consts::FRAC_PI_2, 440.0),
-        )
-        .expect("valid quadrature spectra should be accepted");
+        let opposite = spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::PI, 440.0))
+            .expect("valid opposite-phase spectra should be accepted");
+        let quadrature =
+            spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::FRAC_PI_2, 440.0))
+                .expect("valid quadrature spectra should be accepted");
         let different_frequency = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
             .expect("valid distinct-frequency spectra should be accepted");
 
