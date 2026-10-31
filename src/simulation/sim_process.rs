@@ -114,6 +114,7 @@ fn start_tick_loop(
         let mut last_display_event = Instant::now();
         let mut last_rate_sample = Instant::now();
         let mut last_rate_tick = 0_u64;
+        let mut last_published_tick = None;
         let mut next_tick_deadline = Instant::now();
         let mut scheduled_ticks_per_second = DEFAULT_TICKS_PER_SECOND;
 
@@ -184,14 +185,18 @@ fn start_tick_loop(
             // tick at a modest cadence; subscribers naturally skip obsolete states.
             if last_display_event.elapsed() >= DISPLAY_EVENT_INTERVAL {
                 let state = runtime.lock();
-                let _ = tick_sender.send(
-                    serde_json::json!({
-                        "type": "tick",
-                        "tick": state.simulation.tick,
-                        "session_id": state.session_id,
-                    })
-                    .to_string(),
-                );
+                let tick = state.simulation.tick;
+                if last_published_tick != Some(tick) {
+                    let _ = tick_sender.send(
+                        serde_json::json!({
+                            "type": "tick",
+                            "tick": tick,
+                            "session_id": state.session_id,
+                        })
+                        .to_string(),
+                    );
+                    last_published_tick = Some(tick);
+                }
                 last_display_event = Instant::now();
             }
 
