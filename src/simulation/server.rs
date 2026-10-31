@@ -34,10 +34,7 @@ async fn index_handler() -> impl IntoResponse {
     let organism_inspector = include_str!("../../ui/organism_inspector.js");
     let themed_page = page.replace("</head>", &format!("<style>{theme}</style></head>"));
     Html(format!(
-        "{themed_page}\n<script>
-          const speedControl = document.getElementById('speed');
-          if (speedControl) {{ speedControl.disabled = true; speedControl.value = '100'; }}
-        </script>\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
+        "{themed_page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
 
