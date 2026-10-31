@@ -2096,6 +2096,62 @@ mod tests {
     }
 
     #[test]
+    fn quadrature_material_fields_produce_a_neutral_pair_potential() {
+        let mut catalog = crate::resources::default_catalog();
+        for resource in &mut catalog {
+            resource.properties.mass = 1.0;
+            resource.properties.cohesion = 1.0;
+            resource.properties.reactivity = 1.0;
+        }
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("default catalog contains Carbon");
+        carbon.properties.cohesion = 2.0;
+        carbon.properties.reactivity = 0.0;
+        let hydrogen = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Hydrogen")
+            .expect("default catalog contains Hydrogen");
+        hydrogen.properties.cohesion = 7.0 / 6.0;
+
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let receiver = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("hydrogen should have a valid realized physical shape");
+
+        let potential = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("valid quadrature pair should have a potential");
+        assert!(
+            potential.abs() < 1e-8,
+            "quadrature fields should contribute no cycle-averaged cross-energy"
+        );
+        let (force_on_source, force_on_receiver) =
+            resonance_pair_force(&source, &receiver, &catalog, 0)
+                .expect("valid quadrature pair should have a force");
+        assert!(force_on_source.0.abs() < 1e-6);
+        assert!(force_on_source.1.abs() < 1e-6);
+        assert!(force_on_receiver.0.abs() < 1e-6);
+        assert!(force_on_receiver.1.abs() < 1e-6);
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
