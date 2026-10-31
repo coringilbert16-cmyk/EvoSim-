@@ -6,7 +6,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{Material, PhysicalState};
+use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
@@ -89,17 +89,8 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
                 y,
                 rotation_radians,
             };
-            let physical = if resource.physical_state == PhysicalState::Fluid {
-                PhysicalMaterial::realized_with_single_fluid_shape(
-                    material,
-                    placement,
-                    resource.shape.clone(),
-                    &catalog,
-                )
-            } else {
-                PhysicalMaterial::realized(material, vec![placement], &catalog)
-            }
-            .expect("every canonical base resource must have valid physical geometry");
+            let physical = PhysicalMaterial::realized(material, vec![placement], &catalog)
+                .expect("every canonical base resource must have valid physical geometry");
             assert!(
                 simulation
                     .environment
