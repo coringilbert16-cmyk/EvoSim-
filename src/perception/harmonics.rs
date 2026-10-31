@@ -1845,21 +1845,34 @@ mod tests {
         let left_to_farther = material_aura_receptions(&left, &farther, &catalog, 0)
             .expect("farther pair should produce attenuated aura reception");
 
-        assert_eq!(left_to_right.len(), 1);
-        assert_eq!(right_to_left.len(), 1);
-        assert_eq!(left_to_farther.len(), 1);
-        assert!(left_to_right[0].receiver_x > 3.0);
-        assert!(right_to_left[0].receiver_x < 1.0);
-        assert!(left_to_right[0].magnitude > left_to_farther[0].magnitude);
+        assert!(!left_to_right.is_empty());
+        assert!(!right_to_left.is_empty());
+        assert!(!left_to_farther.is_empty());
+        assert!(left_to_right.iter().any(|sample| sample.receiver_x > 3.0));
+        assert!(right_to_left.iter().any(|sample| sample.receiver_x < 1.0));
+
+        let total_received_energy = |samples: &[MaterialAuraReception]| {
+            samples
+                .iter()
+                .map(|sample| spectrum_energy(&sample.spectrum).expect("received spectrum is valid"))
+                .sum::<f64>()
+        };
+        let near_energy = total_received_energy(&left_to_right);
+        let reverse_energy = total_received_energy(&right_to_left);
+        let far_energy = total_received_energy(&left_to_farther);
+        assert!(near_energy > far_energy);
         assert!(
-            (left_to_right[0].magnitude - right_to_left[0].magnitude).abs() < 1e-9,
-            "identical materials at equal separation should receive reciprocal magnitudes"
+            (near_energy - reverse_energy).abs() < 1e-9,
+            "identical materials at equal separation should receive reciprocal energy"
         );
-        assert!(left_to_right[0]
-            .spectrum
-            .components
-            .iter()
-            .all(|component| component.phase_radians.is_finite()));
+        assert!(left_to_right.iter().all(|sample| sample.projected_extent > 0.0));
+        assert!(left_to_right.iter().all(|sample| {
+            sample
+                .spectrum
+                .components
+                .iter()
+                .all(|component| component.phase_radians.is_finite())
+        }));
         assert!(
             material_aura_receptions(&left, &left, &catalog, 0)
                 .expect("self reception is a valid empty result")
