@@ -88,6 +88,14 @@
     }
 
     const status = document.getElementById('status');
+    window.addEventListener('error', event => {
+      const message = event.message || 'Unknown browser error';
+      if (status) status.textContent = 'Viewer script error: ' + message.slice(0, 180);
+    });
+    window.addEventListener('unhandledrejection', event => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      if (status) status.textContent = 'Viewer async error: ' + reason.slice(0, 180);
+    });
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
     const camera = new Camera();
@@ -505,12 +513,36 @@
     function render(updateUi = true) {
       const viewport = viewportSize();
       ctx.clearRect(0, 0, viewport.width, viewport.height);
-      if (!observation) return;
-      if (!cameraInitialized) fitCurrentObservation();
-      if (observationLevel === 'World') renderWorld();
-      else if (observationLevel === 'Organism') renderOrganism();
-      else if (observationLevel === 'Structure') renderStructure();
-      drawSelectionRectangle(); if (updateUi) updateStatus();
+      ctx.fillStyle = '#071522';
+      ctx.fillRect(0, 0, viewport.width, viewport.height);
+      try {
+        if (!observation) {
+          ctx.fillStyle = '#d9e2ec';
+          ctx.font = '13px ui-monospace, monospace';
+          ctx.fillText('Waiting for simulation observation…', 18, 30);
+          return;
+        }
+        if (!cameraInitialized) fitCurrentObservation();
+        if (observationLevel === 'World') {
+          if (!worldPayload()) {
+            ctx.fillStyle = '#ffd28a';
+            ctx.font = '13px ui-monospace, monospace';
+            ctx.fillText('World observation received without payload.World', 18, 30);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '11px ui-monospace, monospace';
+            ctx.fillText('Check /observation/world response and browser console.', 18, 50);
+          } else renderWorld();
+        } else if (observationLevel === 'Organism') renderOrganism();
+        else if (observationLevel === 'Structure') renderStructure();
+        drawSelectionRectangle();
+        if (updateUi) updateStatus();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.fillStyle = '#ffd28a';
+        ctx.font = '13px ui-monospace, monospace';
+        ctx.fillText('World renderer error: ' + message.slice(0, 140), 18, 30);
+        status.textContent = 'World renderer error: ' + message.slice(0, 180);
+      }
     }
     function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
     function updateStatus() {
