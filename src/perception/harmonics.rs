@@ -2566,6 +2566,71 @@ mod tests {
         );
     }
 
+
+    #[test]
+    fn pair_potential_tracks_full_partial_and_clear_visibility_transitions() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let unobstructed =
+            resonance_pair_potential(&source, &receiver, &catalog, 0)
+                .expect("unobstructed pair should have a potential");
+
+        let centered_blocker = make_material("Nitrogen", 4.0, 0.0);
+        let offset_blocker = make_material("Nitrogen", 4.0, 0.35);
+        let clear_blocker = make_material("Nitrogen", 4.0, 5.0);
+        let centered = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&centered_blocker),
+            &catalog,
+            0,
+        )
+        .expect("centered blocker should produce a finite potential");
+        let partial = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&offset_blocker),
+            &catalog,
+            0,
+        )
+        .expect("offset blocker should produce a finite potential");
+        let clear = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&clear_blocker),
+            &catalog,
+            0,
+        )
+        .expect("nonblocking body should produce a finite potential");
+
+        assert!(centered >= 0.0 && partial >= 0.0 && clear >= 0.0);
+        assert!(
+            centered < partial,
+            "partially exposed receiver should capture more than a fully shadowed receiver"
+        );
+        assert!(
+            partial < clear,
+            "clearer receiver visibility should increase the pair potential"
+        );
+        assert!(
+            (clear - unobstructed).abs() < 1e-9,
+            "a body outside the source-receiver visibility path must not change the pair potential"
+        );
+    }
+
     #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
