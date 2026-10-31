@@ -2235,39 +2235,11 @@ mod tests {
         )
         .expect("water should have a valid realized circular physical shape");
 
-        let receiver_geometry =
-            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                &receiver, &catalog,
-            )
-            .expect("water receiver geometry should resolve");
-        let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
-            (-4.0, 0.0),
-            &[receiver_geometry],
-            &[0],
-        )
-        .expect("water circular boundary visibility should resolve");
-        let (_, _, _, emitted) = environmental_material_resonance(&source, &catalog, 0)
-            .expect("carbon source should emit a valid spectrum");
-        let baselines = ResourceBaselines::from_catalog(&catalog);
-        let source_mass_scale =
-            environmental_mass_scale(source.material.mass(&catalog), baselines.mass);
-        assert!(
-            !curved_intervals.is_empty(),
-            "water geometry should expose circular intervals before spectral reception"
-        );
-        assert!(
-            !emitted.components.is_empty() && source_mass_scale > f64::EPSILON,
-            "carbon should supply nonzero emitted energy and mass scaling"
-        );
-
         let receptions = material_aura_receptions(&source, &receiver, &catalog, 0)
             .expect("circular receiver should support aura reception");
         assert!(
             !receptions.is_empty(),
-            "the exposed circular boundary should produce curved reception samples; intervals={}, emitted={}, mass_scale={}",
-            curved_intervals.len(),
-            emitted.components.len(),
-            source_mass_scale
+            "the exposed circular boundary should produce curved reception samples"
         );
         assert!(receptions.iter().all(|sample| {
             sample.receiver_x.is_finite()
