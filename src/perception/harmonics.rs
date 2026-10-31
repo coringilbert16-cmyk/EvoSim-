@@ -316,6 +316,37 @@ pub(crate) fn resonance_response(
     1.0 / denominator.max(f64::EPSILON)
 }
 
+/// Phase lag of a damped, driven harmonic oscillator's displacement response.
+///
+/// For frequency ratio r = drive / natural and damping ratio ζ, the
+/// steady-state transfer function has denominator
+/// (1 - r²) + i(2ζr). Its argument is the lag, so the response phase is
+/// the drive phase minus this value. This is the standard linear oscillator
+/// result; it introduces no propagation delay or arbitrary phase offset.
+pub(crate) fn oscillator_phase_lag(
+    drive_frequency_cycles_per_day: f64,
+    natural_frequency_cycles_per_day: f64,
+    damping: f64,
+) -> f64 {
+    if !drive_frequency_cycles_per_day.is_finite()
+        || !natural_frequency_cycles_per_day.is_finite()
+        || !damping.is_finite()
+        || drive_frequency_cycles_per_day <= 0.0
+        || natural_frequency_cycles_per_day <= 0.0
+        || damping < 0.0
+    {
+        return 0.0;
+    }
+
+    let ratio = drive_frequency_cycles_per_day / natural_frequency_cycles_per_day;
+    if !ratio.is_finite() || ratio <= 0.0 {
+        return 0.0;
+    }
+
+    let zeta = damping.max(f64::EPSILON);
+    (2.0 * zeta * ratio).atan2(1.0 - ratio * ratio)
+}
+
 /// Convert wave amplitude to normalized wave energy.
 ///
 /// The harmonic model uses a dimensionless normalization where energy is
@@ -511,11 +542,13 @@ fn material_response_to_drive(
     let damping = damping_ratio(properties, baselines);
     let fundamental =
         resonance_response(drive_frequency_cycles_per_day, natural, damping) * signal_level;
+    let response_phase = phase_radians
+        - oscillator_phase_lag(drive_frequency_cycles_per_day, natural, damping);
     let mut spectrum = ToneSpectrum {
         components: vec![ToneComponent {
             frequency_cycles_per_day: drive_frequency_cycles_per_day,
             amplitude: fundamental,
-            phase_radians,
+            phase_radians: response_phase,
         }],
     };
 
@@ -525,7 +558,7 @@ fn material_response_to_drive(
             spectrum.components.push(ToneComponent {
                 frequency_cycles_per_day: drive_frequency_cycles_per_day * order as f64,
                 amplitude,
-                phase_radians: phase_radians * order as f64,
+                phase_radians: response_phase * order as f64,
             });
         }
     }
@@ -1547,6 +1580,48 @@ mod tests {
                 .components
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
+        let natural = 440.0;
+        let damping = 0.15;
+        let below = oscillator_phase_lag(220.0, natural, damping);
+        let at = oscillator_phase_lag(440.0, natural, damping);
+        let above = oscillator_phase_lag(880.0, natural, damping);
+
+        assert!(below > 0.0 && below < std::f64::consts::FRAC_PI_2);
+        assert!((at - std::f64::consts::FRAC_PI_2).abs() < 1e-12);
+        assert!(above > std::f64::consts::FRAC_PI_2 && above < std::f64::consts::PI);
+    }
+
+    #[test]
+    fn oscillator_phase_lag_changes_with_damping() {
+        let low = oscillator_phase_lag(352.0, 440.0, 0.05);
+        let high = oscillator_phase_lag(352.0, 440.0, 0.5);
+        assert!(high > low);
+    }
+
+    #[test]
+    fn material_response_applies_lag_to_fundamental_and_generated_harmonics() {
+        let input_phase = 0.7;
+        let spectrum = material_response(properties(1.0, 1.0, 1.0), baselines(), input_phase);
+        let expected_fundamental =
+            input_phase - oscillator_phase_lag(440.0, 440.0, BASELINE_DAMPING_RATIO);
+
+        let fundamental = spectrum
+            .components
+            .iter()
+            .find(|component| (component.frequency_cycles_per_day - 440.0).abs() < 1e-9)
+            .expect("fundamental response should be present");
+        assert!((fundamental.phase_radians - expected_fundamental).abs() < 1e-12);
+
+        for component in spectrum.components.iter().filter(|component| {
+            component.frequency_cycles_per_day > 440.0
+        }) {
+            let order = component.frequency_cycles_per_day / 440.0;
+            assert!((component.phase_radians - expected_fundamental * order).abs() < 1e-12);
+        }
     }
 
     #[test]
