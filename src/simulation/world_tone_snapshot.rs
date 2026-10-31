@@ -762,22 +762,26 @@ fn body_from_owner_relative_material(
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
 fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,
-) -> Option<(Vec<PhysicalMaterial>, Vec<usize>)> {
+) -> Option<(Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>)> {
     let catalog = &simulation.environment.catalog;
     let mut bodies = Vec::new();
     let mut resonant_participant_indices = Vec::new();
+    // Attached physical bodies are translated with their owner. Their partial
+    // gradients must be summed into the owning organism's net force.
+    let mut force_owner_indices = Vec::new();
 
-    for organism in &simulation.organisms {
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
         if !organism.structure.units.is_empty() {
             resonant_participant_indices.push(bodies.len());
             bodies.push(physical_material_from_structure(
                 &organism.structure,
                 catalog,
             )?);
+            force_owner_indices.push(Some(organism_index));
         }
     }
 
-    for organism in &simulation.organisms {
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
         let Some(construction) = &organism.reproductive_construction else {
             continue;
         };
@@ -794,6 +798,7 @@ fn world_physical_materials_for_pair_potential(
                 let StoredMaterial::Physical(physical) = entry;
                 resonant_participant_indices.push(bodies.len());
                 bodies.push(owner_relative_physical_material(physical, anchor)?);
+                force_owner_indices.push(Some(organism_index));
             }
         }
     }
@@ -802,6 +807,7 @@ fn world_physical_materials_for_pair_potential(
         for physical in &cell.physical_materials {
             resonant_participant_indices.push(bodies.len());
             bodies.push(physical.clone());
+            force_owner_indices.push(None);
         }
     }
 
@@ -812,10 +818,11 @@ fn world_physical_materials_for_pair_potential(
                 &decomposing.structure,
                 catalog,
             )?);
+            force_owner_indices.push(None);
         }
     }
 
-    for organism in &simulation.organisms {
+    for (organism_index, organism) in simulation.organisms.iter().enumerate() {
         if organism.stored_material.entries.is_empty() {
             continue;
         }
@@ -825,6 +832,7 @@ fn world_physical_materials_for_pair_potential(
             // Stored material remains a physical blocker but is deliberately
             // excluded as a resonance source or receiver until it is released.
             bodies.push(owner_relative_physical_material(physical, anchor)?);
+            force_owner_indices.push(Some(organism_index));
         }
     }
 
@@ -839,10 +847,11 @@ fn world_physical_materials_for_pair_potential(
         {
             continue;
         }
-        let owner = simulation
+        let (owner_index, owner) = simulation
             .organisms
             .iter()
-            .find(|organism| organism.id == transformation.organism_id)?;
+            .enumerate()
+            .find(|(_, organism)| organism.id == transformation.organism_id)?;
         if owner.active_transformation_id != Some(transformation.id) {
             return None;
         }
@@ -851,15 +860,20 @@ fn world_physical_materials_for_pair_potential(
                 physical,
                 owner_anchor(owner)?,
             )?);
+            force_owner_indices.push(Some(owner_index));
         }
         if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
             let _ = simulation.environment.field.cells.get(*cell_index)?;
             resonant_participant_indices.push(bodies.len());
             bodies.push(physical.clone());
+            force_owner_indices.push(None);
         }
     }
 
-    Some((bodies, resonant_participant_indices))
+    if bodies.len() != force_owner_indices.len() {
+        return None;
+    }
+    Some((bodies, resonant_participant_indices, force_owner_indices))
 }
 
 fn physical_material_from_structure(
@@ -965,7 +979,7 @@ fn world_pair_potential_components_for_bodies(
 pub(crate) fn world_pair_potential_inventory_components(
     simulation: &Simulation,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
+    let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
     world_pair_potential_components_for_bodies(
         &bodies,
         &resonant_indices,
@@ -1011,16 +1025,21 @@ pub(crate) struct WorldPairPotentialGradient {
     pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
     pub(crate) body_forces: Vec<(f64, f64)>,
+    /// Owner organism index for attached/escrowed bodies; sum those body
+    /// forces into the owner. None means the body moves independently.
+    pub(crate) body_force_owners: Vec<Option<usize>>,
 }
 
 #[allow(dead_code)] // Correctness oracle; production use is gated on caching/benchmarking.
 pub(crate) fn world_pair_potential_gradient(
     simulation: &Simulation,
 ) -> Option<WorldPairPotentialGradient> {
-    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
+    let (bodies, resonant_indices, force_owners) =
+        world_physical_materials_for_pair_potential(simulation)?;
     world_pair_potential_gradient_for_bodies(
         &bodies,
         &resonant_indices,
+        &force_owners,
         &simulation.environment.catalog,
         simulation.tick,
     )
@@ -1029,9 +1048,13 @@ pub(crate) fn world_pair_potential_gradient(
 fn world_pair_potential_gradient_for_bodies(
     bodies: &[PhysicalMaterial],
     resonant_indices: &[usize],
+    force_owners: &[Option<usize>],
     catalog: &[BaseResource],
     tick: u64,
 ) -> Option<WorldPairPotentialGradient> {
+    if force_owners.len() != bodies.len() {
+        return None;
+    }
     const DIFFERENCE_STEP: f64 = 1.0e-4;
     let components =
         world_pair_potential_components_for_bodies(bodies, resonant_indices, catalog, tick)?;
@@ -1102,6 +1125,7 @@ fn world_pair_potential_gradient_for_bodies(
     Some(WorldPairPotentialGradient {
         components,
         body_forces,
+        body_force_owners: force_owners.to_vec(),
     })
 }
 
@@ -1202,8 +1226,9 @@ mod tests {
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("the complete physical world should produce a valid exposure snapshot");
-        let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(&simulation)
-            .expect("the independent oracle should reconstruct all physical body classes");
+        let (bodies, resonant_indices, force_owners) =
+            world_physical_materials_for_pair_potential(&simulation)
+                .expect("the independent oracle should reconstruct all physical body classes");
         assert_eq!(
             bodies.len(),
             snapshot.occluder_count,
@@ -1218,6 +1243,11 @@ mod tests {
             resonant_indices,
             vec![0, 1, 2, 3],
             "stored material must occlude but must not emit or receive resonance"
+        );
+        assert_eq!(
+            force_owners,
+            vec![Some(0), Some(0), None, None, Some(0)],
+            "attached stored material must remain attributed to its owner"
         );
 
         let oracle = world_pair_potential_inventory_components(&simulation)
@@ -1290,6 +1320,7 @@ mod tests {
         let gradient = world_pair_potential_gradient_for_bodies(
             &bodies,
             &[0, 1],
+            &[None, None],
             &catalog,
             0,
         )
@@ -1336,6 +1367,7 @@ mod tests {
         let gradient = world_pair_potential_gradient_for_bodies(
             &bodies,
             &[0, 1],
+            &[None, None, None],
             &catalog,
             0,
         )
