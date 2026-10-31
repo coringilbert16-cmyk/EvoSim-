@@ -454,6 +454,7 @@ impl EnergyInventorySnapshot {
 /// in proportion to their negative frequency-resolved contributions; energy
 /// that cannot be retained is dissipated as heat. The pair-potential change
 /// is recorded as held energy and is never also counted as expended work.
+#[allow(dead_code)] // Staged for the world-potential consumer after inventory validation.
 pub(crate) fn settle_pair_potential_change(
     ledger: &mut EnergyLedger,
     active_mover_usable_energy: &mut f64,
