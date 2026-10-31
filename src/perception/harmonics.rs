@@ -2008,7 +2008,7 @@ mod tests {
     }
 
     #[test]
-    fn resonance_pair_potential_is_symmetric_attractive_or_repulsive_by_phase_and_derives_balanced_force() {
+    fn resonance_pair_potential_is_symmetric_and_derives_balanced_force() {
         let catalog = crate::resources::default_catalog();
         let make_material = |x, y| {
             crate::physical_material::PhysicalMaterial::realized(
@@ -2048,7 +2048,10 @@ mod tests {
             resonance_pair_force(&left, &near, &catalog, 0)
                 .expect("valid pair should have a gradient-derived force");
         assert!(force_on_near.0 > 0.0, "positive decaying potential should repel");
-        assert!(force_on_near.1.abs() < 1e-6, "the symmetric horizontal pair has no vertical force");
+        assert!(
+            force_on_near.1.abs() < 1e-6,
+            "the symmetric horizontal pair has no vertical force"
+        );
         assert!((force_on_left.0 + force_on_near.0).abs() < 1e-12);
         assert!((force_on_left.1 + force_on_near.1).abs() < 1e-12);
     }
