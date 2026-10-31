@@ -1329,21 +1329,12 @@ mod tests {
             make_material("Carbon", 0.0, 0.0),
             make_material("Hydrogen", 4.0, 0.0),
         ];
-        let gradient = world_pair_potential_gradient_for_bodies(
-            &bodies,
-            &[0, 1],
-            &[None, None],
-            &catalog,
-            0,
-        )
-        .expect("the isolated world pair should have a finite complete gradient");
-        let (force_on_a, force_on_b) = crate::harmonics::resonance_pair_force(
-            &bodies[0],
-            &bodies[1],
-            &catalog,
-            0,
-        )
-        .expect("the isolated pair should have a gradient-derived force");
+        let gradient =
+            world_pair_potential_gradient_for_bodies(&bodies, &[0, 1], &[None, None], &catalog, 0)
+                .expect("the isolated world pair should have a finite complete gradient");
+        let (force_on_a, force_on_b) =
+            crate::harmonics::resonance_pair_force(&bodies[0], &bodies[1], &catalog, 0)
+                .expect("the isolated pair should have a gradient-derived force");
 
         assert_eq!(gradient.body_forces.len(), 2);
         assert!((gradient.body_forces[0].0 - force_on_a.0).abs() < 1e-8);
