@@ -25,10 +25,11 @@
   <div id="app">
     <header>
       <div id="status">Connecting to EvoSim…</div>
-      <div id="keyboard-help">Space: pause/play · &lt;: previous checkpoint · &gt;: forward one tick · Esc: reset</div>
+      <div id="keyboard-help">Space: pause/play · &lt;: back one tick · &gt;: forward one tick · Esc: reset</div>
     </header>
     <div id="timeline">
       <button id="run-toggle" class="transport-button primary" type="button">Run</button>
+      <button id="step-back" class="transport-button" type="button" title="Rewind one simulation tick">Back</button>
       <button id="step-once" class="transport-button" type="button" title="Advance one simulation tick">Step</button>
       <button id="live-follow" class="transport-button" type="button" hidden>Continue from Here</button>
       <input id="history" type="range" min="0" max="0" value="0" step="1" aria-label="Simulation history">
@@ -224,6 +225,7 @@
       }
       updateTimeline();
     });
+    document.getElementById('step-back').addEventListener('click', stepBack);
     document.getElementById('step-once').addEventListener('click', stepForward);
 
     async function stepForward() {
