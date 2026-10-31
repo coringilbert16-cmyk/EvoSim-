@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use crate::runtime::RuntimeState;
 use crate::state::Simulation;
 
 const DEFAULT_TICKS_PER_SECOND: f64 = 32.0;
-const MAX_TICKS_PER_SECOND: f64 = 32.0;
+const DISPLAY_EVENT_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
@@ -109,23 +109,36 @@ fn start_tick_loop(
     tick_sender: tokio::sync::broadcast::Sender<String>,
 ) {
     tokio::spawn(async move {
+        let mut last_display_event = Instant::now();
+        let mut last_rate_sample = Instant::now();
+        let mut last_rate_tick = 0_u64;
+
         loop {
-            let tick_duration = {
-                let state = runtime.lock();
-                if !state.simulation.running {
-                    Duration::from_millis(100)
-                } else {
-                    let tps = state.simulation.ticks_per_second.max(0.001);
-                    Duration::from_secs_f64(1.0 / tps)
+            let running = runtime.lock().simulation.running;
+            if !running {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                continue;
+            }
+
+            {
+                let mut state = runtime.lock();
+                if state.simulation.running {
+                    state.step();
+                    let now = Instant::now();
+                    if now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
+                        let elapsed = now.duration_since(last_rate_sample).as_secs_f64();
+                        state.measured_ticks_per_second =
+                            (state.simulation.tick - last_rate_tick) as f64 / elapsed;
+                        last_rate_tick = state.simulation.tick;
+                        last_rate_sample = now;
+                    }
                 }
-            };
+            }
 
-            tokio::time::sleep(tick_duration).await;
-
-            let mut state = runtime.lock();
-            if state.simulation.running {
-                state.step();
-                // The world keeps advancing even when no living organisms remain.
+            // The simulation never waits for a browser frame. Publish only the newest
+            // tick at a modest cadence; subscribers naturally skip obsolete states.
+            if last_display_event.elapsed() >= DISPLAY_EVENT_INTERVAL {
+                let state = runtime.lock();
                 let _ = tick_sender.send(
                     serde_json::json!({
                         "type": "tick",
@@ -134,7 +147,11 @@ fn start_tick_loop(
                     })
                     .to_string(),
                 );
+                last_display_event = Instant::now();
             }
+
+            // Yield so control requests and websocket clients remain responsive.
+            tokio::task::yield_now().await;
         }
     });
 }
@@ -190,7 +207,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
                 "tick": state.simulation.tick,
                 "running": state.simulation.running,
                 "population": state.simulation.living_population(),
-                "ticks_per_second": state.simulation.ticks_per_second,
+                "ticks_per_second": state.measured_ticks_per_second,
                 "history_ticks": state.history_ticks(),
                 "observed_tick": state.observed_tick(),
                 "session_id": state.session_id,
@@ -312,7 +329,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
                 return CommandResponse::error("invalid_speed");
             }
-            let ticks_per_second = ticks_per_second.min(MAX_TICKS_PER_SECOND);
+            let ticks_per_second = ticks_per_second;
             let mut state = runtime.lock();
             state.simulation.ticks_per_second = ticks_per_second;
             CommandResponse::value(serde_json::json!({
@@ -323,7 +340,7 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             let mut state = runtime.lock();
             state.reset();
             CommandResponse::value(
-                serde_json::json!({"tick": 0, "running": false, "session_id": state.session_id}),
+                serde_json::json!({"tick": 0, "running": true, "session_id": state.session_id}),
             )
         }
         SimulationCommand::Restore { tick } => {
