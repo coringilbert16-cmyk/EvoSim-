@@ -1,6 +1,6 @@
 //! Localized radial energy source used by the environmental chemistry experiment.
 //!
-//! The hotspot contributes an ordinary 440 Hz resonant signal. Its spatial
+//! The hotspot contributes an ordinary 440 cycles per simulated day resonant signal. Its spatial
 //! intensity is a smooth radial gradient; material properties determine the
 //! response, and only energy actually retained by the environmental resonance
 //! reservoir is made available to chemistry.
@@ -16,7 +16,8 @@ pub(crate) struct RadialHotspot {
     pub(crate) radius: f64,
     /// Incident energy per tick per unit of realized material area at the center.
     pub(crate) peak_energy_per_tick_per_area: f64,
-    pub(crate) frequency_hz: f64,
+    #[serde(alias = "frequency_hz")]
+    pub(crate) frequency_cycles_per_day: f64,
 }
 
 impl RadialHotspot {
@@ -33,7 +34,7 @@ impl RadialHotspot {
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
             peak_energy_per_tick_per_area: 100.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
         };
         hotspot.is_valid().then_some(hotspot)
     }
@@ -44,7 +45,7 @@ impl RadialHotspot {
             self.center_y,
             self.radius,
             self.peak_energy_per_tick_per_area,
-            self.frequency_hz,
+            self.frequency_cycles_per_day,
         ]
         .iter()
         .all(|value| value.is_finite())
@@ -52,7 +53,7 @@ impl RadialHotspot {
             && self.center_y >= 0.0
             && self.radius > 0.0
             && self.peak_energy_per_tick_per_area > 0.0
-            && self.frequency_hz > 0.0
+            && self.frequency_cycles_per_day > 0.0
     }
 
     /// Cosine falloff has zero slope at both the center and the outer edge.
@@ -115,8 +116,8 @@ fn form_area(form: &Form) -> Option<f64> {
 fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
     let mut energy = 0.0;
     for component in &spectrum.components {
-        if !component.frequency_hz.is_finite()
-            || component.frequency_hz <= 0.0
+        if !component.frequency_cycles_per_day.is_finite()
+            || component.frequency_cycles_per_day <= 0.0
             || !component.amplitude.is_finite()
             || component.amplitude < 0.0
             || !component.phase_radians.is_finite()
@@ -136,6 +137,7 @@ fn spectrum_energy(spectrum: &crate::harmonics::ToneSpectrum) -> Option<f64> {
 /// partially credit the environmental resonance reservoir.
 pub(crate) fn settle_environment_inputs(
     hotspot: RadialHotspot,
+    tick: u64,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> bool {
@@ -192,9 +194,12 @@ pub(crate) fn settle_environment_inputs(
 
                 let signal = crate::harmonics::ToneSpectrum {
                     components: vec![crate::harmonics::ToneComponent {
-                        frequency_hz: hotspot.frequency_hz,
+                        frequency_cycles_per_day: hotspot.frequency_cycles_per_day,
                         amplitude: incident.sqrt(),
-                        phase_radians: 0.0,
+                        phase_radians: crate::harmonics::phase_at_tick(
+                            hotspot.frequency_cycles_per_day,
+                            tick,
+                        ),
                     }],
                 };
                 let Some(response) = crate::harmonics::material_response_spectrum(
@@ -233,7 +238,9 @@ pub(crate) fn settle_environment_inputs(
                 let mut deposit_ok = true;
                 for component in &retained.components {
                     let energy = component.amplitude * component.amplitude;
-                    if energy > f64::EPSILON && !candidate.deposit(component.frequency_hz, energy) {
+                    if energy > f64::EPSILON
+                        && !candidate.deposit(component.frequency_cycles_per_day, energy)
+                    {
                         deposit_ok = false;
                         break;
                     }
@@ -284,6 +291,14 @@ pub(crate) fn settle_environment_inputs(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn legacy_hotspot_frequency_field_loads_as_cycles_per_day() {
+        let legacy_json = r#"{"center_x":1.0,"center_y":2.0,"radius":3.0,"peak_energy_per_tick_per_area":4.0,"frequency_hz":440.0}"#;
+        let hotspot = serde_json::from_str::<RadialHotspot>(legacy_json)
+            .expect("legacy hotspot frequency field should deserialize");
+        assert_eq!(hotspot.frequency_cycles_per_day, 440.0);
+    }
 
     #[test]
     fn right_bend_hotspot_has_a_smooth_radial_gradient_and_100_unit_peak() {
@@ -354,7 +369,7 @@ mod tests {
             center_y: 500.0,
             radius: 100.0,
             peak_energy_per_tick_per_area: 100.0,
-            frequency_hz: 440.0,
+            frequency_cycles_per_day: 440.0,
         };
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
@@ -375,6 +390,7 @@ mod tests {
         let before = simulation.energy_inventory_snapshot();
         assert!(settle_environment_inputs(
             hotspot,
+            0,
             &mut simulation.environment,
             &mut simulation.energy_ledger
         ));

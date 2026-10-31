@@ -1441,7 +1441,7 @@ mod integration_tests {
             bond,
             activation_signal: disruption_cost,
             disruption_cost,
-            reaction_frequency_hz: 440.0,
+            reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "rejected-inventory|rev:0|bond".into(),
             accumulated_reaction: disruption_cost,
         };
