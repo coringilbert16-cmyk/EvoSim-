@@ -101,7 +101,10 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             }
             .expect("every canonical base resource must have valid physical geometry");
             assert!(
-                simulation.environment.field.deposit_physical(x, y, physical, &catalog),
+                simulation
+                    .environment
+                    .field
+                    .deposit_physical(x, y, physical, &catalog),
                 "pile {pile_index} resource {local_index} must be inside the world"
             );
         }
@@ -190,14 +193,16 @@ mod tests {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
-        assert_eq!(
-            first.pile_sizes.iter().sum::<usize>(),
-            128
-        );
+        assert_eq!(first.pile_sizes.iter().sum::<usize>(), 128);
         assert!(first.pile_sizes.iter().all(|size| (6..=20).contains(size)));
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
-        let material_count = first.simulation.environment.field.cells.iter()
+        let material_count = first
+            .simulation
+            .environment
+            .field
+            .cells
+            .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
         assert_eq!(material_count, 128);
@@ -223,7 +228,9 @@ mod tests {
         assert_eq!(simulation.tick, 4);
         assert_eq!(simulation.environmental_chemistry_diagnostics.tick, 4);
         assert_eq!(
-            simulation.environmental_chemistry_diagnostics.hotspot_settlement_succeeded,
+            simulation
+                .environmental_chemistry_diagnostics
+                .hotspot_settlement_succeeded,
             Some(true)
         );
         let total_material = simulation
@@ -235,9 +242,7 @@ mod tests {
             .sum::<f64>();
         assert!((total_material - 128.0).abs() < 1e-6);
         assert!(
-            simulation
-                .energy_inventory_snapshot()
-                .is_balanced(1e-7),
+            simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
         );
         assert_eq!(
@@ -246,7 +251,9 @@ mod tests {
                 .iter()
                 .filter(|event| event.reaction == "COMBINE" && event.outcome == "committed")
                 .count(),
-            simulation.environmental_chemistry_diagnostics.combine_committed
+            simulation
+                .environmental_chemistry_diagnostics
+                .combine_committed
         );
         assert_eq!(
             simulation
@@ -254,7 +261,9 @@ mod tests {
                 .iter()
                 .filter(|event| event.reaction == "BREAK" && event.outcome == "committed")
                 .count(),
-            simulation.environmental_chemistry_diagnostics.break_committed
+            simulation
+                .environmental_chemistry_diagnostics
+                .break_committed
         );
     }
 }
