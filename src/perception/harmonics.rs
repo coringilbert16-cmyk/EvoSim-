@@ -2333,6 +2333,42 @@ mod tests {
     }
 
     #[test]
+    fn third_party_material_occludes_resonance_pair_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.0);
+
+        let unobstructed = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("unobstructed pair should have a potential");
+        let occluded = resonance_pair_potential_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&blocker),
+            &catalog,
+            0,
+        )
+        .expect("occluded pair should have a potential");
+        assert!(unobstructed > 0.0);
+        assert!(
+            occluded < unobstructed,
+            "a third-party physical body must reduce exposed resonance reception"
+        );
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
