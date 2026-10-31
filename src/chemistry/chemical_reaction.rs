@@ -1754,6 +1754,12 @@ mod material_identity_tests {
             .first()
             .expect("seed organism should contain a structural bond");
         assert!(simulation.organisms[0].resonant_energy.deposit(440.0, 1.0));
+        let retained_resonance = simulation.organisms[0]
+            .resonant_energy
+            .total_energy()
+            .expect("retained resonance should have finite energy");
+        simulation.energy_ledger.initial_resonant_energy_held = retained_resonance;
+        simulation.energy_ledger.total_resonant_energy_held = retained_resonance;
         let operation = ChemicalBreakOperation {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
@@ -2114,6 +2120,8 @@ mod material_identity_tests {
             .resonant_energy
             .total_energy()
             .expect("resonance must be finite");
+        simulation.energy_ledger.initial_resonant_energy_held = resonance_before;
+        simulation.energy_ledger.total_resonant_energy_held = resonance_before;
         // A non-finite cumulative sink makes ledger settlement reject after
         // candidate preparation but before any physical or reservoir commit.
         simulation.energy_ledger.total_heat_dissipated = f64::NAN;
