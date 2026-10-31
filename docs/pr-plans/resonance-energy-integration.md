@@ -62,3 +62,17 @@ The following constraints are confirmed by the current implementation and must s
 4. **Occluded systems:** do not apply the isolated-pair force helper when other physical bodies can occlude the pair. Either derive the full N-body potential gradient, including reaction forces on blockers, or keep those force consumers inactive.
 
 These are implementation gates, not reasons to add arbitrary efficiencies, polarity assignments, or a second energy field.
+
+
+## First implementation slice — signed settlement foundation
+
+The current branch now contains the first isolated accounting implementation:
+
+- EnergyLedger has a signed total_pair_interaction_potential_held counter and a tick-zero baseline. The value is the net conservative pair-potential change relative to the tick-zero reference; it is not stored in either resonance or structural bond inventory.
+- EnergyInventorySnapshot includes the signed pair-potential change in its conservation residual.
+- settle_pair_potential_change stages the entire settlement before mutation. A positive delta is paid only from the active mover's usable energy. A negative delta is allocated across its negative frequency-resolved components, retained in the supplied biological reservoir when its bounded spectrum accepts them, and otherwise settled as heat. The same delta is never counted as work_expended.
+- Focused tests cover positive settlement, insufficient-energy rollback, multi-frequency release allocation, heat fallback without a biological holder, full-reservoir fallback, invalid-component rollback, and inventory balance for each sign.
+
+**Still outstanding before this can be considered a complete world inventory:** the current snapshot currently reads the signed pair-potential counter from the ledger; it does not independently recompute that value from the current physical world. The independent oracle must enumerate the same authoritative physical bodies as the world-tone snapshot (organism aggregates, environmental physical materials, decomposing bodies, physically stored/committed material, and in-flight transformation escrow) and calculate the signed pair potential with the complete occlusion set. The existing PR 3 pair API currently accepts PhysicalMaterial, while the world snapshot represents some bodies as aggregate realized geometry plus weighted properties. A safe adapter/generalized geometry API and a benchmark are required before using a naive all-pairs world calculation. Do not activate movement or chemistry consumers until that oracle agrees with the ledger and its cost is acceptable.
+
+The pair-potential baseline is currently initialized to zero as a tick-zero reference for changes; it is not a claim that the absolute static pair potential of the initial world is zero. Future world-oracle work must compute the current world potential and its tick-zero reference consistently, or maintain the same reference through explicit, conserved pair-set creation/removal transactions.
