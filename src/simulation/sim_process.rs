@@ -79,7 +79,10 @@ impl CommandResponse {
 }
 
 pub(crate) async fn run_child(port: u16) {
-    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, DEFAULT_TICKS_PER_SECOND))));
+    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(
+        42,
+        DEFAULT_TICKS_PER_SECOND,
+    ))));
     let (tick_sender, _) = tokio::sync::broadcast::channel::<String>(32);
     start_tick_loop(runtime.clone(), tick_sender.clone());
 
