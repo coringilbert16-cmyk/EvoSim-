@@ -42,11 +42,11 @@
         if (viewportWidth <= 0 || viewportHeight <= 0 || padding <= 0) return;
         this.x = (minX + maxX) / 2; this.y = (minY + maxY) / 2;
         const fitScale = Math.min(viewportWidth / width, viewportHeight / height) * padding;
-        // Bound zoom relative to the fitted view, not arbitrary world units.
-        // This keeps both limits useful in World, Organism, and Structure views.
+        // The fitted world is the maximum zoom-out boundary: never zoom
+        // farther out than the complete world view. Keep a useful zoom-in range.
         this.minScale = Math.max(0.002, fitScale / 24);
-        this.maxScale = Math.min(300, fitScale * 24);
-        this.scale = Math.max(this.minScale, Math.min(this.maxScale, fitScale));
+        this.maxScale = fitScale;
+        this.scale = fitScale;
       }
       fitWorld(worldWidth, worldHeight, viewportWidth, viewportHeight, padding = 0.92) {
         this.fitBounds(0, worldWidth, 0, worldHeight, viewportWidth, viewportHeight, padding);
