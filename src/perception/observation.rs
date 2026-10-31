@@ -707,11 +707,7 @@ mod tests {
             incremental
                 .field
                 .iter()
-                .any(|cell| {
-                    cell.physical_parts
-                        .as_ref()
-                        .is_some_and(|parts| !parts.is_empty())
-                }),
+                .any(|cell| cell.physical_parts.as_ref().is_some_and(|parts| !parts.is_empty())),
             "changed cells must publish their current physical resource geometry"
         );
 
