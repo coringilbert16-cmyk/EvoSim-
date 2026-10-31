@@ -2057,6 +2057,45 @@ mod tests {
     }
 
     #[test]
+    fn different_material_phase_response_can_produce_attraction() {
+        let catalog = crate::resources::default_catalog();
+        let carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        let hydrogen = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("hydrogen should have a valid realized physical shape");
+
+        let potential = resonance_pair_potential(&carbon, &hydrogen, &catalog, 0)
+            .expect("valid unlike-material pair should have a potential");
+        assert!(
+            potential < 0.0,
+            "the unlike oscillator phases should produce a negative cross-energy"
+        );
+        let (_, force_on_hydrogen) =
+            resonance_pair_force(&carbon, &hydrogen, &catalog, 0)
+                .expect("valid unlike-material pair should have a gradient-derived force");
+        assert!(
+            force_on_hydrogen.0 < 0.0,
+            "a negative decaying potential should attract the receiver toward the source"
+        );
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
