@@ -200,6 +200,7 @@ pub(crate) struct ToneSpectrum {
 /// It preserves the receiver geometry needed for a later spatial interaction
 /// calculation without inventing a second field or perception radius.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
 pub(crate) struct MaterialAuraReception {
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
