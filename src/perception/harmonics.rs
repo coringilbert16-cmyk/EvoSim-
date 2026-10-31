@@ -1740,9 +1740,8 @@ mod tests {
             &make(std::f64::consts::FRAC_PI_2, 440.0),
         )
         .expect("valid quadrature spectra should be accepted");
-        let different_frequency =
-            spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
-                .expect("valid distinct-frequency spectra should be accepted");
+        let different_frequency = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
+            .expect("valid distinct-frequency spectra should be accepted");
 
         assert!((in_phase - 0.5).abs() < 1e-12);
         assert!((opposite + 0.5).abs() < 1e-12);
