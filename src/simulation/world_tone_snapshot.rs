@@ -1156,6 +1156,16 @@ mod tests {
             .sum::<f64>()
             - initial_pair_potential;
         assert!(expected_delta.abs() > 1e-10, "test movement must change pair potential");
+        assert!(
+            (delta_components
+                .iter()
+                .map(|component| component.energy)
+                .sum::<f64>()
+                - expected_delta)
+                .abs()
+                < 1e-9
+        );
+        simulation.organisms[0].usable_energy = 1_000.0;
 
         let initial_usable = simulation
             .organisms
