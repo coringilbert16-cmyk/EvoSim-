@@ -373,8 +373,13 @@
       const width = Number(world.width) || 1;
       const height = Number(world.height) || 1;
       ctx.save();
-      ctx.fillStyle = '#075985';
+      ctx.fillStyle = '#071522';
       ctx.fillRect(0, 0, viewport.width, viewport.height);
+      const fieldTopLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
+      const fieldBottomRight = camera.worldToScreen(width, height, viewport.width, viewport.height);
+      ctx.fillStyle = '#075985';
+      ctx.fillRect(fieldTopLeft.x, fieldTopLeft.y,
+        fieldBottomRight.x - fieldTopLeft.x, fieldBottomRight.y - fieldTopLeft.y);
 
       // Visualize the same S-shaped spine used by the transport model. These
       // lines are a rendering aid only; the Rust flow field remains authoritative.
