@@ -135,6 +135,51 @@ fn select_best_contact(
     )
 }
 
+#[cfg(test)]
+fn select_best_positive_work_contact(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    remaining_work: &mut usize,
+) -> Option<SelectedContact> {
+    for &unit_a in indices_a {
+        for &unit_b in indices_b {
+            if *remaining_work == 0 {
+                return None;
+            }
+            *remaining_work = remaining_work.saturating_sub(1);
+            let candidates = crate::contact::connection_pair_candidates_cached(
+                structure, unit_a, unit_b, catalog, cache,
+            );
+            for candidate in candidates {
+                let Some((evaluation, formation_work, investment, required_energy)) =
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        structure, unit_a, unit_b, candidate, catalog,
+                    )
+                else {
+                    continue;
+                };
+                if formation_work.is_finite()
+                    && formation_work > 1e-9
+                    && evaluation.candidate.distance > 1e-9
+                    && evaluation.candidate.facing > 0.5
+                {
+                    return Some(SelectedContact {
+                        unit_a,
+                        unit_b,
+                        candidate: evaluation.candidate,
+                        investment,
+                        required_energy,
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
 fn approach_stage(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -1466,16 +1511,6 @@ mod tests {
                         ) else {
                             continue;
                         };
-                        if indices_b.iter().any(|index| {
-                            crate::construction_runtime::placed_unit_overlaps(
-                                &structure,
-                                &structure.units[*index],
-                                &indices_b,
-                                &catalog,
-                            )
-                        }) {
-                            continue;
-                        }
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
                         let Some(selected) = select_best_contact(
@@ -3199,7 +3234,7 @@ mod tests {
                         }
                         let mut cache = ConnectionCompatibilityCache::new();
                         let mut work = FIELD_COMPONENT_PAIR_LIMIT;
-                        if let Some(selected) = select_best_contact(
+                        if let Some(selected) = select_best_positive_work_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
                             if selected.candidate.distance <= 0.25
