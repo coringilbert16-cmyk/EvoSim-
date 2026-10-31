@@ -1005,6 +1005,9 @@ pub(crate) fn material_aura_receptions(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    if std::ptr::eq(source, receiver) {
+        return Some(Vec::new());
+    }
     let (source_x, source_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
     let receiver_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
