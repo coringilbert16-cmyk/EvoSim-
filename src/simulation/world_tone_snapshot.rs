@@ -981,16 +981,15 @@ fn world_pair_potential_components_for_geometries(
             let occluder_geometries = geometries
                 .iter()
                 .enumerate()
-                .filter_map(|(index, geometry)| {
-                    if index == first || index == second {
-                        return None;
-                    }
-                    let intersects_corridor = geometry.max_x >= corridor_min_x
+                .filter(|(index, geometry)| {
+                    *index != first
+                        && *index != second
+                        && geometry.max_x >= corridor_min_x
                         && geometry.min_x <= corridor_max_x
                         && geometry.max_y >= corridor_min_y
-                        && geometry.min_y <= corridor_max_y;
-                    intersects_corridor.then(|| geometry.clone())
+                        && geometry.min_y <= corridor_max_y
                 })
+                .map(|(_, geometry)| geometry.clone())
                 .collect::<Vec<_>>();
             let pair = crate::harmonics::resonance_pair_potential_components_with_prebuilt_geometries(
                 &bodies[first],
