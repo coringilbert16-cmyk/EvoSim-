@@ -1627,6 +1627,30 @@ mod tests {
     }
 
     #[test]
+    fn successive_material_responses_accumulate_oscillator_phase_lag() {
+        let incoming = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.2,
+            }],
+        };
+        let first = material_response_spectrum(properties(1.0, 1.0, 1.0), baselines(), &incoming)
+            .expect("first material response should be valid");
+        let second = material_response_spectrum(properties(1.0, 1.0, 1.0), baselines(), &first)
+            .expect("second material response should be valid");
+
+        let fundamental = second
+            .components
+            .iter()
+            .find(|component| (component.frequency_cycles_per_day - 440.0).abs() < 1e-9)
+            .expect("fundamental should remain in the transmitted spectrum");
+        let one_material_lag = oscillator_phase_lag(440.0, 440.0, BASELINE_DAMPING_RATIO);
+        let expected_phase = 0.2 - 2.0 * one_material_lag;
+        assert!((fundamental.phase_radians - expected_phase).abs() < 1e-12);
+    }
+
+    #[test]
     fn reactivity_sets_relative_damping_and_nonlinear_content() {
         let baseline = damping_ratio(properties(1.0, 1.0, 1.0), baselines());
         let high = damping_ratio(properties(1.0, 4.0, 1.0), baselines());
