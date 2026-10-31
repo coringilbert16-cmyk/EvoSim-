@@ -1,0 +1,50 @@
+/* EvoSim simulation workspace — visual language adapted from Geometry Viewer. */
+:root {
+  color-scheme: dark;
+  --ev-bg: #111;
+  --ev-panel: #181818;
+  --ev-panel-raised: #202020;
+  --ev-canvas: #0d0d0d;
+  --ev-border: #333;
+  --ev-border-strong: #484848;
+  --ev-text: #eee;
+  --ev-muted: #aaa;
+  --ev-accent: #d7e7f5;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--ev-bg) !important; color: var(--ev-text) !important; font-family: Inter, ui-sans-serif, system-ui, sans-serif !important; }
+#app { background: var(--ev-bg); }
+header {
+  min-height: 48px; padding: 9px 14px !important; gap: 14px !important;
+  background: var(--ev-panel) !important; border-bottom: 1px solid var(--ev-border) !important;
+  color: var(--ev-text);
+}
+#status { color: var(--ev-text); font-size: 12px !important; letter-spacing: .01em; }
+#keyboard-help { color: var(--ev-muted) !important; font-size: 11px !important; }
+main { min-height: 0; padding: 12px; background: var(--ev-bg); }
+#world {
+  width: 100% !important; height: 100% !important; max-width: none !important;
+  background: var(--ev-canvas) !important; border: 1px solid var(--ev-border) !important;
+  border-radius: 4px; cursor: crosshair;
+}
+#timeline {
+  position: static !important; flex: 0 0 auto; margin: 0 12px 12px;
+  padding: 10px 12px !important; gap: 12px !important;
+  background: var(--ev-panel) !important; border: 1px solid var(--ev-border) !important;
+  border-radius: 4px !important; color: var(--ev-text); z-index: 2;
+}
+#history, #speed { accent-color: #b8c9d8; cursor: pointer; }
+#timeline-label { min-width: 140px; color: var(--ev-muted); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.speed-control { color: var(--ev-muted); font-size: 11px; }
+#speed-value { display: inline-block; min-width: 2.5em; color: var(--ev-text); font: 11px ui-monospace, SFMono-Regular, Consolas, monospace; }
+button, input, select { font: inherit; }
+input[type="range"] { accent-color: #b8c9d8; }
+@media (max-width: 800px) {
+  header { align-items: flex-start; }
+  #keyboard-help { white-space: normal !important; }
+  #timeline { flex-wrap: wrap; }
+  #history { min-width: 100%; order: 3; }
+  #timeline-label { text-align: left; }
+  main { padding: 8px; }
+  #timeline { margin: 0 8px 8px; }
+}
