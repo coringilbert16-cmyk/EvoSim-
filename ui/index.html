@@ -28,7 +28,7 @@
     <div id="timeline">
       <input id="history" type="range" min="0" max="0" value="0" step="1">
       <span id="timeline-label">Live</span>
-      <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
+      <label class="speed-control">Run mode <input id="speed" type="range" min="100" max="100" value="100" disabled><span id="speed-value">FULL</span> speed</label>
     </div>
     <main><canvas id="world"></canvas></main>
   </div>
@@ -157,7 +157,7 @@
       const speedValue = document.getElementById('speed-value');
       if (runtimeStatus?.ticks_per_second != null) {
         speed.value = runtimeStatus.ticks_per_second;
-        speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
+        speedValue.textContent = 'FULL';
       }
     }
 
