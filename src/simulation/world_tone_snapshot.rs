@@ -1094,6 +1094,130 @@ mod tests {
     }
 
     #[test]
+    fn pair_potential_oracle_delta_settles_against_the_world_energy_inventory() {
+        let mut simulation = Simulation::new(78, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+
+        for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                0.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+
+        let initial_components = world_pair_potential_inventory_components(&simulation)
+            .expect("initial world pair potential should be computable");
+        let initial_pair_potential = initial_components
+            .iter()
+            .map(|component| component.energy)
+            .sum::<f64>();
+
+        simulation.organisms[0].structure.units[0].placement.x += 3.0;
+        simulation.organisms[0].occupied_cells[0].x += 3.0;
+        simulation.organisms[0].mark_structure_changed();
+        let current_components = world_pair_potential_inventory_components(&simulation)
+            .expect("moved world pair potential should be computable");
+
+        let mut delta_components = current_components.clone();
+        for before in &initial_components {
+            if let Some(current) = delta_components.iter_mut().find(|current| {
+                (current.frequency_cycles_per_day - before.frequency_cycles_per_day).abs() <= 1e-9
+            }) {
+                current.energy -= before.energy;
+            } else {
+                delta_components.push(crate::harmonics::ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: before.frequency_cycles_per_day,
+                    energy: -before.energy,
+                });
+            }
+        }
+        delta_components.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let expected_delta = current_components
+            .iter()
+            .map(|component| component.energy)
+            .sum::<f64>()
+            - initial_pair_potential;
+        assert!(expected_delta.abs() > 1e-10, "test movement must change pair potential");
+
+        let initial_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.usable_energy)
+            .sum::<f64>();
+        let initial_resonant = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum::<f64>()
+            + simulation.environment.resonant_energy.total_energy().unwrap();
+        simulation.energy_ledger.initial_pair_interaction_potential_held = 0.0;
+        simulation.energy_ledger.total_pair_interaction_potential_held = 0.0;
+        simulation.energy_ledger.initial_resonant_energy_held = initial_resonant;
+        simulation.energy_ledger.total_resonant_energy_held = initial_resonant;
+
+        let ledger = &mut simulation.energy_ledger;
+        let mover = &mut simulation.organisms[0];
+        assert!(crate::energy_ledger::settle_pair_potential_change(
+            ledger,
+            &mut mover.usable_energy,
+            Some(&mut mover.resonant_energy),
+            &delta_components,
+        ));
+        assert!(
+            (ledger.total_pair_interaction_potential_held - expected_delta).abs() < 1e-9
+        );
+
+        let current_usable = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.usable_energy)
+            .sum::<f64>();
+        let current_resonant = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.total_energy().unwrap())
+            .sum::<f64>()
+            + simulation.environment.resonant_energy.total_energy().unwrap();
+        let inventory = crate::energy_ledger::EnergyInventorySnapshot {
+            initial_usable_energy: initial_usable,
+            current_usable_energy: current_usable,
+            initial_resonant_energy: initial_resonant,
+            current_resonant_energy: current_resonant,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: ledger.total_pair_interaction_potential_held,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: ledger.total_heat_dissipated,
+        };
+        assert!(
+            inventory.is_balanced_without_creation(1e-9),
+            "the independent world oracle delta must balance against usable energy, compatible resonance, or heat"
+        );
+    }
+
+    #[test]
     fn snapshot_includes_environmental_physical_material_in_shadow_geometry() {
         let mut simulation = Simulation::new(71, 1.0);
         clear_environment_physical_material(&mut simulation);
