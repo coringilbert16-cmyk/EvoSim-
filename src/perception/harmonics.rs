@@ -1725,15 +1725,16 @@ mod tests {
                 phase_radians,
             }],
         };
-        let in_phase =
-            spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
-                .expect("valid in-phase spectra should be accepted");
+        let in_phase = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
+            .expect("valid in-phase spectra should be accepted");
         let opposite =
             spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::PI, 440.0))
                 .expect("valid opposite-phase spectra should be accepted");
-        let quadrature =
-            spectrum_cross_energy(&make(0.0, 440.0), &make(std::f64::consts::FRAC_PI_2, 440.0))
-                .expect("valid quadrature spectra should be accepted");
+        let quadrature = spectrum_cross_energy(
+            &make(0.0, 440.0),
+            &make(std::f64::consts::FRAC_PI_2, 440.0),
+        )
+        .expect("valid quadrature spectra should be accepted");
         let different_frequency =
             spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
                 .expect("valid distinct-frequency spectra should be accepted");
