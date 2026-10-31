@@ -662,7 +662,7 @@ fn spectrum_cross_energy_components(
             if !energy.is_finite() {
                 return None;
             }
-            if let Some(existing) = components.iter_mut().find(|component: &&mut ResonancePairPotentialComponent| {
+            if let Some(existing) = components.iter_mut().find(|component| {
                 (component.frequency_cycles_per_day - left.frequency_cycles_per_day).abs() <= 1e-9
             }) {
                 existing.energy += energy;
