@@ -182,10 +182,21 @@
       if (!physical) continue;
       for (const part of physical.silhouette || []) {
         const bounds = formBounds(part.form, part.x, part.y, part.rotation_radians);
+        const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
         if (bounds) {
           const a = camera.worldToScreen(bounds.minX, bounds.minY, viewport.width, viewport.height);
           const b = camera.worldToScreen(bounds.maxX, bounds.maxY, viewport.width, viewport.height);
           if (b.x < 0 || b.y < 0 || a.x > viewport.width || a.y > viewport.height) continue;
+          const projectedSize = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * camera.scale;
+          if (projectedSize < 1.5) {
+            ctx.save();
+            ctx.fillStyle = '#d9e2ec';
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, Math.max(0.7, projectedSize * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            continue;
+          }
         }
         drawObservedPart(part, viewport);
       }
