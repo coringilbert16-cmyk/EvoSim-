@@ -29,10 +29,18 @@ fn error_response(error: &'static str) -> axum::response::Response {
 
 async fn index_handler() -> impl IntoResponse {
     let page = include_str!("../../ui/index.html");
+    let theme = include_str!("../../ui/simulation_theme.css");
     let resource_visualization = include_str!("../../ui/resource_visualization.js");
     let organism_inspector = include_str!("../../ui/organism_inspector.js");
+    let themed_page = page.replace(
+        "</head>",
+        &format!("<style>{theme}</style></head>"),
+    );
     Html(format!(
-        "{page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
+        "{themed_page}\n<script>
+          const speedControl = document.getElementById('speed');
+          if (speedControl) { speedControl.max = '32'; speedControl.value = '32'; }
+        </script>\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
 
