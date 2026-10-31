@@ -481,8 +481,8 @@ pub(crate) fn settle_pair_potential_change(
     if !delta.is_finite() {
         return false;
     }
-    if delta.abs() <= f64::EPSILON {
-        return delta == 0.0;
+    if delta == 0.0 {
+        return true;
     }
 
     let next_pair_potential = ledger.total_pair_interaction_potential_held + delta;
@@ -1019,6 +1019,31 @@ mod tests {
         assert_eq!(ledger.total_resonant_energy_held, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 5.0);
         assert_eq!(ledger.total_work_expended, 0.0);
+    }
+
+    #[test]
+    fn full_resonance_spectrum_routes_unretained_pair_release_to_heat() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        for index in 0..8 {
+            assert!(resonance.deposit(100.0 + index as f64 * 100.0, 1.0));
+        }
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 2_000.0,
+            energy: -2.5,
+        }];
+
+        assert!(settle_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            Some(&mut resonance),
+            &components,
+        ));
+        assert_eq!(resonance.total_energy(), Some(8.0));
+        assert_eq!(ledger.total_resonant_energy_held, 0.0);
+        assert_eq!(ledger.total_pair_interaction_potential_held, -2.5);
+        assert_eq!(ledger.total_heat_dissipated, 2.5);
     }
 
     #[test]
