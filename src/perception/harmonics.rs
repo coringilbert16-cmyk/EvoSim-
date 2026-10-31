@@ -219,6 +219,15 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) magnitude: f64,
 }
 
+/// One signed frequency contribution to a material pair's interaction
+/// potential. Signed energy is required so PR 4 can settle attractive and
+/// repulsive work against the matching retained-resonance frequency.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonancePairPotentialComponent {
+    pub(crate) frequency_cycles_per_day: f64,
+    pub(crate) energy: f64,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -627,22 +636,53 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 /// energies); it is not by itself a mechanical potential or force.
 #[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
 pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
+    let components = spectrum_cross_energy_components(a, b)?;
+    let energy = components.iter().map(|component| component.energy).sum::<f64>();
+    energy.is_finite().then_some(energy)
+}
+
+/// Preserve the cross-energy term by frequency so conservative work can
+/// be withdrawn from or returned to a compatible resonance component.
+fn spectrum_cross_energy_components(
+    a: &ToneSpectrum,
+    b: &ToneSpectrum,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
     spectrum_energy(a)?;
     spectrum_energy(b)?;
-    let mut cross_energy = 0.0;
+    let mut components = Vec::new();
     for left in &a.components {
         for right in &b.components {
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
                 continue;
             }
-            let phase_difference = left.phase_radians - right.phase_radians;
-            cross_energy += 2.0 * left.amplitude * right.amplitude * phase_difference.cos();
-            if !cross_energy.is_finite() {
+            let energy = 2.0
+                * left.amplitude
+                * right.amplitude
+                * (left.phase_radians - right.phase_radians).cos();
+            if !energy.is_finite() {
                 return None;
+            }
+            if let Some(existing) = components.iter_mut().find(|component: &&mut ResonancePairPotentialComponent| {
+                (component.frequency_cycles_per_day - left.frequency_cycles_per_day).abs() <= 1e-9
+            }) {
+                existing.energy += energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                components.push(ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: left.frequency_cycles_per_day,
+                    energy,
+                });
             }
         }
     }
-    Some(cross_energy)
+    components.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(components)
 }
 
 /// Apply the existing material resonance and nonlinear response to every
@@ -1120,15 +1160,15 @@ pub(crate) fn material_aura_receptions(
 /// responded spectrum: the receiver's own emission already contains its
 /// oscillator phase lag. Comparing against the responded spectrum would apply
 /// that lag a second time and erase the expected same-material phase relation.
-fn directional_resonance_pair_potential(
+fn directional_resonance_pair_potential_components(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
     tick: u64,
-) -> Option<f64> {
+) -> Option<Vec<ResonancePairPotentialComponent>> {
     let receptions = material_aura_receptions(source, receiver, catalog, tick)?;
     if receptions.is_empty() {
-        return Some(0.0);
+        return Some(Vec::new());
     }
 
     let (receiver_x, receiver_y, _, receiver_emission) =
@@ -1140,7 +1180,7 @@ fn directional_resonance_pair_potential(
         return None;
     }
 
-    let mut potential = 0.0;
+    let mut potential = Vec::<ResonancePairPotentialComponent>::new();
     for sample in receptions {
         let local_distance = (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
         if !local_distance.is_finite() {
@@ -1157,31 +1197,78 @@ fn directional_resonance_pair_potential(
         let mut local_field = ToneSpectrum::empty();
         add_spectrum(&mut local_field, &receiver_emission, local_scale);
         local_field.retain_strongest();
-        let contribution = spectrum_cross_energy(&sample.incident_spectrum, &local_field)?;
-        potential += contribution;
-        if !potential.is_finite() {
-            return None;
+        for contribution in
+            spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
+        {
+            if let Some(existing) = potential.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                existing.energy += contribution.energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                potential.push(contribution);
+            }
         }
     }
+    potential.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     Some(potential)
 }
 
-/// One symmetric resonance-derived pair potential. Reciprocal boundary
-/// integrations are averaged so neither material is privileged as source or
-/// receiver. No chemical attraction, movement, or work transaction is
-/// modified by this staged calculation.
+/// One symmetric resonance-derived pair potential, retained by frequency so
+/// energy settlement can use the same spectral compatibility as the reservoir.
+pub(crate) fn resonance_pair_potential_components(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    if std::ptr::eq(a, b) {
+        return Some(Vec::new());
+    }
+    let a_to_b = directional_resonance_pair_potential_components(a, b, catalog, tick)?;
+    let b_to_a = directional_resonance_pair_potential_components(b, a, catalog, tick)?;
+    let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
+    for component in a_to_b.iter().chain(b_to_a.iter()) {
+        if let Some(existing) = symmetric.iter_mut().find(|existing| {
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                <= 1e-9
+        }) {
+            existing.energy += 0.5 * component.energy;
+            if !existing.energy.is_finite() {
+                return None;
+            }
+        } else {
+            symmetric.push(ResonancePairPotentialComponent {
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
+                energy: 0.5 * component.energy,
+            });
+        }
+    }
+    symmetric.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(symmetric)
+}
+
+/// Scalar view of the symmetric pair potential. PR 4 should use the
+/// frequency-resolved form when settling energy into/out of resonance stores.
 pub(crate) fn resonance_pair_potential(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<f64> {
-    if std::ptr::eq(a, b) {
-        return Some(0.0);
-    }
-    let a_to_b = directional_resonance_pair_potential(a, b, catalog, tick)?;
-    let b_to_a = directional_resonance_pair_potential(b, a, catalog, tick)?;
-    let potential = 0.5 * (a_to_b + b_to_a);
+    let components = resonance_pair_potential_components(a, b, catalog, tick)?;
+    let potential = components.iter().map(|component| component.energy).sum::<f64>();
     potential.is_finite().then_some(potential)
 }
 
