@@ -115,6 +115,7 @@ fn start_tick_loop(
         let mut last_rate_sample = Instant::now();
         let mut last_rate_tick = 0_u64;
         let mut last_published_tick = None;
+        let mut last_published_session = None;
         let mut next_tick_deadline = Instant::now();
         let mut scheduled_ticks_per_second = DEFAULT_TICKS_PER_SECOND;
 
@@ -186,7 +187,9 @@ fn start_tick_loop(
             if last_display_event.elapsed() >= DISPLAY_EVENT_INTERVAL {
                 let state = runtime.lock();
                 let tick = state.simulation.tick;
-                if last_published_tick != Some(tick) {
+                if last_published_tick != Some(tick)
+                    || last_published_session.as_deref() != Some(state.session_id.as_str())
+                {
                     let _ = tick_sender.send(
                         serde_json::json!({
                             "type": "tick",
@@ -196,6 +199,7 @@ fn start_tick_loop(
                         .to_string(),
                     );
                     last_published_tick = Some(tick);
+                    last_published_session = Some(state.session_id.clone());
                 }
                 last_display_event = Instant::now();
             }
