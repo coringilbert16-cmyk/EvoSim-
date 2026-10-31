@@ -33,8 +33,9 @@ impl RuntimeState {
 
     pub(crate) fn reset(&mut self) {
         let ticks_per_second = self.simulation.ticks_per_second;
-        self.simulation = Simulation::new(42, ticks_per_second);
-        self.simulation.running = false;
+        self.simulation = crate::environment_chemistry_experiment::build(42).simulation;
+        self.simulation.ticks_per_second = ticks_per_second;
+        self.simulation.running = true;
         self.history.clear();
         self.history.push_back(self.simulation.clone());
     }
