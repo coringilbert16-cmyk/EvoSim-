@@ -761,12 +761,16 @@ fn body_from_owner_relative_material(
 /// independent pair-potential inventory oracle. This intentionally mirrors
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
 #[cfg(test)]
-fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<PhysicalMaterial>> {
+fn world_physical_materials_for_oracle(
+    simulation: &Simulation,
+) -> Option<(Vec<PhysicalMaterial>, Vec<usize>)> {
     let catalog = &simulation.environment.catalog;
     let mut bodies = Vec::new();
+    let mut resonant_participant_indices = Vec::new();
 
     for organism in &simulation.organisms {
         if !organism.structure.units.is_empty() {
+            resonant_participant_indices.push(bodies.len());
             bodies.push(physical_material_from_structure(
                 &organism.structure,
                 catalog,
@@ -789,6 +793,7 @@ fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<Ph
             };
             for entry in &construction.committed_material.entries {
                 let StoredMaterial::Physical(physical) = entry;
+                resonant_participant_indices.push(bodies.len());
                 bodies.push(owner_relative_physical_material(physical, anchor)?);
             }
         }
@@ -796,12 +801,14 @@ fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<Ph
 
     for cell in &simulation.environment.field.cells {
         for physical in &cell.physical_materials {
+            resonant_participant_indices.push(bodies.len());
             bodies.push(physical.clone());
         }
     }
 
     for decomposing in &simulation.decomposing_bodies {
         if !decomposing.structure.units.is_empty() {
+            resonant_participant_indices.push(bodies.len());
             bodies.push(physical_material_from_structure(
                 &decomposing.structure,
                 catalog,
@@ -816,6 +823,8 @@ fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<Ph
         let anchor = owner_anchor(organism)?;
         for entry in &organism.stored_material.entries {
             let StoredMaterial::Physical(physical) = entry;
+            // Stored material remains a physical blocker but is deliberately
+            // excluded as a resonance source or receiver until it is released.
             bodies.push(owner_relative_physical_material(physical, anchor)?);
         }
     }
@@ -846,11 +855,12 @@ fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<Ph
         }
         if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
             let _ = simulation.environment.field.cells.get(*cell_index)?;
+            resonant_participant_indices.push(bodies.len());
             bodies.push(physical.clone());
         }
     }
 
-    Some(bodies)
+    Some((bodies, resonant_participant_indices))
 }
 
 #[cfg(test)]
@@ -919,12 +929,12 @@ fn owner_relative_physical_material(
 pub(crate) fn world_pair_potential_inventory_components(
     simulation: &Simulation,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    let bodies = world_physical_materials_for_oracle(simulation)?;
+    let (bodies, resonant_indices) = world_physical_materials_for_oracle(simulation)?;
     let catalog = &simulation.environment.catalog;
     let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
 
-    for first in 0..bodies.len() {
-        for second in (first + 1)..bodies.len() {
+    for (first_position, &first) in resonant_indices.iter().enumerate() {
+        for &second in resonant_indices.iter().skip(first_position + 1) {
             let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
                 &bodies[first],
                 &bodies[second],
@@ -1031,7 +1041,7 @@ mod tests {
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("the complete physical world should produce a valid exposure snapshot");
-        let bodies = world_physical_materials_for_oracle(&simulation)
+        let (bodies, resonant_indices) = world_physical_materials_for_oracle(&simulation)
             .expect("the independent oracle should reconstruct all physical body classes");
         assert_eq!(
             bodies.len(),
@@ -1043,6 +1053,7 @@ mod tests {
             4,
             "one organism plus three field bodies are expected"
         );
+        assert_eq!(resonant_indices, vec![0, 1, 2, 3]);
 
         let oracle = world_pair_potential_inventory_components(&simulation)
             .expect("every unordered pair should have a finite occlusion-aware potential");
