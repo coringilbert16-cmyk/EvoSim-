@@ -924,7 +924,7 @@ impl Simulation {
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
             let work_required = operation.disruption_cost;
-            let reaction_frequency_hz = Some(operation.reaction_frequency_hz);
+            let reaction_frequency_hz = Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
