@@ -156,8 +156,7 @@ fn select_best_positive_work_contact(
             .iter()
             .enumerate()
             .filter_map(|(other_index, _)| {
-                (other_index == *index || !indices_b.contains(&other_index))
-                    .then_some(other_index)
+                (other_index == *index || !indices_b.contains(&other_index)).then_some(other_index)
             })
             .collect::<Vec<_>>();
         crate::construction_runtime::placed_unit_overlaps(
