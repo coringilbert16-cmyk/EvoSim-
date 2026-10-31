@@ -1046,8 +1046,7 @@ pub(crate) fn material_aura_receptions(
                           receiver_y: f64,
                           normal_x: f64,
                           normal_y: f64,
-                          projected_extent: f64|
-     -> Option<()> {
+                          projected_extent: f64| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
