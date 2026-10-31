@@ -534,7 +534,7 @@ pub(crate) fn settle_pair_potential_change(
     for (index, holder) in biological_resonance_holders.iter().enumerate() {
         if biological_resonance_holders[..index]
             .iter()
-            .any(|previous| std::ptr::eq(*previous, **holder))
+            .any(|previous| std::ptr::eq(&**previous, &**holder))
         {
             return false;
         }
