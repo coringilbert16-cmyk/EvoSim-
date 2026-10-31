@@ -193,6 +193,25 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// One material's existing resonance aura as received at a realized
+/// boundary point on another physical material.
+///
+/// This is a pairwise reception sample, not a force or energy transaction.
+/// It preserves the receiver geometry needed for a later spatial interaction
+/// calculation without inventing a second field or perception radius.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MaterialAuraReception {
+    pub(crate) source_x: f64,
+    pub(crate) source_y: f64,
+    pub(crate) source_extent: f64,
+    pub(crate) receiver_x: f64,
+    pub(crate) receiver_y: f64,
+    pub(crate) receiver_normal_x: f64,
+    pub(crate) receiver_normal_y: f64,
+    pub(crate) spectrum: ToneSpectrum,
+    pub(crate) magnitude: f64,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -593,6 +612,35 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
     Some(energy)
 }
 
+/// Cross-energy contributed by same-frequency components when two
+/// spectra are superposed as the model's existing complex phasors.
+///
+/// Different frequencies have no cycle-averaged cross term. This returns
+/// only the interference term (combined energy minus the two separate
+/// energies); it is not by itself a mechanical potential or force.
+#[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
+pub(crate) fn spectrum_cross_energy(
+    a: &ToneSpectrum,
+    b: &ToneSpectrum,
+) -> Option<f64> {
+    spectrum_energy(a)?;
+    spectrum_energy(b)?;
+    let mut cross_energy = 0.0;
+    for left in &a.components {
+        for right in &b.components {
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            let phase_difference = left.phase_radians - right.phase_radians;
+            cross_energy += 2.0 * left.amplitude * right.amplitude * phase_difference.cos();
+            if !cross_energy.is_finite() {
+                return None;
+            }
+        }
+    }
+    Some(cross_energy)
+}
+
 /// Apply the existing material resonance and nonlinear response to every
 /// component of an incoming spectrum. The returned response keeps its natural
 /// response amplitude, but total energy cannot exceed the incoming spectrum.
@@ -939,6 +987,98 @@ fn environmental_contribution(
         },
         received,
     ))
+}
+
+/// Receive one realized physical material's aura at another realized
+/// physical material's actual exposed constituent boundaries.
+///
+/// The source uses the same aggregate oscillator and mass scaling as the
+/// environmental aura. Receiver probes, normals, and occlusion use the shared
+/// realized-shape surface geometry. Distance attenuation remains exactly the
+/// existing continuous 1/(1 + distance) law. The receiver's own oscillator
+/// response is applied after reception, just as it is for world-tone input.
+///
+/// The returned samples are not yet summed into a pair potential: each keeps
+/// its actual receiver point so a later interaction can derive spatial change
+/// without replacing the aura with a bounding-radius approximation.
+#[allow(dead_code)] // Staged for the force/potential work in this PR.
+pub(crate) fn material_aura_receptions(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    let (source_x, source_y, source_extent, emitted) =
+        environmental_material_resonance(source, catalog, tick)?;
+    let receiver_geometry =
+        crate::geometry::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            receiver, catalog,
+        )?;
+    let source_geometry =
+        crate::geometry::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            source, catalog,
+        )?;
+    let receiver_points = crate::geometry::organism_geometry::visible_source_facing_points(
+        (source_x, source_y),
+        &[receiver_geometry],
+    );
+    if receiver_points.is_empty() {
+        return Some(Vec::new());
+    }
+
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_properties = receiver.material.weighted_properties(catalog);
+    let source_mass_scale =
+        environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    if source_mass_scale <= f64::EPSILON {
+        return Some(Vec::new());
+    }
+
+    // Validate the source aggregate geometry as well as its placements; this
+    // rejects malformed realized shapes instead of allowing a center-only aura.
+    if source_geometry.parts.is_empty() {
+        return None;
+    }
+
+    let mut receptions = Vec::with_capacity(receiver_points.len());
+    for point in receiver_points {
+        let dx = source_x - point.x;
+        let dy = source_y - point.y;
+        let distance = dx.hypot(dy);
+        if !distance.is_finite() || distance <= f64::EPSILON {
+            continue;
+        }
+        let directional_gain =
+            (point.normal_x * dx / distance + point.normal_y * dy / distance).max(0.0);
+        if directional_gain <= f64::EPSILON {
+            continue;
+        }
+        let attenuation = source_mass_scale * directional_gain / (1.0 + distance);
+        if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+            continue;
+        }
+        let mut incident = ToneSpectrum::empty();
+        add_spectrum(&mut incident, &emitted, attenuation);
+        incident.retain_strongest();
+        let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+        received.retain_strongest();
+        let magnitude = spectrum_magnitude(&received);
+        if magnitude <= f64::EPSILON {
+            continue;
+        }
+        receptions.push(MaterialAuraReception {
+            source_x,
+            source_y,
+            source_extent,
+            receiver_x: point.x,
+            receiver_y: point.y,
+            receiver_normal_x: point.normal_x,
+            receiver_normal_y: point.normal_y,
+            spectrum: received,
+            magnitude,
+        });
+    }
+    Some(receptions)
 }
 
 fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
@@ -1580,6 +1720,69 @@ mod tests {
                 .components
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn spectrum_cross_energy_tracks_phase_and_ignores_distinct_frequencies() {
+        let make = |phase_radians: f64, frequency_cycles_per_day: f64| ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day,
+                amplitude: 0.5,
+                phase_radians,
+            }],
+        };
+        let in_phase = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 440.0))
+            .expect("valid in-phase spectra should be accepted");
+        let opposite = spectrum_cross_energy(
+            &make(0.0, 440.0),
+            &make(std::f64::consts::PI, 440.0),
+        )
+        .expect("valid opposite-phase spectra should be accepted");
+        let quadrature = spectrum_cross_energy(
+            &make(0.0, 440.0),
+            &make(std::f64::consts::FRAC_PI_2, 440.0),
+        )
+        .expect("valid quadrature spectra should be accepted");
+        let different_frequency = spectrum_cross_energy(
+            &make(0.0, 440.0),
+            &make(0.0, 441.0),
+        )
+        .expect("valid distinct-frequency spectra should be accepted");
+
+        assert!((in_phase - 0.5).abs() < 1e-12);
+        assert!((opposite + 0.5).abs() < 1e-12);
+        assert!(quadrature.abs() < 1e-12);
+        assert!(different_frequency.abs() < 1e-12);
+    }
+
+    #[test]
+    fn spectrum_cross_energy_is_symmetric_and_fails_closed_for_invalid_input() {
+        let a = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.7,
+                phase_radians: 0.3,
+            }],
+        };
+        let b = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.2,
+                phase_radians: -0.4,
+            }],
+        };
+        let ab = spectrum_cross_energy(&a, &b).expect("valid spectra should be accepted");
+        let ba = spectrum_cross_energy(&b, &a).expect("valid spectra should be accepted");
+        assert!((ab - ba).abs() < 1e-12);
+
+        let invalid = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: f64::NAN,
+                phase_radians: 0.0,
+            }],
+        };
+        assert!(spectrum_cross_energy(&a, &invalid).is_none());
     }
 
     #[test]
