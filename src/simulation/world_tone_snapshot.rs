@@ -1019,6 +1019,25 @@ mod tests {
         clear_environment_physical_material(&mut simulation);
         let catalog = simulation.environment.catalog.clone();
         replace_with_nitrogen_square(&mut simulation.organisms[0], 5.0, 0.0, &catalog);
+        let stored = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 2.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("stored blocker should be physically realized");
+        assert!(simulation.organisms[0].stored_material.store_physical_instance_at_owner_anchor(
+            stored,
+            Placement {
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        ));
 
         for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
             let physical = PhysicalMaterial::realized(
@@ -1050,10 +1069,14 @@ mod tests {
         );
         assert_eq!(
             bodies.len(),
-            4,
-            "one organism plus three field bodies are expected"
+            5,
+            "one organism, three field bodies, and one stored blocker are expected"
         );
-        assert_eq!(resonant_indices, vec![0, 1, 2, 3]);
+        assert_eq!(
+            resonant_indices,
+            vec![0, 1, 2, 3],
+            "stored material must occlude but must not emit or receive resonance"
+        );
 
         let oracle = world_pair_potential_inventory_components(&simulation)
             .expect("every unordered pair should have a finite occlusion-aware potential");
@@ -1072,8 +1095,8 @@ mod tests {
 
         let mut independently_summed =
             Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
-        for first in 0..bodies.len() {
-            for second in (first + 1)..bodies.len() {
+        for (first_position, &first) in resonant_indices.iter().enumerate() {
+            for &second in resonant_indices.iter().skip(first_position + 1) {
                 let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
                     &bodies[first],
                     &bodies[second],
