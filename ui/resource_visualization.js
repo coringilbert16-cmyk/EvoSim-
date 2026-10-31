@@ -99,7 +99,9 @@
       const state = await response.json();
       const tick = String(state.tick ?? '—');
       const population = String(state.population ?? '—');
-      const rate = Number.isFinite(state.ticks_per_second) ? `${state.ticks_per_second.toFixed(1).replace(/\\.0$/, '')} t/s` : '—';
+      const configuredRate = Number.isFinite(state.ticks_per_second) ? state.ticks_per_second : null;
+      const measuredRate = Number.isFinite(state.measured_ticks_per_second) ? state.measured_ticks_per_second : null;
+      const rate = configuredRate == null ? '—' : `${configuredRate.toFixed(1)} target · ${measuredRate?.toFixed(1) ?? '—'} actual t/s`;
       const history = String(state.history_ticks?.length ?? 0);
       for (const id of ['ev-top-tick', 'ev-side-tick']) { const node = document.getElementById(id); if (node) node.textContent = tick; }
       for (const id of ['ev-top-population', 'ev-side-population']) { const node = document.getElementById(id); if (node) node.textContent = population; }
@@ -132,38 +134,25 @@
   function drawField(world, viewport) {
     if (!world) return;
     const size = paletteState.fieldCellSize;
-    const cells = world.field || [];
-    const maxByResource = new Map();
-    for (const cell of cells) {
-      for (const [name, amount] of cell.materials || []) {
-        if (!Number.isFinite(amount) || amount <= 0) continue;
-        maxByResource.set(name, Math.max(maxByResource.get(name) || 0, amount));
-      }
-    }
-    for (const cell of cells) {
-      const topLeft = camera.worldToScreen(cell.x - size / 2, cell.y - size / 2, viewport.width, viewport.height);
+    for (const cell of world.field || []) {
+      const name = dominantResource(cell);
+      if (!name) continue;
+      const appearance = appearanceFor(name);
+      const screen = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
       const screenSize = size * camera.scale;
-      if (screenSize <= 0) continue;
-      for (const [name, amount] of cell.materials || []) {
-        const maximum = maxByResource.get(name) || 0;
-        if (!Number.isFinite(amount) || amount <= 0 || !(maximum > 0)) continue;
-        const appearance = appearanceFor(name);
-        const density = Math.max(0, Math.min(1, amount / maximum));
-        const baseOpacity = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
-        if (!(baseOpacity > 0)) continue;
-        const centerX = topLeft.x + screenSize / 2;
-        const centerY = topLeft.y + screenSize / 2;
-        const innerRadius = Math.max(0, screenSize * 0.08);
-        const outerRadius = Math.max(innerRadius + 1, screenSize * 0.72);
-        const peakAlpha = Math.min(0.82, 0.08 + density * 0.74) * baseOpacity;
-        const gradient = ctx.createRadialGradient(centerX, centerY, innerRadius, centerX, centerY, outerRadius);
-        gradient.addColorStop(0, `${appearance.fill}${Math.round(peakAlpha * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(0.45, `${appearance.fill}${Math.round(peakAlpha * 0.72 * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(1, `${appearance.fill}00`);
-        ctx.save(); ctx.fillStyle = gradient;
-        ctx.fillRect(centerX - outerRadius, centerY - outerRadius, outerRadius * 2, outerRadius * 2);
-        ctx.restore();
+      if (screen.x < -screenSize || screen.y < -screenSize ||
+          screen.x > viewport.width + screenSize || screen.y > viewport.height + screenSize) continue;
+      ctx.save();
+      ctx.fillStyle = appearance.fill;
+      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+      if (screenSize < 3) {
+        ctx.beginPath();
+        ctx.arc(screen.x, screen.y, Math.max(0.75, screenSize * 0.35), 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillRect(screen.x - screenSize / 2, screen.y - screenSize / 2, screenSize, screenSize);
       }
+      ctx.restore();
     }
   }
 
@@ -175,29 +164,24 @@
     }
   }
 
-  // World observation exposes authoritative coarse bounds, not exact forms.
-  // The rectangle is only a visual projection of the observed extent.
-  function drawCoarseOrganisms(world, viewport) {
-    for (const organism of world?.organisms || []) {
-      const a = camera.worldToScreen(organism.min_x, organism.min_y, viewport.width, viewport.height);
-      const b = camera.worldToScreen(organism.max_x, organism.max_y, viewport.width, viewport.height);
-      const width = Math.max(1, b.x - a.x);
-      const height = Math.max(1, b.y - a.y);
-      ctx.save(); ctx.fillStyle = '#777777'; ctx.globalAlpha = 0.35;
-      ctx.fillRect(a.x, a.y, width, height);
-      ctx.strokeStyle = '#BBBBBB'; ctx.globalAlpha = 0.9;
-      ctx.strokeRect(a.x, a.y, width, height); ctx.restore();
-    }
-  }
 
-  const originalRenderWorld = renderWorld;
   renderWorld = function resourceAwareWorldRender() {
     const world = worldPayload();
     const viewport = viewportSize();
+    if (!world) return;
     drawField(world, viewport);
+    renderHotspot(world.hotspot, viewport);
     drawWorldPoints(world, viewport);
-    drawCoarseOrganisms(world, viewport);
-    originalRenderWorld();
+    for (const organism of world.organisms || []) {
+      const physical = organism.physical;
+      if (!physical) continue;
+      for (const part of physical.silhouette || []) {
+        const p = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+        if (p.x < -20 || p.y < -20 || p.x > viewport.width + 20 || p.y > viewport.height + 20) continue;
+        drawObservedPart(part, viewport);
+      }
+      drawSelectionBounds(organism.id, physical, viewport);
+    }
   };
 
   renderStructure = function resourceAwareStructureRender() {
