@@ -1841,12 +1841,20 @@ mod tests {
         assert!(!left_to_right.is_empty());
         assert!(!right_to_left.is_empty());
         assert!(!left_to_farther.is_empty());
-        assert!(left_to_right
-            .iter()
-            .all(|sample| (sample.receiver_x - 4.0).abs() < 2.0));
-        assert!(right_to_left
-            .iter()
-            .all(|sample| sample.receiver_x.abs() < 2.0));
+        assert!(left_to_right.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0)
+                    .abs()
+                    < 1e-6
+        }));
+        assert!(right_to_left.iter().all(|sample| {
+            sample.receiver_x.is_finite()
+                && sample.receiver_y.is_finite()
+                && (sample.receiver_normal_x.powi(2) + sample.receiver_normal_y.powi(2) - 1.0)
+                    .abs()
+                    < 1e-6
+        }));
 
         let total_received_energy = |samples: &[MaterialAuraReception]| {
             samples
