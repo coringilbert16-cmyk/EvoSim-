@@ -1651,6 +1651,64 @@ mod tests {
     }
 
     #[test]
+    fn each_incoming_frequency_receives_its_own_oscillator_phase_lag() {
+        let incoming = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.5,
+                    phase_radians: 0.15,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 713.0,
+                    amplitude: 0.4,
+                    phase_radians: -0.4,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 997.0,
+                    amplitude: 0.3,
+                    phase_radians: 1.1,
+                },
+            ],
+        };
+        let material = properties(1.0, 1.0, 1.0);
+        let baseline = baselines();
+        let natural = natural_frequency_cycles_per_day(material, baseline);
+        let damping = damping_ratio(material, baseline);
+        let output = material_response_spectrum(material, baseline, &incoming)
+            .expect("valid mixed-frequency input should produce a response");
+
+        for incident in &incoming.components {
+            let response = output
+                .components
+                .iter()
+                .find(|component| {
+                    (component.frequency_cycles_per_day - incident.frequency_cycles_per_day)
+                        .abs()
+                        < 1e-9
+                })
+                .unwrap_or_else(|| {
+                    panic!(
+                        "fundamental response at {} cycles/day should be retained",
+                        incident.frequency_cycles_per_day
+                    )
+                });
+            let expected_phase = incident.phase_radians
+                - oscillator_phase_lag(
+                    incident.frequency_cycles_per_day,
+                    natural,
+                    damping,
+                );
+            assert!(
+                (response.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
+                    && (response.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
+                "incoming frequency {} must receive its own phase lag",
+                incident.frequency_cycles_per_day
+            );
+        }
+    }
+
+    #[test]
     fn reactivity_sets_relative_damping_and_nonlinear_content() {
         let baseline = damping_ratio(properties(1.0, 1.0, 1.0), baselines());
         let high = damping_ratio(properties(1.0, 4.0, 1.0), baselines());
