@@ -462,14 +462,13 @@ pub(crate) fn accumulate_environmental(
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
-            for target_offset in 0..target_cells.len() {
+            for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
@@ -733,8 +732,55 @@ pub(crate) fn resolve_environmental(
     else {
         return false;
     };
+
+    // COMBINE couples to the logarithmic midpoint of the reactants' natural
+    // frequencies, matching environmental and organism BREAK. Resonance is
+    // the first energy source; the existing usable reserve covers only the
+    // remaining work. Stage both stores so a failed bond/ledger commit spends
+    // neither.
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
+        return false;
+    }
+    let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    if !reaction_frequency_hz.is_finite() || reaction_frequency_hz <= 0.0 {
+        return false;
+    }
+    let Some((_, work_cost, _, _)) = crate::combine_runtime::selected_candidate_evaluation(
+        &trial_structure,
+        unit_a,
+        unit_b,
+        operation.candidate,
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    if !work_cost.is_finite() || work_cost < 0.0 {
+        return false;
+    }
+    let mut staged_resonance = environment.resonant_energy.clone();
+    // Resonance couples to the physical formation work itself, not merely to
+    // the net external deficit after structural potential is released. The
+    // reaction transaction separately accounts for that released potential.
+    let resonant_work = staged_resonance.withdraw_compatible(reaction_frequency_hz, work_cost);
+    if !resonant_work.is_finite() || resonant_work < 0.0 || resonant_work > work_cost {
+        return false;
+    }
+    let remaining_work = work_cost - resonant_work;
+    if !remaining_work.is_finite() || environment.chemistry_usable_energy + 1e-9 < remaining_work {
+        return false;
+    }
     let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = environment.chemistry_usable_energy;
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    if !staged_usable_energy.is_finite() || staged_usable_energy < 0.0 {
+        return false;
+    }
     let mut cache = ConnectionCompatibilityCache::new();
     if crate::combine_runtime::form_selected_bond_diagnostic(
         &mut trial_structure,
@@ -779,16 +825,20 @@ pub(crate) fn resolve_environmental(
     // many prior reactions and is not the physical state change itself.
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_total_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
+        || !next_total_resonant.is_finite()
+        || next_total_resonant < 0.0
         || !structural_delta.is_finite()
         || !next_total_structural.is_finite()
     {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
+    staged_ledger.total_resonant_energy_held = next_total_resonant;
     staged_ledger.total_structural_energy_held = next_total_structural;
 
     // All fallible checks are complete. Remove in descending index order for a
@@ -818,6 +868,7 @@ pub(crate) fn resolve_environmental(
         environment.field.mark_changed_at_index(operation.cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
+    environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
     true
 }
@@ -1490,7 +1541,7 @@ mod tests {
             let local_x = second.x - first.x;
             let local_y = second.y - first.y;
 
-            'external_pose: for step in 1..=80 {
+            for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
@@ -1610,6 +1661,8 @@ mod tests {
             compound_b.clone(),
             &catalog,
         ));
+        // Preserve the established reserve for the compound/compound round-trip;
+        // the dedicated base-pair test below isolates resonance-only funding.
         simulation.environment.chemistry_usable_energy = 1_000.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
@@ -1817,7 +1870,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);
@@ -2465,6 +2518,24 @@ mod tests {
                         if let Some(selected) = select_best_contact(
                             &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
                         ) {
+                            // The energy-rejection fixture must use a contact
+                            // that actually requires physical formation work.
+                            // Skip zero-work contacts during fixture discovery
+                            // rather than asserting after an arbitrary pair has
+                            // already been selected.
+                            let formation_work =
+                                crate::combine_runtime::selected_candidate_evaluation(
+                                    &structure,
+                                    selected.unit_a,
+                                    selected.unit_b,
+                                    selected.candidate,
+                                    &catalog,
+                                )
+                                .map(|(_, work, _, _)| work)
+                                .unwrap_or(0.0);
+                            if formation_work <= 1e-9 {
+                                continue;
+                            }
                             let material_name_a = structure.units[selected.unit_a]
                                 .material
                                 .parts
@@ -2502,6 +2573,24 @@ mod tests {
 
         let (source_a, source_b, selected) =
             selected_pair.expect("catalog should contain a physically eligible material pair");
+
+        // This case deliberately has no usable-energy reserve: the live
+        // environmental COMBINE must be funded by frequency-compatible field
+        // resonance alone.
+        simulation.environment.chemistry_usable_energy = 0.0;
+        let properties_a = source_a.material.weighted_properties(&catalog);
+        let properties_b = source_b.material.weighted_properties(&catalog);
+        let baselines = crate::resources::ResourceBaselines::from_catalog(&catalog);
+        let frequency_a = crate::harmonics::natural_frequency_hz(properties_a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_hz(properties_b, baselines);
+        let reaction_frequency_hz = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .deposit(reaction_frequency_hz, 1_000.0),
+            "test resonance reservoir must accept the reactants' coupled frequency"
+        );
 
         // Isolate chemical activation from spatial discovery. If this direct call
         // cannot accumulate, the rejection is inside chemical_step rather than
@@ -2551,7 +2640,11 @@ mod tests {
             source_b.clone(),
             &catalog,
         ));
-        simulation.environment.chemistry_usable_energy = 1_000.0;
+        // Keep the usable reserve empty so this transaction is funded solely
+        // by the compatible resonance deposited above. The simulation fixture
+        // starts with a nonzero reserve, so clear it explicitly before taking
+        // the inventory baseline used by the ledger assertions.
+        simulation.environment.chemistry_usable_energy = 0.0;
         let baseline = simulation.energy_inventory_snapshot();
         simulation.energy_ledger = crate::state::EnergyLedger::default();
         simulation.energy_ledger.initial_usable_energy_held = baseline.current_usable_energy;
@@ -2678,11 +2771,78 @@ mod tests {
         );
         assert_eq!(simulation.energy_ledger, original_ledger);
 
+        // Verify the selected operation actually has positive physical
+        // formation work. Otherwise an empty-energy rejection test would be
+        // vacuous because a zero-cost bond needs no funding.
+        let (mut work_structure, work_indices_a) =
+            restored_source(&operation.source_a, &simulation.environment)
+                .expect("selected source A must restore for work-cost diagnostic");
+        let work_indices_b = crate::material_restoration::restore_material(
+            &mut work_structure,
+            &operation.source_b,
+            origin(),
+            &catalog,
+        )
+        .expect("selected source B must restore for work-cost diagnostic");
+        let work_unit_a = work_indices_a[operation.unit_a];
+        let work_unit_b = work_indices_b[operation.unit_b];
+        let (_, formation_work, _, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &work_structure,
+            work_unit_a,
+            work_unit_b,
+            operation.candidate,
+            &catalog,
+        )
+        .expect("selected environmental candidate must remain evaluable");
+        assert!(
+            formation_work > 1e-9,
+            "empty-energy rejection requires positive formation work; got {formation_work}"
+        );
+
+        // With neither compatible resonance nor a usable reserve, COMBINE
+        // must reject without consuming energy or changing either source.
+        let original_resonance = simulation.environment.resonant_energy.clone();
+        simulation.environment.resonant_energy = Default::default();
+        assert!(!resolve_environmental(
+            operation.clone(),
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+        assert_eq!(
+            simulation.environment.field.cells[cell].physical_materials,
+            original_materials
+        );
+        assert_eq!(
+            simulation.environment.chemistry_usable_energy,
+            original_usable
+        );
+        assert_eq!(simulation.energy_ledger, original_ledger);
+        assert!(simulation.environment.resonant_energy.components.is_empty());
+        simulation.environment.resonant_energy = original_resonance;
+
+        let resonant_before = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("test resonance inventory must be valid");
         assert!(resolve_environmental(
             operation,
             &mut simulation.environment,
             &mut simulation.energy_ledger,
         ));
+        assert!(
+            simulation.environment.chemistry_usable_energy <= 1e-9,
+            "resonance-only COMBINE must not rely on a usable-energy grant"
+        );
+        assert!(
+            simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .expect("post-COMBINE resonance inventory must be valid")
+                < resonant_before,
+            "successful COMBINE must withdraw compatible resonant energy"
+        );
 
         let product = &simulation.environment.field.cells[cell].physical_materials;
         assert_eq!(product.len(), 1);
@@ -2739,6 +2899,13 @@ mod tests {
                 .abs()
                 <= 1e-6,
             "COMBINE must keep the ledger structural-energy total aligned with its live bonds"
+        );
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held
+                - inventory.current_resonant_energy)
+                .abs()
+                <= 1e-6,
+            "COMBINE must keep the ledger resonant-energy total aligned with its live reservoir"
         );
         let residual = inventory.residual();
         assert!(
