@@ -181,7 +181,6 @@ fn report(simulation: &Simulation, label: &str) {
     );
 }
 
-
 fn run_environment_chemistry_experiment(
     seed: u64,
     max_ticks: u64,
