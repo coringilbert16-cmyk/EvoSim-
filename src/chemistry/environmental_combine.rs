@@ -147,10 +147,23 @@ fn select_best_positive_work_contact(
     // The fixture must represent two distinct, non-overlapping physical
     // reactants; contact candidates alone do not establish that condition.
     if indices_a.iter().any(|index| {
+        // placed_unit_overlaps scans the complete structure, including the
+        // candidate itself, unless that unit is explicitly ignored. Restrict
+        // the scan to the opposite reactant group so this is a true A-vs-B
+        // penetration check rather than a unit-vs-itself check.
+        let ignored_units = structure
+            .units
+            .iter()
+            .enumerate()
+            .filter_map(|(other_index, _)| {
+                (other_index == *index || !indices_b.contains(&other_index))
+                    .then_some(other_index)
+            })
+            .collect::<Vec<_>>();
         crate::construction_runtime::placed_unit_overlaps(
             structure,
             &structure.units[*index],
-            indices_b,
+            &ignored_units,
             catalog,
         )
     }) {
