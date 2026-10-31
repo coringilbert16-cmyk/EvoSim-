@@ -141,7 +141,8 @@
 
   function drawPhysicalFieldPart(part, viewport) {
     const appearance = appearanceFor(part.resource);
-    const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+    const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
+    const point = camera.worldToScreen(displayPosition.x, displayPosition.y, viewport.width, viewport.height);
     const fluid = part.form?.Fluid;
     const localBounds = formBounds(part.form, 0, 0, part.rotation_radians);
     const radius = localBounds
