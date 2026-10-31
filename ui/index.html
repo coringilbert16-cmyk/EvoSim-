@@ -30,6 +30,7 @@
     <div id="timeline">
       <button id="run-toggle" class="transport-button primary" type="button">Run</button>
       <button id="step-once" class="transport-button" type="button" title="Advance one simulation tick">Step</button>
+      <button id="live-follow" class="transport-button" type="button" hidden>Return to Live</button>
       <input id="history" type="range" min="0" max="0" value="0" step="1" aria-label="Simulation history">
       <span id="timeline-label">Live</span>
       <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
@@ -125,6 +126,8 @@
     function updateTimeline() {
       const slider = document.getElementById('history');
       const label = document.getElementById('timeline-label');
+      const liveButton = document.getElementById('live-follow');
+      if (liveButton) liveButton.hidden = historyViewTick == null;
       if (!historyTicks.length) { label.textContent = 'No history'; return; }
       const index = Math.max(0, Math.min(historyTicks.length - 1, Number(slider.value)));
       const tick = historyTicks[index];
@@ -222,11 +225,14 @@
     });
     document.getElementById('speed').addEventListener('focus', () => { speedControlActive = true; });
     document.getElementById('speed').addEventListener('blur', () => { speedControlActive = false; });
-    document.getElementById('history').addEventListener('input', event => {
+    // Scrub the history slider freely, then load one historical frame on
+    // release. Live playback remains a separate, explicit follow mode.
+    document.getElementById('history').addEventListener('change', event => {
       if (!historyTicks.length) return;
       const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
       loadHistoricalWorld(tick);
     });
+    document.getElementById('live-follow').addEventListener('click', returnToLiveWorld);
 
 
     function resize() {
@@ -806,6 +812,10 @@
         observationLevel = 'World';
         await loadObservation('World');
         connectLiveStream();
+        // This viewer opens the environmental chemistry experiment in live
+        // mode, not as a static history browser. Start it on first load unless
+        // the runtime is already running.
+        if (!runtimeStatus?.running) await control('/control/resume');
       });
     }
   </script>
