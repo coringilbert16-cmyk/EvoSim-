@@ -1026,15 +1026,17 @@ mod tests {
             &catalog,
         )
         .expect("stored blocker should be physically realized");
-        assert!(simulation.organisms[0].stored_material.store_physical_instance_at_owner_anchor(
-            stored,
-            Placement {
-                x: 5.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &catalog,
-        ));
+        assert!(simulation.organisms[0]
+            .stored_material
+            .store_physical_instance_at_owner_anchor(
+                stored,
+                Placement {
+                    x: 5.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &catalog,
+            ));
 
         for (name, x) in [("Carbon", 15.0), ("Hydrogen", 20.0), ("Sulfur", 25.0)] {
             let physical = PhysicalMaterial::realized(
