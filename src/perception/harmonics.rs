@@ -1010,12 +1010,14 @@ pub(crate) fn material_aura_receptions(
     }
     let (source_x, source_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
-    let receiver_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-        receiver, catalog,
-    )?;
-    let source_geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-        source, catalog,
-    )?;
+    let receiver_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            receiver, catalog,
+        )?;
+    let source_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            source, catalog,
+        )?;
     let receiver_points = crate::organism_geometry::visible_source_facing_points(
         (source_x, source_y),
         &[receiver_geometry],
@@ -1026,7 +1028,8 @@ pub(crate) fn material_aura_receptions(
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
-    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    let source_mass_scale =
+        environmental_mass_scale(source.material.mass(catalog), baselines.mass);
     if source_mass_scale <= f64::EPSILON {
         return Some(Vec::new());
     }
@@ -1057,7 +1060,8 @@ pub(crate) fn material_aura_receptions(
         let mut incident = ToneSpectrum::empty();
         add_spectrum(&mut incident, &emitted, attenuation);
         incident.retain_strongest();
-        let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+        let mut received =
+            material_response_spectrum(receiver_properties, baselines, &incident)?;
         received.retain_strongest();
         let magnitude = spectrum_magnitude(&received);
         if magnitude <= f64::EPSILON {
