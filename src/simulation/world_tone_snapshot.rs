@@ -760,8 +760,7 @@ fn body_from_owner_relative_material(
 /// Reconstruct every currently realized physical world body for the
 /// independent pair-potential inventory oracle. This intentionally mirrors
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
-#[cfg(test)]
-fn world_physical_materials_for_oracle(
+fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,
 ) -> Option<(Vec<PhysicalMaterial>, Vec<usize>)> {
     let catalog = &simulation.environment.catalog;
@@ -863,7 +862,6 @@ fn world_physical_materials_for_oracle(
     Some((bodies, resonant_participant_indices))
 }
 
-#[cfg(test)]
 fn physical_material_from_structure(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
@@ -899,7 +897,6 @@ fn physical_material_from_structure(
     })
 }
 
-#[cfg(test)]
 fn owner_relative_physical_material(
     physical: &PhysicalMaterial,
     owner_anchor: Placement,
@@ -924,12 +921,12 @@ fn owner_relative_physical_material(
 
 /// Recompute the signed world pair-potential inventory from the physical
 /// world, including every other body as an occluder for each pair. This is an
-/// intentionally independent, test-only oracle; it is not yet a tick-loop path.
-#[cfg(test)]
+/// intentionally independent oracle; it is not yet a tick-loop path.
+#[allow(dead_code)] // Staged for inventory verification before movement/chemistry use.
 pub(crate) fn world_pair_potential_inventory_components(
     simulation: &Simulation,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    let (bodies, resonant_indices) = world_physical_materials_for_oracle(simulation)?;
+    let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(simulation)?;
     let catalog = &simulation.environment.catalog;
     let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
 
@@ -1060,7 +1057,7 @@ mod tests {
 
         let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
             .expect("the complete physical world should produce a valid exposure snapshot");
-        let (bodies, resonant_indices) = world_physical_materials_for_oracle(&simulation)
+        let (bodies, resonant_indices) = world_physical_materials_for_pair_potential(&simulation)
             .expect("the independent oracle should reconstruct all physical body classes");
         assert_eq!(
             bodies.len(),
