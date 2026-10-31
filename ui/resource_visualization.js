@@ -207,11 +207,29 @@
     ctx.restore();
     for (const unit of structure.units || []) {
       if (!unit.form || !unit.placement) continue;
+      const rotation = unit.placement.rotation_radians || 0;
+      const bounds = formBounds(unit.form, unit.placement.x, unit.placement.y, rotation);
       const point = camera.worldToScreen(unit.placement.x, unit.placement.y, viewport.width, viewport.height);
+      if (bounds) {
+        const a = camera.worldToScreen(bounds.minX, bounds.minY, viewport.width, viewport.height);
+        const b = camera.worldToScreen(bounds.maxX, bounds.maxY, viewport.width, viewport.height);
+        if (b.x < 0 || b.y < 0 || a.x > viewport.width || a.y > viewport.height) continue;
+        const projectedSize = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * camera.scale;
+        if (projectedSize < 1.5) {
+          ctx.save();
+          ctx.fillStyle = appearanceFor(dominantResource(unit.material)).fill;
+          ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(0.7, projectedSize * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          continue;
+        }
+      }
       const appearance = appearanceFor(dominantResource(unit.material));
       ctx.save(); ctx.translate(point.x, point.y); ctx.scale(camera.scale, camera.scale);
       ctx.fillStyle = appearance.fill; ctx.strokeStyle = appearance.outline; ctx.globalAlpha = appearance.fill_opacity / 255;
-      drawForm(unit.form, 0, 0, unit.placement.rotation_radians); ctx.restore();
+      drawForm(unit.form, 0, 0, rotation); ctx.restore();
     }
   };
 
