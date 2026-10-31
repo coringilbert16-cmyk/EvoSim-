@@ -1103,13 +1103,15 @@ mod tests {
             energy: -2.5,
         }];
 
-        let mut holders = [&mut full_resonance, &mut available_resonance];
-        assert!(settle_pair_potential_change(
-            &mut ledger,
-            &mut usable,
-            &mut holders,
-            &components,
-        ));
+        {
+            let mut holders = [&mut full_resonance, &mut available_resonance];
+            assert!(settle_pair_potential_change(
+                &mut ledger,
+                &mut usable,
+                &mut holders,
+                &components,
+            ));
+        }
         assert_eq!(full_resonance.total_energy(), Some(8.0));
         assert_eq!(available_resonance.total_energy(), Some(2.5));
         assert_eq!(ledger.total_resonant_energy_held, 10.5);
