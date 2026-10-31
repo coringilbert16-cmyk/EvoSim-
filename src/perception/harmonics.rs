@@ -2180,9 +2180,8 @@ mod tests {
             potential < 0.0,
             "the unlike oscillator phases should produce a negative cross-energy"
         );
-        let (_, force_on_hydrogen) =
-            resonance_pair_force(&carbon, &hydrogen, &catalog, 0)
-                .expect("valid unlike-material pair should have a gradient-derived force");
+        let (_, force_on_hydrogen) = resonance_pair_force(&carbon, &hydrogen, &catalog, 0)
+            .expect("valid unlike-material pair should have a gradient-derived force");
         assert!(
             force_on_hydrogen.0 < 0.0,
             "a negative decaying potential should attract the receiver toward the source"
