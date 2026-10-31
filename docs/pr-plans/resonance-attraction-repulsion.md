@@ -25,6 +25,21 @@ The source extent is currently recorded as metadata; the existing distance atten
 - Define one symmetric pair interaction potential from the two materials' reciprocal aura reception, then derive the equal-and-opposite pair forces from that single potential. Do not calculate two unrelated one-sided forces or count the same pair twice.
 - Audit existing chemical attraction and define precisely where resonance becomes authoritative.
 
+## Phase-dependent interaction term implied by the existing model
+
+The code already contains the two ingredients needed for a non-arbitrary phase-dependent cross term:
+
+- `combine_component` adds same-frequency components as complex phasors.
+- `wave_energy_from_amplitude` defines spectral energy as amplitude squared, (E=A^2).
+
+For two received components at the same frequency, phasor addition gives:
+
+`|A_i exp(i φ_i) + A_j exp(i φ_j)|² - A_i² - A_j² = 2 A_i A_j cos(φ_i - φ_j)`
+
+This is the phase-dependent cross-energy term naturally implied by the current representation. Components at different frequencies do not contribute to the cycle-averaged cross term. The received amplitudes already include the existing aura attenuation and directional geometric coupling.
+
+This is the leading candidate for the pair interaction-energy term, not permission to treat signal aggregation as mechanical work without proof. PR 3 must establish a symmetric pair contribution from the actual reciprocal receiver geometry, show that the spatial dependence is supplied by the existing aura path, and verify that the resulting mechanical force `F = -∇U` exchanges energy consistently rather than double-counting the incoming aura signal. Do not add a free coupling constant or manually reverse the phase polarity. Under this candidate, constructive/in-phase overlap raises the cross-energy term, destructive/anti-phase overlap lowers it, and quadrature components contribute no cross term; the force direction then follows from the spatial gradient.
+
 ## Acceptance
 
 - Pairwise reception reuses the established aura attenuation and geometry path; no second spatial field or arbitrary hard radius is introduced.
