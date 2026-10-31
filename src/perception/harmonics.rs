@@ -1683,8 +1683,7 @@ mod tests {
                 .components
                 .iter()
                 .find(|component| {
-                    (component.frequency_cycles_per_day - incident.frequency_cycles_per_day)
-                        .abs()
+                    (component.frequency_cycles_per_day - incident.frequency_cycles_per_day).abs()
                         < 1e-9
                 })
                 .unwrap_or_else(|| {
@@ -1694,11 +1693,7 @@ mod tests {
                     )
                 });
             let expected_phase = incident.phase_radians
-                - oscillator_phase_lag(
-                    incident.frequency_cycles_per_day,
-                    natural,
-                    damping,
-                );
+                - oscillator_phase_lag(incident.frequency_cycles_per_day, natural, damping);
             assert!(
                 (response.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
                     && (response.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
