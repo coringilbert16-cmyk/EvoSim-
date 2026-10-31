@@ -659,6 +659,17 @@ pub(crate) fn transform_signal_to_energy_budget(
     Some(transformed)
 }
 
+/// Tick-zero convenience retained for tests that characterize the static initial condition.
+#[cfg(test)]
+pub(crate) fn world_tone_cavity_contribution(
+    catalog: &[crate::resources::BaseResource],
+    structure: &crate::structure::OrganismStructure,
+    cavity: &crate::cavity::GenomeCavity,
+    sample: crate::world_tone::WorldToneSample,
+) -> (ToneSpectrum, Vec<ResonancePerception>) {
+    world_tone_cavity_contribution_at_tick(catalog, structure, cavity, sample, 0)
+}
+
 pub(crate) fn world_tone_cavity_contribution_at_tick(
     catalog: &[crate::resources::BaseResource],
     structure: &crate::structure::OrganismStructure,
@@ -946,6 +957,15 @@ fn environmental_contributions(
     (spectrum, perceptions)
 }
 
+#[cfg(test)]
+pub(crate) fn genome_cavity_spectrum(
+    catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
+    cavity: &crate::cavity::GenomeCavity,
+) -> ToneSpectrum {
+    genome_cavity_spectrum_at_tick(catalog, field, cavity, 0)
+}
+
 pub(crate) fn genome_cavity_spectrum_at_tick(
     catalog: &[crate::resources::BaseResource],
     field: &crate::environment::ActiveMaterialField,
@@ -958,6 +978,15 @@ pub(crate) fn genome_cavity_spectrum_at_tick(
 /// Preserve one spatially attributed signal for each source/receiver pair.
 /// Keeping these channels separate is what gives downstream interpretation
 /// directional information without creating a separate sensor system.
+#[cfg(test)]
+pub(crate) fn genome_cavity_resonance_perceptions(
+    catalog: &[crate::resources::BaseResource],
+    field: &crate::environment::ActiveMaterialField,
+    cavity: &crate::cavity::GenomeCavity,
+) -> Vec<ResonancePerception> {
+    genome_cavity_resonance_perceptions_at_tick(catalog, field, cavity, 0)
+}
+
 pub(crate) fn genome_cavity_resonance_perceptions_at_tick(
     catalog: &[crate::resources::BaseResource],
     field: &crate::environment::ActiveMaterialField,
