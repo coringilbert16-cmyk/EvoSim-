@@ -1715,7 +1715,6 @@ mod tests {
         }));
         assert!(spectrum.components.len() <= MAX_SPECTRAL_COMPONENTS);
     }
-}
 
     #[test]
     fn every_generated_harmonic_advances_from_the_shared_phase_clock() {
