@@ -85,11 +85,30 @@ impl RuntimeState {
     }
 
     pub(crate) fn restore_tick(&mut self, tick: u64) -> bool {
-        let Some(snapshot) = self.history.iter().find(|snapshot| snapshot.tick == tick) else {
+        // Restore the nearest retained checkpoint, then replay authoritative
+        // simulation steps to reach the exact requested tick.
+        if tick > self.simulation.tick {
+            return false;
+        }
+        let Some(snapshot) = self.history.iter()
+            .filter(|snapshot| snapshot.tick <= tick)
+            .max_by_key(|snapshot| snapshot.tick)
+            .cloned()
+        else {
             return false;
         };
-        self.simulation = snapshot.clone();
+        self.simulation = snapshot;
+        while self.simulation.tick < tick {
+            self.simulation.step();
+        }
+        self.simulation.running = false;
         self.history.retain(|candidate| candidate.tick <= tick);
+        if self.history.back().map(|candidate| candidate.tick) != Some(tick) {
+            self.history.push_back(self.simulation.clone());
+        }
+        while self.history.len() > HISTORY_CAPACITY {
+            self.history.pop_front();
+        }
         true
     }
 }
@@ -233,9 +252,10 @@ mod tests {
             runtime.record_tick();
         }
 
-        assert!(runtime.restore_tick(300));
-        assert_eq!(runtime.simulation.tick, 300);
-        assert_eq!(runtime.history_ticks(), vec![0, 100, 200, 300]);
+        assert!(runtime.restore_tick(250));
+        assert_eq!(runtime.simulation.tick, 250);
+        assert!(!runtime.simulation.running);
+        assert_eq!(runtime.history_ticks(), vec![0, 100, 200, 250]);
         assert!(!runtime.restore_tick(500));
     }
 }
