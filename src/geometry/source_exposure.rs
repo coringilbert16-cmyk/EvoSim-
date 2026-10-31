@@ -1868,8 +1868,8 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
                 source,
                 point,
                 bodies,
-                usize::MAX,
-                usize::MAX,
+                target.body_index,
+                target.unit_index,
                 &candidate_body_indices,
             ) {
                 continue;
