@@ -742,7 +742,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     fn write_event(&mut self, event: Value) -> std::io::Result<()> {
         serde_json::to_writer(&mut self.writer, &event)?;
-        self.writer.write_all(b"\\n")
+        self.writer.write_all(b"\n")
     }
 }
 
