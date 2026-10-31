@@ -344,7 +344,9 @@
           else ctx.lineTo(point.x, point.y);
         }
         ctx.strokeStyle = offset === 0 ? 'rgba(224, 242, 254, 0.72)' : 'rgba(186, 230, 253, 0.24)';
-        ctx.lineWidth = offset === 0 ? Math.max(1.5, camera.scale * 0.8) : Math.max(1, camera.scale * 0.45);
+        // Streamlines are projected into screen coordinates, so stroke width
+        // must remain screen-space constant as the camera zooms.
+        ctx.lineWidth = offset === 0 ? 1.5 : 1.0;
         ctx.stroke();
       }
 
@@ -356,7 +358,7 @@
         ctx.beginPath();
         ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? -Math.PI * 0.2 : Math.PI * 0.8, fraction < 0.5 ? Math.PI * 1.45 : Math.PI * 2.8);
         ctx.strokeStyle = 'rgba(186, 230, 253, 0.38)';
-        ctx.lineWidth = Math.max(1, camera.scale * 0.5);
+        ctx.lineWidth = 1.25;
         ctx.stroke();
       }
       ctx.restore();
@@ -378,7 +380,7 @@
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = 'rgba(255, 150, 40, 0.72)';
-      ctx.lineWidth = Math.max(1, camera.scale * 0.5);
+      ctx.lineWidth = 1.25;
       ctx.stroke();
       ctx.fillStyle = 'rgba(255, 245, 220, 0.95)';
       ctx.font = '11px sans-serif';
