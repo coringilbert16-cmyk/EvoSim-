@@ -1828,8 +1828,7 @@ mod tests {
         let baselines = baselines();
         let natural_frequency = natural_frequency_cycles_per_day(properties, baselines);
         let damping = damping_ratio(properties, baselines);
-        let fundamental_lag =
-            oscillator_phase_lag(drive_frequency, natural_frequency, damping);
+        let fundamental_lag = oscillator_phase_lag(drive_frequency, natural_frequency, damping);
 
         for component in &spectrum.components {
             let harmonic_order = component.frequency_cycles_per_day / drive_frequency;
