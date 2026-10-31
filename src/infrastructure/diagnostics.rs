@@ -730,7 +730,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "total_external_energy_input": simulation.energy_ledger.total_external_energy_input,
                 "total_resonant_energy_held": simulation.energy_ledger.total_resonant_energy_held,
                 "total_usable_energy_held": simulation.energy_ledger.total_usable_energy_held,
-                "total_structural_energy_held": simulation.energy_ledger.total_structural_energy_held,
+                "total_structural_energy_held": simulation
+                    .energy_ledger
+                    .total_structural_energy_held,
                 "total_work_expended": simulation.energy_ledger.total_work_expended,
                 "total_heat_dissipated": simulation.energy_ledger.total_heat_dissipated,
                 "escaped_signal_energy": simulation.energy_ledger.total_world_tone_energy_escaped
