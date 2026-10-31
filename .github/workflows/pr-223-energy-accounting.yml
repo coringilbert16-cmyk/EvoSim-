@@ -4,7 +4,7 @@ on:
   push:
     branches: [chemistry/environmental-combine-discovery, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29]
   pull_request:
-    branches: [main, chemistry/reaction-energy-semantics, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29]
+    branches: [main, resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, chemistry/reaction-energy-semantics, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29]
     paths:
       - "src/chemistry/**"
       - "src/materials/**"
