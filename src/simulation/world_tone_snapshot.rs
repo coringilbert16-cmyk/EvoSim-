@@ -1025,8 +1025,9 @@ pub(crate) struct WorldPairPotentialGradient {
     pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
     pub(crate) body_forces: Vec<(f64, f64)>,
-    /// Owner organism index for attached/escrowed bodies; sum those body
-    /// forces into the owner. None means the body moves independently.
+    /// Owner organism index for attached/escrowed bodies; sum every partial
+    /// force with the same owner index before moving that organism. None means
+    /// the body moves independently. This mapping is stable with body_forces.
     pub(crate) body_force_owners: Vec<Option<usize>>,
 }
 
