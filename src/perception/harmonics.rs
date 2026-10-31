@@ -1041,11 +1041,8 @@ pub(crate) fn material_aura_receptions(
     }
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
-    let mut receive_at = |receiver_x: f64,
-                          receiver_y: f64,
-                          normal_x: f64,
-                          normal_y: f64,
-                          projected_extent: f64| {
+    let mut receive_at =
+        |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
@@ -1060,7 +1057,8 @@ pub(crate) fn material_aura_receptions(
         let mut incident = ToneSpectrum::empty();
         add_spectrum(&mut incident, &emitted, attenuation);
         incident.retain_strongest();
-        let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+        let mut received =
+            material_response_spectrum(receiver_properties, baselines, &incident)?;
         received.retain_strongest();
         let magnitude = spectrum_magnitude(&received);
         if magnitude > f64::EPSILON {
@@ -1099,18 +1097,11 @@ pub(crate) fn material_aura_receptions(
             interval.arc,
             (source_x, source_y),
         )?;
-        let midpoint_angle =
-            interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
+        let midpoint_angle = interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
-        receive_at(
-            receiver_x,
-            receiver_y,
-            normal_x,
-            normal_y,
-            projected_extent,
-        )?;
+        receive_at(receiver_x, receiver_y, normal_x, normal_y, projected_extent)?;
     }
 
     Some(receptions)
@@ -1859,7 +1850,9 @@ mod tests {
         let total_received_energy = |samples: &[MaterialAuraReception]| {
             samples
                 .iter()
-                .map(|sample| spectrum_energy(&sample.spectrum).expect("received spectrum is valid"))
+                .map(|sample| {
+                    spectrum_energy(&sample.spectrum).expect("received spectrum is valid")
+                })
                 .sum::<f64>()
         };
         let near_energy = total_received_energy(&left_to_right);
@@ -1870,7 +1863,9 @@ mod tests {
             (near_energy - reverse_energy).abs() < 1e-9,
             "identical materials at equal separation should receive reciprocal energy"
         );
-        assert!(left_to_right.iter().all(|sample| sample.projected_extent > 0.0));
+        assert!(left_to_right
+            .iter()
+            .all(|sample| sample.projected_extent > 0.0));
         assert!(left_to_right.iter().all(|sample| {
             sample
                 .spectrum
@@ -1878,11 +1873,9 @@ mod tests {
                 .iter()
                 .all(|component| component.phase_radians.is_finite())
         }));
-        assert!(
-            material_aura_receptions(&left, &left, &catalog, 0)
-                .expect("self reception is a valid empty result")
-                .is_empty()
-        );
+        assert!(material_aura_receptions(&left, &left, &catalog, 0)
+            .expect("self reception is a valid empty result")
+            .is_empty());
     }
 
     #[test]
