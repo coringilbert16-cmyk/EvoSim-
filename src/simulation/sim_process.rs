@@ -115,6 +115,7 @@ fn start_tick_loop(
         let mut last_rate_sample = Instant::now();
         let mut last_rate_tick = 0_u64;
         let mut next_tick_deadline = Instant::now();
+        let mut scheduled_ticks_per_second = DEFAULT_TICKS_PER_SECOND;
 
         loop {
             let (running, ticks_per_second) = {
@@ -129,42 +130,45 @@ fn start_tick_loop(
                 next_tick_deadline = Instant::now();
                 tokio::time::sleep(Duration::from_millis(50)).await;
             } else {
-                let period = Duration::from_secs_f64(
-                    1.0 / ticks_per_second.clamp(MIN_TICKS_PER_SECOND, MAX_TICKS_PER_SECOND),
-                );
+                let rate = ticks_per_second.clamp(MIN_TICKS_PER_SECOND, MAX_TICKS_PER_SECOND);
+                if (rate - scheduled_ticks_per_second).abs() > f64::EPSILON {
+                    scheduled_ticks_per_second = rate;
+                    next_tick_deadline = Instant::now();
+                }
+                let period = Duration::from_secs_f64(1.0 / rate);
                 let now = Instant::now();
                 if next_tick_deadline < now {
                     next_tick_deadline = now;
                 }
                 if next_tick_deadline > now {
-                    tokio::time::sleep_until(
-                        tokio::time::Instant::from_std(next_tick_deadline),
-                    )
-                    .await;
-                    continue;
+                    let wait = next_tick_deadline.duration_since(now).min(DISPLAY_EVENT_INTERVAL);
+                    tokio::time::sleep(wait).await;
                 }
 
-                {
-                    let mut state = runtime.lock();
-                    // Recheck after waiting: pause/speed commands may have arrived.
-                    if state.simulation.running {
-                        state.step();
-                        let sample_now = Instant::now();
-                        if sample_now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
-                            let elapsed = sample_now.duration_since(last_rate_sample).as_secs_f64();
-                            state.measured_ticks_per_second =
-                                (state.simulation.tick - last_rate_tick) as f64 / elapsed;
-                            last_rate_tick = state.simulation.tick;
-                            last_rate_sample = sample_now;
+                let tick_now = Instant::now();
+                if tick_now >= next_tick_deadline {
+                    {
+                        let mut state = runtime.lock();
+                        // Recheck after waiting: pause/speed commands may have arrived.
+                        if state.simulation.running {
+                            state.step();
+                            let sample_now = Instant::now();
+                            if sample_now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
+                                let elapsed = sample_now.duration_since(last_rate_sample).as_secs_f64();
+                                state.measured_ticks_per_second =
+                                    state.simulation.tick.saturating_sub(last_rate_tick) as f64 / elapsed;
+                                last_rate_tick = state.simulation.tick;
+                                last_rate_sample = sample_now;
+                            }
                         }
                     }
-                }
 
-                let after_tick = Instant::now();
-                next_tick_deadline += period;
-                // Do not run catch-up bursts after a slow tick or a long pause.
-                if next_tick_deadline <= after_tick {
-                    next_tick_deadline = after_tick + period;
+                    let after_tick = Instant::now();
+                    next_tick_deadline += period;
+                    // Do not run catch-up bursts after a slow tick or a long pause.
+                    if next_tick_deadline <= after_tick {
+                        next_tick_deadline = after_tick + period;
+                    }
                 }
             }
 
