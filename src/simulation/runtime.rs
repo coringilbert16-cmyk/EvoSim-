@@ -9,9 +9,11 @@ use tokio::net::TcpStream;
 use tokio::process::{Child, Command};
 
 pub(crate) const HISTORY_CAPACITY: usize = 30;
+pub(crate) const HISTORY_INTERVAL: u64 = 100;
 
 pub(crate) struct RuntimeState {
     pub(crate) simulation: Simulation,
+    pub(crate) measured_ticks_per_second: f64,
     history: VecDeque<Simulation>,
     pub(crate) session_id: String,
 }
@@ -26,6 +28,7 @@ impl RuntimeState {
             .unwrap_or_else(|_| "unknown".into());
         Self {
             simulation,
+            measured_ticks_per_second: 0.0,
             history,
             session_id,
         }
@@ -41,6 +44,9 @@ impl RuntimeState {
     }
 
     pub(crate) fn record_tick(&mut self) {
+        if self.simulation.tick % HISTORY_INTERVAL != 0 {
+            return;
+        }
         self.history.push_back(self.simulation.clone());
         while self.history.len() > HISTORY_CAPACITY {
             self.history.pop_front();
@@ -53,7 +59,12 @@ impl RuntimeState {
     }
 
     pub(crate) fn observed_tick(&self) -> u64 {
-        self.simulation.tick.saturating_sub(15)
+        let target = self.simulation.tick.saturating_sub(15);
+        self.history
+            .iter()
+            .rev()
+            .find(|snapshot| snapshot.tick <= target)
+            .map_or(0, |snapshot| snapshot.tick)
     }
 
     pub(crate) fn snapshot(&self, tick: u64) -> Option<Simulation> {
@@ -185,27 +196,27 @@ mod tests {
     #[test]
     fn history_is_bounded_and_keeps_latest_ticks() {
         let mut runtime = RuntimeState::new(Simulation::new(42, 10.0));
-        for tick in 1..=35 {
+        for tick in 1..=3_500 {
             runtime.simulation.tick = tick;
             runtime.record_tick();
         }
 
         assert_eq!(runtime.history.len(), HISTORY_CAPACITY);
-        assert_eq!(runtime.history_ticks().first(), Some(&6));
-        assert_eq!(runtime.history_ticks().last(), Some(&35));
+        assert_eq!(runtime.history_ticks().first(), Some(&600));
+        assert_eq!(runtime.history_ticks().last(), Some(&3_500));
     }
 
     #[test]
     fn restore_replaces_live_state_and_discards_future_history() {
         let mut runtime = RuntimeState::new(Simulation::new(42, 10.0));
-        for tick in 1..=5 {
+        for tick in 1..=500 {
             runtime.simulation.tick = tick;
             runtime.record_tick();
         }
 
-        assert!(runtime.restore_tick(3));
-        assert_eq!(runtime.simulation.tick, 3);
-        assert_eq!(runtime.history_ticks(), vec![0, 1, 2, 3]);
-        assert!(!runtime.restore_tick(5));
+        assert!(runtime.restore_tick(300));
+        assert_eq!(runtime.simulation.tick, 300);
+        assert_eq!(runtime.history_ticks(), vec![0, 100, 200, 300]);
+        assert!(!runtime.restore_tick(500));
     }
 }
