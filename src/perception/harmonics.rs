@@ -2008,6 +2008,52 @@ mod tests {
     }
 
     #[test]
+    fn resonance_pair_potential_is_symmetric_attractive_or_repulsive_by_phase_and_derives_balanced_force() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_material(0.0, 0.0);
+        let near = make_material(4.0, 0.0);
+        let far = make_material(8.0, 0.0);
+
+        let near_ab = resonance_pair_potential(&left, &near, &catalog, 0)
+            .expect("valid near pair should have a potential");
+        let near_ba = resonance_pair_potential(&near, &left, &catalog, 0)
+            .expect("reversed near pair should have a potential");
+        let far_energy = resonance_pair_potential(&left, &far, &catalog, 0)
+            .expect("valid far pair should have a potential");
+        assert!(near_ab > 0.0, "in-phase material fields should add positive cross-energy");
+        assert!((near_ab - near_ba).abs() < 1e-10);
+        assert!(near_ab > far_energy, "the positive pair potential should decay with separation");
+
+        let shifted_left = translated_physical_material(&left, -13.0, 7.0)
+            .expect("left material should translate");
+        let shifted_near = translated_physical_material(&near, -13.0, 7.0)
+            .expect("right material should translate");
+        let translated_energy = resonance_pair_potential(&shifted_left, &shifted_near, &catalog, 0)
+            .expect("translated pair should have a potential");
+        assert!((near_ab - translated_energy).abs() < 1e-9);
+
+        let (force_on_left, force_on_near) =
+            resonance_pair_force(&left, &near, &catalog, 0)
+                .expect("valid pair should have a gradient-derived force");
+        assert!(force_on_near.0 > 0.0, "positive decaying potential should repel");
+        assert!(force_on_near.1.abs() < 1e-6, "the symmetric horizontal pair has no vertical force");
+        assert!((force_on_left.0 + force_on_near.0).abs() < 1e-12);
+        assert!((force_on_left.1 + force_on_near.1).abs() < 1e-12);
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
