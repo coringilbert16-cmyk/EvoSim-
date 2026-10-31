@@ -218,8 +218,13 @@
     const world = worldPayload();
     const viewport = viewportSize();
     if (!world) return;
-    // Preserve the experiment's visible S-shaped environmental current as a
-    // backdrop; physical resource constituents are drawn above it.
+    // Clip every world layer to the exact field boundary.
+    const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
+    const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    ctx.clip();
     renderWaterField(world, viewport);
     drawField(world, viewport);
     renderHotspot(world.hotspot, viewport);
@@ -249,6 +254,12 @@
       }
       drawSelectionBounds(organism.id, physical, viewport);
     }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    ctx.restore();
   };
 
   renderStructure = function resourceAwareStructureRender() {
