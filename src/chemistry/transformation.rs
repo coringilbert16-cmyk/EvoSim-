@@ -2358,7 +2358,8 @@ mod tests {
 
     #[test]
     fn withdrawn_resonance_funds_work_without_an_efficiency_multiplier() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.total_resonant_energy_held = 2.0;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2369,6 +2370,7 @@ mod tests {
         // the remaining three work units and the four-unit structural increase.
         assert_eq!(prepared.usable_energy, 13.0);
         assert_eq!(prepared.heat_dissipated, 0.0);
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
         assert_eq!(prepared.ledger.total_work_expended, 5.0);
         assert_eq!(prepared.ledger.total_heat_dissipated, 0.0);
         let world_residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
@@ -2390,7 +2392,9 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.total_resonant_energy_held = 5.0;
+        let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0)
                 .expect("the holder can pay the complete work for a zero-energy physical bond");
@@ -2402,18 +2406,21 @@ mod tests {
         assert_eq!(prepared.ledger.total_potential_energy_released, 0.0);
         assert_eq!(
             ledger,
-            crate::state::EnergyLedger::default(),
+            original_ledger,
             "preparing a transaction must not mutate the authoritative ledger"
         );
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
     }
 
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.total_resonant_energy_held = 5.0;
+        let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0);
         assert!(prepared.is_none());
-        assert_eq!(ledger, crate::state::EnergyLedger::default());
+        assert_eq!(ledger, original_ledger);
     }
 
     fn resonance_break_test_organism() -> (
@@ -2510,6 +2517,7 @@ mod tests {
         organism.resonant_energy = crate::harmonics::ResonantEnergyReservoir::default();
         assert!(organism.resonant_energy.deposit(440.0, capacity + 1.0));
         let before_resonance = organism.resonant_energy.total_energy().unwrap();
+        ledger.total_resonant_energy_held = before_resonance;
         assert!(resolve_resonance_overload_break(
             &mut organism,
             &environment,
@@ -2517,6 +2525,10 @@ mod tests {
         ));
         assert_eq!(organism.structure.bonds.len(), original_bond_count - 1);
         assert!(organism.resonant_energy.total_energy().unwrap() < before_resonance);
+        assert_eq!(
+            ledger.total_resonant_energy_held,
+            organism.resonant_energy.total_energy().unwrap()
+        );
     }
 
     #[test]
@@ -2560,6 +2572,12 @@ mod tests {
         );
         assert!(after.current_resonant_energy < before.current_resonant_energy);
         assert!(after.current_structural_energy > before.current_structural_energy);
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held - after.current_resonant_energy)
+                .abs()
+                < 1e-9,
+            "the ledger's retained-resonance counter must match the committed reservoirs"
+        );
     }
 
     #[test]
@@ -2619,7 +2637,8 @@ mod tests {
 
     #[test]
     fn withdrawn_compatible_resonance_funds_disruption_work_without_efficiency_trait() {
-        let ledger = crate::state::EnergyLedger::default();
+        let mut ledger = crate::state::EnergyLedger::default();
+        ledger.total_resonant_energy_held = 2.0;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2630,6 +2649,7 @@ mod tests {
         // pays the remaining work plus the structural-potential increase.
         assert_eq!(prepared.ledger.total_structural_energy_delta, 4.0);
         assert_eq!(prepared.usable_energy, 13.0);
+        assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
         assert_eq!(prepared.ledger.total_work_expended, 5.0);
         assert_eq!(prepared.heat_dissipated, 0.0);
         let residual = (prepared.usable_energy - 20.0) + 4.0 - 2.0
