@@ -2583,9 +2583,8 @@ mod tests {
         };
         let source = make_material("Carbon", 0.0, 0.0);
         let receiver = make_material("Carbon", 8.0, 0.0);
-        let unobstructed =
-            resonance_pair_potential(&source, &receiver, &catalog, 0)
-                .expect("unobstructed pair should have a potential");
+        let unobstructed = resonance_pair_potential(&source, &receiver, &catalog, 0)
+            .expect("unobstructed pair should have a potential");
 
         let centered_blocker = make_material("Nitrogen", 4.0, 0.0);
         let offset_blocker = make_material("Nitrogen", 4.0, 0.35);
