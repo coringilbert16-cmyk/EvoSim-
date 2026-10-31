@@ -50,6 +50,21 @@ This is the phase-dependent cross-energy term naturally implied by the current r
 
 This is the leading candidate for the pair interaction-energy term, not permission to treat signal aggregation as mechanical work without proof. PR 3 must establish a symmetric pair contribution from the actual reciprocal receiver geometry, show that the spatial dependence is supplied by the existing aura path, and verify that the resulting mechanical force `F = -∇U` exchanges energy consistently rather than double-counting the incoming aura signal. Do not add a free coupling constant or manually reverse the phase polarity. Under this candidate, constructive/in-phase overlap raises the cross-energy term, destructive/anti-phase overlap lowers it, and quadrature components contribute no cross term; the force direction then follows from the spatial gradient.
 
+## Symmetric pair potential and gradient-derived force (implementation pass 2)
+
+The draft now computes a directional boundary-integrated interference potential:
+
+- At each exposed receiver boundary sample, compare the **raw incident spectrum** with the receiver's own emitted spectrum at that boundary.
+- Keep the receiver-responded spectrum separately for diagnostics/perception. Do not use it for the interaction cross term: its oscillator phase lag has already been applied to the receiver's own emission, and comparing against it would apply that lag twice.
+- Scale the receiver's own boundary field by its existing mass scale, the same square-root projected-extent factor, and the existing continuous center-to-boundary attenuation. The incident field already carries the source's corresponding projected-extent and distance factors.
+- Integrate the same-frequency phasor cross-energy over the exposed boundary samples. No extra projected-extent multiplier is applied after the square-root amplitude factors.
+- Average the two reciprocal directional integrals to define one symmetric pair potential.
+- Derive the pair force as the negative spatial gradient of that one potential using a centered numerical derivative. The derivative step is a numerical resolution, not a new physical constant or force law. The returned forces are exact opposites by construction.
+
+The first regression case uses two identical Carbon materials at the same shared phase: positive cross-energy decays with separation and therefore produces repulsion. It also checks argument-order symmetry, translation invariance, horizontal force direction, and equal/opposite force vectors.
+
+**Still outstanding before movement can consume this result:** demonstrate phase-shifted/antiphase attraction and quadrature neutrality at the *pair-potential* level (not only the isolated spectrum helper); test non-identical materials and curved boundaries; establish behavior at contact/overlap and near visibility transitions; reconcile time-varying potential with the PR 4 energy ledger and physical work; audit all current chemistry-force consumers and migrate authority only after the energy path is proven. No movement consumer is activated in this pass.
+
 ## Acceptance
 
 - Pairwise reception reuses the established aura attenuation and geometry path; no second spatial field or arbitrary hard radius is introduced.
