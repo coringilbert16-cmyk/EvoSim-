@@ -867,12 +867,12 @@ impl Simulation {
             );
         }
         if let Some(hotspot) = self.hotspot {
-            self.environmental_chemistry_diagnostics.hotspot_settlement_succeeded =
-                Some(crate::hotspot::settle_environment_inputs(
-                    hotspot,
-                    &mut self.environment,
-                    &mut self.energy_ledger,
-                ));
+            self.environmental_chemistry_diagnostics
+                .hotspot_settlement_succeeded = Some(crate::hotspot::settle_environment_inputs(
+                hotspot,
+                &mut self.environment,
+                &mut self.energy_ledger,
+            ));
         }
         // Environmental chemistry is a first-class owner and must run
         // even when the world contains no organisms. Reserve half of the
@@ -887,10 +887,10 @@ impl Simulation {
             self.tick,
             &mut environmental_break_discovery_remaining,
         );
-        self.environmental_chemistry_diagnostics.break_ready_candidates =
-            environmental_break_operations.len();
-        self.environmental_chemistry_diagnostics.break_discovery_work_remaining =
-            environmental_break_discovery_remaining;
+        self.environmental_chemistry_diagnostics
+            .break_ready_candidates = environmental_break_operations.len();
+        self.environmental_chemistry_diagnostics
+            .break_discovery_work_remaining = environmental_break_discovery_remaining;
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
@@ -901,10 +901,10 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
             );
-        self.environmental_chemistry_diagnostics.combine_ready_candidates =
-            environmental_combine_operations.len();
-        self.environmental_chemistry_diagnostics.combine_discovery_work_remaining =
-            environmental_combine_discovery_remaining;
+        self.environmental_chemistry_diagnostics
+            .combine_ready_candidates = environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics
+            .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
 
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -917,8 +917,8 @@ impl Simulation {
             );
         self.environmental_chemistry_diagnostics.break_scheduled =
             environmental_break_operations.len();
-        self.environmental_chemistry_diagnostics.break_realization_work_remaining =
-            environmental_break_work_remaining;
+        self.environmental_chemistry_diagnostics
+            .break_realization_work_remaining = environmental_break_work_remaining;
         for operation in environmental_break_operations {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
@@ -991,8 +991,8 @@ impl Simulation {
             );
         self.environmental_chemistry_diagnostics.combine_scheduled =
             environmental_combine_operations.len();
-        self.environmental_chemistry_diagnostics.combine_realization_work_remaining =
-            environmental_combine_work_remaining;
+        self.environmental_chemistry_diagnostics
+            .combine_realization_work_remaining = environmental_combine_work_remaining;
         for operation in environmental_combine_operations {
             let source_cells = vec![operation.cell_a, operation.cell_b];
             let source_material_indices = vec![operation.material_a, operation.material_b];
@@ -1006,11 +1006,11 @@ impl Simulation {
             let product_material_index = operation.material_a;
             let committed =
                 crate::environmental_combine::resolve_environmental_preserving_accumulation(
-                operation,
-                &mut self.environment,
-                &mut self.energy_ledger,
-                &mut self.chemical_reaction_accumulation,
-            );
+                    operation,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
             } else {
@@ -1026,9 +1026,8 @@ impl Simulation {
                 None
             };
             let product_material = product.map(|material| material.material.parts.clone());
-            let product_internal_bond_count = product.map(|material| {
-                material.internal_connections.as_ref().map_or(0, Vec::len)
-            });
+            let product_internal_bond_count =
+                product.map(|material| material.internal_connections.as_ref().map_or(0, Vec::len));
             let mut post_commit_source_cell_materials = Vec::new();
             if committed {
                 for cell_index in source_cells.iter().copied() {
@@ -1703,8 +1702,8 @@ impl Simulation {
         self.energy_ledger.total_structural_energy_held =
             Self::structural_energy_held(&self.organisms, &self.decomposing_bodies)
                 + Self::environmental_structural_energy_held(&self.environment);
-        self.environmental_chemistry_diagnostics.accumulation_entries =
-            self.chemical_reaction_accumulation.len();
+        self.environmental_chemistry_diagnostics
+            .accumulation_entries = self.chemical_reaction_accumulation.len();
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
