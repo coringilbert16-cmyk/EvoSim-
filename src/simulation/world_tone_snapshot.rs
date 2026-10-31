@@ -1141,8 +1141,19 @@ fn world_pair_potential_gradient_for_bodies(
         return None;
     }
     const DIFFERENCE_STEP: f64 = 1.0e-4;
-    let components =
-        world_pair_potential_components_for_bodies(bodies, resonant_indices, catalog, tick)?;
+    let geometries = bodies
+        .iter()
+        .map(|body| {
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(body, catalog)
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let components = world_pair_potential_components_for_geometries(
+        bodies,
+        resonant_indices,
+        &geometries,
+        catalog,
+        tick,
+    )?;
     let base_potential = components
         .iter()
         .map(|component| component.energy)
@@ -1154,11 +1165,18 @@ fn world_pair_potential_gradient_for_bodies(
     let mut body_forces = vec![(0.0, 0.0); bodies.len()];
     for body_index in 0..bodies.len() {
         let mut translated = bodies.to_vec();
+        let mut translated_geometries = geometries.clone();
         translated[body_index] =
             translate_pair_potential_body(&bodies[body_index], DIFFERENCE_STEP, 0.0)?;
-        let plus_x = world_pair_potential_components_for_bodies(
+        translated_geometries[body_index] = translate_pair_potential_geometry(
+            &geometries[body_index],
+            DIFFERENCE_STEP,
+            0.0,
+        )?;
+        let plus_x = world_pair_potential_components_for_geometries(
             &translated,
             resonant_indices,
+            &translated_geometries,
             catalog,
             tick,
         )?
@@ -1168,9 +1186,15 @@ fn world_pair_potential_gradient_for_bodies(
 
         translated[body_index] =
             translate_pair_potential_body(&bodies[body_index], -DIFFERENCE_STEP, 0.0)?;
-        let minus_x = world_pair_potential_components_for_bodies(
+        translated_geometries[body_index] = translate_pair_potential_geometry(
+            &geometries[body_index],
+            -DIFFERENCE_STEP,
+            0.0,
+        )?;
+        let minus_x = world_pair_potential_components_for_geometries(
             &translated,
             resonant_indices,
+            &translated_geometries,
             catalog,
             tick,
         )?
@@ -1180,9 +1204,15 @@ fn world_pair_potential_gradient_for_bodies(
 
         translated[body_index] =
             translate_pair_potential_body(&bodies[body_index], 0.0, DIFFERENCE_STEP)?;
-        let plus_y = world_pair_potential_components_for_bodies(
+        translated_geometries[body_index] = translate_pair_potential_geometry(
+            &geometries[body_index],
+            0.0,
+            DIFFERENCE_STEP,
+        )?;
+        let plus_y = world_pair_potential_components_for_geometries(
             &translated,
             resonant_indices,
+            &translated_geometries,
             catalog,
             tick,
         )?
@@ -1192,9 +1222,15 @@ fn world_pair_potential_gradient_for_bodies(
 
         translated[body_index] =
             translate_pair_potential_body(&bodies[body_index], 0.0, -DIFFERENCE_STEP)?;
-        let minus_y = world_pair_potential_components_for_bodies(
+        translated_geometries[body_index] = translate_pair_potential_geometry(
+            &geometries[body_index],
+            0.0,
+            -DIFFERENCE_STEP,
+        )?;
+        let minus_y = world_pair_potential_components_for_geometries(
             &translated,
             resonant_indices,
+            &translated_geometries,
             catalog,
             tick,
         )?
