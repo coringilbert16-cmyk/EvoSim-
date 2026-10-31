@@ -575,7 +575,6 @@ fn write_range(
     writeln!(file, "{name}: {:?} .. {:?}", min, max)
 }
 
-
 /// Machine-readable recorder for the organism-free environmental chemistry run.
 /// It records every tick with reaction activity and periodic full inventory
 /// snapshots, so the experiment can be evaluated without watching the canvas.
@@ -639,21 +638,37 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         }
         let diagnostics = simulation.environmental_chemistry_diagnostics;
         self.totals.ticks_observed = self.totals.ticks_observed.saturating_add(1);
-        self.totals.break_ready_candidates = self.totals.break_ready_candidates
+        self.totals.break_ready_candidates = self
+            .totals
+            .break_ready_candidates
             .saturating_add(diagnostics.break_ready_candidates as u64);
-        self.totals.break_scheduled = self.totals.break_scheduled
+        self.totals.break_scheduled = self
+            .totals
+            .break_scheduled
             .saturating_add(diagnostics.break_scheduled as u64);
-        self.totals.break_committed = self.totals.break_committed
+        self.totals.break_committed = self
+            .totals
+            .break_committed
             .saturating_add(diagnostics.break_committed as u64);
-        self.totals.break_rejected = self.totals.break_rejected
+        self.totals.break_rejected = self
+            .totals
+            .break_rejected
             .saturating_add(diagnostics.break_rejected as u64);
-        self.totals.combine_ready_candidates = self.totals.combine_ready_candidates
+        self.totals.combine_ready_candidates = self
+            .totals
+            .combine_ready_candidates
             .saturating_add(diagnostics.combine_ready_candidates as u64);
-        self.totals.combine_scheduled = self.totals.combine_scheduled
+        self.totals.combine_scheduled = self
+            .totals
+            .combine_scheduled
             .saturating_add(diagnostics.combine_scheduled as u64);
-        self.totals.combine_committed = self.totals.combine_committed
+        self.totals.combine_committed = self
+            .totals
+            .combine_committed
             .saturating_add(diagnostics.combine_committed as u64);
-        self.totals.combine_rejected = self.totals.combine_rejected
+        self.totals.combine_rejected = self
+            .totals
+            .combine_rejected
             .saturating_add(diagnostics.combine_rejected as u64);
 
         if diagnostics.break_ready_candidates > 0
@@ -749,20 +764,32 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 }
 
 fn physical_material_count(simulation: &Simulation) -> usize {
-    simulation.environment.field.cells.iter()
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .map(|cell| cell.physical_materials.len())
         .sum()
 }
 
 fn environmental_constituent_count(simulation: &Simulation) -> usize {
-    simulation.environment.field.cells.iter()
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .flat_map(|cell| cell.physical_materials.iter())
         .map(|material| material.material.parts.len())
         .sum()
 }
 
 fn environmental_internal_bond_count(simulation: &Simulation) -> usize {
-    simulation.environment.field.cells.iter()
+    simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .flat_map(|cell| cell.physical_materials.iter())
         .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
         .sum()
