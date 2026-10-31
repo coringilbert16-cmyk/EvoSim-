@@ -1423,6 +1423,39 @@ mod tests {
     }
 
     #[test]
+    fn translated_pair_potential_geometry_matches_rebuilt_material_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let body = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.25,
+                y: -3.5,
+                rotation_radians: 0.4,
+            }],
+            &catalog,
+        )
+        .expect("test material should have valid realized geometry");
+        let translated_body = translate_pair_potential_body(&body, 0.75, -1.25)
+            .expect("world-resolved physical body should translate");
+        let geometry =
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                &body, &catalog,
+            )
+            .expect("base material geometry should resolve");
+        let translated_geometry =
+            translate_pair_potential_geometry(&geometry, 0.75, -1.25)
+                .expect("cached geometry should translate");
+        let rebuilt_geometry =
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                &translated_body,
+                &catalog,
+            )
+            .expect("translated material geometry should resolve");
+
+        assert_eq!(translated_geometry, rebuilt_geometry);
+    }
+
+    #[test]
     fn world_pair_gradient_matches_isolated_pair_and_balances_reaction_forces() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
