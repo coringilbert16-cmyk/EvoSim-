@@ -1200,6 +1200,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
 /// responded spectrum: the receiver's own emission already contains its
 /// oscillator phase lag. Comparing against the responded spectrum would apply
 /// that lag a second time and erase the expected same-material phase relation.
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
 fn directional_resonance_pair_potential_components(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
@@ -1215,6 +1216,7 @@ fn directional_resonance_pair_potential_components(
     )
 }
 
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
 fn directional_resonance_pair_potential_components_with_occluders(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
@@ -1282,6 +1284,7 @@ fn directional_resonance_pair_potential_components_with_occluders(
 /// retained by frequency so energy settlement can use the same spectral
 /// compatibility as the reservoir. If third-party bodies can occlude the pair,
 /// use the occluder-aware variant instead.
+#[allow(dead_code)] // Staged for PR 4 frequency-resolved energy settlement.
 pub(crate) fn resonance_pair_potential_components(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1293,6 +1296,7 @@ pub(crate) fn resonance_pair_potential_components(
 
 /// Frequency-resolved symmetric pair potential with third-party physical
 /// bodies blocking the source-to-receiver boundary paths.
+#[allow(dead_code)] // Staged for PR 4 frequency-resolved energy settlement.
 pub(crate) fn resonance_pair_potential_components_with_occluders(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1336,6 +1340,7 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
 /// Scalar view of the isolated-pair potential. PR 4 should use the
 /// frequency-resolved form when settling energy into/out of resonance stores.
 /// If third-party bodies can occlude the pair, use the occluder-aware variant.
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
 pub(crate) fn resonance_pair_potential(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1345,6 +1350,7 @@ pub(crate) fn resonance_pair_potential(
     resonance_pair_potential_with_occluders(a, b, &[], catalog, tick)
 }
 
+#[allow(dead_code)] // Staged for PR 4 movement and energy consumers.
 pub(crate) fn resonance_pair_potential_with_occluders(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1361,6 +1367,7 @@ pub(crate) fn resonance_pair_potential_with_occluders(
     potential.is_finite().then_some(potential)
 }
 
+#[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
 fn translated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
     dx: f64,
@@ -1385,6 +1392,7 @@ fn translated_physical_material(
 /// symmetric potential. The caller must ensure no third-party body can occlude
 /// the pair; use the occluder-aware variant otherwise. The centered difference
 /// is a numerical derivative only, not an additional physical force law.
+#[allow(dead_code)] // Staged for PR 4 movement and chemistry-force consumers.
 pub(crate) fn resonance_pair_force(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1394,6 +1402,7 @@ pub(crate) fn resonance_pair_force(
     resonance_pair_force_with_occluders(a, b, &[], catalog, tick)
 }
 
+#[allow(dead_code)] // Staged for PR 4 movement and chemistry-force consumers.
 pub(crate) fn resonance_pair_force_with_occluders(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
