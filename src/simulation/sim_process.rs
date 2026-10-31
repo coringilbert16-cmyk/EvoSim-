@@ -120,10 +120,7 @@ fn start_tick_loop(
         loop {
             let (running, ticks_per_second) = {
                 let state = runtime.lock();
-                (
-                    state.simulation.running,
-                    state.simulation.ticks_per_second,
-                )
+                (state.simulation.running, state.simulation.ticks_per_second)
             };
 
             if !running {
@@ -141,7 +138,9 @@ fn start_tick_loop(
                     next_tick_deadline = now;
                 }
                 if next_tick_deadline > now {
-                    let wait = next_tick_deadline.duration_since(now).min(DISPLAY_EVENT_INTERVAL);
+                    let wait = next_tick_deadline
+                        .duration_since(now)
+                        .min(DISPLAY_EVENT_INTERVAL);
                     tokio::time::sleep(wait).await;
                 }
 
@@ -153,10 +152,13 @@ fn start_tick_loop(
                         if state.simulation.running {
                             state.step();
                             let sample_now = Instant::now();
-                            if sample_now.duration_since(last_rate_sample) >= Duration::from_secs(1) {
-                                let elapsed = sample_now.duration_since(last_rate_sample).as_secs_f64();
+                            if sample_now.duration_since(last_rate_sample) >= Duration::from_secs(1)
+                            {
+                                let elapsed =
+                                    sample_now.duration_since(last_rate_sample).as_secs_f64();
                                 state.measured_ticks_per_second =
-                                    state.simulation.tick.saturating_sub(last_rate_tick) as f64 / elapsed;
+                                    state.simulation.tick.saturating_sub(last_rate_tick) as f64
+                                        / elapsed;
                                 last_rate_tick = state.simulation.tick;
                                 last_rate_sample = sample_now;
                             }
