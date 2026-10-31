@@ -144,7 +144,7 @@ The first manual run did not meet the core viewer acceptance criteria. The obser
 - The workspace script reparents the canvas after the original resize call. The canvas backing bitmap could therefore retain its old dimensions and be stretched into the new flex viewport. A ResizeObserver now keeps the backing dimensions synchronized with the displayed canvas.
 - Geometry outlines were assigned a world-space line width with a lower bound that grew in screen pixels as zoom increased. The line width is now inversely scaled so outlines remain visually stable.
 - World-field observations previously exposed only aggregate cell totals, and the renderer filled those cells as squares. Observations now include each physical constituent's resource identity, current position, rotation, and realized/catalog form. Incremental observations preserve unchanged physical geometry in the client cache.
-- The field renderer now draws those physical resource forms with their material palette; unstructured stock remains a small cell marker rather than a fabricated square atom.
+- The field renderer now draws those physical resource forms with their material palette; unstructured stock remains a small cell marker rather than a fabricated square atom. The experiment's S-shaped environmental current has also been restored behind the resource layer.
 - Camera limits are now relative to the fitted view, and visible zoom-in, zoom-out, and fit controls supplement wheel zoom.
 
 A regression test verifies that the environmental experiment's world observation exposes all 128 realized resource constituents, with finite placements, valid forms, and all seven resource types.
