@@ -154,7 +154,12 @@ fn observe_field_physical_parts(
                 .realized_shapes
                 .as_ref()
                 .and_then(|shapes| shapes.get(index))
-                .or_else(|| catalog.iter().find(|entry| entry.name == *resource).map(|entry| &entry.shape))
+                .or_else(|| {
+                    catalog
+                        .iter()
+                        .find(|entry| entry.name == *resource)
+                        .map(|entry| &entry.shape)
+                })
                 .map(|shape| shape.form.clone());
             let Some(form) = form else {
                 continue;
