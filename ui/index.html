@@ -338,7 +338,7 @@
         const samples = 120;
         for (let index = 0; index <= samples; index += 1) {
           const x = width * index / samples;
-          const y = height * 0.5 + height * 0.23 * Math.sin(Math.PI * 2 * x / width) + height * offset;
+          const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * x / width) + height * offset;
           const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
           if (index === 0) ctx.moveTo(point.x, point.y);
           else ctx.lineTo(point.x, point.y);
@@ -353,7 +353,7 @@
       const vortexRadius = Math.max(2, height * 0.13 * camera.scale);
       for (const fraction of [0.25, 0.75]) {
         const x = width * fraction;
-        const y = height * 0.5 + height * 0.23 * Math.sin(Math.PI * 2 * fraction);
+        const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * fraction);
         const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
         ctx.beginPath();
         ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? -Math.PI * 0.2 : Math.PI * 0.8, fraction < 0.5 ? Math.PI * 1.45 : Math.PI * 2.8);
