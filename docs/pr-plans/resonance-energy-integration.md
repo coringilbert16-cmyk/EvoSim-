@@ -1,0 +1,44 @@
+# PR 4 — Resonance energy conservation and environmental integration
+
+**Goal:** Integrate the aura-derived pair interaction from PR 3 into material movement and chemistry, with complete energy accounting. Reuse the existing resonance aura and its established spatial attenuation/geometric reception; do not add a second field or propagation mechanism.
+
+## Existing accounting audit (against the current PR 3 dependency stack)
+
+The current code already has several distinct energy channels; PR 4 must extend them rather than collapse them:
+
+- `EnergyLedger` and `EnergyInventorySnapshot` already track usable energy, retained resonant energy, signed structural bond potential, external input, escaped world-tone energy, work expended, and heat. Structural energy is recomputed from authoritative bond state and counted once.
+- `ResonantEnergyReservoir` is a frequency-tagged store of retained energy used by organism and environment holders. Its `withdraw_compatible` operation weights withdrawal by logarithmic frequency compatibility. It stores energy, not phase, and is not the pair-interaction potential.
+- World-tone reception already stages reservoir changes and ledger settlement atomically. The source frame is accounted as captured resonance, heat, and escaped signal; nonliving materials dissipate rather than retain the energy.
+- Movement currently charges its fixed locomotion cost entirely to heat (`work_expended = 0`) after a staged ledger preflight. It has no pair-force work term yet.
+- COMBINE's `formation_work_cost` integrates the legacy nonnegative chemical attraction over the remaining approach distance. It is separate from `intrinsic_bond_potential`, which becomes stored structural bond energy. PR 4 must replace the old approach-work authority with the new potential difference without charging both.
+- BREAK already distinguishes bond structural-potential change from physical work and heat. Do not rewrite this into a generic reservoir transfer that erases the source attribution.
+
+**Missing inventory category:** the world inventory has no signed current/baseline term for resonance pair-interaction potential. PR 4 must add one authoritative world-level held-potential term (or prove, with an explicit field-energy inventory, that it is already included elsewhere). It must be signed because the PR 3 potential can be attractive or repulsive. It must not be written into `ResonantEnergyReservoir`, `total_resonant_energy_held`, or `total_structural_energy_held`.
+
+**Conservative exchange rule:** for a geometry change, calculate the signed pair-potential change `ΔU_pair` before committing movement. If `ΔU_pair > 0`, the increase in stored pair potential must be funded from compatible retained resonance; if `ΔU_pair < 0`, the released potential must be returned to a frequency-compatible resonance holder, with any unrepresentable remainder explicitly dissipated as heat. Insufficient compatible energy rejects the movement/reaction and rolls back all staged state. The pair-potential change is itself the stored-energy delta: do not also count the same transfer as a second energy sink in `total_work_expended`. Keep that cumulative field for genuinely expended work that leaves the modeled held-energy inventory, not for energy already represented by `ΔU_pair`.
+
+The current shared phase clock should also be tested for stationary relative phase: same-frequency components driven by the same clock have a common phase advance, while material-specific oscillator lags remain fixed. Under that current model, a stationary pair should not gain or lose pair potential merely because the global phase clock advances. If future independent sources or phase modulation break that invariance, their energy exchange must be explicitly sourced rather than silently credited.
+
+**Atomicity constraint:** a movement/reaction candidate must stage the geometry change, recomputed pair-potential delta, compatible resonance withdrawal (when that is the approved work source), usable-energy/heat changes, and ledger update together. Commit none of them if any precondition or inventory check fails.
+
+## Implement
+
+- Consume PR 3's single symmetric pair potential, its signed frequency-resolved components, and the equal-and-opposite force derived from that potential. Use the frequency-resolved form to settle work against matching retained-resonance components; do not collapse to one scalar frequency.
+- Keep interaction potential distinct from retained resonance energy in `ResonantEnergyReservoir`. The former is the conservative energy associated with the pair's configuration; the latter is energy stored by a material across ticks. Do not count either quantity as the other.
+- Account for work done by attractive and repulsive interactions as materials move.
+- Require real energy input for movement against repulsion; do not permit negative-cost or energy-free displacement.
+- Settle changes in pair interaction potential, movement work, usable energy, structural energy, retained resonance, and heat atomically.
+- Integrate with environmental materials, live chemistry, COMBINE, and BREAK using the same authoritative aura-derived interaction.
+- Remove obsolete parallel chemical-attraction movement/work mechanisms only after the replacement is verified. Preserve reaction eligibility and intrinsic bond potential.
+
+## Acceptance
+
+- Independent energy inventory balances through attraction, repulsion, approach, separation, COMBINE, and BREAK.
+- No double-counting between aura signal energy, retained resonance, pair interaction potential, usable energy, structural energy, and heat.
+- Failed movement/reaction transactions roll back completely.
+- Movement against repulsion requires sufficient available energy and settles the actual work.
+- Existing COMBINE and BREAK behavior remains valid except where the approved physical interaction model intentionally changes approach/force outcomes.
+- Environmental and organism-material interactions use the same aura-derived mechanism and realized geometry rules.
+- No duplicate application of a pair force and no hidden energy source/sink.
+
+**Dependency:** PR 3. Draft only until PR 3 is accepted.
