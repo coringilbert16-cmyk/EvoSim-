@@ -11,10 +11,10 @@ The target is not to reproduce RimWorld's engine or adopt a new rendering framew
 ## External references and transferable lessons
 
 1. **RimWorld 1.7 / Waylith engine transition** — Ludeon's developer-reported performance results illustrate the gains possible from addressing the engine and whole execution pipeline rather than only drawing. Treat headline multipliers as developer-reported results, not an EvoSim target.
-   - https://ludeon.com/blog/2026/10/rimworld-1-7-and-waylith/
+   - https://ludeon.com/blog/2026/10/announcing-the-waylith-engine-and-update-1-7/
    - Use: motivation to measure end-to-end costs and remove architectural bottlenecks before micro-optimizing individual draw calls.
 2. **RimWorld 1.6 performance work** — Ludeon's update notes describe work such as multithreaded/batched pathfinding and lighting, and less frequent updates for selected non-critical systems.
-   - https://ludeon.com/blog/2025/10/rimworld-1-6/
+   - https://store.steampowered.com/news/app/294100/view/498322216088241321
    - Use: batch independent work, isolate expensive subsystems, and schedule presentation/ancillary work at appropriate rates. Do not copy visibility-based throttling for EvoSim chemistry.
 3. **ParaView: Displaying data** — https://docs.paraview.org/en/latest/UsersGuide/displayingData.html
    - Use: choose representations by data type and task (points, surfaces, outlines, wireframes, volume); use inexpensive overview representations while navigating and richer detail when inspecting.
