@@ -329,7 +329,6 @@ fn execute(command: SimulationCommand, runtime: &Arc<Mutex<RuntimeState>>) -> Co
             if !ticks_per_second.is_finite() || ticks_per_second <= 0.0 {
                 return CommandResponse::error("invalid_speed");
             }
-            let ticks_per_second = ticks_per_second;
             let mut state = runtime.lock();
             state.simulation.ticks_per_second = ticks_per_second;
             CommandResponse::value(serde_json::json!({
