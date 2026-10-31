@@ -767,7 +767,10 @@ fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<Ph
 
     for organism in &simulation.organisms {
         if !organism.structure.units.is_empty() {
-            bodies.push(physical_material_from_structure(&organism.structure, catalog)?);
+            bodies.push(physical_material_from_structure(
+                &organism.structure,
+                catalog,
+            )?);
         }
     }
 
@@ -1035,7 +1038,11 @@ mod tests {
             snapshot.occluder_count,
             "the oracle and world-tone snapshot must enumerate the same realized bodies"
         );
-        assert_eq!(bodies.len(), 4, "one organism plus three field bodies are expected");
+        assert_eq!(
+            bodies.len(),
+            4,
+            "one organism plus three field bodies are expected"
+        );
 
         let oracle = world_pair_potential_inventory_components(&simulation)
             .expect("every unordered pair should have a finite occlusion-aware potential");
@@ -1048,24 +1055,22 @@ mod tests {
                 && component.frequency_cycles_per_day > 0.0
                 && component.energy.is_finite()
         }));
-        assert!(oracle.windows(2).all(|pair| {
-            pair[0].frequency_cycles_per_day < pair[1].frequency_cycles_per_day
-        }));
+        assert!(oracle
+            .windows(2)
+            .all(|pair| { pair[0].frequency_cycles_per_day < pair[1].frequency_cycles_per_day }));
 
-        let mut independently_summed = Vec::<
-            crate::harmonics::ResonancePairPotentialComponent,
-        >::new();
+        let mut independently_summed =
+            Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
         for first in 0..bodies.len() {
             for second in (first + 1)..bodies.len() {
-                let pair =
-                    crate::harmonics::resonance_pair_potential_components_with_occluders(
-                        &bodies[first],
-                        &bodies[second],
-                        &bodies,
-                        &catalog,
-                        simulation.tick,
-                    )
-                    .expect("each pair should include the remaining bodies as blockers");
+                let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                    &bodies[first],
+                    &bodies[second],
+                    &bodies,
+                    &catalog,
+                    simulation.tick,
+                )
+                .expect("each pair should include the remaining bodies as blockers");
                 for component in pair {
                     if let Some(existing) = independently_summed.iter_mut().find(|existing| {
                         (existing.frequency_cycles_per_day
