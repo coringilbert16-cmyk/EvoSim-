@@ -1068,6 +1068,16 @@ pub(crate) fn material_aura_receptions_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    // This API consumes world-resolved placements. Stored materials carrying
+    // an owner-relative origin must be transformed by their owner first.
+    if source.owner_relative_origin.is_some()
+        || receiver.owner_relative_origin.is_some()
+        || occluders
+            .iter()
+            .any(|material| material.owner_relative_origin.is_some())
+    {
+        return None;
+    }
     if std::ptr::eq(source, receiver) {
         return Some(Vec::new());
     }
@@ -2186,6 +2196,32 @@ mod tests {
         assert!(material_aura_receptions(&left, &left, &catalog, 0)
             .expect("self reception is a valid empty result")
             .is_empty());
+    }
+
+    #[test]
+    fn pair_reception_rejects_unresolved_owner_relative_materials() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let source = make_material(0.0);
+        let mut stored_receiver = make_material(4.0);
+        stored_receiver.owner_relative_origin = Some(crate::structure::Placement {
+            x: 100.0,
+            y: 50.0,
+            rotation_radians: 0.0,
+        });
+
+        assert!(material_aura_receptions(&source, &stored_receiver, &catalog, 0).is_none());
     }
 
     #[test]
