@@ -125,6 +125,12 @@ fn start_tick_loop(
 
             if !running {
                 next_tick_deadline = Instant::now();
+                {
+                    let mut state = runtime.lock();
+                    state.measured_ticks_per_second = 0.0;
+                    last_rate_tick = state.simulation.tick;
+                }
+                last_rate_sample = Instant::now();
                 tokio::time::sleep(Duration::from_millis(50)).await;
             } else {
                 let rate = ticks_per_second.clamp(MIN_TICKS_PER_SECOND, MAX_TICKS_PER_SECOND);
