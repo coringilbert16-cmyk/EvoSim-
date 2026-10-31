@@ -79,10 +79,6 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             let rotation_radians = rng.gen_range(0.0..std::f64::consts::TAU);
             let name = identities[identity_index].clone();
             identity_index += 1;
-            let resource = catalog
-                .iter()
-                .find(|resource| resource.name == name)
-                .expect("every shuffled resource identity must exist in the catalog");
             let material = Material::free_base(&name, 1.0);
             let placement = Placement {
                 x,
