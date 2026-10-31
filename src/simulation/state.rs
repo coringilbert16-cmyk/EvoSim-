@@ -256,6 +256,13 @@ pub(crate) struct EnergyLedger {
     /// Signed structural-potential baseline captured at simulation tick zero.
     #[serde(default)]
     pub(crate) initial_structural_energy_held: f64,
+    /// Net signed resonance pair-potential change held since tick zero.
+    /// This is distinct from retained resonance and structural bond potential.
+    #[serde(default)]
+    pub(crate) total_pair_interaction_potential_held: f64,
+    /// Tick-zero reference for the signed resonance pair-potential inventory.
+    #[serde(default)]
+    pub(crate) initial_pair_interaction_potential_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Organism {
