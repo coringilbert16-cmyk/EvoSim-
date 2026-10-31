@@ -1025,7 +1025,7 @@ mod tests {
         assert!(settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            Some(&mut resonance),
+            &mut [&mut resonance],
             &components,
         ));
         assert_eq!(usable, 10.0);
@@ -1078,7 +1078,7 @@ mod tests {
         assert!(settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            Some(&mut resonance),
+            &mut [&mut resonance],
             &components,
         ));
         assert_eq!(resonance.total_energy(), Some(8.0));
@@ -1101,7 +1101,7 @@ mod tests {
         assert!(!settle_pair_potential_change(
             &mut ledger,
             &mut usable,
-            Some(&mut resonance),
+            &mut [&mut resonance],
             &components,
         ));
         assert_eq!(ledger, before);
