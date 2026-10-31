@@ -1824,12 +1824,21 @@ mod tests {
         let spectrum = material_response(properties(1.0, 4.0, 1.0), baselines(), drive_phase);
 
         assert!(!spectrum.components.is_empty());
+        let properties = properties(1.0, 4.0, 1.0);
+        let baselines = baselines();
+        let natural_frequency = natural_frequency_cycles_per_day(properties, baselines);
+        let damping = damping_ratio(properties, baselines);
+        let fundamental_lag =
+            oscillator_phase_lag(drive_frequency, natural_frequency, damping);
+
         for component in &spectrum.components {
-            let expected_phase = phase_at_tick(component.frequency_cycles_per_day, tick);
+            let harmonic_order = component.frequency_cycles_per_day / drive_frequency;
+            let expected_phase = phase_at_tick(component.frequency_cycles_per_day, tick)
+                - harmonic_order * fundamental_lag;
             assert!(
                 (component.phase_radians.cos() - expected_phase.cos()).abs() < 1e-10
                     && (component.phase_radians.sin() - expected_phase.sin()).abs() < 1e-10,
-                "harmonic at {} cycles/day did not follow the shared clock",
+                "harmonic at {} cycles/day did not follow the shared clock with its derived oscillator lag",
                 component.frequency_cycles_per_day
             );
         }
