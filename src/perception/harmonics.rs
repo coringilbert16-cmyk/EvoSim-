@@ -542,8 +542,8 @@ fn material_response_to_drive(
     let damping = damping_ratio(properties, baselines);
     let fundamental =
         resonance_response(drive_frequency_cycles_per_day, natural, damping) * signal_level;
-    let response_phase = phase_radians
-        - oscillator_phase_lag(drive_frequency_cycles_per_day, natural, damping);
+    let response_phase =
+        phase_radians - oscillator_phase_lag(drive_frequency_cycles_per_day, natural, damping);
     let mut spectrum = ToneSpectrum {
         components: vec![ToneComponent {
             frequency_cycles_per_day: drive_frequency_cycles_per_day,
@@ -1616,9 +1616,11 @@ mod tests {
             .expect("fundamental response should be present");
         assert!((fundamental.phase_radians - expected_fundamental).abs() < 1e-12);
 
-        for component in spectrum.components.iter().filter(|component| {
-            component.frequency_cycles_per_day > 440.0
-        }) {
+        for component in spectrum
+            .components
+            .iter()
+            .filter(|component| component.frequency_cycles_per_day > 440.0)
+        {
             let order = component.frequency_cycles_per_day / 440.0;
             assert!((component.phase_radians - expected_fundamental * order).abs() < 1e-12);
         }
