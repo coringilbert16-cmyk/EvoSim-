@@ -757,6 +757,201 @@ fn body_from_owner_relative_material(
     OrganismBodyGeometry::from_physical_material(&world_material, catalog)
 }
 
+/// Reconstruct every currently realized physical world body for the
+/// independent pair-potential inventory oracle. This intentionally mirrors
+/// the authoritative body classes assembled by WorldToneOccluderSnapshot.
+#[cfg(test)]
+fn world_physical_materials_for_oracle(simulation: &Simulation) -> Option<Vec<PhysicalMaterial>> {
+    let catalog = &simulation.environment.catalog;
+    let mut bodies = Vec::new();
+
+    for organism in &simulation.organisms {
+        if !organism.structure.units.is_empty() {
+            bodies.push(physical_material_from_structure(&organism.structure, catalog)?);
+        }
+    }
+
+    for organism in &simulation.organisms {
+        let Some(construction) = &organism.reproductive_construction else {
+            continue;
+        };
+        if !construction.is_aggregate_owned_by(&organism.structure) {
+            return None;
+        }
+        if !construction.committed_material.entries.is_empty() {
+            let anchor = Placement {
+                x: construction.developmental_origin.x,
+                y: construction.developmental_origin.y,
+                rotation_radians: 0.0,
+            };
+            for entry in &construction.committed_material.entries {
+                let StoredMaterial::Physical(physical) = entry;
+                bodies.push(owner_relative_physical_material(physical, anchor)?);
+            }
+        }
+    }
+
+    for cell in &simulation.environment.field.cells {
+        for physical in &cell.physical_materials {
+            bodies.push(physical.clone());
+        }
+    }
+
+    for decomposing in &simulation.decomposing_bodies {
+        if !decomposing.structure.units.is_empty() {
+            bodies.push(physical_material_from_structure(
+                &decomposing.structure,
+                catalog,
+            )?);
+        }
+    }
+
+    for organism in &simulation.organisms {
+        if organism.stored_material.entries.is_empty() {
+            continue;
+        }
+        let anchor = owner_anchor(organism)?;
+        for entry in &organism.stored_material.entries {
+            let StoredMaterial::Physical(physical) = entry;
+            bodies.push(owner_relative_physical_material(physical, anchor)?);
+        }
+    }
+
+    for transformation in &simulation.active_transformations {
+        if transformation.stored_material.is_some()
+            && transformation.combine_environmental_source.is_some()
+        {
+            return None;
+        }
+        if transformation.stored_material.is_none()
+            && transformation.combine_environmental_source.is_none()
+        {
+            continue;
+        }
+        let owner = simulation
+            .organisms
+            .iter()
+            .find(|organism| organism.id == transformation.organism_id)?;
+        if owner.active_transformation_id != Some(transformation.id) {
+            return None;
+        }
+        if let Some(physical) = &transformation.stored_material {
+            bodies.push(owner_relative_physical_material(
+                physical,
+                owner_anchor(owner)?,
+            )?);
+        }
+        if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
+            let _ = simulation.environment.field.cells.get(*cell_index)?;
+            bodies.push(physical.clone());
+        }
+    }
+
+    Some(bodies)
+}
+
+#[cfg(test)]
+fn physical_material_from_structure(
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<PhysicalMaterial> {
+    if structure.units.is_empty() {
+        return None;
+    }
+    let mut parts = Vec::with_capacity(structure.units.len());
+    let mut placements = Vec::with_capacity(structure.units.len());
+    let mut realized_shapes = Vec::with_capacity(structure.units.len());
+    for unit in &structure.units {
+        if unit.material.parts.len() != 1 || !unit.material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        let (name, amount) = unit.material.parts.first()?;
+        parts.push((name.clone(), *amount));
+        placements.push(unit.placement);
+        realized_shapes.push(unit.shape(catalog)?.clone());
+    }
+    let material = crate::resources::Material {
+        parts,
+        internal_bonds: Vec::new(),
+    };
+    if !material.is_valid_for_catalog(catalog) {
+        return None;
+    }
+    Some(PhysicalMaterial {
+        material,
+        placements: Some(placements),
+        internal_connections: None,
+        owner_relative_origin: None,
+        realized_shapes: Some(realized_shapes),
+    })
+}
+
+#[cfg(test)]
+fn owner_relative_physical_material(
+    physical: &PhysicalMaterial,
+    owner_anchor: Placement,
+) -> Option<PhysicalMaterial> {
+    let relative_origin = physical.owner_relative_origin?;
+    let world_origin = transform_relative(owner_anchor, relative_origin);
+    let placements = physical.placements.as_ref()?;
+    if placements.is_empty() || placements.len() != physical.material.parts.len() {
+        return None;
+    }
+    let mut world_material = physical.clone();
+    world_material.placements = Some(
+        placements
+            .iter()
+            .copied()
+            .map(|relative| transform_relative(world_origin, relative))
+            .collect(),
+    );
+    world_material.owner_relative_origin = None;
+    Some(world_material)
+}
+
+/// Recompute the signed world pair-potential inventory from the physical
+/// world, including every other body as an occluder for each pair. This is an
+/// intentionally independent, test-only oracle; it is not yet a tick-loop path.
+#[cfg(test)]
+pub(crate) fn world_pair_potential_inventory_components(
+    simulation: &Simulation,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    let bodies = world_physical_materials_for_oracle(simulation)?;
+    let catalog = &simulation.environment.catalog;
+    let mut total = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
+
+    for first in 0..bodies.len() {
+        for second in (first + 1)..bodies.len() {
+            let pair = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                &bodies[first],
+                &bodies[second],
+                &bodies,
+                catalog,
+                simulation.tick,
+            )?;
+            for component in pair {
+                if let Some(existing) = total.iter_mut().find(|existing| {
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                }) {
+                    existing.energy += component.energy;
+                    if !existing.energy.is_finite() {
+                        return None;
+                    }
+                } else {
+                    total.push(component);
+                }
+            }
+        }
+    }
+    total.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(total)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
