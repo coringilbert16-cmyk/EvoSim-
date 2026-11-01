@@ -58,11 +58,21 @@ impl RadialHotspot {
 
     /// Cosine falloff has zero slope at both the center and the outer edge.
     pub(crate) fn intensity_at(self, x: f64, y: f64) -> Option<f64> {
-        if !self.is_valid() || !x.is_finite() || !y.is_finite() {
+        self.intensity_at_distance((x - self.center_x).hypot(y - self.center_y))
+    }
+
+    /// Sample the same radial source on a horizontally periodic world.
+    pub(crate) fn intensity_at_wrapped(self, x: f64, y: f64, world_width: f64) -> Option<f64> {
+        if !world_width.is_finite() || world_width <= 0.0 || !x.is_finite() || !y.is_finite() {
             return None;
         }
-        let distance = (x - self.center_x).hypot(y - self.center_y);
-        if !distance.is_finite() {
+        let dx =
+            (x - self.center_x + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
+        self.intensity_at(self.center_x + dx, y)
+    }
+
+    fn intensity_at_distance(self, distance: f64) -> Option<f64> {
+        if !self.is_valid() || !distance.is_finite() {
             return None;
         }
         if distance >= self.radius {
@@ -171,7 +181,9 @@ pub(crate) fn settle_environment_inputs(
                 {
                     return false;
                 }
-                let Some(intensity) = hotspot.intensity_at(placement.x, placement.y) else {
+                let Some(intensity) =
+                    hotspot.intensity_at_wrapped(placement.x, placement.y, environment.width)
+                else {
                     return false;
                 };
                 if intensity <= f64::EPSILON {
@@ -331,6 +343,22 @@ mod tests {
     }
 
     #[test]
+    fn hotspot_intensity_wraps_across_the_horizontal_world_seam() {
+        let hotspot = RadialHotspot {
+            center_x: 5.0,
+            center_y: 50.0,
+            radius: 20.0,
+            peak_energy_per_tick_per_area: 100.0,
+            frequency_cycles_per_day: 440.0,
+        };
+        assert_eq!(
+            hotspot.intensity_at_wrapped(995.0, 50.0, 1000.0),
+            hotspot.intensity_at(15.0, 50.0)
+        );
+        assert_eq!(hotspot.intensity_at_wrapped(5.0, -0.1, 1000.0), Some(0.0));
+    }
+
+    #[test]
     fn right_bend_hotspot_is_between_the_right_eddy_and_the_s_flow_spine() {
         let hotspot = RadialHotspot::right_bend_for_world(1000.0, 1000.0).unwrap();
         let spine_y = 500.0 + 230.0 * (std::f64::consts::TAU * 0.72).sin();
@@ -350,7 +378,7 @@ mod tests {
             .hotspot
             .expect("explicit experiment setup should enable the source");
         assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
-        assert!((hotspot.center_x - 720.0).abs() < 1e-10);
+        assert!((hotspot.center_x - 360.0).abs() < 1e-10);
     }
 
     #[test]
@@ -364,9 +392,11 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
+        let center_x = simulation.environment.width * 0.5;
+        let center_y = simulation.environment.height * 0.5;
         let hotspot = RadialHotspot {
-            center_x: 500.0,
-            center_y: 500.0,
+            center_x,
+            center_y,
             radius: 100.0,
             peak_energy_per_tick_per_area: 100.0,
             frequency_cycles_per_day: 440.0,
@@ -374,16 +404,16 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
             vec![Placement {
-                x: 500.0,
-                y: 500.0,
+                x: center_x,
+                y: center_y,
                 rotation_radians: 0.0,
             }],
             &simulation.environment.catalog,
         )
         .expect("test material should have physical geometry");
         assert!(simulation.environment.field.deposit_physical(
-            500.0,
-            500.0,
+            center_x,
+            center_y,
             physical,
             &simulation.environment.catalog
         ));

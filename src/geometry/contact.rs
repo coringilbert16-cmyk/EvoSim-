@@ -499,19 +499,6 @@ pub(crate) fn endpoint_world_point(
     }
 }
 
-fn endpoint_facing(
-    a: ConnectionEndpoint,
-    b: ConnectionEndpoint,
-    ua: &StructuralUnit,
-    ub: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
-) -> Option<f64> {
-    Some(facing(
-        endpoint_world_point(a, ua, catalog)?,
-        endpoint_world_point(b, ub, catalog)?,
-    ))
-}
-
 fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
@@ -528,7 +515,9 @@ fn candidate_for_endpoints(
         endpoint_a: a,
         endpoint_b: b,
         distance: distance(wa, wb),
-        facing: endpoint_facing(a, b, au, bu, c)?,
+        // Reuse the already-resolved world points instead of transforming both
+        // endpoints a second time solely to calculate facing.
+        facing: facing(wa, wb),
         load_a: s.connection_load(ua, a, c),
         load_b: s.connection_load(ub, b, c),
         available_a: true,
@@ -649,8 +638,8 @@ mod tests {
             endpoint,
             ConnectionEndpoint::LineEndpoint { point_index: 0 | 1 }
         )));
-        let left = endpoint_world_point(endpoints[0], &unit, &catalog).unwrap();
-        let right = endpoint_world_point(endpoints[1], &unit, &catalog).unwrap();
+        let left = endpoints[0].world_point(&unit, &catalog).unwrap();
+        let right = endpoints[1].world_point(&unit, &catalog).unwrap();
         assert_eq!((left.x, left.y), (-0.5, 0.0));
         assert_eq!((right.x, right.y), (0.5, 0.0));
     }

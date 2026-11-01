@@ -221,9 +221,16 @@ pub(crate) struct EnergyLedger {
     /// positive on bond dissociation).
     #[serde(default)]
     pub(crate) total_structural_energy_delta: f64,
+    /// Low-order correction retained when cumulative structural changes exceed f64 precision.
+    /// This is part of the signed structural-energy delta, not a separate energy store.
+    #[serde(default)]
+    pub(crate) total_structural_energy_delta_compensation: f64,
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
+    /// Low-order correction retained when cumulative external inputs exceed f64 precision.
+    #[serde(default)]
+    pub(crate) total_external_energy_input_compensation: f64,
     /// Guards the simulation's one-time initial-condition energy grant.
     #[serde(default)]
     pub(crate) initial_condition_energy_settled: bool,
@@ -595,6 +602,10 @@ pub(crate) struct Environment {
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
+    /// Cumulative successful environmental BREAK commits since simulation creation.
+    pub(crate) break_committed_total: usize,
+    /// Cumulative successful environmental COMBINE commits since simulation creation.
+    pub(crate) combine_committed_total: usize,
     pub(crate) break_ready_candidates: usize,
     pub(crate) break_scheduled: usize,
     pub(crate) break_committed: usize,
@@ -608,6 +619,18 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) combine_discovery_work_remaining: usize,
     pub(crate) combine_realization_work_remaining: usize,
     pub(crate) accumulation_entries: usize,
+    /// Wall-clock microseconds spent in environmental transport this tick.
+    #[serde(default)]
+    pub(crate) transport_elapsed_micros: u64,
+    /// Wall-clock microseconds spent discovering environmental BREAK candidates.
+    #[serde(default)]
+    pub(crate) break_discovery_elapsed_micros: u64,
+    /// Wall-clock microseconds spent discovering environmental COMBINE candidates.
+    #[serde(default)]
+    pub(crate) combine_discovery_elapsed_micros: u64,
+    /// Wall-clock microseconds spent scheduling and committing environmental reactions.
+    #[serde(default)]
+    pub(crate) reaction_settlement_elapsed_micros: u64,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }
 

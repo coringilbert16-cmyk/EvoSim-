@@ -303,7 +303,7 @@ mod tests {
             }],
             &simulation.environment.catalog,
         ));
-        organism.occupied_cells[0].x = 1.0e9;
+        organism.occupied_cells[0].y = 1.0e9;
 
         let storage_before = organism.stored_material.clone();
         let construction_before = organism

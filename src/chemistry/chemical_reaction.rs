@@ -524,18 +524,13 @@ pub(crate) fn accumulate_environmental(
     }
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let (candidates, _scan_steps) = discover_environmental_bonds(environment, tick, count);
-    let indices: Vec<usize> = (0..candidates.len()).collect();
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidates.len());
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut compatibility_cache = ConnectionCompatibilityCache::new();
 
-    for candidate_index in indices {
-        let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
-        else {
-            continue;
-        };
+    for (cell_index, material_index, bond_index) in candidates {
         let Some(instance) = environment
             .field
             .cells
@@ -588,8 +583,42 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
+        let Some(resource_a) =
+            hypothetical.units[unit_a]
+                .material
+                .parts
+                .first()
+                .and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                })
         else {
+            continue;
+        };
+        let Some(resource_b) =
+            hypothetical.units[unit_b]
+                .material
+                .parts
+                .first()
+                .and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                })
+        else {
+            continue;
+        };
+        // A restored structural unit represents one original constituent.
+        // Read its chemical position from the base-resource catalog: the
+        // aggregate weighted-properties path intentionally clears positions
+        // so mixed molecules cannot acquire an artificial averaged identity.
+        let (Some(position_a), Some(position_b)) = (
+            resource_a.properties.chemical_position,
+            resource_b.properties.chemical_position,
+        ) else {
             continue;
         };
         let Some(candidate) = crate::contact::connection_pair_candidates_cached(
@@ -608,18 +637,8 @@ pub(crate) fn accumulate_environmental(
         }) else {
             continue;
         };
-        let geometry_material_a = hypothetical.units[unit_a]
-            .material
-            .parts
-            .first()
-            .map(|part| part.0.as_str())
-            .unwrap_or("unknown");
-        let geometry_material_b = hypothetical.units[unit_b]
-            .material
-            .parts
-            .first()
-            .map(|part| part.0.as_str())
-            .unwrap_or("unknown");
+        let geometry_material_a = resource_a.name.as_str();
+        let geometry_material_b = resource_b.name.as_str();
         let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
             geometry_material_a,
             &hypothetical.units[unit_a],
@@ -978,7 +997,7 @@ mod material_identity_tests {
                 part_b: 1,
             }],
         };
-        crate::physical_material::PhysicalMaterial::realized(
+        let mut composite = crate::physical_material::PhysicalMaterial::realized(
             material,
             vec![
                 crate::structure::Placement {
@@ -987,14 +1006,26 @@ mod material_identity_tests {
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 14.3,
+                    x: 14.0,
                     y: 12.5,
                     rotation_radians: 0.0,
                 },
             ],
             catalog,
         )
-        .expect("test composite should be physically realizable")
+        .expect("test composite should be physically realizable");
+        // Use the exact facing endpoints: Carbon's rightmost corner and
+        // Hydrogen's left longitudinal endpoint. The inferred candidate order
+        // is not authoritative for this symmetric contact.
+        composite.internal_connections =
+            Some(vec![crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+                bond_energy: 0.0,
+            }]);
+        composite
     }
 
     fn remove_living_organisms_preserving_inventory(simulation: &mut crate::state::Simulation) {
@@ -1149,6 +1180,133 @@ mod material_identity_tests {
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "sunlight-captured resonance must be spent once and remain conserved"
+        );
+    }
+
+    #[test]
+    fn bonded_environmental_carbon_hydrogen_can_reach_natural_break_activation() {
+        let mut simulation = crate::state::Simulation::new(940, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("bonded test material must be inside the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source,
+            &simulation.environment.catalog,
+        ));
+
+        let (discovered, _) = discover_environmental_bonds(
+            &simulation.environment,
+            0,
+            MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+        );
+        assert!(
+            discovered.contains(&(cell_index, 0, 0)),
+            "the restored environmental bond must enter bounded discovery"
+        );
+        let instance = &simulation.environment.field.cells[cell_index].physical_materials[0];
+        let connection = instance.internal_connections.as_ref().unwrap()[0].clone();
+        let mut hypothetical = crate::structure::OrganismStructure::new();
+        let restored_indices = crate::material_restoration::restore_material(
+            &mut hypothetical,
+            instance,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &simulation.environment.catalog,
+        )
+        .expect("the realized Carbon-Hydrogen bond must restore before discovery");
+        let unit_a = restored_indices[connection.part_a];
+        let unit_b = restored_indices[connection.part_b];
+        let candidate = crate::contact::connection_pair_candidates(
+            &hypothetical,
+            unit_a,
+            unit_b,
+            &simulation.environment.catalog,
+        )
+        .into_iter()
+        .find(|candidate| {
+            (candidate.endpoint_a == connection.endpoint_a
+                && candidate.endpoint_b == connection.endpoint_b)
+                || (candidate.endpoint_a == connection.endpoint_b
+                    && candidate.endpoint_b == connection.endpoint_a)
+        })
+        .expect("the restored bond endpoints must resolve to a live contact");
+        assert!(candidate.distance <= crate::chemistry::CHEMICAL_CONTACT_RADIUS);
+        assert!(candidate.facing > 0.0, "the facing endpoints must engage");
+        let name_a = hypothetical.units[unit_a].material.parts[0].0.as_str();
+        let name_b = hypothetical.units[unit_b].material.parts[0].0.as_str();
+        let position_a = simulation
+            .environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == name_a)
+            .and_then(|resource| resource.properties.chemical_position)
+            .unwrap();
+        let position_b = simulation
+            .environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == name_b)
+            .and_then(|resource| resource.properties.chemical_position)
+            .unwrap();
+        let potential = crate::chemistry::interaction_potential(
+            position_a,
+            position_b,
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+        )
+        .unwrap();
+        let contact = crate::chemistry::contact_factor(
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        )
+        .unwrap();
+        let engagement = crate::chemistry::interface_engagement(candidate.facing).unwrap();
+        let initial_progress = crate::chemistry::accumulate_reaction(
+            0.0,
+            potential,
+            contact,
+            engagement,
+            crate::chemistry::CHEMICAL_DISSIPATION,
+        )
+        .unwrap();
+        assert!(
+            initial_progress > 0.0,
+            "the realized Carbon-Hydrogen contact must accumulate positive BREAK activation"
+        );
+
+        let mut accumulation = std::collections::BTreeMap::new();
+        let mut max_accumulated = 0.0_f64;
+        let mut ready = false;
+        for tick in 0..2_000_u64 {
+            let mut discovery_work = MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_work,
+            );
+            max_accumulated =
+                max_accumulated.max(accumulation.values().copied().fold(0.0_f64, f64::max));
+            if !operations.is_empty() {
+                ready = true;
+                break;
+            }
+        }
+        assert!(
+            ready,
+            "a realized Carbon-Hydrogen environmental bond never reached BREAK activation; max_accumulated={max_accumulated:.9}, remaining_pairs={}",
+            accumulation.len()
         );
     }
 

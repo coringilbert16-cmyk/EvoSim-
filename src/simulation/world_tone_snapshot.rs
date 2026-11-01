@@ -1519,6 +1519,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: ledger.total_pair_interaction_potential_held,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,

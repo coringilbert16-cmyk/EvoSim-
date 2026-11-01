@@ -280,7 +280,19 @@ impl ConnectionEndpoint {
             }
             Self::LineEndpoint { point_index } => {
                 let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
+                let is_line_like = match &shape.form {
+                    crate::resources::Form::Line { .. } => true,
+                    crate::resources::Form::Rectangle { width, height } => {
+                        unit.material.parts.len() == 1
+                            && unit.material.parts[0].0 == "Hydrogen"
+                            && *height <= *width * 0.1 + 1e-12
+                    }
+                    _ => false,
+                };
+                if !is_line_like {
+                    return None;
+                }
+                crate::connection_geometry::rigid_endpoint_world_point(
                     shape,
                     point_index,
                     unit.placement.x,

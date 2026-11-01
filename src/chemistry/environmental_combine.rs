@@ -29,6 +29,9 @@ pub(crate) struct EnvironmentalCombineOperation {
     pub(crate) unit_a: usize,
     pub(crate) unit_b: usize,
     pub(crate) candidate: ConnectionPairCandidate,
+    /// Periodic image offset applied to the second reactant during contact
+    /// evaluation and commit. The source snapshot itself remains unchanged.
+    pub(crate) horizontal_shift: f64,
     pub(crate) investment: f64,
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
@@ -49,6 +52,50 @@ fn origin() -> Placement {
         y: 0.0,
         rotation_radians: 0.0,
     }
+}
+
+fn material_center_x(material: &PhysicalMaterial) -> Option<f64> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty() || placements.iter().any(|placement| !placement.x.is_finite()) {
+        return None;
+    }
+    let center =
+        placements.iter().map(|placement| placement.x).sum::<f64>() / placements.len() as f64;
+    center.is_finite().then_some(center)
+}
+
+fn nearest_horizontal_image_shift(anchor_x: f64, target_x: f64, world_width: f64) -> Option<f64> {
+    if !anchor_x.is_finite()
+        || !target_x.is_finite()
+        || !world_width.is_finite()
+        || world_width <= 0.0
+    {
+        return None;
+    }
+    let delta = target_x - anchor_x;
+    let wrapped_delta = (delta + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
+    let shift = wrapped_delta - delta;
+    shift.is_finite().then_some(shift)
+}
+
+fn shift_restored_units_horizontally(
+    structure: &mut OrganismStructure,
+    indices: &[usize],
+    shift: f64,
+) -> bool {
+    if !shift.is_finite() {
+        return false;
+    }
+    for index in indices {
+        let Some(unit) = structure.units.get_mut(*index) else {
+            return false;
+        };
+        unit.placement.x += shift;
+        if !unit.placement.x.is_finite() {
+            return false;
+        }
+    }
+    true
 }
 
 fn material_signature(material: &PhysicalMaterial) -> String {
@@ -140,6 +187,15 @@ fn component_pair_start(tick: u64, pair_count: usize) -> usize {
     }
 }
 
+/// Starting cell for a deterministic, window-strided environmental COMBINE scan.
+fn anchor_cell_start(tick: u64, field_cell_count: usize, scan_count: usize) -> usize {
+    if field_cell_count == 0 {
+        0
+    } else {
+        (tick as usize).wrapping_mul(scan_count) % field_cell_count
+    }
+}
+
 fn select_best_contact_from_offset(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -156,6 +212,13 @@ fn select_best_contact_from_offset(
 
     let mut best: Option<SelectedContact> = None;
     let inspected_pairs = (*remaining_work).min(pair_count);
+    if inspected_pairs == 0 {
+        return None;
+    }
+    // Every candidate in this constituent-pair batch shares the same unchanged
+    // trial graph. Structural potential is graph-wide, so calculate it once
+    // rather than rescanning every bond for every geometric contact candidate.
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
@@ -166,8 +229,13 @@ fn select_best_contact_from_offset(
         );
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    structure, unit_a, unit_b, candidate, catalog,
+                crate::combine_runtime::selected_candidate_evaluation_with_reactant_energy(
+                    structure,
+                    unit_a,
+                    unit_b,
+                    candidate,
+                    catalog,
+                    reactant_structural_energy,
                 )
             else {
                 continue;
@@ -235,6 +303,7 @@ fn chemical_step(
     indices_b: &[usize],
     source_a: &PhysicalMaterial,
     source_b: &PhysicalMaterial,
+    horizontal_shift: f64,
     cell_a: usize,
     material_a: usize,
     cell_b: usize,
@@ -374,6 +443,7 @@ fn chemical_step(
             unit_a,
             unit_b,
             candidate: selected.candidate,
+            horizontal_shift,
             investment: selected.investment,
             accumulation_key: key,
             accumulated_reaction: next,
@@ -407,7 +477,11 @@ pub(crate) fn accumulate_environmental(
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
-    let cell_start = tick as usize % field_cell_count;
+    // Advance by the prior scan window, not one cell. A one-cell stride repeats
+    // almost the entire anchor window every tick and delays coverage of distant
+    // field cells. The stride is deterministic and preserves the same per-tick
+    // inspection budget and exhaustive cyclic coverage over successive windows.
+    let cell_start = anchor_cell_start(tick, field_cell_count, cell_scan_count);
 
     'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
@@ -452,24 +526,25 @@ pub(crate) fn accumulate_environmental(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
-            let target_cells = environment.field.cells_intersecting_bounds_limited(
-                body.min_x - BOUNDS_PADDING,
-                body.max_x + BOUNDS_PADDING,
-                body.min_y - BOUNDS_PADDING,
-                body.max_y + BOUNDS_PADDING,
-                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
-                (tick as usize)
-                    .wrapping_add(cell_a)
-                    .wrapping_add(material_a),
-            );
-            for target_offset in 0..target_cells.len() {
+            let target_cells = environment
+                .field
+                .cells_intersecting_bounds_periodic_limited(
+                    body.min_x - BOUNDS_PADDING,
+                    body.max_x + BOUNDS_PADDING,
+                    body.min_y - BOUNDS_PADDING,
+                    body.max_y + BOUNDS_PADDING,
+                    FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
+                    (tick as usize)
+                        .wrapping_add(cell_a)
+                        .wrapping_add(material_a),
+                );
+            for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
@@ -489,6 +564,17 @@ pub(crate) fn accumulate_environmental(
                     if !source_b.is_realized() || source_b.material.is_empty() {
                         continue;
                     }
+                    let Some(anchor_x) = material_center_x(&source_a) else {
+                        continue;
+                    };
+                    let Some(target_x) = material_center_x(&source_b) else {
+                        continue;
+                    };
+                    let Some(horizontal_shift) =
+                        nearest_horizontal_image_shift(anchor_x, target_x, environment.width)
+                    else {
+                        continue;
+                    };
                     let mut trial_structure = source_structure.clone();
                     let Some(indices_b) = crate::material_restoration::restore_material(
                         &mut trial_structure,
@@ -498,6 +584,13 @@ pub(crate) fn accumulate_environmental(
                     ) else {
                         continue;
                     };
+                    if !shift_restored_units_horizontally(
+                        &mut trial_structure,
+                        &indices_b,
+                        horizontal_shift,
+                    ) {
+                        continue;
+                    }
                     if indices_b.iter().any(|index| {
                         crate::construction_runtime::placed_unit_overlaps(
                             &trial_structure,
@@ -537,6 +630,7 @@ pub(crate) fn accumulate_environmental(
                         &indices_b,
                         &source_a,
                         &source_b,
+                        horizontal_shift,
                         cell_a,
                         material_a,
                         cell_b,
@@ -688,6 +782,13 @@ pub(crate) fn resolve_environmental(
     ) else {
         return false;
     };
+    if !shift_restored_units_horizontally(
+        &mut trial_structure,
+        &indices_b,
+        operation.horizontal_shift,
+    ) {
+        return false;
+    }
     if indices_b.iter().any(|index| {
         crate::construction_runtime::placed_unit_overlaps(
             &trial_structure,
@@ -841,6 +942,46 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
+    #[test]
+    fn environmental_combine_selects_the_nearest_horizontal_image() {
+        assert_eq!(
+            nearest_horizontal_image_shift(995.0, 5.0, 1000.0),
+            Some(1000.0)
+        );
+        assert_eq!(
+            nearest_horizontal_image_shift(5.0, 995.0, 1000.0),
+            Some(-1000.0)
+        );
+        assert_eq!(
+            nearest_horizontal_image_shift(100.0, 125.0, 1000.0),
+            Some(0.0)
+        );
+        assert!(nearest_horizontal_image_shift(0.0, 1.0, 0.0).is_none());
+
+        let catalog = crate::resources::default_catalog();
+        let material = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 50.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        let (mut structure, indices) = restored_source(
+            &material,
+            &crate::state::Simulation::new(17, 10.0).environment,
+        )
+        .expect("source should restore");
+        assert!(shift_restored_units_horizontally(
+            &mut structure,
+            &indices,
+            1000.0
+        ));
+        assert!((structure.units[indices[0]].placement.x - 1005.0).abs() < 1e-9);
+    }
+
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
@@ -964,6 +1105,7 @@ mod tests {
                         &indices_b,
                         &source_a,
                         &source_b,
+                        0.0,
                         0,
                         0,
                         0,
@@ -1132,6 +1274,7 @@ mod tests {
                     &base_indices,
                     &compound,
                     &base,
+                    0.0,
                     0,
                     0,
                     0,
@@ -1248,6 +1391,24 @@ mod tests {
     }
 
     #[test]
+    fn environmental_combine_scan_windows_cover_every_cell_without_one_cell_stride() {
+        for field_cell_count in 1..=128 {
+            let scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
+            let mut visited = vec![false; field_cell_count];
+            for tick in 0..field_cell_count {
+                let start = anchor_cell_start(tick as u64, field_cell_count, scan_count);
+                for offset in 0..scan_count {
+                    visited[(start + offset) % field_cell_count] = true;
+                }
+            }
+            assert!(
+                visited.into_iter().all(|seen| seen),
+                "scan windows failed to cover all {field_cell_count} field cells"
+            );
+        }
+    }
+
+    #[test]
     fn environmental_combine_discovery_charges_empty_cell_scans_to_budget() {
         let mut simulation = crate::state::Simulation::new(940, 10.0);
         for cell in &mut simulation.environment.field.cells {
@@ -1319,6 +1480,7 @@ mod tests {
             unit_a: 0,
             unit_b: 0,
             candidate,
+            horizontal_shift: 0.0,
             investment: 0.0,
             accumulation_key: key.to_owned(),
             accumulated_reaction: progress,
@@ -1582,6 +1744,7 @@ mod tests {
                         &restored_b,
                         &compound_a,
                         &base,
+                        0.0,
                         cell,
                         0,
                         cell,
@@ -2073,6 +2236,7 @@ mod tests {
                     &indices_b,
                     &carbon_compound,
                     &base,
+                    0.0,
                     0,
                     0,
                     0,
@@ -2528,6 +2692,7 @@ mod tests {
             &direct_indices_b,
             &source_a,
             &source_b,
+            0.0,
             cell,
             0,
             cell,
@@ -3223,6 +3388,7 @@ mod tests {
             &external_indices,
             &compound,
             &external_material,
+            0.0,
             0,
             0,
             0,

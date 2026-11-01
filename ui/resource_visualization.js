@@ -31,7 +31,7 @@
   worldColumn.className = 'ev-world-column';
   const worldToolbar = document.createElement('div');
   worldToolbar.className = 'ev-world-toolbar';
-  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
+  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span id="ev-sunlight-level" class="ev-sunlight-level">SUNLIGHT 100%</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
   const cameraControls = document.createElement('span');
   cameraControls.className = 'ev-camera-controls';
   cameraControls.innerHTML = '<button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit world" title="Fit current view">Fit</button>';
@@ -49,7 +49,7 @@
   const sidebarContent = sidebar.querySelector('#ev-sidebar-content');
   const overviewContent = document.createElement('div');
   overviewContent.className = 'ev-overview';
-  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE ready / committed / scheduled</small><strong id="ev-combine-count">0 / 0 / 0</strong></div><div><small>BREAK ready / committed / scheduled</small><strong id="ev-break-count">0 / 0 / 0</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
+  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE ready / scheduled / total committed</small><strong id="ev-combine-count">0 ready / 0 scheduled / 0 total</strong></div><div><small>BREAK ready / scheduled / total committed</small><strong id="ev-break-count">0 ready / 0 scheduled / 0 total</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
   const materialsContent = document.createElement('div');
   materialsContent.className = 'ev-materials';
   materialsContent.innerHTML = '<div class="ev-section-label">RESOURCE CATALOG</div><div class="ev-material-list" id="ev-material-list"><span class="ev-empty">Loading material palette…</span></div>';
@@ -79,7 +79,7 @@
     list.replaceChildren();
     const heading = document.createElement('div');
     heading.className = 'ev-note';
-    heading.textContent = 'Element color is calculated from its natural resonant frequency. Aura strength follows the oscillator response amplitude.';
+    heading.textContent = 'Material fill identifies the resource. The thin boundary aura uses natural resonance frequency for hue and oscillator response amplitude for strength.';
     const scale = document.createElement('div');
     scale.style.height = '14px';
     scale.style.borderRadius = '999px';
@@ -139,18 +139,9 @@
       ? Math.max(1, part.resonance_frequency_cycles_per_day) : 440;
     const amplitude = Number.isFinite(part.resonance_amplitude)
       ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
-    // Hue represents the material's natural resonant frequency; amplitude
-    // controls brightness and aura strength.
     const normalizedFrequency = Math.max(0, Math.min(1,
       (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
-    const hue = 200 + normalizedFrequency * 120;
-    const lightness = 42 + amplitude * 24;
-    return {
-      fill: `hsl(${hue} 88% ${lightness}%)`,
-      outline: `hsl(${hue} 95% ${Math.min(88, lightness + 18)}%)`,
-      amplitude,
-      hue
-    };
+    return { ...appearanceFor(part.resource), amplitude, hue: 200 + normalizedFrequency * 120 };
   }
 
   function drawPhysicalFieldPartAt(part, viewport, worldWidth, horizontalOffset) {
@@ -166,26 +157,9 @@
       ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
       : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
     const screenRadius = Math.max(1, radius * camera.scale);
-    const auraRadius = Math.max(7, Math.min(30, screenRadius * 5));
-    if (point.x < -auraRadius || point.y < -auraRadius ||
-        point.x > viewport.width + auraRadius || point.y > viewport.height + auraRadius) return;
-
-    // The aura is a read-only visualization of the oscillator response.
-    // It is deliberately drawn before the physical form and never feeds back
-    // into simulation state, energy, or movement.
-    if (appearance.amplitude > 0) {
-      const alpha = Math.min(0.34, 0.10 + appearance.amplitude * 0.24);
-      ctx.save();
-      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, auraRadius);
-      gradient.addColorStop(0, `hsla(${appearance.hue} 92% 68% / ${alpha})`);
-      gradient.addColorStop(0.42, `hsla(${appearance.hue} 92% 62% / ${alpha * 0.52})`);
-      gradient.addColorStop(1, `hsla(${appearance.hue} 92% 58% / 0)`);
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, auraRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    if (point.x < -screenRadius - 3 || point.y < -screenRadius - 3 ||
+        point.x > viewport.width + screenRadius + 3 ||
+        point.y > viewport.height + screenRadius + 3) return;
 
     ctx.save();
     ctx.translate(point.x, point.y);
@@ -210,6 +184,27 @@
       }
     }
     ctx.restore();
+
+    if (appearance.amplitude > 0) {
+      const alpha = Math.min(0.9, 0.22 + appearance.amplitude * 0.68);
+      const auraColor = `hsla(${appearance.hue} 100% 78% / ${alpha})`;
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.scale(camera.scale * 1.025, camera.scale * 1.025);
+      if (fluid) {
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
+        ctx.stroke();
+      } else {
+        drawForm(part.form, 0, 0, part.rotation_radians, {
+          fill: 'rgba(0, 0, 0, 0)',
+          outline: auraColor
+        });
+      }
+      ctx.restore();
+    }
   }
 
   function drawPhysicalFieldPart(part, viewport, worldWidth) {
@@ -219,10 +214,9 @@
       : displayPosition.x;
     drawPhysicalFieldPartAt(part, viewport, worldWidth, 0);
 
-    // Only draw the opposite-side copy when the element's 30px maximum aura
-    // could cross the seam. This keeps the 10x denser field inexpensive.
+    // Only draw the opposite-side copy when the realized boundary nears the seam.
     if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
-    const seamMargin = 30 / Math.max(camera.scale, 1e-6) + 2;
+    const seamMargin = 3 / Math.max(camera.scale, 1e-6) + 2;
     if (wrappedX < seamMargin) {
       drawPhysicalFieldPartAt(part, viewport, worldWidth, worldWidth);
     }
@@ -266,6 +260,8 @@
   }
 
 
+  let lastCommittedReaction = null;
+
   function updateChemistryReadout(world) {
     const diagnostics = world?.chemistry_diagnostics;
     if (!diagnostics || !Number.isFinite(diagnostics.tick)) return;
@@ -273,17 +269,17 @@
     const breakNode = document.getElementById('ev-break-count');
     const lastNode = document.getElementById('ev-last-reaction');
     if (combineNode) {
-      combineNode.textContent = `${diagnostics.combine_ready_candidates ?? 0} / ${diagnostics.combine_committed ?? 0} / ${diagnostics.combine_scheduled ?? 0}`;
+      combineNode.textContent = `${diagnostics.combine_ready_candidates ?? 0} ready / ${diagnostics.combine_scheduled ?? 0} scheduled / ${diagnostics.combine_committed_total ?? 0} total`;
     }
     if (breakNode) {
-      breakNode.textContent = `${diagnostics.break_ready_candidates ?? 0} / ${diagnostics.break_committed ?? 0} / ${diagnostics.break_scheduled ?? 0}`;
+      breakNode.textContent = `${diagnostics.break_ready_candidates ?? 0} ready / ${diagnostics.break_scheduled ?? 0} scheduled / ${diagnostics.break_committed_total ?? 0} total`;
     }
+    const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
+      .filter(event => event.outcome === 'committed');
+    if (committed.length > 0) lastCommittedReaction = committed[committed.length - 1];
     if (lastNode) {
-      const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
-        .filter(event => event.outcome === 'committed');
-      const latest = committed[committed.length - 1];
-      lastNode.textContent = latest
-        ? `Last committed reaction: ${latest.reaction} at tick ${latest.tick}`
+      lastNode.textContent = lastCommittedReaction
+        ? `Last committed reaction: ${lastCommittedReaction.reaction} at tick ${lastCommittedReaction.tick}`
         : diagnostics.accumulation_entries > 0
           ? `Reaction progress accumulating across ${diagnostics.accumulation_entries} pair(s); no commit this tick`
           : 'No environmental reaction committed or accumulating this tick';
@@ -295,6 +291,11 @@
     const viewport = viewportSize();
     if (!world) return;
     updateChemistryReadout(world);
+    const sunlightBrightness = Number.isFinite(world.sunlight_brightness)
+      ? Math.max(0.1, Math.min(1.0, world.sunlight_brightness)) : 1.0;
+    const sunlightPercent = Math.round(sunlightBrightness * 100);
+    const sunlightLevel = document.getElementById('ev-sunlight-level');
+    if (sunlightLevel) sunlightLevel.textContent = `SUNLIGHT ${sunlightPercent}%`;
     // Clip every world layer to the exact field boundary.
     const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
     const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
@@ -330,6 +331,14 @@
         drawObservedPart(part, viewport);
       }
       drawSelectionBounds(organism.id, physical, viewport);
+    }
+    // Dim the complete world as the actual sunlight source weakens. This is
+    // presentation-only: it never changes source energy or simulation state.
+    const darkness = 1.0 - sunlightBrightness;
+    if (darkness > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+      ctx.fillRect(topLeft.x, topLeft.y,
+        bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
     }
     ctx.restore();
     ctx.save();

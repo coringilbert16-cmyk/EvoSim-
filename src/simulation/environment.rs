@@ -117,20 +117,18 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite()
-            || !y.is_finite()
-            || x < 0.0
-            || x >= self.width_cells as f64 * self.cell_size
-        {
+        if !x.is_finite() || !y.is_finite() || self.width_cells == 0 || self.height_cells == 0 {
             return None;
         }
-        let wrapped_y = y.rem_euclid(self.height_cells as f64 * self.cell_size);
-        let col = (x / self.cell_size).floor() as usize;
-        let row = (wrapped_y / self.cell_size).floor() as usize;
-        if col >= self.width_cells || row >= self.height_cells {
+        let field_width = self.width_cells as f64 * self.cell_size;
+        let field_height = self.height_cells as f64 * self.cell_size;
+        if y < 0.0 || y >= field_height {
             return None;
         }
-        Some((row, col))
+        let wrapped_x = x.rem_euclid(field_width);
+        let col = (wrapped_x / self.cell_size).floor() as usize;
+        let row = (y / self.cell_size).floor() as usize;
+        (col < self.width_cells && row < self.height_cells).then_some((row, col))
     }
 
     pub fn index_for_position(&self, x: f64, y: f64) -> Option<usize> {
@@ -161,26 +159,41 @@ impl ActiveMaterialField {
         {
             return Vec::new();
         }
-        let min_x = (x - radius).max(0.0);
-        let max_x = x + radius;
-        let min_col = (min_x / self.cell_size).floor() as usize;
-        let max_col =
-            ((max_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
-        if min_col >= self.width_cells || min_col > max_col {
+        let field_width = self.width_cells as f64 * self.cell_size;
+        let field_height = self.height_cells as f64 * self.cell_size;
+        if y + radius < 0.0 || y - radius >= field_height {
+            return Vec::new();
+        }
+        let wrapped_x = x.rem_euclid(field_width);
+        let first_col = ((wrapped_x - radius) / self.cell_size).floor() as isize;
+        let last_col = ((wrapped_x + radius) / self.cell_size).floor() as isize;
+        let col_count = last_col.saturating_sub(first_col).saturating_add(1) as usize;
+        let cols: Vec<usize> = if col_count >= self.width_cells {
+            (0..self.width_cells).collect()
+        } else {
+            (0..col_count)
+                .map(|offset| {
+                    (first_col + offset as isize).rem_euclid(self.width_cells as isize) as usize
+                })
+                .collect()
+        };
+        let first_row = (((y - radius) / self.cell_size).floor() as isize).max(0) as usize;
+        let last_row = (((y + radius) / self.cell_size).floor() as isize)
+            .min(self.height_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if first_row > last_row {
             return Vec::new();
         }
 
-        let field_height = self.height_cells as f64 * self.cell_size;
-        let wrapped_y = y.rem_euclid(field_height);
         let radius_squared = radius * radius;
         let mut indices = Vec::new();
-        for row in 0..self.height_cells {
-            for col in min_col..=max_col {
+        for row in first_row..=last_row {
+            for &col in &cols {
                 let index = row * self.width_cells + col;
                 let (cell_x, cell_y) = self.cell_center(index);
-                let dx = cell_x - x;
-                let direct_dy = (cell_y - wrapped_y).abs();
-                let dy = direct_dy.min(field_height - direct_dy);
+                let direct_dx = (cell_x - wrapped_x).abs();
+                let dx = direct_dx.min(field_width - direct_dx);
+                let dy = (cell_y - y).abs();
                 if dx * dx + dy * dy <= radius_squared {
                     indices.push(index);
                 }
@@ -190,8 +203,9 @@ impl ActiveMaterialField {
     }
 
     /// Return field cells whose spatial bounds intersect the supplied
-    /// axis-aligned bounds. Horizontal coordinates remain bounded; vertical
-    /// coordinates wrap continuously from top to bottom.
+    /// bounds. Horizontal coordinates wrap; vertical coordinates are bounded.
+    /// Legacy organism/body query: horizontal coordinates are bounded while
+    /// vertical rows wrap. Environmental chemistry uses the periodic query below.
     pub(crate) fn cells_intersecting_bounds(
         &self,
         min_x: f64,
@@ -295,6 +309,64 @@ impl ActiveMaterialField {
             } else {
                 (row_start + row_offset as isize).rem_euclid(self.height_cells as isize) as usize
             };
+            indices.push(row * self.width_cells + col);
+        }
+        indices
+    }
+
+    pub(crate) fn cells_intersecting_bounds_periodic_limited(
+        &self,
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+        limit: usize,
+        start_offset: usize,
+    ) -> Vec<usize> {
+        if limit == 0
+            || !min_x.is_finite()
+            || !max_x.is_finite()
+            || !min_y.is_finite()
+            || !max_y.is_finite()
+            || min_x > max_x
+            || min_y > max_y
+            || self.width_cells == 0
+            || self.height_cells == 0
+        {
+            return Vec::new();
+        }
+        let field_height = self.height_cells as f64 * self.cell_size;
+        if max_y < 0.0 || min_y >= field_height {
+            return Vec::new();
+        }
+        let first_col = (min_x / self.cell_size).floor() as isize;
+        let last_col = (max_x / self.cell_size).floor() as isize;
+        let col_count = last_col.saturating_sub(first_col).saturating_add(1) as usize;
+        let cols: Vec<usize> = if col_count >= self.width_cells {
+            (0..self.width_cells).collect()
+        } else {
+            (0..col_count)
+                .map(|offset| {
+                    (first_col + offset as isize).rem_euclid(self.width_cells as isize) as usize
+                })
+                .collect()
+        };
+        let first_row = ((min_y / self.cell_size).floor() as isize).max(0) as usize;
+        let last_row = ((max_y / self.cell_size).floor() as isize)
+            .min(self.height_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if first_row > last_row || cols.is_empty() {
+            return Vec::new();
+        }
+        let candidate_rows = last_row - first_row + 1;
+        let total = candidate_rows.saturating_mul(cols.len());
+        let count = limit.min(total);
+        let start = start_offset % total;
+        let mut indices = Vec::with_capacity(count);
+        for offset in 0..count {
+            let linear = start.wrapping_add(offset) % total;
+            let row = first_row + linear / cols.len();
+            let col = cols[linear % cols.len()];
             indices.push(row * self.width_cells + col);
         }
         indices
@@ -642,23 +714,19 @@ impl ActiveMaterialField {
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
-        let above = if row == 0 {
-            self.height_cells.saturating_sub(1)
-        } else {
-            row - 1
-        };
-        let below = if row + 1 == self.height_cells {
-            0
-        } else {
-            row + 1
-        };
-        out.push(above * self.width_cells + col);
-        out.push(below * self.width_cells + col);
-        if col > 0 {
-            out.push(row * self.width_cells + (col - 1));
+        if row > 0 {
+            out.push((row - 1) * self.width_cells + col);
         }
-        if col + 1 < self.width_cells {
-            out.push(row * self.width_cells + (col + 1));
+        if row + 1 < self.height_cells {
+            out.push((row + 1) * self.width_cells + col);
+        }
+        if self.width_cells > 1 {
+            let left = row * self.width_cells + (col + self.width_cells - 1) % self.width_cells;
+            let right = row * self.width_cells + (col + 1) % self.width_cells;
+            out.push(left);
+            if right != left {
+                out.push(right);
+            }
         }
         out
     }

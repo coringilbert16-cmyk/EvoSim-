@@ -160,13 +160,15 @@ impl ResonantEnergyReservoir {
             || reaction_frequency_cycles_per_day <= 0.0
             || !max_energy.is_finite()
             || max_energy <= 0.0
-            || self.total_energy().is_none()
         {
             return 0.0;
         }
+        let Some(before_energy) = self.total_energy() else {
+            return 0.0;
+        };
         let mut remaining = max_energy;
-        let mut withdrawn = 0.0;
-        for component in &mut self.components {
+        let mut last_withdrawn_index = None;
+        for (index, component) in self.components.iter_mut().enumerate() {
             if remaining <= f64::EPSILON {
                 break;
             }
@@ -179,12 +181,43 @@ impl ResonantEnergyReservoir {
             if take.is_finite() && take > 0.0 {
                 component.energy -= take;
                 remaining -= take;
-                withdrawn += take;
+                last_withdrawn_index = Some(index);
             }
+        }
+
+        let Some(mut after_energy) = self.total_energy() else {
+            return 0.0;
+        };
+        let mut actual_withdrawal = before_energy - after_energy;
+        // The sum of component deltas can round slightly above the requested
+        // budget. Restore that overrun to the last touched component so the
+        // reservoir itself never loses more than the caller authorized.
+        if actual_withdrawal > max_energy {
+            let Some(index) = last_withdrawn_index else {
+                return 0.0;
+            };
+            let mut corrections = 0;
+            while actual_withdrawal > max_energy && corrections < 64 {
+                let energy = self.components[index].energy;
+                let restored = f64::from_bits(energy.to_bits() + 1);
+                if !restored.is_finite() {
+                    return 0.0;
+                }
+                self.components[index].energy = restored;
+                after_energy = self.total_energy().unwrap_or(f64::NAN);
+                actual_withdrawal = before_energy - after_energy;
+                corrections += 1;
+            }
+        }
+        if !actual_withdrawal.is_finite()
+            || actual_withdrawal < 0.0
+            || actual_withdrawal > max_energy
+        {
+            return 0.0;
         }
         self.components
             .retain(|component| component.energy > f64::EPSILON);
-        withdrawn
+        actual_withdrawal
     }
 }
 
@@ -1953,6 +1986,10 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        for unit in &mut structure.units {
+            unit.placement.x += 500.0;
+            unit.placement.y += 500.0;
+        }
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("confirmed seed must contain a genome cavity");
