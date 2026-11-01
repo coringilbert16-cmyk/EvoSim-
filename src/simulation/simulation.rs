@@ -2862,6 +2862,7 @@ mod decomposition_finalization_tests {
                 reproduction: 0.0,
                 development: 0.0,
             },
+            false,
         );
 
         assert!(!eligibility.can_move);
