@@ -68,7 +68,7 @@ impl RadialHotspot {
         }
         let dx =
             (x - self.center_x + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
-        self.intensity_at_distance(dx.hypot(y - self.center_y))
+        self.intensity_at(self.center_x + dx, y)
     }
 
     fn intensity_at_distance(self, distance: f64) -> Option<f64> {
