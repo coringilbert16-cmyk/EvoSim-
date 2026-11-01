@@ -950,7 +950,8 @@ impl Simulation {
             );
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
-                self.environmental_chemistry_diagnostics.break_committed_total += 1;
+                self.environmental_chemistry_diagnostics
+                    .break_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.break_rejected += 1;
             }
