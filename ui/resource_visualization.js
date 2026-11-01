@@ -49,7 +49,7 @@
   const sidebarContent = sidebar.querySelector('#ev-sidebar-content');
   const overviewContent = document.createElement('div');
   overviewContent.className = 'ev-overview';
-  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-note">The world view shows the live simulation. Select an organism to inspect its physical structure.</div>';
+  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE committed</small><strong id="ev-combine-count">0</strong></div><div><small>BREAK committed</small><strong id="ev-break-count">0</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
   const materialsContent = document.createElement('div');
   materialsContent.className = 'ev-materials';
   materialsContent.innerHTML = '<div class="ev-section-label">RESOURCE CATALOG</div><div class="ev-material-list" id="ev-material-list"><span class="ev-empty">Loading material palette…</span></div>';
@@ -139,12 +139,11 @@
       ? Math.max(1, part.resonance_frequency_cycles_per_day) : 440;
     const amplitude = Number.isFinite(part.resonance_amplitude)
       ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
-    const phase = Number.isFinite(part.resonance_phase_radians) ? part.resonance_phase_radians : 0;
     // Hue represents the material's natural resonant frequency; amplitude
     // controls brightness and aura strength. Phase contributes a small hue shift.
     const normalizedFrequency = Math.max(0, Math.min(1,
       (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
-    const hue = 200 + normalizedFrequency * 120 + Math.sin(phase) * 8;
+    const hue = 200 + normalizedFrequency * 120;
     const lightness = 42 + amplitude * 24;
     return {
       fill: `hsl(${hue} 88% ${lightness}%)`,
@@ -245,10 +244,29 @@
   }
 
 
+  function updateChemistryReadout(world) {
+    const events = Array.isArray(world?.chemistry_events) ? world.chemistry_events : [];
+    const committed = events.filter(event => event.outcome === 'committed');
+    const combine = committed.filter(event => event.reaction === 'COMBINE').length;
+    const breaking = committed.filter(event => event.reaction === 'BREAK').length;
+    const combineNode = document.getElementById('ev-combine-count');
+    const breakNode = document.getElementById('ev-break-count');
+    const lastNode = document.getElementById('ev-last-reaction');
+    if (combineNode) combineNode.textContent = String(combine);
+    if (breakNode) breakNode.textContent = String(breaking);
+    if (lastNode) {
+      const latest = committed[committed.length - 1];
+      lastNode.textContent = latest
+        ? `Last committed reaction: ${latest.reaction} at tick ${latest.tick}`
+        : 'No committed environmental reactions recorded yet';
+    }
+  }
+
   renderWorld = function resourceAwareWorldRender() {
     const world = worldPayload();
     const viewport = viewportSize();
     if (!world) return;
+    updateChemistryReadout(world);
     // Clip every world layer to the exact field boundary.
     const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
     const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
