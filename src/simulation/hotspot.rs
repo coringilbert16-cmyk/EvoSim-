@@ -58,11 +58,21 @@ impl RadialHotspot {
 
     /// Cosine falloff has zero slope at both the center and the outer edge.
     pub(crate) fn intensity_at(self, x: f64, y: f64) -> Option<f64> {
-        if !self.is_valid() || !x.is_finite() || !y.is_finite() {
+        self.intensity_at_distance((x - self.center_x).hypot(y - self.center_y))
+    }
+
+    /// Sample the same radial source on a horizontally periodic world.
+    pub(crate) fn intensity_at_wrapped(self, x: f64, y: f64, world_width: f64) -> Option<f64> {
+        if !world_width.is_finite() || world_width <= 0.0 || !x.is_finite() || !y.is_finite() {
             return None;
         }
-        let distance = (x - self.center_x).hypot(y - self.center_y);
-        if !distance.is_finite() {
+        let dx =
+            (x - self.center_x + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
+        self.intensity_at(self.center_x + dx, y)
+    }
+
+    fn intensity_at_distance(self, distance: f64) -> Option<f64> {
+        if !self.is_valid() || !distance.is_finite() {
             return None;
         }
         if distance >= self.radius {
@@ -171,7 +181,9 @@ pub(crate) fn settle_environment_inputs(
                 {
                     return false;
                 }
-                let Some(intensity) = hotspot.intensity_at(placement.x, placement.y) else {
+                let Some(intensity) =
+                    hotspot.intensity_at_wrapped(placement.x, placement.y, environment.width)
+                else {
                     return false;
                 };
                 if intensity <= f64::EPSILON {
@@ -328,6 +340,22 @@ mod tests {
             hotspot.intensity_at(hotspot.center_x + hotspot.radius * 1.1, hotspot.center_y),
             Some(0.0)
         );
+    }
+
+    #[test]
+    fn hotspot_intensity_wraps_across_the_horizontal_world_seam() {
+        let hotspot = RadialHotspot {
+            center_x: 5.0,
+            center_y: 50.0,
+            radius: 20.0,
+            peak_energy_per_tick_per_area: 100.0,
+            frequency_cycles_per_day: 440.0,
+        };
+        assert_eq!(
+            hotspot.intensity_at_wrapped(995.0, 50.0, 1000.0),
+            hotspot.intensity_at(15.0, 50.0)
+        );
+        assert_eq!(hotspot.intensity_at_wrapped(5.0, -0.1, 1000.0), Some(0.0));
     }
 
     #[test]
