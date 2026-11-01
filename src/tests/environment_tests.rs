@@ -237,7 +237,7 @@ fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commi
     assert!(!field.deposit_physical_batch(
         vec![
             (12.5, 12.5, make_carbon(12.5)),
-            (100.0, 12.5, make_carbon(37.5)),
+            (37.5, 100.0, make_carbon(37.5)),
         ],
         catalog,
     ));
@@ -551,8 +551,8 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     let invalid_hydrogen = PhysicalMaterial::realized(
         Material::free_base("Hydrogen", 1.0),
         vec![Placement {
-            x: 100.0,
-            y: 12.5,
+            x: 37.5,
+            y: 100.0,
             rotation_radians: 0.0,
         }],
         catalog,
