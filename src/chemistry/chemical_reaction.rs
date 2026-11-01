@@ -588,8 +588,30 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
+        let Some(resource_a) = hypothetical.units[unit_a]
+            .material
+            .parts
+            .first()
+            .and_then(|(name, _)| environment.catalog.iter().find(|resource| resource.name == *name))
         else {
+            continue;
+        };
+        let Some(resource_b) = hypothetical.units[unit_b]
+            .material
+            .parts
+            .first()
+            .and_then(|(name, _)| environment.catalog.iter().find(|resource| resource.name == *name))
+        else {
+            continue;
+        };
+        // A restored structural unit represents one original constituent.
+        // Read its chemical position from the base-resource catalog: the
+        // aggregate weighted-properties path intentionally clears positions
+        // so mixed molecules cannot acquire an artificial averaged identity.
+        let (Some(position_a), Some(position_b)) = (
+            resource_a.properties.chemical_position,
+            resource_b.properties.chemical_position,
+        ) else {
             continue;
         };
         let Some(candidate) = crate::contact::connection_pair_candidates_cached(
@@ -608,18 +630,8 @@ pub(crate) fn accumulate_environmental(
         }) else {
             continue;
         };
-        let geometry_material_a = hypothetical.units[unit_a]
-            .material
-            .parts
-            .first()
-            .map(|part| part.0.as_str())
-            .unwrap_or("unknown");
-        let geometry_material_b = hypothetical.units[unit_b]
-            .material
-            .parts
-            .first()
-            .map(|part| part.0.as_str())
-            .unwrap_or("unknown");
+        let geometry_material_a = resource_a.name.as_str();
+        let geometry_material_b = resource_b.name.as_str();
         let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
             geometry_material_a,
             &hypothetical.units[unit_a],
