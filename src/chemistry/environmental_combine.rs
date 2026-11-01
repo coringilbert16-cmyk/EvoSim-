@@ -915,6 +915,33 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
+    #[test]
+    fn environmental_combine_selects_the_nearest_horizontal_image() {
+        assert_eq!(nearest_horizontal_image_shift(995.0, 5.0, 1000.0), Some(1000.0));
+        assert_eq!(nearest_horizontal_image_shift(5.0, 995.0, 1000.0), Some(-1000.0));
+        assert_eq!(nearest_horizontal_image_shift(100.0, 125.0, 1000.0), Some(0.0));
+        assert!(nearest_horizontal_image_shift(0.0, 1.0, 0.0).is_none());
+
+        let catalog = crate::resources::default_catalog();
+        let material = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 5.0,
+                y: 50.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        let (mut structure, indices) = restored_source(
+            &material,
+            &crate::state::Simulation::new(17, 10.0).environment,
+        )
+        .expect("source should restore");
+        assert!(shift_restored_units_horizontally(&mut structure, &indices, 1000.0));
+        assert!((structure.units[indices[0]].placement.x - 1005.0).abs() < 1e-9);
+    }
+
     /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
