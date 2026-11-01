@@ -34,28 +34,33 @@ fn field_starts_empty() {
 }
 
 #[test]
-fn horizontal_bounds_remain_closed_while_vertical_positions_wrap() {
+fn horizontal_positions_wrap_while_vertical_positions_are_hard_bounded() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    assert!(field.index_for_position(-1.0, 5.0).is_none());
     assert_eq!(
-        field.index_for_position(5.0, 1000.0),
-        field.index_for_position(5.0, 0.0)
+        field.index_for_position(-1.0, 5.0),
+        field.index_for_position(999.0, 5.0)
     );
     assert_eq!(
-        field.index_for_position(5.0, -0.1),
-        field.index_for_position(5.0, 999.9)
+        field.index_for_position(1000.0, 5.0),
+        field.index_for_position(0.0, 5.0)
     );
-    assert!(field.index_for_position(1000.0, 5.0).is_none());
+    assert!(field.index_for_position(5.0, 1000.0).is_none());
+    assert!(field.index_for_position(5.0, -0.1).is_none());
     assert!(field.index_for_position(f64::NAN, 5.0).is_none());
 }
 
 #[test]
-fn vertical_neighbors_wrap_from_top_to_bottom() {
+fn horizontal_neighbors_wrap_but_vertical_neighbors_stop_at_walls() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
-    let top = field.index_for_position(37.5, 12.5).unwrap();
-    let bottom = field.index_for_position(37.5, 87.5).unwrap();
-    assert!(field.neighbor_indices(top).contains(&bottom));
-    assert!(field.neighbor_indices(bottom).contains(&top));
+    let top = field.index_for_position(12.5, 12.5).unwrap();
+    let bottom = field.index_for_position(12.5, 87.5).unwrap();
+    assert!(!field.neighbor_indices(top).contains(&bottom));
+    assert!(!field.neighbor_indices(bottom).contains(&top));
+
+    let left = field.index_for_position(12.5, 37.5).unwrap();
+    let right = field.index_for_position(87.5, 37.5).unwrap();
+    assert!(field.neighbor_indices(left).contains(&right));
+    assert!(field.neighbor_indices(right).contains(&left));
 }
 
 #[test]
@@ -96,7 +101,9 @@ fn cells_within_radius_handles_grid_edges_and_invalid_input() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let cells = field.cells_within_radius(0.0, 0.0, 20.0);
     assert!(cells.contains(&0));
-    assert!(cells.iter().all(|&i| i < field.cells.len()));
+    assert!(cells.contains(&3), "the radius query must see across the horizontal seam");
+    assert!(cells.iter().all(|&i| i < field.width_cells));
+
     assert!(field.cells_within_radius(f64::NAN, 0.0, 10.0).is_empty());
     assert!(field.cells_within_radius(0.0, 0.0, -1.0).is_empty());
 }
