@@ -140,7 +140,7 @@
     const amplitude = Number.isFinite(part.resonance_amplitude)
       ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
     // Hue represents the material's natural resonant frequency; amplitude
-    // controls brightness and aura strength. Phase contributes a small hue shift.
+    // controls brightness and aura strength.
     const normalizedFrequency = Math.max(0, Math.min(1,
       (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
     const hue = 200 + normalizedFrequency * 120;
@@ -244,18 +244,30 @@
   }
 
 
+  const chemistryReadout = { lastTick: null, combine: 0, breaking: 0, latest: null };
   function updateChemistryReadout(world) {
+    const tick = world?.chemistry_diagnostics?.tick;
+    if (!Number.isFinite(tick) || tick === chemistryReadout.lastTick) return;
+    if (chemistryReadout.lastTick !== null && tick < chemistryReadout.lastTick) {
+      chemistryReadout.combine = 0;
+      chemistryReadout.breaking = 0;
+      chemistryReadout.latest = null;
+    }
     const events = Array.isArray(world?.chemistry_events) ? world.chemistry_events : [];
-    const committed = events.filter(event => event.outcome === 'committed');
-    const combine = committed.filter(event => event.reaction === 'COMBINE').length;
-    const breaking = committed.filter(event => event.reaction === 'BREAK').length;
+    for (const event of events) {
+      if (event.outcome !== 'committed') continue;
+      if (event.reaction === 'COMBINE') chemistryReadout.combine += 1;
+      if (event.reaction === 'BREAK') chemistryReadout.breaking += 1;
+      chemistryReadout.latest = event;
+    }
+    chemistryReadout.lastTick = tick;
     const combineNode = document.getElementById('ev-combine-count');
     const breakNode = document.getElementById('ev-break-count');
     const lastNode = document.getElementById('ev-last-reaction');
-    if (combineNode) combineNode.textContent = String(combine);
-    if (breakNode) breakNode.textContent = String(breaking);
+    if (combineNode) combineNode.textContent = String(chemistryReadout.combine);
+    if (breakNode) breakNode.textContent = String(chemistryReadout.breaking);
     if (lastNode) {
-      const latest = committed[committed.length - 1];
+      const latest = chemistryReadout.latest;
       lastNode.textContent = latest
         ? `Last committed reaction: ${latest.reaction} at tick ${latest.tick}`
         : 'No committed environmental reactions recorded yet';
