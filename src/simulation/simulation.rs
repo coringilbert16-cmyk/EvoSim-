@@ -3434,35 +3434,16 @@ mod decomposition_finalization_tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
-        simulation
-            .environmental_chemistry_diagnostics
-            .combine_committed_total = 17;
-        simulation
-            .environmental_chemistry_diagnostics
-            .break_committed_total = 4;
+        simulation.environmental_chemistry_diagnostics.combine_committed_total = 17;
+        simulation.environmental_chemistry_diagnostics.break_committed_total = 4;
 
         simulation.step();
 
-        assert_eq!(
-            simulation
-                .environmental_chemistry_diagnostics
-                .combine_committed_total,
-            17
-        );
-        assert_eq!(
-            simulation
-                .environmental_chemistry_diagnostics
-                .break_committed_total,
-            4
-        );
-        assert_eq!(
-            simulation.environmental_chemistry_diagnostics.combine_committed,
-            0
-        );
-        assert_eq!(
-            simulation.environmental_chemistry_diagnostics.break_committed,
-            0
-        );
+        let diagnostics = simulation.environmental_chemistry_diagnostics;
+        assert_eq!(diagnostics.combine_committed_total, 17);
+        assert_eq!(diagnostics.break_committed_total, 4);
+        assert_eq!(diagnostics.combine_committed, 0);
+        assert_eq!(diagnostics.break_committed, 0);
     }
 
     #[test]
