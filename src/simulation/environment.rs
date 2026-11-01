@@ -204,63 +204,7 @@ impl ActiveMaterialField {
 
     /// Return field cells whose spatial bounds intersect the supplied
     /// bounds. Horizontal coordinates wrap; vertical coordinates are bounded.
-    pub(crate) fn cells_intersecting_bounds(
-        &self,
-        min_x: f64,
-        max_x: f64,
-        min_y: f64,
-        max_y: f64,
-    ) -> Vec<usize> {
-        if !min_x.is_finite()
-            || !max_x.is_finite()
-            || !min_y.is_finite()
-            || !max_y.is_finite()
-            || min_x > max_x
-            || min_y > max_y
-            || self.width_cells == 0
-            || self.height_cells == 0
-        {
-            return Vec::new();
-        }
-        let field_height = self.height_cells as f64 * self.cell_size;
-        if max_y < 0.0 || min_y >= field_height {
-            return Vec::new();
-        }
-        let first_col = (min_x / self.cell_size).floor() as isize;
-        let last_col = (max_x / self.cell_size).floor() as isize;
-        let col_count = last_col.saturating_sub(first_col).saturating_add(1) as usize;
-        let cols: Vec<usize> = if col_count >= self.width_cells {
-            (0..self.width_cells).collect()
-        } else {
-            (0..col_count)
-                .map(|offset| {
-                    (first_col + offset as isize).rem_euclid(self.width_cells as isize) as usize
-                })
-                .collect()
-        };
-        let first_row = ((min_y / self.cell_size).floor() as isize).max(0) as usize;
-        let last_row = ((max_y / self.cell_size).floor() as isize)
-            .min(self.height_cells.saturating_sub(1) as isize)
-            .max(0) as usize;
-        if first_row > last_row {
-            return Vec::new();
-        }
-        let mut indices = Vec::with_capacity((last_row - first_row + 1) * cols.len());
-        for row in first_row..=last_row {
-            for &col in &cols {
-                indices.push(row * self.width_cells + col);
-            }
-        }
-        indices
-    }
-
-    /// Return at most `limit` cells intersecting the supplied bounds without
-    /// materializing the full spatial query. `start_offset` rotates through the
-    /// deterministic row-major candidate sequence so bounded callers can make
-    /// progress across large bounds over successive ticks.
-    /// Legacy organism/body query: horizontal coordinates are bounded while
-    /// vertical rows wrap. Environmental chemistry uses the periodic query below.
-    pub(crate) fn cells_intersecting_bounds(
+    /// Legacy organism/body query: horizontal coordinates are bounded while\n    /// vertical rows wrap. Environmental chemistry uses the periodic query below.\n    pub(crate) fn cells_intersecting_bounds(
         &self,
         min_x: f64,
         max_x: f64,
