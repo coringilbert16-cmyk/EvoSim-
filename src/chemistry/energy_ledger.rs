@@ -887,12 +887,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // Do not manufacture extra heat to hide an unrepresentable transaction:
         // reject atomically if the resulting non-creating residual exceeds the
         // existing tolerance.
+        let actual_structural_delta = next_structural - self.total_structural_energy_delta;
         let actual_work_delta = next_work - self.total_work_expended;
         let actual_heat_delta = next_heat - self.total_heat_dissipated;
         let residual_for = |candidate_holder: f64| {
             let actual_usable_delta = candidate_holder - *holder;
             actual_usable_delta
-                + transaction.structural_delta
+                + actual_structural_delta
                 + actual_work_delta
                 + actual_heat_delta
         };
