@@ -707,10 +707,6 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.combine_scheduled > 0
             || diagnostics.combine_committed > 0
             || diagnostics.combine_rejected > 0
-            || diagnostics.transport_elapsed_micros > 0
-            || diagnostics.break_discovery_elapsed_micros > 0
-            || diagnostics.combine_discovery_elapsed_micros > 0
-            || diagnostics.reaction_settlement_elapsed_micros > 0
             || diagnostics.hotspot_settlement_succeeded == Some(false)
         {
             self.write_event(json!({
