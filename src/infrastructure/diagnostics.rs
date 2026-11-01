@@ -595,6 +595,14 @@ struct EnvironmentalChemistryDiagnosticTotals {
     combine_scheduled: u64,
     combine_committed: u64,
     combine_rejected: u64,
+    transport_elapsed_micros_total: u64,
+    break_discovery_elapsed_micros_total: u64,
+    combine_discovery_elapsed_micros_total: u64,
+    reaction_settlement_elapsed_micros_total: u64,
+    transport_elapsed_micros_max: u64,
+    break_discovery_elapsed_micros_max: u64,
+    combine_discovery_elapsed_micros_max: u64,
+    reaction_settlement_elapsed_micros_max: u64,
 }
 
 impl EnvironmentalChemistryDiagnosticsRecorder {
@@ -678,6 +686,18 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .combine_rejected
             .saturating_add(diagnostics.combine_rejected as u64);
+        self.totals.transport_elapsed_micros_total = self.totals.transport_elapsed_micros_total
+            .saturating_add(diagnostics.transport_elapsed_micros);
+        self.totals.break_discovery_elapsed_micros_total = self.totals.break_discovery_elapsed_micros_total
+            .saturating_add(diagnostics.break_discovery_elapsed_micros);
+        self.totals.combine_discovery_elapsed_micros_total = self.totals.combine_discovery_elapsed_micros_total
+            .saturating_add(diagnostics.combine_discovery_elapsed_micros);
+        self.totals.reaction_settlement_elapsed_micros_total = self.totals.reaction_settlement_elapsed_micros_total
+            .saturating_add(diagnostics.reaction_settlement_elapsed_micros);
+        self.totals.transport_elapsed_micros_max = self.totals.transport_elapsed_micros_max.max(diagnostics.transport_elapsed_micros);
+        self.totals.break_discovery_elapsed_micros_max = self.totals.break_discovery_elapsed_micros_max.max(diagnostics.break_discovery_elapsed_micros);
+        self.totals.combine_discovery_elapsed_micros_max = self.totals.combine_discovery_elapsed_micros_max.max(diagnostics.combine_discovery_elapsed_micros);
+        self.totals.reaction_settlement_elapsed_micros_max = self.totals.reaction_settlement_elapsed_micros_max.max(diagnostics.reaction_settlement_elapsed_micros);
 
         if diagnostics.break_ready_candidates > 0
             || diagnostics.break_scheduled > 0
@@ -687,6 +707,10 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.combine_scheduled > 0
             || diagnostics.combine_committed > 0
             || diagnostics.combine_rejected > 0
+            || diagnostics.transport_elapsed_micros > 0
+            || diagnostics.break_discovery_elapsed_micros > 0
+            || diagnostics.combine_discovery_elapsed_micros > 0
+            || diagnostics.reaction_settlement_elapsed_micros > 0
             || diagnostics.hotspot_settlement_succeeded == Some(false)
         {
             self.write_event(json!({
@@ -717,6 +741,20 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "combine_scheduled": self.totals.combine_scheduled,
             "combine_committed": self.totals.combine_committed,
             "combine_rejected": self.totals.combine_rejected,
+            "phase_timing_microseconds": {
+                "average_per_tick": {
+                    "transport": self.totals.transport_elapsed_micros_total / self.totals.ticks_observed.max(1),
+                    "break_discovery": self.totals.break_discovery_elapsed_micros_total / self.totals.ticks_observed.max(1),
+                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_total / self.totals.ticks_observed.max(1),
+                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_total / self.totals.ticks_observed.max(1)
+                },
+                "max_per_tick": {
+                    "transport": self.totals.transport_elapsed_micros_max,
+                    "break_discovery": self.totals.break_discovery_elapsed_micros_max,
+                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_max,
+                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_max
+                }
+            },
             "final_material_inventory": environmental_material_inventory(simulation),
             "final_physical_material_count": physical_material_count(simulation),
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
