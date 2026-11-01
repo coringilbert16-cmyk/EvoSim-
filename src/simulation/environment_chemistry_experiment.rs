@@ -148,16 +148,32 @@ fn randomized_pile_centers(
     rng: &mut ChaCha8Rng,
 ) -> Vec<(f64, f64)> {
     let mut centers = vec![(hotspot_x, hotspot_y)];
-    let mut attempts = 0;
-    while centers.len() < pile_count && attempts < 20_000 {
-        attempts += 1;
-        let candidate = (
-            rng.gen_range(width * 0.08..width * 0.92),
-            rng.gen_range(height * 0.08..height * 0.92),
-        );
+    // A jittered, shuffled grid guarantees broad coverage at the 10x
+    // population while retaining seeded, irregular pile placement.
+    let grid_side = 12_usize;
+    let spacing_x = width * 0.84 / grid_side as f64;
+    let spacing_y = height * 0.84 / grid_side as f64;
+    let mut candidates = Vec::with_capacity(grid_side * grid_side);
+    for row in 0..grid_side {
+        for col in 0..grid_side {
+            let x = width * 0.08
+                + (col as f64 + 0.5) * spacing_x
+                + rng.gen_range(-spacing_x * 0.12..=spacing_x * 0.12);
+            let y = height * 0.08
+                + (row as f64 + 0.5) * spacing_y
+                + rng.gen_range(-spacing_y * 0.12..=spacing_y * 0.12);
+            candidates.push((x, y));
+        }
+    }
+    candidates.shuffle(rng);
+    for candidate in candidates {
+        if centers.len() >= pile_count {
+            break;
+        }
         let separated = centers.iter().all(|(x, y)| {
-            let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-            (candidate.0 - *x).hypot(vertical) >= 70.0
+            let horizontal = (candidate.0 - *x + width * 0.5).rem_euclid(width) - width * 0.5;
+            let vertical = candidate.1 - *y;
+            horizontal.hypot(vertical) >= 48.0
         });
         if separated {
             centers.push(candidate);
