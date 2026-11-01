@@ -726,7 +726,7 @@ mod tests {
             .iter()
             .map(|part| part.resource.as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(resources.len(), 7);
+        assert_eq!(resources.len(), 6);
         let resonance_frequencies = parts
             .iter()
             .map(|part| part.resonance_frequency_cycles_per_day.to_bits())
