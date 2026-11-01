@@ -139,18 +139,9 @@
       ? Math.max(1, part.resonance_frequency_cycles_per_day) : 440;
     const amplitude = Number.isFinite(part.resonance_amplitude)
       ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
-    // Hue represents the material's natural resonant frequency; amplitude
-    // controls brightness and aura strength.
     const normalizedFrequency = Math.max(0, Math.min(1,
       (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
-    const hue = 200 + normalizedFrequency * 120;
-    const lightness = 42 + amplitude * 24;
-    return {
-      fill: `hsl(${hue} 88% ${lightness}%)`,
-      outline: `hsl(${hue} 95% ${Math.min(88, lightness + 18)}%)`,
-      amplitude,
-      hue
-    };
+    return { ...appearanceFor(part.resource), amplitude, hue: 200 + normalizedFrequency * 120 };
   }
 
   function drawPhysicalFieldPartAt(part, viewport, worldWidth, horizontalOffset) {
@@ -166,26 +157,9 @@
       ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
       : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
     const screenRadius = Math.max(1, radius * camera.scale);
-    const auraRadius = Math.max(7, Math.min(30, screenRadius * 5));
-    if (point.x < -auraRadius || point.y < -auraRadius ||
-        point.x > viewport.width + auraRadius || point.y > viewport.height + auraRadius) return;
-
-    // The aura is a read-only visualization of the oscillator response.
-    // It is deliberately drawn before the physical form and never feeds back
-    // into simulation state, energy, or movement.
-    if (appearance.amplitude > 0) {
-      const alpha = Math.min(0.34, 0.10 + appearance.amplitude * 0.24);
-      ctx.save();
-      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, auraRadius);
-      gradient.addColorStop(0, `hsla(${appearance.hue} 92% 68% / ${alpha})`);
-      gradient.addColorStop(0.42, `hsla(${appearance.hue} 92% 62% / ${alpha * 0.52})`);
-      gradient.addColorStop(1, `hsla(${appearance.hue} 92% 58% / 0)`);
-      ctx.fillStyle = gradient;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, auraRadius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
+    if (point.x < -screenRadius - 3 || point.y < -screenRadius - 3 ||
+        point.x > viewport.width + screenRadius + 3 ||
+        point.y > viewport.height + screenRadius + 3) return;
 
     ctx.save();
     ctx.translate(point.x, point.y);
@@ -209,6 +183,27 @@
         drawForm(part.form, 0, 0, part.rotation_radians, appearance);
       }
     }
+
+    if (appearance.amplitude > 0) {
+      const alpha = Math.min(0.9, 0.22 + appearance.amplitude * 0.68);
+      const auraColor = `hsla(${appearance.hue} 100% 78% / ${alpha})`;
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.scale(camera.scale * 1.025, camera.scale * 1.025);
+      if (fluid) {
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
+        ctx.stroke();
+      } else {
+        drawForm(part.form, 0, 0, part.rotation_radians, {
+          fill: 'rgba(0, 0, 0, 0)',
+          outline: auraColor
+        });
+      }
+      ctx.restore();
+    }
     ctx.restore();
   }
 
@@ -222,7 +217,7 @@
     // Only draw the opposite-side copy when the element's 30px maximum aura
     // could cross the seam. This keeps the 10x denser field inexpensive.
     if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
-    const seamMargin = 30 / Math.max(camera.scale, 1e-6) + 2;
+    const seamMargin = 3 / Math.max(camera.scale, 1e-6) + 2;
     if (wrappedX < seamMargin) {
       drawPhysicalFieldPartAt(part, viewport, worldWidth, worldWidth);
     }
