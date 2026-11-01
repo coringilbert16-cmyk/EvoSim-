@@ -50,6 +50,18 @@ fn horizontal_positions_wrap_while_vertical_positions_are_hard_bounded() {
 }
 
 #[test]
+fn spatial_bounds_queries_wrap_horizontally_and_clip_vertically() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let indices = field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 25.0);
+    assert_eq!(indices, vec![4, 7]);
+    assert!(field.cells_intersecting_bounds(-5.0, 5.0, -20.0, -1.0).is_empty());
+    assert!(field.cells_intersecting_bounds(-5.0, 5.0, 100.0, 110.0).is_empty());
+
+    let limited = field.cells_intersecting_bounds_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
+    assert_eq!(limited, vec![4, 7]);
+}
+
+#[test]
 fn horizontal_neighbors_wrap_but_vertical_neighbors_stop_at_walls() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let top = field.index_for_position(12.5, 12.5).unwrap();
