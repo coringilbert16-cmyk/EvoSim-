@@ -1905,19 +1905,24 @@ impl Simulation {
     /// Signed potential stored in realized physical bonds owned by the field.
     /// Old field bonds deserialize with zero energy rather than inventing a source.
     fn environmental_structural_energy_held(environment: &Environment) -> f64 {
-        environment
-            .field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| {
-                material
-                    .internal_connections
-                    .as_ref()
-                    .map(|bonds| bonds.iter().map(|bond| -bond.bond_energy).sum::<f64>())
-                    .unwrap_or(f64::NAN)
-            })
-            .sum()
+        crate::energy_ledger::compensated_sum(
+            environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .map(|material| {
+                    material
+                        .internal_connections
+                        .as_ref()
+                        .map(|bonds| {
+                            crate::energy_ledger::compensated_sum(
+                                bonds.iter().map(|bond| -bond.bond_energy),
+                            )
+                        })
+                        .unwrap_or(f64::NAN)
+                }),
+        )
     }
     /// Independent diagnostic oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
