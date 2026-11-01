@@ -268,19 +268,9 @@ impl ConnectionEndpoint {
         catalog: &[BaseResource],
     ) -> Option<WorldConnectionPoint> {
         match self {
-            Self::Corner { point_index } => {
+            Self::Corner { point_index } | Self::LineEndpoint { point_index } => {
                 let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_polygon_vertex(
-                    shape,
-                    point_index,
-                    unit.placement.x,
-                    unit.placement.y,
-                    unit.placement.rotation_radians,
-                )
-            }
-            Self::LineEndpoint { point_index } => {
-                let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
+                crate::connection_geometry::rigid_endpoint_world_point(
                     shape,
                     point_index,
                     unit.placement.x,
