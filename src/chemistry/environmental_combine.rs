@@ -501,16 +501,18 @@ pub(crate) fn accumulate_environmental(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
-            let target_cells = environment.field.cells_intersecting_bounds_periodic_limited(
-                body.min_x - BOUNDS_PADDING,
-                body.max_x + BOUNDS_PADDING,
-                body.min_y - BOUNDS_PADDING,
-                body.max_y + BOUNDS_PADDING,
-                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
-                (tick as usize)
-                    .wrapping_add(cell_a)
-                    .wrapping_add(material_a),
-            );
+            let target_cells = environment
+                .field
+                .cells_intersecting_bounds_periodic_limited(
+                    body.min_x - BOUNDS_PADDING,
+                    body.max_x + BOUNDS_PADDING,
+                    body.min_y - BOUNDS_PADDING,
+                    body.max_y + BOUNDS_PADDING,
+                    FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
+                    (tick as usize)
+                        .wrapping_add(cell_a)
+                        .wrapping_add(material_a),
+                );
             for target_offset in 0..target_cells.len() {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
