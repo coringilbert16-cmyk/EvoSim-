@@ -861,7 +861,8 @@ impl Simulation {
             self.environment.width,
             self.environment.height,
         );
-        self.environmental_chemistry_diagnostics.transport_elapsed_micros = transport_started
+        self.environmental_chemistry_diagnostics
+            .transport_elapsed_micros = transport_started
             .elapsed()
             .as_micros()
             .min(u64::MAX as u128) as u64;
@@ -910,11 +911,11 @@ impl Simulation {
             self.tick,
             &mut environmental_break_discovery_remaining,
         );
-        self.environmental_chemistry_diagnostics.break_discovery_elapsed_micros =
-            break_discovery_started
-                .elapsed()
-                .as_micros()
-                .min(u64::MAX as u128) as u64;
+        self.environmental_chemistry_diagnostics
+            .break_discovery_elapsed_micros = break_discovery_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics
@@ -930,11 +931,11 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
             );
-        self.environmental_chemistry_diagnostics.combine_discovery_elapsed_micros =
-            combine_discovery_started
-                .elapsed()
-                .as_micros()
-                .min(u64::MAX as u128) as u64;
+        self.environmental_chemistry_diagnostics
+            .combine_discovery_elapsed_micros = combine_discovery_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
@@ -1103,11 +1104,11 @@ impl Simulation {
             );
         }
 
-        self.environmental_chemistry_diagnostics.reaction_settlement_elapsed_micros =
-            reaction_settlement_started
-                .elapsed()
-                .as_micros()
-                .min(u64::MAX as u128) as u64;
+        self.environmental_chemistry_diagnostics
+            .reaction_settlement_elapsed_micros = reaction_settlement_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
 
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
