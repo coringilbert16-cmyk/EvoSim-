@@ -2899,9 +2899,9 @@ mod decomposition_finalization_tests {
             .expect("the test simulation must have a valid world-tone sample");
         let capture_living_ids: HashSet<String> = capture_only
             .organisms
-            .iter()
+            .iter_mut()
             .filter(|organism| {
-                Simulation::has_intact_genome_core(organism, &capture_only.environment.catalog)
+                Simulation::has_intact_genome_core(*organism, &capture_only.environment.catalog)
             })
             .map(|organism| organism.id.clone())
             .collect();
