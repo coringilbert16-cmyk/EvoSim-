@@ -602,6 +602,10 @@ struct EnvironmentalChemistryDiagnosticTotals {
     transport_elapsed_micros_max: u64,
     break_discovery_elapsed_micros_max: u64,
     combine_discovery_elapsed_micros_max: u64,
+    combine_discovery_elapsed_micros_max_tick: u64,
+    combine_discovery_max_ready_candidates: usize,
+    combine_discovery_max_work_remaining: usize,
+    combine_discovery_max_accumulation_entries: usize,
     reaction_settlement_elapsed_micros_max: u64,
 }
 
@@ -710,10 +714,19 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .break_discovery_elapsed_micros_max
             .max(diagnostics.break_discovery_elapsed_micros);
-        self.totals.combine_discovery_elapsed_micros_max = self
-            .totals
-            .combine_discovery_elapsed_micros_max
-            .max(diagnostics.combine_discovery_elapsed_micros);
+        if diagnostics.combine_discovery_elapsed_micros
+            > self.totals.combine_discovery_elapsed_micros_max
+        {
+            self.totals.combine_discovery_elapsed_micros_max =
+                diagnostics.combine_discovery_elapsed_micros;
+            self.totals.combine_discovery_elapsed_micros_max_tick = diagnostics.tick;
+            self.totals.combine_discovery_max_ready_candidates =
+                diagnostics.combine_ready_candidates;
+            self.totals.combine_discovery_max_work_remaining =
+                diagnostics.combine_discovery_work_remaining;
+            self.totals.combine_discovery_max_accumulation_entries =
+                diagnostics.accumulation_entries;
+        }
         self.totals.reaction_settlement_elapsed_micros_max = self
             .totals
             .reaction_settlement_elapsed_micros_max
@@ -773,6 +786,12 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                     "break_discovery": self.totals.break_discovery_elapsed_micros_max,
                     "combine_discovery": self.totals.combine_discovery_elapsed_micros_max,
                     "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_max
+                },
+                "combine_discovery_max_context": {
+                    "tick": self.totals.combine_discovery_elapsed_micros_max_tick,
+                    "ready_candidates": self.totals.combine_discovery_max_ready_candidates,
+                    "work_remaining": self.totals.combine_discovery_max_work_remaining,
+                    "accumulation_entries": self.totals.combine_discovery_max_accumulation_entries
                 }
             },
             "final_material_inventory": environmental_material_inventory(simulation),
