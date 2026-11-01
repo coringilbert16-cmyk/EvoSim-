@@ -422,7 +422,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let up = obstacle_adjusted_velocity(
             background_velocity(center_x, center_y + epsilon, width, height),
@@ -431,7 +431,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let down = obstacle_adjusted_velocity(
             background_velocity(center_x, center_y - epsilon, width, height),
@@ -440,7 +440,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
         let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
