@@ -20,6 +20,8 @@ This index is the entry point for repository documentation. It classifies docume
 
 ## Chemistry and material handling
 
+- [Chemistry performance research](chemistry-performance-research.md) — comparable particle simulators, spatial candidate-search techniques, cache/data-layout strategies, profiling references, and EvoSim correctness guardrails.
+- [Chemistry optimization baseline](chemistry-optimization-baseline.md) — measured starting point, Clippy inventory, and invariants for PR #259.
 - Chemistry implementation and authority are documented in the source tree and current README; use the focused code/audit before making claims about conservation.
 - [Fluid coalescence transaction](fluid-coalescence-transaction.md) also covers material-state changes that cross geometry and chemistry boundaries.
 
