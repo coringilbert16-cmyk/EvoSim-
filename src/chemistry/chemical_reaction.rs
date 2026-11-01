@@ -1182,6 +1182,79 @@ mod material_identity_tests {
             &simulation.environment.catalog,
         ));
 
+        let (discovered, _) = discover_environmental_bonds(
+            &simulation.environment,
+            0,
+            MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+        );
+        assert!(
+            discovered.contains(&(cell_index, 0, 0)),
+            "the restored environmental bond must enter bounded discovery"
+        );
+        let instance = &simulation.environment.field.cells[cell_index].physical_materials[0];
+        let connection = instance.internal_connections.as_ref().unwrap()[0];
+        let mut hypothetical = crate::structure::OrganismStructure::new();
+        let restored_indices = crate::material_restoration::restore_material(
+            &mut hypothetical,
+            instance,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &simulation.environment.catalog,
+        )
+        .expect("the realized Carbon-Hydrogen bond must restore before discovery");
+        let unit_a = restored_indices[connection.part_a];
+        let unit_b = restored_indices[connection.part_b];
+        let candidate = crate::contact::connection_pair_candidates(
+            &hypothetical,
+            unit_a,
+            unit_b,
+            &simulation.environment.catalog,
+        )
+        .into_iter()
+        .find(|candidate| {
+            (candidate.endpoint_a == connection.endpoint_a
+                && candidate.endpoint_b == connection.endpoint_b)
+                || (candidate.endpoint_a == connection.endpoint_b
+                    && candidate.endpoint_b == connection.endpoint_a)
+        })
+        .expect("the restored bond endpoints must resolve to a live contact");
+        assert!(candidate.distance <= crate::chemistry::CHEMICAL_CONTACT_RADIUS);
+        assert!(candidate.facing > 0.0, "the facing endpoints must engage");
+        let properties_a = hypothetical.units[unit_a]
+            .properties(&simulation.environment.catalog)
+            .unwrap();
+        let properties_b = hypothetical.units[unit_b]
+            .properties(&simulation.environment.catalog)
+            .unwrap();
+        let potential = crate::chemistry::interaction_potential(
+            properties_a.chemical_position.unwrap(),
+            properties_b.chemical_position.unwrap(),
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+        )
+        .unwrap();
+        let contact = crate::chemistry::contact_factor(
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        )
+        .unwrap();
+        let engagement = crate::chemistry::interface_engagement(candidate.facing).unwrap();
+        let initial_progress = crate::chemistry::accumulate_reaction(
+            0.0,
+            potential,
+            contact,
+            engagement,
+            crate::chemistry::CHEMICAL_DISSIPATION,
+        )
+        .unwrap();
+        assert!(
+            initial_progress > 0.0,
+            "the realized Carbon-Hydrogen contact must accumulate positive BREAK activation"
+        );
+
         let mut accumulation = std::collections::BTreeMap::new();
         let mut max_accumulated = 0.0_f64;
         let mut ready = false;
