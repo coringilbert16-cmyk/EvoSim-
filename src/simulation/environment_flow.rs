@@ -838,6 +838,42 @@ mod tests {
     }
 
     #[test]
+    fn environmental_transport_crosses_the_horizontal_seam_without_relocation_loss() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 999.99,
+                y: 500.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        let source = field.index_for_position(999.99, 500.0).unwrap();
+        assert!(field.deposit_physical(999.99, 500.0, material, &catalog));
+
+        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(objects.len(), 1);
+        let placement = &objects[0].placements.as_ref().unwrap()[0];
+        assert!(placement.x >= 1000.0, "the element should cross the right edge");
+        let destination = field.index_for_position(placement.x, placement.y).unwrap();
+        assert_ne!(destination, source);
+        assert_eq!(
+            destination,
+            field.index_for_position(placement.x - 1000.0, placement.y).unwrap()
+        );
+        assert_eq!(field.total_material(), vec![("Carbon".to_string(), 1.0)]);
+    }
+
+    #[test]
     fn horizontal_boundary_wraps_complete_compounds_without_changing_geometry() {
         let catalog = crate::resources::default_catalog();
         let material = PhysicalMaterial::realized(
