@@ -940,7 +940,7 @@ mod tests {
 
         let moved = translated(&material, 0.5, 0.0, 1000.0, &catalog).unwrap();
         let placements = moved.placements.as_ref().unwrap();
-        assert!(placements.iter().all(|p| p.x >= 999.0 && p.x > 0.0));
+        assert!(placements.iter().all(|p| p.x >= 999.0));
         assert!(placements.iter().any(|p| p.x >= 1000.0));
         assert_eq!(
             ActiveMaterialField::new(1000.0, 1000.0, 25.0)
