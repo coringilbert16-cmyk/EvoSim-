@@ -254,10 +254,17 @@ mod tests {
             runtime.record_tick();
         }
 
+        // Add a nearby checkpoint so this history-management test exercises
+        // one authoritative replay tick rather than running 50 full chemistry
+        // ticks merely to test checkpoint selection and future-history removal.
+        let mut nearby_checkpoint = runtime.history.back().unwrap().clone();
+        nearby_checkpoint.tick = 249;
+        runtime.history.push_back(nearby_checkpoint);
+
         assert!(runtime.restore_tick(250));
         assert_eq!(runtime.simulation.tick, 250);
         assert!(!runtime.simulation.running);
-        assert_eq!(runtime.history_ticks(), vec![0, 100, 200, 250]);
+        assert_eq!(runtime.history_ticks(), vec![0, 100, 200, 249, 250]);
         assert!(!runtime.restore_tick(500));
     }
 }

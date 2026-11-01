@@ -31,7 +31,7 @@
   worldColumn.className = 'ev-world-column';
   const worldToolbar = document.createElement('div');
   worldToolbar.className = 'ev-world-toolbar';
-  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
+  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span id="ev-sunlight-level" class="ev-sunlight-level">SUNLIGHT 100%</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
   const cameraControls = document.createElement('span');
   cameraControls.className = 'ev-camera-controls';
   cameraControls.innerHTML = '<button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit world" title="Fit current view">Fit</button>';
@@ -49,7 +49,7 @@
   const sidebarContent = sidebar.querySelector('#ev-sidebar-content');
   const overviewContent = document.createElement('div');
   overviewContent.className = 'ev-overview';
-  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-note">The world view shows the live simulation. Select an organism to inspect its physical structure.</div>';
+  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE ready / scheduled / total committed</small><strong id="ev-combine-count">0 ready / 0 scheduled / 0 total</strong></div><div><small>BREAK ready / scheduled / total committed</small><strong id="ev-break-count">0 ready / 0 scheduled / 0 total</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
   const materialsContent = document.createElement('div');
   materialsContent.className = 'ev-materials';
   materialsContent.innerHTML = '<div class="ev-section-label">RESOURCE CATALOG</div><div class="ev-material-list" id="ev-material-list"><span class="ev-empty">Loading material palette…</span></div>';
@@ -77,26 +77,18 @@
     const list = document.getElementById('ev-material-list');
     if (!list) return;
     list.replaceChildren();
-    const entries = [...paletteState.resources.entries()].sort(([a], [b]) => a.localeCompare(b));
-    if (!entries.length) {
-      const empty = document.createElement('span');
-      empty.className = 'ev-empty';
-      empty.textContent = 'No material palette available';
-      list.append(empty);
-      return;
-    }
-    for (const [name, appearance] of entries) {
-      const row = document.createElement('div');
-      row.className = 'ev-material-row';
-      const swatch = document.createElement('span');
-      swatch.className = 'ev-material-swatch';
-      swatch.style.background = appearance.fill || '#888';
-      swatch.style.borderColor = appearance.outline || '#666';
-      const label = document.createElement('span');
-      label.textContent = name;
-      row.append(swatch, label);
-      list.append(row);
-    }
+    const heading = document.createElement('div');
+    heading.className = 'ev-note';
+    heading.textContent = 'Material fill identifies the resource. The thin boundary aura uses natural resonance frequency for hue and oscillator response amplitude for strength.';
+    const scale = document.createElement('div');
+    scale.style.height = '14px';
+    scale.style.borderRadius = '999px';
+    scale.style.margin = '12px 0 6px';
+    scale.style.background = 'linear-gradient(90deg, hsl(200 90% 62%), hsl(240 90% 62%), hsl(280 90% 62%), hsl(320 90% 62%))';
+    const labels = document.createElement('div');
+    labels.className = 'ev-material-row';
+    labels.innerHTML = '<span>Lower natural frequency</span><span>Higher natural frequency</span>';
+    list.append(heading, scale, labels);
   }
 
   async function refreshWorkspaceMetrics() {
@@ -142,24 +134,38 @@
     return best?.name || null;
   }
 
-  function drawPhysicalFieldPart(part, viewport) {
-    const appearance = appearanceFor(part.resource);
+  function resonanceAppearance(part) {
+    const frequency = Number.isFinite(part.resonance_frequency_cycles_per_day)
+      ? Math.max(1, part.resonance_frequency_cycles_per_day) : 440;
+    const amplitude = Number.isFinite(part.resonance_amplitude)
+      ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
+    const normalizedFrequency = Math.max(0, Math.min(1,
+      (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
+    return { ...appearanceFor(part.resource), amplitude, hue: 200 + normalizedFrequency * 120 };
+  }
+
+  function drawPhysicalFieldPartAt(part, viewport, worldWidth, horizontalOffset) {
+    const appearance = resonanceAppearance(part);
     const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
-    const point = camera.worldToScreen(displayPosition.x, displayPosition.y, viewport.width, viewport.height);
+    const wrappedX = Number.isFinite(worldWidth) && worldWidth > 0
+      ? displayPosition.x - Math.floor(displayPosition.x / worldWidth) * worldWidth
+      : displayPosition.x;
+    const point = camera.worldToScreen(wrappedX + horizontalOffset, displayPosition.y, viewport.width, viewport.height);
     const fluid = part.form?.Fluid;
     const localBounds = formBounds(part.form, 0, 0, part.rotation_radians);
     const radius = localBounds
       ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
       : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
     const screenRadius = Math.max(1, radius * camera.scale);
-    if (point.x < -screenRadius || point.y < -screenRadius ||
-        point.x > viewport.width + screenRadius || point.y > viewport.height + screenRadius) return;
+    if (point.x < -screenRadius - 3 || point.y < -screenRadius - 3 ||
+        point.x > viewport.width + screenRadius + 3 ||
+        point.y > viewport.height + screenRadius + 3) return;
 
     ctx.save();
     ctx.translate(point.x, point.y);
     if (radius * camera.scale < 2.25) {
       ctx.fillStyle = appearance.fill;
-      ctx.globalAlpha = Math.max(0.75, appearance.fill_opacity / 255);
+      ctx.globalAlpha = 0.78 + appearance.amplitude * 0.22;
       ctx.beginPath();
       ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
       ctx.fill();
@@ -167,10 +173,8 @@
       ctx.scale(camera.scale, camera.scale);
       ctx.fillStyle = appearance.fill;
       ctx.strokeStyle = appearance.outline;
-      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+      ctx.globalAlpha = 0.78 + appearance.amplitude * 0.22;
       if (fluid) {
-        // Fluid has no fixed polygon boundary. Use an equal-area disk only as
-        // a visual marker; the simulation's fluid geometry remains authoritative.
         ctx.beginPath();
         ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
         ctx.fill();
@@ -180,13 +184,52 @@
       }
     }
     ctx.restore();
+
+    if (appearance.amplitude > 0) {
+      const alpha = Math.min(0.9, 0.22 + appearance.amplitude * 0.68);
+      const auraColor = `hsla(${appearance.hue} 100% 78% / ${alpha})`;
+      ctx.save();
+      ctx.translate(point.x, point.y);
+      ctx.scale(camera.scale * 1.025, camera.scale * 1.025);
+      if (fluid) {
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
+        ctx.strokeStyle = auraColor;
+        ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
+        ctx.stroke();
+      } else {
+        drawForm(part.form, 0, 0, part.rotation_radians, {
+          fill: 'rgba(0, 0, 0, 0)',
+          outline: auraColor
+        });
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawPhysicalFieldPart(part, viewport, worldWidth) {
+    const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
+    const wrappedX = Number.isFinite(worldWidth) && worldWidth > 0
+      ? displayPosition.x - Math.floor(displayPosition.x / worldWidth) * worldWidth
+      : displayPosition.x;
+    drawPhysicalFieldPartAt(part, viewport, worldWidth, 0);
+
+    // Only draw the opposite-side copy when the realized boundary nears the seam.
+    if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
+    const seamMargin = 3 / Math.max(camera.scale, 1e-6) + 2;
+    if (wrappedX < seamMargin) {
+      drawPhysicalFieldPartAt(part, viewport, worldWidth, worldWidth);
+    }
+    if (wrappedX > worldWidth - seamMargin) {
+      drawPhysicalFieldPartAt(part, viewport, worldWidth, -worldWidth);
+    }
   }
 
   function drawField(world, viewport) {
     if (!world) return;
     for (const cell of world.field || []) {
       const physicalParts = cell.physical_parts || [];
-      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport);
+      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport, world.width);
 
       // Unstructured inventory has no constituent geometry or world-space
       // placement. Show it as a small cell marker, never as fake square atoms.
@@ -217,10 +260,42 @@
   }
 
 
+  let lastCommittedReaction = null;
+
+  function updateChemistryReadout(world) {
+    const diagnostics = world?.chemistry_diagnostics;
+    if (!diagnostics || !Number.isFinite(diagnostics.tick)) return;
+    const combineNode = document.getElementById('ev-combine-count');
+    const breakNode = document.getElementById('ev-break-count');
+    const lastNode = document.getElementById('ev-last-reaction');
+    if (combineNode) {
+      combineNode.textContent = `${diagnostics.combine_ready_candidates ?? 0} ready / ${diagnostics.combine_scheduled ?? 0} scheduled / ${diagnostics.combine_committed_total ?? 0} total`;
+    }
+    if (breakNode) {
+      breakNode.textContent = `${diagnostics.break_ready_candidates ?? 0} ready / ${diagnostics.break_scheduled ?? 0} scheduled / ${diagnostics.break_committed_total ?? 0} total`;
+    }
+    const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
+      .filter(event => event.outcome === 'committed');
+    if (committed.length > 0) lastCommittedReaction = committed[committed.length - 1];
+    if (lastNode) {
+      lastNode.textContent = lastCommittedReaction
+        ? `Last committed reaction: ${lastCommittedReaction.reaction} at tick ${lastCommittedReaction.tick}`
+        : diagnostics.accumulation_entries > 0
+          ? `Reaction progress accumulating across ${diagnostics.accumulation_entries} pair(s); no commit this tick`
+          : 'No environmental reaction committed or accumulating this tick';
+    }
+  }
+
   renderWorld = function resourceAwareWorldRender() {
     const world = worldPayload();
     const viewport = viewportSize();
     if (!world) return;
+    updateChemistryReadout(world);
+    const sunlightBrightness = Number.isFinite(world.sunlight_brightness)
+      ? Math.max(0.1, Math.min(1.0, world.sunlight_brightness)) : 1.0;
+    const sunlightPercent = Math.round(sunlightBrightness * 100);
+    const sunlightLevel = document.getElementById('ev-sunlight-level');
+    if (sunlightLevel) sunlightLevel.textContent = `SUNLIGHT ${sunlightPercent}%`;
     // Clip every world layer to the exact field boundary.
     const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
     const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
@@ -256,6 +331,14 @@
         drawObservedPart(part, viewport);
       }
       drawSelectionBounds(organism.id, physical, viewport);
+    }
+    // Dim the complete world as the actual sunlight source weakens. This is
+    // presentation-only: it never changes source energy or simulation state.
+    const darkness = 1.0 - sunlightBrightness;
+    if (darkness > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+      ctx.fillRect(topLeft.x, topLeft.y,
+        bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
     }
     ctx.restore();
     ctx.save();

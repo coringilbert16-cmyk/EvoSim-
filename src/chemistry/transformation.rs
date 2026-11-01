@@ -127,8 +127,31 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     }
     let resonant_work = resonance_withdrawal.min(disruption_cost);
     let bond_supplied_work = disruption_cost - resonant_work;
+    let next_resonance = f64::from_bits(ledger.total_resonant_energy_held.to_bits() + 1);
+    let resonance_ulp = if next_resonance.is_finite() {
+        next_resonance - ledger.total_resonant_energy_held
+    } else {
+        ledger.total_resonant_energy_held
+            - f64::from_bits(ledger.total_resonant_energy_held.to_bits() - 1)
+    };
+    // If the only remaining shortfall is smaller than one ULP of the
+    // represented resonance inventory, the reservoir cannot express a
+    // closer withdrawal. Record the work actually represented as withdrawn
+    // instead of debiting a nonexistent fraction from an empty usable holder.
+    let rounding_limited_shortfall =
+        bond_supplied_work > 0.0 && bond_supplied_work <= resonance_ulp;
+    let settled_bond_work = if rounding_limited_shortfall {
+        0.0
+    } else {
+        bond_supplied_work
+    };
+    let settled_total_work = if rounding_limited_shortfall {
+        resonant_work
+    } else {
+        disruption_cost
+    };
     let next_total_resonant = (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
-    let next_total_work = ledger.total_work_expended + disruption_cost;
+    let next_total_work = ledger.total_work_expended + settled_total_work;
     let next_total_heat = ledger.total_heat_dissipated;
     if !next_total_resonant.is_finite() {
         return None;
@@ -147,7 +170,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
         reactant_structural_potential,
         product_structural_potential,
-        bond_supplied_work,
+        settled_bond_work,
         0.0,
     )?
     .settlement_transaction(EnergyReason::Break)?;
@@ -490,7 +513,7 @@ pub(crate) fn environmental_break_candidates(
                 continue;
             }
 
-            let mut hypothetical = organism.structure.clone();
+            let mut hypothetical = crate::structure::OrganismStructure::new();
             let Some(indices) = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 instance,
@@ -537,17 +560,6 @@ pub(crate) fn environmental_break_candidates(
         }
     }
     candidates
-}
-
-pub(crate) fn has_environmental_break_candidate(
-    organism: &Organism,
-    environment: &Environment,
-) -> bool {
-    // Eligibility must use the same endpoint-access rule as candidate
-    // generation. Merely finding a bonded environmental component near the
-    // organism is not enough: at least one endpoint of the target bond must
-    // actually lie inside accessible organism interior.
-    !environmental_break_candidates(organism, environment).is_empty()
 }
 
 fn parse_environmental_break_context_key(key: &str) -> Option<(usize, usize, usize)> {
@@ -624,7 +636,7 @@ pub(crate) fn try_start_environmental_break(
             return None;
         }
 
-        let mut hypothetical = organism.structure.clone();
+        let mut hypothetical = crate::structure::OrganismStructure::new();
         let indices = crate::material_restoration::restore_material(
             &mut hypothetical,
             &instance,
@@ -785,8 +797,14 @@ impl Simulation {
                     - original_ledger.total_potential_energy_released,
                 total_structural_energy_delta: trial_ledger.total_structural_energy_delta
                     - original_ledger.total_structural_energy_delta,
+                total_structural_energy_delta_compensation: trial_ledger
+                    .total_structural_energy_delta_compensation
+                    - original_ledger.total_structural_energy_delta_compensation,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
+                total_external_energy_input_compensation: trial_ledger
+                    .total_external_energy_input_compensation
+                    - original_ledger.total_external_energy_input_compensation,
                 total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
                     - original_ledger.total_world_tone_energy_unabsorbed,
                 total_world_tone_energy_escaped: trial_ledger.total_world_tone_energy_escaped
@@ -845,7 +863,11 @@ impl Simulation {
             organism.usable_energy += prepared_energy;
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
             ledger.total_structural_energy_delta += ledger_delta.total_structural_energy_delta;
+            ledger.total_structural_energy_delta_compensation +=
+                ledger_delta.total_structural_energy_delta_compensation;
             ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
+            ledger.total_external_energy_input_compensation +=
+                ledger_delta.total_external_energy_input_compensation;
             ledger.total_world_tone_energy_unabsorbed +=
                 ledger_delta.total_world_tone_energy_unabsorbed;
             ledger.total_world_tone_energy_escaped += ledger_delta.total_world_tone_energy_escaped;
@@ -1106,7 +1128,11 @@ fn rollback_prepared_combine(
         // Legacy serialized transactions have only the staged delta available.
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
+        ledger.total_structural_energy_delta_compensation -=
+            delta.total_structural_energy_delta_compensation;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
+        ledger.total_external_energy_input_compensation -=
+            delta.total_external_energy_input_compensation;
         ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
         ledger.total_world_tone_energy_escaped -= delta.total_world_tone_energy_escaped;
         ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
@@ -1385,7 +1411,9 @@ mod tests {
         let before_ledger = EnergyLedger {
             total_potential_energy_released: 1.25,
             total_structural_energy_delta: 2.5,
+            total_structural_energy_delta_compensation: 0.125,
             total_external_energy_input: 3.75,
+            total_external_energy_input_compensation: 0.0625,
             initial_condition_energy_settled: true,
             total_world_tone_energy_unabsorbed: 4.125,
             total_world_tone_energy_escaped: 5.25,
@@ -1405,7 +1433,13 @@ mod tests {
         let mut ledger = EnergyLedger {
             total_potential_energy_released: before_ledger.total_potential_energy_released + 0.2,
             total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
+            total_structural_energy_delta_compensation: before_ledger
+                .total_structural_energy_delta_compensation
+                - 0.05,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
+            total_external_energy_input_compensation: before_ledger
+                .total_external_energy_input_compensation
+                + 0.025,
             initial_condition_energy_settled: false,
             total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed
                 + 0.5,
@@ -2081,7 +2115,7 @@ mod tests {
             environmental_break_test_inventory(&catalog);
         // Preserve a valid original bond record but make one split piece's
         // destination invalid, so the first staged deposit must also roll back.
-        source.placements.as_mut().unwrap()[1].x = environment.width + 100.0;
+        source.placements.as_mut().unwrap()[1].y = environment.height + 100.0;
         let original_source = source.clone();
         let target = source.internal_connections.as_ref().unwrap()[0].clone();
         environment.field.cells[cell_index].physical_materials =

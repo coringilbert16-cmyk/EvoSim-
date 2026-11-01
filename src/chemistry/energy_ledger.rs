@@ -3,6 +3,42 @@ use crate::state::EnergyLedger;
 
 const EPSILON: f64 = 1e-9;
 
+/// Sum floating-point inventory components with compensation so regrouping
+/// many small bond-energy terms does not create a false world-level surplus.
+pub(crate) fn compensated_sum(values: impl IntoIterator<Item = f64>) -> f64 {
+    let mut sum = 0.0;
+    let mut correction = 0.0;
+    for value in values {
+        let next = sum + value;
+        if sum.abs() >= value.abs() {
+            correction += (sum - next) + value;
+        } else {
+            correction += (value - next) + sum;
+        }
+        sum = next;
+    }
+    sum + correction
+}
+
+/// Add one value to a high/low floating-point accumulator without discarding
+/// the rounding error from the primary cumulative total.
+fn compensated_accumulate(sum: f64, correction: f64, value: f64) -> Option<(f64, f64)> {
+    if !sum.is_finite() || !correction.is_finite() || !value.is_finite() {
+        return None;
+    }
+    let next_sum = sum + value;
+    if !next_sum.is_finite() {
+        return None;
+    }
+    let roundoff = if sum.abs() >= value.abs() {
+        (sum - next_sum) + value
+    } else {
+        (value - next_sum) + sum
+    };
+    let next_correction = correction + roundoff;
+    (next_correction.is_finite()).then_some((next_sum, next_correction))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EnergyReason {
     Combine,
@@ -374,6 +410,7 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_pair_interaction_potential: f64,
     pub(crate) current_pair_interaction_potential: f64,
     pub(crate) external_energy_input: f64,
+    pub(crate) external_energy_input_compensation: f64,
     /// External resonant-field energy that leaves the modeled world after material response.
     pub(crate) world_tone_energy_escaped: f64,
     /// Reserved compatibility slot. Must be zero until an explicitly owned
@@ -404,6 +441,7 @@ impl EnergyInventorySnapshot {
             || !self.current_structural_energy.is_finite()
             || !self.initial_pair_interaction_potential.is_finite()
             || !self.current_pair_interaction_potential.is_finite()
+            || !self.external_energy_input_compensation.is_finite()
             || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
@@ -415,15 +453,18 @@ impl EnergyInventorySnapshot {
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
         let pair_potential_delta =
             self.current_pair_interaction_potential - self.initial_pair_interaction_potential;
-        let residual = usable_delta
-            + resonant_delta
-            + structural_delta
-            + pair_potential_delta
-            + self.work_expended
-            + self.heat_dissipated
-            + self.world_tone_energy_escaped
-            - self.external_energy_input
-            - self.other_energy_released;
+        let residual = compensated_sum([
+            usable_delta,
+            resonant_delta,
+            structural_delta,
+            pair_potential_delta,
+            self.work_expended,
+            self.heat_dissipated,
+            self.world_tone_energy_escaped,
+            -self.external_energy_input,
+            -self.external_energy_input_compensation,
+            -self.other_energy_released,
+        ]);
         residual.is_finite().then_some(residual)
     }
 
@@ -435,9 +476,8 @@ impl EnergyInventorySnapshot {
                 .is_some_and(|residual| residual.abs() <= tolerance)
     }
 
-    /// Stronger release-gate oracle: tolerate tiny missing energy from numeric
-    /// rounding, but never accept a positive residual that represents more
-    /// stored/spent energy than the modeled sources supplied.
+    /// Strict release-gate oracle: tolerate tiny missing energy from numeric
+    /// rounding, but never accept a positive residual that represents creation.
     pub(crate) fn is_balanced_without_creation(self, tolerance: f64) -> bool {
         tolerance.is_finite()
             && tolerance >= 0.0
@@ -703,7 +743,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
-        let next_external = self.total_external_energy_input + transaction.external_input;
+        let Some((next_external, next_external_compensation)) = compensated_accumulate(
+            self.total_external_energy_input,
+            self.total_external_energy_input_compensation,
+            transaction.external_input,
+        ) else {
+            return false;
+        };
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta;
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
@@ -720,6 +766,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         *holder = next_holder;
         self.total_external_energy_input = next_external;
+        self.total_external_energy_input_compensation = next_external_compensation;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
@@ -757,7 +804,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
         {
             return false;
         }
-        let next_external = self.total_external_energy_input + incident_energy;
+        let Some((next_external, next_external_compensation)) = compensated_accumulate(
+            self.total_external_energy_input,
+            self.total_external_energy_input_compensation,
+            incident_energy,
+        ) else {
+            return false;
+        };
         let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
         let mut next_heat = self.total_heat_dissipated + heat_dissipated;
         let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
@@ -774,7 +827,12 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // a small frame to a large cumulative total can round the source and
         // sinks in different directions; the aggregate world inventory must
         // never report more tone energy allocated than actually credited.
-        let actual_incident = next_external - self.total_external_energy_input;
+        let actual_incident = compensated_sum([
+            next_external,
+            -self.total_external_energy_input,
+            next_external_compensation,
+            -self.total_external_energy_input_compensation,
+        ]);
         let actual_capture = next_resonant - self.total_resonant_energy_held;
         let actual_escape = next_escaped - self.total_world_tone_energy_escaped;
         let mut actual_heat = next_heat - self.total_heat_dissipated;
@@ -820,6 +878,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
 
         self.total_external_energy_input = next_external;
+        self.total_external_energy_input_compensation = next_external_compensation;
         self.total_resonant_energy_held = next_resonant;
         self.total_heat_dissipated = next_heat;
         self.total_world_tone_energy_escaped = next_escaped;
@@ -847,11 +906,18 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
-        let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
+        let Some((next_structural, next_structural_compensation)) = compensated_accumulate(
+            self.total_structural_energy_delta,
+            self.total_structural_energy_delta_compensation,
+            transaction.structural_delta,
+        ) else {
+            return false;
+        };
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()
             || !next_structural.is_finite()
+            || !next_structural_compensation.is_finite()
             || !next_work.is_finite()
             || !next_heat.is_finite()
         {
@@ -870,14 +936,17 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // Do not manufacture extra heat to hide an unrepresentable transaction:
         // reject atomically if the resulting non-creating residual exceeds the
         // existing tolerance.
+        let actual_structural_delta = compensated_sum([
+            next_structural,
+            -self.total_structural_energy_delta,
+            next_structural_compensation,
+            -self.total_structural_energy_delta_compensation,
+        ]);
         let actual_work_delta = next_work - self.total_work_expended;
         let actual_heat_delta = next_heat - self.total_heat_dissipated;
         let residual_for = |candidate_holder: f64| {
             let actual_usable_delta = candidate_holder - *holder;
-            actual_usable_delta
-                + transaction.structural_delta
-                + actual_work_delta
-                + actual_heat_delta
+            actual_usable_delta + actual_structural_delta + actual_work_delta + actual_heat_delta
         };
         let mut residual = residual_for(next_holder);
         let mut rounding_steps = 0;
@@ -924,6 +993,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         *holder = next_holder;
         self.total_potential_energy_released = next_released;
         self.total_structural_energy_delta = next_structural;
+        self.total_structural_energy_delta_compensation = next_structural_compensation;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
@@ -955,6 +1025,35 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn small_structural_change_is_retained_after_large_cumulative_history() {
+        let mut ledger = EnergyLedger {
+            total_structural_energy_delta: -1.0e16,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 1_000.0;
+        let structural_delta = -0.3082207001484488;
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Combine,
+            potential_released: 0.0,
+            usable_delta: -structural_delta,
+            structural_delta,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        let residual = compensated_sum([
+            usable,
+            -1_000.0,
+            ledger.total_structural_energy_delta,
+            1.0e16,
+            ledger.total_structural_energy_delta_compensation,
+        ]);
+        assert!(residual <= 0.0 && residual.abs() <= EPSILON);
+        assert!(ledger.total_structural_energy_delta_compensation < 0.0);
+    }
 
     #[test]
     fn positive_pair_potential_change_is_paid_only_by_active_mover() {
@@ -1153,6 +1252,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 3.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1174,6 +1274,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: -8.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1195,6 +1296,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: -5.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1380,6 +1482,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1407,6 +1510,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 5.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 1.0,
@@ -1438,6 +1542,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: ledger.total_external_energy_input,
+            external_energy_input_compensation: ledger.total_external_energy_input_compensation,
             world_tone_energy_escaped: ledger.total_world_tone_energy_escaped,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1459,14 +1564,19 @@ mod tests {
 
         assert!(ledger.settle_world_tone_paths(80.330104, 17.734988, 17.793927, 44.801189,));
 
-        let actual_incident =
-            ledger.total_external_energy_input - before.total_external_energy_input;
+        let actual_incident = compensated_sum([
+            ledger.total_external_energy_input,
+            -before.total_external_energy_input,
+            ledger.total_external_energy_input_compensation,
+            -before.total_external_energy_input_compensation,
+        ]);
         let actual_capture = ledger.total_resonant_energy_held - before.total_resonant_energy_held;
         let actual_heat = ledger.total_heat_dissipated - before.total_heat_dissipated;
         let actual_escape =
             ledger.total_world_tone_energy_escaped - before.total_world_tone_energy_escaped;
+        let allocated = compensated_sum([actual_capture, actual_heat, actual_escape]);
         assert!(
-            actual_incident >= actual_capture + actual_heat + actual_escape,
+            actual_incident >= allocated,
             "cumulative f64 counters must not allocate more energy than the represented source"
         );
         assert!(
@@ -1583,6 +1693,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 7.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 2.0,
@@ -1604,6 +1715,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1625,6 +1737,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 1.0,
             work_expended: 0.0,
@@ -1646,6 +1759,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 7.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 2.0,

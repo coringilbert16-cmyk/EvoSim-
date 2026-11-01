@@ -45,6 +45,9 @@ impl Velocity {
 }
 
 const FLOW_BIN_SIZE: f64 = 5.0;
+// Double the prior per-tick transport response so the current produces
+// visible, measurable circulation without changing chemistry thresholds.
+const FLOW_DISPLACEMENT_SCALE: f64 = 0.30;
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
@@ -62,8 +65,8 @@ fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a 
 
 fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
-    let anchor = placements.first()?;
-    if !height.is_finite()
+    if placements.is_empty()
+        || !height.is_finite()
         || height <= 0.0
         || placements
             .iter()
@@ -73,14 +76,10 @@ fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64
     }
     let count = placements.len() as f64;
     let x = placements.iter().map(|p| p.x).sum::<f64>() / count;
-    // Average vertical offsets relative to one constituent so composites
-    // crossing the wrapped top/bottom seam keep a compact center.
-    let y_offset = placements
-        .iter()
-        .map(|p| (p.y - anchor.y + height * 0.5).rem_euclid(height) - height * 0.5)
-        .sum::<f64>()
-        / count;
-    Some((x, (anchor.y + y_offset).rem_euclid(height)))
+    // Vertical coordinates are bounded, not periodic. Keep the ordinary
+    // center of mass so objects cannot appear across the top/bottom seam.
+    let y = placements.iter().map(|p| p.y).sum::<f64>() / count;
+    Some((x, y))
 }
 
 fn shape_radius(form: &Form) -> f64 {
@@ -168,24 +167,24 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     if ![x, y, width, height].iter().all(|v| v.is_finite()) || width <= 0.0 || height <= 0.0 {
         return Velocity::default();
     }
-    let phase = std::f64::consts::TAU * x / width;
+    let wrapped_x = x.rem_euclid(width);
+    let phase = std::f64::consts::TAU * wrapped_x / width;
     let center_y = height * 0.5 + height * 0.23 * phase.sin();
     let slope = height * 0.23 * std::f64::consts::TAU / width * phase.cos();
-    let vertical_delta = (y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+    let vertical_delta = y - center_y;
     let width_scale = (height * 0.16).max(1.0);
     let envelope = (-0.5 * (vertical_delta / width_scale).powi(2)).exp();
     let tangent = Velocity { x: 1.0, y: slope }.normalized();
     let mut velocity = tangent.scale(0.12 + 0.88 * envelope);
 
-    // Localized counter-flow is a real vector-field vortex, not an arbitrary
-    // per-particle reversal. Its sign alternates across the two S bends.
-    let vortex_radius = (height * 0.13).max(1.0);
+    // The flow field is periodic left-to-right and bounded top-to-bottom.
     for (fraction, sign) in [(0.25, 1.0), (0.75, -1.0)] {
         let cx = width * fraction;
         let cy = height * 0.5 + height * 0.23 * (std::f64::consts::TAU * fraction).sin();
-        let dx = x - cx;
-        let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = (wrapped_x - cx + width * 0.5).rem_euclid(width) - width * 0.5;
+        let dy = y - cy;
         let radial_sq = dx * dx + dy * dy;
+        let vortex_radius = (height * 0.13).max(1.0);
         let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 1.2;
         velocity = velocity.add(Velocity {
             x: -dy / vortex_radius * weight,
@@ -202,7 +201,7 @@ fn obstacle_adjusted_velocity(
     source_cell: usize,
     source_index: usize,
     obstacles: &[Obstacle],
-    height: f64,
+    width: f64,
 ) -> Velocity {
     for obstacle in obstacles {
         if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
@@ -211,11 +210,10 @@ fn obstacle_adjusted_velocity(
         if obstacle.solidity <= 1e-6 {
             continue;
         }
-        let dx = x - obstacle.x;
-        let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
+        let dy = y - obstacle.y;
         let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
-        // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
             let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
@@ -224,7 +222,6 @@ fn obstacle_adjusted_velocity(
                 y: side * influence * 0.65,
             });
         }
-        // Downstream wake is sheltered and slower; upstream flow is unchanged.
         if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
@@ -235,39 +232,74 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
-fn clamp_horizontal_displacement(
-    material: &PhysicalMaterial,
-    requested_dx: f64,
-    width: f64,
-) -> Option<f64> {
-    let placements = material.placements.as_ref()?;
-    if placements.is_empty() || !width.is_finite() || width <= 0.0 {
-        return None;
-    }
-    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements
-        .iter()
-        .map(|p| p.x)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let world_max = (width - 1e-6).max(0.0);
-    let min_dx = -min_x;
-    let max_dx = world_max - max_x;
-    if min_dx <= max_dx {
-        Some(requested_dx.clamp(min_dx, max_dx))
-    } else {
-        // If an object is wider than the world, preserve it as a unit and keep
-        // its anchor in range; never split the object to satisfy the boundary.
-        let anchor_x = placements[0].x;
-        Some((anchor_x + requested_dx).clamp(0.0, world_max) - anchor_x)
+fn shape_vertical_extent(form: &Form, rotation_radians: f64) -> f64 {
+    let (sin, cos) = rotation_radians.sin_cos();
+    match form {
+        Form::Circle { radius } => *radius,
+        Form::Line { length } => length * 0.5 * sin.abs(),
+        Form::Rectangle { width, height } => width * 0.5 * sin.abs() + height * 0.5 * cos.abs(),
+        Form::RegularPolygon { radius, .. } => *radius,
+        Form::Polygon { vertices } => vertices
+            .iter()
+            .map(|(x, y)| (x * sin + y * cos).abs())
+            .fold(0.0, f64::max),
+        Form::Fluid {
+            nominal_area,
+            arc_boundary,
+            ..
+        } => {
+            let equivalent_radius = (nominal_area.max(0.0) / std::f64::consts::PI).sqrt();
+            arc_boundary
+                .as_ref()
+                .map_or(equivalent_radius, |arc| equivalent_radius.max(arc.radius))
+        }
     }
 }
 
+fn clamp_vertical_displacement(
+    material: &PhysicalMaterial,
+    requested_dy: f64,
+    height: f64,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty()
+        || placements.len() != material.material.parts.len()
+        || !height.is_finite()
+        || height <= 0.0
+    {
+        return None;
+    }
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (index, placement) in placements.iter().enumerate() {
+        let (name, _) = material.material.parts.get(index)?;
+        let form = material
+            .realized_shapes
+            .as_ref()
+            .and_then(|shapes| shapes.get(index))
+            .map(|shape| &shape.form)
+            .or_else(|| resource_for_part(name, catalog).map(|resource| &resource.shape.form))?;
+        let extent = shape_vertical_extent(form, placement.rotation_radians);
+        if !placement.y.is_finite() || !extent.is_finite() || extent < 0.0 {
+            return None;
+        }
+        min_y = min_y.min(placement.y - extent);
+        max_y = max_y.max(placement.y + extent);
+    }
+    let world_max = (height - 1e-6).max(0.0);
+    let min_dy = -min_y;
+    let max_dy = world_max - max_y;
+    (min_dy <= max_dy).then_some(requested_dy.clamp(min_dy, max_dy))
+}
 fn translated(
     material: &PhysicalMaterial,
     dx: f64,
     dy: f64,
     height: f64,
+    catalog: &[BaseResource],
 ) -> Option<PhysicalMaterial> {
+    let dy = clamp_vertical_displacement(material, dy, height, catalog)?;
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
     if placements.is_empty() {
@@ -275,7 +307,7 @@ fn translated(
     }
     for placement in placements {
         placement.x += dx;
-        placement.y = (placement.y + dy).rem_euclid(height);
+        placement.y += dy;
         if !placement.x.is_finite()
             || !placement.y.is_finite()
             || !placement.rotation_radians.is_finite()
@@ -286,12 +318,6 @@ fn translated(
     Some(moved)
 }
 
-/// Estimate angular response to local flow shear. Compound torque is
-/// accumulated from constituent mass and the velocity difference across the
-/// object's extent; the geometry-derived moment of inertia resists rotation.
-/// Single non-circular resources respond to local vorticity according to their
-/// shape anisotropy. This is an overdamped response: it adds no arbitrary spin
-/// or per-tick angle cap, and has no hidden angular state to lose on transfer.
 fn angular_displacement(
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
@@ -329,11 +355,10 @@ fn angular_displacement(
             return 0.0;
         }
         weighted_x += placement.x * part_mass;
-        weighted_y +=
-            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * part_mass;
+        weighted_y += (placement.y - anchor_y) * part_mass;
     }
     let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+    let center_y = anchor_y + weighted_y / total_mass;
 
     let center_velocity = obstacle_adjusted_velocity(
         background_velocity(center_x, center_y, width, height),
@@ -342,7 +367,7 @@ fn angular_displacement(
         source_cell,
         source_index,
         obstacles,
-        height,
+        width,
     );
     let mut torque = 0.0;
     let mut moment = 0.0;
@@ -358,7 +383,7 @@ fn angular_displacement(
             continue;
         }
         let rx = placement.x - center_x;
-        let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let ry = placement.y - center_y;
         let radius_sq = rx * rx + ry * ry;
         let form = material
             .realized_shapes
@@ -377,7 +402,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         torque += part_mass
             * (rx * (local_velocity.y - center_velocity.y)
@@ -432,7 +457,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let left = obstacle_adjusted_velocity(
             background_velocity(center_x - epsilon, center_y, width, height),
@@ -441,7 +466,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let up = obstacle_adjusted_velocity(
             background_velocity(center_x, center_y + epsilon, width, height),
@@ -450,7 +475,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let down = obstacle_adjusted_velocity(
             background_velocity(center_x, center_y - epsilon, width, height),
@@ -459,7 +484,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
         let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
@@ -487,60 +512,58 @@ fn rotated(
     material: &PhysicalMaterial,
     angle: f64,
     catalog: &[BaseResource],
-    width: f64,
+    _width: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
     if !angle.is_finite() {
         return None;
     }
     let mut result = material.clone();
-    let placements = result.placements.as_mut()?;
-    if placements.is_empty() {
-        return None;
-    }
-    let anchor_y = placements[0].y;
-    let mut total_mass = 0.0;
-    let mut weighted_x = 0.0;
-    let mut weighted_y = 0.0;
-    for (index, placement) in placements.iter().enumerate() {
-        let Some((name, amount)) = material.material.parts.get(index) else {
-            return None;
-        };
-        let resource = resource_for_part(name, catalog)?;
-        let mass = resource.properties.mass * *amount;
-        if !mass.is_finite() || mass <= 0.0 {
+    {
+        let placements = result.placements.as_mut()?;
+        if placements.is_empty() || placements.len() != material.material.parts.len() {
             return None;
         }
-        total_mass += mass;
-        weighted_x += placement.x * mass;
-        weighted_y +=
-            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * mass;
-    }
-    if !total_mass.is_finite() || total_mass <= 0.0 {
-        return None;
-    }
-    let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
-    let (sin, cos) = angle.sin_cos();
-    for placement in placements.iter_mut() {
-        let dx = placement.x - center_x;
-        let dy = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
-        placement.x = center_x + dx * cos - dy * sin;
-        placement.y = (center_y + dx * sin + dy * cos).rem_euclid(height);
-        placement.rotation_radians =
-            (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !placement.rotation_radians.is_finite()
-        {
+        let anchor_y = placements[0].y;
+        let mut total_mass = 0.0;
+        let mut weighted_x = 0.0;
+        let mut weighted_y = 0.0;
+        for (index, placement) in placements.iter().enumerate() {
+            let (name, amount) = material.material.parts.get(index)?;
+            let resource = resource_for_part(name, catalog)?;
+            let mass = resource.properties.mass * *amount;
+            if !mass.is_finite() || mass <= 0.0 {
+                return None;
+            }
+            total_mass += mass;
+            weighted_x += placement.x * mass;
+            weighted_y += (placement.y - anchor_y) * mass;
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
             return None;
         }
-    }
-    let dx = clamp_horizontal_displacement(&result, 0.0, width)?;
-    if dx != 0.0 {
-        for placement in result.placements.as_mut()? {
-            placement.x += dx;
+        let center_x = weighted_x / total_mass;
+        let center_y = anchor_y + weighted_y / total_mass;
+        let (sin, cos) = angle.sin_cos();
+        for placement in placements.iter_mut() {
+            let dx = placement.x - center_x;
+            let dy = placement.y - center_y;
+            placement.x = center_x + dx * cos - dy * sin;
+            placement.y = center_y + dx * sin + dy * cos;
+            placement.rotation_radians =
+                (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
         }
+    }
+
+    let vertical_shift = clamp_vertical_displacement(&result, 0.0, height, catalog)?;
+    for placement in result.placements.as_mut()? {
+        placement.y += vertical_shift;
     }
     Some(result)
 }
@@ -586,25 +609,26 @@ pub(crate) fn transport_field(
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
     for obstacle in obstacles {
         let radius = obstacle.radius.max(0.5).min(width.max(height));
-        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col =
-            ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = max_col.min(flow_cols.saturating_sub(1));
-        if min_col > max_col {
+        let first_col = ((obstacle.x - radius * 6.0) / FLOW_BIN_SIZE).floor() as isize;
+        let last_col = ((obstacle.x + radius * 6.0) / FLOW_BIN_SIZE).floor() as isize;
+        let col_count = last_col.saturating_sub(first_col).saturating_add(1) as usize;
+        let cols: Vec<usize> = if col_count >= flow_cols {
+            (0..flow_cols).collect()
+        } else {
+            (0..col_count)
+                .map(|offset| (first_col + offset as isize).rem_euclid(flow_cols as isize) as usize)
+                .collect()
+        };
+        let first_row =
+            (((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize).max(0) as usize;
+        let last_row = (((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize)
+            .min(flow_rows.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if first_row > last_row {
             continue;
         }
-        let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
-        let rows = if row_count >= flow_rows {
-            (0..flow_rows).collect::<Vec<_>>()
-        } else {
-            (0..row_count)
-                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
-                .collect::<Vec<_>>()
-        };
-        for row in rows {
-            for col in min_col..=max_col {
+        for row in first_row..=last_row {
+            for &col in &cols {
                 obstacle_bins[row * flow_cols + col].push(obstacle);
             }
         }
@@ -616,8 +640,10 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
-        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
-        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
+        let flow_col =
+            ((x / FLOW_BIN_SIZE).floor() as isize).rem_euclid(flow_cols as isize) as usize;
+        let flow_row = ((y / FLOW_BIN_SIZE).floor() as isize)
+            .clamp(0, flow_rows.saturating_sub(1) as isize) as usize;
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
@@ -626,15 +652,11 @@ pub(crate) fn transport_field(
             source_cell,
             source_index,
             nearby,
-            height,
+            width,
         );
-        let scale = mobility(mass) * 0.15;
-        let mut dx = velocity.x * scale;
+        let scale = mobility(mass) * FLOW_DISPLACEMENT_SCALE;
+        let dx = velocity.x * scale;
         let dy = velocity.y * scale;
-        let Some(clamped_dx) = clamp_horizontal_displacement(&material, dx, width) else {
-            continue;
-        };
-        dx = clamped_dx;
         let angular_step = angular_displacement(
             &material,
             catalog,
@@ -647,7 +669,7 @@ pub(crate) fn transport_field(
         if dx.abs() + dy.abs() <= 1e-12 && angular_step.abs() <= 1e-12 {
             continue;
         }
-        let Some(translated_material) = translated(&material, dx, dy, height) else {
+        let Some(translated_material) = translated(&material, dx, dy, height, catalog) else {
             continue;
         };
         let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
@@ -798,7 +820,7 @@ mod tests {
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
-                x: 24.99,
+                x: 24.999,
                 y: 200.0,
                 rotation_radians: 0.0,
             }],
@@ -806,39 +828,45 @@ mod tests {
         )
         .expect("catalog carbon should realize");
         let original = material.clone();
-        assert!(field.deposit_physical(24.99, 200.0, material, &catalog));
+        assert!(field.deposit_physical(24.999, 200.0, material, &catalog));
         let inventory_before = field.total_material();
         let revision_before = field.revision;
-        let source_cell = field.index_for_position(24.99, 200.0).unwrap();
+        let source_cell = field.index_for_position(24.999, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
-        let destination_cell = field.index_for_position(25.001, 200.0).unwrap();
-        let destination_cell_revision = field.cell_revisions[destination_cell];
+        let cell_revisions_before = field.cell_revisions.clone();
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
 
         assert_eq!(field.total_material(), inventory_before);
         assert!(field.revision > revision_before);
         assert!(field.cell_revisions[source_cell] > source_cell_revision);
-        assert!(field.cell_revisions[destination_cell] > destination_cell_revision);
         let objects: Vec<_> = field
             .cells
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(objects.len(), 1);
-        assert!(objects[0].placements.as_ref().unwrap()[0].x > 25.0);
-        assert_ne!(
-            field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
-            Some(source_cell)
+        let moved_anchor = objects[0].placements.as_ref().unwrap()[0];
+        assert!(moved_anchor.x > 25.0);
+        let actual_destination_cell = field
+            .index_for_position(moved_anchor.x, moved_anchor.y)
+            .expect("transported material must remain inside the vertical world bounds");
+        assert_ne!(actual_destination_cell, source_cell);
+        assert!(
+            field.cell_revisions[actual_destination_cell]
+                > cell_revisions_before[actual_destination_cell],
+            "the cell containing the moved material must be invalidated"
         );
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
-        let displacement_scale = mobility(original.material.mass(&catalog)) * 0.15;
+        let displacement_scale =
+            mobility(original.material.mass(&catalog)) * FLOW_DISPLACEMENT_SCALE;
         let translated_expected = translated(
             &original,
             velocity.x * displacement_scale,
             velocity.y * displacement_scale,
             1000.0,
+            &catalog,
         )
         .unwrap();
         let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
@@ -851,7 +879,48 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_boundary_keeps_every_constituent_inside_world() {
+    fn environmental_transport_crosses_the_horizontal_seam_without_relocation_loss() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 999.99,
+                y: 500.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        let source = field.index_for_position(999.99, 500.0).unwrap();
+        assert!(field.deposit_physical(999.99, 500.0, material, &catalog));
+
+        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        assert_eq!(objects.len(), 1);
+        let placement = &objects[0].placements.as_ref().unwrap()[0];
+        assert!(
+            placement.x >= 1000.0,
+            "the element should cross the right edge"
+        );
+        let destination = field.index_for_position(placement.x, placement.y).unwrap();
+        assert_ne!(destination, source);
+        assert_eq!(
+            destination,
+            field
+                .index_for_position(placement.x - 1000.0, placement.y)
+                .unwrap()
+        );
+        assert_eq!(field.total_material(), vec![("Carbon".to_string(), 1.0)]);
+    }
+
+    #[test]
+    fn horizontal_boundary_wraps_complete_compounds_without_changing_geometry() {
         let catalog = crate::resources::default_catalog();
         let material = PhysicalMaterial::realized(
             crate::resources::Material {
@@ -863,7 +932,7 @@ mod tests {
             },
             vec![
                 crate::structure::Placement {
-                    x: 998.8,
+                    x: 999.2,
                     y: 500.0,
                     rotation_radians: 0.0,
                 },
@@ -877,50 +946,75 @@ mod tests {
         )
         .expect("realized carbon-hydrogen compound should realize");
 
-        let dx = clamp_horizontal_displacement(&material, 0.15, 1000.0).unwrap();
-        let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
+        let moved = translated(&material, 0.5, 0.0, 1000.0, &catalog).unwrap();
         let placements = moved.placements.as_ref().unwrap();
-        assert!(placements.iter().all(|p| p.x >= 0.0 && p.x < 1000.0));
+        assert!(placements.iter().all(|p| p.x >= 999.0));
+        assert!(placements.iter().any(|p| p.x >= 1000.0));
+        assert_eq!(
+            ActiveMaterialField::new(1000.0, 1000.0, 25.0)
+                .index_for_position(placements[0].x, placements[0].y),
+            ActiveMaterialField::new(1000.0, 1000.0, 25.0)
+                .index_for_position(placements[0].x - 1000.0, placements[0].y)
+        );
         let original_placements = material.placements.as_ref().unwrap();
         let original_separation = original_placements[1].x - original_placements[0].x;
         let moved_separation = placements[1].x - placements[0].x;
         assert!(
             (moved_separation - original_separation).abs() < 1e-9,
-            "boundary handling must preserve the object's internal geometry"
+            "wrapping must preserve the object's internal geometry"
         );
     }
 
     #[test]
-    fn vertical_boundary_wraps_without_losing_material() {
+    fn vertical_boundary_is_a_hard_wall_not_a_wraparound_seam() {
         let catalog = crate::resources::default_catalog();
-        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
-                x: 0.0,
+                x: 500.0,
                 y: 999.999,
                 rotation_radians: 0.0,
             }],
             &catalog,
         )
         .expect("catalog carbon should realize");
-        assert!(field.deposit_physical(0.0, 999.999, material, &catalog));
-        let before = field.total_material();
-
-        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
-        assert_eq!(field.total_material(), before);
-        let objects: Vec<_> = field
-            .cells
+        let moved = translated(&material, 0.0, 1.0, 1000.0, &catalog).unwrap();
+        let placement = &moved.placements.as_ref().unwrap()[0];
+        let carbon_form = &catalog
             .iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .collect();
-        assert_eq!(objects.len(), 1);
-        let placement = &objects[0].placements.as_ref().unwrap()[0];
-        assert!((0.0..1000.0).contains(&placement.y));
+            .find(|resource| resource.name == "Carbon")
+            .expect("carbon must exist in the canonical catalog")
+            .shape
+            .form;
+        let extent = shape_vertical_extent(carbon_form, 0.0);
+        assert!(placement.y - extent >= 0.0);
+        assert!(placement.y + extent <= 1000.0 - 1e-6 + 1e-9);
         assert!(
-            placement.y < 1.0,
-            "positive vertical motion should wrap across the seam"
+            placement.y < 999.999,
+            "the element's full geometry, not only its center, must remain inside the wall"
         );
+
+        let top_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 500.0,
+                y: 0.001,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        let top_moved = translated(&top_material, 0.0, -1.0, 1000.0, &catalog).unwrap();
+        let top_placement = &top_moved.placements.as_ref().unwrap()[0];
+        assert!(top_placement.y - extent >= 0.0);
+        assert!(
+            top_placement.y > 0.0,
+            "the top wall must constrain full element geometry"
+        );
+
+        let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        assert!(field.index_for_position(500.0, 1000.0).is_none());
+        assert!(field.index_for_position(500.0, -0.001).is_none());
     }
 
     #[test]

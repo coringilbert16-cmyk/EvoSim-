@@ -108,6 +108,9 @@ pub(crate) struct WorldFieldPartObservation {
     pub(crate) y: f64,
     pub(crate) rotation_radians: f64,
     pub(crate) form: crate::resources::Form,
+    /// Derived from the same material oscillator response used by the simulation.
+    pub(crate) resonance_frequency_cycles_per_day: f64,
+    pub(crate) resonance_amplitude: f64,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
@@ -130,6 +133,8 @@ pub(crate) struct WorldPointObservation {
 pub(crate) struct WorldObservation {
     pub(crate) width: f64,
     pub(crate) height: f64,
+    /// Whole-map visual brightness derived from the current sunlight source, in [0.1, 1.0].
+    pub(crate) sunlight_brightness: f64,
     pub(crate) organisms: Vec<WorldOrganismObservation>,
     pub(crate) field: Vec<WorldFieldObservation>,
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
@@ -142,6 +147,7 @@ fn observe_field_physical_parts(
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<WorldFieldPartObservation> {
     let mut parts = Vec::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     for physical in &cell.physical_materials {
         let Some(placements) = physical.placements.as_ref() else {
             continue;
@@ -164,12 +170,25 @@ fn observe_field_physical_parts(
             let Some(form) = form else {
                 continue;
             };
+            let resource_definition = catalog.iter().find(|entry| entry.name == *resource);
+            let Some(resource_definition) = resource_definition else {
+                continue;
+            };
+            let response =
+                crate::harmonics::material_response(resource_definition.properties, baselines, 0.0);
+            let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
+                resource_definition.properties,
+                baselines,
+            );
+            let fundamental = response.components.first();
             parts.push(WorldFieldPartObservation {
                 resource: resource.clone(),
                 x: placement.x,
                 y: placement.y,
                 rotation_radians: placement.rotation_radians,
                 form,
+                resonance_frequency_cycles_per_day: natural_frequency,
+                resonance_amplitude: fundamental.map_or(0.0, |component| component.amplitude),
             });
         }
     }
@@ -382,9 +401,36 @@ impl WorldObservation {
                 })
             })
             .collect();
+        let sunlight_brightness = simulation
+            .world_tone
+            .and_then(|config| {
+                let sample = simulation
+                    .world_tone_cycle
+                    .as_ref()
+                    .and_then(|cycle| cycle.sample(simulation.tick))
+                    .or_else(|| {
+                        config.sample(
+                            simulation.tick,
+                            simulation.environment.width,
+                            simulation.environment.height,
+                        )
+                    })?;
+                let minimum = config
+                    .parameters
+                    .minimum_energy_intensity_per_tick_per_width;
+                let maximum = config
+                    .parameters
+                    .maximum_energy_intensity_per_tick_per_width;
+                let source_fraction =
+                    (sample.energy_intensity_per_tick_per_width - minimum) / (maximum - minimum);
+                let source_fraction = source_fraction.clamp(0.0, 1.0);
+                Some(0.1 + source_fraction * 0.9)
+            })
+            .unwrap_or(1.0);
         Self {
             width: simulation.environment.width,
             height: simulation.environment.height,
+            sunlight_brightness,
             organisms,
             field,
             decomposing_bodies,
@@ -628,18 +674,78 @@ mod tests {
             .flat_map(|cell| cell.physical_parts.iter().flatten())
             .collect::<Vec<_>>();
 
-        assert_eq!(parts.len(), 128);
-        assert!(parts.iter().all(|part| {
-            part.x.is_finite()
-                && part.y.is_finite()
-                && part.rotation_radians.is_finite()
-                && part.form.is_valid()
-        }));
+        assert_eq!(
+            parts.len(),
+            640,
+            "every realized physical constituent must be present in the world observation"
+        );
+        for part in &parts {
+            assert!(
+                part.x.is_finite() && part.y.is_finite(),
+                "resource {} has non-finite observed position ({}, {})",
+                part.resource,
+                part.x,
+                part.y
+            );
+            assert!(
+                part.rotation_radians.is_finite(),
+                "resource {} has non-finite observed rotation {}",
+                part.resource,
+                part.rotation_radians
+            );
+            assert!(
+                part.form.is_valid(),
+                "resource {} has invalid observed physical form: {:?}",
+                part.resource,
+                part.form
+            );
+            assert!(
+                part.resonance_frequency_cycles_per_day.is_finite()
+                    && part.resonance_frequency_cycles_per_day >= 0.0,
+                "resource {} has invalid natural resonance frequency {}",
+                part.resource,
+                part.resonance_frequency_cycles_per_day
+            );
+            assert!(
+                part.resonance_amplitude.is_finite()
+                    && (0.0..=1.0).contains(&part.resonance_amplitude),
+                "resource {} has invalid normalized resonance amplitude {}",
+                part.resource,
+                part.resonance_amplitude
+            );
+        }
+        let water_parts = parts
+            .iter()
+            .filter(|part| part.resource == "Water")
+            .collect::<Vec<_>>();
+        assert!(!water_parts.is_empty());
+        assert!(water_parts
+            .iter()
+            .all(|part| part.resonance_frequency_cycles_per_day == 0.0));
         let resources = parts
             .iter()
             .map(|part| part.resource.as_str())
             .collect::<std::collections::BTreeSet<_>>();
-        assert_eq!(resources.len(), 7);
+        assert_eq!(resources.len(), 6);
+        let resonance_frequencies = parts
+            .iter()
+            .map(|part| part.resonance_frequency_cycles_per_day.to_bits())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(
+            resonance_frequencies.len() > 1,
+            "resource types must expose distinct natural resonance frequencies"
+        );
+    }
+
+    #[test]
+    fn world_observation_maps_sunlight_minimum_and_maximum_to_ten_and_one_hundred_percent() {
+        let mut fixture = crate::environment_chemistry_experiment::build(42);
+        let maximum = WorldObservation::from_simulation(&fixture.simulation);
+        assert!((maximum.sunlight_brightness - 1.0).abs() < 1e-12);
+
+        fixture.simulation.tick = 1_200;
+        let minimum = WorldObservation::from_simulation(&fixture.simulation);
+        assert!((minimum.sunlight_brightness - 0.1).abs() < 1e-12);
     }
 
     #[test]

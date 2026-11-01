@@ -10,6 +10,13 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
+pub(crate) const CONTROLLED_REACTANT_PAIRS: [(&str, &str); 4] = [
+    ("Nitrogen", "Water"),
+    ("Carbon", "Oxygen"),
+    ("Oxygen", "Water"),
+    ("Hydrogen", "Phosphorus"),
+];
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
@@ -23,6 +30,25 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     simulation.chemical_reaction_accumulation.clear();
     simulation.environment.chemistry_usable_energy = 0.0;
     simulation.environment.resonant_energy = Default::default();
+    // Keep the smaller domain local to this experiment so unrelated simulation
+    // fixtures retain their established 500 x 500 world.
+    simulation.environment.width = 250.0;
+    simulation.environment.height = 250.0;
+    simulation.world_tone = Some(
+        crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+            simulation.environment.width,
+            simulation.environment.height,
+        )
+        .expect("experiment world tone must fit the reduced world"),
+    );
+    simulation.world_tone_cycle = simulation.world_tone.and_then(|config| {
+        crate::world_tone::WorldToneCycle::precompute(
+            config,
+            simulation.environment.width,
+            simulation.environment.height,
+        )
+    });
+    assert!(simulation.world_tone_cycle.is_some());
     simulation.environment.field = ActiveMaterialField::new(
         simulation.environment.width,
         simulation.environment.height,
@@ -41,15 +67,8 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         "the chemistry experiment requires the seven canonical base resources"
     );
 
-    let mut identities = resource_names.clone();
-    while identities.len() < 128 {
-        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
-    }
-    identities.shuffle(&mut rng);
-
-    let pile_sizes = randomized_pile_sizes(&mut rng);
-    assert_eq!(pile_sizes.iter().sum::<usize>(), 128);
-    assert!(pile_sizes.iter().all(|size| (6..=20).contains(size)));
+    let pile_sizes = vec![20; 32];
+    assert_eq!(pile_sizes.iter().sum::<usize>(), 640);
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
         simulation.environment.width,
@@ -66,20 +85,29 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         &mut rng,
     );
+    assert_eq!(
+        centers.len(),
+        pile_sizes.len(),
+        "the seeded placement grid must provide one center for every resource pile"
+    );
     let mut identity_index = 0;
     for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
         let (center_x, center_y) = centers[pile_index];
-        let columns = (pile_size as f64).sqrt().ceil() as usize;
-        let rows = pile_size.div_ceil(columns);
+        let (first, second) = CONTROLLED_REACTANT_PAIRS[pile_index / 8];
+        let columns = 5;
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.0;
-            let y = center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.0;
+            let name = if (column + row) % 2 == 0 {
+                first
+            } else {
+                second
+            };
+            let x = center_x + (column as f64 - 2.0) * 1.25 + rng.gen_range(-0.04..=0.04);
+            let y = center_y + (row as f64 - 1.5) * 1.25 + rng.gen_range(-0.04..=0.04);
             let rotation_radians = rng.gen_range(0.0..std::f64::consts::TAU);
-            let name = identities[identity_index].clone();
             identity_index += 1;
-            let material = Material::free_base(&name, 1.0);
+            let material = Material::free_base(name, 1.0);
             let placement = Placement {
                 x,
                 y,
@@ -96,7 +124,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             );
         }
     }
-    assert_eq!(identity_index, 128);
+    assert_eq!(identity_index, 640);
     assert_eq!(
         simulation
             .environment
@@ -105,7 +133,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>(),
-        128
+        640
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
@@ -126,19 +154,6 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     }
 }
 
-fn randomized_pile_sizes(rng: &mut ChaCha8Rng) -> Vec<usize> {
-    let mut remaining = 128;
-    let mut sizes = Vec::new();
-    while remaining > 20 {
-        let maximum = 20.min(remaining - 6);
-        let size = rng.gen_range(6..=maximum);
-        sizes.push(size);
-        remaining -= size;
-    }
-    sizes.push(remaining);
-    sizes
-}
-
 fn randomized_pile_centers(
     pile_count: usize,
     hotspot_x: f64,
@@ -148,16 +163,31 @@ fn randomized_pile_centers(
     rng: &mut ChaCha8Rng,
 ) -> Vec<(f64, f64)> {
     let mut centers = vec![(hotspot_x, hotspot_y)];
-    let mut attempts = 0;
-    while centers.len() < pile_count && attempts < 20_000 {
-        attempts += 1;
-        let candidate = (
-            rng.gen_range(width * 0.08..width * 0.92),
-            rng.gen_range(height * 0.08..height * 0.92),
-        );
+    // A jittered, shuffled grid spreads the 32 controlled piles across the field.
+    let grid_side = 6_usize;
+    let spacing_x = width * 0.84 / grid_side as f64;
+    let spacing_y = height * 0.84 / grid_side as f64;
+    let mut candidates = Vec::with_capacity(grid_side * grid_side);
+    for row in 0..grid_side {
+        for col in 0..grid_side {
+            let x = width * 0.08
+                + (col as f64 + 0.5) * spacing_x
+                + rng.gen_range(-spacing_x * 0.12..=spacing_x * 0.12);
+            let y = height * 0.08
+                + (row as f64 + 0.5) * spacing_y
+                + rng.gen_range(-spacing_y * 0.12..=spacing_y * 0.12);
+            candidates.push((x, y));
+        }
+    }
+    candidates.shuffle(rng);
+    for candidate in candidates {
+        if centers.len() >= pile_count {
+            break;
+        }
         let separated = centers.iter().all(|(x, y)| {
-            let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-            (candidate.0 - *x).hypot(vertical) >= 70.0
+            let horizontal = (candidate.0 - *x + width * 0.5).rem_euclid(width) - width * 0.5;
+            let vertical = candidate.1 - *y;
+            horizontal.hypot(vertical) >= width.min(height) * 0.048
         });
         if separated {
             centers.push(candidate);
@@ -176,14 +206,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fixture_has_128_whole_resources_in_randomized_valid_piles_and_no_organisms() {
+    fn fixture_has_640_resources_in_controlled_pair_piles_and_no_organisms() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
-        assert_eq!(first.pile_sizes.iter().sum::<usize>(), 128);
-        assert!(first.pile_sizes.iter().all(|size| (6..=20).contains(size)));
+        assert_eq!(first.pile_sizes, vec![20; 32]);
+        assert_eq!(first.pile_sizes.iter().sum::<usize>(), 640);
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
+        assert_eq!(first.simulation.environment.width, 250.0);
+        assert_eq!(first.simulation.environment.height, 250.0);
         let material_count = first
             .simulation
             .environment
@@ -192,7 +224,7 @@ mod tests {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
-        assert_eq!(material_count, 128);
+        assert_eq!(material_count, 640);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -202,7 +234,22 @@ mod tests {
                 }
             }
         }
-        assert_eq!(represented_types.len(), 7);
+        assert_eq!(represented_types.len(), 6);
+        let mut resource_counts = std::collections::BTreeMap::new();
+        for cell in &first.simulation.environment.field.cells {
+            for material in &cell.physical_materials {
+                for (name, _) in &material.material.parts {
+                    *resource_counts.entry(name.clone()).or_insert(0usize) += 1;
+                }
+            }
+        }
+        assert_eq!(resource_counts.get("Nitrogen"), Some(&80));
+        assert_eq!(resource_counts.get("Carbon"), Some(&80));
+        assert_eq!(resource_counts.get("Oxygen"), Some(&160));
+        assert_eq!(resource_counts.get("Water"), Some(&160));
+        assert_eq!(resource_counts.get("Hydrogen"), Some(&80));
+        assert_eq!(resource_counts.get("Phosphorus"), Some(&80));
+        assert!(!resource_counts.contains_key("Sulfur"));
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
@@ -227,7 +274,7 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - 128.0).abs() < 1e-6);
+        assert!((total_material - 640.0).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"

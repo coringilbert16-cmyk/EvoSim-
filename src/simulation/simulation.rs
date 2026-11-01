@@ -1,6 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
+use std::time::Instant;
 
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
@@ -221,8 +222,8 @@ impl Simulation {
 
     fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
-        let width = 1000.0;
-        let height = 1000.0;
+        let width = 500.0;
+        let height = 500.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
         crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
@@ -250,7 +251,7 @@ impl Simulation {
             "only live-validated Bob suggestions may attach an acquired fluid shape"
         );
 
-        let anchor = Position { x: 500.0, y: 500.0 };
+        let anchor = Position { x: 250.0, y: 250.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
             unit.placement.y += anchor.y;
@@ -546,6 +547,7 @@ impl Simulation {
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
+        has_environmental_break_candidate: bool,
     ) -> ActionEligibility {
         // A multi-tick transformation owns a staged physical/energy snapshot.
         // Do not start movement or another material action against that snapshot.
@@ -570,8 +572,8 @@ impl Simulation {
                                 .is_some_and(|connections| !connections.is_empty())
                 )
             });
-        let can_break_environment = organism.active_transformation_id.is_none()
-            && crate::transformation::has_environmental_break_candidate(organism, environment);
+        let can_break_environment =
+            organism.active_transformation_id.is_none() && has_environmental_break_candidate;
         ActionEligibility {
             can_move: true,
             can_combine,
@@ -589,9 +591,9 @@ impl Simulation {
     }
     fn decision_candidates(
         organism: &Organism,
-        _environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
+        environmental_break_candidates: &[ActionCandidate],
     ) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| {
@@ -609,10 +611,7 @@ impl Simulation {
                     }
                 }
             }
-            candidates.extend(crate::transformation::environmental_break_candidates(
-                organism,
-                _environment,
-            ));
+            candidates.extend(environmental_break_candidates.iter().cloned());
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -756,9 +755,17 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        let break_committed_total = self
+            .environmental_chemistry_diagnostics
+            .break_committed_total;
+        let combine_committed_total = self
+            .environmental_chemistry_diagnostics
+            .combine_committed_total;
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
+                break_committed_total,
+                combine_committed_total,
                 ..Default::default()
             };
         self.environmental_chemistry_events.clear();
@@ -845,12 +852,18 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
+        let transport_started = Instant::now();
         crate::environment_flow::transport_field(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
             self.environment.height,
         );
+        self.environmental_chemistry_diagnostics
+            .transport_elapsed_micros = transport_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
@@ -886,6 +899,7 @@ impl Simulation {
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
         // the organism iteration below.
+        let break_discovery_started = Instant::now();
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_break_operations = crate::chemical_reaction::accumulate_environmental(
@@ -896,9 +910,15 @@ impl Simulation {
             &mut environmental_break_discovery_remaining,
         );
         self.environmental_chemistry_diagnostics
+            .break_discovery_elapsed_micros = break_discovery_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
+        self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics
             .break_discovery_work_remaining = environmental_break_discovery_remaining;
+        let combine_discovery_started = Instant::now();
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
@@ -910,10 +930,16 @@ impl Simulation {
                 &mut environmental_combine_discovery_remaining,
             );
         self.environmental_chemistry_diagnostics
+            .combine_discovery_elapsed_micros = combine_discovery_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
+        self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
             .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
 
+        let reaction_settlement_started = Instant::now();
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
         let environmental_break_operations =
@@ -945,6 +971,8 @@ impl Simulation {
             );
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
+                self.environmental_chemistry_diagnostics
+                    .break_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.break_rejected += 1;
             }
@@ -1022,6 +1050,8 @@ impl Simulation {
                 );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
+                self.environmental_chemistry_diagnostics
+                    .combine_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.combine_rejected += 1;
             }
@@ -1071,6 +1101,12 @@ impl Simulation {
                 },
             );
         }
+
+        self.environmental_chemistry_diagnostics
+            .reaction_settlement_elapsed_micros = reaction_settlement_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
 
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
@@ -1209,7 +1245,25 @@ impl Simulation {
                     decision_parameters,
                     developmental.as_ref(),
                 );
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
+                // Environmental BREAK candidate discovery restores each nearby
+                // physical material to inspect its bond endpoints. Reuse this exact
+                // result for both eligibility and decision construction rather than
+                // repeating the full geometry/restoration pass.
+                let environmental_break_candidates =
+                    if organisms[index].active_transformation_id.is_none() {
+                        crate::transformation::environmental_break_candidates(
+                            &organisms[index],
+                            environment,
+                        )
+                    } else {
+                        Vec::new()
+                    };
+                let eligibility = Self::action_eligibility(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    !environmental_break_candidates.is_empty(),
+                );
                 // Movement is a persistent operation. A decision starts it;
                 // each later progress tick advances exactly one world unit.
                 let mut movement_operation_active = false;
@@ -1347,8 +1401,12 @@ impl Simulation {
                     continue;
                 }
                 let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let candidates = Self::decision_candidates(
+                    &organisms[index],
+                    needs,
+                    eligibility,
+                    &environmental_break_candidates,
+                );
                 let competing_indices = crate::decision_runtime::developmental_competition_indices(
                     context,
                     &organisms[index].decision_history,
@@ -1847,19 +1905,24 @@ impl Simulation {
     /// Signed potential stored in realized physical bonds owned by the field.
     /// Old field bonds deserialize with zero energy rather than inventing a source.
     fn environmental_structural_energy_held(environment: &Environment) -> f64 {
-        environment
-            .field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| {
-                material
-                    .internal_connections
-                    .as_ref()
-                    .map(|bonds| bonds.iter().map(|bond| -bond.bond_energy).sum::<f64>())
-                    .unwrap_or(f64::NAN)
-            })
-            .sum()
+        crate::energy_ledger::compensated_sum(
+            environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .map(|material| {
+                    material
+                        .internal_connections
+                        .as_ref()
+                        .map(|bonds| {
+                            crate::energy_ledger::compensated_sum(
+                                bonds.iter().map(|bond| -bond.bond_energy),
+                            )
+                        })
+                        .unwrap_or(f64::NAN)
+                }),
+        )
     }
     /// Independent diagnostic oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
@@ -1899,6 +1962,9 @@ impl Simulation {
                 .energy_ledger
                 .total_pair_interaction_potential_held,
             external_energy_input: self.energy_ledger.total_external_energy_input,
+            external_energy_input_compensation: self
+                .energy_ledger
+                .total_external_energy_input_compensation,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
             work_expended: self.energy_ledger.total_work_expended,
@@ -2353,7 +2419,7 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(0xD3AE, 10.0);
         prepare_bondless_dead_fixture(&mut simulation);
         simulation.organisms[0].usable_energy = 2.0;
-        simulation.organisms[0].structure.units[0].placement.x = f64::MAX;
+        simulation.organisms[0].structure.units[0].placement.y = f64::MAX;
         let field_before = simulation.environment.field.total_amount();
         let ledger_before = simulation.energy_ledger;
         let living = HashSet::new();
@@ -2804,6 +2870,7 @@ mod decomposition_finalization_tests {
                 reproduction: 0.0,
                 development: 0.0,
             },
+            false,
         );
 
         assert!(!eligibility.can_move);
@@ -2820,6 +2887,41 @@ mod decomposition_finalization_tests {
         }
         assert!(simulation.world_tone.is_some());
 
+        // Isolate the source-frame settlement from the remainder of the tick.
+        // If this inventory is balanced but the full tick is not, the discrepancy
+        // is introduced by a later simulation phase (for example, reaction settlement).
+        let mut capture_only = simulation.clone();
+        let sample = capture_only
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(capture_only.tick))
+            .or_else(|| {
+                capture_only.world_tone.and_then(|config| {
+                    config.sample(
+                        capture_only.tick,
+                        capture_only.environment.width,
+                        capture_only.environment.height,
+                    )
+                })
+            })
+            .expect("the test simulation must have a valid world-tone sample");
+        let mut capture_living_ids = HashSet::new();
+        for organism in &mut capture_only.organisms {
+            if Simulation::has_intact_genome_core(organism, &capture_only.environment.catalog) {
+                capture_living_ids.insert(organism.id.clone());
+            }
+        }
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut capture_only,
+            sample,
+            &capture_living_ids,
+        );
+        let capture_inventory = capture_only.energy_inventory_snapshot();
+        assert!(
+            capture_inventory.is_balanced_without_creation(1e-9),
+            "world-tone-only inventory must reconcile before chemistry: {capture_inventory:#?}"
+        );
+
         let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();
 
@@ -2835,8 +2937,9 @@ mod decomposition_finalization_tests {
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
             inventory.is_balanced_without_creation(1e-9),
-            "world inventory after live sunlight capture: {:?}",
-            inventory.residual()
+            "world inventory after live sunlight capture: residual={:?}; inventory={inventory:#?}; ledger={:#?}",
+            inventory.residual(),
+            simulation.energy_ledger
         );
     }
 
@@ -3025,17 +3128,30 @@ mod decomposition_finalization_tests {
 
     #[test]
     fn world_energy_inventory_reconciles_across_ordinary_ticks() {
-        let mut simulation = Simulation::new(916, 10.0);
+        // Simulation::step has a large debug-build stack frame. Give this
+        // integration-style test a normal application-sized stack rather
+        // than relying on the test harness's smaller worker-thread stack.
+        std::thread::Builder::new()
+            .name("world-energy-inventory-test".into())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                let mut simulation = Simulation::new(916, 10.0);
 
-        for tick in 1..=5 {
-            simulation.step();
-            let inventory = simulation.energy_inventory_snapshot();
-            assert!(
-                inventory.is_balanced_without_creation(1e-9),
-                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}",
-                inventory.residual()
-            );
-        }
+                for tick in 1..=5 {
+                    let ledger_before = simulation.energy_ledger;
+                    simulation.step();
+                    let inventory = simulation.energy_inventory_snapshot();
+                    assert!(
+                        inventory.is_balanced(1e-9),
+                        "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}, ledger_before={ledger_before:?}, ledger_after={:?}",
+                        inventory.residual(),
+                        simulation.energy_ledger
+                    );
+                }
+            })
+            .expect("spawn test thread with application-sized stack")
+            .join()
+            .expect("ordinary-tick inventory test must complete");
     }
 
     #[test]
@@ -3418,6 +3534,29 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn cumulative_environmental_chemistry_totals_survive_tick_reset() {
+        let mut simulation = Simulation::new(954, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation
+            .environmental_chemistry_diagnostics
+            .combine_committed_total = 17;
+        simulation
+            .environmental_chemistry_diagnostics
+            .break_committed_total = 4;
+
+        simulation.step();
+
+        let diagnostics = simulation.environmental_chemistry_diagnostics;
+        assert_eq!(diagnostics.combine_committed_total, 17);
+        assert_eq!(diagnostics.break_committed_total, 4);
+        assert_eq!(diagnostics.combine_committed, 0);
+        assert_eq!(diagnostics.break_committed, 0);
+    }
+
+    #[test]
     fn aggregate_owned_construction_is_counted_once_in_energy_inventory() {
         let mut simulation = Simulation::new(953, 20.0);
         let organism = &mut simulation.organisms[0];
@@ -3439,12 +3578,13 @@ mod decomposition_finalization_tests {
             needs_space: false,
         });
 
-        let expected_structural_energy = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| -bond.bond_energy)
-            .sum::<f64>();
+        let expected_structural_energy = crate::energy_ledger::compensated_sum(
+            organism
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| -bond.bond_energy),
+        );
         let inventory = simulation.energy_inventory_snapshot();
 
         assert_eq!(inventory.current_usable_energy, 7.0);

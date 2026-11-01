@@ -40,7 +40,6 @@ fn compound(parts: &[(&str, f64)]) -> Material {
 /// comes entirely from material composition, quantity, and neighboring cells.
 pub(crate) const INITIAL_FORMATION_COUNT: usize = 6;
 const FORMATION_PARTICLES: usize = 120;
-const FORMATION_RADIUS: f64 = 45.0;
 const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
     (0.18, 0.18),
     (0.50, 0.18),
@@ -56,8 +55,6 @@ const FORMATION_CENTER_FRACTIONS: [(f64, f64); INITIAL_FORMATION_COUNT] = [
 /// ecological formations remain in place, while the starting organism also
 /// begins in a physically realized local material cloud.
 pub(crate) const INITIAL_RESOURCE_CLOUD_PARTICLES: usize = 5000;
-const INITIAL_RESOURCE_CLOUD_RADIUS: f64 = 55.0;
-const INITIAL_RESOURCE_CLOUD_CENTER: (f64, f64) = (500.0, 500.0);
 
 pub(crate) fn seed_initial_resource_cloud(
     field: &mut ActiveMaterialField,
@@ -72,10 +69,14 @@ pub(crate) fn seed_initial_resource_cloud(
     }
 
     let mut rng = StdRng::seed_from_u64(0xC10D_0001);
-    let (center_x, center_y) = INITIAL_RESOURCE_CLOUD_CENTER;
+    let field_width = field.width_cells as f64 * field.cell_size;
+    let field_height = field.height_cells as f64 * field.cell_size;
+    let center_x = field_width * 0.5;
+    let center_y = field_height * 0.5;
+    let cloud_radius = field_width.min(field_height) * 0.055;
     for particle_index in 0..INITIAL_RESOURCE_CLOUD_PARTICLES {
         let angle = rng.gen_range(0.0..std::f64::consts::TAU);
-        let radius = INITIAL_RESOURCE_CLOUD_RADIUS * rng.gen_range(0.0_f64..1.0_f64).sqrt();
+        let radius = cloud_radius * rng.gen_range(0.0_f64..1.0_f64).sqrt();
         let x = center_x + radius * angle.cos();
         let y = center_y + radius * angle.sin();
         let material = &compounds[particle_index % compounds.len()];
@@ -107,6 +108,7 @@ pub(crate) fn seed_initial_landscape(
     let width = field.width_cells as f64 * field.cell_size;
     let height = field.height_cells as f64 * field.cell_size;
 
+    let formation_radius = width.min(height) * 0.045;
     for (formation_index, &(fx, fy)) in FORMATION_CENTER_FRACTIONS.iter().enumerate() {
         let center_x = fx * width;
         let center_y = fy * height;
@@ -123,7 +125,7 @@ pub(crate) fn seed_initial_landscape(
                 + 0.12 * (angle * (2.0 + (seed % 4) as f64)).sin()
                 + 0.07 * (angle * (3.0 + (seed % 3) as f64) + 1.1).cos();
             let jitter = rng.gen_range(-0.12..0.12);
-            let radius = FORMATION_RADIUS * radial * (harmonic + jitter).max(0.25);
+            let radius = formation_radius * radial * (harmonic + jitter).max(0.25);
             let x = center_x + radius * angle.cos();
             let y = (center_y + radius * angle.sin()).rem_euclid(height);
             if x < 0.0 || x >= width {
