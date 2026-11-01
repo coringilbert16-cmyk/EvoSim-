@@ -133,6 +133,8 @@ pub(crate) struct WorldPointObservation {
 pub(crate) struct WorldObservation {
     pub(crate) width: f64,
     pub(crate) height: f64,
+    /// Whole-map visual brightness derived from the current sunlight source, in [0.1, 1.0].
+    pub(crate) sunlight_brightness: f64,
     pub(crate) organisms: Vec<WorldOrganismObservation>,
     pub(crate) field: Vec<WorldFieldObservation>,
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
@@ -399,9 +401,32 @@ impl WorldObservation {
                 })
             })
             .collect();
+        let sunlight_brightness = simulation
+            .world_tone
+            .and_then(|config| {
+                let sample = simulation
+                    .world_tone_cycle
+                    .as_ref()
+                    .and_then(|cycle| cycle.sample(simulation.tick))
+                    .or_else(|| {
+                        config.sample(
+                            simulation.tick,
+                            simulation.environment.width,
+                            simulation.environment.height,
+                        )
+                    })?;
+                let minimum = config.parameters.minimum_energy_intensity_per_tick_per_width;
+                let maximum = config.parameters.maximum_energy_intensity_per_tick_per_width;
+                let source_fraction = ((sample.energy_intensity_per_tick_per_width - minimum)
+                    / (maximum - minimum))
+                    .clamp(0.0, 1.0);
+                Some(0.1 + source_fraction * 0.9)
+            })
+            .unwrap_or(1.0);
         Self {
             width: simulation.environment.width,
             height: simulation.environment.height,
+            sunlight_brightness,
             organisms,
             field,
             decomposing_bodies,
@@ -706,6 +731,17 @@ mod tests {
             resonance_frequencies.len() > 1,
             "resource types must expose distinct natural resonance frequencies"
         );
+    }
+
+    #[test]
+    fn world_observation_maps_sunlight_minimum_and_maximum_to_ten_and_one_hundred_percent() {
+        let mut fixture = crate::environment_chemistry_experiment::build(42);
+        let maximum = WorldObservation::from_simulation(&fixture.simulation);
+        assert!((maximum.sunlight_brightness - 1.0).abs() < 1e-12);
+
+        fixture.simulation.tick = 1_200;
+        let minimum = WorldObservation::from_simulation(&fixture.simulation);
+        assert!((minimum.sunlight_brightness - 0.1).abs() < 1e-12);
     }
 
     #[test]
