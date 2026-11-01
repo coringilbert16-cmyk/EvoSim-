@@ -1235,15 +1235,25 @@ mod material_identity_tests {
         .expect("the restored bond endpoints must resolve to a live contact");
         assert!(candidate.distance <= crate::chemistry::CHEMICAL_CONTACT_RADIUS);
         assert!(candidate.facing > 0.0, "the facing endpoints must engage");
-        let properties_a = hypothetical.units[unit_a]
-            .properties(&simulation.environment.catalog)
+        let name_a = hypothetical.units[unit_a].material.parts[0].0.as_str();
+        let name_b = hypothetical.units[unit_b].material.parts[0].0.as_str();
+        let position_a = simulation
+            .environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == name_a)
+            .and_then(|resource| resource.properties.chemical_position)
             .unwrap();
-        let properties_b = hypothetical.units[unit_b]
-            .properties(&simulation.environment.catalog)
+        let position_b = simulation
+            .environment
+            .catalog
+            .iter()
+            .find(|resource| resource.name == name_b)
+            .and_then(|resource| resource.properties.chemical_position)
             .unwrap();
         let potential = crate::chemistry::interaction_potential(
-            properties_a.chemical_position.unwrap(),
-            properties_b.chemical_position.unwrap(),
+            position_a,
+            position_b,
             crate::chemistry::CHEMICAL_K,
             crate::chemistry::CHEMICAL_D_MAX,
         )
