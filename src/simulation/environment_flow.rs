@@ -830,8 +830,7 @@ mod tests {
         let revision_before = field.revision;
         let source_cell = field.index_for_position(24.999, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
-        let destination_cell = field.index_for_position(25.001, 200.0).unwrap();
-        let destination_cell_revision = field.cell_revisions[destination_cell];
+        let cell_revisions_before = field.cell_revisions.clone();
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
 
@@ -845,10 +844,16 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(objects.len(), 1);
-        assert!(objects[0].placements.as_ref().unwrap()[0].x > 25.0);
-        assert_ne!(
-            field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
-            Some(source_cell)
+        let moved_anchor = objects[0].placements.as_ref().unwrap()[0];
+        assert!(moved_anchor.x > 25.0);
+        let actual_destination_cell = field
+            .index_for_position(moved_anchor.x, moved_anchor.y)
+            .expect("transported material must remain inside the vertical world bounds");
+        assert_ne!(actual_destination_cell, source_cell);
+        assert!(
+            field.cell_revisions[actual_destination_cell]
+                > cell_revisions_before[actual_destination_cell],
+            "the cell containing the moved material must be invalidated"
         );
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
