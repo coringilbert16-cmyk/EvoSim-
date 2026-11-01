@@ -797,6 +797,9 @@ impl Simulation {
                     - original_ledger.total_potential_energy_released,
                 total_structural_energy_delta: trial_ledger.total_structural_energy_delta
                     - original_ledger.total_structural_energy_delta,
+                total_structural_energy_delta_compensation: trial_ledger
+                    .total_structural_energy_delta_compensation
+                    - original_ledger.total_structural_energy_delta_compensation,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
                 total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
@@ -857,6 +860,8 @@ impl Simulation {
             organism.usable_energy += prepared_energy;
             ledger.total_potential_energy_released += ledger_delta.total_potential_energy_released;
             ledger.total_structural_energy_delta += ledger_delta.total_structural_energy_delta;
+            ledger.total_structural_energy_delta_compensation +=
+                ledger_delta.total_structural_energy_delta_compensation;
             ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
             ledger.total_world_tone_energy_unabsorbed +=
                 ledger_delta.total_world_tone_energy_unabsorbed;
@@ -1118,6 +1123,8 @@ fn rollback_prepared_combine(
         // Legacy serialized transactions have only the staged delta available.
         ledger.total_potential_energy_released -= delta.total_potential_energy_released;
         ledger.total_structural_energy_delta -= delta.total_structural_energy_delta;
+        ledger.total_structural_energy_delta_compensation -=
+            delta.total_structural_energy_delta_compensation;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
         ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
         ledger.total_world_tone_energy_escaped -= delta.total_world_tone_energy_escaped;
@@ -1397,6 +1404,7 @@ mod tests {
         let before_ledger = EnergyLedger {
             total_potential_energy_released: 1.25,
             total_structural_energy_delta: 2.5,
+            total_structural_energy_delta_compensation: 0.125,
             total_external_energy_input: 3.75,
             initial_condition_energy_settled: true,
             total_world_tone_energy_unabsorbed: 4.125,
@@ -1417,6 +1425,9 @@ mod tests {
         let mut ledger = EnergyLedger {
             total_potential_energy_released: before_ledger.total_potential_energy_released + 0.2,
             total_structural_energy_delta: before_ledger.total_structural_energy_delta - 0.3,
+            total_structural_energy_delta_compensation: before_ledger
+                .total_structural_energy_delta_compensation
+                - 0.05,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
             initial_condition_energy_settled: false,
             total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed

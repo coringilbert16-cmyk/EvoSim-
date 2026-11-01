@@ -90,7 +90,15 @@ mod tests {
             "decomposition energy residual: {residual}"
         );
         assert_eq!(ledger.total_potential_energy_released, 0.0);
-        assert!((ledger.total_structural_energy_delta + initial_structural_energy).abs() <= 1e-9);
+        assert!(
+            crate::energy_ledger::compensated_sum([
+                ledger.total_structural_energy_delta,
+                ledger.total_structural_energy_delta_compensation,
+                initial_structural_energy,
+            ])
+            .abs()
+                <= 1e-9
+        );
         assert!((ledger.total_heat_dissipated - step.heat).abs() <= 1e-9);
     }
 

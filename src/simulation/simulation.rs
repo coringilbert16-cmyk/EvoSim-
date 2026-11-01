@@ -3563,7 +3563,11 @@ mod decomposition_finalization_tests {
         });
 
         let expected_structural_energy = crate::energy_ledger::compensated_sum(
-            organism.structure.bonds.iter().map(|bond| -bond.bond_energy),
+            organism
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| -bond.bond_energy),
         );
         let inventory = simulation.energy_inventory_snapshot();
 

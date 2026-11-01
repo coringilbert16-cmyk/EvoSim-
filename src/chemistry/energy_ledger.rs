@@ -867,10 +867,20 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
+        let structural_roundoff = if self.total_structural_energy_delta.abs()
+            >= transaction.structural_delta.abs()
+        {
+            (self.total_structural_energy_delta - next_structural) + transaction.structural_delta
+        } else {
+            (transaction.structural_delta - next_structural) + self.total_structural_energy_delta
+        };
+        let next_structural_compensation =
+            self.total_structural_energy_delta_compensation + structural_roundoff;
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()
             || !next_structural.is_finite()
+            || !next_structural_compensation.is_finite()
             || !next_work.is_finite()
             || !next_heat.is_finite()
         {
@@ -889,7 +899,12 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // Do not manufacture extra heat to hide an unrepresentable transaction:
         // reject atomically if the resulting non-creating residual exceeds the
         // existing tolerance.
-        let actual_structural_delta = next_structural - self.total_structural_energy_delta;
+        let actual_structural_delta = compensated_sum([
+            next_structural,
+            -self.total_structural_energy_delta,
+            next_structural_compensation,
+            -self.total_structural_energy_delta_compensation,
+        ]);
         let actual_work_delta = next_work - self.total_work_expended;
         let actual_heat_delta = next_heat - self.total_heat_dissipated;
         let residual_for = |candidate_holder: f64| {
@@ -941,6 +956,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         *holder = next_holder;
         self.total_potential_energy_released = next_released;
         self.total_structural_energy_delta = next_structural;
+        self.total_structural_energy_delta_compensation = next_structural_compensation;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
@@ -972,6 +988,35 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn small_structural_change_is_retained_after_large_cumulative_history() {
+        let mut ledger = EnergyLedger {
+            total_structural_energy_delta: -1.0e16,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 1_000.0;
+        let structural_delta = -0.3082207001484488;
+        let transaction = EnergyTransaction {
+            reason: EnergyReason::Combine,
+            potential_released: 0.0,
+            usable_delta: -structural_delta,
+            structural_delta,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+
+        assert!(ledger.settle_transaction(&mut usable, transaction));
+        let residual = compensated_sum([
+            usable,
+            -1_000.0,
+            ledger.total_structural_energy_delta,
+            1.0e16,
+            ledger.total_structural_energy_delta_compensation,
+        ]);
+        assert!(residual <= 0.0 && residual.abs() <= EPSILON);
+        assert!(ledger.total_structural_energy_delta_compensation < 0.0);
+    }
 
     #[test]
     fn positive_pair_potential_change_is_paid_only_by_active_mover() {

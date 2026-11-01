@@ -221,6 +221,10 @@ pub(crate) struct EnergyLedger {
     /// positive on bond dissociation).
     #[serde(default)]
     pub(crate) total_structural_energy_delta: f64,
+    /// Low-order correction retained when cumulative structural changes exceed f64 precision.
+    /// This is part of the signed structural-energy delta, not a separate energy store.
+    #[serde(default)]
+    pub(crate) total_structural_energy_delta_compensation: f64,
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
