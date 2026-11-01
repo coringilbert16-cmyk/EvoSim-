@@ -168,9 +168,7 @@ fn observe_field_physical_parts(
             let Some(form) = form else {
                 continue;
             };
-            let resource_definition = catalog
-                .iter()
-                .find(|entry| entry.name == *resource);
+            let resource_definition = catalog.iter().find(|entry| entry.name == *resource);
             let Some(resource_definition) = resource_definition else {
                 continue;
             };
