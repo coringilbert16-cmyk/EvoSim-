@@ -212,6 +212,13 @@ fn select_best_contact_from_offset(
 
     let mut best: Option<SelectedContact> = None;
     let inspected_pairs = (*remaining_work).min(pair_count);
+    if inspected_pairs == 0 {
+        return None;
+    }
+    // Every candidate in this constituent-pair batch shares the same unchanged
+    // trial graph. Structural potential is graph-wide, so calculate it once
+    // rather than rescanning every bond for every geometric contact candidate.
+    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
@@ -222,8 +229,13 @@ fn select_best_contact_from_offset(
         );
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    structure, unit_a, unit_b, candidate, catalog,
+                crate::combine_runtime::selected_candidate_evaluation_with_reactant_energy(
+                    structure,
+                    unit_a,
+                    unit_b,
+                    candidate,
+                    catalog,
+                    reactant_structural_energy,
                 )
             else {
                 continue;
