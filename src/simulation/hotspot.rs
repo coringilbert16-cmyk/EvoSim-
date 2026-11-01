@@ -186,7 +186,9 @@ pub(crate) fn settle_environment_inputs(
                 {
                     return false;
                 }
-                let Some(intensity) = hotspot.intensity_at_wrapped(placement.x, placement.y, environment.width) else {
+                let Some(intensity) =
+                    hotspot.intensity_at_wrapped(placement.x, placement.y, environment.width)
+                else {
                     return false;
                 };
                 if intensity <= f64::EPSILON {
