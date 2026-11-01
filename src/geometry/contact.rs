@@ -499,19 +499,6 @@ pub(crate) fn endpoint_world_point(
     }
 }
 
-fn endpoint_facing(
-    a: ConnectionEndpoint,
-    b: ConnectionEndpoint,
-    ua: &StructuralUnit,
-    ub: &StructuralUnit,
-    catalog: &[crate::resources::BaseResource],
-) -> Option<f64> {
-    Some(facing(
-        endpoint_world_point(a, ua, catalog)?,
-        endpoint_world_point(b, ub, catalog)?,
-    ))
-}
-
 fn candidate_for_endpoints(
     s: &OrganismStructure,
     ua: usize,
