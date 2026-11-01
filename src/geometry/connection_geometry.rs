@@ -93,7 +93,7 @@ pub fn transform_line_endpoint(
 ///
 /// This function is deliberately keyed by the realized shape and vertex index,
 /// not by connection metadata. It is the preferred endpoint API for rigid shapes.
-pub fn rigid_endpoint_world_point(
+pub pub(crate) fn rigid_endpoint_world_point(
     shape: &Shape,
     vertex: usize,
     origin_x: f64,
