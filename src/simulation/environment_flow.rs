@@ -509,49 +509,50 @@ fn rotated(
         return None;
     }
     let mut result = material.clone();
-    let placements = result.placements.as_mut()?;
-    if placements.is_empty() {
-        return None;
-    }
-    let anchor_y = placements[0].y;
-    let mut total_mass = 0.0;
-    let mut weighted_x = 0.0;
-    let mut weighted_y = 0.0;
-    for (index, placement) in placements.iter().enumerate() {
-        let Some((name, amount)) = material.material.parts.get(index) else {
-            return None;
-        };
-        let resource = resource_for_part(name, catalog)?;
-        let mass = resource.properties.mass * *amount;
-        if !mass.is_finite() || mass <= 0.0 {
+    {
+        let placements = result.placements.as_mut()?;
+        if placements.is_empty() || placements.len() != material.material.parts.len() {
             return None;
         }
-        total_mass += mass;
-        weighted_x += placement.x * mass;
-        weighted_y += (placement.y - anchor_y) * mass;
-    }
-    if !total_mass.is_finite() || total_mass <= 0.0 {
-        return None;
-    }
-    let center_x = weighted_x / total_mass;
-    let center_y = anchor_y + weighted_y / total_mass;
-    let (sin, cos) = angle.sin_cos();
-    for placement in placements.iter_mut() {
-        let dx = placement.x - center_x;
-        let dy = placement.y - center_y;
-        placement.x = center_x + dx * cos - dy * sin;
-        placement.y = center_y + dx * sin + dy * cos;
-        placement.rotation_radians =
-            (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !placement.rotation_radians.is_finite()
-        {
+        let anchor_y = placements[0].y;
+        let mut total_mass = 0.0;
+        let mut weighted_x = 0.0;
+        let mut weighted_y = 0.0;
+        for (index, placement) in placements.iter().enumerate() {
+            let (name, amount) = material.material.parts.get(index)?;
+            let resource = resource_for_part(name, catalog)?;
+            let mass = resource.properties.mass * *amount;
+            if !mass.is_finite() || mass <= 0.0 {
+                return None;
+            }
+            total_mass += mass;
+            weighted_x += placement.x * mass;
+            weighted_y += (placement.y - anchor_y) * mass;
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
             return None;
         }
+        let center_x = weighted_x / total_mass;
+        let center_y = anchor_y + weighted_y / total_mass;
+        let (sin, cos) = angle.sin_cos();
+        for placement in placements.iter_mut() {
+            let dx = placement.x - center_x;
+            let dy = placement.y - center_y;
+            placement.x = center_x + dx * cos - dy * sin;
+            placement.y = center_y + dx * sin + dy * cos;
+            placement.rotation_radians =
+                (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+        }
     }
+
     let vertical_shift = clamp_vertical_displacement(&result, 0.0, height, catalog)?;
-    for placement in placements.iter_mut() {
+    for placement in result.placements.as_mut()? {
         placement.y += vertical_shift;
     }
     Some(result)
