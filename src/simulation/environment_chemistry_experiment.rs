@@ -66,6 +66,11 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         &mut rng,
     );
+    assert_eq!(
+        centers.len(),
+        pile_sizes.len(),
+        "the seeded placement grid must provide one center for every resource pile"
+    );
     let mut identity_index = 0;
     for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
         let (center_x, center_y) = centers[pile_index];
