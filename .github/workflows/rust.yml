@@ -201,6 +201,10 @@ jobs:
           run_check cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
+      - name: Environmental experiment observation (focused test)
+        if: always()
+        timeout-minutes: 5
+        run: cargo test --locked environmental_world_observation_exposes_each_physical_resource_shape -- --nocapture
       - name: Run Rust tests
         if: always()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
