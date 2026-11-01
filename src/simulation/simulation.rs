@@ -2897,14 +2897,15 @@ mod decomposition_finalization_tests {
                 })
             })
             .expect("the test simulation must have a valid world-tone sample");
-        let capture_living_ids: HashSet<String> = capture_only
-            .organisms
-            .iter_mut()
-            .filter(|organism| {
-                Simulation::has_intact_genome_core(*organism, &capture_only.environment.catalog)
-            })
-            .map(|organism| organism.id.clone())
-            .collect();
+        let mut capture_living_ids = HashSet::new();
+        for organism in &mut capture_only.organisms {
+            if Simulation::has_intact_genome_core(
+                organism,
+                &capture_only.environment.catalog,
+            ) {
+                capture_living_ids.insert(organism.id.clone());
+            }
+        }
         crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
             &mut capture_only,
             sample,
