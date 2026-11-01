@@ -209,7 +209,22 @@ mod tests {
                 }
             }
         }
-        assert_eq!(represented_types.len(), 7);
+        assert_eq!(represented_types.len(), 6);
+        let mut resource_counts = std::collections::BTreeMap::new();
+        for cell in &first.simulation.environment.field.cells {
+            for material in &cell.physical_materials {
+                for (name, _) in &material.material.parts {
+                    *resource_counts.entry(name.clone()).or_insert(0usize) += 1;
+                }
+            }
+        }
+        assert_eq!(resource_counts.get("Nitrogen"), Some(&80));
+        assert_eq!(resource_counts.get("Carbon"), Some(&80));
+        assert_eq!(resource_counts.get("Oxygen"), Some(&160));
+        assert_eq!(resource_counts.get("Water"), Some(&160));
+        assert_eq!(resource_counts.get("Hydrogen"), Some(&80));
+        assert_eq!(resource_counts.get("Phosphorus"), Some(&80));
+        assert!(!resource_counts.contains_key("Sulfur"));
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
