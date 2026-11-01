@@ -547,6 +547,7 @@ impl Simulation {
         organism: &Organism,
         environment: &Environment,
         needs: CurrentNeeds,
+        has_environmental_break_candidate: bool,
     ) -> ActionEligibility {
         // A multi-tick transformation owns a staged physical/energy snapshot.
         // Do not start movement or another material action against that snapshot.
@@ -571,8 +572,8 @@ impl Simulation {
                                 .is_some_and(|connections| !connections.is_empty())
                 )
             });
-        let can_break_environment = organism.active_transformation_id.is_none()
-            && crate::transformation::has_environmental_break_candidate(organism, environment);
+        let can_break_environment =
+            organism.active_transformation_id.is_none() && has_environmental_break_candidate;
         ActionEligibility {
             can_move: true,
             can_combine,
@@ -590,9 +591,9 @@ impl Simulation {
     }
     fn decision_candidates(
         organism: &Organism,
-        _environment: &Environment,
         needs: CurrentNeeds,
         eligibility: ActionEligibility,
+        environmental_break_candidates: &[ActionCandidate],
     ) -> Vec<ActionCandidate> {
         let mut candidates = Vec::new();
         let relevant = |action: ActionKind| {
@@ -610,10 +611,7 @@ impl Simulation {
                     }
                 }
             }
-            candidates.extend(crate::transformation::environmental_break_candidates(
-                organism,
-                _environment,
-            ));
+            candidates.extend(environmental_break_candidates.iter().cloned());
         }
         if relevant(ActionKind::Combine) {
             candidates.push(ActionCandidate {
@@ -1247,7 +1245,21 @@ impl Simulation {
                     decision_parameters,
                     developmental.as_ref(),
                 );
-                let eligibility = Self::action_eligibility(&organisms[index], environment, needs);
+                // Environmental BREAK candidate discovery restores each nearby
+                // physical material to inspect its bond endpoints. Reuse this exact
+                // result for both eligibility and decision construction rather than
+                // repeating the full geometry/restoration pass.
+                let environmental_break_candidates =
+                    crate::transformation::environmental_break_candidates(
+                        &organisms[index],
+                        environment,
+                    );
+                let eligibility = Self::action_eligibility(
+                    &organisms[index],
+                    environment,
+                    needs,
+                    !environmental_break_candidates.is_empty(),
+                );
                 // Movement is a persistent operation. A decision starts it;
                 // each later progress tick advances exactly one world unit.
                 let mut movement_operation_active = false;
@@ -1385,8 +1397,12 @@ impl Simulation {
                     continue;
                 }
                 let context = DecisionContext { needs, eligibility };
-                let candidates =
-                    Self::decision_candidates(&organisms[index], environment, needs, eligibility);
+                let candidates = Self::decision_candidates(
+                    &organisms[index],
+                    needs,
+                    eligibility,
+                    &environmental_break_candidates,
+                );
                 let competing_indices = crate::decision_runtime::developmental_competition_indices(
                     context,
                     &organisms[index].decision_history,
