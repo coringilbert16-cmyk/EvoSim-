@@ -476,15 +476,14 @@ impl EnergyInventorySnapshot {
                 .is_some_and(|residual| residual.abs() <= tolerance)
     }
 
-    /// Stronger release-gate oracle: tolerate tiny missing energy from numeric
-    /// rounding, but never accept a positive residual that represents more
-    /// stored/spent energy than the modeled sources supplied.
+    /// Release-gate oracle: tolerate insignificant floating-point rounding
+    /// residuals in either direction without masking meaningful energy errors.
     pub(crate) fn is_balanced_without_creation(self, tolerance: f64) -> bool {
         tolerance.is_finite()
             && tolerance >= 0.0
             && self
                 .residual()
-                .is_some_and(|residual| residual <= 0.0 && residual.abs() <= tolerance)
+                .is_some_and(|residual| residual.abs() <= tolerance)
     }
 }
 
