@@ -998,19 +998,14 @@ mod material_identity_tests {
         // Use the exact facing endpoints: Carbon's rightmost corner and
         // Hydrogen's left longitudinal endpoint. The inferred candidate order
         // is not authoritative for this symmetric contact.
-        composite.internal_connections = Some(vec![
-            crate::physical_material::PhysicalMaterialBond {
+        composite.internal_connections =
+            Some(vec![crate::physical_material::PhysicalMaterialBond {
                 part_a: 0,
-                endpoint_a: crate::structure::ConnectionEndpoint::Corner {
-                    point_index: 0,
-                },
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
                 part_b: 1,
-                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint {
-                    point_index: 0,
-                },
+                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
                 bond_energy: 0.0,
-            },
-        ]);
+            }]);
         composite
     }
 
