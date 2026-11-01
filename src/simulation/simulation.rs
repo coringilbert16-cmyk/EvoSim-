@@ -3562,12 +3562,9 @@ mod decomposition_finalization_tests {
             needs_space: false,
         });
 
-        let expected_structural_energy = organism
-            .structure
-            .bonds
-            .iter()
-            .map(|bond| -bond.bond_energy)
-            .sum::<f64>();
+        let expected_structural_energy = crate::energy_ledger::compensated_sum(
+            organism.structure.bonds.iter().map(|bond| -bond.bond_energy),
+        );
         let inventory = simulation.energy_inventory_snapshot();
 
         assert_eq!(inventory.current_usable_energy, 7.0);
