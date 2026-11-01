@@ -987,7 +987,7 @@ mod material_identity_tests {
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 13.338,
+                    x: 14.0,
                     y: 12.5,
                     rotation_radians: 0.0,
                 },
