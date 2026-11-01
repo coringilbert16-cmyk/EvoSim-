@@ -1001,9 +1001,13 @@ mod material_identity_tests {
         composite.internal_connections = Some(vec![
             crate::physical_material::PhysicalMaterialBond {
                 part_a: 0,
-                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner {
+                    point_index: 0,
+                },
                 part_b: 1,
-                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint {
+                    point_index: 0,
+                },
                 bond_energy: 0.0,
             },
         ]);
