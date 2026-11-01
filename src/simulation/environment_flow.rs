@@ -413,7 +413,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
-            height,
+            width,
         );
         let left = obstacle_adjusted_velocity(
             background_velocity(center_x - epsilon, center_y, width, height),
@@ -468,7 +468,7 @@ fn rotated(
     material: &PhysicalMaterial,
     angle: f64,
     catalog: &[BaseResource],
-    width: f64,
+    _width: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
     if !angle.is_finite() {
@@ -500,7 +500,7 @@ fn rotated(
         return None;
     }
     let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+    let center_y = anchor_y + weighted_y / total_mass;
     let (sin, cos) = angle.sin_cos();
     for placement in placements.iter_mut() {
         let dx = placement.x - center_x;
@@ -620,7 +620,7 @@ pub(crate) fn transport_field(
             width,
         );
         let scale = mobility(mass) * 0.15;
-        let mut dx = velocity.x * scale;
+        let dx = velocity.x * scale;
         let dy = velocity.y * scale;
         let angular_step = angular_displacement(
             &material,
