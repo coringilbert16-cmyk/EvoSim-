@@ -1153,6 +1153,51 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn bonded_environmental_carbon_hydrogen_can_reach_natural_break_activation() {
+        let mut simulation = crate::state::Simulation::new(940, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let cell_index = simulation
+            .environment
+            .field
+            .index_for_position(12.5, 12.5)
+            .expect("bonded test material must be inside the field");
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            cell_index,
+            source,
+            &simulation.environment.catalog,
+        ));
+
+        let mut accumulation = std::collections::BTreeMap::new();
+        let mut max_accumulated = 0.0_f64;
+        let mut ready = false;
+        for tick in 0..2_000_u64 {
+            let mut discovery_work = MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_work,
+            );
+            max_accumulated = max_accumulated.max(
+                accumulation.values().copied().fold(0.0_f64, f64::max),
+            );
+            if !operations.is_empty() {
+                ready = true;
+                break;
+            }
+        }
+        assert!(
+            ready,
+            "a realized Carbon-Hydrogen environmental bond never reached BREAK activation; max_accumulated={max_accumulated:.9}, remaining_pairs={}",
+            accumulation.len()
+        );
+    }
+
+    #[test]
     fn environmental_discovery_work_is_bounded_at_each_budget_size() {
         let mut simulation = crate::state::Simulation::new(938, 10.0);
         for cell in &mut simulation.environment.field.cells {
