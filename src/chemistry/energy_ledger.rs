@@ -3,6 +3,23 @@ use crate::state::EnergyLedger;
 
 const EPSILON: f64 = 1e-9;
 
+/// Sum floating-point inventory components with compensation so regrouping
+/// many small bond-energy terms does not create a false world-level surplus.
+pub(crate) fn compensated_sum(values: impl IntoIterator<Item = f64>) -> f64 {
+    let mut sum = 0.0;
+    let mut correction = 0.0;
+    for value in values {
+        let next = sum + value;
+        if sum.abs() >= value.abs() {
+            correction += (sum - next) + value;
+        } else {
+            correction += (value - next) + sum;
+        }
+        sum = next;
+    }
+    sum + correction
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EnergyReason {
     Combine,
