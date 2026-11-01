@@ -859,7 +859,8 @@ mod tests {
         );
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
-    let displacement_scale = mobility(original.material.mass(&catalog)) * FLOW_DISPLACEMENT_SCALE;
+        let displacement_scale =
+            mobility(original.material.mass(&catalog)) * FLOW_DISPLACEMENT_SCALE;
         let translated_expected = translated(
             &original,
             velocity.x * displacement_scale,
