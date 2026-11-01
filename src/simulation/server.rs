@@ -142,8 +142,10 @@ async fn world_observation_handler(
         serde_json::json!({
             "command": "world",
             "bounds": bounds,
-            "known_organisms": known_organisms,
-            "known_cells": known_cells,
+            // The child command expects concrete vectors. Missing query parameters
+            // mean "no incremental cache", not JSON null.
+            "known_organisms": known_organisms.unwrap_or_default(),
+            "known_cells": known_cells.unwrap_or_default(),
         }),
     )
     .await
