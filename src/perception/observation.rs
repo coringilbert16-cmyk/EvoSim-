@@ -168,10 +168,10 @@ fn observe_field_physical_parts(
             let Some(form) = form else {
                 continue;
             };
-            let Some(resource_definition) = catalog
+            let resource_definition = catalog
                 .iter()
-                .find(|entry| entry.name == *resource)
-            else {
+                .find(|entry| entry.name == *resource);
+            let Some(resource_definition) = resource_definition else {
                 continue;
             };
             let response = crate::harmonics::material_response(
