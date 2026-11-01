@@ -227,8 +227,8 @@ jobs:
           done
           exit "$failed"
       - name: Run Rust tests
-        if: always()
-        # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
+        if: success()
+        # Preserve full-suite coverage after all focused acceptance checks pass.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
       - name: Run Clippy
