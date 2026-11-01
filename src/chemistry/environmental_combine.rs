@@ -1385,7 +1385,7 @@ mod tests {
             let scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
             let mut visited = vec![false; field_cell_count];
             for tick in 0..field_cell_count {
-                let start = anchor_cell_start(tick, field_cell_count, scan_count);
+                let start = anchor_cell_start(tick as u64, field_cell_count, scan_count);
                 for offset in 0..scan_count {
                     visited[(start + offset) % field_cell_count] = true;
                 }
