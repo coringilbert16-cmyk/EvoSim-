@@ -160,7 +160,6 @@ impl ResonantEnergyReservoir {
             || reaction_frequency_cycles_per_day <= 0.0
             || !max_energy.is_finite()
             || max_energy <= 0.0
-            || self.total_energy().is_none()
         {
             return 0.0;
         }
@@ -219,7 +218,8 @@ impl ResonantEnergyReservoir {
         self.components
             .retain(|component| component.energy > f64::EPSILON);
         actual_withdrawal
-    }}
+    }
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub(crate) struct ToneSpectrum {
