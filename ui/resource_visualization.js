@@ -273,7 +273,9 @@
       const latest = committed[committed.length - 1];
       lastNode.textContent = latest
         ? `Last committed reaction: ${latest.reaction} at tick ${latest.tick}`
-        : 'No committed environmental reactions this tick';
+        : diagnostics.accumulation_entries > 0
+          ? `Reaction progress accumulating across ${diagnostics.accumulation_entries} pair(s); no commit this tick`
+          : 'No environmental reaction committed or accumulating this tick';
     }
   }
 
