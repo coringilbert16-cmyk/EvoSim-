@@ -959,8 +959,13 @@ mod tests {
         .expect("catalog carbon should realize");
         let moved = translated(&material, 0.0, 1.0, 1000.0, &catalog).unwrap();
         let placement = &moved.placements.as_ref().unwrap()[0];
-        assert!((0.0..1000.0).contains(&placement.y));
-        assert!((placement.y - 999.999).abs() < 1e-9);
+        let extent = shape_vertical_extent(&material.realized_shapes.as_ref().unwrap()[0].form, 0.0);
+        assert!(placement.y - extent >= 0.0);
+        assert!(placement.y + extent <= 1000.0 - 1e-6 + 1e-9);
+        assert!(
+            placement.y < 999.999,
+            "the element's full geometry, not only its center, must remain inside the wall"
+        );
         let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         assert!(field.index_for_position(500.0, 1000.0).is_none());
         assert!(field.index_for_position(500.0, -0.001).is_none());
