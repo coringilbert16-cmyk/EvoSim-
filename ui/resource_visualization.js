@@ -79,7 +79,7 @@
     list.replaceChildren();
     const heading = document.createElement('div');
     heading.className = 'ev-note';
-    heading.textContent = 'Element color is calculated from its natural resonant frequency. Aura strength follows the oscillator response amplitude.';
+    heading.textContent = 'Material fill identifies the resource. The thin boundary aura uses natural resonance frequency for hue and oscillator response amplitude for strength.';
     const scale = document.createElement('div');
     scale.style.height = '14px';
     scale.style.borderRadius = '999px';
