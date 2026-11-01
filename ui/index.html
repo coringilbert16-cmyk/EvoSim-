@@ -648,8 +648,17 @@
         }
       }
       try {
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        // Bound observation requests so a stalled simulation endpoint cannot
+        // leave the canvas indefinitely showing its initial waiting state.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        let response;
+        try {
+          response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`);
         const next = await response.json();
         if (serial !== requestSerial) return;
         if (level === 'World' && next?.payload?.World) {
@@ -713,8 +722,20 @@
         observation = next; observationLevel = level;
         if (levelChanged) cameraInitialized = false;
         render();
-      } catch (_) {
-        if (serial === requestSerial) status.textContent = 'Observation unavailable — retrying…';
+      } catch (error) {
+        if (serial === requestSerial) {
+          const message = error instanceof Error ? error.message : String(error);
+          status.textContent = 'Observation request failed: ' + message.slice(0, 180);
+          const viewport = viewportSize();
+          ctx.clearRect(0, 0, viewport.width, viewport.height);
+          ctx.fillStyle = '#071522';
+          ctx.fillRect(0, 0, viewport.width, viewport.height);
+          ctx.fillStyle = '#ffd28a';
+          ctx.font = '13px ui-monospace, monospace';
+          ctx.fillText('Could not load /observation/world', 18, 30);
+          ctx.fillStyle = '#d9e2ec';
+          ctx.fillText(message.slice(0, 140), 18, 52);
+        }
       }
     }
     async function enterOrganismLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Organism', id); }
@@ -922,21 +943,18 @@
     resize();
     awaitInitialObservation();
 
-    function awaitInitialObservation() {
-      refreshRuntimeStatus().finally(async () => {
-        // The chemistry experiment starts with an organism-free physical field.
-        // Always enter through World so the field, not a stale hard-coded
-        // organism/structure ID, is the initial observation.
-        selectedIds.clear();
-        focusedOrganismId = null;
-        observationLevel = 'World';
-        await loadObservation('World');
-        connectLiveStream();
-        // This viewer opens the environmental chemistry experiment in live
-        // mode, not as a static history browser. Start it on first load unless
-        // the runtime is already running.
-        if (!runtimeStatus?.running) await control('/control/resume');
-      });
+    async function awaitInitialObservation() {
+      // Do not make the first world render wait for the status endpoint. A slow
+      // status request must not block the independent world-observation request.
+      selectedIds.clear();
+      focusedOrganismId = null;
+      observationLevel = 'World';
+      const observationRequest = loadObservation('World');
+      const statusRequest = refreshRuntimeStatus();
+      await Promise.allSettled([observationRequest, statusRequest]);
+      connectLiveStream();
+      // This viewer opens the environmental chemistry experiment in live mode.
+      if (!runtimeStatus?.running) await control('/control/resume');
     }
   </script>
 </body>
