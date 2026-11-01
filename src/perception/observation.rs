@@ -111,7 +111,6 @@ pub(crate) struct WorldFieldPartObservation {
     /// Derived from the same material oscillator response used by the simulation.
     pub(crate) resonance_frequency_cycles_per_day: f64,
     pub(crate) resonance_amplitude: f64,
-    pub(crate) resonance_phase_radians: f64,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
@@ -144,14 +143,9 @@ pub(crate) struct WorldObservation {
 fn observe_field_physical_parts(
     cell: &crate::environment::FieldCell,
     catalog: &[crate::resources::BaseResource],
-    tick: u64,
-) -> Vec<WorldFieldPartObservation> {
+ ) -> Vec<WorldFieldPartObservation> {
     let mut parts = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
-    let phase = crate::harmonics::phase_at_tick(
-        crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
-        tick,
-    );
     for physical in &cell.physical_materials {
         let Some(placements) = physical.placements.as_ref() else {
             continue;
@@ -180,7 +174,7 @@ fn observe_field_physical_parts(
             let response = crate::harmonics::material_response(
                 resource_definition.properties,
                 baselines,
-                phase,
+                0.0,
             );
             let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
                 resource_definition.properties,
@@ -195,7 +189,6 @@ fn observe_field_physical_parts(
                 form,
                 resonance_frequency_cycles_per_day: natural_frequency,
                 resonance_amplitude: fundamental.map_or(0.0, |component| component.amplitude),
-                resonance_phase_radians: fundamental.map_or(phase, |component| component.phase_radians),
             });
         }
     }
@@ -343,7 +336,7 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
-                            physical_parts: Some(observe_field_physical_parts(cell, catalog, simulation.tick)),
+                            physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                         })
                     })
                     .collect()
@@ -384,7 +377,6 @@ impl WorldObservation {
                         physical_parts: Some(observe_field_physical_parts(
                             cell,
                             &simulation.environment.catalog,
-                            simulation.tick,
                         )),
                     })
                 })
@@ -655,12 +647,16 @@ mod tests {
             .flat_map(|cell| cell.physical_parts.iter().flatten())
             .collect::<Vec<_>>();
 
-        assert_eq!(parts.len(), 128);
+        assert_eq!(parts.len(), 1280);
         assert!(parts.iter().all(|part| {
             part.x.is_finite()
                 && part.y.is_finite()
                 && part.rotation_radians.is_finite()
                 && part.form.is_valid()
+                && part.resonance_frequency_cycles_per_day.is_finite()
+                && part.resonance_frequency_cycles_per_day > 0.0
+                && part.resonance_amplitude.is_finite()
+                && (0.0..=1.0).contains(&part.resonance_amplitude)
         }));
         let resources = parts
             .iter()
