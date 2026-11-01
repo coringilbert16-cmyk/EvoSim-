@@ -538,14 +538,13 @@ pub(crate) fn accumulate_environmental(
                         .wrapping_add(cell_a)
                         .wrapping_add(material_a),
                 );
-            for target_offset in 0..target_cells.len() {
+            for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
