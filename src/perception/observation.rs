@@ -172,11 +172,8 @@ fn observe_field_physical_parts(
             let Some(resource_definition) = resource_definition else {
                 continue;
             };
-            let response = crate::harmonics::material_response(
-                resource_definition.properties,
-                baselines,
-                0.0,
-            );
+            let response =
+                crate::harmonics::material_response(resource_definition.properties, baselines, 0.0);
             let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
                 resource_definition.properties,
                 baselines,
