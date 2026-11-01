@@ -9,6 +9,8 @@ on:
     paths:
       - "src/chemistry/**"
       - "src/simulation/**"
+      - "src/geometry/**"
+      - "src/materials/**"
       - "src/infrastructure/diagnostics.rs"
       - ".github/workflows/environment-chemistry-experiment.yml"
 
