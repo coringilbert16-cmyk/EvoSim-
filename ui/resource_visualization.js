@@ -213,10 +213,21 @@
   }
 
   function drawPhysicalFieldPart(part, viewport, worldWidth) {
-    // Draw periodic copies so an element and its aura remain continuous as
-    // they cross the left/right seam. The world clip removes off-world copies.
-    for (const offset of [0, -worldWidth, worldWidth]) {
-      drawPhysicalFieldPartAt(part, viewport, worldWidth, offset);
+    const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
+    const wrappedX = Number.isFinite(worldWidth) && worldWidth > 0
+      ? displayPosition.x - Math.floor(displayPosition.x / worldWidth) * worldWidth
+      : displayPosition.x;
+    drawPhysicalFieldPartAt(part, viewport, worldWidth, 0);
+
+    // Only draw the opposite-side copy when the element's 30px maximum aura
+    // could cross the seam. This keeps the 10x denser field inexpensive.
+    if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
+    const seamMargin = 30 / Math.max(camera.scale, 1e-6) + 2;
+    if (wrappedX < seamMargin) {
+      drawPhysicalFieldPartAt(part, viewport, worldWidth, worldWidth);
+    }
+    if (wrappedX > worldWidth - seamMargin) {
+      drawPhysicalFieldPartAt(part, viewport, worldWidth, -worldWidth);
     }
   }
 
