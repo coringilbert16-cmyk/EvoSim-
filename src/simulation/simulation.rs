@@ -221,8 +221,8 @@ impl Simulation {
 
     fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
-        let width = 250.0;
-        let height = 250.0;
+        let width = 500.0;
+        let height = 500.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
         crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
