@@ -62,17 +62,12 @@ impl RadialHotspot {
     }
 
     /// Sample the same radial source on a horizontally periodic world.
-    pub(crate) fn intensity_at_wrapped(
-        self,
-        x: f64,
-        y: f64,
-        world_width: f64,
-    ) -> Option<f64> {
+    pub(crate) fn intensity_at_wrapped(self, x: f64, y: f64, world_width: f64) -> Option<f64> {
         if !world_width.is_finite() || world_width <= 0.0 || !x.is_finite() || !y.is_finite() {
             return None;
         }
-        let dx = (x - self.center_x + world_width * 0.5).rem_euclid(world_width)
-            - world_width * 0.5;
+        let dx =
+            (x - self.center_x + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
         self.intensity_at_distance(dx.hypot(y - self.center_y))
     }
 
