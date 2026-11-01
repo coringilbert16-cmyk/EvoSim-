@@ -73,8 +73,7 @@ fn nearest_horizontal_image_shift(anchor_x: f64, target_x: f64, world_width: f64
         return None;
     }
     let delta = target_x - anchor_x;
-    let wrapped_delta =
-        (delta + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
+    let wrapped_delta = (delta + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
     let shift = wrapped_delta - delta;
     shift.is_finite().then_some(shift)
 }
@@ -1437,6 +1436,7 @@ mod tests {
             unit_a: 0,
             unit_b: 0,
             candidate,
+            horizontal_shift: 0.0,
             investment: 0.0,
             accumulation_key: key.to_owned(),
             accumulated_reaction: progress,
