@@ -45,6 +45,9 @@ impl Velocity {
 }
 
 const FLOW_BIN_SIZE: f64 = 5.0;
+// Double the prior per-tick transport response so the current produces
+// visible, measurable circulation without changing chemistry thresholds.
+const FLOW_DISPLACEMENT_SCALE: f64 = 0.30;
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
@@ -651,7 +654,7 @@ pub(crate) fn transport_field(
             nearby,
             width,
         );
-        let scale = mobility(mass) * 0.15;
+        let scale = mobility(mass) * FLOW_DISPLACEMENT_SCALE;
         let dx = velocity.x * scale;
         let dy = velocity.y * scale;
         let angular_step = angular_displacement(
@@ -856,7 +859,7 @@ mod tests {
         );
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
-        let displacement_scale = mobility(original.material.mass(&catalog)) * 0.15;
+        let displacement_scale = mobility(original.material.mass(&catalog)) * FLOW_DISPLACEMENT_SCALE;
         let translated_expected = translated(
             &original,
             velocity.x * displacement_scale,
