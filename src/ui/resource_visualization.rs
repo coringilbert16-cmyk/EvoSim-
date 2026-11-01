@@ -28,9 +28,9 @@ pub(crate) fn appearance(resource: &BaseResource) -> ResourceAppearance {
     match resource.name.as_str() {
         "Carbon" => ResourceAppearance::new("#080808", "#777777", 255),
         "Sulfur" => ResourceAppearance::new("#D6D44A", "#A8A62F", 255),
-        "Oxygen" => ResourceAppearance::new("#F5F5F5", "#C93636", 255),
+        "Oxygen" => ResourceAppearance::new("#D93636", "#9E2020", 255),
         "Hydrogen" => ResourceAppearance::new("#E8E8E8", "#BDBDBD", 255),
-        "Nitrogen" => ResourceAppearance::new("#315E9E", "#203F70", 255),
+        "Nitrogen" => ResourceAppearance::new("#8B5A2B", "#5C3A1B", 255),
         "Phosphorus" => ResourceAppearance::new("#D65A32", "#9C3E23", 255),
         "Water" => ResourceAppearance::new("#CFEFFF", "#9CCFE8", 72),
         _ => ResourceAppearance::new("#AAAAAA", "#666666", 255),
@@ -65,10 +65,10 @@ mod tests {
         assert_eq!(appearance(&resource("Sulfur")).fill, "#D6D44A");
         assert_eq!(
             appearance(&resource("Oxygen")),
-            ResourceAppearance::new("#F5F5F5", "#C93636", 255)
+            ResourceAppearance::new("#D93636", "#9E2020", 255)
         );
         assert_eq!(appearance(&resource("Hydrogen")).fill, "#E8E8E8");
-        assert_eq!(appearance(&resource("Nitrogen")).fill, "#315E9E");
+        assert_eq!(appearance(&resource("Nitrogen")).fill, "#8B5A2B");
         assert_eq!(appearance(&resource("Phosphorus")).fill, "#D65A32");
         assert_eq!(appearance(&resource("Water")).fill, "#CFEFFF");
         assert_eq!(appearance(&resource("Water")).fill_opacity, 72);
