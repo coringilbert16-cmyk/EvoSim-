@@ -645,17 +645,46 @@ mod tests {
             .flat_map(|cell| cell.physical_parts.iter().flatten())
             .collect::<Vec<_>>();
 
-        assert_eq!(parts.len(), 1280);
-        assert!(parts.iter().all(|part| {
-            part.x.is_finite()
-                && part.y.is_finite()
-                && part.rotation_radians.is_finite()
-                && part.form.is_valid()
-                && part.resonance_frequency_cycles_per_day.is_finite()
-                && part.resonance_frequency_cycles_per_day > 0.0
-                && part.resonance_amplitude.is_finite()
-                && (0.0..=1.0).contains(&part.resonance_amplitude)
-        }));
+        assert_eq!(
+            parts.len(),
+            1280,
+            "every realized physical constituent must be present in the world observation"
+        );
+        for part in &parts {
+            assert!(
+                part.x.is_finite() && part.y.is_finite(),
+                "resource {} has non-finite observed position ({}, {})",
+                part.resource,
+                part.x,
+                part.y
+            );
+            assert!(
+                part.rotation_radians.is_finite(),
+                "resource {} has non-finite observed rotation {}",
+                part.resource,
+                part.rotation_radians
+            );
+            assert!(
+                part.form.is_valid(),
+                "resource {} has invalid observed physical form: {:?}",
+                part.resource,
+                part.form
+            );
+            assert!(
+                part.resonance_frequency_cycles_per_day.is_finite()
+                    && part.resonance_frequency_cycles_per_day > 0.0,
+                "resource {} has invalid natural resonance frequency {}",
+                part.resource,
+                part.resonance_frequency_cycles_per_day
+            );
+            assert!(
+                part.resonance_amplitude.is_finite()
+                    && (0.0..=1.0).contains(&part.resonance_amplitude),
+                "resource {} has invalid normalized resonance amplitude {}",
+                part.resource,
+                part.resonance_amplitude
+            );
+        }
         let resources = parts
             .iter()
             .map(|part| part.resource.as_str())
