@@ -29,6 +29,9 @@ pub(crate) struct EnvironmentalCombineOperation {
     pub(crate) unit_a: usize,
     pub(crate) unit_b: usize,
     pub(crate) candidate: ConnectionPairCandidate,
+    /// Periodic image offset applied to the second reactant during contact
+    /// evaluation and commit. The source snapshot itself remains unchanged.
+    pub(crate) horizontal_shift: f64,
     pub(crate) investment: f64,
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
@@ -49,6 +52,51 @@ fn origin() -> Placement {
         y: 0.0,
         rotation_radians: 0.0,
     }
+}
+
+fn material_center_x(material: &PhysicalMaterial) -> Option<f64> {
+    let placements = material.placements.as_ref()?;
+    if placements.is_empty() || placements.iter().any(|placement| !placement.x.is_finite()) {
+        return None;
+    }
+    let center = placements.iter().map(|placement| placement.x).sum::<f64>()
+        / placements.len() as f64;
+    center.is_finite().then_some(center)
+}
+
+fn nearest_horizontal_image_shift(anchor_x: f64, target_x: f64, world_width: f64) -> Option<f64> {
+    if !anchor_x.is_finite()
+        || !target_x.is_finite()
+        || !world_width.is_finite()
+        || world_width <= 0.0
+    {
+        return None;
+    }
+    let delta = target_x - anchor_x;
+    let wrapped_delta = (delta + world_width * 0.5).rem_euclid(world_width)
+        - world_width * 0.5;
+    let shift = wrapped_delta - delta;
+    shift.is_finite().then_some(shift)
+}
+
+fn shift_restored_units_horizontally(
+    structure: &mut OrganismStructure,
+    indices: &[usize],
+    shift: f64,
+) -> bool {
+    if !shift.is_finite() {
+        return false;
+    }
+    for index in indices {
+        let Some(unit) = structure.units.get_mut(*index) else {
+            return false;
+        };
+        unit.placement.x += shift;
+        if !unit.placement.x.is_finite() {
+            return false;
+        }
+    }
+    true
 }
 
 fn material_signature(material: &PhysicalMaterial) -> String {
@@ -374,6 +422,7 @@ fn chemical_step(
             unit_a,
             unit_b,
             candidate: selected.candidate,
+            horizontal_shift,
             investment: selected.investment,
             accumulation_key: key,
             accumulated_reaction: next,
@@ -489,6 +538,17 @@ pub(crate) fn accumulate_environmental(
                     if !source_b.is_realized() || source_b.material.is_empty() {
                         continue;
                     }
+                    let Some(anchor_x) = material_center_x(&source_a) else {
+                        continue;
+                    };
+                    let Some(target_x) = material_center_x(&source_b) else {
+                        continue;
+                    };
+                    let Some(horizontal_shift) =
+                        nearest_horizontal_image_shift(anchor_x, target_x, environment.width)
+                    else {
+                        continue;
+                    };
                     let mut trial_structure = source_structure.clone();
                     let Some(indices_b) = crate::material_restoration::restore_material(
                         &mut trial_structure,
@@ -498,6 +558,13 @@ pub(crate) fn accumulate_environmental(
                     ) else {
                         continue;
                     };
+                    if !shift_restored_units_horizontally(
+                        &mut trial_structure,
+                        &indices_b,
+                        horizontal_shift,
+                    ) {
+                        continue;
+                    }
                     if indices_b.iter().any(|index| {
                         crate::construction_runtime::placed_unit_overlaps(
                             &trial_structure,
@@ -688,6 +755,13 @@ pub(crate) fn resolve_environmental(
     ) else {
         return false;
     };
+    if !shift_restored_units_horizontally(
+        &mut trial_structure,
+        &indices_b,
+        operation.horizontal_shift,
+    ) {
+        return false;
+    }
     if indices_b.iter().any(|index| {
         crate::construction_runtime::placed_unit_overlaps(
             &trial_structure,
