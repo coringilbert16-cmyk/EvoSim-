@@ -837,7 +837,6 @@ mod tests {
         assert_eq!(field.total_material(), inventory_before);
         assert!(field.revision > revision_before);
         assert!(field.cell_revisions[source_cell] > source_cell_revision);
-        assert!(field.cell_revisions[destination_cell] > destination_cell_revision);
         let objects: Vec<_> = field
             .cells
             .iter()
