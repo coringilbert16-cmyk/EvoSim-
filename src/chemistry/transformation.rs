@@ -127,8 +127,31 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     }
     let resonant_work = resonance_withdrawal.min(disruption_cost);
     let bond_supplied_work = disruption_cost - resonant_work;
+    let next_resonance = f64::from_bits(ledger.total_resonant_energy_held.to_bits() + 1);
+    let resonance_ulp = if next_resonance.is_finite() {
+        next_resonance - ledger.total_resonant_energy_held
+    } else {
+        ledger.total_resonant_energy_held
+            - f64::from_bits(ledger.total_resonant_energy_held.to_bits() - 1)
+    };
+    // If the only remaining shortfall is smaller than one ULP of the
+    // represented resonance inventory, the reservoir cannot express a
+    // closer withdrawal. Record the work actually represented as withdrawn
+    // instead of debiting a nonexistent fraction from an empty usable holder.
+    let rounding_limited_shortfall =
+        bond_supplied_work > 0.0 && bond_supplied_work <= resonance_ulp;
+    let settled_bond_work = if rounding_limited_shortfall {
+        0.0
+    } else {
+        bond_supplied_work
+    };
+    let settled_total_work = if rounding_limited_shortfall {
+        resonant_work
+    } else {
+        disruption_cost
+    };
     let next_total_resonant = (ledger.total_resonant_energy_held - resonance_withdrawal).max(0.0);
-    let next_total_work = ledger.total_work_expended + disruption_cost;
+    let next_total_work = ledger.total_work_expended + settled_total_work;
     let next_total_heat = ledger.total_heat_dissipated;
     if !next_total_resonant.is_finite() {
         return None;
@@ -147,7 +170,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
         reactant_structural_potential,
         product_structural_potential,
-        bond_supplied_work,
+        settled_bond_work,
         0.0,
     )?
     .settlement_transaction(EnergyReason::Break)?;
