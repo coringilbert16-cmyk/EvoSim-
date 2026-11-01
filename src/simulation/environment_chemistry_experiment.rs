@@ -178,7 +178,7 @@ fn randomized_pile_centers(
         let separated = centers.iter().all(|(x, y)| {
             let horizontal = (candidate.0 - *x + width * 0.5).rem_euclid(width) - width * 0.5;
             let vertical = candidate.1 - *y;
-            horizontal.hypot(vertical) >= 48.0
+            horizontal.hypot(vertical) >= width.min(height) * 0.048
         });
         if separated {
             centers.push(candidate);

@@ -378,7 +378,7 @@ mod tests {
             .hotspot
             .expect("explicit experiment setup should enable the source");
         assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
-        assert!((hotspot.center_x - 720.0).abs() < 1e-10);
+        assert!((hotspot.center_x - 360.0).abs() < 1e-10);
     }
 
     #[test]

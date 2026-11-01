@@ -221,8 +221,8 @@ impl Simulation {
 
     fn create_environment() -> Environment {
         let catalog = crate::resources::default_catalog();
-        let width = 1000.0;
-        let height = 1000.0;
+        let width = 500.0;
+        let height = 500.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
         crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
@@ -250,7 +250,7 @@ impl Simulation {
             "only live-validated Bob suggestions may attach an acquired fluid shape"
         );
 
-        let anchor = Position { x: 500.0, y: 500.0 };
+        let anchor = Position { x: 250.0, y: 250.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
             unit.placement.y += anchor.y;
