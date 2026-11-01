@@ -26,6 +26,17 @@ The issue #258 controlled 180-second runs recorded:
 
 These results are promising but noisy. Repeat same-seed runs on the exact PR head before attributing or claiming a whole-simulation speedup. Report both average and maximum timings.
 
+## Research-informed optimization guidance
+
+See [chemistry performance research](chemistry-performance-research.md) for comparable particle simulators and the technical references behind the following priorities:
+
+- If repeated pair discovery is the measured bottleneck, evaluate spatial bins/stencils or another conservative neighbor structure. It may only reduce the candidate set; current live geometry, contact, interface, activation, and transaction checks must still decide eligibility.
+- Choose a grid, stencil, tree, or direct scan from EvoSim's measured density, size/cutoff disparity, and object counts. LAMMPS and HOOMD-blue document that no one neighbor-search structure is best for every workload; small sparse systems may favor a direct scan.
+- If allocations or copies dominate, measure temporary graph/material copying and data locality before considering packed arrays or other storage redesigns.
+- Keep invariant chemical-potential memoization separate from geometry/interface identity. Do not cache live physical eligibility.
+- Preserve deterministic/fair scheduling and conflict handling when reorganizing reaction stages. Defer parallelism until these boundaries are explicit and independently tested.
+- Tune candidate-index parameters with repeatable same-seed runs and exact inventory/energy checks. Never accept a faster broad phase that can omit a physically eligible pair.
+
 ## Clippy baseline
 
 The latest PR #257 Rust workflow completed all functional validation steps but failed Clippy:
