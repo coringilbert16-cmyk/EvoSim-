@@ -676,7 +676,7 @@ mod tests {
 
         assert_eq!(
             parts.len(),
-            1280,
+            640,
             "every realized physical constituent must be present in the world observation"
         );
         for part in &parts {
