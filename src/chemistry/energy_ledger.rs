@@ -892,10 +892,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let actual_heat_delta = next_heat - self.total_heat_dissipated;
         let residual_for = |candidate_holder: f64| {
             let actual_usable_delta = candidate_holder - *holder;
-            actual_usable_delta
-                + actual_structural_delta
-                + actual_work_delta
-                + actual_heat_delta
+            actual_usable_delta + actual_structural_delta + actual_work_delta + actual_heat_delta
         };
         let mut residual = residual_for(next_holder);
         let mut rounding_steps = 0;
