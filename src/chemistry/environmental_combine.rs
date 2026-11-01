@@ -187,6 +187,15 @@ fn component_pair_start(tick: u64, pair_count: usize) -> usize {
     }
 }
 
+/// Starting cell for a deterministic, window-strided environmental COMBINE scan.
+fn anchor_cell_start(tick: u64, field_cell_count: usize, scan_count: usize) -> usize {
+    if field_cell_count == 0 {
+        0
+    } else {
+        (tick as usize).wrapping_mul(scan_count) % field_cell_count
+    }
+}
+
 fn select_best_contact_from_offset(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -460,7 +469,7 @@ pub(crate) fn accumulate_environmental(
     // almost the entire anchor window every tick and delays coverage of distant
     // field cells. The stride is deterministic and preserves the same per-tick
     // inspection budget and exhaustive cyclic coverage over successive windows.
-    let cell_start = (tick as usize).wrapping_mul(cell_scan_count) % field_cell_count;
+    let cell_start = anchor_cell_start(tick, field_cell_count, cell_scan_count);
 
     'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
@@ -1368,6 +1377,24 @@ mod tests {
             structure.units[0].placement,
             source.placements.as_ref().unwrap()[0]
         );
+    }
+
+    #[test]
+    fn environmental_combine_scan_windows_cover_every_cell_without_one_cell_stride() {
+        for field_cell_count in 1..=128 {
+            let scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
+            let mut visited = vec![false; field_cell_count];
+            for tick in 0..field_cell_count {
+                let start = anchor_cell_start(tick, field_cell_count, scan_count);
+                for offset in 0..scan_count {
+                    visited[(start + offset) % field_cell_count] = true;
+                }
+            }
+            assert!(
+                visited.into_iter().all(|seen| seen),
+                "scan windows failed to cover all {field_cell_count} field cells"
+            );
+        }
     }
 
     #[test]
