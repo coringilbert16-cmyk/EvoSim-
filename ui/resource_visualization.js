@@ -266,6 +266,8 @@
   }
 
 
+  let lastCommittedReaction = null;
+
   function updateChemistryReadout(world) {
     const diagnostics = world?.chemistry_diagnostics;
     if (!diagnostics || !Number.isFinite(diagnostics.tick)) return;
@@ -278,12 +280,12 @@
     if (breakNode) {
       breakNode.textContent = `${diagnostics.break_ready_candidates ?? 0} ready / ${diagnostics.break_scheduled ?? 0} scheduled / ${diagnostics.break_committed_total ?? 0} total`;
     }
+    const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
+      .filter(event => event.outcome === 'committed');
+    if (committed.length > 0) lastCommittedReaction = committed[committed.length - 1];
     if (lastNode) {
-      const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
-        .filter(event => event.outcome === 'committed');
-      const latest = committed[committed.length - 1];
-      lastNode.textContent = latest
-        ? `Last committed reaction: ${latest.reaction} at tick ${latest.tick}`
+      lastNode.textContent = lastCommittedReaction
+        ? `Last committed reaction: ${lastCommittedReaction.reaction} at tick ${lastCommittedReaction.tick}`
         : diagnostics.accumulation_entries > 0
           ? `Reaction progress accumulating across ${diagnostics.accumulation_entries} pair(s); no commit this tick`
           : 'No environmental reaction committed or accumulating this tick';
