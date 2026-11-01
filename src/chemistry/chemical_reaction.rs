@@ -524,18 +524,13 @@ pub(crate) fn accumulate_environmental(
     }
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let (candidates, _scan_steps) = discover_environmental_bonds(environment, tick, count);
-    let indices: Vec<usize> = (0..candidates.len()).collect();
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidates.len());
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut compatibility_cache = ConnectionCompatibilityCache::new();
 
-    for candidate_index in indices {
-        let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
-        else {
-            continue;
-        };
+    for (cell_index, material_index, bond_index) in candidates {
         let Some(instance) = environment
             .field
             .cells
