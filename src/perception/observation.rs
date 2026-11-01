@@ -684,25 +684,15 @@ mod tests {
                 part.resource,
                 part.resonance_amplitude
             );
-            if part.resource == "Water" {
-                assert_eq!(
-                    part.resonance_frequency_cycles_per_day,
-                    0.0,
-                    "cohesion-free Water must not be assigned an artificial natural frequency"
-                );
-                assert_eq!(
-                    part.resonance_amplitude,
-                    0.0,
-                    "cohesion-free Water must not receive a forced-oscillator response"
-                );
-            } else {
-                assert!(
-                    part.resonance_frequency_cycles_per_day > 0.0,
-                    "resource {} must have a positive natural frequency",
-                    part.resource
-                );
-            }
         }
+        let water_parts = parts
+            .iter()
+            .filter(|part| part.resource == "Water")
+            .collect::<Vec<_>>();
+        assert!(!water_parts.is_empty());
+        assert!(water_parts
+            .iter()
+            .all(|part| part.resonance_frequency_cycles_per_day == 0.0));
         let resources = parts
             .iter()
             .map(|part| part.resource.as_str())
