@@ -1,9 +1,63 @@
 // Read-only observation-layer rendering helpers.
 // Resource identity comes from the simulation-side observation endpoint.
 (async function initializeResourceVisualization() {
-  document.querySelector('header')?.remove();
-
   const paletteState = { resources: new Map(), fieldCellSize: 25 };
+
+  // Build the simulation workspace around the existing authoritative canvas.
+  const app = document.getElementById('app');
+  const originalHeader = document.querySelector('header');
+  const status = document.getElementById('status');
+  const keyboardHelp = document.getElementById('keyboard-help');
+  const topbar = document.createElement('header');
+  topbar.className = 'ev-topbar';
+  const brand = document.createElement('div');
+  brand.className = 'ev-brand';
+  brand.innerHTML = '<span class="ev-brand-mark">E</span><span><strong>EVOSIM</strong><small>SIMULATION WORKSPACE</small></span>';
+  const metrics = document.createElement('div');
+  metrics.className = 'ev-top-metrics';
+  metrics.innerHTML = '<span><small>TICK</small><strong id="ev-top-tick">—</strong></span><span><small>POPULATION</small><strong id="ev-top-population">—</strong></span><span><small>RATE</small><strong id="ev-top-rate">—</strong></span><span class="ev-run-state" id="ev-top-state">CONNECTING</span>';
+  topbar.append(brand, metrics);
+  if (status) { status.className = 'ev-connection-status'; topbar.append(status); }
+  if (keyboardHelp) { keyboardHelp.className = 'ev-keyboard-help'; topbar.append(keyboardHelp); }
+  originalHeader?.remove();
+  app?.insertBefore(topbar, app.firstChild);
+
+  const main = document.querySelector('main');
+  // The workspace CSS relies on this flex container class. Without it the
+  // viewport can collapse to zero height after the canvas is reparented.
+  main?.classList.add('ev-main');
+  const canvas = document.getElementById('world');
+  const worldColumn = document.createElement('section');
+  worldColumn.className = 'ev-world-column';
+  const worldToolbar = document.createElement('div');
+  worldToolbar.className = 'ev-world-toolbar';
+  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
+  const cameraControls = document.createElement('span');
+  cameraControls.className = 'ev-camera-controls';
+  cameraControls.innerHTML = '<button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit world" title="Fit current view">Fit</button>';
+  worldToolbar.append(cameraControls);
+  const viewport = document.createElement('div');
+  viewport.className = 'ev-world-viewport';
+  canvas?.parentNode?.removeChild(canvas);
+  viewport.append(canvas);
+  worldColumn.append(worldToolbar, viewport);
+
+  const sidebar = document.createElement('aside');
+  sidebar.className = 'ev-sidebar';
+  sidebar.innerHTML = '<div class="ev-panel-heading">OBSERVATION</div><nav class="ev-sidebar-tabs"><button type="button" class="active" data-panel="overview">Overview</button><button type="button" data-panel="materials">Materials</button></nav><div id="ev-sidebar-content"></div>';
+  main?.replaceChildren(sidebar, worldColumn);
+  const sidebarContent = sidebar.querySelector('#ev-sidebar-content');
+  const overviewContent = document.createElement('div');
+  overviewContent.className = 'ev-overview';
+  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-note">The world view shows the live simulation. Select an organism to inspect its physical structure.</div>';
+  const materialsContent = document.createElement('div');
+  materialsContent.className = 'ev-materials';
+  materialsContent.innerHTML = '<div class="ev-section-label">RESOURCE CATALOG</div><div class="ev-material-list" id="ev-material-list"><span class="ev-empty">Loading material palette…</span></div>';
+  sidebarContent?.append(overviewContent);
+  sidebar.querySelectorAll('[data-panel]').forEach(button => button.addEventListener('click', () => {
+    sidebar.querySelectorAll('[data-panel]').forEach(item => item.classList.toggle('active', item === button));
+    sidebarContent?.replaceChildren(button.dataset.panel === 'materials' ? materialsContent : overviewContent);
+  }));
 
   function normalizePalette(payload) {
     const resources = Array.isArray(payload) ? payload : (payload.resources || []);
@@ -13,13 +67,70 @@
     }
     if (!Array.isArray(payload) && Number.isFinite(payload.field_cell_size)) paletteState.fieldCellSize = payload.field_cell_size;
   }
+  renderMaterialLegend();
 
   function appearanceFor(name) {
     return paletteState.resources.get(name) || { fill: '#AAAAAA', outline: '#666666', fill_opacity: 255 };
   }
 
+  function renderMaterialLegend() {
+    const list = document.getElementById('ev-material-list');
+    if (!list) return;
+    list.replaceChildren();
+    const entries = [...paletteState.resources.entries()].sort(([a], [b]) => a.localeCompare(b));
+    if (!entries.length) {
+      const empty = document.createElement('span');
+      empty.className = 'ev-empty';
+      empty.textContent = 'No material palette available';
+      list.append(empty);
+      return;
+    }
+    for (const [name, appearance] of entries) {
+      const row = document.createElement('div');
+      row.className = 'ev-material-row';
+      const swatch = document.createElement('span');
+      swatch.className = 'ev-material-swatch';
+      swatch.style.background = appearance.fill || '#888';
+      swatch.style.borderColor = appearance.outline || '#666';
+      const label = document.createElement('span');
+      label.textContent = name;
+      row.append(swatch, label);
+      list.append(row);
+    }
+  }
+
+  async function refreshWorkspaceMetrics() {
+    try {
+      const response = await fetch('/observation/status', { cache: 'no-store' });
+      if (!response.ok) return;
+      const state = await response.json();
+      const tick = String(state.tick ?? '—');
+      const population = String(state.population ?? '—');
+      const configuredRate = Number.isFinite(state.ticks_per_second) ? state.ticks_per_second : null;
+      const measuredRate = Number.isFinite(state.measured_ticks_per_second) ? state.measured_ticks_per_second : null;
+      const rate = measuredRate == null ? '—' : `${measuredRate.toFixed(1)} t/s`;
+      const rateDetail = configuredRate == null ? '—' : `${configuredRate.toFixed(1)} / ${measuredRate?.toFixed(1) ?? '—'} t/s`;
+      const history = String(state.history_ticks?.length ?? 0);
+      for (const id of ['ev-top-tick', 'ev-side-tick']) { const node = document.getElementById(id); if (node) node.textContent = tick; }
+      for (const id of ['ev-top-population', 'ev-side-population']) { const node = document.getElementById(id); if (node) node.textContent = population; }
+      const topRate = document.getElementById('ev-top-rate');
+      if (topRate) topRate.textContent = rate;
+      const sideRate = document.getElementById('ev-side-rate');
+      if (sideRate) sideRate.textContent = rateDetail;
+      const historyNode = document.getElementById('ev-side-history');
+      if (historyNode) historyNode.textContent = history;
+      const runState = document.getElementById('ev-top-state');
+      if (runState) {
+        runState.textContent = state.running ? 'RUNNING' : 'PAUSED';
+        runState.classList.toggle('running', Boolean(state.running));
+      }
+    } catch (_) {
+      // The observation stream and existing status indicator handle reconnects.
+    }
+  }
+
   function dominantResource(material) {
-    const parts = material?.parts || [];
+    const parts = material?.parts || material?.materials || [];
     if (!parts.length) return null;
     const totals = new Map();
     for (const [name, amount] of parts) {
@@ -31,39 +142,66 @@
     return best?.name || null;
   }
 
-  function drawField(world, viewport) {
-    if (!world) return;
-    const size = paletteState.fieldCellSize;
-    const cells = world.field || [];
-    const maxByResource = new Map();
-    for (const cell of cells) {
-      for (const [name, amount] of cell.materials || []) {
-        if (!Number.isFinite(amount) || amount <= 0) continue;
-        maxByResource.set(name, Math.max(maxByResource.get(name) || 0, amount));
+  function drawPhysicalFieldPart(part, viewport) {
+    const appearance = appearanceFor(part.resource);
+    const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
+    const point = camera.worldToScreen(displayPosition.x, displayPosition.y, viewport.width, viewport.height);
+    const fluid = part.form?.Fluid;
+    const localBounds = formBounds(part.form, 0, 0, part.rotation_radians);
+    const radius = localBounds
+      ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
+      : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
+    const screenRadius = Math.max(1, radius * camera.scale);
+    if (point.x < -screenRadius || point.y < -screenRadius ||
+        point.x > viewport.width + screenRadius || point.y > viewport.height + screenRadius) return;
+
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    if (radius * camera.scale < 2.25) {
+      ctx.fillStyle = appearance.fill;
+      ctx.globalAlpha = Math.max(0.75, appearance.fill_opacity / 255);
+      ctx.beginPath();
+      ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.scale(camera.scale, camera.scale);
+      ctx.fillStyle = appearance.fill;
+      ctx.strokeStyle = appearance.outline;
+      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+      if (fluid) {
+        // Fluid has no fixed polygon boundary. Use an equal-area disk only as
+        // a visual marker; the simulation's fluid geometry remains authoritative.
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        drawForm(part.form, 0, 0, part.rotation_radians, appearance);
       }
     }
-    for (const cell of cells) {
-      const topLeft = camera.worldToScreen(cell.x - size / 2, cell.y - size / 2, viewport.width, viewport.height);
-      const screenSize = size * camera.scale;
-      if (screenSize <= 0) continue;
-      for (const [name, amount] of cell.materials || []) {
-        const maximum = maxByResource.get(name) || 0;
-        if (!Number.isFinite(amount) || amount <= 0 || !(maximum > 0)) continue;
+    ctx.restore();
+  }
+
+  function drawField(world, viewport) {
+    if (!world) return;
+    for (const cell of world.field || []) {
+      const physicalParts = cell.physical_parts || [];
+      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport);
+
+      // Unstructured inventory has no constituent geometry or world-space
+      // placement. Show it as a small cell marker, never as fake square atoms.
+      if (!physicalParts.length && cell.materials?.length) {
+        const name = dominantResource(cell);
+        if (!name) continue;
         const appearance = appearanceFor(name);
-        const density = Math.max(0, Math.min(1, amount / maximum));
-        const baseOpacity = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
-        if (!(baseOpacity > 0)) continue;
-        const centerX = topLeft.x + screenSize / 2;
-        const centerY = topLeft.y + screenSize / 2;
-        const innerRadius = Math.max(0, screenSize * 0.08);
-        const outerRadius = Math.max(innerRadius + 1, screenSize * 0.72);
-        const peakAlpha = Math.min(0.82, 0.08 + density * 0.74) * baseOpacity;
-        const gradient = ctx.createRadialGradient(centerX, centerY, innerRadius, centerX, centerY, outerRadius);
-        gradient.addColorStop(0, `${appearance.fill}${Math.round(peakAlpha * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(0.45, `${appearance.fill}${Math.round(peakAlpha * 0.72 * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(1, `${appearance.fill}00`);
-        ctx.save(); ctx.fillStyle = gradient;
-        ctx.fillRect(centerX - outerRadius, centerY - outerRadius, outerRadius * 2, outerRadius * 2);
+        const point = camera.worldToScreen(cell.x, cell.y, viewport.width, viewport.height);
+        if (point.x < -4 || point.y < -4 || point.x > viewport.width + 4 || point.y > viewport.height + 4) continue;
+        ctx.save();
+        ctx.fillStyle = appearance.fill;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 2, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
     }
@@ -72,34 +210,59 @@
   function drawWorldPoints(world, viewport) {
     for (const point of world.decomposing_bodies || []) {
       const p = camera.worldToScreen(point.x, point.y, viewport.width, viewport.height);
+      if (p.x < -8 || p.y < -8 || p.x > viewport.width + 8 || p.y > viewport.height + 8) continue;
       ctx.save(); ctx.strokeStyle = '#8B8B8B'; ctx.setLineDash([3, 3]); ctx.beginPath();
       ctx.arc(p.x, p.y, 6, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
     }
   }
 
-  // World observation exposes authoritative coarse bounds, not exact forms.
-  // The rectangle is only a visual projection of the observed extent.
-  function drawCoarseOrganisms(world, viewport) {
-    for (const organism of world?.organisms || []) {
-      const a = camera.worldToScreen(organism.min_x, organism.min_y, viewport.width, viewport.height);
-      const b = camera.worldToScreen(organism.max_x, organism.max_y, viewport.width, viewport.height);
-      const width = Math.max(1, b.x - a.x);
-      const height = Math.max(1, b.y - a.y);
-      ctx.save(); ctx.fillStyle = '#777777'; ctx.globalAlpha = 0.35;
-      ctx.fillRect(a.x, a.y, width, height);
-      ctx.strokeStyle = '#BBBBBB'; ctx.globalAlpha = 0.9;
-      ctx.strokeRect(a.x, a.y, width, height); ctx.restore();
-    }
-  }
 
-  const originalRenderWorld = renderWorld;
   renderWorld = function resourceAwareWorldRender() {
     const world = worldPayload();
     const viewport = viewportSize();
+    if (!world) return;
+    // Clip every world layer to the exact field boundary.
+    const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
+    const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    ctx.clip();
+    renderWaterField(world, viewport);
     drawField(world, viewport);
+    renderHotspot(world.hotspot, viewport);
     drawWorldPoints(world, viewport);
-    drawCoarseOrganisms(world, viewport);
-    originalRenderWorld();
+    for (const organism of world.organisms || []) {
+      const physical = organism.physical;
+      if (!physical) continue;
+      for (const part of physical.silhouette || []) {
+        const bounds = formBounds(part.form, part.x, part.y, part.rotation_radians);
+        const point = camera.worldToScreen(part.x, part.y, viewport.width, viewport.height);
+        if (bounds) {
+          const a = camera.worldToScreen(bounds.minX, bounds.minY, viewport.width, viewport.height);
+          const b = camera.worldToScreen(bounds.maxX, bounds.maxY, viewport.width, viewport.height);
+          if (b.x < 0 || b.y < 0 || a.x > viewport.width || a.y > viewport.height) continue;
+          const projectedSize = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * camera.scale;
+          if (projectedSize < 1.5) {
+            ctx.save();
+            ctx.fillStyle = '#d9e2ec';
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, Math.max(0.7, projectedSize * 0.5), 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+            continue;
+          }
+        }
+        drawObservedPart(part, viewport);
+      }
+      drawSelectionBounds(organism.id, physical, viewport);
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
+    ctx.restore();
   };
 
   renderStructure = function resourceAwareStructureRender() {
@@ -116,13 +279,47 @@
     ctx.restore();
     for (const unit of structure.units || []) {
       if (!unit.form || !unit.placement) continue;
+      const rotation = unit.placement.rotation_radians || 0;
+      const bounds = formBounds(unit.form, unit.placement.x, unit.placement.y, rotation);
       const point = camera.worldToScreen(unit.placement.x, unit.placement.y, viewport.width, viewport.height);
+      if (bounds) {
+        const a = camera.worldToScreen(bounds.minX, bounds.minY, viewport.width, viewport.height);
+        const b = camera.worldToScreen(bounds.maxX, bounds.maxY, viewport.width, viewport.height);
+        if (b.x < 0 || b.y < 0 || a.x > viewport.width || a.y > viewport.height) continue;
+        const projectedSize = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * camera.scale;
+        if (projectedSize < 1.5) {
+          ctx.save();
+          ctx.fillStyle = appearanceFor(dominantResource(unit.material)).fill;
+          ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, Math.max(0.7, projectedSize * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+          continue;
+        }
+      }
       const appearance = appearanceFor(dominantResource(unit.material));
       ctx.save(); ctx.translate(point.x, point.y); ctx.scale(camera.scale, camera.scale);
       ctx.fillStyle = appearance.fill; ctx.strokeStyle = appearance.outline; ctx.globalAlpha = appearance.fill_opacity / 255;
-      drawForm(unit.form, 0, 0, unit.placement.rotation_radians); ctx.restore();
+      drawForm(unit.form, 0, 0, rotation); ctx.restore();
     }
   };
+
+  cameraControls.querySelector('[data-zoom="out"]').addEventListener('click', () => {
+    const size = viewportSize();
+    camera.zoomAt(size.width / 2, size.height / 2, 1 / 1.5, size.width, size.height);
+    render();
+  });
+  cameraControls.querySelector('[data-zoom="in"]').addEventListener('click', () => {
+    const size = viewportSize();
+    camera.zoomAt(size.width / 2, size.height / 2, 1.5, size.width, size.height);
+    render();
+  });
+  cameraControls.querySelector('[data-zoom="fit"]').addEventListener('click', () => {
+    cameraInitialized = false;
+    fitCurrentObservation();
+    render();
+  });
 
   const originalFinishWorldSelection = finishWorldSelection;
   finishWorldSelection = function normalizedWorldSelection(point) {
@@ -166,9 +363,12 @@
     const response = await fetch('/observation/resources', { cache: 'no-store' });
     if (response.ok) {
       normalizePalette(await response.json());
+      renderMaterialLegend();
       render();
     }
   } catch (_) {
     // Neutral rendering fallback is intentional.
   }
+  refreshWorkspaceMetrics();
+  setInterval(refreshWorkspaceMetrics, 1000);
 })();

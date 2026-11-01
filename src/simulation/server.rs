@@ -29,10 +29,12 @@ fn error_response(error: &'static str) -> axum::response::Response {
 
 async fn index_handler() -> impl IntoResponse {
     let page = include_str!("../../ui/index.html");
+    let theme = include_str!("../../ui/simulation_theme.css");
     let resource_visualization = include_str!("../../ui/resource_visualization.js");
     let organism_inspector = include_str!("../../ui/organism_inspector.js");
+    let themed_page = page.replace("</head>", &format!("<style>{theme}</style></head>"));
     Html(format!(
-        "{page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
+        "{themed_page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
 
@@ -140,8 +142,10 @@ async fn world_observation_handler(
         serde_json::json!({
             "command": "world",
             "bounds": bounds,
-            "known_organisms": known_organisms,
-            "known_cells": known_cells,
+            // The child command expects concrete vectors. Missing query parameters
+            // mean "no incremental cache", not JSON null.
+            "known_organisms": known_organisms.unwrap_or_default(),
+            "known_cells": known_cells.unwrap_or_default(),
         }),
     )
     .await

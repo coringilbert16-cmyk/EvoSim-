@@ -102,12 +102,24 @@ pub(crate) struct WorldOrganismPhysicalObservation {
     pub(crate) silhouette: Vec<OrganismSilhouettePart>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct WorldFieldPartObservation {
+    pub(crate) resource: String,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) rotation_radians: f64,
+    pub(crate) form: crate::resources::Form,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
     pub(crate) cell_index: usize,
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) revision: u64,
     pub(crate) materials: Option<Vec<(String, f64)>>,
+    /// Individual realized constituents retain their physical shape and position.
+    /// None means unchanged in an incremental observation; Some(empty) means empty.
+    #[serde(default)]
+    pub(crate) physical_parts: Option<Vec<WorldFieldPartObservation>>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldPointObservation {
@@ -125,6 +137,45 @@ pub(crate) struct WorldObservation {
     pub(crate) chemistry_diagnostics: crate::state::EnvironmentalChemistryTickDiagnostics,
     pub(crate) chemistry_events: Vec<crate::state::EnvironmentalChemistryEvent>,
 }
+fn observe_field_physical_parts(
+    cell: &crate::environment::FieldCell,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<WorldFieldPartObservation> {
+    let mut parts = Vec::new();
+    for physical in &cell.physical_materials {
+        let Some(placements) = physical.placements.as_ref() else {
+            continue;
+        };
+        for (index, (resource, _)) in physical.material.parts.iter().enumerate() {
+            let Some(placement) = placements.get(index) else {
+                continue;
+            };
+            let form = physical
+                .realized_shapes
+                .as_ref()
+                .and_then(|shapes| shapes.get(index))
+                .or_else(|| {
+                    catalog
+                        .iter()
+                        .find(|entry| entry.name == *resource)
+                        .map(|entry| &entry.shape)
+                })
+                .map(|shape| shape.form.clone());
+            let Some(form) = form else {
+                continue;
+            };
+            parts.push(WorldFieldPartObservation {
+                resource: resource.clone(),
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+                form,
+            });
+        }
+    }
+    parts
+}
+
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
         Self::from_simulation_in_bounds(simulation, None, &[], &[])
@@ -252,6 +303,7 @@ impl WorldObservation {
                                 y,
                                 revision,
                                 materials: None,
+                                physical_parts: None,
                             });
                         }
                         let materials = cell.total_material();
@@ -265,29 +317,48 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
+                            physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                         })
                     })
                     .collect()
             }
         } else {
-            simulation
-                .environment
-                .field
+            let field = &simulation.environment.field;
+            field
                 .cells
                 .iter()
                 .enumerate()
                 .filter_map(|(cell_index, cell)| {
+                    let revision = field.cell_revisions[cell_index];
+                    let known_revision = known_cells
+                        .iter()
+                        .find(|(known_index, _)| *known_index == cell_index)
+                        .map(|(_, revision)| *revision);
+                    let (x, y) = field.cell_center(cell_index);
+                    if known_revision == Some(revision) {
+                        return Some(WorldFieldObservation {
+                            cell_index,
+                            x,
+                            y,
+                            revision,
+                            materials: None,
+                            physical_parts: None,
+                        });
+                    }
                     let materials = cell.total_material();
-                    if materials.is_empty() {
+                    if materials.is_empty() && known_revision.is_none() {
                         return None;
                     }
-                    let (x, y) = simulation.environment.field.cell_center(cell_index);
                     Some(WorldFieldObservation {
                         cell_index,
                         x,
                         y,
-                        revision: simulation.environment.field.cell_revisions[cell_index],
+                        revision,
                         materials: Some(materials),
+                        physical_parts: Some(observe_field_physical_parts(
+                            cell,
+                            &simulation.environment.catalog,
+                        )),
                     })
                 })
                 .collect()
@@ -547,6 +618,120 @@ mod tests {
         assert_ne!(ObservationLevel::World, ObservationLevel::Organism);
         assert_ne!(ObservationLevel::Organism, ObservationLevel::Structure)
     }
+    #[test]
+    fn environmental_world_observation_exposes_each_physical_resource_shape() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let observation = WorldObservation::from_simulation(&fixture.simulation);
+        let parts = observation
+            .field
+            .iter()
+            .flat_map(|cell| cell.physical_parts.iter().flatten())
+            .collect::<Vec<_>>();
+
+        assert_eq!(parts.len(), 128);
+        assert!(parts.iter().all(|part| {
+            part.x.is_finite()
+                && part.y.is_finite()
+                && part.rotation_radians.is_finite()
+                && part.form.is_valid()
+        }));
+        let resources = parts
+            .iter()
+            .map(|part| part.resource.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(resources.len(), 7);
+    }
+
+    #[test]
+    fn unchanged_full_world_cells_omit_redundant_physical_payloads() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let full = WorldObservation::from_simulation(&fixture.simulation);
+        let known_cells = full
+            .field
+            .iter()
+            .map(|cell| (cell.cell_index, cell.revision))
+            .collect::<Vec<_>>();
+        let incremental = WorldObservation::from_simulation_in_bounds(
+            &fixture.simulation,
+            None,
+            &[],
+            &known_cells,
+        );
+
+        assert_eq!(incremental.field.len(), full.field.len());
+        assert!(incremental
+            .field
+            .iter()
+            .all(|cell| cell.materials.is_none() && cell.physical_parts.is_none()));
+    }
+
+    #[test]
+    fn environmental_transport_updates_observed_resource_positions() {
+        let mut fixture = crate::environment_chemistry_experiment::build(42);
+        let before_observation = WorldObservation::from_simulation(&fixture.simulation);
+        let known_cells = before_observation
+            .field
+            .iter()
+            .map(|cell| (cell.cell_index, cell.revision))
+            .collect::<Vec<_>>();
+        let mut before = before_observation
+            .field
+            .into_iter()
+            .flat_map(|cell| cell.physical_parts.unwrap_or_default())
+            .collect::<Vec<_>>();
+        before.sort_by(|a, b| {
+            a.resource
+                .cmp(&b.resource)
+                .then_with(|| a.x.total_cmp(&b.x))
+                .then_with(|| a.y.total_cmp(&b.y))
+        });
+        let catalog = fixture.simulation.environment.catalog.clone();
+        let moved = crate::environment_flow::transport_field(
+            &mut fixture.simulation.environment.field,
+            &catalog,
+            fixture.simulation.environment.width,
+            fixture.simulation.environment.height,
+        );
+        assert!(
+            moved > 0,
+            "the experiment's environmental current must transport resources"
+        );
+
+        let incremental = WorldObservation::from_simulation_in_bounds(
+            &fixture.simulation,
+            None,
+            &[],
+            &known_cells,
+        );
+        assert!(
+            incremental.field.iter().any(|cell| cell
+                .physical_parts
+                .as_ref()
+                .is_some_and(|parts| !parts.is_empty())),
+            "changed cells must publish their current physical resource geometry"
+        );
+
+        let mut after = WorldObservation::from_simulation(&fixture.simulation)
+            .field
+            .into_iter()
+            .flat_map(|cell| cell.physical_parts.unwrap_or_default())
+            .collect::<Vec<_>>();
+        after.sort_by(|a, b| {
+            a.resource
+                .cmp(&b.resource)
+                .then_with(|| a.x.total_cmp(&b.x))
+                .then_with(|| a.y.total_cmp(&b.y))
+        });
+        assert_eq!(before.len(), after.len());
+        assert!(
+            before.iter().zip(&after).any(|(previous, current)| {
+                previous.resource == current.resource
+                    && (previous.x - current.x).hypot(previous.y - current.y) > 1e-9
+            }),
+            "the updated world observation must expose moved resource positions"
+        );
+    }
+
     #[test]
     fn world_context_contains_no_selection() {
         let context = ObservationContext::world();
