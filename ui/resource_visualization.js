@@ -31,7 +31,7 @@
   worldColumn.className = 'ev-world-column';
   const worldToolbar = document.createElement('div');
   worldToolbar.className = 'ev-world-toolbar';
-  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
+  worldToolbar.innerHTML = '<span>WORLD VIEW</span><span id="ev-sunlight-level" class="ev-sunlight-level">SUNLIGHT 100%</span><span class="ev-view-hint">Drag to pan · Scroll to zoom · Select an organism to inspect</span>';
   const cameraControls = document.createElement('span');
   cameraControls.className = 'ev-camera-controls';
   cameraControls.innerHTML = '<button type="button" data-zoom="out" aria-label="Zoom out" title="Zoom out">−</button><button type="button" data-zoom="in" aria-label="Zoom in" title="Zoom in">+</button><button type="button" data-zoom="fit" aria-label="Fit world" title="Fit current view">Fit</button>';
@@ -297,6 +297,11 @@
     const viewport = viewportSize();
     if (!world) return;
     updateChemistryReadout(world);
+    const sunlightBrightness = Number.isFinite(world.sunlight_brightness)
+      ? Math.max(0.1, Math.min(1.0, world.sunlight_brightness)) : 1.0;
+    const sunlightPercent = Math.round(sunlightBrightness * 100);
+    const sunlightLevel = document.getElementById('ev-sunlight-level');
+    if (sunlightLevel) sunlightLevel.textContent = `SUNLIGHT ${sunlightPercent}%`;
     // Clip every world layer to the exact field boundary.
     const topLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
     const bottomRight = camera.worldToScreen(world.width, world.height, viewport.width, viewport.height);
@@ -332,6 +337,14 @@
         drawObservedPart(part, viewport);
       }
       drawSelectionBounds(organism.id, physical, viewport);
+    }
+    // Dim the complete world as the actual sunlight source weakens. This is
+    // presentation-only: it never changes source energy or simulation state.
+    const darkness = 1.0 - sunlightBrightness;
+    if (darkness > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${darkness})`;
+      ctx.fillRect(topLeft.x, topLeft.y,
+        bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
     }
     ctx.restore();
     ctx.save();
