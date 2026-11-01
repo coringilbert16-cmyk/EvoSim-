@@ -50,19 +50,31 @@ fn horizontal_positions_wrap_while_vertical_positions_are_hard_bounded() {
 }
 
 #[test]
-fn spatial_bounds_queries_wrap_horizontally_and_clip_vertically() {
+fn periodic_spatial_bounds_queries_wrap_horizontally_and_clip_vertically() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
-    let indices = field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 25.0);
+    let indices = field.cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 25.0, 25.0, 8, 0);
     assert_eq!(indices, vec![7, 4]);
     assert!(field
-        .cells_intersecting_bounds(-5.0, 5.0, -20.0, -1.0)
+        .cells_intersecting_bounds_periodic_limited(-5.0, 5.0, -20.0, -1.0, 8, 0)
         .is_empty());
     assert!(field
-        .cells_intersecting_bounds(-5.0, 5.0, 100.0, 110.0)
+        .cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 100.0, 110.0, 8, 0)
         .is_empty());
 
-    let limited = field.cells_intersecting_bounds_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
+    let limited =
+        field.cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
     assert_eq!(limited, vec![7, 4]);
+}
+
+#[test]
+fn legacy_organism_bounds_queries_keep_horizontal_edges_bounded_and_vertical_rows_wrapped() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    assert_eq!(
+        field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 25.0),
+        vec![4]
+    );
+    let top_edge = field.cells_intersecting_bounds(25.0, 25.0, -1.0, 0.0);
+    assert_eq!(top_edge, vec![13, 1]);
 }
 
 #[test]
