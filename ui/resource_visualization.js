@@ -183,6 +183,7 @@
         drawForm(part.form, 0, 0, part.rotation_radians, appearance);
       }
     }
+    ctx.restore();
 
     if (appearance.amplitude > 0) {
       const alpha = Math.min(0.9, 0.22 + appearance.amplitude * 0.68);
@@ -204,7 +205,6 @@
       }
       ctx.restore();
     }
-    ctx.restore();
   }
 
   function drawPhysicalFieldPart(part, viewport, worldWidth) {
@@ -214,8 +214,7 @@
       : displayPosition.x;
     drawPhysicalFieldPartAt(part, viewport, worldWidth, 0);
 
-    // Only draw the opposite-side copy when the element's 30px maximum aura
-    // could cross the seam. This keeps the 10x denser field inexpensive.
+    // Only draw the opposite-side copy when the realized boundary nears the seam.
     if (!Number.isFinite(worldWidth) || worldWidth <= 0) return;
     const seamMargin = 3 / Math.max(camera.scale, 1e-6) + 2;
     if (wrappedX < seamMargin) {
