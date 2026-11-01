@@ -817,7 +817,7 @@ mod tests {
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
-                x: 24.99,
+                x: 24.999,
                 y: 200.0,
                 rotation_radians: 0.0,
             }],
@@ -825,10 +825,10 @@ mod tests {
         )
         .expect("catalog carbon should realize");
         let original = material.clone();
-        assert!(field.deposit_physical(24.99, 200.0, material, &catalog));
+        assert!(field.deposit_physical(24.999, 200.0, material, &catalog));
         let inventory_before = field.total_material();
         let revision_before = field.revision;
-        let source_cell = field.index_for_position(24.99, 200.0).unwrap();
+        let source_cell = field.index_for_position(24.999, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
         let destination_cell = field.index_for_position(25.001, 200.0).unwrap();
         let destination_cell_revision = field.cell_revisions[destination_cell];
