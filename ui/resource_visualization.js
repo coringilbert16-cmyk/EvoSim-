@@ -153,10 +153,13 @@
     };
   }
 
-  function drawPhysicalFieldPart(part, viewport) {
+  function drawPhysicalFieldPartAt(part, viewport, worldWidth, horizontalOffset) {
     const appearance = resonanceAppearance(part);
     const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
-    const point = camera.worldToScreen(displayPosition.x, displayPosition.y, viewport.width, viewport.height);
+    const wrappedX = Number.isFinite(worldWidth) && worldWidth > 0
+      ? displayPosition.x - Math.floor(displayPosition.x / worldWidth) * worldWidth
+      : displayPosition.x;
+    const point = camera.worldToScreen(wrappedX + horizontalOffset, displayPosition.y, viewport.width, viewport.height);
     const fluid = part.form?.Fluid;
     const localBounds = formBounds(part.form, 0, 0, part.rotation_radians);
     const radius = localBounds
@@ -209,11 +212,19 @@
     ctx.restore();
   }
 
+  function drawPhysicalFieldPart(part, viewport, worldWidth) {
+    // Draw periodic copies so an element and its aura remain continuous as
+    // they cross the left/right seam. The world clip removes off-world copies.
+    for (const offset of [0, -worldWidth, worldWidth]) {
+      drawPhysicalFieldPartAt(part, viewport, worldWidth, offset);
+    }
+  }
+
   function drawField(world, viewport) {
     if (!world) return;
     for (const cell of world.field || []) {
       const physicalParts = cell.physical_parts || [];
-      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport);
+      for (const part of physicalParts) drawPhysicalFieldPart(part, viewport, world.width);
 
       // Unstructured inventory has no constituent geometry or world-space
       // placement. Show it as a small cell marker, never as fake square atoms.
