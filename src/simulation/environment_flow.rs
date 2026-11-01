@@ -972,8 +972,13 @@ mod tests {
         .expect("catalog carbon should realize");
         let moved = translated(&material, 0.0, 1.0, 1000.0, &catalog).unwrap();
         let placement = &moved.placements.as_ref().unwrap()[0];
-        let extent =
-            shape_vertical_extent(&material.realized_shapes.as_ref().unwrap()[0].form, 0.0);
+        let carbon_form = &catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("carbon must exist in the canonical catalog")
+            .shape
+            .form;
+        let extent = shape_vertical_extent(carbon_form, 0.0);
         assert!(placement.y - extent >= 0.0);
         assert!(placement.y + extent <= 1000.0 - 1e-6 + 1e-9);
         assert!(
