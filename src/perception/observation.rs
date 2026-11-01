@@ -108,6 +108,10 @@ pub(crate) struct WorldFieldPartObservation {
     pub(crate) y: f64,
     pub(crate) rotation_radians: f64,
     pub(crate) form: crate::resources::Form,
+    /// Derived from the same material oscillator response used by the simulation.
+    pub(crate) resonance_frequency_cycles_per_day: f64,
+    pub(crate) resonance_amplitude: f64,
+    pub(crate) resonance_phase_radians: f64,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
@@ -140,8 +144,14 @@ pub(crate) struct WorldObservation {
 fn observe_field_physical_parts(
     cell: &crate::environment::FieldCell,
     catalog: &[crate::resources::BaseResource],
+    tick: u64,
 ) -> Vec<WorldFieldPartObservation> {
     let mut parts = Vec::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+    let phase = crate::harmonics::phase_at_tick(
+        crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
+        tick,
+    );
     for physical in &cell.physical_materials {
         let Some(placements) = physical.placements.as_ref() else {
             continue;
@@ -164,12 +174,28 @@ fn observe_field_physical_parts(
             let Some(form) = form else {
                 continue;
             };
+            let Some(resource_definition) = catalog.iter().find(|entry| entry.name == *resource) else {
+                continue;
+            };
+            let response = crate::harmonics::material_response(
+                resource_definition.properties,
+                baselines,
+                phase,
+            );
+            let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
+                resource_definition.properties,
+                baselines,
+            );
+            let fundamental = response.components.first();
             parts.push(WorldFieldPartObservation {
                 resource: resource.clone(),
                 x: placement.x,
                 y: placement.y,
                 rotation_radians: placement.rotation_radians,
                 form,
+                resonance_frequency_cycles_per_day: natural_frequency,
+                resonance_amplitude: fundamental.map_or(0.0, |component| component.amplitude),
+                resonance_phase_radians: fundamental.map_or(phase, |component| component.phase_radians),
             });
         }
     }
@@ -317,7 +343,7 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
-                            physical_parts: Some(observe_field_physical_parts(cell, catalog)),
+                            physical_parts: Some(observe_field_physical_parts(cell, catalog, simulation.tick)),
                         })
                     })
                     .collect()
@@ -358,6 +384,7 @@ impl WorldObservation {
                         physical_parts: Some(observe_field_physical_parts(
                             cell,
                             &simulation.environment.catalog,
+                            simulation.tick,
                         )),
                     })
                 })
