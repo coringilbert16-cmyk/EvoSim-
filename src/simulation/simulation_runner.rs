@@ -200,8 +200,23 @@ fn run_environment_chemistry_experiment(
         panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
     });
 
+    let initial_physical_resources = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .map(|cell| cell.physical_materials.len())
+        .sum::<usize>();
+    let initial_constituents = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.material.parts.len())
+        .sum::<usize>();
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=128 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources={initial_physical_resources} constituents={initial_constituents} piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot
