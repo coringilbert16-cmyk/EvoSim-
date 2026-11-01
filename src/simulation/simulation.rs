@@ -756,12 +756,9 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
-        let break_committed_total = self
-            .environmental_chemistry_diagnostics
-            .break_committed_total;
-        let combine_committed_total = self
-            .environmental_chemistry_diagnostics
-            .combine_committed_total;
+        let break_committed_total = self.environmental_chemistry_diagnostics.break_committed_total;
+        let combine_committed_total =
+            self.environmental_chemistry_diagnostics.combine_committed_total;
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
