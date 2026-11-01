@@ -1250,10 +1250,14 @@ impl Simulation {
                 // result for both eligibility and decision construction rather than
                 // repeating the full geometry/restoration pass.
                 let environmental_break_candidates =
-                    crate::transformation::environmental_break_candidates(
-                        &organisms[index],
-                        environment,
-                    );
+                    if organisms[index].active_transformation_id.is_none() {
+                        crate::transformation::environmental_break_candidates(
+                            &organisms[index],
+                            environment,
+                        )
+                    } else {
+                        Vec::new()
+                    };
                 let eligibility = Self::action_eligibility(
                     &organisms[index],
                     environment,
