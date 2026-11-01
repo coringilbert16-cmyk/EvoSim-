@@ -649,8 +649,8 @@ mod tests {
             endpoint,
             ConnectionEndpoint::LineEndpoint { point_index: 0 | 1 }
         )));
-        let left = endpoint_world_point(endpoints[0], &unit, &catalog).unwrap();
-        let right = endpoint_world_point(endpoints[1], &unit, &catalog).unwrap();
+        let left = endpoints[0].world_point(&unit, &catalog).unwrap();
+        let right = endpoints[1].world_point(&unit, &catalog).unwrap();
         assert_eq!((left.x, left.y), (-0.5, 0.0));
         assert_eq!((right.x, right.y), (0.5, 0.0));
     }
