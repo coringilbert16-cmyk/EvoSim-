@@ -54,8 +54,12 @@ fn spatial_bounds_queries_wrap_horizontally_and_clip_vertically() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let indices = field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 25.0);
     assert_eq!(indices, vec![7, 4]);
-    assert!(field.cells_intersecting_bounds(-5.0, 5.0, -20.0, -1.0).is_empty());
-    assert!(field.cells_intersecting_bounds(-5.0, 5.0, 100.0, 110.0).is_empty());
+    assert!(field
+        .cells_intersecting_bounds(-5.0, 5.0, -20.0, -1.0)
+        .is_empty());
+    assert!(field
+        .cells_intersecting_bounds(-5.0, 5.0, 100.0, 110.0)
+        .is_empty());
 
     let limited = field.cells_intersecting_bounds_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
     assert_eq!(limited, vec![7, 4]);
@@ -113,7 +117,10 @@ fn cells_within_radius_handles_grid_edges_and_invalid_input() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let cells = field.cells_within_radius(0.0, 0.0, 20.0);
     assert!(cells.contains(&0));
-    assert!(cells.contains(&3), "the radius query must see across the horizontal seam");
+    assert!(
+        cells.contains(&3),
+        "the radius query must see across the horizontal seam"
+    );
     assert!(cells.iter().all(|&i| i < field.width_cells));
 
     assert!(field.cells_within_radius(f64::NAN, 0.0, 10.0).is_empty());
