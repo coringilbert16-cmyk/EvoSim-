@@ -219,7 +219,7 @@ jobs:
             failed_dead_recycling_deposit_preserves_all_material_and_energy_owners \
             failed_dead_material_release_preserves_organism_energy_and_field \
             harmonic_reception_depends_on_qualifying_realized_cavity \
-            world_energy_inventory_reconciles_across_ordinary_ticks \
+            world_energy_inventory_reconciles_world_tone_and_structural_break_together \
             bonded_environmental_carbon_hydrogen_can_reach_natural_break_activation \
             cumulative_environmental_chemistry_totals_survive_tick_reset
           do
