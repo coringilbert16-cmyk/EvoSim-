@@ -629,50 +629,56 @@ pub(crate) fn total_structural_energy_held(
     organisms: &[Organism],
     decomposing_bodies: &[crate::decomposition::DecomposingBody],
 ) -> f64 {
-    let organism_energy = crate::energy_ledger::compensated_sum(
-        organisms.iter().map(|organism| {
-            let own_energy = crate::energy_ledger::compensated_sum(
-                organism.structure.bonds.iter().map(|bond| -bond.bond_energy),
-            );
-            let stored_material_energy = crate::energy_ledger::compensated_sum(
-                organism.stored_material.entries.iter().map(|entry| match entry {
-                    crate::material_storage::StoredMaterial::Physical(instance) => instance
-                        .internal_connections
-                        .as_ref()
-                        .map(|bonds| {
-                            crate::energy_ledger::compensated_sum(
-                                bonds.iter().map(|bond| -bond.bond_energy),
-                            )
-                        })
-                        .unwrap_or(f64::NAN),
-                }),
-            );
-            let construction_energy =
-                organism
-                    .reproductive_construction
-                    .as_ref()
-                    .map_or(0.0, |construction| {
-                        if construction.is_aggregate_owned_by(&organism.structure) {
-                            0.0
-                        } else {
-                            // Detached construction is no longer a valid physical
-                            // owner; mark inventory as unreconciled instead of
-                            // counting its duplicate graph as independent material.
-                            f64::NAN
-                        }
-                    });
-            [own_energy, stored_material_energy, construction_energy]
-                .into_iter()
-                .sum::<f64>()
-        },
-    ));
-    let decomposition_energy = crate::energy_ledger::compensated_sum(
-        decomposing_bodies.iter().map(|body| {
+    let organism_energy = crate::energy_ledger::compensated_sum(organisms.iter().map(|organism| {
+        let own_energy = crate::energy_ledger::compensated_sum(
+            organism
+                .structure
+                .bonds
+                .iter()
+                .map(|bond| -bond.bond_energy),
+        );
+        let stored_material_energy =
+            crate::energy_ledger::compensated_sum(organism.stored_material.entries.iter().map(
+                |entry| {
+                    match entry {
+                        crate::material_storage::StoredMaterial::Physical(instance) => instance
+                            .internal_connections
+                            .as_ref()
+                            .map(|bonds| {
+                                crate::energy_ledger::compensated_sum(
+                                    bonds.iter().map(|bond| -bond.bond_energy),
+                                )
+                            })
+                            .unwrap_or(f64::NAN),
+                    }
+                },
+            ));
+        let construction_energy =
+            organism
+                .reproductive_construction
+                .as_ref()
+                .map_or(0.0, |construction| {
+                    if construction.is_aggregate_owned_by(&organism.structure) {
+                        0.0
+                    } else {
+                        // Detached construction is no longer a valid physical
+                        // owner; mark inventory as unreconciled instead of
+                        // counting its duplicate graph as independent material.
+                        f64::NAN
+                    }
+                });
+        crate::energy_ledger::compensated_sum([
+            own_energy,
+            stored_material_energy,
+            construction_energy,
+        ])
+    }));
+    let decomposition_energy =
+        crate::energy_ledger::compensated_sum(decomposing_bodies.iter().map(|body| {
             crate::energy_ledger::compensated_sum(
                 body.structure.bonds.iter().map(|bond| -bond.bond_energy),
             )
-        }),
-    );
+        }));
     crate::energy_ledger::compensated_sum([organism_energy, decomposition_energy])
 }
 pub(crate) fn total_resonant_energy_held(organisms: &[Organism]) -> f64 {
