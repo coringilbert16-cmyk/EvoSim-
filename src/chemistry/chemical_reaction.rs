@@ -1192,7 +1192,7 @@ mod material_identity_tests {
             "the restored environmental bond must enter bounded discovery"
         );
         let instance = &simulation.environment.field.cells[cell_index].physical_materials[0];
-        let connection = instance.internal_connections.as_ref().unwrap()[0];
+        let connection = instance.internal_connections.as_ref().unwrap()[0].clone();
         let mut hypothetical = crate::structure::OrganismStructure::new();
         let restored_indices = crate::material_restoration::restore_material(
             &mut hypothetical,
