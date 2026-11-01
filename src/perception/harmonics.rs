@@ -279,17 +279,20 @@ pub(crate) fn natural_frequency_cycles_per_day(
     properties: ResourceProperties,
     baselines: ResourceBaselines,
 ) -> f64 {
-    let values = [
-        properties.mass,
-        properties.cohesion,
-        baselines.mass,
-        baselines.cohesion,
-    ];
+    let values = [properties.mass, baselines.mass, baselines.cohesion];
     if values
         .iter()
         .any(|value| !value.is_finite() || *value <= 0.0)
+        || !properties.cohesion.is_finite()
+        || properties.cohesion < 0.0
     {
         return f64::NAN;
+    }
+    // Zero cohesion means no restoring force, so the material has a zero
+    // natural frequency rather than an invalid resonance parameter. This is
+    // the physical behavior of the catalog's cohesion-free Water resource.
+    if properties.cohesion == 0.0 {
+        return 0.0;
     }
     let ratio = (properties.cohesion / properties.mass) / (baselines.cohesion / baselines.mass);
     if !ratio.is_finite() || ratio <= 0.0 {
@@ -2058,6 +2061,11 @@ mod tests {
         );
         assert!(natural_frequency_cycles_per_day(properties(0.5, 0.0, 1.0), baselines()) > 440.0);
         assert!(natural_frequency_cycles_per_day(properties(1.0, 0.0, 0.5), baselines()) < 440.0);
+        assert_eq!(
+            natural_frequency_cycles_per_day(properties(1.0, 0.0, 0.0), baselines()),
+            0.0,
+            "a material with zero cohesion has no restoring force and therefore no natural oscillation"
+        );
     }
 
     #[test]
