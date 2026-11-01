@@ -59,8 +59,8 @@ fn material_center_x(material: &PhysicalMaterial) -> Option<f64> {
     if placements.is_empty() || placements.iter().any(|placement| !placement.x.is_finite()) {
         return None;
     }
-    let center = placements.iter().map(|placement| placement.x).sum::<f64>()
-        / placements.len() as f64;
+    let center =
+        placements.iter().map(|placement| placement.x).sum::<f64>() / placements.len() as f64;
     center.is_finite().then_some(center)
 }
 
@@ -73,8 +73,8 @@ fn nearest_horizontal_image_shift(anchor_x: f64, target_x: f64, world_width: f64
         return None;
     }
     let delta = target_x - anchor_x;
-    let wrapped_delta = (delta + world_width * 0.5).rem_euclid(world_width)
-        - world_width * 0.5;
+    let wrapped_delta =
+        (delta + world_width * 0.5).rem_euclid(world_width) - world_width * 0.5;
     let shift = wrapped_delta - delta;
     shift.is_finite().then_some(shift)
 }
@@ -283,6 +283,7 @@ fn chemical_step(
     indices_b: &[usize],
     source_a: &PhysicalMaterial,
     source_b: &PhysicalMaterial,
+    horizontal_shift: f64,
     cell_a: usize,
     material_a: usize,
     cell_b: usize,
@@ -604,6 +605,7 @@ pub(crate) fn accumulate_environmental(
                         &indices_b,
                         &source_a,
                         &source_b,
+                        horizontal_shift,
                         cell_a,
                         material_a,
                         cell_b,
@@ -917,9 +919,18 @@ mod tests {
 
     #[test]
     fn environmental_combine_selects_the_nearest_horizontal_image() {
-        assert_eq!(nearest_horizontal_image_shift(995.0, 5.0, 1000.0), Some(1000.0));
-        assert_eq!(nearest_horizontal_image_shift(5.0, 995.0, 1000.0), Some(-1000.0));
-        assert_eq!(nearest_horizontal_image_shift(100.0, 125.0, 1000.0), Some(0.0));
+        assert_eq!(
+            nearest_horizontal_image_shift(995.0, 5.0, 1000.0),
+            Some(1000.0)
+        );
+        assert_eq!(
+            nearest_horizontal_image_shift(5.0, 995.0, 1000.0),
+            Some(-1000.0)
+        );
+        assert_eq!(
+            nearest_horizontal_image_shift(100.0, 125.0, 1000.0),
+            Some(0.0)
+        );
         assert!(nearest_horizontal_image_shift(0.0, 1.0, 0.0).is_none());
 
         let catalog = crate::resources::default_catalog();
@@ -938,7 +949,11 @@ mod tests {
             &crate::state::Simulation::new(17, 10.0).environment,
         )
         .expect("source should restore");
-        assert!(shift_restored_units_horizontally(&mut structure, &indices, 1000.0));
+        assert!(shift_restored_units_horizontally(
+            &mut structure,
+            &indices,
+            1000.0
+        ));
         assert!((structure.units[indices[0]].placement.x - 1005.0).abs() < 1e-9);
     }
 
