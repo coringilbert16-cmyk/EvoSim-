@@ -221,7 +221,7 @@ jobs:
             harmonic_reception_depends_on_qualifying_realized_cavity \
             world_energy_inventory_reconciles_across_ordinary_ticks
           do
-            cargo test --locked --lib "$test_name" -- --nocapture || failed=1
+            cargo test --locked "$test_name" -- --nocapture || failed=1
           done
           exit "$failed"
       - name: Run Rust tests
