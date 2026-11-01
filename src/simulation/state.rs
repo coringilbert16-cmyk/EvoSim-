@@ -595,6 +595,10 @@ pub(crate) struct Environment {
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
+    /// Cumulative successful environmental BREAK commits since simulation creation.
+    pub(crate) break_committed_total: usize,
+    /// Cumulative successful environmental COMBINE commits since simulation creation.
+    pub(crate) combine_committed_total: usize,
     pub(crate) break_ready_candidates: usize,
     pub(crate) break_scheduled: usize,
     pub(crate) break_committed: usize,
