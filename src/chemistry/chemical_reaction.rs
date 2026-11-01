@@ -1182,8 +1182,8 @@ mod material_identity_tests {
                 tick,
                 &mut discovery_work,
             );
-            max_accumulated = max_accumulated
-                .max(accumulation.values().copied().fold(0.0_f64, f64::max));
+            max_accumulated =
+                max_accumulated.max(accumulation.values().copied().fold(0.0_f64, f64::max));
             if !operations.is_empty() {
                 ready = true;
                 break;
