@@ -233,6 +233,7 @@ fn new_structure_bond_is_formed_only_through_combine() {
         ledger.total_work_expended,
         ledger.total_heat_dissipated,
         -ledger.total_external_energy_input,
+        -ledger.total_external_energy_input_compensation,
     ]);
     assert!(
         residual.abs() < 1e-9,

@@ -802,6 +802,9 @@ impl Simulation {
                     - original_ledger.total_structural_energy_delta_compensation,
                 total_external_energy_input: trial_ledger.total_external_energy_input
                     - original_ledger.total_external_energy_input,
+                total_external_energy_input_compensation: trial_ledger
+                    .total_external_energy_input_compensation
+                    - original_ledger.total_external_energy_input_compensation,
                 total_world_tone_energy_unabsorbed: trial_ledger.total_world_tone_energy_unabsorbed
                     - original_ledger.total_world_tone_energy_unabsorbed,
                 total_world_tone_energy_escaped: trial_ledger.total_world_tone_energy_escaped
@@ -863,6 +866,8 @@ impl Simulation {
             ledger.total_structural_energy_delta_compensation +=
                 ledger_delta.total_structural_energy_delta_compensation;
             ledger.total_external_energy_input += ledger_delta.total_external_energy_input;
+            ledger.total_external_energy_input_compensation +=
+                ledger_delta.total_external_energy_input_compensation;
             ledger.total_world_tone_energy_unabsorbed +=
                 ledger_delta.total_world_tone_energy_unabsorbed;
             ledger.total_world_tone_energy_escaped += ledger_delta.total_world_tone_energy_escaped;
@@ -1126,6 +1131,8 @@ fn rollback_prepared_combine(
         ledger.total_structural_energy_delta_compensation -=
             delta.total_structural_energy_delta_compensation;
         ledger.total_external_energy_input -= delta.total_external_energy_input;
+        ledger.total_external_energy_input_compensation -=
+            delta.total_external_energy_input_compensation;
         ledger.total_world_tone_energy_unabsorbed -= delta.total_world_tone_energy_unabsorbed;
         ledger.total_world_tone_energy_escaped -= delta.total_world_tone_energy_escaped;
         ledger.total_usable_energy_gained -= delta.total_usable_energy_gained;
@@ -1406,6 +1413,7 @@ mod tests {
             total_structural_energy_delta: 2.5,
             total_structural_energy_delta_compensation: 0.125,
             total_external_energy_input: 3.75,
+            total_external_energy_input_compensation: 0.0625,
             initial_condition_energy_settled: true,
             total_world_tone_energy_unabsorbed: 4.125,
             total_world_tone_energy_escaped: 5.25,
@@ -1429,6 +1437,9 @@ mod tests {
                 .total_structural_energy_delta_compensation
                 - 0.05,
             total_external_energy_input: before_ledger.total_external_energy_input + 0.4,
+            total_external_energy_input_compensation: before_ledger
+                .total_external_energy_input_compensation
+                + 0.025,
             initial_condition_energy_settled: false,
             total_world_tone_energy_unabsorbed: before_ledger.total_world_tone_energy_unabsorbed
                 + 0.5,

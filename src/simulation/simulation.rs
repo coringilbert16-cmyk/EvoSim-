@@ -1962,6 +1962,9 @@ impl Simulation {
                 .energy_ledger
                 .total_pair_interaction_potential_held,
             external_energy_input: self.energy_ledger.total_external_energy_input,
+            external_energy_input_compensation: self
+                .energy_ledger
+                .total_external_energy_input_compensation,
             world_tone_energy_escaped: self.energy_ledger.total_world_tone_energy_escaped,
             other_energy_released: self.energy_ledger.total_potential_energy_released,
             work_expended: self.energy_ledger.total_work_expended,

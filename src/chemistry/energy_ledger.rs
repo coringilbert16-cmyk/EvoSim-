@@ -20,6 +20,25 @@ pub(crate) fn compensated_sum(values: impl IntoIterator<Item = f64>) -> f64 {
     sum + correction
 }
 
+/// Add one value to a high/low floating-point accumulator without discarding
+/// the rounding error from the primary cumulative total.
+fn compensated_accumulate(sum: f64, correction: f64, value: f64) -> Option<(f64, f64)> {
+    if !sum.is_finite() || !correction.is_finite() || !value.is_finite() {
+        return None;
+    }
+    let next_sum = sum + value;
+    if !next_sum.is_finite() {
+        return None;
+    }
+    let roundoff = if sum.abs() >= value.abs() {
+        (sum - next_sum) + value
+    } else {
+        (value - next_sum) + sum
+    };
+    let next_correction = correction + roundoff;
+    (next_correction.is_finite()).then_some((next_sum, next_correction))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum EnergyReason {
     Combine,
@@ -391,6 +410,7 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) initial_pair_interaction_potential: f64,
     pub(crate) current_pair_interaction_potential: f64,
     pub(crate) external_energy_input: f64,
+    pub(crate) external_energy_input_compensation: f64,
     /// External resonant-field energy that leaves the modeled world after material response.
     pub(crate) world_tone_energy_escaped: f64,
     /// Reserved compatibility slot. Must be zero until an explicitly owned
@@ -441,6 +461,7 @@ impl EnergyInventorySnapshot {
             self.heat_dissipated,
             self.world_tone_energy_escaped,
             -self.external_energy_input,
+            -self.external_energy_input_compensation,
             -self.other_energy_released,
         ]);
         residual.is_finite().then_some(residual)
@@ -722,7 +743,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_holder = *holder + transaction.usable_delta;
-        let next_external = self.total_external_energy_input + transaction.external_input;
+        let Some((next_external, next_external_compensation)) = compensated_accumulate(
+            self.total_external_energy_input,
+            self.total_external_energy_input_compensation,
+            transaction.external_input,
+        ) else {
+            return false;
+        };
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta;
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
@@ -739,6 +766,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         *holder = next_holder;
         self.total_external_energy_input = next_external;
+        self.total_external_energy_input_compensation = next_external_compensation;
         self.total_usable_energy_gained = next_gained;
         self.total_work_expended = next_work;
         self.total_heat_dissipated = next_heat;
@@ -776,7 +804,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
         {
             return false;
         }
-        let next_external = self.total_external_energy_input + incident_energy;
+        let Some((next_external, next_external_compensation)) = compensated_accumulate(
+            self.total_external_energy_input,
+            self.total_external_energy_input_compensation,
+            incident_energy,
+        ) else {
+            return false;
+        };
         let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
         let mut next_heat = self.total_heat_dissipated + heat_dissipated;
         let next_escaped = self.total_world_tone_energy_escaped + escaped_energy;
@@ -793,7 +827,12 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // a small frame to a large cumulative total can round the source and
         // sinks in different directions; the aggregate world inventory must
         // never report more tone energy allocated than actually credited.
-        let actual_incident = next_external - self.total_external_energy_input;
+        let actual_incident = compensated_sum([
+            next_external,
+            -self.total_external_energy_input,
+            next_external_compensation,
+            -self.total_external_energy_input_compensation,
+        ]);
         let actual_capture = next_resonant - self.total_resonant_energy_held;
         let actual_escape = next_escaped - self.total_world_tone_energy_escaped;
         let mut actual_heat = next_heat - self.total_heat_dissipated;
@@ -839,6 +878,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
 
         self.total_external_energy_input = next_external;
+        self.total_external_energy_input_compensation = next_external_compensation;
         self.total_resonant_energy_held = next_resonant;
         self.total_heat_dissipated = next_heat;
         self.total_world_tone_energy_escaped = next_escaped;
@@ -866,16 +906,13 @@ impl EnergyLedgerAuthority for EnergyLedger {
             return false;
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
-        let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
-        let structural_roundoff = if self.total_structural_energy_delta.abs()
-            >= transaction.structural_delta.abs()
-        {
-            (self.total_structural_energy_delta - next_structural) + transaction.structural_delta
-        } else {
-            (transaction.structural_delta - next_structural) + self.total_structural_energy_delta
+        let Some((next_structural, next_structural_compensation)) = compensated_accumulate(
+            self.total_structural_energy_delta,
+            self.total_structural_energy_delta_compensation,
+            transaction.structural_delta,
+        ) else {
+            return false;
         };
-        let next_structural_compensation =
-            self.total_structural_energy_delta_compensation + structural_roundoff;
         let next_work = self.total_work_expended + transaction.work_expended;
         let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_released.is_finite()

@@ -228,6 +228,9 @@ pub(crate) struct EnergyLedger {
     /// Energy received from explicit external sources, distinct from bond release.
     #[serde(default)]
     pub(crate) total_external_energy_input: f64,
+    /// Low-order correction retained when cumulative external inputs exceed f64 precision.
+    #[serde(default)]
+    pub(crate) total_external_energy_input_compensation: f64,
     /// Guards the simulation's one-time initial-condition energy grant.
     #[serde(default)]
     pub(crate) initial_condition_energy_settled: bool,
