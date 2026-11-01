@@ -65,7 +65,9 @@ fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64
     if placements.is_empty()
         || !height.is_finite()
         || height <= 0.0
-        || placements.iter().any(|p| !p.x.is_finite() || !p.y.is_finite())
+        || placements
+            .iter()
+            .any(|p| !p.x.is_finite() || !p.y.is_finite())
     {
         return None;
     }
@@ -232,9 +234,7 @@ fn shape_vertical_extent(form: &Form, rotation_radians: f64) -> f64 {
     match form {
         Form::Circle { radius } => *radius,
         Form::Line { length } => length * 0.5 * sin.abs(),
-        Form::Rectangle { width, height } => {
-            width * 0.5 * sin.abs() + height * 0.5 * cos.abs()
-        }
+        Form::Rectangle { width, height } => width * 0.5 * sin.abs() + height * 0.5 * cos.abs(),
         Form::RegularPolygon { radius, .. } => *radius,
         Form::Polygon { vertices } => vertices
             .iter()
@@ -245,8 +245,7 @@ fn shape_vertical_extent(form: &Form, rotation_radians: f64) -> f64 {
             arc_boundary,
             ..
         } => {
-            let equivalent_radius =
-                (nominal_area.max(0.0) / std::f64::consts::PI).sqrt();
+            let equivalent_radius = (nominal_area.max(0.0) / std::f64::consts::PI).sqrt();
             arc_boundary
                 .as_ref()
                 .map_or(equivalent_radius, |arc| equivalent_radius.max(arc.radius))
@@ -614,13 +613,11 @@ pub(crate) fn transport_field(
             (0..flow_cols).collect()
         } else {
             (0..col_count)
-                .map(|offset| {
-                    (first_col + offset as isize).rem_euclid(flow_cols as isize) as usize
-                })
+                .map(|offset| (first_col + offset as isize).rem_euclid(flow_cols as isize) as usize)
                 .collect()
         };
-        let first_row = (((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize)
-            .max(0) as usize;
+        let first_row =
+            (((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize).max(0) as usize;
         let last_row = (((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize)
             .min(flow_rows.saturating_sub(1) as isize)
             .max(0) as usize;
@@ -640,8 +637,8 @@ pub(crate) fn transport_field(
             continue;
         };
         let mass = material.material.mass(catalog);
-        let flow_col = ((x / FLOW_BIN_SIZE).floor() as isize)
-            .rem_euclid(flow_cols as isize) as usize;
+        let flow_col =
+            ((x / FLOW_BIN_SIZE).floor() as isize).rem_euclid(flow_cols as isize) as usize;
         let flow_row = ((y / FLOW_BIN_SIZE).floor() as isize)
             .clamp(0, flow_rows.saturating_sub(1) as isize) as usize;
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
@@ -899,12 +896,17 @@ mod tests {
             .collect();
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
-        assert!(placement.x >= 1000.0, "the element should cross the right edge");
+        assert!(
+            placement.x >= 1000.0,
+            "the element should cross the right edge"
+        );
         let destination = field.index_for_position(placement.x, placement.y).unwrap();
         assert_ne!(destination, source);
         assert_eq!(
             destination,
-            field.index_for_position(placement.x - 1000.0, placement.y).unwrap()
+            field
+                .index_for_position(placement.x - 1000.0, placement.y)
+                .unwrap()
         );
         assert_eq!(field.total_material(), vec![("Carbon".to_string(), 1.0)]);
     }
@@ -940,10 +942,12 @@ mod tests {
         let placements = moved.placements.as_ref().unwrap();
         assert!(placements.iter().all(|p| p.x >= 999.0 && p.x > 0.0));
         assert!(placements.iter().any(|p| p.x >= 1000.0));
-        assert_eq!(ActiveMaterialField::new(1000.0, 1000.0, 25.0)
-            .index_for_position(placements[0].x, placements[0].y),
+        assert_eq!(
             ActiveMaterialField::new(1000.0, 1000.0, 25.0)
-                .index_for_position(placements[0].x - 1000.0, placements[0].y));
+                .index_for_position(placements[0].x, placements[0].y),
+            ActiveMaterialField::new(1000.0, 1000.0, 25.0)
+                .index_for_position(placements[0].x - 1000.0, placements[0].y)
+        );
         let original_placements = material.placements.as_ref().unwrap();
         let original_separation = original_placements[1].x - original_placements[0].x;
         let moved_separation = placements[1].x - placements[0].x;
@@ -968,7 +972,8 @@ mod tests {
         .expect("catalog carbon should realize");
         let moved = translated(&material, 0.0, 1.0, 1000.0, &catalog).unwrap();
         let placement = &moved.placements.as_ref().unwrap()[0];
-        let extent = shape_vertical_extent(&material.realized_shapes.as_ref().unwrap()[0].form, 0.0);
+        let extent =
+            shape_vertical_extent(&material.realized_shapes.as_ref().unwrap()[0].form, 0.0);
         assert!(placement.y - extent >= 0.0);
         assert!(placement.y + extent <= 1000.0 - 1e-6 + 1e-9);
         assert!(
@@ -989,7 +994,10 @@ mod tests {
         let top_moved = translated(&top_material, 0.0, -1.0, 1000.0, &catalog).unwrap();
         let top_placement = &top_moved.placements.as_ref().unwrap()[0];
         assert!(top_placement.y - extent >= 0.0);
-        assert!(top_placement.y > 0.0, "the top wall must constrain full element geometry");
+        assert!(
+            top_placement.y > 0.0,
+            "the top wall must constrain full element geometry"
+        );
 
         let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         assert!(field.index_for_position(500.0, 1000.0).is_none());
