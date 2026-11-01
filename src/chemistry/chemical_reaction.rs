@@ -588,19 +588,31 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let Some(resource_a) = hypothetical.units[unit_a]
-            .material
-            .parts
-            .first()
-            .and_then(|(name, _)| environment.catalog.iter().find(|resource| resource.name == *name))
+        let Some(resource_a) =
+            hypothetical.units[unit_a]
+                .material
+                .parts
+                .first()
+                .and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                })
         else {
             continue;
         };
-        let Some(resource_b) = hypothetical.units[unit_b]
-            .material
-            .parts
-            .first()
-            .and_then(|(name, _)| environment.catalog.iter().find(|resource| resource.name == *name))
+        let Some(resource_b) =
+            hypothetical.units[unit_b]
+                .material
+                .parts
+                .first()
+                .and_then(|(name, _)| {
+                    environment
+                        .catalog
+                        .iter()
+                        .find(|resource| resource.name == *name)
+                })
         else {
             continue;
         };
