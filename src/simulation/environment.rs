@@ -117,11 +117,7 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite()
-            || !y.is_finite()
-            || self.width_cells == 0
-            || self.height_cells == 0
-        {
+        if !x.is_finite() || !y.is_finite() || self.width_cells == 0 || self.height_cells == 0 {
             return None;
         }
         let field_width = self.width_cells as f64 * self.cell_size;
