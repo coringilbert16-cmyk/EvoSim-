@@ -30,6 +30,23 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     simulation.chemical_reaction_accumulation.clear();
     simulation.environment.chemistry_usable_energy = 0.0;
     simulation.environment.resonant_energy = Default::default();
+    // Keep the smaller domain local to this experiment so unrelated simulation
+    // fixtures retain their established 500 x 500 world.
+    simulation.environment.width = 250.0;
+    simulation.environment.height = 250.0;
+    simulation.world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+        simulation.environment.width,
+        simulation.environment.height,
+    )
+    .expect("experiment world tone must fit the reduced world");
+    simulation.world_tone_cycle = simulation.world_tone.and_then(|config| {
+        crate::world_tone::WorldToneCycle::precompute(
+            config,
+            simulation.environment.width,
+            simulation.environment.height,
+        )
+    });
+    assert!(simulation.world_tone_cycle.is_some());
     simulation.environment.field = ActiveMaterialField::new(
         simulation.environment.width,
         simulation.environment.height,
@@ -79,7 +96,11 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let name = if (column + row) % 2 == 0 { first } else { second };
+            let name = if (column + row) % 2 == 0 {
+                first
+            } else {
+                second
+            };
             let x = center_x + (column as f64 - 2.0) * 1.25 + rng.gen_range(-0.04..=0.04);
             let y = center_y + (row as f64 - 1.5) * 1.25 + rng.gen_range(-0.04..=0.04);
             let rotation_radians = rng.gen_range(0.0..std::f64::consts::TAU);
