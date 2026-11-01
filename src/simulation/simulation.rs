@@ -1,6 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
+use std::time::Instant;
 
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
@@ -853,12 +854,17 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
+        let transport_started = Instant::now();
         crate::environment_flow::transport_field(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
             self.environment.height,
         );
+        self.environmental_chemistry_diagnostics.transport_elapsed_micros = transport_started
+            .elapsed()
+            .as_micros()
+            .min(u64::MAX as u128) as u64;
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
@@ -894,6 +900,7 @@ impl Simulation {
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
         // the organism iteration below.
+        let break_discovery_started = Instant::now();
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_break_operations = crate::chemical_reaction::accumulate_environmental(
@@ -903,10 +910,16 @@ impl Simulation {
             self.tick,
             &mut environmental_break_discovery_remaining,
         );
+        self.environmental_chemistry_diagnostics.break_discovery_elapsed_micros =
+            break_discovery_started
+                .elapsed()
+                .as_micros()
+                .min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics
             .break_discovery_work_remaining = environmental_break_discovery_remaining;
+        let combine_discovery_started = Instant::now();
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_combine_operations =
@@ -917,11 +930,17 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
             );
+        self.environmental_chemistry_diagnostics.combine_discovery_elapsed_micros =
+            combine_discovery_started
+                .elapsed()
+                .as_micros()
+                .min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
             .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
 
+        let reaction_settlement_started = Instant::now();
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
         let environmental_break_operations =
@@ -1083,6 +1102,12 @@ impl Simulation {
                 },
             );
         }
+
+        self.environmental_chemistry_diagnostics.reaction_settlement_elapsed_micros =
+            reaction_settlement_started
+                .elapsed()
+                .as_micros()
+                .min(u64::MAX as u128) as u64;
 
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
