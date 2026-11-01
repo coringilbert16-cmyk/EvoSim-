@@ -3135,7 +3135,7 @@ mod decomposition_finalization_tests {
             simulation.step();
             let inventory = simulation.energy_inventory_snapshot();
             assert!(
-                inventory.is_balanced_without_creation(1e-9),
+                inventory.is_balanced(1e-9),
                 "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}, ledger_before={ledger_before:?}, ledger_after={:?}",
                 inventory.residual(),
                 simulation.energy_ledger
