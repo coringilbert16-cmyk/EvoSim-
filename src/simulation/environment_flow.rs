@@ -975,6 +975,22 @@ mod tests {
             placement.y < 999.999,
             "the element's full geometry, not only its center, must remain inside the wall"
         );
+
+        let top_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 500.0,
+                y: 0.001,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        let top_moved = translated(&top_material, 0.0, -1.0, 1000.0, &catalog).unwrap();
+        let top_placement = &top_moved.placements.as_ref().unwrap()[0];
+        assert!(top_placement.y - extent >= 0.0);
+        assert!(top_placement.y > 0.0, "the top wall must constrain full element geometry");
+
         let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         assert!(field.index_for_position(500.0, 1000.0).is_none());
         assert!(field.index_for_position(500.0, -0.001).is_none());
