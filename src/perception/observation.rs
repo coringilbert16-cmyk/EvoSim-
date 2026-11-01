@@ -417,9 +417,9 @@ impl WorldObservation {
                     })?;
                 let minimum = config.parameters.minimum_energy_intensity_per_tick_per_width;
                 let maximum = config.parameters.maximum_energy_intensity_per_tick_per_width;
-                let source_fraction = ((sample.energy_intensity_per_tick_per_width - minimum)
-                    / (maximum - minimum))
-                    .clamp(0.0, 1.0);
+                let source_fraction =
+                    (sample.energy_intensity_per_tick_per_width - minimum) / (maximum - minimum);
+                let source_fraction = source_fraction.clamp(0.0, 1.0);
                 Some(0.1 + source_fraction * 0.9)
             })
             .unwrap_or(1.0);
