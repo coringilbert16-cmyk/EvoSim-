@@ -34,11 +34,13 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     // fixtures retain their established 500 x 500 world.
     simulation.environment.width = 250.0;
     simulation.environment.height = 250.0;
-    simulation.world_tone = crate::world_tone::WorldToneRuntimeConfig::default_for_world(
-        simulation.environment.width,
-        simulation.environment.height,
-    )
-    .expect("experiment world tone must fit the reduced world");
+    simulation.world_tone = Some(
+        crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+            simulation.environment.width,
+            simulation.environment.height,
+        )
+        .expect("experiment world tone must fit the reduced world"),
+    );
     simulation.world_tone_cycle = simulation.world_tone.and_then(|config| {
         crate::world_tone::WorldToneCycle::precompute(
             config,
