@@ -1029,7 +1029,8 @@ impl Simulation {
                 );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
-                self.environmental_chemistry_diagnostics.combine_committed_total += 1;
+                self.environmental_chemistry_diagnostics
+                    .combine_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.combine_rejected += 1;
             }
