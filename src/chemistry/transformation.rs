@@ -539,17 +539,6 @@ pub(crate) fn environmental_break_candidates(
     candidates
 }
 
-pub(crate) fn has_environmental_break_candidate(
-    organism: &Organism,
-    environment: &Environment,
-) -> bool {
-    // Eligibility must use the same endpoint-access rule as candidate
-    // generation. Merely finding a bonded environmental component near the
-    // organism is not enough: at least one endpoint of the target bond must
-    // actually lie inside accessible organism interior.
-    !environmental_break_candidates(organism, environment).is_empty()
-}
-
 fn parse_environmental_break_context_key(key: &str) -> Option<(usize, usize, usize)> {
     let rest = key.strip_prefix("environment:")?;
     let (cell_material_part, bond_part) = rest.rsplit_once(":bond:")?;
