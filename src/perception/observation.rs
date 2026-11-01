@@ -672,7 +672,7 @@ mod tests {
             );
             assert!(
                 part.resonance_frequency_cycles_per_day.is_finite()
-                    && part.resonance_frequency_cycles_per_day > 0.0,
+                    && part.resonance_frequency_cycles_per_day >= 0.0,
                 "resource {} has invalid natural resonance frequency {}",
                 part.resource,
                 part.resonance_frequency_cycles_per_day
@@ -684,6 +684,24 @@ mod tests {
                 part.resource,
                 part.resonance_amplitude
             );
+            if part.resource == "Water" {
+                assert_eq!(
+                    part.resonance_frequency_cycles_per_day,
+                    0.0,
+                    "cohesion-free Water must not be assigned an artificial natural frequency"
+                );
+                assert_eq!(
+                    part.resonance_amplitude,
+                    0.0,
+                    "cohesion-free Water must not receive a forced-oscillator response"
+                );
+            } else {
+                assert!(
+                    part.resonance_frequency_cycles_per_day > 0.0,
+                    "resource {} must have a positive natural frequency",
+                    part.resource
+                );
+            }
         }
         let resources = parts
             .iter()
