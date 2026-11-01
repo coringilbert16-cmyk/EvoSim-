@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   environmental-chemistry:
-    name: 24,000-tick organism-free chemistry experiment
+    name: 240,000-tick organism-free chemistry experiment
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -35,7 +35,7 @@ jobs:
           cargo run --release -- --headless \
             --environment-chemistry-experiment \
             --seed 42 \
-            --ticks 24000 \
+            --ticks 240000 \
             --diagnostic-interval 100 \
             --diagnostics /tmp/environment-chemistry-diagnostics.jsonl
 
