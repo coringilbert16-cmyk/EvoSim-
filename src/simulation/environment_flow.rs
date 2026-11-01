@@ -62,25 +62,19 @@ fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a 
 
 fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
-    let anchor = placements.first()?;
-    if !height.is_finite()
+    if placements.is_empty()
+        || !height.is_finite()
         || height <= 0.0
-        || placements
-            .iter()
-            .any(|p| !p.x.is_finite() || !p.y.is_finite())
+        || placements.iter().any(|p| !p.x.is_finite() || !p.y.is_finite())
     {
         return None;
     }
     let count = placements.len() as f64;
     let x = placements.iter().map(|p| p.x).sum::<f64>() / count;
-    // Average vertical offsets relative to one constituent so composites
-    // crossing the wrapped top/bottom seam keep a compact center.
-    let y_offset = placements
-        .iter()
-        .map(|p| (p.y - anchor.y + height * 0.5).rem_euclid(height) - height * 0.5)
-        .sum::<f64>()
-        / count;
-    Some((x, (anchor.y + y_offset).rem_euclid(height)))
+    // Vertical coordinates are bounded, not periodic. Keep the ordinary
+    // center of mass so objects cannot appear across the top/bottom seam.
+    let y = placements.iter().map(|p| p.y).sum::<f64>() / count;
+    Some((x, y))
 }
 
 fn shape_radius(form: &Form) -> f64 {
@@ -168,24 +162,24 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     if ![x, y, width, height].iter().all(|v| v.is_finite()) || width <= 0.0 || height <= 0.0 {
         return Velocity::default();
     }
-    let phase = std::f64::consts::TAU * x / width;
+    let wrapped_x = x.rem_euclid(width);
+    let phase = std::f64::consts::TAU * wrapped_x / width;
     let center_y = height * 0.5 + height * 0.23 * phase.sin();
     let slope = height * 0.23 * std::f64::consts::TAU / width * phase.cos();
-    let vertical_delta = (y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+    let vertical_delta = y - center_y;
     let width_scale = (height * 0.16).max(1.0);
     let envelope = (-0.5 * (vertical_delta / width_scale).powi(2)).exp();
     let tangent = Velocity { x: 1.0, y: slope }.normalized();
     let mut velocity = tangent.scale(0.12 + 0.88 * envelope);
 
-    // Localized counter-flow is a real vector-field vortex, not an arbitrary
-    // per-particle reversal. Its sign alternates across the two S bends.
-    let vortex_radius = (height * 0.13).max(1.0);
+    // The flow field is periodic left-to-right and bounded top-to-bottom.
     for (fraction, sign) in [(0.25, 1.0), (0.75, -1.0)] {
         let cx = width * fraction;
         let cy = height * 0.5 + height * 0.23 * (std::f64::consts::TAU * fraction).sin();
-        let dx = x - cx;
-        let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = (wrapped_x - cx + width * 0.5).rem_euclid(width) - width * 0.5;
+        let dy = y - cy;
         let radial_sq = dx * dx + dy * dy;
+        let vortex_radius = (height * 0.13).max(1.0);
         let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 1.2;
         velocity = velocity.add(Velocity {
             x: -dy / vortex_radius * weight,
@@ -202,7 +196,7 @@ fn obstacle_adjusted_velocity(
     source_cell: usize,
     source_index: usize,
     obstacles: &[Obstacle],
-    height: f64,
+    width: f64,
 ) -> Velocity {
     for obstacle in obstacles {
         if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
@@ -211,11 +205,10 @@ fn obstacle_adjusted_velocity(
         if obstacle.solidity <= 1e-6 {
             continue;
         }
-        let dx = x - obstacle.x;
-        let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
+        let dy = y - obstacle.y;
         let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
-        // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
             let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
@@ -224,7 +217,6 @@ fn obstacle_adjusted_velocity(
                 y: side * influence * 0.65,
             });
         }
-        // Downstream wake is sheltered and slower; upstream flow is unchanged.
         if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
@@ -235,30 +227,25 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
-fn clamp_horizontal_displacement(
+fn clamp_vertical_displacement(
     material: &PhysicalMaterial,
-    requested_dx: f64,
-    width: f64,
+    requested_dy: f64,
+    height: f64,
 ) -> Option<f64> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty() || !width.is_finite() || width <= 0.0 {
+    if placements.is_empty() || !height.is_finite() || height <= 0.0 {
         return None;
     }
-    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements
-        .iter()
-        .map(|p| p.x)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let world_max = (width - 1e-6).max(0.0);
-    let min_dx = -min_x;
-    let max_dx = world_max - max_x;
-    if min_dx <= max_dx {
-        Some(requested_dx.clamp(min_dx, max_dx))
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let world_max = (height - 1e-6).max(0.0);
+    let min_dy = -min_y;
+    let max_dy = world_max - max_y;
+    if min_dy <= max_dy {
+        Some(requested_dy.clamp(min_dy, max_dy))
     } else {
-        // If an object is wider than the world, preserve it as a unit and keep
-        // its anchor in range; never split the object to satisfy the boundary.
-        let anchor_x = placements[0].x;
-        Some((anchor_x + requested_dx).clamp(0.0, world_max) - anchor_x)
+        let anchor_y = placements[0].y;
+        Some(-anchor_y)
     }
 }
 
@@ -268,6 +255,7 @@ fn translated(
     dy: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
+    let dy = clamp_vertical_displacement(material, dy, height)?;
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
     if placements.is_empty() {
@@ -275,7 +263,7 @@ fn translated(
     }
     for placement in placements {
         placement.x += dx;
-        placement.y = (placement.y + dy).rem_euclid(height);
+        placement.y += dy;
         if !placement.x.is_finite()
             || !placement.y.is_finite()
             || !placement.rotation_radians.is_finite()
@@ -286,12 +274,6 @@ fn translated(
     Some(moved)
 }
 
-/// Estimate angular response to local flow shear. Compound torque is
-/// accumulated from constituent mass and the velocity difference across the
-/// object's extent; the geometry-derived moment of inertia resists rotation.
-/// Single non-circular resources respond to local vorticity according to their
-/// shape anisotropy. This is an overdamped response: it adds no arbitrary spin
-/// or per-tick angle cap, and has no hidden angular state to lose on transfer.
 fn angular_displacement(
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
