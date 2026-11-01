@@ -978,7 +978,7 @@ mod material_identity_tests {
                 part_b: 1,
             }],
         };
-        crate::physical_material::PhysicalMaterial::realized(
+        let mut composite = crate::physical_material::PhysicalMaterial::realized(
             material,
             vec![
                 crate::structure::Placement {
@@ -987,14 +987,27 @@ mod material_identity_tests {
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 13.1,
+                    x: 14.0,
                     y: 12.5,
-                    rotation_radians: 0.25,
+                    rotation_radians: 0.0,
                 },
             ],
             catalog,
         )
-        .expect("test composite should be physically realizable")
+        .expect("test composite should be physically realizable");
+        // Use the exact facing endpoints: Carbon's rightmost corner and
+        // Hydrogen's left longitudinal endpoint. The inferred candidate order
+        // is not authoritative for this symmetric contact.
+        composite.internal_connections = Some(vec![
+            crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+                bond_energy: 0.0,
+            },
+        ]);
+        composite
     }
 
     fn remove_living_organisms_preserving_inventory(simulation: &mut crate::state::Simulation) {
