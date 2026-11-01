@@ -3428,6 +3428,44 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn cumulative_environmental_chemistry_totals_survive_tick_reset() {
+        let mut simulation = Simulation::new(954, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation
+            .environmental_chemistry_diagnostics
+            .combine_committed_total = 17;
+        simulation
+            .environmental_chemistry_diagnostics
+            .break_committed_total = 4;
+
+        simulation.step();
+
+        assert_eq!(
+            simulation
+                .environmental_chemistry_diagnostics
+                .combine_committed_total,
+            17
+        );
+        assert_eq!(
+            simulation
+                .environmental_chemistry_diagnostics
+                .break_committed_total,
+            4
+        );
+        assert_eq!(
+            simulation.environmental_chemistry_diagnostics.combine_committed,
+            0
+        );
+        assert_eq!(
+            simulation.environmental_chemistry_diagnostics.break_committed,
+            0
+        );
+    }
+
+    #[test]
     fn aggregate_owned_construction_is_counted_once_in_energy_inventory() {
         let mut simulation = Simulation::new(953, 20.0);
         let organism = &mut simulation.organisms[0];
