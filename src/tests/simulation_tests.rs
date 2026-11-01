@@ -1270,33 +1270,31 @@ mod integration_tests {
             .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap_or(f64::NAN))
             .sum::<f64>();
-        let expected_structural = crate::energy_ledger::compensated_sum(
-            simulation
-                .organisms
-                .iter()
-                .flat_map(|organism| {
-                    organism
-                        .structure
-                        .bonds
-                        .iter()
-                        .map(|bond| -bond.bond_energy)
-                        .chain(organism.reproductive_construction.iter().flat_map(
-                            |construction| {
-                                construction
-                                    .developing_structure
-                                    .bonds
-                                    .iter()
-                                    .map(|bond| -bond.bond_energy)
-                            },
-                        ))
-                })
-                .chain(simulation.decomposing_bodies.iter().flat_map(|body| {
-                    body.structure
-                        .bonds
-                        .iter()
-                        .map(|bond| -bond.bond_energy)
-                })),
-        );
+        let expected_structural =
+            crate::energy_ledger::compensated_sum(
+                simulation
+                    .organisms
+                    .iter()
+                    .flat_map(|organism| {
+                        organism
+                            .structure
+                            .bonds
+                            .iter()
+                            .map(|bond| -bond.bond_energy)
+                            .chain(organism.reproductive_construction.iter().flat_map(
+                                |construction| {
+                                    construction
+                                        .developing_structure
+                                        .bonds
+                                        .iter()
+                                        .map(|bond| -bond.bond_energy)
+                                },
+                            ))
+                    })
+                    .chain(simulation.decomposing_bodies.iter().flat_map(|body| {
+                        body.structure.bonds.iter().map(|bond| -bond.bond_energy)
+                    })),
+            );
 
         // Poison only cached current totals. The independent inventory must
         // still describe the live holders, not reproduce these ledger values.
