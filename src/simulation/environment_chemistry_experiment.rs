@@ -10,6 +10,13 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
+pub(crate) const CONTROLLED_REACTANT_PAIRS: [(&str, &str); 4] = [
+    ("Nitrogen", "Water"),
+    ("Carbon", "Oxygen"),
+    ("Oxygen", "Water"),
+    ("Hydrogen", "Phosphorus"),
+];
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
@@ -41,12 +48,6 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         "the chemistry experiment requires the seven canonical base resources"
     );
 
-    let pairings = [
-        ("Nitrogen", "Water"),
-        ("Carbon", "Oxygen"),
-        ("Oxygen", "Water"),
-        ("Hydrogen", "Phosphorus"),
-    ];
     let pile_sizes = vec![20; 32];
     assert_eq!(pile_sizes.iter().sum::<usize>(), 640);
 
@@ -73,7 +74,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     let mut identity_index = 0;
     for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
         let (center_x, center_y) = centers[pile_index];
-        let (first, second) = pairings[pile_index / 8];
+        let (first, second) = CONTROLLED_REACTANT_PAIRS[pile_index / 8];
         let columns = 5;
         for local_index in 0..pile_size {
             let column = local_index % columns;
@@ -139,8 +140,7 @@ fn randomized_pile_centers(
     rng: &mut ChaCha8Rng,
 ) -> Vec<(f64, f64)> {
     let mut centers = vec![(hotspot_x, hotspot_y)];
-    // A jittered, shuffled grid guarantees broad coverage at the 10x
-    // population while retaining seeded, irregular pile placement.
+    // A jittered, shuffled grid spreads the 32 controlled piles across the field.
     let grid_side = 6_usize;
     let spacing_x = width * 0.84 / grid_side as f64;
     let spacing_y = height * 0.84 / grid_side as f64;
@@ -191,6 +191,8 @@ mod tests {
         assert_eq!(first.pile_sizes.iter().sum::<usize>(), 640);
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
+        assert_eq!(first.simulation.environment.width, 250.0);
+        assert_eq!(first.simulation.environment.height, 250.0);
         let material_count = first
             .simulation
             .environment
