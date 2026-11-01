@@ -2081,7 +2081,7 @@ mod tests {
             environmental_break_test_inventory(&catalog);
         // Preserve a valid original bond record but make one split piece's
         // destination invalid, so the first staged deposit must also roll back.
-        source.placements.as_mut().unwrap()[1].x = environment.width + 100.0;
+        source.placements.as_mut().unwrap()[1].y = environment.height + 100.0;
         let original_source = source.clone();
         let target = source.internal_connections.as_ref().unwrap()[0].clone();
         environment.field.cells[cell_index].physical_materials =
