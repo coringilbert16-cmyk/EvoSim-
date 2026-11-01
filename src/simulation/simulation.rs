@@ -3128,19 +3128,30 @@ mod decomposition_finalization_tests {
 
     #[test]
     fn world_energy_inventory_reconciles_across_ordinary_ticks() {
-        let mut simulation = Simulation::new(916, 10.0);
+        // Simulation::step has a large debug-build stack frame. Give this
+        // integration-style test a normal application-sized stack rather
+        // than relying on the test harness's smaller worker-thread stack.
+        std::thread::Builder::new()
+            .name("world-energy-inventory-test".into())
+            .stack_size(8 * 1024 * 1024)
+            .spawn(|| {
+                let mut simulation = Simulation::new(916, 10.0);
 
-        for tick in 1..=5 {
-            let ledger_before = simulation.energy_ledger;
-            simulation.step();
-            let inventory = simulation.energy_inventory_snapshot();
-            assert!(
-                inventory.is_balanced(1e-9),
-                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}, ledger_before={ledger_before:?}, ledger_after={:?}",
-                inventory.residual(),
-                simulation.energy_ledger
-            );
-        }
+                for tick in 1..=5 {
+                    let ledger_before = simulation.energy_ledger;
+                    simulation.step();
+                    let inventory = simulation.energy_inventory_snapshot();
+                    assert!(
+                        inventory.is_balanced(1e-9),
+                        "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}, ledger_before={ledger_before:?}, ledger_after={:?}",
+                        inventory.residual(),
+                        simulation.energy_ledger
+                    );
+                }
+            })
+            .expect("spawn test thread with application-sized stack")
+            .join()
+            .expect("ordinary-tick inventory test must complete");
     }
 
     #[test]
