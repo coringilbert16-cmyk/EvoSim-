@@ -49,7 +49,7 @@
   const sidebarContent = sidebar.querySelector('#ev-sidebar-content');
   const overviewContent = document.createElement('div');
   overviewContent.className = 'ev-overview';
-  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE committed / scheduled</small><strong id="ev-combine-count">0 / 0</strong></div><div><small>BREAK committed / scheduled</small><strong id="ev-break-count">0 / 0</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
+  overviewContent.innerHTML = '<div class="ev-section-label">LIVE WORLD</div><div class="ev-stat-grid"><div><small>Current tick</small><strong id="ev-side-tick">—</strong></div><div><small>Population</small><strong id="ev-side-population">—</strong></div><div><small>Simulation rate</small><strong id="ev-side-rate">—</strong></div><div><small>History</small><strong id="ev-side-history">—</strong></div></div><div class="ev-section-label">CHEMISTRY ACTIVITY</div><div class="ev-stat-grid"><div><small>COMBINE ready / committed / scheduled</small><strong id="ev-combine-count">0 / 0 / 0</strong></div><div><small>BREAK ready / committed / scheduled</small><strong id="ev-break-count">0 / 0 / 0</strong></div></div><div class="ev-note" id="ev-last-reaction">Waiting for chemistry events…</div><div class="ev-note">Select an organism to inspect its physical structure.</div>';
   const materialsContent = document.createElement('div');
   materialsContent.className = 'ev-materials';
   materialsContent.innerHTML = '<div class="ev-section-label">RESOURCE CATALOG</div><div class="ev-material-list" id="ev-material-list"><span class="ev-empty">Loading material palette…</span></div>';
@@ -262,10 +262,10 @@
     const breakNode = document.getElementById('ev-break-count');
     const lastNode = document.getElementById('ev-last-reaction');
     if (combineNode) {
-      combineNode.textContent = `${diagnostics.combine_committed ?? 0} / ${diagnostics.combine_scheduled ?? 0}`;
+      combineNode.textContent = `${diagnostics.combine_ready_candidates ?? 0} / ${diagnostics.combine_committed ?? 0} / ${diagnostics.combine_scheduled ?? 0}`;
     }
     if (breakNode) {
-      breakNode.textContent = `${diagnostics.break_committed ?? 0} / ${diagnostics.break_scheduled ?? 0}`;
+      breakNode.textContent = `${diagnostics.break_ready_candidates ?? 0} / ${diagnostics.break_committed ?? 0} / ${diagnostics.break_scheduled ?? 0}`;
     }
     if (lastNode) {
       const committed = (Array.isArray(world.chemistry_events) ? world.chemistry_events : [])
