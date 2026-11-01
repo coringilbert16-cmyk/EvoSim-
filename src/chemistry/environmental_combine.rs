@@ -456,7 +456,11 @@ pub(crate) fn accumulate_environmental(
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
-    let cell_start = tick as usize % field_cell_count;
+    // Advance by the prior scan window, not one cell. A one-cell stride repeats
+    // almost the entire anchor window every tick and delays coverage of distant
+    // field cells. The stride is deterministic and preserves the same per-tick
+    // inspection budget and exhaustive cyclic coverage over successive windows.
+    let cell_start = (tick as usize).wrapping_mul(cell_scan_count) % field_cell_count;
 
     'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
