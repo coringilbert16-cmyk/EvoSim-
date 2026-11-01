@@ -42,13 +42,13 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     );
 
     let mut identities = resource_names.clone();
-    while identities.len() < 128 {
+    while identities.len() < 1280 {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
     identities.shuffle(&mut rng);
 
     let pile_sizes = randomized_pile_sizes(&mut rng);
-    assert_eq!(pile_sizes.iter().sum::<usize>(), 128);
+    assert_eq!(pile_sizes.iter().sum::<usize>(), 1280);
     assert!(pile_sizes.iter().all(|size| (6..=20).contains(size)));
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
@@ -96,7 +96,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             );
         }
     }
-    assert_eq!(identity_index, 128);
+    assert_eq!(identity_index, 1280);
     assert_eq!(
         simulation
             .environment
@@ -105,7 +105,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>(),
-        128
+        1280
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
@@ -127,7 +127,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
 }
 
 fn randomized_pile_sizes(rng: &mut ChaCha8Rng) -> Vec<usize> {
-    let mut remaining = 128;
+    let mut remaining = 1280;
     let mut sizes = Vec::new();
     while remaining > 20 {
         let maximum = 20.min(remaining - 6);
@@ -176,11 +176,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fixture_has_128_whole_resources_in_randomized_valid_piles_and_no_organisms() {
+    fn fixture_has_1280_whole_resources_in_randomized_valid_piles_and_no_organisms() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
-        assert_eq!(first.pile_sizes.iter().sum::<usize>(), 128);
+        assert_eq!(first.pile_sizes.iter().sum::<usize>(), 1280);
         assert!(first.pile_sizes.iter().all(|size| (6..=20).contains(size)));
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
@@ -192,7 +192,7 @@ mod tests {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
-        assert_eq!(material_count, 128);
+        assert_eq!(material_count, 1280);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -227,7 +227,7 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - 128.0).abs() < 1e-6);
+        assert!((total_material - 1280.0).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
