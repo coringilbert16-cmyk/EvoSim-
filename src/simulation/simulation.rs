@@ -2879,6 +2879,43 @@ mod decomposition_finalization_tests {
         }
         assert!(simulation.world_tone.is_some());
 
+        // Isolate the source-frame settlement from the remainder of the tick.
+        // If this inventory is balanced but the full tick is not, the discrepancy
+        // is introduced by a later simulation phase (for example, reaction settlement).
+        let mut capture_only = simulation.clone();
+        let sample = capture_only
+            .world_tone_cycle
+            .as_ref()
+            .and_then(|cycle| cycle.sample(capture_only.tick))
+            .or_else(|| {
+                capture_only.world_tone.and_then(|config| {
+                    config.sample(
+                        capture_only.tick,
+                        capture_only.environment.width,
+                        capture_only.environment.height,
+                    )
+                })
+            })
+            .expect("the test simulation must have a valid world-tone sample");
+        let capture_living_ids: HashSet<String> = capture_only
+            .organisms
+            .iter()
+            .filter(|organism| {
+                Simulation::has_intact_genome_core(organism, &capture_only.environment.catalog)
+            })
+            .map(|organism| organism.id.clone())
+            .collect();
+        crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            &mut capture_only,
+            sample,
+            &capture_living_ids,
+        );
+        let capture_inventory = capture_only.energy_inventory_snapshot();
+        assert!(
+            capture_inventory.is_balanced_without_creation(1e-9),
+            "world-tone-only inventory must reconcile before chemistry: {capture_inventory:#?}"
+        );
+
         let external_before = simulation.energy_ledger.total_external_energy_input;
         simulation.step();
 
@@ -2894,8 +2931,9 @@ mod decomposition_finalization_tests {
         let inventory = simulation.energy_inventory_snapshot();
         assert!(
             inventory.is_balanced_without_creation(1e-9),
-            "world inventory after live sunlight capture: {:?}",
-            inventory.residual()
+            "world inventory after live sunlight capture: residual={:?}; inventory={inventory:#?}; ledger={:#?}",
+            inventory.residual(),
+            simulation.energy_ledger
         );
     }
 
