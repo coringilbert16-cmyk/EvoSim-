@@ -441,6 +441,7 @@ impl EnergyInventorySnapshot {
             || !self.current_structural_energy.is_finite()
             || !self.initial_pair_interaction_potential.is_finite()
             || !self.current_pair_interaction_potential.is_finite()
+            || !self.external_energy_input_compensation.is_finite()
             || nonnegative_values
                 .iter()
                 .any(|value| !value.is_finite() || *value < 0.0)
@@ -1252,6 +1253,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 3.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1273,6 +1275,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: -8.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1294,6 +1297,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: -5.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1479,6 +1483,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1537,6 +1542,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: ledger.total_external_energy_input,
+            external_energy_input_compensation: ledger.total_external_energy_input_compensation,
             world_tone_energy_escaped: ledger.total_world_tone_energy_escaped,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1558,14 +1564,19 @@ mod tests {
 
         assert!(ledger.settle_world_tone_paths(80.330104, 17.734988, 17.793927, 44.801189,));
 
-        let actual_incident =
-            ledger.total_external_energy_input - before.total_external_energy_input;
+        let actual_incident = compensated_sum([
+            ledger.total_external_energy_input,
+            -before.total_external_energy_input,
+            ledger.total_external_energy_input_compensation,
+            -before.total_external_energy_input_compensation,
+        ]);
         let actual_capture = ledger.total_resonant_energy_held - before.total_resonant_energy_held;
         let actual_heat = ledger.total_heat_dissipated - before.total_heat_dissipated;
         let actual_escape =
             ledger.total_world_tone_energy_escaped - before.total_world_tone_energy_escaped;
+        let allocated = compensated_sum([actual_capture, actual_heat, actual_escape]);
         assert!(
-            actual_incident >= actual_capture + actual_heat + actual_escape,
+            actual_incident >= allocated,
             "cumulative f64 counters must not allocate more energy than the represented source"
         );
         assert!(
@@ -1703,6 +1714,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 0.0,
             work_expended: 0.0,
@@ -1724,6 +1736,7 @@ mod tests {
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: 0.0,
             external_energy_input: 0.0,
+            external_energy_input_compensation: 0.0,
             world_tone_energy_escaped: 0.0,
             other_energy_released: 1.0,
             work_expended: 0.0,
