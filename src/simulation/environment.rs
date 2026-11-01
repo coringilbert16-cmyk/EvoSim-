@@ -207,8 +207,7 @@ impl ActiveMaterialField {
     }
 
     /// Return field cells whose spatial bounds intersect the supplied
-    /// axis-aligned bounds. Horizontal coordinates remain bounded; vertical
-    /// coordinates wrap continuously from top to bottom.
+    /// bounds. Horizontal coordinates wrap; vertical coordinates are bounded.
     pub(crate) fn cells_intersecting_bounds(
         &self,
         min_x: f64,
