@@ -612,6 +612,18 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) combine_discovery_work_remaining: usize,
     pub(crate) combine_realization_work_remaining: usize,
     pub(crate) accumulation_entries: usize,
+    /// Wall-clock microseconds spent in environmental transport this tick.
+    #[serde(default)]
+    pub(crate) transport_elapsed_micros: u64,
+    /// Wall-clock microseconds spent discovering environmental BREAK candidates.
+    #[serde(default)]
+    pub(crate) break_discovery_elapsed_micros: u64,
+    /// Wall-clock microseconds spent discovering environmental COMBINE candidates.
+    #[serde(default)]
+    pub(crate) combine_discovery_elapsed_micros: u64,
+    /// Wall-clock microseconds spent scheduling and committing environmental reactions.
+    #[serde(default)]
+    pub(crate) reaction_settlement_elapsed_micros: u64,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }
 
