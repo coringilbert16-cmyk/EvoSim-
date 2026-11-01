@@ -204,7 +204,9 @@ impl ActiveMaterialField {
 
     /// Return field cells whose spatial bounds intersect the supplied
     /// bounds. Horizontal coordinates wrap; vertical coordinates are bounded.
-    /// Legacy organism/body query: horizontal coordinates are bounded while\n    /// vertical rows wrap. Environmental chemistry uses the periodic query below.\n    pub(crate) fn cells_intersecting_bounds(
+    /// Legacy organism/body query: horizontal coordinates are bounded while
+    /// vertical rows wrap. Environmental chemistry uses the periodic query below.
+    pub(crate) fn cells_intersecting_bounds(
         &self,
         min_x: f64,
         max_x: f64,
