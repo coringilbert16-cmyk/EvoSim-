@@ -227,35 +227,69 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
+fn shape_vertical_extent(form: &Form, rotation_radians: f64) -> f64 {
+    let (sin, cos) = rotation_radians.sin_cos();
+    match form {
+        Form::Circle { radius } => *radius,
+        Form::Line { length } => length * 0.5 * sin.abs(),
+        Form::Rectangle { width, height } => {
+            width * 0.5 * sin.abs() + height * 0.5 * cos.abs()
+        }
+        Form::RegularPolygon { radius, .. } => *radius,
+        Form::Polygon { vertices } => vertices
+            .iter()
+            .map(|(x, y)| (x * sin + y * cos).abs())
+            .fold(0.0, f64::max),
+        Form::Fluid { nominal_area, .. } => {
+            (nominal_area.max(0.0) / std::f64::consts::PI).sqrt()
+        }
+    }
+}
+
 fn clamp_vertical_displacement(
     material: &PhysicalMaterial,
     requested_dy: f64,
     height: f64,
+    catalog: &[BaseResource],
 ) -> Option<f64> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty() || !height.is_finite() || height <= 0.0 {
+    if placements.is_empty()
+        || placements.len() != material.material.parts.len()
+        || !height.is_finite()
+        || height <= 0.0
+    {
         return None;
     }
-    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (index, placement) in placements.iter().enumerate() {
+        let (name, _) = material.material.parts.get(index)?;
+        let form = material
+            .realized_shapes
+            .as_ref()
+            .and_then(|shapes| shapes.get(index))
+            .map(|shape| &shape.form)
+            .or_else(|| resource_for_part(name, catalog).map(|resource| &resource.shape.form))?;
+        let extent = shape_vertical_extent(form, placement.rotation_radians);
+        if !placement.y.is_finite() || !extent.is_finite() || extent < 0.0 {
+            return None;
+        }
+        min_y = min_y.min(placement.y - extent);
+        max_y = max_y.max(placement.y + extent);
+    }
     let world_max = (height - 1e-6).max(0.0);
     let min_dy = -min_y;
     let max_dy = world_max - max_y;
-    if min_dy <= max_dy {
-        Some(requested_dy.clamp(min_dy, max_dy))
-    } else {
-        let anchor_y = placements[0].y;
-        Some(-anchor_y)
-    }
+    (min_dy <= max_dy).then_some(requested_dy.clamp(min_dy, max_dy))
 }
-
 fn translated(
     material: &PhysicalMaterial,
     dx: f64,
     dy: f64,
     height: f64,
+    catalog: &[BaseResource],
 ) -> Option<PhysicalMaterial> {
-    let dy = clamp_vertical_displacement(material, dy, height)?;
+    let dy = clamp_vertical_displacement(material, dy, height, catalog)?;
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
     if placements.is_empty() {
@@ -516,15 +550,7 @@ fn rotated(
             return None;
         }
     }
-    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-    let vertical_shift = if min_y < 0.0 {
-        -min_y
-    } else if max_y > height - 1e-6 {
-        height - 1e-6 - max_y
-    } else {
-        0.0
-    };
+    let vertical_shift = clamp_vertical_displacement(&result, 0.0, height, catalog)?;
     for placement in placements.iter_mut() {
         placement.y += vertical_shift;
     }
@@ -634,7 +660,7 @@ pub(crate) fn transport_field(
         if dx.abs() + dy.abs() <= 1e-12 && angular_step.abs() <= 1e-12 {
             continue;
         }
-        let Some(translated_material) = translated(&material, dx, dy, height) else {
+        let Some(translated_material) = translated(&material, dx, dy, height, catalog) else {
             continue;
         };
         let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
@@ -826,6 +852,7 @@ mod tests {
             velocity.x * displacement_scale,
             velocity.y * displacement_scale,
             1000.0,
+            &catalog,
         )
         .unwrap();
         let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
@@ -900,7 +927,7 @@ mod tests {
         )
         .expect("realized carbon-hydrogen compound should realize");
 
-        let moved = translated(&material, 0.5, 0.0, 1000.0).unwrap();
+        let moved = translated(&material, 0.5, 0.0, 1000.0, &catalog).unwrap();
         let placements = moved.placements.as_ref().unwrap();
         assert!(placements.iter().all(|p| p.x >= 999.0 && p.x > 0.0));
         assert!(placements.iter().any(|p| p.x >= 1000.0));
@@ -930,7 +957,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog carbon should realize");
-        let moved = translated(&material, 0.0, 1.0, 1000.0).unwrap();
+        let moved = translated(&material, 0.0, 1.0, 1000.0, &catalog).unwrap();
         let placement = &moved.placements.as_ref().unwrap()[0];
         assert!((0.0..1000.0).contains(&placement.y));
         assert!((placement.y - 999.999).abs() < 1e-9);
