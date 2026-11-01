@@ -619,7 +619,15 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
             "initial_material_inventory": environmental_material_inventory(simulation),
+            "world_dimensions": {
+                "width": simulation.environment.width,
+                "height": simulation.environment.height
+            },
             "pile_sizes": pile_sizes,
+            "pile_size": 20,
+            "piles_per_reactant_pair": 8,
+            "reactant_pair_groups": crate::environment_chemistry_experiment::CONTROLLED_REACTANT_PAIRS,
+            "pile_composition": "10 of each listed reactant, checkerboard arranged",
             "hotspot": simulation.hotspot,
             "diagnostic_interval": recorder.interval,
             "experiment_goal": "validate chemistry building blocks; no organism emergence criterion"
