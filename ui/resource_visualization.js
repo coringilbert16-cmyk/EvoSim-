@@ -77,26 +77,18 @@
     const list = document.getElementById('ev-material-list');
     if (!list) return;
     list.replaceChildren();
-    const entries = [...paletteState.resources.entries()].sort(([a], [b]) => a.localeCompare(b));
-    if (!entries.length) {
-      const empty = document.createElement('span');
-      empty.className = 'ev-empty';
-      empty.textContent = 'No material palette available';
-      list.append(empty);
-      return;
-    }
-    for (const [name, appearance] of entries) {
-      const row = document.createElement('div');
-      row.className = 'ev-material-row';
-      const swatch = document.createElement('span');
-      swatch.className = 'ev-material-swatch';
-      swatch.style.background = appearance.fill || '#888';
-      swatch.style.borderColor = appearance.outline || '#666';
-      const label = document.createElement('span');
-      label.textContent = name;
-      row.append(swatch, label);
-      list.append(row);
-    }
+    const heading = document.createElement('div');
+    heading.className = 'ev-note';
+    heading.textContent = 'Element color is calculated from its natural resonant frequency. Aura strength follows the oscillator response amplitude.';
+    const scale = document.createElement('div');
+    scale.style.height = '14px';
+    scale.style.borderRadius = '999px';
+    scale.style.margin = '12px 0 6px';
+    scale.style.background = 'linear-gradient(90deg, hsl(200 90% 62%), hsl(240 90% 62%), hsl(280 90% 62%), hsl(320 90% 62%))';
+    const labels = document.createElement('div');
+    labels.className = 'ev-material-row';
+    labels.innerHTML = '<span>Lower natural frequency</span><span>Higher natural frequency</span>';
+    list.append(heading, scale, labels);
   }
 
   async function refreshWorkspaceMetrics() {
@@ -142,8 +134,28 @@
     return best?.name || null;
   }
 
+  function resonanceAppearance(part) {
+    const frequency = Number.isFinite(part.resonance_frequency_cycles_per_day)
+      ? Math.max(1, part.resonance_frequency_cycles_per_day) : 440;
+    const amplitude = Number.isFinite(part.resonance_amplitude)
+      ? Math.max(0, Math.min(1, part.resonance_amplitude)) : 0;
+    const phase = Number.isFinite(part.resonance_phase_radians) ? part.resonance_phase_radians : 0;
+    // Hue represents the material's natural resonant frequency; amplitude
+    // controls brightness and aura strength. Phase contributes a small hue shift.
+    const normalizedFrequency = Math.max(0, Math.min(1,
+      (Math.log(frequency) - Math.log(100)) / (Math.log(1000) - Math.log(100))));
+    const hue = 200 + normalizedFrequency * 120 + Math.sin(phase) * 8;
+    const lightness = 42 + amplitude * 24;
+    return {
+      fill: `hsl(${hue} 88% ${lightness}%)`,
+      outline: `hsl(${hue} 95% ${Math.min(88, lightness + 18)}%)`,
+      amplitude,
+      hue
+    };
+  }
+
   function drawPhysicalFieldPart(part, viewport) {
-    const appearance = appearanceFor(part.resource);
+    const appearance = resonanceAppearance(part);
     const displayPosition = window.__evosimGetDisplayPosition?.(part) || { x: part.x, y: part.y };
     const point = camera.worldToScreen(displayPosition.x, displayPosition.y, viewport.width, viewport.height);
     const fluid = part.form?.Fluid;
@@ -152,14 +164,32 @@
       ? Math.max(Math.abs(localBounds.minX), Math.abs(localBounds.maxX), Math.abs(localBounds.minY), Math.abs(localBounds.maxY))
       : (fluid && Number.isFinite(fluid.nominal_area) ? Math.sqrt(fluid.nominal_area / Math.PI) : 0.5);
     const screenRadius = Math.max(1, radius * camera.scale);
-    if (point.x < -screenRadius || point.y < -screenRadius ||
-        point.x > viewport.width + screenRadius || point.y > viewport.height + screenRadius) return;
+    const auraRadius = Math.max(7, Math.min(30, screenRadius * 5));
+    if (point.x < -auraRadius || point.y < -auraRadius ||
+        point.x > viewport.width + auraRadius || point.y > viewport.height + auraRadius) return;
+
+    // The aura is a read-only visualization of the oscillator response.
+    // It is deliberately drawn before the physical form and never feeds back
+    // into simulation state, energy, or movement.
+    if (appearance.amplitude > 0) {
+      const alpha = Math.min(0.34, 0.10 + appearance.amplitude * 0.24);
+      ctx.save();
+      const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, auraRadius);
+      gradient.addColorStop(0, `hsla(${appearance.hue} 92% 68% / ${alpha})`);
+      gradient.addColorStop(0.42, `hsla(${appearance.hue} 92% 62% / ${alpha * 0.52})`);
+      gradient.addColorStop(1, `hsla(${appearance.hue} 92% 58% / 0)`);
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, auraRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     ctx.save();
     ctx.translate(point.x, point.y);
     if (radius * camera.scale < 2.25) {
       ctx.fillStyle = appearance.fill;
-      ctx.globalAlpha = Math.max(0.75, appearance.fill_opacity / 255);
+      ctx.globalAlpha = 0.78 + appearance.amplitude * 0.22;
       ctx.beginPath();
       ctx.arc(0, 0, 1.25, 0, Math.PI * 2);
       ctx.fill();
@@ -167,10 +197,8 @@
       ctx.scale(camera.scale, camera.scale);
       ctx.fillStyle = appearance.fill;
       ctx.strokeStyle = appearance.outline;
-      ctx.globalAlpha = Math.max(0, Math.min(1, appearance.fill_opacity / 255));
+      ctx.globalAlpha = 0.78 + appearance.amplitude * 0.22;
       if (fluid) {
-        // Fluid has no fixed polygon boundary. Use an equal-area disk only as
-        // a visual marker; the simulation's fluid geometry remains authoritative.
         ctx.beginPath();
         ctx.arc(0, 0, Math.sqrt(Math.max(fluid.nominal_area, 0) / Math.PI), 0, Math.PI * 2);
         ctx.fill();
