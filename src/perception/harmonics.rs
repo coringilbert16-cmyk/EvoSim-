@@ -1953,6 +1953,10 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog).unwrap();
         let (mut structure, _, _) = crate::juvenile::realize_initial(&blueprint, &catalog).unwrap();
+        for unit in &mut structure.units {
+            unit.placement.x += 500.0;
+            unit.placement.y += 500.0;
+        }
         let cavity = crate::cavity::analyze_genome_cavity(&structure, &catalog)
             .unwrap()
             .expect("confirmed seed must contain a genome cavity");
