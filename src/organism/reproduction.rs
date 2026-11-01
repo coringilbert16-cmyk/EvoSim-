@@ -629,8 +629,8 @@ pub(crate) fn total_structural_energy_held(
     organisms: &[Organism],
     decomposing_bodies: &[crate::decomposition::DecomposingBody],
 ) -> f64 {
-    let organism_energy = crate::energy_ledger::compensated_sum(organisms.iter().map(
-        |organism| {
+    let organism_energy = crate::energy_ledger::compensated_sum(
+        organisms.iter().map(|organism| {
             let own_energy = crate::energy_ledger::compensated_sum(
                 organism.structure.bonds.iter().map(|bond| -bond.bond_energy),
             );
