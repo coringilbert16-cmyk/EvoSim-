@@ -226,6 +226,7 @@ jobs:
             environmental_pair_combine_commits_a_realized_product \
             hotspot_energy_is_captured_as_environmental_resonance_and_balances \
             aggregate_owned_construction_is_counted_once_in_energy_inventory \
+            world_energy_inventory_reconciles_across_ordinary_ticks \
             restore_replaces_live_state_and_discards_future_history
           do
             cargo test --locked "$test_name" -- --nocapture || failed=1

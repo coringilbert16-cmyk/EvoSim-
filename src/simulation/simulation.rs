@@ -3131,12 +3131,14 @@ mod decomposition_finalization_tests {
         let mut simulation = Simulation::new(916, 10.0);
 
         for tick in 1..=5 {
+            let ledger_before = simulation.energy_ledger;
             simulation.step();
             let inventory = simulation.energy_inventory_snapshot();
             assert!(
                 inventory.is_balanced_without_creation(1e-9),
-                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}",
-                inventory.residual()
+                "world energy inventory must reconcile after ordinary tick {tick}: residual={:?}, inventory={inventory:?}, ledger_before={ledger_before:?}, ledger_after={:?}",
+                inventory.residual(),
+                simulation.energy_ledger
             );
         }
     }
