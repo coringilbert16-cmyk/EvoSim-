@@ -756,9 +756,17 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        let break_committed_total = self
+            .environmental_chemistry_diagnostics
+            .break_committed_total;
+        let combine_committed_total = self
+            .environmental_chemistry_diagnostics
+            .combine_committed_total;
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
+                break_committed_total,
+                combine_committed_total,
                 ..Default::default()
             };
         self.environmental_chemistry_events.clear();
@@ -945,6 +953,7 @@ impl Simulation {
             );
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
+                self.environmental_chemistry_diagnostics.break_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.break_rejected += 1;
             }
@@ -1022,6 +1031,7 @@ impl Simulation {
                 );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
+                self.environmental_chemistry_diagnostics.combine_committed_total += 1;
             } else {
                 self.environmental_chemistry_diagnostics.combine_rejected += 1;
             }
