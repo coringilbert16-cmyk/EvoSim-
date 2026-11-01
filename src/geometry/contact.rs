@@ -528,7 +528,9 @@ fn candidate_for_endpoints(
         endpoint_a: a,
         endpoint_b: b,
         distance: distance(wa, wb),
-        facing: endpoint_facing(a, b, au, bu, c)?,
+        // Reuse the already-resolved world points instead of transforming both
+        // endpoints a second time solely to calculate facing.
+        facing: facing(wa, wb),
         load_a: s.connection_load(ua, a, c),
         load_b: s.connection_load(ub, b, c),
         available_a: true,
