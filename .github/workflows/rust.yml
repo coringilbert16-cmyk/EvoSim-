@@ -201,6 +201,25 @@ jobs:
           run_check cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
+      - name: Horizontal topology regression diagnostics
+        if: always()
+        timeout-minutes: 5
+        run: |
+          set +e
+          failed=0
+          for test_name in \
+            physical_batch_deposit_rejects_late_invalid_destination_without_partial_commit \
+            physical_split_replaces_source_only_after_every_piece_destination_is_valid \
+            transport_moves_complete_material_and_preserves_inventory \
+            vertical_boundary_is_a_hard_wall_not_a_wraparound_seam \
+            failed_dead_recycling_deposit_preserves_all_material_and_energy_owners \
+            failed_dead_material_release_preserves_organism_energy_and_field \
+            harmonic_reception_depends_on_qualifying_realized_cavity \
+            world_energy_inventory_reconciles_across_ordinary_ticks
+          do
+            cargo test --locked --lib "$test_name" -- --nocapture || failed=1
+          done
+          exit "$failed"
       - name: Run Rust tests
         if: always()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
