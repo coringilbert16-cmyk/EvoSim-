@@ -143,7 +143,7 @@ pub(crate) struct WorldObservation {
 fn observe_field_physical_parts(
     cell: &crate::environment::FieldCell,
     catalog: &[crate::resources::BaseResource],
- ) -> Vec<WorldFieldPartObservation> {
+) -> Vec<WorldFieldPartObservation> {
     let mut parts = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     for physical in &cell.physical_materials {
@@ -168,7 +168,10 @@ fn observe_field_physical_parts(
             let Some(form) = form else {
                 continue;
             };
-            let Some(resource_definition) = catalog.iter().find(|entry| entry.name == *resource) else {
+            let Some(resource_definition) = catalog
+                .iter()
+                .find(|entry| entry.name == *resource)
+            else {
                 continue;
             };
             let response = crate::harmonics::material_response(
@@ -663,6 +666,14 @@ mod tests {
             .map(|part| part.resource.as_str())
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(resources.len(), 7);
+        let resonance_frequencies = parts
+            .iter()
+            .map(|part| part.resonance_frequency_cycles_per_day.to_bits())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert!(
+            resonance_frequencies.len() > 1,
+            "resource types must expose distinct natural resonance frequencies"
+        );
     }
 
     #[test]
