@@ -688,16 +688,34 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .saturating_add(diagnostics.combine_rejected as u64);
         self.totals.transport_elapsed_micros_total = self.totals.transport_elapsed_micros_total
             .saturating_add(diagnostics.transport_elapsed_micros);
-        self.totals.break_discovery_elapsed_micros_total = self.totals.break_discovery_elapsed_micros_total
+        self.totals.break_discovery_elapsed_micros_total = self
+            .totals
+            .break_discovery_elapsed_micros_total
             .saturating_add(diagnostics.break_discovery_elapsed_micros);
-        self.totals.combine_discovery_elapsed_micros_total = self.totals.combine_discovery_elapsed_micros_total
+        self.totals.combine_discovery_elapsed_micros_total = self
+            .totals
+            .combine_discovery_elapsed_micros_total
             .saturating_add(diagnostics.combine_discovery_elapsed_micros);
-        self.totals.reaction_settlement_elapsed_micros_total = self.totals.reaction_settlement_elapsed_micros_total
+        self.totals.reaction_settlement_elapsed_micros_total = self
+            .totals
+            .reaction_settlement_elapsed_micros_total
             .saturating_add(diagnostics.reaction_settlement_elapsed_micros);
-        self.totals.transport_elapsed_micros_max = self.totals.transport_elapsed_micros_max.max(diagnostics.transport_elapsed_micros);
-        self.totals.break_discovery_elapsed_micros_max = self.totals.break_discovery_elapsed_micros_max.max(diagnostics.break_discovery_elapsed_micros);
-        self.totals.combine_discovery_elapsed_micros_max = self.totals.combine_discovery_elapsed_micros_max.max(diagnostics.combine_discovery_elapsed_micros);
-        self.totals.reaction_settlement_elapsed_micros_max = self.totals.reaction_settlement_elapsed_micros_max.max(diagnostics.reaction_settlement_elapsed_micros);
+        self.totals.transport_elapsed_micros_max = self
+            .totals
+            .transport_elapsed_micros_max
+            .max(diagnostics.transport_elapsed_micros);
+        self.totals.break_discovery_elapsed_micros_max = self
+            .totals
+            .break_discovery_elapsed_micros_max
+            .max(diagnostics.break_discovery_elapsed_micros);
+        self.totals.combine_discovery_elapsed_micros_max = self
+            .totals
+            .combine_discovery_elapsed_micros_max
+            .max(diagnostics.combine_discovery_elapsed_micros);
+        self.totals.reaction_settlement_elapsed_micros_max = self
+            .totals
+            .reaction_settlement_elapsed_micros_max
+            .max(diagnostics.reaction_settlement_elapsed_micros);
 
         if diagnostics.break_ready_candidates > 0
             || diagnostics.break_scheduled > 0
@@ -739,10 +757,14 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "combine_rejected": self.totals.combine_rejected,
             "phase_timing_microseconds": {
                 "average_per_tick": {
-                    "transport": self.totals.transport_elapsed_micros_total / self.totals.ticks_observed.max(1),
-                    "break_discovery": self.totals.break_discovery_elapsed_micros_total / self.totals.ticks_observed.max(1),
-                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_total / self.totals.ticks_observed.max(1),
-                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_total / self.totals.ticks_observed.max(1)
+                    "transport": self.totals.transport_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "break_discovery": self.totals.break_discovery_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1)
                 },
                 "max_per_tick": {
                     "transport": self.totals.transport_elapsed_micros_max,
