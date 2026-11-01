@@ -2899,10 +2899,7 @@ mod decomposition_finalization_tests {
             .expect("the test simulation must have a valid world-tone sample");
         let mut capture_living_ids = HashSet::new();
         for organism in &mut capture_only.organisms {
-            if Simulation::has_intact_genome_core(
-                organism,
-                &capture_only.environment.catalog,
-            ) {
+            if Simulation::has_intact_genome_core(organism, &capture_only.environment.catalog) {
                 capture_living_ids.insert(organism.id.clone());
             }
         }
