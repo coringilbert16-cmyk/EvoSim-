@@ -240,8 +240,16 @@ fn shape_vertical_extent(form: &Form, rotation_radians: f64) -> f64 {
             .iter()
             .map(|(x, y)| (x * sin + y * cos).abs())
             .fold(0.0, f64::max),
-        Form::Fluid { nominal_area, .. } => {
-            (nominal_area.max(0.0) / std::f64::consts::PI).sqrt()
+        Form::Fluid {
+            nominal_area,
+            arc_boundary,
+            ..
+        } => {
+            let equivalent_radius =
+                (nominal_area.max(0.0) / std::f64::consts::PI).sqrt();
+            arc_boundary
+                .as_ref()
+                .map_or(equivalent_radius, |arc| equivalent_radius.max(arc.radius))
         }
     }
 }
