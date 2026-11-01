@@ -61,8 +61,7 @@ fn periodic_spatial_bounds_queries_wrap_horizontally_and_clip_vertically() {
         .cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 100.0, 110.0, 8, 0)
         .is_empty());
 
-    let limited =
-        field.cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
+    let limited = field.cells_intersecting_bounds_periodic_limited(-5.0, 5.0, 25.0, 25.0, 2, 0);
     assert_eq!(limited, vec![7, 4]);
 }
 
