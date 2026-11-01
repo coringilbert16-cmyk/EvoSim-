@@ -258,7 +258,117 @@ impl ActiveMaterialField {
     /// materializing the full spatial query. `start_offset` rotates through the
     /// deterministic row-major candidate sequence so bounded callers can make
     /// progress across large bounds over successive ticks.
+    /// Legacy organism/body query: horizontal coordinates are bounded while
+    /// vertical rows wrap. Environmental chemistry uses the periodic query below.
+    pub(crate) fn cells_intersecting_bounds(
+        &self,
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+    ) -> Vec<usize> {
+        if !min_x.is_finite()
+            || !max_x.is_finite()
+            || !min_y.is_finite()
+            || !max_y.is_finite()
+            || min_x > max_x
+            || min_y > max_y
+        {
+            return Vec::new();
+        }
+
+        let min_col = ((min_x / self.cell_size).floor() as isize).max(0) as usize;
+        let max_col = ((max_x / self.cell_size).floor() as isize)
+            .min(self.width_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if min_col > max_col || self.width_cells == 0 || self.height_cells == 0 {
+            return Vec::new();
+        }
+
+        let row_start = (min_y / self.cell_size).floor() as isize;
+        let row_end = (max_y / self.cell_size).floor() as isize;
+        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
+        let rows: Vec<usize> = if row_count >= self.height_cells {
+            (0..self.height_cells).collect()
+        } else {
+            (0..row_count)
+                .map(|offset| {
+                    (row_start + offset as isize).rem_euclid(self.height_cells as isize) as usize
+                })
+                .collect()
+        };
+
+        let mut indices = Vec::with_capacity(rows.len() * (max_col - min_col + 1));
+        for row in rows {
+            for col in min_col..=max_col {
+                indices.push(row * self.width_cells + col);
+            }
+        }
+        indices
+    }
+
+    /// Return at most `limit` cells intersecting the supplied bounds without
+    /// materializing the full spatial query. `start_offset` rotates through the
+    /// deterministic row-major candidate sequence so bounded callers can make
+    /// progress across large bounds over successive ticks.
     pub(crate) fn cells_intersecting_bounds_limited(
+        &self,
+        min_x: f64,
+        max_x: f64,
+        min_y: f64,
+        max_y: f64,
+        limit: usize,
+        start_offset: usize,
+    ) -> Vec<usize> {
+        if limit == 0
+            || !min_x.is_finite()
+            || !max_x.is_finite()
+            || !min_y.is_finite()
+            || !max_y.is_finite()
+            || min_x > max_x
+            || min_y > max_y
+            || self.width_cells == 0
+            || self.height_cells == 0
+        {
+            return Vec::new();
+        }
+
+        let min_col = ((min_x / self.cell_size).floor() as isize).max(0) as usize;
+        let max_col = ((max_x / self.cell_size).floor() as isize)
+            .min(self.width_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if min_col > max_col {
+            return Vec::new();
+        }
+
+        let row_start = (min_y / self.cell_size).floor() as isize;
+        let row_end = (max_y / self.cell_size).floor() as isize;
+        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
+        let candidate_rows = row_count.min(self.height_cells);
+        let candidate_cols = max_col - min_col + 1;
+        let total = candidate_rows.saturating_mul(candidate_cols);
+        if total == 0 {
+            return Vec::new();
+        }
+
+        let count = limit.min(total);
+        let start = start_offset % total;
+        let mut indices = Vec::with_capacity(count);
+        for offset in 0..count {
+            let linear = start.wrapping_add(offset) % total;
+            let row_offset = linear / candidate_cols;
+            let col = min_col + linear % candidate_cols;
+            let row = if row_count >= self.height_cells {
+                row_offset
+            } else {
+                (row_start + row_offset as isize).rem_euclid(self.height_cells as isize) as usize
+            };
+            indices.push(row * self.width_cells + col);
+        }
+        indices
+    }
+
+    pub(crate) fn cells_intersecting_bounds_periodic_limited(
         &self,
         min_x: f64,
         max_x: f64,
