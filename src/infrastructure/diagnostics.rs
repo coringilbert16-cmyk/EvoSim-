@@ -686,7 +686,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .combine_rejected
             .saturating_add(diagnostics.combine_rejected as u64);
-        self.totals.transport_elapsed_micros_total = self.totals.transport_elapsed_micros_total
+        self.totals.transport_elapsed_micros_total = self
+            .totals
+            .transport_elapsed_micros_total
             .saturating_add(diagnostics.transport_elapsed_micros);
         self.totals.break_discovery_elapsed_micros_total = self
             .totals
