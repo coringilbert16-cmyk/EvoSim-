@@ -1,0 +1,124 @@
+name: BREAK Same-Runner Confirmation
+
+on:
+  workflow_dispatch:
+    inputs:
+      baseline_sha:
+        description: "Baseline commit (before PR #261)"
+        required: true
+        type: string
+        default: "b3aa3ed95e94a31867c1bb8b9b54a55bd6896737"
+      candidate_sha:
+        description: "PR #261 candidate commit"
+        required: true
+        type: string
+        default: "380c323b9846e5234f1589f64ae8d24fe846582c"
+  push:
+    branches:
+      - break-same-runner-confirmation
+    paths:
+      - ".github/workflows/break-same-runner-confirmation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: break-same-runner-confirmation
+  cancel-in-progress: false
+
+jobs:
+  paired-release-benchmark:
+    name: Three alternating 180-second baseline/candidate pairs
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BASELINE_SHA: ${{ inputs.baseline_sha || 'b3aa3ed95e94a31867c1bb8b9b54a55bd6896737' }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || '380c323b9846e5234f1589f64ae8d24fe846582c' }}
+    steps:
+      - name: Check out baseline source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.baseline_sha || 'b3aa3ed95e94a31867c1bb8b9b54a55bd6896737' }}
+          path: baseline
+          persist-credentials: false
+
+      - name: Check out candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha || '380c323b9846e5234f1589f64ae8d24fe846582c' }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Record runner and source identities
+        run: |
+          mkdir -p /tmp/break-confirmation
+          {
+            echo "runner_name=${RUNNER_NAME}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "baseline_sha=$(git -C baseline rev-parse HEAD)"
+            echo "candidate_sha=$(git -C candidate rev-parse HEAD)"
+            echo
+            lscpu | grep -E '^(Architecture|CPU\(s\)|Model name|Thread|Core|Socket|CPU MHz):' || true
+          } | tee /tmp/break-confirmation/runner.txt
+          test "$(git -C baseline rev-parse HEAD)" = "$BASELINE_SHA"
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+      - name: Build both release binaries before timing
+        run: |
+          cargo build --locked --release --bin evosim
+          cargo build --locked --release --bin evosim
+        working-directory: baseline
+
+      - name: Build candidate release binary before timing
+        run: cargo build --locked --release --bin evosim
+        working-directory: candidate
+
+      - name: Run alternating same-runner pairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline_bin="$GITHUB_WORKSPACE/baseline/target/release/evosim"
+          candidate_bin="$GITHUB_WORKSPACE/candidate/target/release/evosim"
+          test -x "$baseline_bin"
+          test -x "$candidate_bin"
+
+          run_trial() {
+            local label="$1"
+            local binary="$2"
+            local pair="$3"
+            local diagnostics="/tmp/break-confirmation/${label}-pair-${pair}.jsonl"
+            local output="/tmp/break-confirmation/${label}-pair-${pair}.stdout.log"
+
+            echo "::group::Pair ${pair} — ${label}"
+            echo "started_utc=$(date -u +%FT%TZ)"
+            echo "binary=$binary"
+            timeout 240s "$binary" --headless \
+              --environment-chemistry-experiment \
+              --seed 42 \
+              --duration-seconds 180 \
+              --diagnostic-interval 100 \
+              --diagnostics "$diagnostics" >"$output" 2>&1
+            test -s "$diagnostics"
+            grep '"event":"environmental_chemistry_summary"' "$diagnostics" | tee -a /tmp/break-confirmation/summaries.jsonl
+            echo "finished_utc=$(date -u +%FT%TZ)"
+            echo "::endgroup::"
+          }
+
+          # Alternate order to reduce systematic warm-up, thermal, and time-order bias.
+          run_trial baseline "$baseline_bin" 1
+          run_trial candidate "$candidate_bin" 1
+          run_trial candidate "$candidate_bin" 2
+          run_trial baseline "$baseline_bin" 2
+          run_trial baseline "$baseline_bin" 3
+          run_trial candidate "$candidate_bin" 3
+
+          test "$(grep -c '"event":"environmental_chemistry_summary"' /tmp/break-confirmation/summaries.jsonl)" -eq 6
+
+      - name: Upload paired diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: break-same-runner-confirmation
+          path: /tmp/break-confirmation/
+          if-no-files-found: warn
