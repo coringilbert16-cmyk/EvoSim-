@@ -165,17 +165,11 @@ pub fn facing_compatibility(a: WorldConnectionPoint, b: WorldConnectionPoint) ->
 }
 
 #[cfg_attr(
-
     not(test),
-
     expect(
-
         dead_code,
-
         reason = "Retained as the shared tolerance predicate for future contact-query callers"
-
     )
-
 )]
 pub fn within_contact_tolerance(
     a: WorldConnectionPoint,
