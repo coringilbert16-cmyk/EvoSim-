@@ -267,7 +267,7 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        let pair_key = (unit_a.min(unit_b), unit_a.max(unit_b));
+        let pair_key = (unit_a, unit_b);
         if !pair_candidates.contains_key(&pair_key) {
             pair_candidates.insert(
                 pair_key,
@@ -669,12 +669,7 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        let pair_key = (
-            cell_index,
-            material_index,
-            unit_a.min(unit_b),
-            unit_a.max(unit_b),
-        );
+        let pair_key = (cell_index, material_index, unit_a, unit_b);
         if !pair_candidates.contains_key(&pair_key) {
             pair_candidates.insert(
                 pair_key,
