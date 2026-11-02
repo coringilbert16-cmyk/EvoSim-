@@ -1301,6 +1301,13 @@ impl CapillaryContactFamily {
             reason = "Retained for downstream capillary pressure and curvature calculations"
         )
     )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained for downstream capillary pressure and curvature calculations"
+        )
+    )]
     pub fn curvature(&self) -> f64 {
         1.0 / self.curvature_radius
     }
@@ -1314,6 +1321,13 @@ impl CapillaryContactFamily {
     #[cfg_attr(
         not(test),
         expect(dead_code, reason = "Retained for downstream surface-tension pressure calculations")
+    )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained for downstream surface-tension pressure calculations"
+        )
     )]
     pub fn pressure_jump(&self, surface_tension: f64) -> Option<f64> {
         if !surface_tension.is_finite() || surface_tension < 0.0 {
