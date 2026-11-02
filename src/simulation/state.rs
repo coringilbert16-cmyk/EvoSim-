@@ -631,6 +631,33 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     /// Wall-clock microseconds spent scheduling and committing environmental reactions.
     #[serde(default)]
     pub(crate) reaction_settlement_elapsed_micros: u64,
+    /// Organism-owned BREAK discovery is separate from environmental BREAK.
+    #[serde(default)]
+    pub(crate) organism_break_ready_candidates: usize,
+    #[serde(default)]
+    pub(crate) organism_break_scheduled: usize,
+    #[serde(default)]
+    pub(crate) organism_break_committed: usize,
+    #[serde(default)]
+    pub(crate) organism_break_rejected: usize,
+    #[serde(default)]
+    pub(crate) organism_break_discovery_work_used: usize,
+    #[serde(default)]
+    pub(crate) organism_environmental_break_candidates: usize,
+    #[serde(default)]
+    pub(crate) organism_break_materials_restored: usize,
+    #[serde(default)]
+    pub(crate) organism_break_material_restoration_elapsed_micros: u64,
+    #[serde(default)]
+    pub(crate) organism_environmental_break_selection_elapsed_micros: u64,
+    #[serde(default)]
+    pub(crate) organism_break_discovery_work_remaining: usize,
+    /// Wall-clock time spent selecting organism-owned BREAK operations this tick.
+    #[serde(default)]
+    pub(crate) organism_break_discovery_elapsed_micros: u64,
+    /// Wall-clock time spent preparing and settling organism-owned BREAK operations.
+    #[serde(default)]
+    pub(crate) organism_break_settlement_elapsed_micros: u64,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }
 

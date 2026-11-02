@@ -476,6 +476,8 @@ impl Simulation {
 pub(crate) fn environmental_break_candidates(
     organism: &Organism,
     environment: &Environment,
+    diagnostics: &mut crate::state::EnvironmentalChemistryTickDiagnostics,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
 ) -> Vec<ActionCandidate> {
     let Ok(regions) = crate::interior_geometry::find_accessible_interior_regions(
         &organism.structure,
@@ -514,7 +516,10 @@ pub(crate) fn environmental_break_candidates(
             }
 
             let mut hypothetical = crate::structure::OrganismStructure::new();
-            let Some(indices) = crate::material_restoration::restore_material(
+            let restoration_started = chemistry_library
+                .performance_enabled()
+                .then(std::time::Instant::now);
+            let restored_indices = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 instance,
                 crate::structure::Placement {
@@ -523,9 +528,26 @@ pub(crate) fn environmental_break_candidates(
                     rotation_radians: 0.0,
                 },
                 &environment.catalog,
-            ) else {
+            );
+            if let Some(started) = restoration_started {
+                chemistry_library.record_performance_stage(
+                    "organism_break_material_restoration",
+                    started,
+                    1,
+                );
+            }
+            diagnostics.organism_break_material_restoration_elapsed_micros = diagnostics
+                .organism_break_material_restoration_elapsed_micros
+                .saturating_add(restoration_started.map_or(0, |started| {
+                    started.elapsed().as_micros().min(u64::MAX as u128) as u64
+                }));
+            let Some(indices) = restored_indices else {
                 continue;
             };
+            diagnostics.organism_break_materials_restored = diagnostics
+                .organism_break_materials_restored
+                .saturating_add(1);
+            chemistry_library.record_performance_counter("organism_break_materials_restored", 1);
 
             for (bond_index, connection) in connections.iter().enumerate() {
                 let Some(&a_index) = indices.get(connection.part_a) else {

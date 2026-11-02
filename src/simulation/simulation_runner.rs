@@ -12,6 +12,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut profile_chemistry = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
@@ -21,6 +22,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--profile-chemistry" => {
+                profile_chemistry = true;
             }
             "--seed" => {
                 seed = args
@@ -75,7 +79,10 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         return;
     }
 
-    let mut simulation = Simulation::new(42, 10.0);
+    let mut simulation = Simulation::new(seed, 10.0);
+    simulation
+        .chemistry_library
+        .set_performance_enabled(profile_chemistry);
     let initial_id = simulation
         .organisms
         .first()
@@ -83,7 +90,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         .unwrap_or_default();
 
     println!(
-        "HEADLESS SIMULATION START: seed=42 initial_organism={initial_id}          max_ticks={max_ticks} target_births={target_births}"
+        "HEADLESS SIMULATION START: seed={seed} initial_organism={initial_id}          max_ticks={max_ticks} target_births={target_births}"
     );
 
     let mut diagnostics = diagnostics_path.map(|path| {
@@ -186,6 +193,59 @@ fn report(simulation: &Simulation, label: &str) {
         simulation.active_transformations.len(),
         simulation.next_organism_id.saturating_sub(2),
     );
+    if simulation.chemistry_library.performance_enabled() {
+        let performance = simulation.chemistry_library.performance_summary();
+        let average_micros = |stage: &str| {
+            performance
+                .stages
+                .get(stage)
+                .map_or(0, |timing| timing.total_micros / timing.calls.max(1))
+        };
+        let maximum_micros = |stage: &str| {
+            performance
+                .stages
+                .get(stage)
+                .map_or(0, |timing| timing.max_micros)
+        };
+        let maximum_tick = |stage: &str| {
+            performance
+                .stages
+                .get(stage)
+                .map_or(0, |timing| timing.max_tick)
+        };
+        println!(
+            "[organism-chemistry-profile] cache_hits={} cache_misses={} break_ready={} break_scheduled={} break_committed={} break_rejected={} env_break_candidates={} restored_materials={} key_avg/max_us={}/{} lookup_avg/max_us={}/{} potential_avg/max_us={}/{} organism_break_discovery_avg/max_us={}/{} organism_break_settlement_avg/max_us={}/{} organism_env_break_selection_avg/max_us={}/{} organism_break_restoration_avg/max_us={}/{} worst_break_discovery_tick={} worst_break_settlement_tick={} worst_break_restoration_tick={}",
+            performance.counters.get("cache_hits").copied().unwrap_or(0),
+            performance.counters.get("cache_misses").copied().unwrap_or(0),
+            performance.counters.get("organism_break_ready_candidates").copied().unwrap_or(0),
+            performance.counters.get("organism_break_scheduled").copied().unwrap_or(0),
+            performance.counters.get("organism_break_committed").copied().unwrap_or(0),
+            performance.counters.get("organism_break_rejected").copied().unwrap_or(0),
+            performance
+                .counters
+                .get("organism_environmental_break_candidates")
+                .copied()
+                .unwrap_or(0),
+            performance.counters.get("organism_break_materials_restored").copied().unwrap_or(0),
+            average_micros("chemistry_key_construction"),
+            maximum_micros("chemistry_key_construction"),
+            average_micros("chemistry_lookup"),
+            maximum_micros("chemistry_lookup"),
+            average_micros("static_potential_calculation"),
+            maximum_micros("static_potential_calculation"),
+            average_micros("organism_break_discovery"),
+            maximum_micros("organism_break_discovery"),
+            average_micros("organism_break_transaction_settlement"),
+            maximum_micros("organism_break_transaction_settlement"),
+            average_micros("organism_environmental_break_selection"),
+            maximum_micros("organism_environmental_break_selection"),
+            average_micros("organism_break_material_restoration"),
+            maximum_micros("organism_break_material_restoration"),
+            maximum_tick("organism_break_discovery"),
+            maximum_tick("organism_break_transaction_settlement"),
+            maximum_tick("organism_break_material_restoration"),
+        );
+    }
 }
 
 fn run_environment_chemistry_experiment(
@@ -197,6 +257,7 @@ fn run_environment_chemistry_experiment(
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
+    simulation.chemistry_library.set_performance_enabled(true);
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,
         diagnostic_interval,
@@ -250,8 +311,27 @@ fn run_environment_chemistry_experiment(
         if simulation.tick % 1_000 == 0 {
             let counters = simulation.environmental_chemistry_diagnostics;
             let energy = simulation.energy_inventory_snapshot();
+            let performance = simulation.chemistry_library.performance_summary();
+            let average_micros = |stage: &str| {
+                performance
+                    .stages
+                    .get(stage)
+                    .map_or(0, |timing| timing.total_micros / timing.calls.max(1))
+            };
+            let maximum_micros = |stage: &str| {
+                performance
+                    .stages
+                    .get(stage)
+                    .map_or(0, |timing| timing.max_micros)
+            };
+            let maximum_tick = |stage: &str| {
+                performance
+                    .stages
+                    .get(stage)
+                    .map_or(0, |timing| timing.max_tick)
+            };
             println!(
-                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} ENV_BREAK={}/{}/{}/{} ORG_BREAK ready/scheduled/committed/rejected={}/{}/{}/{} discovery_us={} settlement_us={} organism_env_break_candidates={} organism_env_break_selection_us={} break_materials_restored={} break_restore_us={} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
                 counters.combine_ready_candidates,
                 counters.combine_scheduled,
@@ -261,6 +341,16 @@ fn run_environment_chemistry_experiment(
                 counters.break_scheduled,
                 counters.break_committed,
                 counters.break_rejected,
+                counters.organism_break_ready_candidates,
+                counters.organism_break_scheduled,
+                counters.organism_break_committed,
+                counters.organism_break_rejected,
+                counters.organism_break_discovery_elapsed_micros,
+                counters.organism_break_settlement_elapsed_micros,
+                counters.organism_environmental_break_candidates,
+                counters.organism_environmental_break_selection_elapsed_micros,
+                counters.organism_break_materials_restored,
+                counters.organism_break_material_restoration_elapsed_micros,
                 simulation.environment.field.cells.iter()
                     .map(|cell| cell.physical_materials.len())
                     .sum::<usize>(),
@@ -271,6 +361,105 @@ fn run_environment_chemistry_experiment(
                 simulation.environment.resonant_energy.total_energy().unwrap_or(f64::NAN),
                 simulation.environment.chemistry_usable_energy,
                 energy.residual()
+            );
+            println!(
+                "[chemistry-perf] cache_hits={} cache_misses={} cache_inserts={} key_avg/max_us={}/{} lookup_avg/max_us={}/{} potential_avg/max_us={}/{} persistence_reload_avg_us={} persistence_append_avg_us={} manifest_avg_us={} worst_key_tick={} worst_lookup_tick={} worst_potential_tick={}",
+                performance.counters.get("cache_hits").copied().unwrap_or(0),
+                performance.counters.get("cache_misses").copied().unwrap_or(0),
+                performance.counters.get("cache_inserts").copied().unwrap_or(0),
+                average_micros("chemistry_key_construction"),
+                maximum_micros("chemistry_key_construction"),
+                average_micros("chemistry_lookup"),
+                maximum_micros("chemistry_lookup"),
+                average_micros("static_potential_calculation"),
+                maximum_micros("static_potential_calculation"),
+                average_micros("persistence_reload_read"),
+                average_micros("persistence_append_sync"),
+                average_micros("persistence_manifest_update"),
+                maximum_tick("chemistry_key_construction"),
+                maximum_tick("chemistry_lookup"),
+                maximum_tick("static_potential_calculation"),
+            );
+            println!(
+                "[chemistry-stages] spatial_query_avg/max_us={}/{} anchor_cells={} anchor_materials={} target_cells={} material_restore_avg/max_us={}/{} geometry_avg/max_us={}/{} interface_resolution_avg/max_us={}/{} contact_eval_avg/max_us={}/{} contact_generation_avg/max_us={}/{} candidate_evaluation_avg/max_us={}/{} constituent_pairs={} contact_candidates={} pair_inspections={} chemistry_accum_avg/max_us={}/{} cleanup_avg/max_us={}/{} schedule_avg/max_us={}/{} transaction_avg/max_us={}/{} worst_spatial_tick={} worst_restore_tick={} worst_geometry_tick={} worst_interface_tick={} worst_contact_tick={} worst_generation_tick={} worst_candidate_eval_tick={} worst_accumulation_tick={} worst_transaction_tick={}",
+                average_micros("environmental_combine_spatial_cell_query"),
+                maximum_micros("environmental_combine_spatial_cell_query"),
+                performance
+                .counters
+                .get("environmental_combine_anchor_cells")
+                .copied()
+                .unwrap_or(0),
+                performance
+                .counters
+                .get("environmental_combine_anchor_materials")
+                .copied()
+                .unwrap_or(0),
+                performance
+                .counters
+                .get("environmental_combine_target_cells")
+                .copied()
+                .unwrap_or(0),
+                average_micros("environmental_combine_material_restoration"),
+                maximum_micros("environmental_combine_material_restoration"),
+                average_micros("environmental_combine_geometry_validation"),
+                maximum_micros("environmental_combine_geometry_validation"),
+                average_micros("environmental_combine_interface_resolution"),
+                maximum_micros("environmental_combine_interface_resolution"),
+                average_micros("environmental_combine_contact_generation_evaluation"),
+                maximum_micros("environmental_combine_contact_generation_evaluation"),
+                average_micros("environmental_combine_contact_generation"),
+                maximum_micros("environmental_combine_contact_generation"),
+                average_micros("environmental_combine_candidate_evaluation"),
+                maximum_micros("environmental_combine_candidate_evaluation"),
+                performance
+                .counters
+                .get("environmental_combine_constituent_pairs")
+                .copied()
+                .unwrap_or(0),
+                performance
+                .counters
+                .get("environmental_combine_contact_candidates")
+                .copied()
+                .unwrap_or(0),
+                performance
+                .counters
+                .get("environmental_combine_constituent_pairs_inspected")
+                .copied()
+                .unwrap_or(0),
+                average_micros("environmental_combine_chemistry_accumulation"),
+                maximum_micros("environmental_combine_chemistry_accumulation"),
+                average_micros("environmental_combine_accumulation_cleanup"),
+                maximum_micros("environmental_combine_accumulation_cleanup"),
+                average_micros("environmental_combine_scheduling"),
+                maximum_micros("environmental_combine_scheduling"),
+                average_micros("environmental_combine_transaction_settlement"),
+                maximum_micros("environmental_combine_transaction_settlement"),
+                maximum_tick("environmental_combine_spatial_cell_query"),
+                maximum_tick("environmental_combine_material_restoration"),
+                maximum_tick("environmental_combine_geometry_validation"),
+                maximum_tick("environmental_combine_interface_resolution"),
+                maximum_tick("environmental_combine_contact_generation_evaluation"),
+                maximum_tick("environmental_combine_contact_generation"),
+                maximum_tick("environmental_combine_candidate_evaluation"),
+                maximum_tick("environmental_combine_chemistry_accumulation"),
+                maximum_tick("environmental_combine_transaction_settlement"),
+            );
+            println!(
+                "[chemistry-persistence] lock_wait_avg/max_us={}/{} lock_hold_avg/max_us={}/{} reload_avg/max_us={}/{} serialize_avg/max_us={}/{} append_sync_avg/max_us={}/{} manifest_avg/max_us={}/{} worst_reload_tick={} worst_append_tick={}",
+                average_micros("persistence_lock_wait"),
+                maximum_micros("persistence_lock_wait"),
+                average_micros("persistence_lock_hold"),
+                maximum_micros("persistence_lock_hold"),
+                average_micros("persistence_reload_read"),
+                maximum_micros("persistence_reload_read"),
+                average_micros("persistence_serialization"),
+                maximum_micros("persistence_serialization"),
+                average_micros("persistence_append_sync"),
+                maximum_micros("persistence_append_sync"),
+                average_micros("persistence_manifest_update"),
+                maximum_micros("persistence_manifest_update"),
+                maximum_tick("persistence_reload_read"),
+                maximum_tick("persistence_append_sync"),
             );
         }
     }
