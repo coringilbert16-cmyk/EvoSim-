@@ -593,7 +593,7 @@ pub(crate) fn accumulate_environmental(
             restored_materials.entry(material_key)
         {
             let mut hypothetical = crate::structure::OrganismStructure::new();
-            let Some(restored_indices) = crate::material_restoration::restore_material(
+            let restored = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 instance,
                 crate::structure::Placement {
@@ -602,12 +602,16 @@ pub(crate) fn accumulate_environmental(
                     rotation_radians: 0.0,
                 },
                 &environment.catalog,
-            ) else {
-                continue;
-            };
-            entry.insert((hypothetical, restored_indices));
+            )
+            .map(|restored_indices| (hypothetical, restored_indices));
+            // Cache failed restorations too: this material is immutable during
+            // discovery, so retrying the same rejected geometry for each bond
+            // cannot produce a different result.
+            entry.insert(restored);
         }
-        let Some((hypothetical, restored_indices)) = restored_materials.get(&material_key) else {
+        let Some(Some((hypothetical, restored_indices))) =
+            restored_materials.get(&material_key)
+        else {
             continue;
         };
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
