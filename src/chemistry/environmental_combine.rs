@@ -3587,11 +3587,18 @@ mod tests {
         );
         assert_eq!(chemistry_key.material_a, selected_name.min(external_name).to_string());
         assert_eq!(chemistry_key.material_b, selected_name.max(external_name).to_string());
+        let (expected_position_a, expected_position_b) = if selected_name <= external_name {
+            (selected_position, external_position)
+        } else {
+            (external_position, selected_position)
+        };
         assert_eq!(
             chemistry_key.chemical_position_a,
-            Some((selected_position.min(external_position) * 1_000_000_000.0).round() as i64)
-                .filter(|_| selected_name <= external_name)
-                .or_else(|| Some((external_position * 1_000_000_000.0).round() as i64))
+            Some((expected_position_a * 1_000_000_000.0).round() as i64)
+        );
+        assert_eq!(
+            chemistry_key.chemical_position_b,
+            Some((expected_position_b * 1_000_000_000.0).round() as i64)
         );
         let expected_potential = crate::chemistry::interaction_potential(
             selected_position,
