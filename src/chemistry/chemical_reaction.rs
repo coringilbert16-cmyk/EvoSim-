@@ -576,7 +576,6 @@ pub(crate) fn accumulate_environmental(
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let mut compatibility_cache = ConnectionCompatibilityCache::new();
     // A material is immutable during this discovery pass. Restore its graph
     // once, then reuse that authoritative trial geometry for each of its bonds.
     let mut restored_materials = std::collections::BTreeMap::new();
@@ -727,10 +726,8 @@ pub(crate) fn accumulate_environmental(
             );
         }
         if chemistry_library.performance_enabled() {
-            chemistry_library.record_performance_counter(
-                "environmental_break_pair_candidate_lookups",
-                1,
-            );
+            chemistry_library
+                .record_performance_counter("environmental_break_pair_candidate_lookups", 1);
             chemistry_library.record_performance_counter(
                 "environmental_break_pair_candidate_matches",
                 u64::from(candidate.is_some()),
