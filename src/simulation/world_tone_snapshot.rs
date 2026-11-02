@@ -764,7 +764,7 @@ type WorldPhysicalMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usi
 
 fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,
-) -> Option<WorldPhysicalMaterials>;
+) -> Option<WorldPhysicalMaterials> {
     let catalog = &simulation.environment.catalog;
     let mut bodies = Vec::new();
     let mut resonant_participant_indices = Vec::new();
