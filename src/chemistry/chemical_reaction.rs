@@ -555,7 +555,23 @@ pub(crate) fn accumulate_environmental(
         return Vec::new();
     }
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let (candidates, _scan_steps) = discover_environmental_bonds(environment, tick, count);
+    let scan_started = chemistry_library
+        .performance_enabled()
+        .then(std::time::Instant::now);
+    let (candidates, scan_steps) = discover_environmental_bonds(environment, tick, count);
+    if let Some(started) = scan_started {
+        chemistry_library.record_performance_stage(
+            "environmental_break_discovery_scan",
+            started,
+            scan_steps as u64,
+        );
+        chemistry_library
+            .record_performance_counter("environmental_break_scan_steps", scan_steps as u64);
+        chemistry_library.record_performance_counter(
+            "environmental_break_discovered_candidates",
+            candidates.len() as u64,
+        );
+    }
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidates.len());
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
@@ -589,25 +605,49 @@ pub(crate) fn accumulate_environmental(
         // valid geometry owner for a world-owned bond: it can carry unrelated
         // units, IDs, and contact context into candidate resolution.
         let material_key = (cell_index, material_index);
-        if let std::collections::btree_map::Entry::Vacant(entry) =
-            restored_materials.entry(material_key)
-        {
-            let mut hypothetical = crate::structure::OrganismStructure::new();
-            let restored = crate::material_restoration::restore_material(
-                &mut hypothetical,
-                instance,
-                crate::structure::Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                &environment.catalog,
-            )
-            .map(|restored_indices| (hypothetical, restored_indices));
-            // Cache failed restorations too: this material is immutable during
-            // discovery, so retrying the same rejected geometry for each bond
-            // cannot produce a different result.
-            entry.insert(restored);
+        match restored_materials.entry(material_key) {
+            std::collections::btree_map::Entry::Occupied(_) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_material_restore_cache_hits",
+                        1,
+                    );
+                }
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_material_restore_cache_misses",
+                        1,
+                    );
+                }
+                let restore_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let mut hypothetical = crate::structure::OrganismStructure::new();
+                let restored = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    &environment.catalog,
+                )
+                .map(|restored_indices| (hypothetical, restored_indices));
+                if let Some(started) = restore_started {
+                    chemistry_library.record_performance_stage(
+                        "environmental_break_material_restoration",
+                        started,
+                        1,
+                    );
+                }
+                // Cache failed restorations too: this material is immutable during
+                // discovery, so retrying the same rejected geometry for each bond
+                // cannot produce a different result.
+                entry.insert(restored);
+            }
         }
         let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
         else {
@@ -672,29 +712,81 @@ pub(crate) fn accumulate_environmental(
             continue;
         };
         let pair_key = (cell_index, material_index, unit_a, unit_b);
-        pair_candidates.entry(pair_key).or_insert_with(|| {
-            crate::contact::connection_pair_candidates_cached(
-                hypothetical,
-                unit_a,
-                unit_b,
-                &environment.catalog,
-                &mut compatibility_cache,
-            )
-        });
-        let Some(candidate) = pair_candidates
-            .get(&pair_key)
+        match pair_candidates.entry(pair_key) {
+            std::collections::btree_map::Entry::Occupied(_) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidate_cache_hits",
+                        1,
+                    );
+                }
+            }
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidate_cache_misses",
+                        1,
+                    );
+                }
+                let candidate_generation_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let generated = crate::contact::connection_pair_candidates_cached(
+                    hypothetical,
+                    unit_a,
+                    unit_b,
+                    &environment.catalog,
+                    &mut compatibility_cache,
+                );
+                if let Some(started) = candidate_generation_started {
+                    chemistry_library.record_performance_stage(
+                        "environmental_break_pair_candidate_generation",
+                        started,
+                        generated.len() as u64,
+                    );
+                }
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidates_generated",
+                        generated.len() as u64,
+                    );
+                }
+                entry.insert(generated);
+            }
+        }
+        let endpoint_match_started = chemistry_library
+            .performance_enabled()
+            .then(std::time::Instant::now);
+        let candidate_list = pair_candidates.get(&pair_key);
+        let mut endpoint_inspections = 0_u64;
+        let candidate = candidate_list
             .into_iter()
             .flatten()
             .copied()
             .find(|candidate| {
+                endpoint_inspections = endpoint_inspections.saturating_add(1);
                 (candidate.endpoint_a == connection.endpoint_a
                     && candidate.endpoint_b == connection.endpoint_b)
                     || (candidate.endpoint_a == connection.endpoint_b
                         && candidate.endpoint_b == connection.endpoint_a)
-            })
-        else {
+            });
+        if let Some(started) = endpoint_match_started {
+            chemistry_library.record_performance_stage(
+                "environmental_break_endpoint_matching",
+                started,
+                endpoint_inspections,
+            );
+            chemistry_library.record_performance_counter(
+                "environmental_break_endpoint_match_inspections",
+                endpoint_inspections,
+            );
+        }
+        let Some(candidate) = candidate else {
             continue;
         };
+        if chemistry_library.performance_enabled() {
+            chemistry_library.record_performance_counter("environmental_break_endpoint_matches", 1);
+        }
         let geometry_material_a = resource_a.name.as_str();
         let geometry_material_b = resource_b.name.as_str();
         let material_a = material_identity(&hypothetical.units[unit_a].material);
