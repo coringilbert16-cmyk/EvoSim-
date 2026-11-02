@@ -1184,7 +1184,8 @@ impl Simulation {
                 chemistry_discovery_work_remaining
             };
             let mut graph_discovery_remaining = graph_discovery_budget;
-            let organism_break_discovery_started = Instant::now();
+            let organism_break_discovery_started =
+                self.chemistry_library.performance_enabled().then(Instant::now);
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -1193,21 +1194,20 @@ impl Simulation {
                 self.tick,
                 &mut graph_discovery_remaining,
             );
-            self.chemistry_library.record_performance_stage(
-                "organism_break_discovery",
-                organism_break_discovery_started,
-                chemical_operations.len() as u64,
-            );
-            self.environmental_chemistry_diagnostics
-                .organism_break_discovery_elapsed_micros = self
-                .environmental_chemistry_diagnostics
-                .organism_break_discovery_elapsed_micros
-                .saturating_add(
-                    organism_break_discovery_started
-                        .elapsed()
-                        .as_micros()
-                        .min(u64::MAX as u128) as u64,
+            if let Some(started) = organism_break_discovery_started {
+                self.chemistry_library.record_performance_stage(
+                    "organism_break_discovery",
+                    started,
+                    chemical_operations.len() as u64,
                 );
+                self.environmental_chemistry_diagnostics
+                    .organism_break_discovery_elapsed_micros = self
+                    .environmental_chemistry_diagnostics
+                    .organism_break_discovery_elapsed_micros
+                    .saturating_add(
+                        started.elapsed().as_micros().min(u64::MAX as u128) as u64,
+                    );
+            }
             self.environmental_chemistry_diagnostics
                 .organism_break_ready_candidates = self
                 .environmental_chemistry_diagnostics
@@ -1232,7 +1232,8 @@ impl Simulation {
             // its geometry and progress keys are independent of organism graphs.
             carried_chemistry_discovery_work = graph_discovery_remaining;
             let mut graph_work_remaining = chemistry_work_remaining;
-            let organism_break_settlement_started = Instant::now();
+            let organism_break_settlement_started =
+                self.chemistry_library.performance_enabled().then(Instant::now);
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
@@ -1270,21 +1271,20 @@ impl Simulation {
                         .record_performance_counter("organism_break_rejected", 1);
                 }
             }
-            self.chemistry_library.record_performance_stage(
-                "organism_break_transaction_settlement",
-                organism_break_settlement_started,
-                organism_break_scheduled_count as u64,
-            );
-            self.environmental_chemistry_diagnostics
-                .organism_break_settlement_elapsed_micros = self
-                .environmental_chemistry_diagnostics
-                .organism_break_settlement_elapsed_micros
-                .saturating_add(
-                    organism_break_settlement_started
-                        .elapsed()
-                        .as_micros()
-                        .min(u64::MAX as u128) as u64,
+            if let Some(started) = organism_break_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "organism_break_transaction_settlement",
+                    started,
+                    organism_break_scheduled_count as u64,
                 );
+                self.environmental_chemistry_diagnostics
+                    .organism_break_settlement_elapsed_micros = self
+                    .environmental_chemistry_diagnostics
+                    .organism_break_settlement_elapsed_micros
+                    .saturating_add(
+                        started.elapsed().as_micros().min(u64::MAX as u128) as u64,
+                    );
+            }
             // Carry unused graph slots forward, but never exceed the
             // graph half-budget reserved for this tick.
             carried_chemistry_work = graph_work_remaining;
@@ -1339,7 +1339,8 @@ impl Simulation {
                 // physical material to inspect its bond endpoints. Reuse this exact
                 // result for both eligibility and decision construction rather than
                 // repeating the full geometry/restoration pass.
-                let organism_environmental_break_selection_started = Instant::now();
+                let organism_environmental_break_selection_started =
+                    self.chemistry_library.performance_enabled().then(Instant::now);
                 let environmental_break_candidates =
                     if organisms[index].active_transformation_id.is_none() {
                         crate::transformation::environmental_break_candidates(
@@ -1351,11 +1352,13 @@ impl Simulation {
                     } else {
                         Vec::new()
                     };
-                self.chemistry_library.record_performance_stage(
-                    "organism_environmental_break_selection",
-                    organism_environmental_break_selection_started,
-                    environmental_break_candidates.len() as u64,
-                );
+                if let Some(started) = organism_environmental_break_selection_started {
+                    self.chemistry_library.record_performance_stage(
+                        "organism_environmental_break_selection",
+                        started,
+                        environmental_break_candidates.len() as u64,
+                    );
+                }
                 self.environmental_chemistry_diagnostics
                     .organism_environmental_break_candidates = self
                     .environmental_chemistry_diagnostics
