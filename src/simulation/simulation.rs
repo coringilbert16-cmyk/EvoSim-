@@ -1213,9 +1213,7 @@ impl Simulation {
                     .organism_break_discovery_elapsed_micros = self
                     .environmental_chemistry_diagnostics
                     .organism_break_discovery_elapsed_micros
-                    .saturating_add(
-                        started.elapsed().as_micros().min(u64::MAX as u128) as u64,
-                    );
+                    .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
             }
             self.environmental_chemistry_diagnostics
                 .organism_break_ready_candidates = self
@@ -1290,9 +1288,7 @@ impl Simulation {
                     .organism_break_settlement_elapsed_micros = self
                     .environmental_chemistry_diagnostics
                     .organism_break_settlement_elapsed_micros
-                    .saturating_add(
-                        started.elapsed().as_micros().min(u64::MAX as u128) as u64,
-                    );
+                    .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
             }
             // Carry unused graph slots forward, but never exceed the
             // graph half-budget reserved for this tick.
