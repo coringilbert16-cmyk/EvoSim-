@@ -229,7 +229,13 @@ pub struct LiveGeometryInterface {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the result type for the staged persistent-family resolver"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the result type for the staged persistent-family resolver"
+    )
+)]
 pub enum LiveFamilyResolution {
     Unresolved,
     Ambiguous,
@@ -445,7 +451,13 @@ fn local_contact_descriptor(
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as a canonical endpoint projection helper for family matching"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as a canonical endpoint projection helper for family matching"
+    )
+)]
 fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
     match endpoint {
         ConnectionEndpoint::Corner { point_index } => format!("corner:{point_index}"),
@@ -520,7 +532,13 @@ fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature:
     hasher.finish()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the rigid-edge family projection for indexed resolution"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-edge family projection for indexed resolution"
+    )
+)]
 fn rigid_family_projection(
     family: &GeometryRigidContactFamily,
     relative_rotation_radians: f64,
@@ -536,7 +554,13 @@ fn rigid_family_projection(
     )
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the rigid-point family projection for indexed resolution"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-point family projection for indexed resolution"
+    )
+)]
 fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     format!(
         "point|{}|{}|{}|{}|{}|{}|{}",
@@ -550,7 +574,13 @@ fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     )
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the rigid-vertex family projection for indexed resolution"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-vertex family projection for indexed resolution"
+    )
+)]
 fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
     format!(
         "vertex|{}|{}|{}|{}|{}|{}|{}",
@@ -570,7 +600,13 @@ fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String
 /// callers provide the endpoints that contact detection has already realized.
 /// If the same physical interface is presented in the opposite endpoint order,
 /// the returned identity is unchanged.
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the staged adapter from live contacts to persistent family queries"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the staged adapter from live contacts to persistent family queries"
+    )
+)]
 pub fn resolve_live_contact_interface(
     material_a: &str,
     endpoint_a: ConnectionEndpoint,
@@ -3653,7 +3689,13 @@ fn quantize(value: f64) -> i64 {
 /// Family intervals are generated in unwrapped radians; the live angle is
 /// normalized, so equivalent turns must be considered without changing the
 /// persisted interval convention.
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as a periodic interval helper for geometry-family matching"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as a periodic interval helper for geometry-family matching"
+    )
+)]
 fn angle_in_periodic_interval(angle: f64, start: f64, end: f64) -> bool {
     if !angle.is_finite() || !start.is_finite() || !end.is_finite() || start > end {
         return false;
@@ -4169,7 +4211,13 @@ fn load_fluid_boundary_families(
     out
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the combined fluid-boundary generation API"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the combined fluid-boundary generation API"
+    )
+)]
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
     fluid_resource: &BaseResource,
@@ -4226,7 +4274,13 @@ pub struct WaterContactGenerationDiagnostics {
 
 /// Preserve the original generator API while exposing reason-level outcomes
 /// to Bob's worker and focused diagnostics tests.
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the compatibility wrapper for Water contact generation"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the compatibility wrapper for Water contact generation"
+    )
+)]
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -4517,7 +4571,13 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained as the rigid-contact family instantiation API"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-contact family instantiation API"
+    )
+)]
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
     family: &GeometryRigidContactFamily,
@@ -5066,7 +5126,13 @@ pub fn generate_two_constituent_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained for the staged three-constituent catalogue expansion"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained for the staged three-constituent catalogue expansion"
+    )
+)]
 pub fn expand_three_constituent_candidates(
     two_constituent: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -5246,7 +5312,13 @@ pub fn expand_formation_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained for the staged two-constituent catalogue seeding workflow"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained for the staged two-constituent catalogue seeding workflow"
+    )
+)]
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -5266,7 +5338,13 @@ pub fn seed_two_constituent_catalogue(
     library.insert_many(candidates, catalog)
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Retained for the staged three-constituent catalogue seeding workflow"))]
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Retained for the staged three-constituent catalogue seeding workflow"
+    )
+)]
 pub fn seed_three_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
