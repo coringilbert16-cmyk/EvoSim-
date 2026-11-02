@@ -378,20 +378,33 @@ fn run_environment_chemistry_experiment(
                     .map_or(0, |timing| timing.max_tick)
             };
             let average_micros_alias = |current: &str, legacy: &str| {
-                performance.stages.get(current).or_else(|| performance.stages.get(legacy))
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
                     .map_or(0, |timing| timing.total_micros / timing.calls.max(1))
             };
             let maximum_micros_alias = |current: &str, legacy: &str| {
-                performance.stages.get(current).or_else(|| performance.stages.get(legacy))
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
                     .map_or(0, |timing| timing.max_micros)
             };
             let maximum_tick_alias = |current: &str, legacy: &str| {
-                performance.stages.get(current).or_else(|| performance.stages.get(legacy))
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
                     .map_or(0, |timing| timing.max_tick)
             };
             let counter_alias = |current: &str, legacy: &str| {
-                performance.counters.get(current).or_else(|| performance.counters.get(legacy))
-                    .copied().unwrap_or(0)
+                performance
+                    .counters
+                    .get(current)
+                    .or_else(|| performance.counters.get(legacy))
+                    .copied()
+                    .unwrap_or(0)
             };
             println!(
                 "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} ENV_BREAK={}/{}/{}/{} ORG_BREAK ready/scheduled/committed/rejected={}/{}/{}/{} discovery_us={} settlement_us={} organism_env_break_candidates={} organism_env_break_selection_us={} break_materials_restored={} break_restore_us={} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
