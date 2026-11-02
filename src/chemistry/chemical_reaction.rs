@@ -220,6 +220,7 @@ pub(crate) fn accumulate(
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
     let mut cache = ConnectionCompatibilityCache::new();
+    let mut pair_candidates = std::collections::BTreeMap::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bond_count = organism.structure.bonds.len();
     let mut operations = Vec::new();
@@ -266,20 +267,27 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        let candidate = crate::contact::connection_pair_candidates_cached(
-            &organism.structure,
-            unit_a,
-            unit_b,
-            catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            (candidate.endpoint_a == bond.endpoint_a.location
-                && candidate.endpoint_b == bond.endpoint_b.location)
-                || (candidate.endpoint_a == bond.endpoint_b.location
-                    && candidate.endpoint_b == bond.endpoint_a.location)
+        let pair_key = (unit_a, unit_b);
+        pair_candidates.entry(pair_key).or_insert_with(|| {
+            crate::contact::connection_pair_candidates_cached(
+                &organism.structure,
+                unit_a,
+                unit_b,
+                catalog,
+                &mut cache,
+            )
         });
+        let candidate = pair_candidates
+            .get(&pair_key)
+            .into_iter()
+            .flatten()
+            .copied()
+            .find(|candidate| {
+                (candidate.endpoint_a == bond.endpoint_a.location
+                    && candidate.endpoint_b == bond.endpoint_b.location)
+                    || (candidate.endpoint_a == bond.endpoint_b.location
+                        && candidate.endpoint_b == bond.endpoint_a.location)
+            });
         let Some(candidate) = candidate else {
             continue;
         };
@@ -553,6 +561,12 @@ pub(crate) fn accumulate_environmental(
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut compatibility_cache = ConnectionCompatibilityCache::new();
+    // A material is immutable during this discovery pass. Restore its graph
+    // once, then reuse that authoritative trial geometry for each of its bonds.
+    let mut restored_materials = std::collections::BTreeMap::new();
+    // Multiple physical bonds can connect the same constituent pair at
+    // different endpoints. Generate their live candidates once per pair.
+    let mut pair_candidates = std::collections::BTreeMap::new();
 
     for (cell_index, material_index, bond_index) in candidates {
         let Some(instance) = environment
@@ -574,17 +588,29 @@ pub(crate) fn accumulate_environmental(
         // realized environmental material itself. An organism graph is not a
         // valid geometry owner for a world-owned bond: it can carry unrelated
         // units, IDs, and contact context into candidate resolution.
-        let mut hypothetical = crate::structure::OrganismStructure::new();
-        let Some(restored_indices) = crate::material_restoration::restore_material(
-            &mut hypothetical,
-            instance,
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &environment.catalog,
-        ) else {
+        let material_key = (cell_index, material_index);
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            restored_materials.entry(material_key)
+        {
+            let mut hypothetical = crate::structure::OrganismStructure::new();
+            let restored = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            )
+            .map(|restored_indices| (hypothetical, restored_indices));
+            // Cache failed restorations too: this material is immutable during
+            // discovery, so retrying the same rejected geometry for each bond
+            // cannot produce a different result.
+            entry.insert(restored);
+        }
+        let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
+        else {
             continue;
         };
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
@@ -645,20 +671,28 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-            &hypothetical,
-            unit_a,
-            unit_b,
-            &environment.catalog,
-            &mut compatibility_cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            (candidate.endpoint_a == connection.endpoint_a
-                && candidate.endpoint_b == connection.endpoint_b)
-                || (candidate.endpoint_a == connection.endpoint_b
-                    && candidate.endpoint_b == connection.endpoint_a)
-        }) else {
+        let pair_key = (cell_index, material_index, unit_a, unit_b);
+        pair_candidates.entry(pair_key).or_insert_with(|| {
+            crate::contact::connection_pair_candidates_cached(
+                hypothetical,
+                unit_a,
+                unit_b,
+                &environment.catalog,
+                &mut compatibility_cache,
+            )
+        });
+        let Some(candidate) = pair_candidates
+            .get(&pair_key)
+            .into_iter()
+            .flatten()
+            .copied()
+            .find(|candidate| {
+                (candidate.endpoint_a == connection.endpoint_a
+                    && candidate.endpoint_b == connection.endpoint_b)
+                    || (candidate.endpoint_a == connection.endpoint_b
+                        && candidate.endpoint_b == connection.endpoint_a)
+            })
+        else {
             continue;
         };
         let geometry_material_a = resource_a.name.as_str();
