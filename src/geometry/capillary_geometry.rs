@@ -1287,7 +1287,7 @@ impl CapillaryContactFamily {
     /// Half-width of the symmetric contact interval.
     #[cfg_attr(
         not(test),
-            expect(dead_code, reason = "Retained as an exact capillary-family geometry query")
+        expect(dead_code, reason = "Retained as an exact capillary-family geometry query")
     )]
     pub fn half_contact_length(&self) -> f64 {
         self.contact_length * 0.5
@@ -1313,10 +1313,7 @@ impl CapillaryContactFamily {
     /// an interfacial property, not a universal property of a resource alone.
     #[cfg_attr(
         not(test),
-        expect(
-            dead_code,
-            reason = "Retained for downstream surface-tension pressure calculations"
-        )
+        expect(dead_code, reason = "Retained for downstream surface-tension pressure calculations")
     )]
     pub fn pressure_jump(&self, surface_tension: f64) -> Option<f64> {
         if !surface_tension.is_finite() || surface_tension < 0.0 {
