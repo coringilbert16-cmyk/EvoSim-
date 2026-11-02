@@ -2633,11 +2633,17 @@ impl GeometryLibrary {
 
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "Retained as the geometry-library membership query")
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
     )]
     #[cfg_attr(
         test,
-        expect(dead_code, reason = "Retained as the geometry-library membership query")
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
     )]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
