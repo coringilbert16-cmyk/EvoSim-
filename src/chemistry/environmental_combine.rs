@@ -1802,7 +1802,7 @@ mod tests {
             let local_x = second.x - first.x;
             let local_y = second.y - first.y;
 
-            'external_pose: for step in 1..=80 {
+            for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
