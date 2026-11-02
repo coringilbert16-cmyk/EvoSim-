@@ -1209,17 +1209,11 @@ impl MultiContactFluidBoundary {
     }
 
     #[cfg_attr(
-
         not(test),
-
         expect(
-
             dead_code,
-
             reason = "Retained as a diagnostic query for exact multi-contact fluid boundaries"
-
         )
-
     )]
     pub fn free_arc_count(&self) -> usize {
         self.pieces
@@ -1302,7 +1296,7 @@ impl CapillaryContactFamily {
         )
     )]
     #[cfg_attr(
-        test,
+        not(test),
         expect(
             dead_code,
             reason = "Retained for downstream capillary pressure and curvature calculations"
@@ -1323,11 +1317,8 @@ impl CapillaryContactFamily {
         expect(dead_code, reason = "Retained for downstream surface-tension pressure calculations")
     )]
     #[cfg_attr(
-        test,
-        expect(
-            dead_code,
-            reason = "Retained for downstream surface-tension pressure calculations"
-        )
+        not(test),
+        expect(dead_code, reason = "Retained for downstream surface-tension pressure calculations")
     )]
     pub fn pressure_jump(&self, surface_tension: f64) -> Option<f64> {
         if !surface_tension.is_finite() || surface_tension < 0.0 {
@@ -1371,17 +1362,11 @@ impl ContactTranslationInterval {
     }
 
     #[cfg_attr(
-
         not(test),
-
         expect(
-
             dead_code,
-
             reason = "Retained as the normalized extent query for contact translation intervals"
-
         )
-
     )]
     pub fn length(&self) -> f64 {
         (self.edge_end_parameter - self.edge_start_parameter).max(0.0)
