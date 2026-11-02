@@ -514,7 +514,7 @@ fn run_environment_chemistry_experiment(
                 maximum_tick("environmental_combine_transaction_settlement"),
             );
             println!(
-                "[chemistry-break-stages] scan_avg/max_us={}/{} scan_steps={} discovered_candidates={} restore_avg/max_us={}/{} restore_cache_hits={} restore_cache_misses={} pair_generation_avg/max_us={}/{} pair_cache_hits={} pair_cache_misses={} pair_candidates_generated={} endpoint_matching_avg/max_us={}/{} endpoint_inspections={} endpoint_matches={} interface_avg/max_us={}/{} settlement_avg/max_us={}/{} worst_scan_tick={} worst_restore_tick={} worst_pair_generation_tick={} worst_endpoint_matching_tick={} worst_interface_tick={} worst_settlement_tick={}",
+                "[chemistry-break-stages] scan_avg/max_us={}/{} scan_steps={} discovered_candidates={} restore_avg/max_us={}/{} restore_cache_hits={} restore_cache_misses={} pair_lookup_avg/max_us={}/{} pair_lookups={} pair_matches={} interface_avg/max_us={}/{} settlement_avg/max_us={}/{} worst_scan_tick={} worst_restore_tick={} worst_pair_lookup_tick={} worst_interface_tick={} worst_settlement_tick={}",
                 average_micros("environmental_break_discovery_scan"),
                 maximum_micros("environmental_break_discovery_scan"),
                 performance
@@ -543,29 +543,12 @@ fn run_environment_chemistry_experiment(
                 maximum_micros("environmental_break_pair_candidate_generation"),
                 performance
                     .counters
-                    .get("environmental_break_pair_candidate_cache_hits")
+                    .get("environmental_break_pair_candidate_lookups")
                     .copied()
                     .unwrap_or(0),
                 performance
                     .counters
-                    .get("environmental_break_pair_candidate_cache_misses")
-                    .copied()
-                    .unwrap_or(0),
-                performance
-                    .counters
-                    .get("environmental_break_pair_candidates_generated")
-                    .copied()
-                    .unwrap_or(0),
-                average_micros("environmental_break_endpoint_matching"),
-                maximum_micros("environmental_break_endpoint_matching"),
-                performance
-                    .counters
-                    .get("environmental_break_endpoint_match_inspections")
-                    .copied()
-                    .unwrap_or(0),
-                performance
-                    .counters
-                    .get("environmental_break_endpoint_matches")
+                    .get("environmental_break_pair_candidate_matches")
                     .copied()
                     .unwrap_or(0),
                 average_micros("environmental_break_interface_resolution"),
@@ -575,7 +558,6 @@ fn run_environment_chemistry_experiment(
                 maximum_tick("environmental_break_discovery_scan"),
                 maximum_tick("environmental_break_material_restoration"),
                 maximum_tick("environmental_break_pair_candidate_generation"),
-                maximum_tick("environmental_break_endpoint_matching"),
                 maximum_tick("environmental_break_interface_resolution"),
                 maximum_tick("environmental_break_transaction_settlement"),
             );

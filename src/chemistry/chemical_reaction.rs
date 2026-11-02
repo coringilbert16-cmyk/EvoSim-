@@ -576,13 +576,9 @@ pub(crate) fn accumulate_environmental(
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let mut compatibility_cache = ConnectionCompatibilityCache::new();
     // A material is immutable during this discovery pass. Restore its graph
     // once, then reuse that authoritative trial geometry for each of its bonds.
     let mut restored_materials = std::collections::BTreeMap::new();
-    // Multiple physical bonds can connect the same constituent pair at
-    // different endpoints. Generate their live candidates once per pair.
-    let mut pair_candidates = std::collections::BTreeMap::new();
 
     for (cell_index, material_index, bond_index) in candidates {
         let Some(instance) = environment
@@ -711,74 +707,30 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        let pair_key = (cell_index, material_index, unit_a, unit_b);
-        match pair_candidates.entry(pair_key) {
-            std::collections::btree_map::Entry::Occupied(_) => {
-                if chemistry_library.performance_enabled() {
-                    chemistry_library.record_performance_counter(
-                        "environmental_break_pair_candidate_cache_hits",
-                        1,
-                    );
-                }
-            }
-            std::collections::btree_map::Entry::Vacant(entry) => {
-                if chemistry_library.performance_enabled() {
-                    chemistry_library.record_performance_counter(
-                        "environmental_break_pair_candidate_cache_misses",
-                        1,
-                    );
-                }
-                let candidate_generation_started = chemistry_library
-                    .performance_enabled()
-                    .then(std::time::Instant::now);
-                let generated = crate::contact::connection_pair_candidates_cached(
-                    hypothetical,
-                    unit_a,
-                    unit_b,
-                    &environment.catalog,
-                    &mut compatibility_cache,
-                );
-                if let Some(started) = candidate_generation_started {
-                    chemistry_library.record_performance_stage(
-                        "environmental_break_pair_candidate_generation",
-                        started,
-                        generated.len() as u64,
-                    );
-                }
-                if chemistry_library.performance_enabled() {
-                    chemistry_library.record_performance_counter(
-                        "environmental_break_pair_candidates_generated",
-                        generated.len() as u64,
-                    );
-                }
-                entry.insert(generated);
-            }
-        }
-        let endpoint_match_started = chemistry_library
+        let candidate_generation_started = chemistry_library
             .performance_enabled()
             .then(std::time::Instant::now);
-        let candidate_list = pair_candidates.get(&pair_key);
-        let mut endpoint_inspections = 0_u64;
-        let candidate = candidate_list
-            .into_iter()
-            .flatten()
-            .copied()
-            .find(|candidate| {
-                endpoint_inspections = endpoint_inspections.saturating_add(1);
-                (candidate.endpoint_a == connection.endpoint_a
-                    && candidate.endpoint_b == connection.endpoint_b)
-                    || (candidate.endpoint_a == connection.endpoint_b
-                        && candidate.endpoint_b == connection.endpoint_a)
-            });
-        if let Some(started) = endpoint_match_started {
+        let candidate = crate::contact::connection_pair_candidate_for_endpoints(
+            hypothetical,
+            unit_a,
+            unit_b,
+            &environment.catalog,
+            connection.endpoint_a,
+            connection.endpoint_b,
+        );
+        if let Some(started) = candidate_generation_started {
             chemistry_library.record_performance_stage(
-                "environmental_break_endpoint_matching",
+                "environmental_break_pair_candidate_generation",
                 started,
-                endpoint_inspections,
+                u64::from(candidate.is_some()),
             );
+        }
+        if chemistry_library.performance_enabled() {
+            chemistry_library
+                .record_performance_counter("environmental_break_pair_candidate_lookups", 1);
             chemistry_library.record_performance_counter(
-                "environmental_break_endpoint_match_inspections",
-                endpoint_inspections,
+                "environmental_break_pair_candidate_matches",
+                u64::from(candidate.is_some()),
             );
         }
         let Some(candidate) = candidate else {
