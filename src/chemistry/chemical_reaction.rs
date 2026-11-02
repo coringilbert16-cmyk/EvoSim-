@@ -298,27 +298,11 @@ pub(crate) fn accumulate(
             .unwrap_or("unknown");
         let material_a = material_identity(&organism.structure.units[unit_a].material);
         let material_b = material_identity(&organism.structure.units[unit_b].material);
-        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            geometry_material_a,
-            &organism.structure.units[unit_a],
-            geometry_material_b,
-            &organism.structure.units[unit_b],
-            candidate,
-            catalog,
-        ) else {
-            continue;
-        };
-        let key = format!(
-            "{}|rev:{}|{}",
-            organism.id,
-            organism.structure_revision,
-            reaction_key(&bond, &interface.signature)
-        );
-
-        let key_record = chemistry_library.key_from_live_geometry(
+        // Static potential depends only on canonical chemistry identity and
+        // chemical positions. Resolve the live interface separately below.
+        let key_record = chemistry_library.key_from_chemical_pair(
             &material_a,
             &material_b,
-            &interface,
             position_a,
             position_b,
         );
@@ -350,6 +334,33 @@ pub(crate) fn accumulate(
                 }
             }
         };
+        let interface_resolution_started = chemistry_library
+            .performance_enabled()
+            .then(std::time::Instant::now);
+        let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &organism.structure.units[unit_a],
+            geometry_material_b,
+            &organism.structure.units[unit_b],
+            candidate,
+            catalog,
+        );
+        if let Some(started) = interface_resolution_started {
+            chemistry_library.record_performance_stage(
+                "organism_break_interface_resolution",
+                started,
+                1,
+            );
+        }
+        let Some(interface) = resolved_interface else {
+            continue;
+        };
+        let key = format!(
+            "{}|rev:{}|{}",
+            organism.id,
+            organism.structure_revision,
+            reaction_key(&bond, &interface.signature)
+        );
         let Some(contact) = crate::chemistry::contact_factor(
             candidate.distance,
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
@@ -652,16 +663,6 @@ pub(crate) fn accumulate_environmental(
         };
         let geometry_material_a = resource_a.name.as_str();
         let geometry_material_b = resource_b.name.as_str();
-        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            geometry_material_a,
-            &hypothetical.units[unit_a],
-            geometry_material_b,
-            &hypothetical.units[unit_b],
-            candidate,
-            &environment.catalog,
-        ) else {
-            continue;
-        };
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
         let key = format!(
@@ -673,22 +674,32 @@ pub(crate) fn accumulate_environmental(
             material_identity(&instance.material),
             connection
         );
-        let key_record = chemistry_library.key_from_live_geometry(
+        let key_record = chemistry_library.key_from_chemical_pair(
             &material_a,
             &material_b,
-            &interface,
             position_a,
             position_b,
         );
-        let potential = match chemistry_library.get(&key_record) {
+        let potential = match chemistry_library.lookup(&key_record) {
             Some(record) => record.static_potential,
             None => {
-                let Some(calculated) = crate::chemistry::interaction_potential(
+                let potential_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let calculated = crate::chemistry::interaction_potential(
                     position_a,
                     position_b,
                     crate::chemistry::CHEMICAL_K,
                     crate::chemistry::CHEMICAL_D_MAX,
-                ) else {
+                );
+                if let Some(started) = potential_started {
+                    chemistry_library.record_performance_stage(
+                        "static_potential_calculation",
+                        started,
+                        1,
+                    );
+                }
+                let Some(calculated) = calculated else {
                     continue;
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
@@ -696,6 +707,29 @@ pub(crate) fn accumulate_environmental(
                     Ok(None) | Err(_) => calculated,
                 }
             }
+        };
+        // Retain the exact live interface check; only the static potential
+        // lookup is geometry-independent.
+        let interface_resolution_started = chemistry_library
+            .performance_enabled()
+            .then(std::time::Instant::now);
+        let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &hypothetical.units[unit_a],
+            geometry_material_b,
+            &hypothetical.units[unit_b],
+            candidate,
+            &environment.catalog,
+        );
+        if let Some(started) = interface_resolution_started {
+            chemistry_library.record_performance_stage(
+                "environmental_break_interface_resolution",
+                started,
+                1,
+            );
+        }
+        let Some(_interface) = resolved_interface else {
+            continue;
         };
         let Some(contact_factor) = crate::chemistry::contact_factor(
             candidate.distance,
@@ -2616,10 +2650,10 @@ mod material_identity_tests {
         );
         assert_eq!(key.material_a, "Carbon");
         assert_eq!(key.material_b, "Hydrogen");
-        assert_eq!(key.interface_class, "rigid_point");
+        assert_eq!(key.interface_class.as_deref(), Some("rigid_point"));
         assert_eq!(
-            key.interface_signature,
-            "live-v1|Carbon:corner:0|Hydrogen:line:0"
+            key.interface_signature.as_deref(),
+            Some("live-v1|Carbon:corner:0|Hydrogen:line:0")
         );
     }
 }

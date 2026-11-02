@@ -390,29 +390,11 @@ fn chemical_step(
     let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
-    let interface_resolution_started = chemistry_library.performance_enabled().then(Instant::now);
-    let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-        material_name_a,
-        &structure.units[selected.unit_a],
-        material_name_b,
-        &structure.units[selected.unit_b],
-        selected.candidate,
-        &environment.catalog,
-    );
-    if let Some(started) = interface_resolution_started {
-        chemistry_library.record_performance_stage(
-            "environmental_combine_interface_resolution",
-            started,
-            1,
-        );
-    }
-    let Some(interface) = resolved_interface else {
-        reject_step!();
-    };
-    let cache_key = chemistry_library.key_from_live_geometry(
+    // Static potential is invariant across geometry variants of this
+    // canonical chemical pair. Look it up before resolving live interface data.
+    let cache_key = chemistry_library.key_from_chemical_pair(
         material_name_a,
         material_name_b,
-        &interface,
         position_a,
         position_b,
     );
@@ -443,6 +425,26 @@ fn chemical_step(
                 Ok(None) | Err(_) => calculated,
             }
         }
+    };
+    // Geometry/contact remains a live, authoritative check on every candidate.
+    let interface_resolution_started = chemistry_library.performance_enabled().then(Instant::now);
+    let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+        material_name_a,
+        &structure.units[selected.unit_a],
+        material_name_b,
+        &structure.units[selected.unit_b],
+        selected.candidate,
+        &environment.catalog,
+    );
+    if let Some(started) = interface_resolution_started {
+        chemistry_library.record_performance_stage(
+            "environmental_combine_interface_resolution",
+            started,
+            1,
+        );
+    }
+    let Some(_interface) = resolved_interface else {
+        reject_step!();
     };
     let Some(contact) = crate::chemistry::contact_factor(
         selected.candidate.distance,
@@ -3570,16 +3572,45 @@ mod tests {
         let external_position =
             constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
                 .expect("external constituent must retain its chemical position");
-        let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+        let chemistry_key = crate::chemistry_library::ChemistryKey::from_chemical_pair(
             selected_name,
             external_name,
-            &interface,
             selected_position,
             external_position,
         );
         let cached = chemistry_library
-            .get(&chemistry_key)
-            .expect("chemical step must key its record by the exact constituent interface");
+            .lookup(&chemistry_key)
+            .expect("chemical step must cache the exact contacting constituent pair");
+        assert!(
+            !interface.signature.is_empty(),
+            "live geometry identity must still resolve independently of the static-potential cache"
+        );
+        let (expected_material_a, expected_material_b, expected_position_a, expected_position_b) =
+            if selected_name.as_str() <= external_name {
+                (
+                    selected_name.as_str(),
+                    external_name,
+                    selected_position,
+                    external_position,
+                )
+            } else {
+                (
+                    external_name,
+                    selected_name.as_str(),
+                    external_position,
+                    selected_position,
+                )
+            };
+        assert_eq!(chemistry_key.material_a, expected_material_a);
+        assert_eq!(chemistry_key.material_b, expected_material_b);
+        assert_eq!(
+            chemistry_key.chemical_position_a,
+            Some((expected_position_a * 1_000_000_000.0).round() as i64)
+        );
+        assert_eq!(
+            chemistry_key.chemical_position_b,
+            Some((expected_position_b * 1_000_000_000.0).round() as i64)
+        );
         let expected_potential = crate::chemistry::interaction_potential(
             selected_position,
             external_position,

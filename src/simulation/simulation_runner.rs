@@ -213,10 +213,33 @@ fn report(simulation: &Simulation, label: &str) {
                 .get(stage)
                 .map_or(0, |timing| timing.max_tick)
         };
+        // Keep diagnostics comparable with pre-cache-rename experiment baselines.
+        let average_micros_alias = |current: &str, legacy: &str| {
+            performance
+                .stages
+                .get(current)
+                .or_else(|| performance.stages.get(legacy))
+                .map_or(0, |timing| timing.total_micros / timing.calls.max(1))
+        };
+        let maximum_micros_alias = |current: &str, legacy: &str| {
+            performance
+                .stages
+                .get(current)
+                .or_else(|| performance.stages.get(legacy))
+                .map_or(0, |timing| timing.max_micros)
+        };
+        let counter_alias = |current: &str, legacy: &str| {
+            performance
+                .counters
+                .get(current)
+                .or_else(|| performance.counters.get(legacy))
+                .copied()
+                .unwrap_or(0)
+        };
         println!(
             "[organism-chemistry-profile] cache_hits={} cache_misses={} break_ready={} break_scheduled={} break_committed={} break_rejected={} env_break_candidates={} restored_materials={} key_avg/max_us={}/{} lookup_avg/max_us={}/{} potential_avg/max_us={}/{} organism_break_discovery_avg/max_us={}/{} organism_break_settlement_avg/max_us={}/{} organism_env_break_selection_avg/max_us={}/{} organism_break_restoration_avg/max_us={}/{} worst_break_discovery_tick={} worst_break_settlement_tick={} worst_break_restoration_tick={}",
-            performance.counters.get("cache_hits").copied().unwrap_or(0),
-            performance.counters.get("cache_misses").copied().unwrap_or(0),
+            counter_alias("static_potential_cache_hits", "cache_hits"),
+            counter_alias("static_potential_cache_misses", "cache_misses"),
             performance.counters.get("organism_break_ready_candidates").copied().unwrap_or(0),
             performance.counters.get("organism_break_scheduled").copied().unwrap_or(0),
             performance.counters.get("organism_break_committed").copied().unwrap_or(0),
@@ -227,8 +250,8 @@ fn report(simulation: &Simulation, label: &str) {
                 .copied()
                 .unwrap_or(0),
             performance.counters.get("organism_break_materials_restored").copied().unwrap_or(0),
-            average_micros("chemistry_key_construction"),
-            maximum_micros("chemistry_key_construction"),
+            average_micros_alias("static_potential_key_construction", "chemistry_key_construction"),
+            maximum_micros_alias("static_potential_key_construction", "chemistry_key_construction"),
             average_micros("chemistry_lookup"),
             maximum_micros("chemistry_lookup"),
             average_micros("static_potential_calculation"),
@@ -347,6 +370,35 @@ fn run_environment_chemistry_experiment(
                     .get(stage)
                     .map_or(0, |timing| timing.max_tick)
             };
+            let average_micros_alias = |current: &str, legacy: &str| {
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
+                    .map_or(0, |timing| timing.total_micros / timing.calls.max(1))
+            };
+            let maximum_micros_alias = |current: &str, legacy: &str| {
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
+                    .map_or(0, |timing| timing.max_micros)
+            };
+            let maximum_tick_alias = |current: &str, legacy: &str| {
+                performance
+                    .stages
+                    .get(current)
+                    .or_else(|| performance.stages.get(legacy))
+                    .map_or(0, |timing| timing.max_tick)
+            };
+            let counter_alias = |current: &str, legacy: &str| {
+                performance
+                    .counters
+                    .get(current)
+                    .or_else(|| performance.counters.get(legacy))
+                    .copied()
+                    .unwrap_or(0)
+            };
             println!(
                 "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} ENV_BREAK={}/{}/{}/{} ORG_BREAK ready/scheduled/committed/rejected={}/{}/{}/{} discovery_us={} settlement_us={} organism_env_break_candidates={} organism_env_break_selection_us={} break_materials_restored={} break_restore_us={} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
@@ -380,12 +432,12 @@ fn run_environment_chemistry_experiment(
                 energy.residual()
             );
             println!(
-                "[chemistry-perf] cache_hits={} cache_misses={} cache_inserts={} key_avg/max_us={}/{} lookup_avg/max_us={}/{} potential_avg/max_us={}/{} persistence_reload_avg_us={} persistence_append_avg_us={} manifest_avg_us={} worst_key_tick={} worst_lookup_tick={} worst_potential_tick={}",
-                performance.counters.get("cache_hits").copied().unwrap_or(0),
-                performance.counters.get("cache_misses").copied().unwrap_or(0),
-                performance.counters.get("cache_inserts").copied().unwrap_or(0),
-                average_micros("chemistry_key_construction"),
-                maximum_micros("chemistry_key_construction"),
+                "[chemistry-perf] static_potential_cache_hits={} static_potential_cache_misses={} static_potential_cache_inserts={} static_key_avg/max_us={}/{} lookup_avg/max_us={}/{} potential_avg/max_us={}/{} persistence_reload_avg_us={} persistence_append_avg_us={} manifest_avg_us={} worst_static_key_tick={} worst_lookup_tick={} worst_potential_tick={}",
+                counter_alias("static_potential_cache_hits", "cache_hits"),
+                counter_alias("static_potential_cache_misses", "cache_misses"),
+                counter_alias("static_potential_cache_inserts", "cache_inserts"),
+                average_micros_alias("static_potential_key_construction", "chemistry_key_construction"),
+                maximum_micros_alias("static_potential_key_construction", "chemistry_key_construction"),
                 average_micros("chemistry_lookup"),
                 maximum_micros("chemistry_lookup"),
                 average_micros("static_potential_calculation"),
@@ -393,7 +445,7 @@ fn run_environment_chemistry_experiment(
                 average_micros("persistence_reload_read"),
                 average_micros("persistence_append_sync"),
                 average_micros("persistence_manifest_update"),
-                maximum_tick("chemistry_key_construction"),
+                maximum_tick_alias("static_potential_key_construction", "chemistry_key_construction"),
                 maximum_tick("chemistry_lookup"),
                 maximum_tick("static_potential_calculation"),
             );

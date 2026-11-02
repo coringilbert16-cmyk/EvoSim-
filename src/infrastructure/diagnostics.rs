@@ -759,8 +759,38 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     pub(crate) fn finish(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         self.write_snapshot(simulation, "final")?;
+        // The JSONL experiment artifact is the benchmark's source of truth.
+        // Include the same cache counters and stage timings printed to stdout
+        // so downloaded artifacts can be compared without parsing runner logs.
+        let performance = simulation.chemistry_library.performance_summary();
+        let performance_counters = performance
+            .counters
+            .iter()
+            .map(|(name, value)| (*name, *value))
+            .collect::<BTreeMap<_, _>>();
+        let performance_stages = performance
+            .stages
+            .iter()
+            .map(|(name, timing)| {
+                (
+                    *name,
+                    json!({
+                        "calls": timing.calls,
+                        "work_items": timing.work_items,
+                        "total_microseconds": timing.total_micros,
+                        "average_microseconds": timing.total_micros / timing.calls.max(1),
+                        "max_microseconds": timing.max_micros,
+                        "max_tick": timing.max_tick
+                    }),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
         self.write_event(json!({
             "event": "environmental_chemistry_summary",
+            "chemistry_performance": {
+                "counters": performance_counters,
+                "stages": performance_stages
+            },
             "ticks_observed": self.totals.ticks_observed,
             "break_ready_candidates": self.totals.break_ready_candidates,
             "break_scheduled": self.totals.break_scheduled,
