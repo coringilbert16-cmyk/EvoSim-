@@ -766,12 +766,13 @@ pub(crate) fn accumulate_environmental(
                 candidate_count as u64,
             );
         }
-        if candidate.is_some() {
-            chemistry_library.record_performance_counter(
-                "environmental_break_endpoint_matches",
-                1,
-            );
-        }
+        let Some(candidate) = candidate else {
+            continue;
+        };
+        chemistry_library.record_performance_counter(
+            "environmental_break_endpoint_matches",
+            1,
+        );
         let geometry_material_a = resource_a.name.as_str();
         let geometry_material_b = resource_b.name.as_str();
         let material_a = material_identity(&hypothetical.units[unit_a].material);
