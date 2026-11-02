@@ -100,6 +100,7 @@ pub struct ChemistryKey {
 }
 
 impl ChemistryKey {
+    #[cfg(test)]
     pub fn new(
         a: impl Into<String>,
         b: impl Into<String>,
@@ -165,6 +166,7 @@ impl ChemistryKey {
 
     /// Key the invariant static potential by chemical identity only. Live
     /// geometry and interface eligibility are deliberately not part of this key.
+    #[cfg(test)]
     pub fn from_chemical_pair(
         a: impl Into<String>,
         b: impl Into<String>,
