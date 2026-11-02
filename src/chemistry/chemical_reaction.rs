@@ -565,10 +565,8 @@ pub(crate) fn accumulate_environmental(
             started,
             scan_steps as u64,
         );
-        chemistry_library.record_performance_counter(
-            "environmental_break_scan_steps",
-            scan_steps as u64,
-        );
+        chemistry_library
+            .record_performance_counter("environmental_break_scan_steps", scan_steps as u64);
         chemistry_library.record_performance_counter(
             "environmental_break_discovered_candidates",
             candidates.len() as u64,
@@ -608,15 +606,11 @@ pub(crate) fn accumulate_environmental(
         // units, IDs, and contact context into candidate resolution.
         let material_key = (cell_index, material_index);
         if restored_materials.contains_key(&material_key) {
-            chemistry_library.record_performance_counter(
-                "environmental_break_material_restore_cache_hits",
-                1,
-            );
+            chemistry_library
+                .record_performance_counter("environmental_break_material_restore_cache_hits", 1);
         } else {
-            chemistry_library.record_performance_counter(
-                "environmental_break_material_restore_cache_misses",
-                1,
-            );
+            chemistry_library
+                .record_performance_counter("environmental_break_material_restore_cache_misses", 1);
             let restore_started = chemistry_library
                 .performance_enabled()
                 .then(std::time::Instant::now);
@@ -708,15 +702,11 @@ pub(crate) fn accumulate_environmental(
         };
         let pair_key = (cell_index, material_index, unit_a, unit_b);
         if pair_candidates.contains_key(&pair_key) {
-            chemistry_library.record_performance_counter(
-                "environmental_break_pair_candidate_cache_hits",
-                1,
-            );
+            chemistry_library
+                .record_performance_counter("environmental_break_pair_candidate_cache_hits", 1);
         } else {
-            chemistry_library.record_performance_counter(
-                "environmental_break_pair_candidate_cache_misses",
-                1,
-            );
+            chemistry_library
+                .record_performance_counter("environmental_break_pair_candidate_cache_misses", 1);
             let candidate_generation_started = chemistry_library
                 .performance_enabled()
                 .then(std::time::Instant::now);
@@ -769,10 +759,7 @@ pub(crate) fn accumulate_environmental(
         let Some(candidate) = candidate else {
             continue;
         };
-        chemistry_library.record_performance_counter(
-            "environmental_break_endpoint_matches",
-            1,
-        );
+        chemistry_library.record_performance_counter("environmental_break_endpoint_matches", 1);
         let geometry_material_a = resource_a.name.as_str();
         let geometry_material_b = resource_b.name.as_str();
         let material_a = material_identity(&hypothetical.units[unit_a].material);
