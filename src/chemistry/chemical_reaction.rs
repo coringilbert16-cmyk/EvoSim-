@@ -606,11 +606,15 @@ pub(crate) fn accumulate_environmental(
         // units, IDs, and contact context into candidate resolution.
         let material_key = (cell_index, material_index);
         if restored_materials.contains_key(&material_key) {
-            chemistry_library
-                .record_performance_counter("environmental_break_material_restore_cache_hits", 1);
+            if chemistry_library.performance_enabled() {
+                chemistry_library
+                    .record_performance_counter("environmental_break_material_restore_cache_hits", 1);
+            }
         } else {
-            chemistry_library
-                .record_performance_counter("environmental_break_material_restore_cache_misses", 1);
+            if chemistry_library.performance_enabled() {
+                chemistry_library
+                    .record_performance_counter("environmental_break_material_restore_cache_misses", 1);
+            }
             let restore_started = chemistry_library
                 .performance_enabled()
                 .then(std::time::Instant::now);
@@ -702,11 +706,15 @@ pub(crate) fn accumulate_environmental(
         };
         let pair_key = (cell_index, material_index, unit_a, unit_b);
         if pair_candidates.contains_key(&pair_key) {
-            chemistry_library
-                .record_performance_counter("environmental_break_pair_candidate_cache_hits", 1);
+            if chemistry_library.performance_enabled() {
+                chemistry_library
+                    .record_performance_counter("environmental_break_pair_candidate_cache_hits", 1);
+            }
         } else {
-            chemistry_library
-                .record_performance_counter("environmental_break_pair_candidate_cache_misses", 1);
+            if chemistry_library.performance_enabled() {
+                chemistry_library
+                    .record_performance_counter("environmental_break_pair_candidate_cache_misses", 1);
+            }
             let candidate_generation_started = chemistry_library
                 .performance_enabled()
                 .then(std::time::Instant::now);
@@ -724,26 +732,25 @@ pub(crate) fn accumulate_environmental(
                     generated.len() as u64,
                 );
             }
-            chemistry_library.record_performance_counter(
-                "environmental_break_pair_candidates_generated",
-                generated.len() as u64,
-            );
+            if chemistry_library.performance_enabled() {
+                chemistry_library.record_performance_counter(
+                    "environmental_break_pair_candidates_generated",
+                    generated.len() as u64,
+                );
+            }
             pair_candidates.insert(pair_key, generated);
         }
         let endpoint_match_started = chemistry_library
             .performance_enabled()
             .then(std::time::Instant::now);
         let candidate_list = pair_candidates.get(&pair_key);
-        let candidate_count = candidate_list.map_or(0, Vec::len);
-        chemistry_library.record_performance_counter(
-            "environmental_break_endpoint_match_inspections",
-            candidate_count as u64,
-        );
+        let mut endpoint_inspections = 0_u64;
         let candidate = candidate_list
             .into_iter()
             .flatten()
             .copied()
             .find(|candidate| {
+                endpoint_inspections = endpoint_inspections.saturating_add(1);
                 (candidate.endpoint_a == connection.endpoint_a
                     && candidate.endpoint_b == connection.endpoint_b)
                     || (candidate.endpoint_a == connection.endpoint_b
@@ -753,13 +760,19 @@ pub(crate) fn accumulate_environmental(
             chemistry_library.record_performance_stage(
                 "environmental_break_endpoint_matching",
                 started,
-                candidate_count as u64,
+                endpoint_inspections,
+            );
+            chemistry_library.record_performance_counter(
+                "environmental_break_endpoint_match_inspections",
+                endpoint_inspections,
             );
         }
         let Some(candidate) = candidate else {
             continue;
         };
-        chemistry_library.record_performance_counter("environmental_break_endpoint_matches", 1);
+        if chemistry_library.performance_enabled() {
+            chemistry_library.record_performance_counter("environmental_break_endpoint_matches", 1);
+        }
         let geometry_material_a = resource_a.name.as_str();
         let geometry_material_b = resource_b.name.as_str();
         let material_a = material_identity(&hypothetical.units[unit_a].material);
