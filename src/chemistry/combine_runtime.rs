@@ -120,6 +120,17 @@ fn evaluate_candidate(
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Option<(FormationEvaluation, f64, f64, f64)> {
+    evaluate_candidate_with_reactant_energy(structure, ua, ub, candidate, catalog, None)
+}
+
+fn evaluate_candidate_with_reactant_energy(
+    structure: &crate::structure::OrganismStructure,
+    ua: usize,
+    ub: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    cached_reactant_structural_energy: Option<f64>,
+) -> Option<(FormationEvaluation, f64, f64, f64)> {
     if candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
@@ -156,7 +167,11 @@ fn evaluate_candidate(
         return None;
     }
     let transient_fluid_bond = transient_fluid_pair(structure, ua, ub, catalog)?;
-    let reactant_structural_energy = crate::energy_ledger::structural_potential(structure)?;
+    let reactant_structural_energy = match cached_reactant_structural_energy {
+        Some(value) if value.is_finite() => value,
+        Some(_) => return None,
+        None => crate::energy_ledger::structural_potential(structure)?,
+    };
     let product_structural_energy = if transient_fluid_bond {
         reactant_structural_energy
     } else {
@@ -182,6 +197,27 @@ pub(crate) fn selected_candidate_evaluation(
     catalog: &[BaseResource],
 ) -> Option<(FormationEvaluation, f64, f64, f64)> {
     evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
+}
+
+/// Candidate evaluation for a batch sharing the same unchanged reactant graph.
+/// The caller computes its structural potential once and still performs the
+/// complete candidate-specific geometry, chemistry, and energy evaluation.
+pub(crate) fn selected_candidate_evaluation_with_reactant_energy(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+    reactant_structural_energy: f64,
+) -> Option<(FormationEvaluation, f64, f64, f64)> {
+    evaluate_candidate_with_reactant_energy(
+        structure,
+        unit_a,
+        unit_b,
+        candidate,
+        catalog,
+        Some(reactant_structural_energy),
+    )
 }
 
 pub(crate) fn form_specific_bond(

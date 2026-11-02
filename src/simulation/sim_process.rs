@@ -12,7 +12,6 @@ use crate::observation::{
 };
 use crate::resource_visualization::appearance;
 use crate::runtime::RuntimeState;
-use crate::state::Simulation;
 
 const DEFAULT_TICKS_PER_SECOND: f64 = 10.0;
 const MIN_TICKS_PER_SECOND: f64 = 0.1;

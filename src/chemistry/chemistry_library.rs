@@ -10,6 +10,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 
@@ -234,11 +235,29 @@ pub struct ChemistryLibraryManifest {
     pub entries: u64,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct ChemistryStageTiming {
+    pub calls: u64,
+    pub total_micros: u64,
+    pub max_micros: u64,
+    pub max_tick: u64,
+    pub work_items: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ChemistryPerformanceSummary {
+    pub stages: std::collections::BTreeMap<&'static str, ChemistryStageTiming>,
+    pub counters: std::collections::BTreeMap<&'static str, u64>,
+}
+
 #[derive(Clone)]
 pub struct ChemistryLibrary {
     root: PathBuf,
     entries: HashMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
+    performance_tick: u64,
+    performance_enabled: bool,
+    performance: ChemistryPerformanceSummary,
 }
 
 impl ChemistryLibrary {
@@ -334,7 +353,112 @@ impl ChemistryLibrary {
             root,
             entries,
             manifest,
+            performance_tick: 0,
+            performance_enabled: false,
+            performance: ChemistryPerformanceSummary::default(),
         })
+    }
+
+    pub fn set_performance_tick(&mut self, tick: u64) {
+        self.performance_tick = tick;
+    }
+
+    /// Enable detailed timing only for explicit profiling/benchmark runs.
+    pub fn set_performance_enabled(&mut self, enabled: bool) {
+        self.performance_enabled = enabled;
+    }
+
+    pub fn performance_enabled(&self) -> bool {
+        self.performance_enabled
+    }
+
+    pub fn performance_summary(&self) -> &ChemistryPerformanceSummary {
+        &self.performance
+    }
+
+    pub fn record_performance_stage(
+        &mut self,
+        name: &'static str,
+        started: Instant,
+        work_items: u64,
+    ) {
+        if !self.performance_enabled {
+            return;
+        }
+        let elapsed = started.elapsed().as_micros().min(u64::MAX as u128) as u64;
+        let timing = self.performance.stages.entry(name).or_default();
+        timing.calls = timing.calls.saturating_add(1);
+        timing.total_micros = timing.total_micros.saturating_add(elapsed);
+        timing.work_items = timing.work_items.saturating_add(work_items);
+        if elapsed > timing.max_micros {
+            timing.max_micros = elapsed;
+            timing.max_tick = self.performance_tick;
+        }
+    }
+
+    pub fn record_performance_counter(&mut self, name: &'static str, amount: u64) {
+        if !self.performance_enabled {
+            return;
+        }
+        let counter = self.performance.counters.entry(name).or_default();
+        *counter = counter.saturating_add(amount);
+    }
+
+    pub fn key_from_live_geometry(
+        &mut self,
+        a: impl Into<String>,
+        b: impl Into<String>,
+        interface: &LiveGeometryInterface,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> ChemistryKey {
+        if !self.performance_enabled {
+            return ChemistryKey::from_live_geometry(
+                a,
+                b,
+                interface,
+                chemical_position_a,
+                chemical_position_b,
+            );
+        }
+        let started = Instant::now();
+        let key = ChemistryKey::from_live_geometry(
+            a,
+            b,
+            interface,
+            chemical_position_a,
+            chemical_position_b,
+        );
+        self.record_performance_stage("chemistry_key_construction", started, 1);
+        key
+    }
+
+    pub fn lookup(&mut self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
+        if !self.performance_enabled {
+            return self.entries.get(key);
+        }
+        let started = Instant::now();
+        let tick = self.performance_tick;
+        let entries = &self.entries;
+        let performance = &mut self.performance;
+        let record = entries.get(key);
+        let counter_name = if record.is_some() {
+            "cache_hits"
+        } else {
+            "cache_misses"
+        };
+        let counter = performance.counters.entry(counter_name).or_default();
+        *counter = counter.saturating_add(1);
+        let elapsed = started.elapsed().as_micros().min(u64::MAX as u128) as u64;
+        let timing = performance.stages.entry("chemistry_lookup").or_default();
+        timing.calls = timing.calls.saturating_add(1);
+        timing.total_micros = timing.total_micros.saturating_add(elapsed);
+        timing.work_items = timing.work_items.saturating_add(1);
+        if elapsed > timing.max_micros {
+            timing.max_micros = elapsed;
+            timing.max_tick = tick;
+        }
+        record
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
@@ -396,50 +520,82 @@ impl ChemistryLibrary {
         if !record.is_valid() {
             return Ok(false);
         }
+        let lock_wait_started = self.performance_enabled.then(Instant::now);
         let _lock = lock_chemistry_store(&self.root)?;
-        // Another instance may have changed the store since this instance opened.
-        // Refresh under the lock before duplicate detection or manifest counting.
-        let current = Self::open_unlocked(self.root.clone())?;
-        self.entries = current.entries;
-        self.manifest = current.manifest;
-
-        let key = record.key.clone();
-        if self.entries.contains_key(&key) {
-            return Ok(false);
+        if let Some(started) = lock_wait_started {
+            self.record_performance_stage("persistence_lock_wait", started, 1);
         }
-        let data_path = self.root.join("chemistry.jsonl");
-        let mut file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .append(true)
-            .open(&data_path)?;
-        let original_len = file.metadata()?.len();
-        let mut row = serde_json::to_vec(&record)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        row.push(b'\n');
+        let lock_hold_started = self.performance_enabled.then(Instant::now);
+        let result = (|| -> std::io::Result<bool> {
+            // Another instance may have changed the store since this instance opened.
+            // Refresh under the lock before duplicate detection or manifest counting.
+            let reload_started = self.performance_enabled.then(Instant::now);
+            let current_result = Self::open_unlocked(self.root.clone());
+            if let Some(started) = reload_started {
+                self.record_performance_stage("persistence_reload_read", started, 1);
+            }
+            let current = current_result?;
+            self.entries = current.entries;
+            self.manifest = current.manifest;
 
-        if let Err(write_error) = append_record(&mut file, &row) {
-            return Err(rollback_appended_record(
-                &mut file,
-                original_len,
-                write_error,
-            ));
+            let key = record.key.clone();
+            if self.entries.contains_key(&key) {
+                return Ok(false);
+            }
+            let data_path = self.root.join("chemistry.jsonl");
+            let mut file = OpenOptions::new()
+                .create(true)
+                .read(true)
+                .append(true)
+                .open(&data_path)?;
+            let original_len = file.metadata()?.len();
+            let serialization_started = self.performance_enabled.then(Instant::now);
+            let serialized = serde_json::to_vec(&record);
+            if let Some(started) = serialization_started {
+                self.record_performance_stage("persistence_serialization", started, 1);
+            }
+            let mut row =
+                serialized.map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            row.push(b'\n');
+
+            let append_started = self.performance_enabled.then(Instant::now);
+            let append_result = append_record(&mut file, &row);
+            if let Some(started) = append_started {
+                self.record_performance_stage("persistence_append_sync", started, 1);
+            }
+            if let Err(write_error) = append_result {
+                return Err(rollback_appended_record(
+                    &mut file,
+                    original_len,
+                    write_error,
+                ));
+            }
+
+            let mut next_manifest = self.manifest.clone();
+            next_manifest.entries = (self.entries.len() + 1) as u64;
+            let manifest_started = self.performance_enabled.then(Instant::now);
+            let manifest_result = persist_manifest(&self.root, &next_manifest);
+            if let Some(started) = manifest_started {
+                self.record_performance_stage("persistence_manifest_update", started, 1);
+            }
+            if let Err(manifest_error) = manifest_result {
+                return Err(rollback_appended_record(
+                    &mut file,
+                    original_len,
+                    manifest_error,
+                ));
+            }
+
+            // Publish the new in-memory state only after both persisted updates succeed.
+            self.entries.insert(key, record);
+            self.manifest = next_manifest;
+            self.record_performance_counter("cache_inserts", 1);
+            Ok(true)
+        })();
+        if let Some(started) = lock_hold_started {
+            self.record_performance_stage("persistence_lock_hold", started, 1);
         }
-
-        let mut next_manifest = self.manifest.clone();
-        next_manifest.entries = (self.entries.len() + 1) as u64;
-        if let Err(manifest_error) = persist_manifest(&self.root, &next_manifest) {
-            return Err(rollback_appended_record(
-                &mut file,
-                original_len,
-                manifest_error,
-            ));
-        }
-
-        // Publish the new in-memory state only after both persisted updates succeed.
-        self.entries.insert(key, record);
-        self.manifest = next_manifest;
-        Ok(true)
+        result
     }
 }
 

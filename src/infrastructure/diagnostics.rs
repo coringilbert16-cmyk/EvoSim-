@@ -595,6 +595,18 @@ struct EnvironmentalChemistryDiagnosticTotals {
     combine_scheduled: u64,
     combine_committed: u64,
     combine_rejected: u64,
+    transport_elapsed_micros_total: u64,
+    break_discovery_elapsed_micros_total: u64,
+    combine_discovery_elapsed_micros_total: u64,
+    reaction_settlement_elapsed_micros_total: u64,
+    transport_elapsed_micros_max: u64,
+    break_discovery_elapsed_micros_max: u64,
+    combine_discovery_elapsed_micros_max: u64,
+    combine_discovery_elapsed_micros_max_tick: u64,
+    combine_discovery_max_ready_candidates: usize,
+    combine_discovery_max_work_remaining: usize,
+    combine_discovery_max_accumulation_entries: usize,
+    reaction_settlement_elapsed_micros_max: u64,
 }
 
 impl EnvironmentalChemistryDiagnosticsRecorder {
@@ -619,7 +631,15 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
             "initial_material_inventory": environmental_material_inventory(simulation),
+            "world_dimensions": {
+                "width": simulation.environment.width,
+                "height": simulation.environment.height
+            },
             "pile_sizes": pile_sizes,
+            "pile_size": 20,
+            "piles_per_reactant_pair": 8,
+            "reactant_pair_groups": crate::environment_chemistry_experiment::CONTROLLED_REACTANT_PAIRS,
+            "pile_composition": "10 of each listed reactant, checkerboard arranged",
             "hotspot": simulation.hotspot,
             "diagnostic_interval": recorder.interval,
             "experiment_goal": "validate chemistry building blocks; no organism emergence criterion"
@@ -670,6 +690,47 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .combine_rejected
             .saturating_add(diagnostics.combine_rejected as u64);
+        self.totals.transport_elapsed_micros_total = self
+            .totals
+            .transport_elapsed_micros_total
+            .saturating_add(diagnostics.transport_elapsed_micros);
+        self.totals.break_discovery_elapsed_micros_total = self
+            .totals
+            .break_discovery_elapsed_micros_total
+            .saturating_add(diagnostics.break_discovery_elapsed_micros);
+        self.totals.combine_discovery_elapsed_micros_total = self
+            .totals
+            .combine_discovery_elapsed_micros_total
+            .saturating_add(diagnostics.combine_discovery_elapsed_micros);
+        self.totals.reaction_settlement_elapsed_micros_total = self
+            .totals
+            .reaction_settlement_elapsed_micros_total
+            .saturating_add(diagnostics.reaction_settlement_elapsed_micros);
+        self.totals.transport_elapsed_micros_max = self
+            .totals
+            .transport_elapsed_micros_max
+            .max(diagnostics.transport_elapsed_micros);
+        self.totals.break_discovery_elapsed_micros_max = self
+            .totals
+            .break_discovery_elapsed_micros_max
+            .max(diagnostics.break_discovery_elapsed_micros);
+        if diagnostics.combine_discovery_elapsed_micros
+            > self.totals.combine_discovery_elapsed_micros_max
+        {
+            self.totals.combine_discovery_elapsed_micros_max =
+                diagnostics.combine_discovery_elapsed_micros;
+            self.totals.combine_discovery_elapsed_micros_max_tick = diagnostics.tick;
+            self.totals.combine_discovery_max_ready_candidates =
+                diagnostics.combine_ready_candidates;
+            self.totals.combine_discovery_max_work_remaining =
+                diagnostics.combine_discovery_work_remaining;
+            self.totals.combine_discovery_max_accumulation_entries =
+                diagnostics.accumulation_entries;
+        }
+        self.totals.reaction_settlement_elapsed_micros_max = self
+            .totals
+            .reaction_settlement_elapsed_micros_max
+            .max(diagnostics.reaction_settlement_elapsed_micros);
 
         if diagnostics.break_ready_candidates > 0
             || diagnostics.break_scheduled > 0
@@ -709,6 +770,30 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "combine_scheduled": self.totals.combine_scheduled,
             "combine_committed": self.totals.combine_committed,
             "combine_rejected": self.totals.combine_rejected,
+            "phase_timing_microseconds": {
+                "average_per_tick": {
+                    "transport": self.totals.transport_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "break_discovery": self.totals.break_discovery_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1),
+                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_total
+                        / self.totals.ticks_observed.max(1)
+                },
+                "max_per_tick": {
+                    "transport": self.totals.transport_elapsed_micros_max,
+                    "break_discovery": self.totals.break_discovery_elapsed_micros_max,
+                    "combine_discovery": self.totals.combine_discovery_elapsed_micros_max,
+                    "reaction_settlement": self.totals.reaction_settlement_elapsed_micros_max
+                },
+                "combine_discovery_max_context": {
+                    "tick": self.totals.combine_discovery_elapsed_micros_max_tick,
+                    "ready_candidates": self.totals.combine_discovery_max_ready_candidates,
+                    "work_remaining": self.totals.combine_discovery_max_work_remaining,
+                    "accumulation_entries": self.totals.combine_discovery_max_accumulation_entries
+                }
+            },
             "final_material_inventory": environmental_material_inventory(simulation),
             "final_physical_material_count": physical_material_count(simulation),
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()

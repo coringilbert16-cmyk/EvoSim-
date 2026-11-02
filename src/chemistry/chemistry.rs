@@ -224,11 +224,9 @@ pub fn chemical_break_surplus(activation_signal: f64, disruption_cost: f64) -> O
 /// This comparison does not credit energy; the physical transaction separately
 /// accounts for stored bond energy, usable energy, and any resonance withdrawal.
 pub fn can_chemical_break(activation_signal: f64, disruption_cost: f64) -> bool {
-    activation_signal.is_finite()
-        && disruption_cost.is_finite()
-        && activation_signal > 0.0
-        && disruption_cost >= 0.0
-        && activation_signal >= disruption_cost
+    chemical_break_surplus(activation_signal, disruption_cost).is_some_and(|surplus| {
+        activation_signal > 0.0 && (surplus > 0.0 || activation_signal == disruption_cost)
+    })
 }
 
 /// Whether accumulated interaction has reached the calculated activation

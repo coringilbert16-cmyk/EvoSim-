@@ -5,9 +5,12 @@ on:
   push:
     branches:
       - main
+      - horizontal-wrap-vertical-walls
     paths:
       - "src/chemistry/**"
       - "src/simulation/**"
+      - "src/geometry/**"
+      - "src/materials/**"
       - "src/infrastructure/diagnostics.rs"
       - ".github/workflows/environment-chemistry-experiment.yml"
 
@@ -16,7 +19,7 @@ permissions:
 
 jobs:
   environmental-chemistry:
-    name: 24,000-tick organism-free chemistry experiment
+    name: 3-minute organism-free chemistry experiment
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -34,7 +37,7 @@ jobs:
           cargo run --release -- --headless \
             --environment-chemistry-experiment \
             --seed 42 \
-            --ticks 24000 \
+            --duration-seconds 180 \
             --diagnostic-interval 100 \
             --diagnostics /tmp/environment-chemistry-diagnostics.jsonl
 

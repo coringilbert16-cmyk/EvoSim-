@@ -1208,6 +1208,13 @@ impl MultiContactFluidBoundary {
             .count()
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as a diagnostic query for exact multi-contact fluid boundaries"
+        )
+    )]
     pub fn free_arc_count(&self) -> usize {
         self.pieces
             .iter()
@@ -1272,11 +1279,32 @@ impl CapillaryContactFamily {
     }
 
     /// Half-width of the symmetric contact interval.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as an exact capillary-family geometry query"
+        )
+    )]
     pub fn half_contact_length(&self) -> f64 {
         self.contact_length * 0.5
     }
 
     /// The curvature magnitude kappa = 1/R for the circular free interface.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained for downstream capillary pressure and curvature calculations"
+        )
+    )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained for downstream capillary pressure and curvature calculations"
+        )
+    )]
     pub fn curvature(&self) -> f64 {
         1.0 / self.curvature_radius
     }
@@ -1287,6 +1315,20 @@ impl CapillaryContactFamily {
     ///
     /// Surface tension is intentionally supplied by the caller because it is
     /// an interfacial property, not a universal property of a resource alone.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained for downstream surface-tension pressure calculations"
+        )
+    )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained for downstream surface-tension pressure calculations"
+        )
+    )]
     pub fn pressure_jump(&self, surface_tension: f64) -> Option<f64> {
         if !surface_tension.is_finite() || surface_tension < 0.0 {
             return None;
@@ -1328,6 +1370,13 @@ impl ContactTranslationInterval {
         })
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the normalized extent query for contact translation intervals"
+        )
+    )]
     pub fn length(&self) -> f64 {
         (self.edge_end_parameter - self.edge_start_parameter).max(0.0)
     }
