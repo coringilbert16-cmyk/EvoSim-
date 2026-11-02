@@ -964,18 +964,21 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let break_settlement_started = Instant::now();
+            let break_settlement_started =
+                self.chemistry_library.performance_enabled().then(Instant::now);
             let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
             );
-            self.chemistry_library.record_performance_stage(
-                "environmental_break_transaction_settlement",
-                break_settlement_started,
-                1,
-            );
+            if let Some(started) = break_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "environmental_break_transaction_settlement",
+                    started,
+                    1,
+                );
+            }
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
                 self.environmental_chemistry_diagnostics
@@ -1026,7 +1029,8 @@ impl Simulation {
         // progress if a source snapshot became stale before commit.
         let mut environmental_combine_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
-        let combine_schedule_started = Instant::now();
+        let combine_schedule_started =
+            self.chemistry_library.performance_enabled().then(Instant::now);
         let environmental_combine_operations =
             crate::environmental_combine::schedule_environmental_operations(
                 environmental_combine_operations,
@@ -1034,11 +1038,13 @@ impl Simulation {
                 &mut environmental_combine_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
-        self.chemistry_library.record_performance_stage(
-            "environmental_combine_scheduling",
-            combine_schedule_started,
-            environmental_combine_operations.len() as u64,
-        );
+        if let Some(started) = combine_schedule_started {
+            self.chemistry_library.record_performance_stage(
+                "environmental_combine_scheduling",
+                started,
+                environmental_combine_operations.len() as u64,
+            );
+        }
         self.environmental_chemistry_diagnostics.combine_scheduled =
             environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
@@ -1054,7 +1060,8 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
-            let combine_settlement_started = Instant::now();
+            let combine_settlement_started =
+                self.chemistry_library.performance_enabled().then(Instant::now);
             let committed =
                 crate::environmental_combine::resolve_environmental_preserving_accumulation(
                     operation,
@@ -1062,11 +1069,13 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
-            self.chemistry_library.record_performance_stage(
-                "environmental_combine_transaction_settlement",
-                combine_settlement_started,
-                1,
-            );
+            if let Some(started) = combine_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "environmental_combine_transaction_settlement",
+                    started,
+                    1,
+                );
+            }
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
                 self.environmental_chemistry_diagnostics
