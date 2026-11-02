@@ -390,29 +390,11 @@ fn chemical_step(
     let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
-    let interface_resolution_started = chemistry_library.performance_enabled().then(Instant::now);
-    let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
-        material_name_a,
-        &structure.units[selected.unit_a],
-        material_name_b,
-        &structure.units[selected.unit_b],
-        selected.candidate,
-        &environment.catalog,
-    );
-    if let Some(started) = interface_resolution_started {
-        chemistry_library.record_performance_stage(
-            "environmental_combine_interface_resolution",
-            started,
-            1,
-        );
-    }
-    let Some(interface) = resolved_interface else {
-        reject_step!();
-    };
-    let cache_key = chemistry_library.key_from_live_geometry(
+    // Static potential is invariant across geometry variants of this
+    // canonical chemical pair. Look it up before resolving live interface data.
+    let cache_key = chemistry_library.key_from_chemical_pair(
         material_name_a,
         material_name_b,
-        &interface,
         position_a,
         position_b,
     );
@@ -443,6 +425,26 @@ fn chemical_step(
                 Ok(None) | Err(_) => calculated,
             }
         }
+    };
+    // Geometry/contact remains a live, authoritative check on every candidate.
+    let interface_resolution_started = chemistry_library.performance_enabled().then(Instant::now);
+    let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
+        material_name_a,
+        &structure.units[selected.unit_a],
+        material_name_b,
+        &structure.units[selected.unit_b],
+        selected.candidate,
+        &environment.catalog,
+    );
+    if let Some(started) = interface_resolution_started {
+        chemistry_library.record_performance_stage(
+            "environmental_combine_interface_resolution",
+            started,
+            1,
+        );
+    }
+    let Some(_interface) = resolved_interface else {
+        reject_step!();
     };
     let Some(contact) = crate::chemistry::contact_factor(
         selected.candidate.distance,
