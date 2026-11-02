@@ -268,18 +268,15 @@ pub(crate) fn accumulate(
         };
 
         let pair_key = (unit_a, unit_b);
-        if !pair_candidates.contains_key(&pair_key) {
-            pair_candidates.insert(
-                pair_key,
-                crate::contact::connection_pair_candidates_cached(
-                    &organism.structure,
-                    unit_a,
-                    unit_b,
-                    catalog,
-                    &mut cache,
-                ),
-            );
-        }
+        pair_candidates.entry(pair_key).or_insert_with(|| {
+            crate::contact::connection_pair_candidates_cached(
+                &organism.structure,
+                unit_a,
+                unit_b,
+                catalog,
+                &mut cache,
+            )
+        });
         let candidate = pair_candidates
             .get(&pair_key)
             .into_iter()
@@ -592,7 +589,9 @@ pub(crate) fn accumulate_environmental(
         // valid geometry owner for a world-owned bond: it can carry unrelated
         // units, IDs, and contact context into candidate resolution.
         let material_key = (cell_index, material_index);
-        if !restored_materials.contains_key(&material_key) {
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            restored_materials.entry(material_key)
+        {
             let mut hypothetical = crate::structure::OrganismStructure::new();
             let Some(restored_indices) = crate::material_restoration::restore_material(
                 &mut hypothetical,
@@ -606,7 +605,7 @@ pub(crate) fn accumulate_environmental(
             ) else {
                 continue;
             };
-            restored_materials.insert(material_key, (hypothetical, restored_indices));
+            entry.insert((hypothetical, restored_indices));
         }
         let Some((hypothetical, restored_indices)) = restored_materials.get(&material_key) else {
             continue;
@@ -670,18 +669,15 @@ pub(crate) fn accumulate_environmental(
             continue;
         };
         let pair_key = (cell_index, material_index, unit_a, unit_b);
-        if !pair_candidates.contains_key(&pair_key) {
-            pair_candidates.insert(
-                pair_key,
-                crate::contact::connection_pair_candidates_cached(
-                    hypothetical,
-                    unit_a,
-                    unit_b,
-                    &environment.catalog,
-                    &mut compatibility_cache,
-                ),
-            );
-        }
+        pair_candidates.entry(pair_key).or_insert_with(|| {
+            crate::contact::connection_pair_candidates_cached(
+                hypothetical,
+                unit_a,
+                unit_b,
+                &environment.catalog,
+                &mut compatibility_cache,
+            )
+        });
         let Some(candidate) = pair_candidates
             .get(&pair_key)
             .into_iter()
