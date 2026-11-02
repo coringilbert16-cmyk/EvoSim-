@@ -1,4 +1,5 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
+#[cfg(test)]
 use crate::geometry_reference_library::LiveGeometryInterface;
 #[cfg(test)]
 use crate::geometry_reference_library::{
@@ -135,6 +136,7 @@ impl ChemistryKey {
         )
     }
 
+    #[cfg(test)]
     pub fn from_live_geometry(
         a: impl Into<String>,
         b: impl Into<String>,
@@ -468,35 +470,6 @@ impl ChemistryLibrary {
         }
         let counter = self.performance.counters.entry(name).or_default();
         *counter = counter.saturating_add(amount);
-    }
-
-    pub fn key_from_live_geometry(
-        &mut self,
-        a: impl Into<String>,
-        b: impl Into<String>,
-        interface: &LiveGeometryInterface,
-        chemical_position_a: f64,
-        chemical_position_b: f64,
-    ) -> ChemistryKey {
-        if !self.performance_enabled {
-            return ChemistryKey::from_live_geometry(
-                a,
-                b,
-                interface,
-                chemical_position_a,
-                chemical_position_b,
-            );
-        }
-        let started = Instant::now();
-        let key = ChemistryKey::from_live_geometry(
-            a,
-            b,
-            interface,
-            chemical_position_a,
-            chemical_position_b,
-        );
-        self.record_performance_stage("chemistry_key_construction", started, 1);
-        key
     }
 
     pub fn key_from_chemical_pair(
@@ -1360,8 +1333,9 @@ mod tests {
                 schema_version,
                 material_a: "Carbon".into(),
                 material_b: "Hydrogen".into(),
-                interface_class: "rigid_edge".into(),
-                interface_signature: signature.into(),
+                interface_class: Some("rigid_edge".into()),
+                interface_signature: Some(signature.into()),
+                equation_fingerprint: String::new(),
                 chemical_position_a: None,
                 chemical_position_b: None,
             },
