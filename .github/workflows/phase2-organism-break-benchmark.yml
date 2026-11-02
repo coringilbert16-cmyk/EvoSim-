@@ -1,0 +1,78 @@
+name: Phase 2 - Organism BREAK benchmark
+
+on:
+  push:
+    branches:
+      - phase2-organism-break-benchmark
+
+permissions:
+  contents: read
+
+jobs:
+  matched-organism-break-runs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout profiled source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: profiled
+
+      - name: Checkout unprofiled source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: unprofiled
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build profiled binary
+        working-directory: profiled
+        run: cargo build --release --locked
+
+      - name: Build unprofiled binary
+        working-directory: unprofiled
+        run: cargo build --release --locked
+
+      - name: Run profiled organism benchmark
+        working-directory: profiled
+        env:
+          HOME: ${{ runner.temp }}/profiled-home
+          CARGO_TERM_COLOR: never
+        run: |
+          mkdir -p "$HOME"
+          set -o pipefail
+          /usr/bin/time -f 'wall_seconds=%e max_rss_kb=%M' -o benchmark-time.txt \
+            cargo run --release -- --headless --profile-chemistry --seed 42 --ticks 10000 --births 18446744073709551615 \
+            2>&1 | tee benchmark-profiled.log
+          echo "PROFILED WALL TIME:"
+          cat benchmark-time.txt
+
+      - name: Run unprofiled organism benchmark
+        working-directory: unprofiled
+        env:
+          HOME: ${{ runner.temp }}/unprofiled-home
+          CARGO_TERM_COLOR: never
+        run: |
+          mkdir -p "$HOME"
+          set -o pipefail
+          /usr/bin/time -f 'wall_seconds=%e max_rss_kb=%M' -o benchmark-time.txt \
+            cargo run --release -- --headless --seed 42 --ticks 10000 --births 18446744073709551615 \
+            2>&1 | tee benchmark-unprofiled.log
+          echo "UNPROFILED WALL TIME:"
+          cat benchmark-time.txt
+
+      - name: Retain benchmark logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-organism-break-benchmark
+          path: |
+            profiled/benchmark-profiled.log
+            profiled/benchmark-time.txt
+            unprofiled/benchmark-unprofiled.log
+            unprofiled/benchmark-time.txt
+          if-no-files-found: warn
+          retention-days: 14
