@@ -30,7 +30,10 @@ impl Default for OrganismViabilityRequirements {
 /// than by a predefined set of constituents.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the single-genome viability validation API")
+    expect(
+        dead_code,
+        reason = "Retained as the single-genome viability validation API"
+    )
 )]
 pub fn validate_realized_organism(
     structure: &OrganismStructure,
