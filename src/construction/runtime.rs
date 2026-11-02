@@ -2097,7 +2097,7 @@ fn construct_blueprint_bond_driven_internal(
     // every required bond has committed, consume the exact stored entries that
     // supplied the realized structure. Validate the complete reservation set
     // before mutating storage so a failed construction cannot partially spend it.
-    if let Some(storage) = available_materials.as_deref_mut() {
+    if let Some(storage) = available_materials {
         reserved_storage_indices.sort_unstable();
         reserved_storage_indices.dedup();
         if reserved_storage_indices
