@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - horizontal-wrap-vertical-walls
+      - experiment-break-baseline
+      - experiment-break-candidate
     paths:
       - "src/chemistry/**"
       - "src/simulation/**"
@@ -13,6 +15,10 @@ on:
       - "src/materials/**"
       - "src/infrastructure/diagnostics.rs"
       - ".github/workflows/environment-chemistry-experiment.yml"
+
+concurrency:
+  group: environmental-chemistry-benchmark
+  cancel-in-progress: false
 
 permissions:
   contents: read
