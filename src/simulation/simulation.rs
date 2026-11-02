@@ -1379,9 +1379,7 @@ impl Simulation {
                         .organism_environmental_break_selection_elapsed_micros = self
                         .environmental_chemistry_diagnostics
                         .organism_environmental_break_selection_elapsed_micros
-                        .saturating_add(
-                            started.elapsed().as_micros().min(u64::MAX as u128) as u64,
-                        );
+                        .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
                 }
                 self.environmental_chemistry_diagnostics
                     .organism_environmental_break_candidates = self
