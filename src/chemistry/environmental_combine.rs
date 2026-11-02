@@ -3585,8 +3585,14 @@ mod tests {
             !interface.signature.is_empty(),
             "live geometry identity must still resolve independently of the static-potential cache"
         );
-        assert_eq!(chemistry_key.material_a, selected_name.min(external_name).to_string());
-        assert_eq!(chemistry_key.material_b, selected_name.max(external_name).to_string());
+        assert_eq!(
+            chemistry_key.material_a,
+            selected_name.min(external_name).to_string()
+        );
+        assert_eq!(
+            chemistry_key.material_b,
+            selected_name.max(external_name).to_string()
+        );
         let (expected_position_a, expected_position_b) = if selected_name <= external_name {
             (selected_position, external_position)
         } else {
