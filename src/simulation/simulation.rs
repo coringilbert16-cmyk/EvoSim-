@@ -964,8 +964,10 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let break_settlement_started =
-                self.chemistry_library.performance_enabled().then(Instant::now);
+            let break_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
@@ -1029,8 +1031,10 @@ impl Simulation {
         // progress if a source snapshot became stale before commit.
         let mut environmental_combine_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
-        let combine_schedule_started =
-            self.chemistry_library.performance_enabled().then(Instant::now);
+        let combine_schedule_started = self
+            .chemistry_library
+            .performance_enabled()
+            .then(Instant::now);
         let environmental_combine_operations =
             crate::environmental_combine::schedule_environmental_operations(
                 environmental_combine_operations,
@@ -1060,8 +1064,10 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
-            let combine_settlement_started =
-                self.chemistry_library.performance_enabled().then(Instant::now);
+            let combine_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let committed =
                 crate::environmental_combine::resolve_environmental_preserving_accumulation(
                     operation,
