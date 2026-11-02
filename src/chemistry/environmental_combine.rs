@@ -3572,16 +3572,27 @@ mod tests {
         let external_position =
             constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
                 .expect("external constituent must retain its chemical position");
-        let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+        let chemistry_key = crate::chemistry_library::ChemistryKey::from_chemical_pair(
             selected_name,
             external_name,
-            &interface,
             selected_position,
             external_position,
         );
         let cached = chemistry_library
-            .get(&chemistry_key)
-            .expect("chemical step must key its record by the exact constituent interface");
+            .lookup(&chemistry_key)
+            .expect("chemical step must cache the exact contacting constituent pair");
+        assert!(
+            !interface.signature.is_empty(),
+            "live geometry identity must still resolve independently of the static-potential cache"
+        );
+        assert_eq!(chemistry_key.material_a, selected_name.min(external_name).to_string());
+        assert_eq!(chemistry_key.material_b, selected_name.max(external_name).to_string());
+        assert_eq!(
+            chemistry_key.chemical_position_a,
+            Some((selected_position.min(external_position) * 1_000_000_000.0).round() as i64)
+                .filter(|_| selected_name <= external_name)
+                .or_else(|| Some((external_position * 1_000_000_000.0).round() as i64))
+        );
         let expected_potential = crate::chemistry::interaction_potential(
             selected_position,
             external_position,
