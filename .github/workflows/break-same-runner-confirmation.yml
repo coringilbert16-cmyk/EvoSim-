@@ -9,10 +9,10 @@ on:
         type: string
         default: "b3aa3ed95e94a31867c1bb8b9b54a55bd6896737"
       candidate_sha:
-        description: "PR #261 candidate commit"
+        description: "BREAK optimization plus profiling candidate commit"
         required: true
         type: string
-        default: "380c323b9846e5234f1589f64ae8d24fe846582c"
+        default: "218808e9f3b7e5442536e3f27e8ce6fe5a39d575"
   push:
     branches:
       - break-same-runner-confirmation
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 45
     env:
       BASELINE_SHA: ${{ inputs.baseline_sha || 'b3aa3ed95e94a31867c1bb8b9b54a55bd6896737' }}
-      CANDIDATE_SHA: ${{ inputs.candidate_sha || '380c323b9846e5234f1589f64ae8d24fe846582c' }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
     steps:
       - name: Check out baseline source
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
       - name: Check out candidate source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.candidate_sha || '380c323b9846e5234f1589f64ae8d24fe846582c' }}
+          ref: ${{ inputs.candidate_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
           path: candidate
           persist-credentials: false
 
