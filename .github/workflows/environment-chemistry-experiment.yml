@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - horizontal-wrap-vertical-walls
+      - experiment-cache-baseline
+      - experiment-cache-candidate
     paths:
       - "src/chemistry/**"
       - "src/simulation/**"
