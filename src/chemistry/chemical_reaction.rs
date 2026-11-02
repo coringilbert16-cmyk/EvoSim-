@@ -2650,10 +2650,10 @@ mod material_identity_tests {
         );
         assert_eq!(key.material_a, "Carbon");
         assert_eq!(key.material_b, "Hydrogen");
-        assert_eq!(key.interface_class, "rigid_point");
+        assert_eq!(key.interface_class.as_deref(), Some("rigid_point"));
         assert_eq!(
-            key.interface_signature,
-            "live-v1|Carbon:corner:0|Hydrogen:line:0"
+            key.interface_signature.as_deref(),
+            Some("live-v1|Carbon:corner:0|Hydrogen:line:0")
         );
     }
 }
