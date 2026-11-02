@@ -2631,12 +2631,24 @@ impl GeometryLibrary {
         self.entries.len()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the geometry-library membership query"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
+    )]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the canonical formation lookup API"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the canonical formation lookup API"
+        )
+    )]
     pub fn get(&self, signature: &str) -> Option<&GeometryFormation> {
         self.entries.get(signature)
     }
@@ -2649,7 +2661,13 @@ impl GeometryLibrary {
         &self.frontier
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the persisted rigid-contact family iterator"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the persisted rigid-contact family iterator"
+        )
+    )]
     pub fn contact_families(&self) -> impl Iterator<Item = &GeometryContactFamily> {
         self.contact_families.values()
     }
@@ -2673,24 +2691,48 @@ impl GeometryLibrary {
         })
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the persisted fluid-boundary family iterator"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the persisted fluid-boundary family iterator"
+        )
+    )]
     pub fn fluid_boundary_families(&self) -> impl Iterator<Item = &GeometryFluidBoundaryFamily> {
         self.fluid_boundary_families.values()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the persisted rigid-edge family iterator"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the persisted rigid-edge family iterator"
+        )
+    )]
     pub fn rigid_contact_families(&self) -> impl Iterator<Item = &GeometryRigidContactFamily> {
         self.rigid_contact_families.values()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the persisted rigid-point family iterator"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the persisted rigid-point family iterator"
+        )
+    )]
     pub fn rigid_point_contact_families(
         &self,
     ) -> impl Iterator<Item = &GeometryRigidPointContactFamily> {
         self.rigid_point_contact_families.values()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the persisted rigid-vertex family iterator"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the persisted rigid-vertex family iterator"
+        )
+    )]
     pub fn rigid_vertex_contact_families(
         &self,
     ) -> impl Iterator<Item = &GeometryRigidVertexContactFamily> {
@@ -2701,7 +2743,13 @@ impl GeometryLibrary {
     /// generating formations or sampling orientations. Multiple formation
     /// records that describe the same local interface collapse to one
     /// canonical projection; genuinely different projections remain ambiguous.
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the canonical persistent-interface projection API"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the canonical persistent-interface projection API"
+        )
+    )]
     pub fn persistent_interface_projection(
         &self,
         interface: &LiveGeometryInterface,
@@ -2840,7 +2888,13 @@ impl GeometryLibrary {
         suggestions.into_values().collect()
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the indexed persistent-family resolver"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the indexed persistent-family resolver"
+        )
+    )]
     pub fn resolve_persistent_interface(
         &self,
         interface: &LiveGeometryInterface,
@@ -2852,7 +2906,13 @@ impl GeometryLibrary {
         }
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the indexed projection stage of persistent-family resolution"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the indexed projection stage of persistent-family resolution"
+        )
+    )]
     fn indexed_interface_projections(
         &self,
         interface: &LiveGeometryInterface,
@@ -3254,7 +3314,13 @@ impl GeometryLibrary {
         Ok(added)
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the legacy fluid-formation persistence API"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the legacy fluid-formation persistence API"
+        )
+    )]
     pub fn insert_fluid_formations(
         &mut self,
         formations: Vec<GeometryFluidFormation>,
@@ -3346,7 +3412,13 @@ impl GeometryLibrary {
         Ok(added)
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the single-record contact-family persistence API"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the single-record contact-family persistence API"
+        )
+    )]
     pub fn insert_contact_family(
         &mut self,
         family: GeometryContactFamily,
@@ -3414,7 +3486,13 @@ impl GeometryLibrary {
         Ok(added)
     }
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "Retained as the single-frontier state update API"))]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the single-frontier state update API"
+        )
+    )]
     pub fn set_frontier_state(
         &mut self,
         formation_signature: impl Into<String>,
