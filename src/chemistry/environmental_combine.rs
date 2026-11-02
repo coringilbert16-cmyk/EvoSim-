@@ -2130,7 +2130,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);
