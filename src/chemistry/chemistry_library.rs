@@ -78,8 +78,17 @@ pub struct ChemistryKey {
     pub schema_version: u32,
     pub material_a: String,
     pub material_b: String,
-    pub interface_class: String,
-    pub interface_signature: String,
+    /// Present only for legacy geometry-scoped records. Static-potential keys omit
+    /// interface identity so equivalent chemical pairs share one cache entry.
+    #[serde(default)]
+    pub interface_class: Option<String>,
+    #[serde(default)]
+    pub interface_signature: Option<String>,
+    /// Equation and catalog identity is part of every new static-potential key.
+    /// Empty is accepted only for legacy geometry-scoped records written before
+    /// the key split; the manifest still validates their equation fingerprint.
+    #[serde(default)]
+    pub equation_fingerprint: String,
     /// Quantized chemical positions used by the static-potential equation.
     /// They belong in the cache key so a catalog position change cannot reuse
     /// a potential calculated from the previous chemistry spectrum.
@@ -105,22 +114,24 @@ impl ChemistryKey {
             schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
             material_a,
             material_b,
-            interface_class: class.into(),
-            interface_signature: interface.into(),
+            interface_class: Some(class.into()),
+            interface_signature: Some(interface.into()),
             chemical_position_a: None,
             chemical_position_b: None,
+            equation_fingerprint: current_chemistry_equation_fingerprint(),
         }
     }
     pub fn signature(&self) -> String {
         format!(
-            "v{}|{}|{}|{}|{}|chemical_positions={:?},{:?}",
+            "v{}|{}|{}|interface={:?}|{:?}|chemical_positions={:?},{:?}|equations={}",
             self.schema_version,
             self.material_a,
             self.material_b,
             self.interface_class,
             self.interface_signature,
             self.chemical_position_a,
-            self.chemical_position_b
+            self.chemical_position_b,
+            self.equation_fingerprint
         )
     }
 
@@ -147,6 +158,22 @@ impl ChemistryKey {
         );
         key.chemical_position_a = Some(quantize_chemical_position(position_a));
         key.chemical_position_b = Some(quantize_chemical_position(position_b));
+        key
+    }
+
+    /// Key the invariant static potential by chemical identity only. Live
+    /// geometry and interface eligibility are deliberately not part of this key.
+    pub fn from_chemical_pair(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> Self {
+        let mut key = Self::new(a, b, "", "");
+        key.interface_class = None;
+        key.interface_signature = None;
+        key.chemical_position_a = Some(quantize_chemical_position(chemical_position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(chemical_position_b));
         key
     }
 
@@ -207,12 +234,23 @@ impl ChemistryRecord {
         self.key.schema_version == CHEMISTRY_LIBRARY_SCHEMA_VERSION
             && !self.key.material_a.is_empty()
             && !self.key.material_b.is_empty()
-            && !self.key.interface_class.is_empty()
-            && !self.key.interface_signature.is_empty()
-            // Live chemistry keys carry both positions; geometry-only library
-            // keys carry neither. A half-populated key is never a valid identity.
+            && match (&self.key.interface_class, &self.key.interface_signature) {
+                (Some(class), Some(signature)) => !class.is_empty() && !signature.is_empty(),
+                (None, None) => true,
+                _ => false,
+            }
+            // Live chemistry keys carry both positions; geometry-only legacy
+            // records may carry neither. A half-populated key is never valid.
             && (self.key.chemical_position_a.is_some()
                 == self.key.chemical_position_b.is_some())
+            // New geometry-independent keys must bind the exact equation and
+            // catalog fingerprint. Legacy geometry keys are accepted only when
+            // their geometry identity is present and the manifest validates them.
+            && if self.key.equation_fingerprint.is_empty() {
+                self.key.interface_class.is_some()
+            } else {
+                self.key.equation_fingerprint == current_chemistry_equation_fingerprint()
+            }
             && match (
                 self.key.chemical_position_a,
                 self.key.chemical_position_b,
@@ -433,6 +471,32 @@ impl ChemistryLibrary {
         key
     }
 
+    pub fn key_from_chemical_pair(
+        &mut self,
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> ChemistryKey {
+        if !self.performance_enabled {
+            return ChemistryKey::from_chemical_pair(
+                a,
+                b,
+                chemical_position_a,
+                chemical_position_b,
+            );
+        }
+        let started = Instant::now();
+        let key = ChemistryKey::from_chemical_pair(
+            a,
+            b,
+            chemical_position_a,
+            chemical_position_b,
+        );
+        self.record_performance_stage("static_potential_key_construction", started, 1);
+        key
+    }
+
     pub fn lookup(&mut self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
         if !self.performance_enabled {
             return self.entries.get(key);
@@ -443,9 +507,9 @@ impl ChemistryLibrary {
         let performance = &mut self.performance;
         let record = entries.get(key);
         let counter_name = if record.is_some() {
-            "cache_hits"
+            "static_potential_cache_hits"
         } else {
-            "cache_misses"
+            "static_potential_cache_misses"
         };
         let counter = performance.counters.entry(counter_name).or_default();
         *counter = counter.saturating_add(1);
@@ -589,7 +653,7 @@ impl ChemistryLibrary {
             // Publish the new in-memory state only after both persisted updates succeed.
             self.entries.insert(key, record);
             self.manifest = next_manifest;
-            self.record_performance_counter("cache_inserts", 1);
+            self.record_performance_counter("static_potential_cache_inserts", 1);
             Ok(true)
         })();
         if let Some(started) = lock_hold_started {
@@ -696,8 +760,8 @@ mod tests {
             crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
         );
         let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
-        assert_eq!(key.interface_class, "rigid_point");
-        assert_eq!(key.interface_signature, interface.signature);
+        assert_eq!(key.interface_class.as_deref(), Some("rigid_point"));
+        assert_eq!(key.interface_signature.as_deref(), Some(interface.signature.as_str()));
         assert_eq!(key.chemical_position_a, Some(10_500_000_000));
         assert_eq!(key.chemical_position_b, Some(5_500_000_000));
     }
