@@ -169,12 +169,40 @@ impl ChemistryKey {
         chemical_position_a: f64,
         chemical_position_b: f64,
     ) -> Self {
-        let mut key = Self::new(a, b, "", "");
-        key.interface_class = None;
-        key.interface_signature = None;
-        key.chemical_position_a = Some(quantize_chemical_position(chemical_position_a));
-        key.chemical_position_b = Some(quantize_chemical_position(chemical_position_b));
-        key
+        Self::from_chemical_pair_with_fingerprint(
+            a,
+            b,
+            chemical_position_a,
+            chemical_position_b,
+            current_chemistry_equation_fingerprint(),
+        )
+    }
+
+    fn from_chemical_pair_with_fingerprint(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+        equation_fingerprint: String,
+    ) -> Self {
+        let mut material_a = a.into();
+        let mut material_b = b.into();
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            std::mem::swap(&mut material_a, &mut material_b);
+            (chemical_position_b, chemical_position_a)
+        };
+        Self {
+            schema_version: CHEMISTRY_LIBRARY_SCHEMA_VERSION,
+            material_a,
+            material_b,
+            interface_class: None,
+            interface_signature: None,
+            equation_fingerprint,
+            chemical_position_a: Some(quantize_chemical_position(position_a)),
+            chemical_position_b: Some(quantize_chemical_position(position_b)),
+        }
     }
 
     #[cfg(test)]
@@ -479,19 +507,21 @@ impl ChemistryLibrary {
         chemical_position_b: f64,
     ) -> ChemistryKey {
         if !self.performance_enabled {
-            return ChemistryKey::from_chemical_pair(
+            return ChemistryKey::from_chemical_pair_with_fingerprint(
                 a,
                 b,
                 chemical_position_a,
                 chemical_position_b,
+                self.manifest.equation_fingerprint.clone(),
             );
         }
         let started = Instant::now();
-        let key = ChemistryKey::from_chemical_pair(
+        let key = ChemistryKey::from_chemical_pair_with_fingerprint(
             a,
             b,
             chemical_position_a,
             chemical_position_b,
+            self.manifest.equation_fingerprint.clone(),
         );
         self.record_performance_stage("static_potential_key_construction", started, 1);
         key
