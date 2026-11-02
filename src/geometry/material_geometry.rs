@@ -20,6 +20,13 @@ pub struct MaterialGeometry {
     pub max_y: f64,
 }
 impl MaterialGeometry {
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the direct constructor for realized material geometry; current runtime uses per-part geometry paths"
+        )
+    )]
     pub fn new(
         material: &Material,
         placements: &[Placement],

@@ -33,6 +33,7 @@ This README is the current repository guide and implementation-status summary. O
 - **Resonance time / phase:** one simulated day is 24,000 physics ticks; the reference tone is 440 oscillations per simulated day. Every oscillator starts at phase zero (peak) at tick zero, and phase is derived analytically from the shared simulation tick when a signal is evaluated. Runtime `ticks_per_second` controls execution pacing only. The 2,400-tick world-source orbital cycle is separate from carrier oscillation.
 - **Geometry ownership:** a structural unit represents one physical constituent. Composite materials must retain per-constituent placements and bond identity; never invent transforms from a cached composite shape.
 - **Bob is a geometry library worker/viewer.** Prefer stored/reusable library results over repeated runtime geometry discovery. Preserve the corner-free 12-piece nitrogen seed; do not revert to the obsolete 16-piece ring.
+- **Performance optimization:** use profiling and repeatable benchmarks before selecting a data structure. Spatial indexes and neighbor caches may only produce conservative candidate sets; exact live geometry/contact and reaction checks remain authoritative. See [chemistry performance research](docs/chemistry-performance-research.md).
 - **Repository safety:** audit before each change, keep changes small, verify the exact PR head, compare test failure identities against the known baseline, and do not delete dead code until its architectural role is understood.
 
 ## Repository map
@@ -44,6 +45,7 @@ This README is the current repository guide and implementation-status summary. O
 - `src/perception/` — harmonic response, movement, and related perception logic.
 - `src/materials/` — resource definitions, physical-material handling, storage, transfer, and restoration.
 - `docs/README.md` — documentation index, grouped by architecture, geometry, chemistry, Bob, and organism-development topics.
+- `docs/chemistry-performance-research.md` — external particle-simulation references and EvoSim-specific guidance for spatial candidate search, caching, data layout, profiling, and safe optimization.
 - `docs/` — focused architecture, implementation, and audit documents.
 - `scripts/`, `.github/workflows/` — repository checks and automation.
 - `ui/` — user-interface assets.

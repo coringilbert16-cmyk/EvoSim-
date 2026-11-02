@@ -205,13 +205,6 @@ impl Simulation {
     }
     /// Enable the localized source only for an explicitly configured chemistry
     /// experiment; the ordinary default simulation remains unchanged.
-    #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "The experiment setup will call this when environment-only run configuration is added"
-        )
-    )]
     pub(crate) fn enable_chemistry_experiment_hotspot(&mut self) -> bool {
         self.hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
             self.environment.width,
@@ -771,6 +764,7 @@ impl Simulation {
         self.environmental_chemistry_events.clear();
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
+        self.chemistry_library.set_performance_tick(self.tick);
 
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
@@ -963,12 +957,23 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
+            let break_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
                 &mut self.chemical_reaction_accumulation,
             );
+            if let Some(started) = break_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "environmental_break_transaction_settlement",
+                    started,
+                    1,
+                );
+            }
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
                 self.environmental_chemistry_diagnostics
@@ -1019,6 +1024,10 @@ impl Simulation {
         // progress if a source snapshot became stale before commit.
         let mut environmental_combine_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+        let combine_schedule_started = self
+            .chemistry_library
+            .performance_enabled()
+            .then(Instant::now);
         let environmental_combine_operations =
             crate::environmental_combine::schedule_environmental_operations(
                 environmental_combine_operations,
@@ -1026,6 +1035,13 @@ impl Simulation {
                 &mut environmental_combine_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+        if let Some(started) = combine_schedule_started {
+            self.chemistry_library.record_performance_stage(
+                "environmental_combine_scheduling",
+                started,
+                environmental_combine_operations.len() as u64,
+            );
+        }
         self.environmental_chemistry_diagnostics.combine_scheduled =
             environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
@@ -1041,6 +1057,10 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
+            let combine_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let committed =
                 crate::environmental_combine::resolve_environmental_preserving_accumulation(
                     operation,
@@ -1048,6 +1068,13 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            if let Some(started) = combine_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "environmental_combine_transaction_settlement",
+                    started,
+                    1,
+                );
+            }
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
                 self.environmental_chemistry_diagnostics
@@ -1165,6 +1192,10 @@ impl Simulation {
                 chemistry_discovery_work_remaining
             };
             let mut graph_discovery_remaining = graph_discovery_budget;
+            let organism_break_discovery_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -1173,27 +1204,94 @@ impl Simulation {
                 self.tick,
                 &mut graph_discovery_remaining,
             );
+            if let Some(started) = organism_break_discovery_started {
+                self.chemistry_library.record_performance_stage(
+                    "organism_break_discovery",
+                    started,
+                    chemical_operations.len() as u64,
+                );
+                self.environmental_chemistry_diagnostics
+                    .organism_break_discovery_elapsed_micros = self
+                    .environmental_chemistry_diagnostics
+                    .organism_break_discovery_elapsed_micros
+                    .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
+            }
+            self.environmental_chemistry_diagnostics
+                .organism_break_ready_candidates = self
+                .environmental_chemistry_diagnostics
+                .organism_break_ready_candidates
+                .saturating_add(chemical_operations.len());
+            self.chemistry_library.record_performance_counter(
+                "organism_break_ready_candidates",
+                chemical_operations.len() as u64,
+            );
+            self.environmental_chemistry_diagnostics
+                .organism_break_discovery_work_used = self
+                .environmental_chemistry_diagnostics
+                .organism_break_discovery_work_used
+                .saturating_add(graph_discovery_budget.saturating_sub(graph_discovery_remaining));
+            self.environmental_chemistry_diagnostics
+                .organism_break_discovery_work_remaining = self
+                .environmental_chemistry_diagnostics
+                .organism_break_discovery_work_remaining
+                .saturating_add(graph_discovery_remaining);
             // The environment is one chemistry owner, not one owner per
             // organism. Discover each field-owned bond at most once per tick;
             // its geometry and progress keys are independent of organism graphs.
             carried_chemistry_discovery_work = graph_discovery_remaining;
             let mut graph_work_remaining = chemistry_work_remaining;
+            let organism_break_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
                 &mut graph_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
+            let organism_break_scheduled_count = chemical_operations.len();
+            self.environmental_chemistry_diagnostics
+                .organism_break_scheduled = self
+                .environmental_chemistry_diagnostics
+                .organism_break_scheduled
+                .saturating_add(organism_break_scheduled_count);
+            self.chemistry_library.record_performance_counter(
+                "organism_break_scheduled",
+                organism_break_scheduled_count as u64,
+            );
             // The shared per-tick budget bounds physical reaction realization.
             // Deferred activations retain progress only; they must be discovered
             // and validated against live geometry again before a later commit.
             for operation in chemical_operations {
-                let _ = crate::chemical_reaction::resolve_preserving_accumulation(
+                if crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
                     organism,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
+                ) {
+                    self.environmental_chemistry_diagnostics
+                        .organism_break_committed += 1;
+                    self.chemistry_library
+                        .record_performance_counter("organism_break_committed", 1);
+                } else {
+                    self.environmental_chemistry_diagnostics
+                        .organism_break_rejected += 1;
+                    self.chemistry_library
+                        .record_performance_counter("organism_break_rejected", 1);
+                }
+            }
+            if let Some(started) = organism_break_settlement_started {
+                self.chemistry_library.record_performance_stage(
+                    "organism_break_transaction_settlement",
+                    started,
+                    organism_break_scheduled_count as u64,
                 );
+                self.environmental_chemistry_diagnostics
+                    .organism_break_settlement_elapsed_micros = self
+                    .environmental_chemistry_diagnostics
+                    .organism_break_settlement_elapsed_micros
+                    .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
             }
             // Carry unused graph slots forward, but never exceed the
             // graph half-budget reserved for this tick.
@@ -1249,15 +1347,42 @@ impl Simulation {
                 // physical material to inspect its bond endpoints. Reuse this exact
                 // result for both eligibility and decision construction rather than
                 // repeating the full geometry/restoration pass.
+                let organism_environmental_break_selection_started = self
+                    .chemistry_library
+                    .performance_enabled()
+                    .then(Instant::now);
                 let environmental_break_candidates =
                     if organisms[index].active_transformation_id.is_none() {
                         crate::transformation::environmental_break_candidates(
                             &organisms[index],
                             environment,
+                            &mut self.environmental_chemistry_diagnostics,
+                            &mut self.chemistry_library,
                         )
                     } else {
                         Vec::new()
                     };
+                if let Some(started) = organism_environmental_break_selection_started {
+                    self.chemistry_library.record_performance_stage(
+                        "organism_environmental_break_selection",
+                        started,
+                        environmental_break_candidates.len() as u64,
+                    );
+                    self.environmental_chemistry_diagnostics
+                        .organism_environmental_break_selection_elapsed_micros = self
+                        .environmental_chemistry_diagnostics
+                        .organism_environmental_break_selection_elapsed_micros
+                        .saturating_add(started.elapsed().as_micros().min(u64::MAX as u128) as u64);
+                }
+                self.environmental_chemistry_diagnostics
+                    .organism_environmental_break_candidates = self
+                    .environmental_chemistry_diagnostics
+                    .organism_environmental_break_candidates
+                    .saturating_add(environmental_break_candidates.len());
+                self.chemistry_library.record_performance_counter(
+                    "organism_environmental_break_candidates",
+                    environmental_break_candidates.len() as u64,
+                );
                 let eligibility = Self::action_eligibility(
                     &organisms[index],
                     environment,
@@ -2334,6 +2459,13 @@ mod decomposition_finalization_tests {
         // physically bonded aggregate. Do not assume these constructor bonds
         // are chemically breakable or require them to break within a deadline.
         simulation.step();
+        assert!(
+            simulation
+                .environmental_chemistry_diagnostics
+                .organism_break_discovery_work_used
+                > 0,
+            "the organism-present tick must exercise organism-owned BREAK discovery instrumentation"
+        );
 
         let structural_amount_after = simulation
             .organisms

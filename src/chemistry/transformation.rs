@@ -476,6 +476,8 @@ impl Simulation {
 pub(crate) fn environmental_break_candidates(
     organism: &Organism,
     environment: &Environment,
+    diagnostics: &mut crate::state::EnvironmentalChemistryTickDiagnostics,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
 ) -> Vec<ActionCandidate> {
     let Ok(regions) = crate::interior_geometry::find_accessible_interior_regions(
         &organism.structure,
@@ -514,7 +516,10 @@ pub(crate) fn environmental_break_candidates(
             }
 
             let mut hypothetical = crate::structure::OrganismStructure::new();
-            let Some(indices) = crate::material_restoration::restore_material(
+            let restoration_started = chemistry_library
+                .performance_enabled()
+                .then(std::time::Instant::now);
+            let restored_indices = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 instance,
                 crate::structure::Placement {
@@ -523,9 +528,26 @@ pub(crate) fn environmental_break_candidates(
                     rotation_radians: 0.0,
                 },
                 &environment.catalog,
-            ) else {
+            );
+            if let Some(started) = restoration_started {
+                chemistry_library.record_performance_stage(
+                    "organism_break_material_restoration",
+                    started,
+                    1,
+                );
+            }
+            diagnostics.organism_break_material_restoration_elapsed_micros = diagnostics
+                .organism_break_material_restoration_elapsed_micros
+                .saturating_add(restoration_started.map_or(0, |started| {
+                    started.elapsed().as_micros().min(u64::MAX as u128) as u64
+                }));
+            let Some(indices) = restored_indices else {
                 continue;
             };
+            diagnostics.organism_break_materials_restored = diagnostics
+                .organism_break_materials_restored
+                .saturating_add(1);
+            chemistry_library.record_performance_counter("organism_break_materials_restored", 1);
 
             for (bond_index, connection) in connections.iter().enumerate() {
                 let Some(&a_index) = indices.get(connection.part_a) else {
@@ -2391,9 +2413,11 @@ mod tests {
 
     #[test]
     fn withdrawn_resonance_funds_work_without_an_efficiency_multiplier() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 2.0;
-        ledger.total_resonant_energy_held = 2.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 2.0,
+            total_resonant_energy_held: 2.0,
+            ..Default::default()
+        };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2415,9 +2439,11 @@ mod tests {
 
     #[test]
     fn chemical_break_rejects_resonance_debit_exceeding_inventory() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 1.0;
-        ledger.total_resonant_energy_held = 1.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 1.0,
+            total_resonant_energy_held: 1.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
@@ -2439,9 +2465,11 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 5.0;
-        ledger.total_resonant_energy_held = 5.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 5.0,
+            total_resonant_energy_held: 5.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0)
@@ -2462,9 +2490,11 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 5.0;
-        ledger.total_resonant_energy_held = 5.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 5.0,
+            total_resonant_energy_held: 5.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0);
@@ -2687,9 +2717,11 @@ mod tests {
 
     #[test]
     fn withdrawn_compatible_resonance_funds_disruption_work_without_efficiency_trait() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 2.0;
-        ledger.total_resonant_energy_held = 2.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 2.0,
+            total_resonant_energy_held: 2.0,
+            ..Default::default()
+        };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )

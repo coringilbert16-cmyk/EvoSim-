@@ -760,9 +760,11 @@ fn body_from_owner_relative_material(
 /// Reconstruct every currently realized physical world body for the
 /// independent pair-potential inventory oracle. This intentionally mirrors
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
+type WorldPhysicalMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>);
+
 fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,
-) -> Option<(Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>)> {
+) -> Option<WorldPhysicalMaterials> {
     let catalog = &simulation.environment.catalog;
     let mut bodies = Vec::new();
     let mut resonant_participant_indices = Vec::new();

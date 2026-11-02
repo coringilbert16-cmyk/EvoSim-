@@ -665,7 +665,7 @@ pub(crate) fn settle_pair_potential_change(
 
     for (target, staged) in biological_resonance_holders
         .iter_mut()
-        .zip(staged_resonance.into_iter())
+        .zip(staged_resonance)
     {
         **target = staged;
     }

@@ -4,6 +4,7 @@
 //! activation accumulation, and energy-ledger transaction as organism COMBINE.
 //! The field owns both source objects and the resulting realized compound.
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::time::Instant;
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
@@ -157,6 +158,7 @@ fn restored_source(
     Some((structure, indices))
 }
 
+#[cfg(test)]
 fn select_best_contact(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -196,6 +198,7 @@ fn anchor_cell_start(tick: u64, field_cell_count: usize, scan_count: usize) -> u
     }
 }
 
+#[cfg(test)]
 fn select_best_contact_from_offset(
     structure: &OrganismStructure,
     indices_a: &[usize],
@@ -204,6 +207,28 @@ fn select_best_contact_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
+) -> Option<SelectedContact> {
+    select_best_contact_from_offset_profiled(
+        structure,
+        indices_a,
+        indices_b,
+        catalog,
+        cache,
+        pair_start,
+        remaining_work,
+        None,
+    )
+}
+
+fn select_best_contact_from_offset_profiled(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    pair_start: usize,
+    remaining_work: &mut usize,
+    mut telemetry: Option<&mut crate::chemistry_library::ChemistryLibrary>,
 ) -> Option<SelectedContact> {
     let pair_count = indices_a.len().checked_mul(indices_b.len())?;
     if pair_count == 0 {
@@ -224,9 +249,23 @@ fn select_best_contact_from_offset(
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
         let unit_a = indices_a[pair_index / indices_b.len()];
         let unit_b = indices_b[pair_index % indices_b.len()];
+        let contact_generation_started = telemetry.as_ref().map(|_| Instant::now());
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
+        let contact_candidate_count = candidates.len();
+        if let (Some(library), Some(started)) = (telemetry.as_mut(), contact_generation_started) {
+            library.record_performance_counter(
+                "environmental_combine_contact_candidates",
+                contact_candidate_count as u64,
+            );
+            library.record_performance_stage(
+                "environmental_combine_contact_generation",
+                started,
+                contact_candidate_count as u64,
+            );
+        }
+        let candidate_evaluation_started = telemetry.as_ref().map(|_| Instant::now());
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation_with_reactant_energy(
@@ -274,6 +313,13 @@ fn select_best_contact_from_offset(
             if replace {
                 best = Some(proposed);
             }
+        }
+        if let (Some(library), Some(started)) = (telemetry.as_mut(), candidate_evaluation_started) {
+            library.record_performance_stage(
+                "environmental_combine_candidate_evaluation",
+                started,
+                contact_candidate_count as u64,
+            );
         }
     }
     best
@@ -344,32 +390,52 @@ fn chemical_step(
     let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
-    let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+    let interface_resolution_started = chemistry_library.performance_enabled().then(Instant::now);
+    let resolved_interface = crate::geometry_reference_library::resolve_live_contact_candidate(
         material_name_a,
         &structure.units[selected.unit_a],
         material_name_b,
         &structure.units[selected.unit_b],
         selected.candidate,
         &environment.catalog,
-    ) else {
+    );
+    if let Some(started) = interface_resolution_started {
+        chemistry_library.record_performance_stage(
+            "environmental_combine_interface_resolution",
+            started,
+            1,
+        );
+    }
+    let Some(interface) = resolved_interface else {
         reject_step!();
     };
-    let cache_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+    let cache_key = chemistry_library.key_from_live_geometry(
         material_name_a,
         material_name_b,
         &interface,
         position_a,
         position_b,
     );
-    let static_potential = match chemistry_library.get(&cache_key) {
+    let static_potential = match chemistry_library.lookup(&cache_key) {
         Some(record) => record.static_potential,
         None => {
-            let Some(calculated) = crate::chemistry::interaction_potential(
+            let potential_started = chemistry_library
+                .performance_enabled()
+                .then(std::time::Instant::now);
+            let calculated = crate::chemistry::interaction_potential(
                 position_a,
                 position_b,
                 crate::chemistry::CHEMICAL_K,
                 crate::chemistry::CHEMICAL_D_MAX,
-            ) else {
+            );
+            if let Some(started) = potential_started {
+                chemistry_library.record_performance_stage(
+                    "static_potential_calculation",
+                    started,
+                    1,
+                );
+            }
+            let Some(calculated) = calculated else {
                 reject_step!();
             };
             match chemistry_library.get_or_insert_static_potential(cache_key, calculated) {
@@ -506,9 +572,19 @@ pub(crate) fn accumulate_environmental(
             // a small supplied budget must also bound work on empty/sparse fields.
             *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
             let material_a = (material_start + material_offset) % material_count;
+            chemistry_library
+                .record_performance_counter("environmental_combine_anchor_materials", 1);
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
-            let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
-            else {
+            let source_restore_started = chemistry_library.performance_enabled().then(Instant::now);
+            let restored_a = restored_source(&source_a, environment);
+            if let Some(started) = source_restore_started {
+                chemistry_library.record_performance_stage(
+                    "environmental_combine_material_restoration",
+                    started,
+                    1,
+                );
+            }
+            let Some((source_structure, indices_a)) = restored_a else {
                 continue;
             };
             // Environmental COMBINE must discover isolated physical objects too.
@@ -526,6 +602,7 @@ pub(crate) fn accumulate_environmental(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
+            let spatial_query_started = chemistry_library.performance_enabled().then(Instant::now);
             let target_cells = environment
                 .field
                 .cells_intersecting_bounds_periodic_limited(
@@ -538,6 +615,17 @@ pub(crate) fn accumulate_environmental(
                         .wrapping_add(cell_a)
                         .wrapping_add(material_a),
                 );
+            if let Some(started) = spatial_query_started {
+                chemistry_library.record_performance_stage(
+                    "environmental_combine_spatial_cell_query",
+                    started,
+                    target_cells.len() as u64,
+                );
+            }
+            chemistry_library.record_performance_counter(
+                "environmental_combine_target_cells",
+                target_cells.len() as u64,
+            );
             for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
@@ -576,29 +664,46 @@ pub(crate) fn accumulate_environmental(
                         continue;
                     };
                     let mut trial_structure = source_structure.clone();
-                    let Some(indices_b) = crate::material_restoration::restore_material(
+                    let target_restore_started =
+                        chemistry_library.performance_enabled().then(Instant::now);
+                    let restored_b = crate::material_restoration::restore_material(
                         &mut trial_structure,
                         &source_b,
                         origin(),
                         &environment.catalog,
-                    ) else {
+                    );
+                    if let Some(started) = target_restore_started {
+                        chemistry_library.record_performance_stage(
+                            "environmental_combine_material_restoration",
+                            started,
+                            1,
+                        );
+                    }
+                    let Some(indices_b) = restored_b else {
                         continue;
                     };
-                    if !shift_restored_units_horizontally(
+                    let geometry_validation_started =
+                        chemistry_library.performance_enabled().then(Instant::now);
+                    let geometry_valid = shift_restored_units_horizontally(
                         &mut trial_structure,
                         &indices_b,
                         horizontal_shift,
-                    ) {
-                        continue;
-                    }
-                    if indices_b.iter().any(|index| {
+                    ) && !indices_b.iter().any(|index| {
                         crate::construction_runtime::placed_unit_overlaps(
                             &trial_structure,
                             &trial_structure.units[*index],
                             &indices_b,
                             &environment.catalog,
                         )
-                    }) {
+                    });
+                    if let Some(started) = geometry_validation_started {
+                        chemistry_library.record_performance_stage(
+                            "environmental_combine_geometry_validation",
+                            started,
+                            indices_b.len() as u64,
+                        );
+                    }
+                    if !geometry_valid {
                         continue;
                     }
                     let mut component_work =
@@ -606,7 +711,18 @@ pub(crate) fn accumulate_environmental(
                     let component_work_initial = component_work;
                     let pair_count = indices_a.len().saturating_mul(indices_b.len());
                     let pair_start = component_pair_start(tick, pair_count);
-                    let selected = select_best_contact_from_offset(
+                    chemistry_library.record_performance_counter(
+                        "environmental_combine_constituent_pairs",
+                        pair_count as u64,
+                    );
+                    let contact_evaluation_started =
+                        chemistry_library.performance_enabled().then(Instant::now);
+                    let telemetry = if chemistry_library.performance_enabled() {
+                        Some(&mut *chemistry_library)
+                    } else {
+                        None
+                    };
+                    let selected = select_best_contact_from_offset_profiled(
                         &trial_structure,
                         &indices_a,
                         &indices_b,
@@ -614,13 +730,27 @@ pub(crate) fn accumulate_environmental(
                         &mut cache,
                         pair_start,
                         &mut component_work,
+                        telemetry,
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
+                    if let Some(started) = contact_evaluation_started {
+                        chemistry_library.record_performance_stage(
+                            "environmental_combine_contact_generation_evaluation",
+                            started,
+                            component_work_used as u64,
+                        );
+                    }
+                    chemistry_library.record_performance_counter(
+                        "environmental_combine_constituent_pairs_inspected",
+                        component_work_used as u64,
+                    );
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
                     let Some(selected) = selected else {
                         continue;
                     };
+                    let chemistry_evaluation_started =
+                        chemistry_library.performance_enabled().then(Instant::now);
                     chemical_step(
                         environment,
                         chemistry_library,
@@ -639,12 +769,32 @@ pub(crate) fn accumulate_environmental(
                         &mut updated_keys,
                         &mut operations,
                     );
+                    if let Some(started) = chemistry_evaluation_started {
+                        chemistry_library.record_performance_stage(
+                            "environmental_combine_chemistry_accumulation",
+                            started,
+                            1,
+                        );
+                    }
                 }
             }
         }
     }
 
+    let cleanup_started = chemistry_library.performance_enabled().then(Instant::now);
+    let accumulation_before_cleanup = accumulation.len();
     dissipate_unupdated_accumulations(accumulation, &updated_keys);
+    if let Some(started) = cleanup_started {
+        chemistry_library.record_performance_stage(
+            "environmental_combine_accumulation_cleanup",
+            started,
+            accumulation_before_cleanup as u64,
+        );
+    }
+    chemistry_library.record_performance_counter(
+        "environmental_combine_accumulation_entries_after_cleanup",
+        accumulation.len() as u64,
+    );
     operations
 }
 
@@ -1652,7 +1802,7 @@ mod tests {
             let local_x = second.x - first.x;
             let local_y = second.y - first.y;
 
-            'external_pose: for step in 1..=80 {
+            for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
@@ -1980,7 +2130,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);

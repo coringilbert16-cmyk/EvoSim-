@@ -400,6 +400,13 @@ impl Simulation {
         }
     }
 
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the direct movement helper used by focused regression tests"
+        )
+    )]
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
         environment: &mut Environment,

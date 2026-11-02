@@ -1,6 +1,8 @@
 //! Local runtime chemical reaction accumulation.
 
-use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
+#[cfg(test)]
+use crate::chemistry_library::ChemistryKey;
+use crate::chemistry_library::ChemistryLibrary;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::BaseResource;
 use crate::state::Organism;
@@ -313,22 +315,33 @@ pub(crate) fn accumulate(
             reaction_key(&bond, &interface.signature)
         );
 
-        let key_record = ChemistryKey::from_live_geometry(
+        let key_record = chemistry_library.key_from_live_geometry(
             &material_a,
             &material_b,
             &interface,
             position_a,
             position_b,
         );
-        let potential = match chemistry_library.get(&key_record) {
+        let potential = match chemistry_library.lookup(&key_record) {
             Some(record) => record.static_potential,
             None => {
-                let Some(calculated) = crate::chemistry::interaction_potential(
+                let potential_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let calculated = crate::chemistry::interaction_potential(
                     position_a,
                     position_b,
                     crate::chemistry::CHEMICAL_K,
                     crate::chemistry::CHEMICAL_D_MAX,
-                ) else {
+                );
+                if let Some(started) = potential_started {
+                    chemistry_library.record_performance_stage(
+                        "static_potential_calculation",
+                        started,
+                        1,
+                    );
+                }
+                let Some(calculated) = calculated else {
                     continue;
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
@@ -660,7 +673,7 @@ pub(crate) fn accumulate_environmental(
             material_identity(&instance.material),
             connection
         );
-        let key_record = ChemistryKey::from_live_geometry(
+        let key_record = chemistry_library.key_from_live_geometry(
             &material_a,
             &material_b,
             &interface,
