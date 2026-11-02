@@ -228,13 +228,6 @@ fn report(simulation: &Simulation, label: &str) {
                 .or_else(|| performance.stages.get(legacy))
                 .map_or(0, |timing| timing.max_micros)
         };
-        let maximum_tick_alias = |current: &str, legacy: &str| {
-            performance
-                .stages
-                .get(current)
-                .or_else(|| performance.stages.get(legacy))
-                .map_or(0, |timing| timing.max_tick)
-        };
         let counter_alias = |current: &str, legacy: &str| {
             performance
                 .counters
