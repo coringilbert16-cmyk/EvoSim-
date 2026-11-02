@@ -64,10 +64,8 @@ jobs:
           test "$(git -C baseline rev-parse HEAD)" = "$BASELINE_SHA"
           test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
 
-      - name: Build both release binaries before timing
-        run: |
-          cargo build --locked --release --bin evosim
-          cargo build --locked --release --bin evosim
+      - name: Build baseline release binary before timing
+        run: cargo build --locked --release --bin evosim
         working-directory: baseline
 
       - name: Build candidate release binary before timing
