@@ -1193,8 +1193,10 @@ impl Simulation {
                 chemistry_discovery_work_remaining
             };
             let mut graph_discovery_remaining = graph_discovery_budget;
-            let organism_break_discovery_started =
-                self.chemistry_library.performance_enabled().then(Instant::now);
+            let organism_break_discovery_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -1239,8 +1241,10 @@ impl Simulation {
             // its geometry and progress keys are independent of organism graphs.
             carried_chemistry_discovery_work = graph_discovery_remaining;
             let mut graph_work_remaining = chemistry_work_remaining;
-            let organism_break_settlement_started =
-                self.chemistry_library.performance_enabled().then(Instant::now);
+            let organism_break_settlement_started = self
+                .chemistry_library
+                .performance_enabled()
+                .then(Instant::now);
             let chemical_operations = crate::chemical_reaction::schedule_operations(
                 chemical_operations,
                 self.tick,
@@ -1344,8 +1348,10 @@ impl Simulation {
                 // physical material to inspect its bond endpoints. Reuse this exact
                 // result for both eligibility and decision construction rather than
                 // repeating the full geometry/restoration pass.
-                let organism_environmental_break_selection_started =
-                    self.chemistry_library.performance_enabled().then(Instant::now);
+                let organism_environmental_break_selection_started = self
+                    .chemistry_library
+                    .performance_enabled()
+                    .then(Instant::now);
                 let environmental_break_candidates =
                     if organisms[index].active_transformation_id.is_none() {
                         crate::transformation::environmental_break_candidates(
