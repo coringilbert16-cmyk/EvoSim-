@@ -829,6 +829,79 @@ mod tests {
     }
 
     #[test]
+    fn static_potential_key_excludes_geometry_and_canonicalizes_chemical_identity() {
+        let interface_a = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 0 },
+        );
+        let interface_b = crate::geometry_reference_library::resolve_live_contact_interface(
+            "Carbon",
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index: 1 },
+            "Hydrogen",
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians: 1.0 },
+        );
+        let geometry_a =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface_a, 10.5, 5.5);
+        let geometry_b =
+            ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface_b, 10.5, 5.5);
+        assert_ne!(
+            geometry_a, geometry_b,
+            "live geometry identity must remain distinct"
+        );
+
+        let static_a = ChemistryKey::from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        let reversed = ChemistryKey::from_chemical_pair("Hydrogen", "Carbon", 5.5, 10.5);
+        assert_eq!(static_a, reversed);
+        assert!(static_a.interface_class.is_none());
+        assert!(static_a.interface_signature.is_none());
+        assert_eq!(
+            static_a.equation_fingerprint,
+            current_chemistry_equation_fingerprint()
+        );
+        assert_ne!(
+            static_a,
+            ChemistryKey::from_chemical_pair("Carbon", "Hydrogen", 10.25, 5.5),
+            "different chemical positions must not share a static potential"
+        );
+        assert_ne!(
+            static_a,
+            ChemistryKey::from_chemical_pair("Carbon", "Oxygen", 10.5, 5.5),
+            "different constituent identities must not share a static potential"
+        );
+        let mut changed_equations = static_a.clone();
+        changed_equations.equation_fingerprint.push_str("|different-equations");
+        assert_ne!(
+            static_a, changed_equations,
+            "equation/catalog fingerprints must participate in static cache identity"
+        );
+    }
+
+    #[test]
+    fn static_potential_lookup_reuses_one_entry_for_repeated_canonical_pairs() {
+        let root = test_root("static-potential-reuse");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        let key = ChemistryKey::from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        let reversed = ChemistryKey::from_chemical_pair("Hydrogen", "Carbon", 5.5, 10.5);
+
+        assert!(library.lookup(&key).is_none());
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(key.clone(), 0.625)
+                .unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library.lookup(&reversed).map(|record| record.static_potential),
+            Some(0.625)
+        );
+        assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn key_canonicalizes_material_order() {
         assert_eq!(
             ChemistryKey::new("Carbon", "Hydrogen", "rigid_edge", "g"),
