@@ -559,11 +559,12 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
     let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
         return None;
     };
-    let (candidate_a, candidate_b) = candidate_endpoints(a, b, c)
-        .into_iter()
-        .find(|(candidate_a, candidate_b)| {
-            *candidate_a == endpoint_a && *candidate_b == endpoint_b
-        })?;
+    let (candidate_a, candidate_b) =
+        candidate_endpoints(a, b, c)
+            .into_iter()
+            .find(|(candidate_a, candidate_b)| {
+                *candidate_a == endpoint_a && *candidate_b == endpoint_b
+            })?;
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
 
