@@ -2633,11 +2633,17 @@ impl GeometryLibrary {
 
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "Retained as the geometry-library membership query")
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
     )]
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "Retained as the geometry-library membership query")
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
     )]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
@@ -2888,7 +2894,10 @@ impl GeometryLibrary {
 
     #[cfg_attr(
         not(test),
-        expect(dead_code, reason = "Retained as the indexed persistent-family resolver")
+        expect(
+            dead_code,
+            reason = "Retained as the indexed persistent-family resolver"
+        )
     )]
     pub fn resolve_persistent_interface(
         &self,
@@ -4294,11 +4303,17 @@ fn load_fluid_boundary_families(
 
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the combined fluid-boundary generation API")
+    expect(
+        dead_code,
+        reason = "Retained as the combined fluid-boundary generation API"
+    )
 )]
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the combined fluid-boundary generation API")
+    expect(
+        dead_code,
+        reason = "Retained as the combined fluid-boundary generation API"
+    )
 )]
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
@@ -4662,11 +4677,17 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
 
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the rigid-contact family instantiation API")
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-contact family instantiation API"
+    )
 )]
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the rigid-contact family instantiation API")
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-contact family instantiation API"
+    )
 )]
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
