@@ -2413,9 +2413,11 @@ mod tests {
 
     #[test]
     fn withdrawn_resonance_funds_work_without_an_efficiency_multiplier() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 2.0;
-        ledger.total_resonant_energy_held = 2.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 2.0,
+            total_resonant_energy_held: 2.0,
+            ..Default::default()
+        };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
@@ -2437,9 +2439,11 @@ mod tests {
 
     #[test]
     fn chemical_break_rejects_resonance_debit_exceeding_inventory() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 1.0;
-        ledger.total_resonant_energy_held = 1.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 1.0,
+            total_resonant_energy_held: 1.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
@@ -2461,9 +2465,11 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_work_uses_holder_energy_without_bond_credit() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 5.0;
-        ledger.total_resonant_energy_held = 5.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 5.0,
+            total_resonant_energy_held: 5.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0)
@@ -2484,9 +2490,11 @@ mod tests {
 
     #[test]
     fn prepared_environmental_break_rejects_unfunded_work_without_mutation() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 5.0;
-        ledger.total_resonant_energy_held = 5.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 5.0,
+            total_resonant_energy_held: 5.0,
+            ..Default::default()
+        };
         let original_ledger = ledger;
         let prepared =
             prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0);
@@ -2709,9 +2717,11 @@ mod tests {
 
     #[test]
     fn withdrawn_compatible_resonance_funds_disruption_work_without_efficiency_trait() {
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.initial_resonant_energy_held = 2.0;
-        ledger.total_resonant_energy_held = 2.0;
+        let ledger = crate::state::EnergyLedger {
+            initial_resonant_energy_held: 2.0,
+            total_resonant_energy_held: 2.0,
+            ..Default::default()
+        };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
             20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
         )
