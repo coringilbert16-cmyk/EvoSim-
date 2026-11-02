@@ -2638,6 +2638,13 @@ impl GeometryLibrary {
             reason = "Retained as the geometry-library membership query"
         )
     )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained as the geometry-library membership query"
+        )
+    )]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
     }
@@ -3419,6 +3426,13 @@ impl GeometryLibrary {
             reason = "Retained as the single-record contact-family persistence API"
         )
     )]
+    #[cfg_attr(
+        test,
+        expect(
+            dead_code,
+            reason = "Retained as the single-record contact-family persistence API"
+        )
+    )]
     pub fn insert_contact_family(
         &mut self,
         family: GeometryContactFamily,
@@ -3488,6 +3502,13 @@ impl GeometryLibrary {
 
     #[cfg_attr(
         not(test),
+        expect(
+            dead_code,
+            reason = "Retained as the single-frontier state update API"
+        )
+    )]
+    #[cfg_attr(
+        test,
         expect(
             dead_code,
             reason = "Retained as the single-frontier state update API"
@@ -4296,6 +4317,13 @@ fn load_fluid_boundary_families(
         reason = "Retained as the combined fluid-boundary generation API"
     )
 )]
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "Retained as the combined fluid-boundary generation API"
+    )
+)]
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
     fluid_resource: &BaseResource,
@@ -4354,6 +4382,13 @@ pub struct WaterContactGenerationDiagnostics {
 /// to Bob's worker and focused diagnostics tests.
 #[cfg_attr(
     not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the compatibility wrapper for Water contact generation"
+    )
+)]
+#[cfg_attr(
+    test,
     expect(
         dead_code,
         reason = "Retained as the compatibility wrapper for Water contact generation"
@@ -4651,6 +4686,13 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
 
 #[cfg_attr(
     not(test),
+    expect(
+        dead_code,
+        reason = "Retained as the rigid-contact family instantiation API"
+    )
+)]
+#[cfg_attr(
+    test,
     expect(
         dead_code,
         reason = "Retained as the rigid-contact family instantiation API"
@@ -5211,6 +5253,13 @@ pub fn generate_two_constituent_candidates(
         reason = "Retained for the staged three-constituent catalogue expansion"
     )
 )]
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "Retained for the staged three-constituent catalogue expansion"
+    )
+)]
 pub fn expand_three_constituent_candidates(
     two_constituent: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -5397,6 +5446,13 @@ pub fn expand_formation_candidates(
         reason = "Retained for the staged two-constituent catalogue seeding workflow"
     )
 )]
+#[cfg_attr(
+    test,
+    expect(
+        dead_code,
+        reason = "Retained for the staged two-constituent catalogue seeding workflow"
+    )
+)]
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -5418,6 +5474,13 @@ pub fn seed_two_constituent_catalogue(
 
 #[cfg_attr(
     not(test),
+    expect(
+        dead_code,
+        reason = "Retained for the staged three-constituent catalogue seeding workflow"
+    )
+)]
+#[cfg_attr(
+    test,
     expect(
         dead_code,
         reason = "Retained for the staged three-constituent catalogue seeding workflow"
