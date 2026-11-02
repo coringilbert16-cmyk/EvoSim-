@@ -4,15 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       baseline_sha:
-        description: "Baseline commit (before PR #261)"
-        required: true
-        type: string
-        default: "b3aa3ed95e94a31867c1bb8b9b54a55bd6896737"
-      candidate_sha:
-        description: "BREAK optimization plus profiling candidate commit"
+        description: "Profiling baseline commit (before PR #264)"
         required: true
         type: string
         default: "218808e9f3b7e5442536e3f27e8ce6fe5a39d575"
+      candidate_sha:
+        description: "Targeted BREAK candidate-lookup optimization commit"
+        required: true
+        type: string
+        default: "778e16f25c75d8d53cd01d8a63f9710cad76d7fa"
   push:
     branches:
       - break-same-runner-confirmation
@@ -32,20 +32,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      BASELINE_SHA: ${{ inputs.baseline_sha || 'b3aa3ed95e94a31867c1bb8b9b54a55bd6896737' }}
-      CANDIDATE_SHA: ${{ inputs.candidate_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
+      BASELINE_SHA: ${{ inputs.baseline_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
+      CANDIDATE_SHA: ${{ inputs.candidate_sha || '778e16f25c75d8d53cd01d8a63f9710cad76d7fa' }}
     steps:
       - name: Check out baseline source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.baseline_sha || 'b3aa3ed95e94a31867c1bb8b9b54a55bd6896737' }}
+          ref: ${{ inputs.baseline_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
           path: baseline
           persist-credentials: false
 
       - name: Check out candidate source
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.candidate_sha || '218808e9f3b7e5442536e3f27e8ce6fe5a39d575' }}
+          ref: ${{ inputs.candidate_sha || '778e16f25c75d8d53cd01d8a63f9710cad76d7fa' }}
           path: candidate
           persist-credentials: false
 
