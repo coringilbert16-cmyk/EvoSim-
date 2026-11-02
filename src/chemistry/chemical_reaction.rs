@@ -605,42 +605,49 @@ pub(crate) fn accumulate_environmental(
         // valid geometry owner for a world-owned bond: it can carry unrelated
         // units, IDs, and contact context into candidate resolution.
         let material_key = (cell_index, material_index);
-        if restored_materials.contains_key(&material_key) {
-            if chemistry_library.performance_enabled() {
-                chemistry_library
-                    .record_performance_counter("environmental_break_material_restore_cache_hits", 1);
+        match restored_materials.entry(material_key) {
+            std::collections::btree_map::Entry::Occupied(_) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_material_restore_cache_hits",
+                        1,
+                    );
+                }
             }
-        } else {
-            if chemistry_library.performance_enabled() {
-                chemistry_library
-                    .record_performance_counter("environmental_break_material_restore_cache_misses", 1);
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_material_restore_cache_misses",
+                        1,
+                    );
+                }
+                let restore_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let mut hypothetical = crate::structure::OrganismStructure::new();
+                let restored = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    &environment.catalog,
+                )
+                .map(|restored_indices| (hypothetical, restored_indices));
+                if let Some(started) = restore_started {
+                    chemistry_library.record_performance_stage(
+                        "environmental_break_material_restoration",
+                        started,
+                        1,
+                    );
+                }
+                // Cache failed restorations too: this material is immutable during
+                // discovery, so retrying the same rejected geometry for each bond
+                // cannot produce a different result.
+                entry.insert(restored);
             }
-            let restore_started = chemistry_library
-                .performance_enabled()
-                .then(std::time::Instant::now);
-            let mut hypothetical = crate::structure::OrganismStructure::new();
-            let restored = crate::material_restoration::restore_material(
-                &mut hypothetical,
-                instance,
-                crate::structure::Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                &environment.catalog,
-            )
-            .map(|restored_indices| (hypothetical, restored_indices));
-            if let Some(started) = restore_started {
-                chemistry_library.record_performance_stage(
-                    "environmental_break_material_restoration",
-                    started,
-                    1,
-                );
-            }
-            // Cache failed restorations too: this material is immutable during
-            // discovery, so retrying the same rejected geometry for each bond
-            // cannot produce a different result.
-            restored_materials.insert(material_key, restored);
         }
         let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
         else {
@@ -705,40 +712,47 @@ pub(crate) fn accumulate_environmental(
             continue;
         };
         let pair_key = (cell_index, material_index, unit_a, unit_b);
-        if pair_candidates.contains_key(&pair_key) {
-            if chemistry_library.performance_enabled() {
-                chemistry_library
-                    .record_performance_counter("environmental_break_pair_candidate_cache_hits", 1);
+        match pair_candidates.entry(pair_key) {
+            std::collections::btree_map::Entry::Occupied(_) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidate_cache_hits",
+                        1,
+                    );
+                }
             }
-        } else {
-            if chemistry_library.performance_enabled() {
-                chemistry_library
-                    .record_performance_counter("environmental_break_pair_candidate_cache_misses", 1);
-            }
-            let candidate_generation_started = chemistry_library
-                .performance_enabled()
-                .then(std::time::Instant::now);
-            let generated = crate::contact::connection_pair_candidates_cached(
-                hypothetical,
-                unit_a,
-                unit_b,
-                &environment.catalog,
-                &mut compatibility_cache,
-            );
-            if let Some(started) = candidate_generation_started {
-                chemistry_library.record_performance_stage(
-                    "environmental_break_pair_candidate_generation",
-                    started,
-                    generated.len() as u64,
+            std::collections::btree_map::Entry::Vacant(entry) => {
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidate_cache_misses",
+                        1,
+                    );
+                }
+                let candidate_generation_started = chemistry_library
+                    .performance_enabled()
+                    .then(std::time::Instant::now);
+                let generated = crate::contact::connection_pair_candidates_cached(
+                    hypothetical,
+                    unit_a,
+                    unit_b,
+                    &environment.catalog,
+                    &mut compatibility_cache,
                 );
+                if let Some(started) = candidate_generation_started {
+                    chemistry_library.record_performance_stage(
+                        "environmental_break_pair_candidate_generation",
+                        started,
+                        generated.len() as u64,
+                    );
+                }
+                if chemistry_library.performance_enabled() {
+                    chemistry_library.record_performance_counter(
+                        "environmental_break_pair_candidates_generated",
+                        generated.len() as u64,
+                    );
+                }
+                entry.insert(generated);
             }
-            if chemistry_library.performance_enabled() {
-                chemistry_library.record_performance_counter(
-                    "environmental_break_pair_candidates_generated",
-                    generated.len() as u64,
-                );
-            }
-            pair_candidates.insert(pair_key, generated);
         }
         let endpoint_match_started = chemistry_library
             .performance_enabled()
