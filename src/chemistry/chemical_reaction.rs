@@ -609,8 +609,7 @@ pub(crate) fn accumulate_environmental(
             // cannot produce a different result.
             entry.insert(restored);
         }
-        let Some(Some((hypothetical, restored_indices))) =
-            restored_materials.get(&material_key)
+        let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
         else {
             continue;
         };
