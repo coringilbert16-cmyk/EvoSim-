@@ -227,7 +227,10 @@ pub fn record_consequence(
 
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the decision-history outcome query API")
+    expect(
+        dead_code,
+        reason = "Retained as the decision-history outcome query API"
+    )
 )]
 pub fn known_outcome(
     history: &DecisionHistory,
