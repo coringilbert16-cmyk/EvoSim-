@@ -1299,7 +1299,7 @@ impl CapillaryContactFamily {
         )
     )]
     #[cfg_attr(
-        not(test),
+        test,
         expect(
             dead_code,
             reason = "Retained for downstream capillary pressure and curvature calculations"
@@ -1323,7 +1323,7 @@ impl CapillaryContactFamily {
         )
     )]
     #[cfg_attr(
-        not(test),
+        test,
         expect(
             dead_code,
             reason = "Retained for downstream surface-tension pressure calculations"
