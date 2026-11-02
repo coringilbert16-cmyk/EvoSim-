@@ -4294,17 +4294,11 @@ fn load_fluid_boundary_families(
 
 #[cfg_attr(
     not(test),
-    expect(
-        dead_code,
-        reason = "Retained as the combined fluid-boundary generation API"
-    )
+    expect(dead_code, reason = "Retained as the combined fluid-boundary generation API")
 )]
 #[cfg_attr(
     not(test),
-    expect(
-        dead_code,
-        reason = "Retained as the combined fluid-boundary generation API"
-    )
+    expect(dead_code, reason = "Retained as the combined fluid-boundary generation API")
 )]
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
@@ -4668,17 +4662,11 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
 
 #[cfg_attr(
     not(test),
-    expect(
-        dead_code,
-        reason = "Retained as the rigid-contact family instantiation API"
-    )
+    expect(dead_code, reason = "Retained as the rigid-contact family instantiation API")
 )]
 #[cfg_attr(
     not(test),
-    expect(
-        dead_code,
-        reason = "Retained as the rigid-contact family instantiation API"
-    )
+    expect(dead_code, reason = "Retained as the rigid-contact family instantiation API")
 )]
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
