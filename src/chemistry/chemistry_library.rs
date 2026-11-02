@@ -764,7 +764,10 @@ mod tests {
         );
         let key = ChemistryKey::from_live_geometry("Carbon", "Hydrogen", &interface, 10.5, 5.5);
         assert_eq!(key.interface_class.as_deref(), Some("rigid_point"));
-        assert_eq!(key.interface_signature.as_deref(), Some(interface.signature.as_str()));
+        assert_eq!(
+            key.interface_signature.as_deref(),
+            Some(interface.signature.as_str())
+        );
         assert_eq!(key.chemical_position_a, Some(10_500_000_000));
         assert_eq!(key.chemical_position_b, Some(5_500_000_000));
     }
@@ -874,7 +877,9 @@ mod tests {
             "different constituent identities must not share a static potential"
         );
         let mut changed_equations = static_a.clone();
-        changed_equations.equation_fingerprint.push_str("|different-equations");
+        changed_equations
+            .equation_fingerprint
+            .push_str("|different-equations");
         assert_ne!(
             static_a, changed_equations,
             "equation/catalog fingerprints must participate in static cache identity"
@@ -897,7 +902,9 @@ mod tests {
             Some(0.625)
         );
         assert_eq!(
-            library.lookup(&reversed).map(|record| record.static_potential),
+            library
+                .lookup(&reversed)
+                .map(|record| record.static_potential),
             Some(0.625)
         );
         assert_eq!(ChemistryLibrary::open(&root).unwrap().len(), 1);
