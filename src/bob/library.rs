@@ -2633,17 +2633,11 @@ impl GeometryLibrary {
 
     #[cfg_attr(
         not(test),
-        expect(
-            dead_code,
-            reason = "Retained as the geometry-library membership query"
-        )
+        expect(dead_code, reason = "Retained as the geometry-library membership query")
     )]
     #[cfg_attr(
-        not(test),
-        expect(
-            dead_code,
-            reason = "Retained as the geometry-library membership query"
-        )
+        test,
+        expect(dead_code, reason = "Retained as the geometry-library membership query")
     )]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
@@ -3424,7 +3418,7 @@ impl GeometryLibrary {
         )
     )]
     #[cfg_attr(
-        not(test),
+        test,
         expect(
             dead_code,
             reason = "Retained as the single-record contact-family persistence API"
@@ -3502,7 +3496,7 @@ impl GeometryLibrary {
         expect(dead_code, reason = "Retained as the single-frontier state update API")
     )]
     #[cfg_attr(
-        not(test),
+        test,
         expect(dead_code, reason = "Retained as the single-frontier state update API")
     )]
     pub fn set_frontier_state(
@@ -4309,7 +4303,7 @@ fn load_fluid_boundary_families(
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained as the combined fluid-boundary generation API"
@@ -4379,7 +4373,7 @@ pub struct WaterContactGenerationDiagnostics {
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained as the compatibility wrapper for Water contact generation"
@@ -4683,7 +4677,7 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained as the rigid-contact family instantiation API"
@@ -5245,7 +5239,7 @@ pub fn generate_two_constituent_candidates(
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained for the staged three-constituent catalogue expansion"
@@ -5438,7 +5432,7 @@ pub fn expand_formation_candidates(
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained for the staged two-constituent catalogue seeding workflow"
@@ -5471,7 +5465,7 @@ pub fn seed_two_constituent_catalogue(
     )
 )]
 #[cfg_attr(
-    not(test),
+    test,
     expect(
         dead_code,
         reason = "Retained for the staged three-constituent catalogue seeding workflow"
