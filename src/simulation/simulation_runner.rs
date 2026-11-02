@@ -245,6 +245,21 @@ fn report(simulation: &Simulation, label: &str) {
             maximum_tick("organism_break_transaction_settlement"),
             maximum_tick("organism_break_material_restoration"),
         );
+        for (name, timing) in &performance.stages {
+            println!(
+                "[chemistry-profile-stage] name={} calls={} work_items={} total_us={} avg_us={} max_us={} max_tick={}",
+                name,
+                timing.calls,
+                timing.work_items,
+                timing.total_micros,
+                timing.total_micros / timing.calls.max(1),
+                timing.max_micros,
+                timing.max_tick,
+            );
+        }
+        for (name, value) in &performance.counters {
+            println!("[chemistry-profile-counter] name={} value={}", name, value);
+        }
     }
 }
 
