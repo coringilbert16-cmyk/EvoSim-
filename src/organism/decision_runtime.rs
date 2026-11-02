@@ -122,7 +122,10 @@ pub fn developmental_competition_indices(
 /// randomly rather than by candidate ordering.
 #[cfg_attr(
     not(test),
-    expect(dead_code, reason = "Retained as the simple action-selection API for callers without developmental scores")
+    expect(
+        dead_code,
+        reason = "Retained as the simple action-selection API for callers without developmental scores"
+    )
 )]
 pub fn select_action(
     context: DecisionContext,
