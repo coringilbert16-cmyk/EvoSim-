@@ -149,6 +149,36 @@ impl ChemistryKey {
         key
     }
 
+    /// Identify an invariant chemical interaction independently of the live
+    /// geometry used to establish physical contact. The library manifest
+    /// fingerprint is embedded in the signature so a changed chemistry
+    /// equation/catalog cannot reuse a previous static-potential entry.
+    fn from_chemical_pair(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+        equation_fingerprint: &str,
+    ) -> Self {
+        let mut material_a = a.into();
+        let mut material_b = b.into();
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            std::mem::swap(&mut material_a, &mut material_b);
+            (chemical_position_b, chemical_position_a)
+        };
+        let mut key = Self::new(
+            material_a,
+            material_b,
+            "static_potential",
+            format!("static-potential-v1|equations={equation_fingerprint}"),
+        );
+        key.chemical_position_a = Some(quantize_chemical_position(position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(position_b));
+        key
+    }
+
     #[cfg(test)]
     pub fn from_geometry_rigid_contact(
         a: impl Into<String>,
@@ -340,6 +370,25 @@ impl ChemistryLibrary {
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
         self.entries.get(key)
     }
+
+    /// Build a canonical static-potential key using this store's validated
+    /// equation/catalog fingerprint. Geometry is intentionally excluded.
+    pub fn key_from_chemical_pair(
+        &self,
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> ChemistryKey {
+        ChemistryKey::from_chemical_pair(
+            a,
+            b,
+            chemical_position_a,
+            chemical_position_b,
+            &self.manifest.equation_fingerprint,
+        )
+    }
+
     pub fn get_or_insert_static_potential(
         &mut self,
         key: ChemistryKey,
