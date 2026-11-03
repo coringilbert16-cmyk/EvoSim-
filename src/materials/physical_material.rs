@@ -8,6 +8,9 @@ use crate::resources::{BaseResource, Material};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
+// Allows only accumulated floating-point noise at the unit-length bond boundary.
+const INTERNAL_BOND_DISTANCE_EPSILON: f64 = 1e-12;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterialBond {
     pub(crate) part_a: usize,
@@ -118,7 +121,9 @@ impl PhysicalMaterial {
                 connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
                     .into_iter()
                     .find(|candidate| {
-                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
+                        candidate.available_a
+                            && candidate.available_b
+                            && candidate.distance <= 1.0 + INTERNAL_BOND_DISTANCE_EPSILON
                     })?;
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
