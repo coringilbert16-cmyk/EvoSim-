@@ -445,6 +445,44 @@ mod tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
+    fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {
+        let catalog = crate::resources::default_catalog();
+        let realize_pair = |separation: f64| {
+            PhysicalMaterial::realized(
+                Material {
+                    parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                    internal_bonds: vec![InternalBond {
+                        part_a: 0,
+                        part_b: 1,
+                    }],
+                },
+                vec![
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    Placement {
+                        x: separation,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                ],
+                &catalog,
+            )
+        };
+
+        assert!(
+            realize_pair(2.0 + 5e-13).is_some(),
+            "sub-picometer numerical excess at the unit bond boundary should be accepted"
+        );
+        assert!(
+            realize_pair(2.0 + 5e-10).is_none(),
+            "a genuine geometric excess must still be rejected"
+        );
+    }
+
+    #[test]
     fn realized_fluid_shape_area_scales_with_material_amount() {
         let catalog = crate::resources::default_catalog();
         let water = catalog
