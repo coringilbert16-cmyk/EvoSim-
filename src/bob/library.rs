@@ -2596,6 +2596,8 @@ impl GeometryLibrary {
         self.entries.len()
     }
 
+    #[expect(dead_code, reason = "Bob API")]
+
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
     }
@@ -3300,6 +3302,8 @@ impl GeometryLibrary {
         Ok(added)
     }
 
+    #[expect(dead_code, reason = "Bob API")]
+
     pub fn insert_contact_family(
         &mut self,
         family: GeometryContactFamily,
@@ -3366,6 +3370,8 @@ impl GeometryLibrary {
         self.contact_families.extend(unique);
         Ok(added)
     }
+
+    #[expect(dead_code, reason = "Bob API")]
 
     pub fn set_frontier_state(
         &mut self,
@@ -4157,7 +4163,8 @@ fn load_fluid_boundary_families(
     out
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
+
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
     fluid_resource: &BaseResource,
@@ -4214,7 +4221,7 @@ pub struct WaterContactGenerationDiagnostics {
 
 /// Preserve the original generator API while exposing reason-level outcomes
 /// to Bob's worker and focused diagnostics tests.
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -4505,7 +4512,8 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
+
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
     family: &GeometryRigidContactFamily,
@@ -5054,7 +5062,8 @@ pub fn generate_two_constituent_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
+
 pub fn expand_three_constituent_candidates(
     two_constituent: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -5234,7 +5243,8 @@ pub fn expand_formation_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
+
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -5254,7 +5264,8 @@ pub fn seed_two_constituent_catalogue(
     library.insert_many(candidates, catalog)
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Bob API"))]
+#[expect(dead_code, reason = "Bob API")]
+
 pub fn seed_three_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
