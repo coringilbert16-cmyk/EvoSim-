@@ -400,6 +400,7 @@ impl Simulation {
         }
     }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
         environment: &mut Environment,
