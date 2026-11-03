@@ -1208,7 +1208,7 @@ impl MultiContactFluidBoundary {
             .count()
     }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+
     pub fn free_arc_count(&self) -> usize {
         self.pieces
             .iter()
@@ -1233,6 +1233,7 @@ pub struct CapillaryContactFamily {
     pub enclosed_area: f64,
 }
 
+#[expect(dead_code, reason = "Retained capillary properties for planned fluid integration")]
 impl CapillaryContactFamily {
     /// Solve the zero-gravity 2-D Young–Laplace equilibrium for a fluid
     /// contacting a flat solid boundary.
@@ -1273,13 +1274,13 @@ impl CapillaryContactFamily {
     }
 
     /// Half-width of the symmetric contact interval.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+
     pub fn half_contact_length(&self) -> f64 {
         self.contact_length * 0.5
     }
 
     /// The curvature magnitude kappa = 1/R for the circular free interface.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+
     pub fn curvature(&self) -> f64 {
         1.0 / self.curvature_radius
     }
@@ -1290,7 +1291,7 @@ impl CapillaryContactFamily {
     ///
     /// Surface tension is intentionally supplied by the caller because it is
     /// an interfacial property, not a universal property of a resource alone.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+
     pub fn pressure_jump(&self, surface_tension: f64) -> Option<f64> {
         if !surface_tension.is_finite() || surface_tension < 0.0 {
             return None;
@@ -1332,7 +1333,7 @@ impl ContactTranslationInterval {
         })
     }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+
     pub fn length(&self) -> f64 {
         (self.edge_end_parameter - self.edge_start_parameter).max(0.0)
     }
