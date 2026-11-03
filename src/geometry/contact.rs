@@ -551,6 +551,14 @@ pub fn connection_pair_candidates(
         .collect()
 }
 
+
+// Targeted endpoint lookup used by BREAK discovery.
+pub(crate) fn connection_pair_candidate_for_endpoints(s: &OrganismStructure, ua: usize, ub: usize, c: &[crate::resources::BaseResource], endpoint_a: ConnectionEndpoint, endpoint_b: ConnectionEndpoint) -> Option<ConnectionPairCandidate> {
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else { return None; };
+    let (a, b) = candidate_endpoints(a, b, c).into_iter().find(|(a, b)| *a == endpoint_a && *b == endpoint_b)?;
+    candidate_for_endpoints(s, ua, ub, a, b, c)
+}
+
 #[allow(dead_code)]
 pub fn contacting_connection_pair_candidates(
     s: &OrganismStructure,
