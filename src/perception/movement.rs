@@ -400,7 +400,7 @@ impl Simulation {
         }
     }
 
-    #[expect(dead_code, reason = "Retained for planned runtime integration")]
+    #[expect(dead_code, reason = "Planned API")]
     pub(crate) fn try_move_cell(
         organism: &mut Organism,
         environment: &mut Environment,
