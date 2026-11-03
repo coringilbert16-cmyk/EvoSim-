@@ -93,6 +93,8 @@ mod combine_runtime;
 mod decomposition;
 #[path = "infrastructure/diagnostics.rs"]
 mod diagnostics;
+#[path = "infrastructure/chemistry_cache_metrics.rs"]
+mod chemistry_cache_metrics;
 #[path = "chemistry/energy_ledger.rs"]
 mod energy_ledger;
 #[path = "chemistry/environmental_combine.rs"]
