@@ -3252,6 +3252,10 @@ mod tests {
             &catalog,
         )
         .expect("the selected live interface must remain resolvable");
+        assert!(
+            !interface.signature.is_empty(),
+            "live geometry identity must resolve independently of the static-potential cache"
+        );
         let selected_position = constituent_chemical_position(selected_unit, &catalog)
             .expect("selected constituent must retain its chemical position");
         let external_position =
