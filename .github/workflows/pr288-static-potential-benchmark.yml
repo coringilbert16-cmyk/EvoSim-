@@ -1,4 +1,4 @@
-name: PR 288 Static Potential Same-Runner Benchmark
+name: PR 288 Static Potential One-Minute Matched Benchmark
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - bench/pr288-static-potential-candidate
 
 concurrency:
-  group: pr288-static-potential-same-runner
+  group: pr288-static-potential-one-minute
   cancel-in-progress: false
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Alternating baseline and candidate release runs
+    name: Three one-minute matched samples per revision
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -38,59 +38,111 @@ jobs:
           git worktree add /tmp/pr288-candidate "$CANDIDATE_SHA"
           (cd /tmp/pr288-baseline && cargo build --release)
           (cd /tmp/pr288-candidate && cargo build --release)
-      - name: Run alternating matched experiments
+      - name: Warm both revisions outside measured samples
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/pr288-matched
-          : > /tmp/pr288-matched/timings.tsv
+          for variant in baseline candidate; do
+            workdir="/tmp/pr288-$variant"
+            (cd "$workdir" && "$workdir/target/release/evosim" --headless \
+              --environment-chemistry-experiment --seed 42 --ticks 24000 \
+              --diagnostic-interval 1000 --diagnostics "/tmp/pr288-warmup-$variant.jsonl")
+          done
+      - name: Run three alternating one-minute samples per revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr288-one-minute
+          : > /tmp/pr288-one-minute/samples.tsv
+          : > /tmp/pr288-one-minute/runs.tsv
+          : > /tmp/pr288-one-minute/summaries.jsonl
           declare -A counts
           counts[baseline]=0
           counts[candidate]=0
           sequence=(baseline candidate candidate baseline baseline candidate)
           for variant in "${sequence[@]}"; do
             counts[$variant]=$((counts[$variant] + 1))
-            iteration="${counts[$variant]}"
-            if [ "$variant" = baseline ]; then
-              workdir="/tmp/pr288-baseline"
-            else
-              workdir="/tmp/pr288-candidate"
-            fi
+            sample="${counts[$variant]}"
+            workdir="/tmp/pr288-$variant"
             binary="$workdir/target/release/evosim"
-            output="/tmp/pr288-matched/${variant}-${iteration}.jsonl"
-            start_ns=$(date +%s%N)
-            (cd "$workdir" && "$binary" --headless \
-              --environment-chemistry-experiment \
-              --seed 42 \
-              --duration-seconds 180 \
-              --diagnostic-interval 100 \
-              --diagnostics "$output")
-            end_ns=$(date +%s%N)
-            elapsed=$(awk -v start="$start_ns" -v end="$end_ns" 'BEGIN { printf "%.6f", (end-start)/1000000000 }')
-            ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-            awk -v v="$variant" -v i="$iteration" -v t="$ticks" -v e="$elapsed" 'BEGIN { printf "%s\t%d\t%d\t%s\t%.3f\n", v, i, t, e, t/e }' | tee -a /tmp/pr288-matched/timings.tsv
-            grep '"event":"environmental_chemistry_summary"' "$output" | tee -a /tmp/pr288-matched/summaries.jsonl
+            sample_start=$(date +%s%N)
+            sample_ticks=0
+            run_count=0
+            while true; do
+              run_count=$((run_count + 1))
+              output="/tmp/pr288-one-minute/${variant}-${sample}-run-${run_count}.jsonl"
+              run_start=$(date +%s%N)
+              (cd "$workdir" && "$binary" --headless \
+                --environment-chemistry-experiment --seed 42 --ticks 24000 \
+                --diagnostic-interval 1000 --diagnostics "$output")
+              run_end=$(date +%s%N)
+              run_elapsed=$(awk -v a="$run_start" -v b="$run_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
+              ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
+              test "$ticks" = "24000"
+              sample_ticks=$((sample_ticks + ticks))
+              printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$run_elapsed" >> /tmp/pr288-one-minute/runs.tsv
+              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/pr288-one-minute/summaries.jsonl
+              sample_now=$(date +%s%N)
+              sample_elapsed=$(awk -v a="$sample_start" -v b="$sample_now" 'BEGIN { print (b-a)/1000000000 }')
+              if awk -v elapsed="$sample_elapsed" 'BEGIN { exit !(elapsed >= 60) }'; then
+                break
+              fi
+            done
+            sample_end=$(date +%s%N)
+            elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
+            rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
+            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/pr288-one-minute/samples.tsv
           done
-          echo "=== MEDIAN THROUGHPUT BY REVISION ==="
+          echo "=== SAMPLE MEDIANS ==="
           python3 - <<'PY'
           import statistics
           rows = {}
-          with open("/tmp/pr288-matched/timings.tsv", encoding="utf-8") as source:
+          with open("/tmp/pr288-one-minute/samples.tsv", encoding="utf-8") as source:
               for line in source:
-                  variant, iteration, ticks, elapsed, rate = line.split()
+                  variant, sample, ticks, elapsed, runs, rate = line.split()
                   rows.setdefault(variant, []).append(float(rate))
           for variant, rates in sorted(rows.items()):
-              print(f"{variant}: runs={len(rates)} rates={rates} median_ticks_per_second={statistics.median(rates):.3f}")
+              print(f"{variant}: samples={len(rates)} rates={rates} median_ticks_per_second={statistics.median(rates):.3f}")
           baseline = statistics.median(rows["baseline"])
           candidate = statistics.median(rows["candidate"])
           print(f"candidate_vs_baseline_percent={(candidate / baseline - 1.0) * 100.0:.2f}%")
+          assert len(rows["baseline"]) == 3 and len(rows["candidate"]) == 3
           PY
-          echo "=== RAW TIMINGS ==="
-          cat /tmp/pr288-matched/timings.tsv
-      - name: Upload matched benchmark data
+          echo "=== RAW SAMPLES ==="
+          cat /tmp/pr288-one-minute/samples.tsv
+          echo "=== PER-RUN WALL TIMES ==="
+          cat /tmp/pr288-one-minute/runs.tsv
+      - name: Validate inventory and energy conservation
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, math
+          path = "/tmp/pr288-one-minute/summaries.jsonl"
+          try:
+              rows = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+          except FileNotFoundError:
+              raise SystemExit("No experiment summaries were produced")
+          if not rows:
+              raise SystemExit("No experiment summaries were produced")
+          expected = {"Carbon":15.0,"Hydrogen":16.0,"Nitrogen":24.0,"Oxygen":20.0,"Phosphorus":17.0,"Sulfur":19.0,"Water":17.0}
+          for i, row in enumerate(rows, 1):
+              assert row.get("ticks_observed") == 24000, (i, row)
+              assert row.get("final_material_inventory") == expected, (i, row.get("final_material_inventory"))
+              residual = row.get("energy_balance_residual")
+              assert isinstance(residual, (int, float)) and math.isfinite(residual) and abs(residual) < 1e-4, (i, residual)
+          print(f"Validated {len(rows)} complete runs: 24,000 ticks each, exact material inventory, energy residual < 1e-4")
+          print("Totals:", {
+              "combine_committed": sum(r["combine_committed"] for r in rows),
+              "combine_rejected": sum(r["combine_rejected"] for r in rows),
+              "break_committed": sum(r["break_committed"] for r in rows),
+              "break_rejected": sum(r["break_rejected"] for r in rows),
+          })
+          PY
+      - name: Upload one-minute matched benchmark data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr288-same-runner-matched-benchmark
-          path: /tmp/pr288-matched/
+          name: pr288-one-minute-matched-benchmark
+          path: /tmp/pr288-one-minute/
           if-no-files-found: warn
