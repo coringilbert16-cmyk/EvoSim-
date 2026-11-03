@@ -233,7 +233,7 @@ jobs:
           done
           exit "$failed"
       - name: Environmental transport benchmark (profiling)
-        if: success()
+        if: always()
         timeout-minutes: 5
         run: cargo test --locked transport_layout_benchmark_reports_distributed_and_dense_cost -- --nocapture
       - name: Run Rust tests
