@@ -114,12 +114,22 @@ impl PhysicalMaterial {
             // More than one endpoint pairing can be geometrically valid for a
             // symmetric realization. Preserve one deterministic physical choice
             // rather than rejecting an otherwise valid material.
-            let candidate =
-                connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
-                    .into_iter()
-                    .find(|candidate| {
-                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
-                    })?;
+            let candidates =
+                connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog);
+            let candidate = candidates.iter().position(|candidate| {
+                candidate.available_a && candidate.available_b && candidate.distance <= 1.0
+            });
+            let Some(candidate) = candidate else {
+                eprintln!(
+                    "REALIZATION_NO_BOND parts={:?} placements={:?} bond={:?} candidate_distances={:?}",
+                    material.parts,
+                    placements,
+                    bond,
+                    candidates.iter().map(|candidate| candidate.distance).collect::<Vec<_>>()
+                );
+                return None;
+            };
+            let candidate = candidates[candidate].clone();
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
                 endpoint_a: candidate.endpoint_a,
