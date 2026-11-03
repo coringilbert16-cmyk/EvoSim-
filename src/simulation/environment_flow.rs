@@ -812,7 +812,7 @@ pub(crate) fn transport_field(
     moved_count
 }
 
-#[cfg(test)
+#[cfg(test)]
 mod tests {
     use super::*;
 
