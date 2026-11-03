@@ -7,6 +7,9 @@ edition = "2021"
 name = "evosim"
 path = "src/main.rs"
 
+[features]
+transport-profiling = []
+
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 parking_lot = "0.12"
