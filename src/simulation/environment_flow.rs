@@ -212,17 +212,24 @@ fn obstacle_adjusted_velocity(
         }
         let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
         let dy = y - obstacle.y;
-        let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
-        if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+        let near_radius = radius * 2.5;
+        let near_radius_sq = near_radius * near_radius;
+        let distance_sq = dx * dx + dy * dy;
+        let in_wake = dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0;
+        if distance_sq >= near_radius_sq && !in_wake {
+            continue;
+        }
+        if distance_sq < near_radius_sq {
+            let distance = distance_sq.sqrt().max(1e-9);
+            let influence = obstacle.solidity * (1.0 - distance / near_radius).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
                 y: side * influence * 0.65,
             });
         }
-        if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
+        if in_wake {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
             let attenuation = (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
