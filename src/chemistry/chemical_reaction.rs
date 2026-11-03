@@ -1,6 +1,6 @@
 //! Local runtime chemical reaction accumulation.
 
-use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
+use crate::chemistry_library::ChemistryLibrary;
 use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::BaseResource;
 use crate::state::Organism;
@@ -966,6 +966,7 @@ pub(crate) fn resolve_preserving_accumulation(
 #[cfg(test)]
 mod material_identity_tests {
     use super::*;
+    use crate::chemistry_library::ChemistryKey;
     use crate::resources::{InternalBond, Material};
 
     fn environmental_test_composite(
