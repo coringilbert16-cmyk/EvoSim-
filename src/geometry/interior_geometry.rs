@@ -65,7 +65,7 @@ impl EnclosedRegion {
 /// Whether a structural connection endpoint lies in an accessible enclosed
 /// interior region. The genome cavity is already excluded when callers supply
 /// regions from `find_accessible_interior_regions`.
-#[expect(dead_code, reason = "Planned API")]
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn endpoint_in_accessible_interior(
     endpoint: crate::structure::ConnectionEndpoint,
     unit: &crate::structure::StructuralUnit,
