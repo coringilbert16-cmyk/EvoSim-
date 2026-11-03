@@ -20,7 +20,7 @@ pub struct MaterialGeometry {
     pub max_y: f64,
 }
 impl MaterialGeometry {
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+#[expect(dead_code, reason = "Retained for planned runtime integration")]
     pub fn new(
         material: &Material,
         placements: &[Placement],
