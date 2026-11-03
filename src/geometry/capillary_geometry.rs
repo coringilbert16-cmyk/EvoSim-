@@ -1232,7 +1232,7 @@ pub struct CapillaryContactFamily {
     pub enclosed_area: f64,
 }
 
-#[expect(dead_code, reason = "Retained capillary properties for planned fluid integration")]
+#[expect(dead_code, reason = "Fluid API")]
 impl CapillaryContactFamily {
     /// Solve the zero-gravity 2-D Young–Laplace equilibrium for a fluid
     /// contacting a flat solid boundary.
