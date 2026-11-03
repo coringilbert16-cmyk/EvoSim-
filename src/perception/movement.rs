@@ -774,10 +774,9 @@ fn environmental_penetration_allowed(
     }
 
     // Permeability is the fraction of the requested movement that may occur
-    // after first boundary contact. This makes the response continuous:
-    // Carbon (0) stops at contact, Water (1) permits the full displacement,
-    // and intermediate cohesion permits partial penetration without a
-    // random acquisition roll.
+    // after first boundary contact. Carbon (0) stops at contact, Water (0.5)
+    // permits at most half the remaining displacement, and other materials
+    // retain their relative permeability with a 0.3 maximum.
     if permeability >= 1.0 - 1e-12 {
         return true;
     }
