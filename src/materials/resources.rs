@@ -672,8 +672,9 @@ pub fn combine_materials(inputs: &[Material]) -> Material {
     result
 }
 
-/// Convert cohesion into boundary permeability using Water and Carbon as the
-/// physical endpoints. Water is fully permeable; Carbon is a hard wall.
+/// Convert cohesion into boundary permeability. Water is the explicit 50%
+/// exception; all other materials retain the original linear dispersion with
+/// a 30% maximum. Carbon remains an impermeable hard wall.
 pub fn permeability_from_cohesion(cohesion: f64, catalog: &[BaseResource]) -> f64 {
     let water = catalog
         .iter()
@@ -689,7 +690,10 @@ pub fn permeability_from_cohesion(cohesion: f64, catalog: &[BaseResource]) -> f6
     if !cohesion.is_finite() || !water.is_finite() || !carbon.is_finite() || carbon <= water {
         return 0.0;
     }
-    ((carbon - cohesion) / (carbon - water)).clamp(0.0, 1.0)
+    if cohesion <= water {
+        return 0.5;
+    }
+    0.3 * ((carbon - cohesion) / (carbon - water)).clamp(0.0, 1.0)
 }
 
 pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
@@ -1010,11 +1014,16 @@ mod shape_tests {
     }
 
     #[test]
-    fn cohesion_permeability_uses_water_and_carbon_as_endpoints() {
+    fn cohesion_permeability_preserves_dispersion_with_reduced_non_water_maximum() {
         let catalog = default_catalog();
-        assert!((permeability_from_cohesion(0.0, &catalog) - 1.0).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.0, &catalog) - 0.5).abs() < 1e-12);
         assert!((permeability_from_cohesion(0.95, &catalog) - 0.0).abs() < 1e-12);
-        assert!((permeability_from_cohesion(0.475, &catalog) - 0.5).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.475, &catalog) - 0.15).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.10, &catalog) - 0.26842105263157895).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.05, &catalog) - 0.28421052631578947).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.45, &catalog) - 0.15789473684210525).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.70, &catalog) - 0.07894736842105263).abs() < 1e-12);
+        assert!((permeability_from_cohesion(0.60, &catalog) - 0.11052631578947368).abs() < 1e-12);
         assert_eq!(permeability_from_cohesion(f64::NAN, &catalog), 0.0);
     }
 

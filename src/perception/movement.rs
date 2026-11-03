@@ -774,10 +774,9 @@ fn environmental_penetration_allowed(
     }
 
     // Permeability is the fraction of the requested movement that may occur
-    // after first boundary contact. This makes the response continuous:
-    // Carbon (0) stops at contact, Water (1) permits the full displacement,
-    // and intermediate cohesion permits partial penetration without a
-    // random acquisition roll.
+    // after first boundary contact. Carbon (0) stops at contact, Water (0.5)
+    // permits at most half the remaining displacement, and other materials
+    // retain their relative permeability with a 0.3 maximum.
     if permeability >= 1.0 - 1e-12 {
         return true;
     }
@@ -1169,7 +1168,7 @@ mod tests {
     }
 
     #[test]
-    fn water_boundary_permits_full_environmental_penetration() {
+    fn water_boundary_limits_environmental_penetration_to_half_the_remaining_distance() {
         let simulation = Simulation::new(42, 1.0);
         let environment = simulation.environment.clone();
         let mut moving = simulation
@@ -1200,13 +1199,37 @@ mod tests {
             &environment.catalog,
         )
         .expect("valid carbon realization");
-        assert!(environmental_penetration_allowed(
-            &moving,
-            &environment,
-            &carbon,
-            1.0,
-            0.0
-        ));
+        assert!(
+            !environmental_penetration_allowed(
+                &moving,
+                &environment,
+                &carbon,
+                1.0,
+                0.0
+            ),
+            "Water must not permit movement through the entire remaining overlap"
+        );
+
+        let farther_carbon = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: water_x + 1.5,
+                y: water_y,
+                rotation_radians: 0.0,
+            }],
+            &environment.catalog,
+        )
+        .expect("valid farther carbon realization");
+        assert!(
+            environmental_penetration_allowed(
+                &moving,
+                &environment,
+                &farther_carbon,
+                1.5,
+                0.0
+            ),
+            "Water should permit movement when no more than half the requested distance remains after first contact"
+        );
     }
 
     #[test]
