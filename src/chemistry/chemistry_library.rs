@@ -760,6 +760,63 @@ mod tests {
     }
 
     #[test]
+    fn static_potential_key_reuses_canonical_pair_across_geometry_variants() {
+        let root = test_root("static-potential-geometry-independent");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+
+        let forward = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        let reversed = library.key_from_chemical_pair("Hydrogen", "Carbon", 5.5, 10.5);
+        assert_eq!(forward, reversed);
+        assert_eq!(forward.interface_class, "static_potential");
+        assert!(forward
+            .interface_signature
+            .contains(&library.manifest.equation_fingerprint));
+        assert_ne!(
+            forward,
+            ChemistryKey::from_live_geometry(
+                "Carbon",
+                "Hydrogen",
+                &LiveGeometryInterface {
+                    interface_class: "rigid_point".into(),
+                    signature: "live-v1|Carbon:corner:0|Hydrogen:line:0".into(),
+                },
+                10.5,
+                5.5,
+            ),
+            "static-potential identity must remain separate from live geometry identity"
+        );
+
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(forward.clone(), 0.625)
+                .unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(reversed.clone(), 0.75)
+                .unwrap(),
+            Some(0.625),
+            "reversed material order must reuse the existing static potential"
+        );
+        assert_ne!(
+            forward,
+            library.key_from_chemical_pair("Carbon", "Hydrogen", 10.25, 5.5),
+            "different chemical positions must not share a cache entry"
+        );
+        assert_ne!(
+            forward,
+            library.key_from_chemical_pair("Carbon", "Oxygen", 10.5, 5.5),
+            "different constituent identities must not share a cache entry"
+        );
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(reopened.get(&forward).map(|record| record.static_potential), Some(0.625));
+        assert_eq!(reopened.len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn library_deduplicates_keys() {
         let root = std::env::temp_dir().join(format!("evosim-chemistry-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
