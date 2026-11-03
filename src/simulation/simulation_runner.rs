@@ -244,7 +244,10 @@ fn run_environment_chemistry_experiment(
         .finish(&simulation)
         .expect("failed to finalize environmental chemistry diagnostics");
     if std::env::var_os("EVOSIM_CHEMISTRY_CACHE_METRICS").is_some() {
-        println!("CHEMISTRY_CACHE_METRICS {}", crate::chemistry_cache_metrics::summary_json());
+        println!(
+            "CHEMISTRY_CACHE_METRICS {}",
+            crate::chemistry_cache_metrics::summary_json()
+        );
     }
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
