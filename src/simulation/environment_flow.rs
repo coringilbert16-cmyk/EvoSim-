@@ -1239,7 +1239,11 @@ mod tests {
                 moved_total += moved;
                 assert_eq!(field.total_material(), inventory_before);
                 assert_eq!(
-                    field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+                    field
+                        .cells
+                        .iter()
+                        .map(|cell| cell.physical_materials.len())
+                        .sum::<usize>(),
                     256
                 );
             }
