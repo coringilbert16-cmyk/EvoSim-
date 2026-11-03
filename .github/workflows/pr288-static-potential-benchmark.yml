@@ -1,12 +1,13 @@
-name: PR 288 Static Potential Candidate Benchmark
+name: PR 288 Static Potential Matched Benchmark
 
 on:
   push:
     branches:
       - bench/pr288-static-potential-candidate
+      - bench/pr288-static-potential-baseline
 
 concurrency:
-  group: pr288-static-potential-benchmark
+  group: pr288-static-potential-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -14,11 +15,11 @@ permissions:
 
 jobs:
   benchmark:
-    name: 180-second organism-free chemistry benchmark
+    name: Three-run 24,000-tick organism-free chemistry benchmark
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Check out candidate
+      - name: Check out benchmark revision
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -26,25 +27,35 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
-      - name: Run reproducible release experiment
+      - name: Build release executable
+        run: cargo build --release
+      - name: Run three timed reproducible release experiments
+        shell: bash
         run: |
-          cargo run --release -- --headless \
-            --environment-chemistry-experiment \
-            --seed 42 \
-            --duration-seconds 180 \
-            --diagnostic-interval 100 \
-            --diagnostics /tmp/environment-chemistry-diagnostics.jsonl
-      - name: Print experiment summary
-        if: always()
-        run: |
-          if [ -f /tmp/environment-chemistry-diagnostics.jsonl ]; then
-            grep '"event":"environmental_chemistry_summary"' /tmp/environment-chemistry-diagnostics.jsonl || true
-            tail -n 80 /tmp/environment-chemistry-diagnostics.jsonl
-          fi
-      - name: Upload full diagnostic record
+          set -euo pipefail
+          mkdir -p /tmp/pr288-benchmark
+          : > /tmp/pr288-benchmark/timings.tsv
+          for iteration in 1 2 3; do
+            output="/tmp/pr288-benchmark/run-${iteration}.jsonl"
+            start_ns=$(date +%s%N)
+            target/release/evosim --headless \
+              --environment-chemistry-experiment \
+              --seed 42 \
+              --duration-seconds 180 \
+              --diagnostic-interval 100 \
+              --diagnostics "$output"
+            end_ns=$(date +%s%N)
+            elapsed=$(awk -v start="$start_ns" -v end="$end_ns" 'BEGIN { printf "%.6f", (end-start)/1000000000 }')
+            ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
+            awk -v i="$iteration" -v t="$ticks" -v e="$elapsed" 'BEGIN { printf "run=%d ticks=%d elapsed_seconds=%s ticks_per_second=%.3f\n", i, t, e, t/e }' | tee -a /tmp/pr288-benchmark/timings.tsv
+            grep '"event":"environmental_chemistry_summary"' "$output" | tee -a /tmp/pr288-benchmark/timings.tsv
+          done
+          echo "=== TIMING SUMMARY ==="
+          cat /tmp/pr288-benchmark/timings.tsv
+      - name: Upload benchmark diagnostics and timings
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr288-static-potential-candidate-diagnostics
-          path: /tmp/environment-chemistry-diagnostics.jsonl
+          name: pr288-${{ github.ref_name }}-benchmark
+          path: /tmp/pr288-benchmark/
           if-no-files-found: warn
