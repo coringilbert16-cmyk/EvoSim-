@@ -13,9 +13,7 @@ static COMBINE_CALLS: AtomicU64 = AtomicU64::new(0);
 static COMBINE_NS: AtomicU64 = AtomicU64::new(0);
 
 fn enabled() -> bool {
-    *ENABLED.get_or_init(|| {
-        std::env::var_os("EVOSIM_CHEMISTRY_CACHE_METRICS").is_some()
-    })
+    *ENABLED.get_or_init(|| std::env::var_os("EVOSIM_CHEMISTRY_CACHE_METRICS").is_some())
 }
 
 pub(crate) fn record_lookup(hit: bool) {
