@@ -1207,7 +1207,7 @@ mod tests {
         let farther_carbon = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![Placement {
-                x: water_x + 1.5,
+                x: water_x + 3.0,
                 y: water_y,
                 rotation_radians: 0.0,
             }],
@@ -1219,7 +1219,7 @@ mod tests {
                 &moving,
                 &environment,
                 &farther_carbon,
-                1.5,
+                3.0,
                 0.0
             ),
             "Water should permit movement when no more than half the requested distance remains after first contact"
