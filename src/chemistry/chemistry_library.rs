@@ -1,4 +1,5 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
+#[cfg(test)]
 use crate::geometry_reference_library::LiveGeometryInterface;
 #[cfg(test)]
 use crate::geometry_reference_library::{
@@ -123,6 +124,7 @@ impl ChemistryKey {
         )
     }
 
+    #[cfg(test)]
     pub fn from_live_geometry(
         a: impl Into<String>,
         b: impl Into<String>,
