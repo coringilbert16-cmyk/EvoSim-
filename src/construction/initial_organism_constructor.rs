@@ -974,16 +974,18 @@ fn bob_fluid_acquisition_candidate(
     (None, had_records)
 }
 
+type ValidConstructionDetails = (
+    Vec<(String, Placement)>,
+    Vec<(String, Shape)>,
+    FluidGeometryStatus,
+);
+
 fn valid_construction(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
     bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Option<(
-    Vec<(String, Placement)>,
-    Vec<(String, Shape)>,
-    FluidGeometryStatus,
-)> {
+) -> Option<ValidConstructionDetails> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
