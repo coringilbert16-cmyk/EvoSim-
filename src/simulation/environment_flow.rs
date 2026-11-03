@@ -360,6 +360,16 @@ fn angular_displacement(
     let center_x = weighted_x / total_mass;
     let center_y = anchor_y + weighted_y / total_mass;
 
+    // A single constituent has no lever arm, so the torque path below is
+    // unnecessary. In particular, avoid an obstacle scan at the center: the
+    // vorticity estimate only needs the four offset velocity samples.
+    if placements.len() == 1 {
+        return single_constituent_angular_displacement(
+            material, catalog, width, height, obstacles, source_cell, source_index,
+            center_x, center_y, total_mass,
+        );
+    }
+
     let center_velocity = obstacle_adjusted_velocity(
         background_velocity(center_x, center_y, width, height),
         center_x,
@@ -409,93 +419,10 @@ fn angular_displacement(
                 - ry * (local_velocity.x - center_velocity.x));
     }
 
-    let response = if placements.len() > 1 && moment > f64::EPSILON {
+    let response = if moment > f64::EPSILON {
         torque / moment
     } else {
-        // A single constituent has no center-of-mass lever arm. Its shape's
-        // anisotropy determines whether flow vorticity can turn its orientation.
-        let shape_form = material
-            .realized_shapes
-            .as_ref()
-            .and_then(|shapes| shapes.first())
-            .map(|shape| &shape.form)
-            .or_else(|| {
-                resource_for_part(&material.material.parts[0].0, catalog)
-                    .map(|resource| &resource.shape.form)
-            });
-        let anisotropy = match shape_form {
-            Some(Form::Circle { .. }) | None => 0.0,
-            Some(Form::Fluid {
-                boundary,
-                arc_boundary,
-                multi_contact_boundary,
-                ..
-            }) => {
-                if boundary.is_some() || arc_boundary.is_some() || multi_contact_boundary.is_some()
-                {
-                    1.0
-                } else {
-                    0.0
-                }
-            }
-            Some(Form::Line { .. })
-            | Some(Form::Rectangle { .. })
-            | Some(Form::RegularPolygon { .. })
-            | Some(Form::Polygon { .. }) => 1.0,
-        };
-        if anisotropy == 0.0 {
-            return 0.0;
-        }
-        let Some(shape_form) = shape_form else {
-            return 0.0;
-        };
-        let epsilon = (width.min(height) * 1e-4).max(1e-3);
-        let right = obstacle_adjusted_velocity(
-            background_velocity(center_x + epsilon, center_y, width, height),
-            center_x + epsilon,
-            center_y,
-            source_cell,
-            source_index,
-            obstacles,
-            width,
-        );
-        let left = obstacle_adjusted_velocity(
-            background_velocity(center_x - epsilon, center_y, width, height),
-            center_x - epsilon,
-            center_y,
-            source_cell,
-            source_index,
-            obstacles,
-            width,
-        );
-        let up = obstacle_adjusted_velocity(
-            background_velocity(center_x, center_y + epsilon, width, height),
-            center_x,
-            center_y + epsilon,
-            source_cell,
-            source_index,
-            obstacles,
-            width,
-        );
-        let down = obstacle_adjusted_velocity(
-            background_velocity(center_x, center_y - epsilon, width, height),
-            center_x,
-            center_y - epsilon,
-            source_cell,
-            source_index,
-            obstacles,
-            width,
-        );
-        let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
-        let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
-        let characteristic_radius_sq = shape_radius(shape_form).powi(2);
-        let intrinsic_moment = intrinsic_moment_of_inertia(shape_form, total_mass);
-        if intrinsic_moment <= f64::EPSILON {
-            0.0
-        } else {
-            (dv_y_dx - dv_x_dy) * 0.5 * anisotropy * total_mass * characteristic_radius_sq
-                / intrinsic_moment
-        }
+        0.0
     };
 
     let angle = response * mobility(total_mass) * 0.15;
@@ -504,6 +431,107 @@ fn angular_displacement(
     } else {
         0.0
     }
+}
+
+
+/// Compute vorticity-driven rotation for a single anisotropic constituent.
+/// There is no center-of-mass torque for one constituent, so only the four
+/// finite-difference velocity samples are needed.
+fn single_constituent_angular_displacement(
+    material: &PhysicalMaterial,
+    catalog: &[BaseResource],
+    width: f64,
+    height: f64,
+    obstacles: &[Obstacle],
+    source_cell: usize,
+    source_index: usize,
+    center_x: f64,
+    center_y: f64,
+    total_mass: f64,
+) -> f64 {
+    let shape_form = material
+        .realized_shapes
+        .as_ref()
+        .and_then(|shapes| shapes.first())
+        .map(|shape| &shape.form)
+        .or_else(|| {
+            resource_for_part(&material.material.parts[0].0, catalog)
+                .map(|resource| &resource.shape.form)
+        });
+    let anisotropy = match shape_form {
+        Some(Form::Circle { .. }) | None => 0.0,
+        Some(Form::Fluid {
+            boundary,
+            arc_boundary,
+            multi_contact_boundary,
+            ..
+        }) => {
+            if boundary.is_some() || arc_boundary.is_some() || multi_contact_boundary.is_some() {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        Some(Form::Line { .. })
+        | Some(Form::Rectangle { .. })
+        | Some(Form::RegularPolygon { .. })
+        | Some(Form::Polygon { .. }) => 1.0,
+    };
+    if anisotropy == 0.0 {
+        return 0.0;
+    }
+    let Some(shape_form) = shape_form else {
+        return 0.0;
+    };
+    let epsilon = (width.min(height) * 1e-4).max(1e-3);
+    let right = obstacle_adjusted_velocity(
+        background_velocity(center_x + epsilon, center_y, width, height),
+        center_x + epsilon,
+        center_y,
+        source_cell,
+        source_index,
+        obstacles,
+        width,
+    );
+    let left = obstacle_adjusted_velocity(
+        background_velocity(center_x - epsilon, center_y, width, height),
+        center_x - epsilon,
+        center_y,
+        source_cell,
+        source_index,
+        obstacles,
+        width,
+    );
+    let up = obstacle_adjusted_velocity(
+        background_velocity(center_x, center_y + epsilon, width, height),
+        center_x,
+        center_y + epsilon,
+        source_cell,
+        source_index,
+        obstacles,
+        width,
+    );
+    let down = obstacle_adjusted_velocity(
+        background_velocity(center_x, center_y - epsilon, width, height),
+        center_x,
+        center_y - epsilon,
+        source_cell,
+        source_index,
+        obstacles,
+        width,
+    );
+    let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
+    let dv_x_dy = (up.x - down.x) / (2.0 * epsilon);
+    let characteristic_radius_sq = shape_radius(shape_form).powi(2);
+    let intrinsic_moment = intrinsic_moment_of_inertia(shape_form, total_mass);
+    let response = if intrinsic_moment <= f64::EPSILON {
+        0.0
+    } else {
+        (dv_y_dx - dv_x_dy) * 0.5 * anisotropy * total_mass * characteristic_radius_sq
+            / intrinsic_moment
+    };
+    let angle = response * mobility(total_mass) * 0.15;
+    if angle.is_finite() { angle } else { 0.0 }
 }
 
 /// Rotate a complete realized object around its mass-center while preserving
