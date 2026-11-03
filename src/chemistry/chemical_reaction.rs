@@ -1,7 +1,6 @@
 //! Local runtime chemical reaction accumulation.
 
 use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
-use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::BaseResource;
 use crate::state::Organism;
 use crate::structure::Bond;
@@ -217,7 +216,6 @@ pub(crate) fn accumulate(
     accumulation.retain(|key, _| {
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
-    let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bond_count = organism.structure.bonds.len();
     let mut operations = Vec::new();
@@ -264,20 +262,14 @@ pub(crate) fn accumulate(
             continue;
         };
 
-        let candidate = crate::contact::connection_pair_candidates_cached(
+        let candidate = crate::contact::connection_pair_candidate_for_endpoints(
             &organism.structure,
             unit_a,
             unit_b,
             catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            (candidate.endpoint_a == bond.endpoint_a.location
-                && candidate.endpoint_b == bond.endpoint_b.location)
-                || (candidate.endpoint_a == bond.endpoint_b.location
-                    && candidate.endpoint_b == bond.endpoint_a.location)
-        });
+            bond.endpoint_a.location,
+            bond.endpoint_b.location,
+        );
         let Some(candidate) = candidate else {
             continue;
         };
@@ -529,7 +521,6 @@ pub(crate) fn accumulate_environmental(
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let mut compatibility_cache = ConnectionCompatibilityCache::new();
 
     for candidate_index in indices {
         let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
@@ -592,20 +583,14 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
+        let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
             &hypothetical,
             unit_a,
             unit_b,
             &environment.catalog,
-            &mut compatibility_cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            (candidate.endpoint_a == connection.endpoint_a
-                && candidate.endpoint_b == connection.endpoint_b)
-                || (candidate.endpoint_a == connection.endpoint_b
-                    && candidate.endpoint_b == connection.endpoint_a)
-        }) else {
+            connection.endpoint_a,
+            connection.endpoint_b,
+        ) else {
             continue;
         };
         let geometry_material_a = hypothetical.units[unit_a]
