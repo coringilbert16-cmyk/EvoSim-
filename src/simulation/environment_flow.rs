@@ -292,16 +292,15 @@ fn clamp_vertical_displacement(
     let max_dy = world_max - max_y;
     (min_dy <= max_dy).then_some(requested_dy.clamp(min_dy, max_dy))
 }
-fn translated(
-    material: &PhysicalMaterial,
+fn translate_in_place(
+    material: &mut PhysicalMaterial,
     dx: f64,
     dy: f64,
     height: f64,
     catalog: &[BaseResource],
-) -> Option<PhysicalMaterial> {
+) -> Option<()> {
     let dy = clamp_vertical_displacement(material, dy, height, catalog)?;
-    let mut moved = material.clone();
-    let placements = moved.placements.as_mut()?;
+    let placements = material.placements.as_mut()?;
     if placements.is_empty() {
         return None;
     }
@@ -315,6 +314,19 @@ fn translated(
             return None;
         }
     }
+    Some(())
+}
+
+#[cfg(test)]
+fn translated(
+    material: &PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+    height: f64,
+    catalog: &[BaseResource],
+) -> Option<PhysicalMaterial> {
+    let mut moved = material.clone();
+    translate_in_place(&mut moved, dx, dy, height, catalog)?;
     Some(moved)
 }
 
@@ -508,19 +520,18 @@ fn angular_displacement(
 
 /// Rotate a complete realized object around its mass-center while preserving
 /// every constituent's local orientation offset and all bond metadata.
-fn rotated(
-    material: &PhysicalMaterial,
+fn rotate_in_place(
+    material: &mut PhysicalMaterial,
     angle: f64,
     catalog: &[BaseResource],
     _width: f64,
     height: f64,
-) -> Option<PhysicalMaterial> {
+) -> Option<()> {
     if !angle.is_finite() {
         return None;
     }
-    let mut result = material.clone();
     {
-        let placements = result.placements.as_mut()?;
+        let placements = material.placements.as_mut()?;
         if placements.is_empty() || placements.len() != material.material.parts.len() {
             return None;
         }
@@ -561,10 +572,23 @@ fn rotated(
         }
     }
 
-    let vertical_shift = clamp_vertical_displacement(&result, 0.0, height, catalog)?;
-    for placement in result.placements.as_mut()? {
+    let vertical_shift = clamp_vertical_displacement(material, 0.0, height, catalog)?;
+    for placement in material.placements.as_mut()? {
         placement.y += vertical_shift;
     }
+    Some(())
+}
+
+#[cfg(test)]
+fn rotated(
+    material: &PhysicalMaterial,
+    angle: f64,
+    catalog: &[BaseResource],
+    width: f64,
+    height: f64,
+) -> Option<PhysicalMaterial> {
+    let mut result = material.clone();
+    rotate_in_place(&mut result, angle, catalog, width, height)?;
     Some(result)
 }
 
@@ -583,14 +607,13 @@ pub(crate) fn transport_field(
         return 0;
     }
 
-    let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field
+    let snapshot: Vec<(usize, usize, &PhysicalMaterial)> = field
         .cells
         .iter()
         .enumerate()
         .flat_map(|(cell_index, cell)| {
             cell.physical_materials
                 .iter()
-                .cloned()
                 .enumerate()
                 .map(move |(material_index, material)| (cell_index, material_index, material))
         })
@@ -635,8 +658,8 @@ pub(crate) fn transport_field(
     }
     let mut staged = Vec::new();
 
-    for (source_cell, source_index, material) in snapshot {
-        let Some((x, y)) = material_center(&material, height) else {
+    for &(source_cell, source_index, material) in &snapshot {
+        let Some((x, y)) = material_center(material, height) else {
             continue;
         };
         let mass = material.material.mass(catalog);
@@ -658,7 +681,7 @@ pub(crate) fn transport_field(
         let dx = velocity.x * scale;
         let dy = velocity.y * scale;
         let angular_step = angular_displacement(
-            &material,
+            material,
             catalog,
             width,
             height,
@@ -669,20 +692,21 @@ pub(crate) fn transport_field(
         if dx.abs() + dy.abs() <= 1e-12 && angular_step.abs() <= 1e-12 {
             continue;
         }
-        let Some(translated_material) = translated(&material, dx, dy, height, catalog) else {
+        // Keep source state immutable during evaluation; clone only candidates
+        // that actually need movement, then transform that destination in place.
+        let mut moved = material.clone();
+        if translate_in_place(&mut moved, dx, dy, height, catalog).is_none()
+            || rotate_in_place(&mut moved, angular_step, catalog, width, height).is_none()
+        {
             continue;
-        };
-        let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
-        else {
-            continue;
-        };
+        }
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
             continue;
         };
         let Some(destination_cell) = field.index_for_position(anchor.x, anchor.y) else {
             continue;
         };
-        if destination_cell != source_cell || moved != material {
+        if destination_cell != source_cell || &moved != material {
             staged.push((source_cell, source_index, destination_cell, moved));
         }
     }
