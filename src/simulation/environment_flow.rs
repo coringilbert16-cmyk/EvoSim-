@@ -668,7 +668,10 @@ pub(crate) fn transport_field(
             width,
             height,
             nearby,
-            Some(velocity),
+            // A one-part object's arithmetic and mass-weighted centers coincide.
+            // For compounds, angular response uses a mass-weighted center that
+            // may differ from the translational sample, so retain its own query.
+            (material.material.parts.len() == 1).then_some(velocity),
             source_cell,
             source_index,
         );
