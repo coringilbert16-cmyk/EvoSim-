@@ -1200,13 +1200,7 @@ mod tests {
         )
         .expect("valid carbon realization");
         assert!(
-            !environmental_penetration_allowed(
-                &moving,
-                &environment,
-                &carbon,
-                1.0,
-                0.0
-            ),
+            !environmental_penetration_allowed(&moving, &environment, &carbon, 1.0, 0.0),
             "Water must not permit movement through the entire remaining overlap"
         );
 
