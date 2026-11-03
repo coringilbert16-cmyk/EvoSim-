@@ -52,18 +52,19 @@ jobs:
             counts[$variant]=$((counts[$variant] + 1))
             iteration="${counts[$variant]}"
             if [ "$variant" = baseline ]; then
-              binary="/tmp/pr288-baseline/target/release/evosim"
+              workdir="/tmp/pr288-baseline"
             else
-              binary="/tmp/pr288-candidate/target/release/evosim"
+              workdir="/tmp/pr288-candidate"
             fi
+            binary="$workdir/target/release/evosim"
             output="/tmp/pr288-matched/${variant}-${iteration}.jsonl"
             start_ns=$(date +%s%N)
-            "$binary" --headless \
+            (cd "$workdir" && "$binary" --headless \
               --environment-chemistry-experiment \
               --seed 42 \
               --duration-seconds 180 \
               --diagnostic-interval 100 \
-              --diagnostics "$output"
+              --diagnostics "$output")
             end_ns=$(date +%s%N)
             elapsed=$(awk -v start="$start_ns" -v end="$end_ns" 'BEGIN { printf "%.6f", (end-start)/1000000000 }')
             ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
