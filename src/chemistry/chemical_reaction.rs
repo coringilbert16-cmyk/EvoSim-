@@ -296,27 +296,9 @@ pub(crate) fn accumulate(
             .unwrap_or("unknown");
         let material_a = material_identity(&organism.structure.units[unit_a].material);
         let material_b = material_identity(&organism.structure.units[unit_b].material);
-        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            geometry_material_a,
-            &organism.structure.units[unit_a],
-            geometry_material_b,
-            &organism.structure.units[unit_b],
-            candidate,
-            catalog,
-        ) else {
-            continue;
-        };
-        let key = format!(
-            "{}|rev:{}|{}",
-            organism.id,
-            organism.structure_revision,
-            reaction_key(&bond, &interface.signature)
-        );
-
-        let key_record = ChemistryKey::from_live_geometry(
+        let key_record = chemistry_library.key_from_chemical_pair(
             &material_a,
             &material_b,
-            &interface,
             position_a,
             position_b,
         );
@@ -337,6 +319,24 @@ pub(crate) fn accumulate(
                 }
             }
         };
+        // Static potential is cached independently; live geometry remains the
+        // authoritative eligibility check for every physical bond.
+        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &organism.structure.units[unit_a],
+            geometry_material_b,
+            &organism.structure.units[unit_b],
+            candidate,
+            catalog,
+        ) else {
+            continue;
+        };
+        let key = format!(
+            "{}|rev:{}|{}",
+            organism.id,
+            organism.structure_revision,
+            reaction_key(&bond, &interface.signature)
+        );
         let Some(contact) = crate::chemistry::contact_factor(
             candidate.distance,
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
@@ -620,16 +620,6 @@ pub(crate) fn accumulate_environmental(
             .first()
             .map(|part| part.0.as_str())
             .unwrap_or("unknown");
-        let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            geometry_material_a,
-            &hypothetical.units[unit_a],
-            geometry_material_b,
-            &hypothetical.units[unit_b],
-            candidate,
-            &environment.catalog,
-        ) else {
-            continue;
-        };
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
         let key = format!(
@@ -641,10 +631,9 @@ pub(crate) fn accumulate_environmental(
             material_identity(&instance.material),
             connection
         );
-        let key_record = ChemistryKey::from_live_geometry(
+        let key_record = chemistry_library.key_from_chemical_pair(
             &material_a,
             &material_b,
-            &interface,
             position_a,
             position_b,
         );
@@ -664,6 +653,17 @@ pub(crate) fn accumulate_environmental(
                     Ok(None) | Err(_) => calculated,
                 }
             }
+        };
+        // Static potential reuse never bypasses live interface eligibility.
+        let Some(_interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &hypothetical.units[unit_a],
+            geometry_material_b,
+            &hypothetical.units[unit_b],
+            candidate,
+            &environment.catalog,
+        ) else {
+            continue;
         };
         let Some(contact_factor) = crate::chemistry::contact_factor(
             candidate.distance,
