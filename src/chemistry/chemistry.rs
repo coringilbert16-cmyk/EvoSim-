@@ -208,6 +208,7 @@ pub fn accumulate_reaction(
 
 /// Non-negative excess of the activation signal over a bond's disruption
 /// threshold. This is a comparison value only, not energy released or stored.
+#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
 pub fn chemical_break_surplus(activation_signal: f64, disruption_cost: f64) -> Option<f64> {
     if !activation_signal.is_finite()
         || !disruption_cost.is_finite()
