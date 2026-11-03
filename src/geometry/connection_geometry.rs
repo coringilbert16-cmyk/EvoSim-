@@ -132,6 +132,7 @@ pub fn rigid_endpoint_world_point(
 /// The normals come exclusively from the realized shape boundaries. No authored
 /// connection direction, bond angle, socket capacity, or radial approximation is
 /// consulted here.
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn rigid_endpoint_facing(
     shape_a: &Shape,
     vertex_a: usize,
@@ -157,6 +158,7 @@ pub fn facing_compatibility(a: WorldConnectionPoint, b: WorldConnectionPoint) ->
     directional_compatibility(a.normal_x, a.normal_y, -b.normal_x, -b.normal_y)
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn within_contact_tolerance(
     a: WorldConnectionPoint,
     b: WorldConnectionPoint,

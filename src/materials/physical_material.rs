@@ -8,6 +8,9 @@ use crate::resources::{BaseResource, Material};
 use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
 use serde::{Deserialize, Serialize};
 
+// Allows only accumulated floating-point noise at the unit-length bond boundary.
+const INTERNAL_BOND_DISTANCE_EPSILON: f64 = 1e-12;
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterialBond {
     pub(crate) part_a: usize,
@@ -118,7 +121,9 @@ impl PhysicalMaterial {
                 connection_pair_candidates(&structure, bond.part_a, bond.part_b, catalog)
                     .into_iter()
                     .find(|candidate| {
-                        candidate.available_a && candidate.available_b && candidate.distance <= 1.0
+                        candidate.available_a
+                            && candidate.available_b
+                            && candidate.distance <= 1.0 + INTERNAL_BOND_DISTANCE_EPSILON
                     })?;
             internal_connections.push(PhysicalMaterialBond {
                 part_a: bond.part_a,
@@ -438,6 +443,44 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {
+        let catalog = crate::resources::default_catalog();
+        let realize_pair = |separation: f64| {
+            PhysicalMaterial::realized(
+                Material {
+                    parts: vec![("Hydrogen".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                    internal_bonds: vec![InternalBond {
+                        part_a: 0,
+                        part_b: 1,
+                    }],
+                },
+                vec![
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    Placement {
+                        x: separation,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                ],
+                &catalog,
+            )
+        };
+
+        assert!(
+            realize_pair(2.0 + 5e-13).is_some(),
+            "sub-picometer numerical excess at the unit bond boundary should be accepted"
+        );
+        assert!(
+            realize_pair(2.0 + 5e-10).is_none(),
+            "a genuine geometric excess must still be rejected"
+        );
+    }
 
     #[test]
     fn realized_fluid_shape_area_scales_with_material_amount() {

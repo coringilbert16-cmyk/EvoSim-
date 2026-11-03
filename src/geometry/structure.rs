@@ -280,7 +280,19 @@ impl ConnectionEndpoint {
             }
             Self::LineEndpoint { point_index } => {
                 let shape = unit.shape(catalog)?;
-                crate::connection_geometry::transform_line_endpoint(
+                let is_line_like = match &shape.form {
+                    crate::resources::Form::Line { .. } => true,
+                    crate::resources::Form::Rectangle { width, height } => {
+                        unit.material.parts.len() == 1
+                            && unit.material.parts[0].0 == "Hydrogen"
+                            && *height <= *width * 0.1 + 1e-12
+                    }
+                    _ => false,
+                };
+                if !is_line_like {
+                    return None;
+                }
+                crate::connection_geometry::rigid_endpoint_world_point(
                     shape,
                     point_index,
                     unit.placement.x,
@@ -1568,6 +1580,32 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hydrogen_line_endpoints_follow_rigid_rotation() {
+        let catalog = crate::resources::default_catalog();
+        let rotation = std::f64::consts::FRAC_PI_4;
+        let hydrogen = StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: rotation,
+            },
+        );
+        let left = ConnectionEndpoint::LineEndpoint { point_index: 0 }
+            .world_point(&hydrogen, &catalog)
+            .expect("thin Hydrogen rectangle has a line-like left endpoint");
+        let right = ConnectionEndpoint::LineEndpoint { point_index: 1 }
+            .world_point(&hydrogen, &catalog)
+            .expect("thin Hydrogen rectangle has a line-like right endpoint");
+
+        assert!((left.x - (10.0 - 0.5 * rotation.cos())).abs() < 1e-12);
+        assert!((left.y - (20.0 - 0.5 * rotation.sin())).abs() < 1e-12);
+        assert!((right.x - (10.0 + 0.5 * rotation.cos())).abs() < 1e-12);
+        assert!((right.y - (20.0 + 0.5 * rotation.sin())).abs() < 1e-12);
+        assert!((crate::connection_geometry::point_distance(left, right) - 1.0).abs() < 1e-12);
+    }
     #[test]
     fn external_aggregate_view_omits_complete_child_group_without_mutating_owner() {
         let mut aggregate = OrganismStructure::new();

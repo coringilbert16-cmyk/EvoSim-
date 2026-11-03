@@ -503,9 +503,7 @@ fn rotated(
     let mut weighted_x = 0.0;
     let mut weighted_y = 0.0;
     for (index, placement) in placements.iter().enumerate() {
-        let Some((name, amount)) = material.material.parts.get(index) else {
-            return None;
-        };
+        let (name, amount) = material.material.parts.get(index)?;
         let resource = resource_for_part(name, catalog)?;
         let mass = resource.properties.mass * *amount;
         if !mass.is_finite() || mass <= 0.0 {

@@ -16,7 +16,7 @@ const CONSTRUCTION_ENERGY: f64 = 1.0e6;
 const INNER_RING_RADIUS: i32 = 3;
 const OUTER_RING_RADIUS: i32 = 5;
 const SPOKE_RADIUS: i32 = 4;
-const SQRT_3: f64 = 1.7320508075688772935;
+const SQRT_3: f64 = 1.732_050_807_568_877_2;
 
 #[derive(Clone, Debug)]
 pub(crate) struct ValidConstruction {
@@ -317,8 +317,8 @@ fn bond_units(
             ));
         };
 
-        let endpoint_a = candidate.endpoint_a.clone();
-        let endpoint_b = candidate.endpoint_b.clone();
+        let endpoint_a = candidate.endpoint_a;
+        let endpoint_b = candidate.endpoint_b;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             structure, unit_a, unit_b, candidate, catalog,
         )
@@ -587,11 +587,11 @@ fn construct_scaffold(
     // Connect the remaining spokes to the outer boundary. The exact radial
     // correspondence is selected from the physical contact graph rather than
     // by inventing a special construction bond.
-    for side in 1..6 {
+    for (side, &spoke) in spokes.iter().enumerate().skip(1).take(5) {
         let outer_coordinate = side * OUTER_RING_RADIUS as usize;
         bond_units(
             &mut structure,
-            spokes[side],
+            spoke,
             outer_indices[outer_coordinate],
             catalog,
             &mut ledger,
@@ -645,7 +645,7 @@ fn placement_fits_resource(
     None
 }
 
-fn available_acquisition_resources<'a>(catalog: &'a [BaseResource]) -> Vec<&'a BaseResource> {
+fn available_acquisition_resources(catalog: &[BaseResource]) -> Vec<&BaseResource> {
     catalog
         .iter()
         .filter(|resource| resource.name != "Water")
@@ -974,16 +974,18 @@ fn bob_fluid_acquisition_candidate(
     (None, had_records)
 }
 
+type ValidConstructionDetails = (
+    Vec<(String, Placement)>,
+    Vec<(String, Shape)>,
+    FluidGeometryStatus,
+);
+
 fn valid_construction(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
     bob_library: &crate::geometry_reference_library::GeometryLibrary,
-) -> Option<(
-    Vec<(String, Placement)>,
-    Vec<(String, Shape)>,
-    FluidGeometryStatus,
-)> {
+) -> Option<ValidConstructionDetails> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
         .flatten()?;
