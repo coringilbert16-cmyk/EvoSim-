@@ -284,7 +284,9 @@ fn chemical_step(
         position_a,
         position_b,
     );
-    let static_potential = match chemistry_library.get(&cache_key) {
+    let cache_record = chemistry_library.get(&cache_key);
+    crate::chemistry_cache_metrics::record_lookup(cache_record.is_some());
+    let static_potential = match cache_record {
         Some(record) => record.static_potential,
         None => {
             let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(position_a, position_b) else {
