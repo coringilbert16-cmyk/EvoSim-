@@ -110,7 +110,7 @@ fn restored_source(
     Some((structure, indices))
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
+#[expect(dead_code, reason = "Retained for planned runtime integration")]
 fn select_best_contact(
     structure: &OrganismStructure,
     indices_a: &[usize],
