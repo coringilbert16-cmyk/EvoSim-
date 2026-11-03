@@ -229,7 +229,7 @@ pub struct LiveGeometryInterface {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub enum LiveFamilyResolution {
     Unresolved,
     Ambiguous,
@@ -445,7 +445,7 @@ fn local_contact_descriptor(
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 fn endpoint_descriptor(endpoint: ConnectionEndpoint) -> String {
     match endpoint {
         ConnectionEndpoint::Corner { point_index } => format!("corner:{point_index}"),
@@ -520,7 +520,7 @@ fn contact_bucket_hash(material: &str, anchor_feature: usize, candidate_feature:
     hasher.finish()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 fn rigid_family_projection(
     family: &GeometryRigidContactFamily,
     relative_rotation_radians: f64,
@@ -536,7 +536,7 @@ fn rigid_family_projection(
     )
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     format!(
         "point|{}|{}|{}|{}|{}|{}|{}",
@@ -550,7 +550,7 @@ fn point_family_projection(family: &GeometryRigidPointContactFamily) -> String {
     )
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String {
     format!(
         "vertex|{}|{}|{}|{}|{}|{}|{}",
@@ -570,7 +570,7 @@ fn vertex_family_projection(family: &GeometryRigidVertexContactFamily) -> String
 /// callers provide the endpoints that contact detection has already realized.
 /// If the same physical interface is presented in the opposite endpoint order,
 /// the returned identity is unchanged.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn resolve_live_contact_interface(
     material_a: &str,
     endpoint_a: ConnectionEndpoint,
@@ -2261,6 +2261,7 @@ fn load_compositional_formations(
     Ok(entries)
 }
 
+#[expect(dead_code, reason = "Retained Bob library APIs for explicit workflows")]
 impl GeometryLibrary {
     pub fn open(root: impl AsRef<Path>, catalog: &[BaseResource]) -> std::io::Result<Self> {
         let root = root.as_ref().to_path_buf();
@@ -2595,7 +2596,6 @@ impl GeometryLibrary {
         self.entries.len()
     }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
     }
@@ -3300,7 +3300,6 @@ impl GeometryLibrary {
         Ok(added)
     }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
     pub fn insert_contact_family(
         &mut self,
         family: GeometryContactFamily,
@@ -3368,7 +3367,6 @@ impl GeometryLibrary {
         Ok(added)
     }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
     pub fn set_frontier_state(
         &mut self,
         formation_signature: impl Into<String>,
@@ -3643,7 +3641,7 @@ fn quantize(value: f64) -> i64 {
 /// Family intervals are generated in unwrapped radians; the live angle is
 /// normalized, so equivalent turns must be considered without changing the
 /// persisted interval convention.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 fn angle_in_periodic_interval(angle: f64, start: f64, end: f64) -> bool {
     if !angle.is_finite() || !start.is_finite() || !end.is_finite() || start > end {
         return false;
@@ -4159,7 +4157,7 @@ fn load_fluid_boundary_families(
     out
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
     fluid_resource: &BaseResource,
@@ -4216,7 +4214,7 @@ pub struct WaterContactGenerationDiagnostics {
 
 /// Preserve the original generator API while exposing reason-level outcomes
 /// to Bob's worker and focused diagnostics tests.
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn generate_water_contact_families(
     formation: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -4507,7 +4505,7 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
     family: &GeometryRigidContactFamily,
@@ -5056,7 +5054,7 @@ pub fn generate_two_constituent_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn expand_three_constituent_candidates(
     two_constituent: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -5236,7 +5234,7 @@ pub fn expand_formation_candidates(
     unique.into_values().collect()
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -5256,7 +5254,7 @@ pub fn seed_two_constituent_catalogue(
     library.insert_many(candidates, catalog)
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Tested Bob library API retained for explicit workflows not yet enabled in the live runtime"))]
+#[expect(dead_code, reason = "Retained for explicit Bob library workflows")]
 pub fn seed_three_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
