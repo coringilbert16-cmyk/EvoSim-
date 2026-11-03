@@ -774,15 +774,11 @@ mod tests {
             .contains(&library.manifest.equation_fingerprint));
         assert_ne!(
             forward,
-            ChemistryKey::from_live_geometry(
+            ChemistryKey::new(
                 "Carbon",
                 "Hydrogen",
-                &LiveGeometryInterface {
-                    interface_class: "rigid_point".into(),
-                    signature: "live-v1|Carbon:corner:0|Hydrogen:line:0".into(),
-                },
-                10.5,
-                5.5,
+                "rigid_point",
+                "live-v1|Carbon:corner:0|Hydrogen:line:0",
             ),
             "static-potential identity must remain separate from live geometry identity"
         );
