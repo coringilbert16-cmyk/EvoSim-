@@ -324,6 +324,7 @@ fn angular_displacement(
     width: f64,
     height: f64,
     obstacles: &[Obstacle],
+    center_velocity: Option<Velocity>,
     source_cell: usize,
     source_index: usize,
 ) -> f64 {
@@ -360,15 +361,19 @@ fn angular_displacement(
     let center_x = weighted_x / total_mass;
     let center_y = anchor_y + weighted_y / total_mass;
 
-    let center_velocity = obstacle_adjusted_velocity(
-        background_velocity(center_x, center_y, width, height),
-        center_x,
-        center_y,
-        source_cell,
-        source_index,
-        obstacles,
-        width,
-    );
+    // The caller already samples this exact center for translational motion.
+    // Reuse it rather than scanning the same obstacle set a second time.
+    let center_velocity = center_velocity.unwrap_or_else(|| {
+        obstacle_adjusted_velocity(
+            background_velocity(center_x, center_y, width, height),
+            center_x,
+            center_y,
+            source_cell,
+            source_index,
+            obstacles,
+            width,
+        )
+    });
     let mut torque = 0.0;
     let mut moment = 0.0;
     for (index, placement) in placements.iter().enumerate() {
@@ -663,6 +668,7 @@ pub(crate) fn transport_field(
             width,
             height,
             nearby,
+            Some(velocity),
             source_cell,
             source_index,
         );
@@ -869,7 +875,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
+        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], None, 0, 0);
         let expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
         assert_eq!(
@@ -1039,7 +1045,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog resource should realize");
-        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], 0, 0);
+        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], None, 0, 0);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
@@ -1069,7 +1075,7 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], 0, 1);
+        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], None, 0, 1);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
