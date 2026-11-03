@@ -1,0 +1,50 @@
+name: PR 288 Static Potential Candidate Benchmark
+
+on:
+  push:
+    branches:
+      - bench/pr288-static-potential-candidate
+
+concurrency:
+  group: pr288-static-potential-benchmark
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: 180-second organism-free chemistry benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - name: Run reproducible release experiment
+        run: |
+          cargo run --release -- --headless \
+            --environment-chemistry-experiment \
+            --seed 42 \
+            --duration-seconds 180 \
+            --diagnostic-interval 100 \
+            --diagnostics /tmp/environment-chemistry-diagnostics.jsonl
+      - name: Print experiment summary
+        if: always()
+        run: |
+          if [ -f /tmp/environment-chemistry-diagnostics.jsonl ]; then
+            grep '"event":"environmental_chemistry_summary"' /tmp/environment-chemistry-diagnostics.jsonl || true
+            tail -n 80 /tmp/environment-chemistry-diagnostics.jsonl
+          fi
+      - name: Upload full diagnostic record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr288-static-potential-candidate-diagnostics
+          path: /tmp/environment-chemistry-diagnostics.jsonl
+          if-no-files-found: warn
