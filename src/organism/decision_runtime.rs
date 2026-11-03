@@ -120,6 +120,7 @@ pub fn developmental_competition_indices(
 /// that score. Physical developmental results are used only when all tied
 /// candidates have comparable results. Any remaining genuine tie is resolved
 /// randomly rather than by candidate ordering.
+#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
 pub fn select_action(
     context: DecisionContext,
     history: &DecisionHistory,
@@ -218,6 +219,7 @@ pub fn record_consequence(
     history.record(candidate.action, candidate.context_key.clone(), consequence);
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "Tested geometry or chemistry helper retained for planned runtime integration"))]
 pub fn known_outcome(
     history: &DecisionHistory,
     action: ActionKind,
