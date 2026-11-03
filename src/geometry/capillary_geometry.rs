@@ -1208,6 +1208,7 @@ impl MultiContactFluidBoundary {
             .count()
     }
 
+    #[cfg_attr(not(test), expect(dead_code, reason = "Fluid API"))]
     pub fn free_arc_count(&self) -> usize {
         self.pieces
             .iter()
@@ -1329,6 +1330,7 @@ impl ContactTranslationInterval {
         })
     }
 
+    #[cfg_attr(not(test), expect(dead_code, reason = "Fluid API"))]
     pub fn length(&self) -> f64 {
         (self.edge_end_parameter - self.edge_start_parameter).max(0.0)
     }
