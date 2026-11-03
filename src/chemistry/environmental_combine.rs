@@ -296,12 +296,7 @@ fn chemical_step(
     let static_potential = match chemistry_library.get(&cache_key) {
         Some(record) => record.static_potential,
         None => {
-            let Some(calculated) = crate::chemistry::interaction_potential(
-                position_a,
-                position_b,
-                crate::chemistry::CHEMICAL_K,
-                crate::chemistry::CHEMICAL_D_MAX,
-            ) else {
+            let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(position_a, position_b) else {
                 reject_step!();
             };
             match chemistry_library.get_or_insert_static_potential(cache_key, calculated) {
@@ -395,6 +390,7 @@ pub(crate) fn accumulate_environmental(
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
+    let discovery_started = std::time::Instant::now();
     let field_cell_count = environment.field.cells.len();
     if field_cell_count == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
@@ -551,6 +547,7 @@ pub(crate) fn accumulate_environmental(
     }
 
     dissipate_unupdated_accumulations(accumulation, &updated_keys);
+    crate::chemistry_cache_metrics::record_combine_discovery(discovery_started.elapsed());
     operations
 }
 
