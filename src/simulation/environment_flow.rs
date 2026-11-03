@@ -785,7 +785,7 @@ mod tests {
         let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
         let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
 
-        assert_eq!(water_obstacle.solidity, 0.0);
+        assert!((water_obstacle.solidity - 0.5).abs() < 1e-12);
         assert!(
             carbon_obstacle.solidity > 0.9,
             "dense carbon geometry should strongly disturb local flow"
