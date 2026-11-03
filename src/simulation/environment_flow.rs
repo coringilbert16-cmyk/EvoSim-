@@ -194,6 +194,25 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     velocity
 }
 
+/// Return the shortest horizontal displacement on the periodic world axis.
+///
+/// Most obstacle pairs are already within half a world-width, so their
+/// shifted displacement is in the canonical modulo interval. In that common
+/// case the modulo operation is an identity and can be skipped. Keeping the
+/// same add/modulo/subtract arithmetic preserves the original floating-point
+/// result exactly; only the expensive remainder is avoided.
+#[inline]
+fn wrapped_horizontal_delta(x: f64, obstacle_x: f64, width: f64) -> f64 {
+    let half_width = width * 0.5;
+    let shifted = x - obstacle_x + half_width;
+    let wrapped = if shifted >= 0.0 && shifted < width {
+        shifted
+    } else {
+        shifted.rem_euclid(width)
+    };
+    wrapped - half_width
+}
+
 fn obstacle_adjusted_velocity(
     mut velocity: Velocity,
     x: f64,
@@ -210,7 +229,7 @@ fn obstacle_adjusted_velocity(
         if obstacle.solidity <= 1e-6 {
             continue;
         }
-        let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
+        let dx = wrapped_horizontal_delta(x, obstacle.x, width);
         let dy = y - obstacle.y;
         let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
@@ -794,6 +813,38 @@ mod tests {
             carbon_obstacle.radius > water_obstacle.radius,
             "the obstacle footprint should come from the material's actual catalog shape"
         );
+    }
+
+    #[test]
+    fn wrapped_horizontal_delta_matches_euclidean_modulo_bit_for_bit() {
+        for width in [1.0, 25.0, 1000.0] {
+            let mut deltas = vec![
+                -4.0 * width,
+                -2.0 * width,
+                -width,
+                -width * 0.5,
+                -f64::EPSILON,
+                0.0,
+                f64::EPSILON,
+                width * 0.5,
+                width,
+                2.0 * width,
+                4.0 * width,
+            ];
+            for step in -1024_i32..=1024 {
+                deltas.push(step as f64 * width / 137.0);
+            }
+
+            for delta in deltas {
+                let expected = (delta + width * 0.5).rem_euclid(width) - width * 0.5;
+                let actual = wrapped_horizontal_delta(delta, 0.0, width);
+                assert_eq!(
+                    actual.to_bits(),
+                    expected.to_bits(),
+                    "wrapped displacement differs for delta={delta}, width={width}"
+                );
+            }
+        }
     }
 
     #[test]
