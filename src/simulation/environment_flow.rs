@@ -317,6 +317,7 @@ fn translate_in_place(
     Some(())
 }
 
+#[cfg(test)]
 fn translated(
     material: &PhysicalMaterial,
     dx: f64,
@@ -571,13 +572,14 @@ fn rotate_in_place(
         }
     }
 
-    let vertical_shift = clamp_vertical_displacement(&result, 0.0, height, catalog)?;
-    for placement in result.placements.as_mut()? {
+    let vertical_shift = clamp_vertical_displacement(material, 0.0, height, catalog)?;
+    for placement in material.placements.as_mut()? {
         placement.y += vertical_shift;
     }
     Some(())
 }
 
+#[cfg(test)]
 fn rotated(
     material: &PhysicalMaterial,
     angle: f64,
