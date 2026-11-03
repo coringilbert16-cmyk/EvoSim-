@@ -120,7 +120,7 @@ pub fn developmental_competition_indices(
 /// that score. Physical developmental results are used only when all tied
 /// candidates have comparable results. Any remaining genuine tie is resolved
 /// randomly rather than by candidate ordering.
-#[expect(dead_code, reason = "Planned API")]
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn select_action(
     context: DecisionContext,
     history: &DecisionHistory,
@@ -219,7 +219,7 @@ pub fn record_consequence(
     history.record(candidate.action, candidate.context_key.clone(), consequence);
 }
 
-#[expect(dead_code, reason = "Planned API")]
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn known_outcome(
     history: &DecisionHistory,
     action: ActionKind,
