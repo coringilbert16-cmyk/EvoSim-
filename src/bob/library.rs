@@ -2597,7 +2597,6 @@ impl GeometryLibrary {
     }
 
     #[expect(dead_code, reason = "Bob API")]
-
     pub fn contains(&self, signature: &str) -> bool {
         self.entries.contains_key(signature)
     }
@@ -3303,7 +3302,6 @@ impl GeometryLibrary {
     }
 
     #[expect(dead_code, reason = "Bob API")]
-
     pub fn insert_contact_family(
         &mut self,
         family: GeometryContactFamily,
@@ -3372,7 +3370,6 @@ impl GeometryLibrary {
     }
 
     #[expect(dead_code, reason = "Bob API")]
-
     pub fn set_frontier_state(
         &mut self,
         formation_signature: impl Into<String>,
@@ -4164,7 +4161,6 @@ fn load_fluid_boundary_families(
 }
 
 #[expect(dead_code, reason = "Bob API")]
-
 pub fn generate_fluid_boundary_families(
     formation: &GeometryFormation,
     fluid_resource: &BaseResource,
@@ -4513,7 +4509,6 @@ fn rigid_boundary_segments(form: &Form) -> Vec<((f64, f64), (f64, f64))> {
 }
 
 #[expect(dead_code, reason = "Bob API")]
-
 pub fn instantiate_rigid_contact_family(
     formation: &GeometryFormation,
     family: &GeometryRigidContactFamily,
@@ -5063,7 +5058,6 @@ pub fn generate_two_constituent_candidates(
 }
 
 #[expect(dead_code, reason = "Bob API")]
-
 pub fn expand_three_constituent_candidates(
     two_constituent: &GeometryFormation,
     candidate_resource: &BaseResource,
@@ -5244,7 +5238,6 @@ pub fn expand_formation_candidates(
 }
 
 #[expect(dead_code, reason = "Bob API")]
-
 pub fn seed_two_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
@@ -5265,7 +5258,6 @@ pub fn seed_two_constituent_catalogue(
 }
 
 #[expect(dead_code, reason = "Bob API")]
-
 pub fn seed_three_constituent_catalogue(
     library: &mut GeometryLibrary,
     catalog: &[BaseResource],
