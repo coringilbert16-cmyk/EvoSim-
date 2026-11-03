@@ -572,7 +572,8 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
     let (candidate_a, candidate_b) = candidate_endpoints(a, b, c)
         .into_iter()
         .find(|(candidate_a, candidate_b)| {
-            *candidate_a == endpoint_a && *candidate_b == endpoint_b
+            (*candidate_a == endpoint_a && *candidate_b == endpoint_b)
+                || (*candidate_a == endpoint_b && *candidate_b == endpoint_a)
         })?;
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
@@ -747,6 +748,21 @@ mod tests {
                     expected.endpoint_b,
                 ),
                 Some(*expected),
+            );
+            let reversed = all_candidates.iter().find(|candidate| {
+                candidate.endpoint_a == expected.endpoint_b
+                    && candidate.endpoint_b == expected.endpoint_a
+            });
+            assert_eq!(
+                connection_pair_candidate_for_endpoints(
+                    &structure,
+                    0,
+                    1,
+                    &catalog,
+                    expected.endpoint_b,
+                    expected.endpoint_a,
+                ),
+                reversed.copied(),
             );
         }
 
