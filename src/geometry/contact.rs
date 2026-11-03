@@ -552,11 +552,29 @@ pub fn connection_pair_candidates(
 }
 
 
-// Targeted endpoint lookup used by BREAK discovery.
-pub(crate) fn connection_pair_candidate_for_endpoints(s: &OrganismStructure, ua: usize, ub: usize, c: &[crate::resources::BaseResource], endpoint_a: ConnectionEndpoint, endpoint_b: ConnectionEndpoint) -> Option<ConnectionPairCandidate> {
-    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else { return None; };
-    let (a, b) = candidate_endpoints(a, b, c).into_iter().find(|(a, b)| *a == endpoint_a && *b == endpoint_b)?;
-    candidate_for_endpoints(s, ua, ub, a, b, c)
+/// Resolve only the endpoint pair already recorded by a physical bond.
+///
+/// BREAK discovery knows the bond endpoints before asking for geometry
+/// candidates. Building full candidate records for every possible endpoint
+/// pair needlessly computes world positions and connection loads for pairs
+/// that are immediately discarded.
+pub(crate) fn connection_pair_candidate_for_endpoints(
+    s: &OrganismStructure,
+    ua: usize,
+    ub: usize,
+    c: &[crate::resources::BaseResource],
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+) -> Option<ConnectionPairCandidate> {
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return None;
+    };
+    let (candidate_a, candidate_b) = candidate_endpoints(a, b, c)
+        .into_iter()
+        .find(|(candidate_a, candidate_b)| {
+            *candidate_a == endpoint_a && *candidate_b == endpoint_b
+        })?;
+    candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
 
 #[allow(dead_code)]
@@ -709,6 +727,40 @@ mod tests {
         let rotated_point = endpoint_world_point(endpoint, &rotated, &catalog).unwrap();
         assert!((rotated_point.normal_x + point.normal_y).abs() < 1e-12);
         assert!((rotated_point.normal_y - point.normal_x).abs() < 1e-12);
+    }
+
+    #[test]
+    fn targeted_candidate_lookup_matches_full_candidate_enumeration() {
+        let catalog = crate::resources::default_catalog();
+        let (structure, _) = test_structure();
+        let all_candidates = connection_pair_candidates(&structure, 0, 1, &catalog);
+        assert!(!all_candidates.is_empty());
+
+        for expected in &all_candidates {
+            assert_eq!(
+                connection_pair_candidate_for_endpoints(
+                    &structure,
+                    0,
+                    1,
+                    &catalog,
+                    expected.endpoint_a,
+                    expected.endpoint_b,
+                ),
+                Some(*expected),
+            );
+        }
+
+        assert_eq!(
+            connection_pair_candidate_for_endpoints(
+                &structure,
+                0,
+                1,
+                &catalog,
+                ConnectionEndpoint::Boundary { angle_radians: 123.456 },
+                ConnectionEndpoint::Boundary { angle_radians: -98.765 },
+            ),
+            None,
+        );
     }
 
     #[test]

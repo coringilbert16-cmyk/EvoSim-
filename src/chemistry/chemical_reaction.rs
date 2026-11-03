@@ -1,7 +1,6 @@
 //! Local runtime chemical reaction accumulation.
 
 use crate::chemistry_library::{ChemistryKey, ChemistryLibrary};
-use crate::contact::ConnectionCompatibilityCache;
 use crate::resources::BaseResource;
 use crate::state::Organism;
 use crate::structure::Bond;
@@ -217,7 +216,6 @@ pub(crate) fn accumulate(
     accumulation.retain(|key, _| {
         !key.starts_with(&format!("{}|rev:", organism.id)) || key.starts_with(&current_prefix)
     });
-    let mut cache = ConnectionCompatibilityCache::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
     let bond_count = organism.structure.bonds.len();
     let mut operations = Vec::new();
@@ -523,7 +521,6 @@ pub(crate) fn accumulate_environmental(
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let mut compatibility_cache = ConnectionCompatibilityCache::new();
 
     for candidate_index in indices {
         let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
