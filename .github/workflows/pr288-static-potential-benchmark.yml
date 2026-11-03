@@ -56,6 +56,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr288-${{ github.ref_name }}-benchmark
+          name: pr288-benchmark-${{ github.ref_name == 'bench/pr288-static-potential-baseline' && 'baseline' || 'candidate' }}
           path: /tmp/pr288-benchmark/
           if-no-files-found: warn
