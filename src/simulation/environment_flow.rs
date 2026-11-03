@@ -1198,7 +1198,7 @@ mod tests {
 
     #[test]
     fn transport_layout_benchmark_reports_distributed_and_dense_cost() {
-        use std::time::Instant;
+        use std::time::{Duration, Instant};
 
         let catalog = crate::resources::default_catalog();
         let scenarios = [("distributed", false), ("dense", true)];
@@ -1209,9 +1209,15 @@ mod tests {
                 let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
                 for index in 0..256 {
                     let (x, y) = if dense {
-                        (10.0 + (index % 16) as f64 * 0.1, 10.0 + (index / 16) as f64 * 0.1)
+                        (
+                            10.0 + (index % 16) as f64 * 0.1,
+                            10.0 + (index / 16) as f64 * 0.1,
+                        )
                     } else {
-                        (30.0 + (index % 16) as f64 * 58.0, 30.0 + (index / 16) as f64 * 58.0)
+                        (
+                            30.0 + (index % 16) as f64 * 58.0,
+                            30.0 + (index / 16) as f64 * 58.0,
+                        )
                     };
                     let material = PhysicalMaterial::realized(
                         crate::resources::Material::free_base("Carbon", 1.0),
@@ -1233,7 +1239,11 @@ mod tests {
                 moved_total += moved;
                 assert_eq!(field.total_material(), inventory_before);
                 assert_eq!(
-                    field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+                    field
+                        .cells
+                        .iter()
+                        .map(|cell| cell.physical_materials.len())
+                        .sum::<usize>(),
                     256
                 );
             }
@@ -1244,7 +1254,7 @@ mod tests {
                 median.as_micros()
             );
             assert!(
-                median.as_secs() < 10,
+                median < Duration::from_secs(10),
                 "{scenario} transport benchmark exceeded the 10-second safety ceiling: {median:?}"
             );
         }
