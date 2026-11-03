@@ -673,7 +673,9 @@ pub(crate) fn transport_field(
             .clamp(0, flow_rows.saturating_sub(1) as isize) as usize;
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
         #[cfg(feature = "transport-profiling")]
-        { candidate_references += nearby.len(); }
+        {
+            candidate_references += nearby.len();
+        }
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
             x,
@@ -722,8 +724,15 @@ pub(crate) fn transport_field(
         eprintln!(
             "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us=0 bin_entries={} max_bin={} center_candidate_refs={} staged=0 moved=0 total_us={}",
             field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
-            obstacle_count, snapshot_us, obstacle_us, bins_us, evaluation_us,
-            bin_entries, max_bin_occupancy, candidate_references, total_started.elapsed().as_micros()
+            obstacle_count,
+            snapshot_us,
+            obstacle_us,
+            bins_us,
+            evaluation_us,
+            bin_entries,
+            max_bin_occupancy,
+            candidate_references,
+            total_started.elapsed().as_micros()
         );
         return 0;
     }
@@ -763,9 +772,18 @@ pub(crate) fn transport_field(
     eprintln!(
         "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us={} bin_entries={} max_bin={} center_candidate_refs={} staged={} moved={} total_us={}",
         field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
-        obstacle_count, snapshot_us, obstacle_us, bins_us, evaluation_us,
-        commitment_started.elapsed().as_micros(), bin_entries, max_bin_occupancy,
-        candidate_references, moved_count, moved_count, total_started.elapsed().as_micros()
+        obstacle_count,
+        snapshot_us,
+        obstacle_us,
+        bins_us,
+        evaluation_us,
+        commitment_started.elapsed().as_micros(),
+        bin_entries,
+        max_bin_occupancy,
+        candidate_references,
+        moved_count,
+        moved_count,
+        total_started.elapsed().as_micros()
     );
     moved_count
 }
