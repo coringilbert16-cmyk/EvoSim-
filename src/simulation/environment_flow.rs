@@ -212,17 +212,24 @@ fn obstacle_adjusted_velocity(
         }
         let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
         let dy = y - obstacle.y;
-        let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
-        if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+        let near_radius = radius * 2.5;
+        let near_radius_sq = near_radius * near_radius;
+        let distance_sq = dx * dx + dy * dy;
+        let in_wake = dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0;
+        if distance_sq >= near_radius_sq && !in_wake {
+            continue;
+        }
+        if distance_sq < near_radius_sq {
+            let distance = distance_sq.sqrt().max(1e-9);
+            let influence = obstacle.solidity * (1.0 - distance / near_radius).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
                 y: side * influence * 0.65,
             });
         }
-        if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
+        if in_wake {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
             let attenuation = (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
@@ -1194,5 +1201,69 @@ mod tests {
         assert!(wake.length() < free.length());
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
+    }
+
+    #[test]
+    fn transport_layout_benchmark_reports_distributed_and_dense_cost() {
+        use std::time::{Duration, Instant};
+
+        let catalog = crate::resources::default_catalog();
+        let scenarios = [("distributed", false), ("dense", true)];
+        for (scenario, dense) in scenarios {
+            let mut samples = Vec::new();
+            let mut moved_total = 0usize;
+            for _ in 0..5 {
+                let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+                for index in 0..256 {
+                    let (x, y) = if dense {
+                        (
+                            10.0 + (index % 16) as f64 * 0.1,
+                            10.0 + (index / 16) as f64 * 0.1,
+                        )
+                    } else {
+                        (
+                            30.0 + (index % 16) as f64 * 58.0,
+                            30.0 + (index / 16) as f64 * 58.0,
+                        )
+                    };
+                    let material = PhysicalMaterial::realized(
+                        crate::resources::Material::free_base("Carbon", 1.0),
+                        vec![crate::structure::Placement {
+                            x,
+                            y,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    )
+                    .expect("catalog carbon should realize");
+                    assert!(field.deposit_physical(x, y, material, &catalog));
+                }
+
+                let inventory_before = field.total_material();
+                let started = Instant::now();
+                let moved = transport_field(&mut field, &catalog, 1000.0, 1000.0);
+                samples.push(started.elapsed());
+                moved_total += moved;
+                assert_eq!(field.total_material(), inventory_before);
+                assert_eq!(
+                    field
+                        .cells
+                        .iter()
+                        .map(|cell| cell.physical_materials.len())
+                        .sum::<usize>(),
+                    256
+                );
+            }
+            samples.sort_unstable();
+            let median = samples[samples.len() / 2];
+            eprintln!(
+                "TRANSPORT_BENCH scenario={scenario} objects=256 samples=5 median_us={} moved_total={moved_total}",
+                median.as_micros()
+            );
+            assert!(
+                median < Duration::from_secs(10),
+                "{scenario} transport benchmark exceeded the 10-second safety ceiling: {median:?}"
+            );
+        }
     }
 }

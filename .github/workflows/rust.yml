@@ -4,10 +4,10 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, transport/dense-candidate-evaluation]
   pull_request:
     # Also validate stacked fix branches against their parent fix branch.
-    branches: [main, chemistry-break-discovery-optimization, gui-foundation-geometry-inspired, chemistry-experiment-density-resonance-visuals, horizontal-wrap-vertical-walls, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, resonance-energy-integration-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29]
+    branches: [main, chemistry-break-discovery-optimization, gui-foundation-geometry-inspired, chemistry-experiment-density-resonance-visuals, horizontal-wrap-vertical-walls, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, resonance-energy-integration-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29, transport/current-main-baseline]
 
 permissions:
   contents: read
@@ -232,6 +232,10 @@ jobs:
             cargo test --locked "$test_name" -- --nocapture || failed=1
           done
           exit "$failed"
+      - name: Environmental transport benchmark (profiling)
+        if: always()
+        timeout-minutes: 5
+        run: cargo test --locked transport_layout_benchmark_reports_distributed_and_dense_cost -- --nocapture
       - name: Run Rust tests
         if: success()
         # Preserve full-suite coverage after all focused acceptance checks pass.
