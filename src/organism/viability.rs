@@ -28,7 +28,7 @@ impl Default for OrganismViabilityRequirements {
 /// This does not require any fixed piece count, material recipe, shape, or
 /// topology. The genome is identified by the realized physical cavity rather
 /// than by a predefined set of constituents.
-#[expect(dead_code, reason = "Planned API")]
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 pub fn validate_realized_organism(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
