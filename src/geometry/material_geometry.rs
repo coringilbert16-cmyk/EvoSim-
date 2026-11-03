@@ -20,7 +20,7 @@ pub struct MaterialGeometry {
     pub max_y: f64,
 }
 impl MaterialGeometry {
-    #[expect(dead_code, reason = "Planned API")]
+    #[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
     pub fn new(
         material: &Material,
         placements: &[Placement],
