@@ -462,14 +462,13 @@ pub(crate) fn accumulate_environmental(
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
-            for target_offset in 0..target_cells.len() {
+            for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                let cell_b = target_cells[target_offset];
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
@@ -1490,7 +1489,7 @@ mod tests {
             let local_x = second.x - first.x;
             let local_y = second.y - first.y;
 
-            'external_pose: for step in 1..=80 {
+            for step in 1..=80 {
                 let distance = step as f64 * 0.05;
                 for rotation_step in 0..12 {
                     let angle = rotation_step as f64 * std::f64::consts::PI / 6.0;
@@ -1817,7 +1816,7 @@ mod tests {
                     .map(|bond| bond.bond_energy)
             })
             .collect();
-        let mut original_bond_energies = vec![original_a_energy, original_b_energy];
+        let mut original_bond_energies = [original_a_energy, original_b_energy];
         restored_bond_energies.sort_by(f64::total_cmp);
         original_bond_energies.sort_by(f64::total_cmp);
         assert_eq!(restored_bond_energies.len(), 2);
