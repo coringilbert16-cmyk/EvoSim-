@@ -771,11 +771,9 @@ mod tests {
         let reversed = library.key_from_chemical_pair("Hydrogen", "Carbon", 5.5, 10.5);
         assert_eq!(forward, reversed);
         assert_eq!(forward.interface_class, "static_potential");
-        assert!(
-            forward
-                .interface_signature
-                .contains(&library.manifest.equation_fingerprint)
-        );
+        assert!(forward
+            .interface_signature
+            .contains(&library.manifest.equation_fingerprint));
         assert_ne!(
             forward,
             ChemistryKey::new(
