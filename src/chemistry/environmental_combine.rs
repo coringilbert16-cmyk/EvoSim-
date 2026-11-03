@@ -110,7 +110,7 @@ fn restored_source(
     Some((structure, indices))
 }
 
-#[expect(dead_code, reason = "Planned API")]
+#[cfg_attr(not(test), expect(dead_code, reason = "Planned API"))]
 fn select_best_contact(
     structure: &OrganismStructure,
     indices_a: &[usize],
