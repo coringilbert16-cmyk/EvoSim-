@@ -215,10 +215,15 @@ fn obstacle_adjusted_velocity(
         }
         let dx = (x - obstacle.x + width * 0.5).rem_euclid(width) - width * 0.5;
         let dy = y - obstacle.y;
-        let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
-        if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+        let influence_radius = radius * 2.5;
+        // Most candidates are outside the local influence region. Compare
+        // squared distance first and pay for a square root only for obstacles
+        // that actually contribute to the flow response.
+        let distance_squared = dx * dx + dy * dy;
+        if distance_squared < influence_radius * influence_radius {
+            let distance = distance_squared.sqrt().max(1e-9);
+            let influence = obstacle.solidity * (1.0 - distance / influence_radius).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
