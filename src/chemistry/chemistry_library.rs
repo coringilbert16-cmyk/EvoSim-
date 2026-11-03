@@ -338,11 +338,7 @@ impl ChemistryLibrary {
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
-        let record = self.entries.get(key);
-        if key.interface_class == "static_potential" {
-            crate::chemistry_cache_metrics::record_lookup(record.is_some());
-        }
-        record
+        self.entries.get(key)
     }
     pub fn get_or_insert_static_potential(
         &mut self,
