@@ -720,10 +720,10 @@ pub(crate) fn transport_field(
     if staged.is_empty() {
         #[cfg(feature = "transport-profiling")]
         eprintln!(
-            "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us=0 bin_entries={} max_bin={} candidate_refs=0 staged=0 moved=0 total_us={}",
+            "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us=0 bin_entries={} max_bin={} center_candidate_refs={} staged=0 moved=0 total_us={}",
             field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
             obstacle_count, snapshot_us, obstacle_us, bins_us, evaluation_us,
-            bin_entries, max_bin_occupancy, total_started.elapsed().as_micros()
+            bin_entries, max_bin_occupancy, candidate_references, total_started.elapsed().as_micros()
         );
         return 0;
     }
@@ -761,8 +761,8 @@ pub(crate) fn transport_field(
     }
     #[cfg(feature = "transport-profiling")]
     eprintln!(
-        "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us={} bin_entries={} max_bin={} candidate_refs={} staged={} moved={} total_us={}",
-        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>() + moved_count,
+        "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us={} bin_entries={} max_bin={} center_candidate_refs={} staged={} moved={} total_us={}",
+        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
         obstacle_count, snapshot_us, obstacle_us, bins_us, evaluation_us,
         commitment_started.elapsed().as_micros(), bin_entries, max_bin_occupancy,
         candidate_references, moved_count, moved_count, total_started.elapsed().as_micros()
