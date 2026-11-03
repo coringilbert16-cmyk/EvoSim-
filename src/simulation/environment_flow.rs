@@ -9,6 +9,9 @@ use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, Form};
 
+#[cfg(feature = "transport-profiling")]
+use std::time::Instant;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Velocity {
     x: f64,
@@ -611,6 +614,10 @@ pub(crate) fn transport_field(
         return 0;
     }
 
+    #[cfg(feature = "transport-profiling")]
+    let total_started = Instant::now();
+    #[cfg(feature = "transport-profiling")]
+    let snapshot_started = Instant::now();
     let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field
         .cells
         .iter()
@@ -623,6 +630,10 @@ pub(crate) fn transport_field(
                 .map(move |(material_index, material)| (cell_index, material_index, material))
         })
         .collect();
+    #[cfg(feature = "transport-profiling")]
+    let snapshot_us = snapshot_started.elapsed().as_micros();
+    #[cfg(feature = "transport-profiling")]
+    let obstacle_started = Instant::now();
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
@@ -632,6 +643,12 @@ pub(crate) fn transport_field(
             obstacle_for(*cell, *index, material, catalog, height)
         })
         .collect();
+    #[cfg(feature = "transport-profiling")]
+    let obstacle_us = obstacle_started.elapsed().as_micros();
+    #[cfg(feature = "transport-profiling")]
+    let obstacle_count = obstacles.len();
+    #[cfg(feature = "transport-profiling")]
+    let bins_started = Instant::now();
     let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
@@ -661,6 +678,16 @@ pub(crate) fn transport_field(
             }
         }
     }
+    #[cfg(feature = "transport-profiling")]
+    let bin_entries = obstacle_bins.iter().map(Vec::len).sum::<usize>();
+    #[cfg(feature = "transport-profiling")]
+    let max_bin_occupancy = obstacle_bins.iter().map(Vec::len).max().unwrap_or(0);
+    #[cfg(feature = "transport-profiling")]
+    let bins_us = bins_started.elapsed().as_micros();
+    #[cfg(feature = "transport-profiling")]
+    let evaluation_started = Instant::now();
+    #[cfg(feature = "transport-profiling")]
+    let mut candidate_references = 0usize;
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -673,6 +700,10 @@ pub(crate) fn transport_field(
         let flow_row = ((y / FLOW_BIN_SIZE).floor() as isize)
             .clamp(0, flow_rows.saturating_sub(1) as isize) as usize;
         let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
+        #[cfg(feature = "transport-profiling")]
+        {
+            candidate_references += nearby.len();
+        }
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, width, height),
             x,
@@ -714,10 +745,28 @@ pub(crate) fn transport_field(
             staged.push((source_cell, source_index, destination_cell, moved));
         }
     }
+    #[cfg(feature = "transport-profiling")]
+    let evaluation_us = evaluation_started.elapsed().as_micros();
     if staged.is_empty() {
+        #[cfg(feature = "transport-profiling")]
+        eprintln!(
+            "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us=0 bin_entries={} max_bin={} center_candidate_refs={} staged=0 moved=0 total_us={}",
+            field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+            obstacle_count,
+            snapshot_us,
+            obstacle_us,
+            bins_us,
+            evaluation_us,
+            bin_entries,
+            max_bin_occupancy,
+            candidate_references,
+            total_started.elapsed().as_micros()
+        );
         return 0;
     }
 
+    #[cfg(feature = "transport-profiling")]
+    let commitment_started = Instant::now();
     let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
     for (source_cell, source_index, _, _) in &staged {
@@ -747,6 +796,23 @@ pub(crate) fn transport_field(
             field.mark_changed_at_index(index);
         }
     }
+    #[cfg(feature = "transport-profiling")]
+    eprintln!(
+        "TRANSPORT_PROFILE objects={} obstacles={} snapshot_us={} obstacle_us={} bins_us={} evaluation_us={} commitment_us={} bin_entries={} max_bin={} center_candidate_refs={} staged={} moved={} total_us={}",
+        field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>(),
+        obstacle_count,
+        snapshot_us,
+        obstacle_us,
+        bins_us,
+        evaluation_us,
+        commitment_started.elapsed().as_micros(),
+        bin_entries,
+        max_bin_occupancy,
+        candidate_references,
+        moved_count,
+        moved_count,
+        total_started.elapsed().as_micros()
+    );
     moved_count
 }
 
