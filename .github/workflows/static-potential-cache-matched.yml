@@ -1,4 +1,4 @@
-name: Static Potential Cache Matched Benchmark — Current Baseline
+name: Static Potential Cache Matched Benchmark
 
 on:
   push:
@@ -14,9 +14,9 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three alternating 60-second samples per revision
+    name: One continuous 60-second run per revision
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Check out benchmark harness
         uses: actions/checkout@v4
@@ -26,23 +26,29 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
-      - name: Prepare exact validated revisions
+      - name: Prepare exact revisions with identical duration runner
         shell: bash
         env:
           BASE_SHA: 02114ede20874f732b39e83ae79b2ad444eb9580
           CANDIDATE_SHA: a8a176f2ce34c182c0f1015083592318add697a5
+          DURATION_RUNNER_SHA: e20f38ca78151eb75f56d548bd6181686716f4be
         run: |
           set -euo pipefail
-          git fetch origin "$BASE_SHA" "$CANDIDATE_SHA"
+          git fetch origin "$BASE_SHA" "$CANDIDATE_SHA" "$DURATION_RUNNER_SHA"
           git worktree add /tmp/static-cache-baseline "$BASE_SHA"
           git worktree add /tmp/static-cache-candidate "$CANDIDATE_SHA"
-          (cd /tmp/static-cache-baseline && cargo build --release)
-          (cd /tmp/static-cache-candidate && cargo build --release)
-      - name: Warm both revisions outside measured samples
+          for variant in baseline candidate; do
+            worktree="/tmp/static-cache-$variant"
+            # Apply the exact same runner-only timing implementation to both
+            # instrumented source revisions. No simulation/chemistry code is changed.
+            git show "$DURATION_RUNNER_SHA:src/simulation/simulation_runner.rs" > "$worktree/src/simulation/simulation_runner.rs"
+            (cd "$worktree" && cargo build --release)
+          done
+      - name: Run exactly one uninterrupted 60-second sample per revision
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/static-cache-metrics
+          mkdir -p /tmp/static-cache-results
           make_isolated_runtime_dir() {
             local source="$1"
             local destination="$2"
@@ -51,8 +57,6 @@ jobs:
             for entry in "$source"/*; do
               local name
               name="$(basename "$entry")"
-              # The chemistry store is the only persistent state intentionally
-              # isolated between samples. Other generated libraries remain shared.
               if [[ "$name" == "chemistry_library" ]]; then
                 continue
               fi
@@ -62,147 +66,75 @@ jobs:
           }
           for variant in baseline candidate; do
             worktree="/tmp/static-cache-$variant"
-            warmup_dir="/tmp/static-cache-warmup-$variant"
-            make_isolated_runtime_dir "$worktree" "$warmup_dir"
+            runtime="/tmp/static-cache-runtime-$variant"
+            make_isolated_runtime_dir "$worktree" "$runtime"
             binary="$worktree/target/release/evosim"
-            (cd "$warmup_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 250 \
-              --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
-              > "/tmp/static-cache-metrics/warmup-$variant.log" 2>&1)
+            diagnostics="/tmp/static-cache-results/$variant.jsonl"
+            log="/tmp/static-cache-results/$variant.log"
+            start_ns="$(date +%s%N)"
+            (cd "$runtime" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
+              --environment-chemistry-experiment --seed 42 --duration-seconds 60 \
+              --diagnostic-interval 1000 --diagnostics "$diagnostics" > "$log" 2>&1)
+            end_ns="$(date +%s%N)"
+            elapsed="$(awk -v a="$start_ns" -v b="$end_ns" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')"
+            summary="$(grep '"event":"environmental_chemistry_summary"' "$diagnostics" | tail -1)"
+            test -n "$summary"
+            ticks="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["ticks_observed"])' "$summary")"
+            rate="$(awk -v t="$ticks" -v s="$elapsed" 'BEGIN { printf "%.3f", t/s }')"
+            printf "%s\t%s\t%s\t%s\n" "$variant" "$ticks" "$elapsed" "$rate" | tee -a /tmp/static-cache-results/throughput.tsv
+            grep '^CHEMISTRY_CACHE_METRICS ' "$log" > "/tmp/static-cache-results/$variant-cache-metrics.txt"
+            grep 'ENVIRONMENTAL CHEMISTRY START\|ENVIRONMENTAL CHEMISTRY END' "$log"
           done
-      - name: Run three alternating 60-second instrumented samples per revision
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/static-cache-metrics
-          : > /tmp/static-cache-metrics/samples.tsv
-          : > /tmp/static-cache-metrics/runs.tsv
-          : > /tmp/static-cache-metrics/metrics.tsv
-          : > /tmp/static-cache-metrics/summaries.jsonl
-          make_isolated_runtime_dir() {
-            local source="$1"
-            local destination="$2"
-            mkdir -p "$destination"
-            shopt -s dotglob nullglob
-            for entry in "$source"/*; do
-              local name
-              name="$(basename "$entry")"
-              if [[ "$name" == "chemistry_library" ]]; then
-                continue
-              fi
-              ln -s "$entry" "$destination/$name"
-            done
-            mkdir -p "$destination/chemistry_library/data"
-          }
-          declare -A counts
-          counts[baseline]=0
-          counts[candidate]=0
-          sequence=(baseline candidate candidate baseline baseline candidate)
-          for variant in "${sequence[@]}"; do
-            counts[$variant]=$((counts[$variant] + 1))
-            sample="${counts[$variant]}"
-            worktree="/tmp/static-cache-$variant"
-            sample_dir="/tmp/static-cache-sample-$variant-$sample"
-            make_isolated_runtime_dir "$worktree" "$sample_dir"
-            binary="$worktree/target/release/evosim"
-            sample_start=$(date +%s%N)
-            sample_end=$sample_start
-            sample_ticks=0
-            run_count=0
-            while (( (sample_end - sample_start) < 60000000000 )); do
-              run_count=$((run_count + 1))
-              output="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
-              log="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.log"
-              (cd "$sample_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-                --environment-chemistry-experiment --seed 42 --ticks 1000 \
-                --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
-              ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-              test "$ticks" = "1000"
-              sample_ticks=$((sample_ticks + ticks))
-              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
-              grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /${variant}\t${sample}\t${run_count}\t/" >> /tmp/static-cache-metrics/metrics.tsv
-              sample_end=$(date +%s%N)
-            done
-            elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
-            rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
-            printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
-            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
-          done
-          echo "=== THROUGHPUT MEDIANS ==="
+          echo "=== MATCHED THROUGHPUT ==="
+          cat /tmp/static-cache-results/throughput.tsv
           python3 - <<'PY'
-          import statistics
           rows = {}
-          with open("/tmp/static-cache-metrics/samples.tsv", encoding="utf-8") as source:
+          with open("/tmp/static-cache-results/throughput.tsv", encoding="utf-8") as source:
               for line in source:
-                  variant, sample, ticks, elapsed, runs, rate = line.split()
-                  rows.setdefault(variant, []).append(float(rate))
-          for variant, rates in sorted(rows.items()):
-              print(f"{variant}: samples={len(rates)} rates={rates} median_ticks_per_second={statistics.median(rates):.3f}")
-          baseline = statistics.median(rows["baseline"])
-          candidate = statistics.median(rows["candidate"])
-          print(f"candidate_vs_baseline_percent={(candidate / baseline - 1.0) * 100.0:.2f}%")
-          assert len(rows["baseline"]) == 3 and len(rows["candidate"]) == 3
+                  variant, ticks, elapsed, rate = line.split()
+                  if variant in rows:
+                      raise SystemExit(f"Duplicate {variant} measurement")
+                  rows[variant] = float(rate)
+          assert set(rows) == {"baseline", "candidate"}, rows
+          print(f"candidate_vs_baseline_percent={(rows['candidate'] / rows['baseline'] - 1.0) * 100.0:.2f}%")
           PY
-          echo "=== CACHE METRICS TOTALS ==="
-          python3 - <<'PY'
-          import json
-          from collections import defaultdict
-          totals = defaultdict(lambda: defaultdict(int))
-          runs = defaultdict(int)
-          with open("/tmp/static-cache-metrics/metrics.tsv", encoding="utf-8") as source:
-              for line in source:
-                  variant, sample, run, payload = line.rstrip("\n").split("\t", 3)
-                  data = json.loads(payload)
-                  runs[variant] += 1
-                  for key, value in data.items():
-                      totals[variant][key] += value
-          for variant in ("baseline", "candidate"):
-              t = totals[variant]
-              lookups = t["cache_hits"] + t["cache_misses"]
-              hit_rate = 100.0 * t["cache_hits"] / lookups if lookups else 0.0
-              avg_calc_us = t["potential_calculation_ns"] / t["potential_calculations"] / 1000 if t["potential_calculations"] else 0.0
-              avg_combine_ms = t["combine_discovery_ns"] / t["combine_discovery_calls"] / 1_000_000 if t["combine_discovery_calls"] else 0.0
-              print(f"{variant}: invocations={runs[variant]} lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} potential_calc_total_ms={t['potential_calculation_ns']/1e6:.3f} avg_potential_calc_us={avg_calc_us:.3f} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
-          PY
-          echo "=== RAW SAMPLES ==="
-          cat /tmp/static-cache-metrics/samples.tsv
-          echo "=== RAW METRICS ==="
-          cat /tmp/static-cache-metrics/metrics.tsv
-      - name: Validate inventory and energy conservation
-        if: always()
+      - name: Validate both final inventories and energy balances
         shell: bash
         run: |
           python3 - <<'PY'
           import json, math
-          path = "/tmp/static-cache-metrics/summaries.jsonl"
-          try:
-              rows = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
-          except FileNotFoundError:
-              raise SystemExit("No experiment summaries were produced")
-          if not rows:
-              raise SystemExit("No experiment summaries were produced")
-          reference_inventory = None
-          for i, row in enumerate(rows, 1):
-              assert row.get("ticks_observed") == 1000, (i, row)
+          from pathlib import Path
+          rows = {}
+          for variant in ("baseline", "candidate"):
+              path = Path(f"/tmp/static-cache-results/{variant}.jsonl")
+              summaries = [json.loads(line) for line in path.read_text().splitlines()
+                           if '"event":"environmental_chemistry_summary"' in line]
+              if len(summaries) != 1:
+                  raise SystemExit(f"{variant}: expected exactly one final summary, found {len(summaries)}")
+              row = summaries[0]
+              ticks = row.get("ticks_observed")
+              if not isinstance(ticks, int) or ticks <= 0:
+                  raise SystemExit(f"{variant}: invalid observed tick count {ticks}")
               inventory = row.get("final_material_inventory")
-              assert isinstance(inventory, dict) and sum(inventory.values()) == 1280, (i, inventory)
-              if reference_inventory is None:
-                  reference_inventory = inventory
-              assert inventory == reference_inventory, (i, inventory, reference_inventory)
+              if not isinstance(inventory, dict) or sum(inventory.values()) != 1280:
+                  raise SystemExit(f"{variant}: invalid final inventory {inventory}")
               residual = row.get("energy_balance_residual")
-              assert isinstance(residual, (int, float)) and math.isfinite(residual) and abs(residual) < 1e-4, (i, residual)
-          print(f"Validated {len(rows)} complete 1,000-tick invocations across six 60-second samples, matching 1,280-resource inventories, energy residual < 1e-4")
-          print("Totals:", {
-              "combine_committed": sum(r["combine_committed"] for r in rows),
-              "combine_rejected": sum(r["combine_rejected"] for r in rows),
-              "break_committed": sum(r["break_committed"] for r in rows),
-              "break_rejected": sum(r["break_rejected"] for r in rows),
-          })
+              if not isinstance(residual, (int, float)) or not math.isfinite(residual) or abs(residual) >= 1e-4:
+                  raise SystemExit(f"{variant}: invalid energy residual {residual}")
+              rows[variant] = row
+          if rows["baseline"]["final_material_inventory"] != rows["candidate"]["final_material_inventory"]:
+              raise SystemExit("Baseline and candidate final material inventories differ")
+          print("PASS: exactly one completed run per revision; both preserve 1,280 resources and energy residual < 1e-4")
+          for variant, row in rows.items():
+              print(variant, "ticks=", row["ticks_observed"],
+                    "combine_committed=", row.get("combine_committed"),
+                    "break_committed=", row.get("break_committed"),
+                    "energy_residual=", row["energy_balance_residual"])
           PY
-      - name: Upload instrumented benchmark data
+      - name: Upload the two benchmark runs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: static-potential-cache-matched-benchmark
-          path: /tmp/static-cache-metrics/
-          if-no-files-found: warn
+          name: static-potential-cache-60-second-matched-benchmark
+          path: /tmp/static-cache-results/
+          if-no-files-found: error
