@@ -536,6 +536,32 @@ fn candidate_for_endpoints(
     })
 }
 
+/// Resolve only the endpoint pair already recorded by a physical bond.
+///
+/// BREAK discovery knows the bond endpoints before asking for geometry
+/// candidates. Keep authoritative endpoint enumeration and ordering, but
+/// avoid materializing geometry for every possible pair when only one pair
+/// can match the recorded bond.
+pub(crate) fn connection_pair_candidate_for_endpoints(
+    s: &OrganismStructure,
+    ua: usize,
+    ub: usize,
+    c: &[crate::resources::BaseResource],
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+) -> Option<ConnectionPairCandidate> {
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return None;
+    };
+    let (candidate_a, candidate_b) = candidate_endpoints(a, b, c)
+        .into_iter()
+        .find(|(candidate_a, candidate_b)| {
+            (*candidate_a == endpoint_a && *candidate_b == endpoint_b)
+                || (*candidate_a == endpoint_b && *candidate_b == endpoint_a)
+        })?;
+    candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
+}
+
 pub fn connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
