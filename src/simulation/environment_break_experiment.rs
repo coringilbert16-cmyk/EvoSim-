@@ -89,7 +89,9 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
                     )
                 })
                 .next()
-                .unwrap_or_else(|| panic!("existing {a}-{b} compound has no valid physical realization"));
+                .unwrap_or_else(|| {
+                    panic!("existing {a}-{b} compound has no valid physical realization")
+                });
             let cell_index = simulation
                 .environment
                 .field
