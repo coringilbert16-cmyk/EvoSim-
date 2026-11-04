@@ -52,11 +52,11 @@ fn restorable_physical(
                 rotation + std::f64::consts::TAU * axis_step as f64 / ORIENTATION_STEPS as f64;
             let (axis_sin, axis_cos) = axis.sin_cos();
             for orientation_a in 0..ORIENTATION_STEPS {
-                let angle_a =
-                    rotation + std::f64::consts::TAU * orientation_a as f64 / ORIENTATION_STEPS as f64;
+                let angle_a = rotation
+                    + std::f64::consts::TAU * orientation_a as f64 / ORIENTATION_STEPS as f64;
                 for orientation_b in 0..ORIENTATION_STEPS {
-                    let angle_b =
-                        rotation + std::f64::consts::TAU * orientation_b as f64 / ORIENTATION_STEPS as f64;
+                    let angle_b = rotation
+                        + std::f64::consts::TAU * orientation_b as f64 / ORIENTATION_STEPS as f64;
                     let candidate_placements = vec![
                         Placement {
                             x: x - center_distance * 0.5 * axis_cos,
