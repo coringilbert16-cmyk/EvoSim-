@@ -1,12 +1,12 @@
-name: PR 288 Cache Metrics Matched Benchmark
+name: PR 288 Cache Metrics Wall-Clock Benchmark
 
 on:
   push:
     branches:
-      - bench/pr288-static-potential-candidate
+      - bench/pr288-wall-clock-break-samples
 
 concurrency:
-  group: pr288-cache-metrics-matched
+  group: pr288-cache-metrics-wall-clock
   cancel-in-progress: false
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three one-minute instrumented samples per revision
+    name: Three 60-second samples per revision
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -38,63 +38,44 @@ jobs:
           git worktree add /tmp/pr288-candidate "$CANDIDATE_SHA"
           (cd /tmp/pr288-baseline && cargo build --release)
           (cd /tmp/pr288-candidate && cargo build --release)
-          # Preserve each revision's checked-in starting library. Every measured
-          # experiment restores this pristine snapshot so previous runs cannot
-          # turn later samples into warm-cache-only measurements.
           for variant in baseline candidate; do
             mkdir -p "/tmp/pr288-seed-$variant"
             cp -a "/tmp/pr288-$variant/chemistry_library/data" "/tmp/pr288-seed-$variant/data"
           done
-      - name: Run three alternating one-minute instrumented samples per revision
+      - name: Run three alternating 60-second samples per revision
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p /tmp/pr288-cache-metrics
           : > /tmp/pr288-cache-metrics/samples.tsv
-          : > /tmp/pr288-cache-metrics/runs.tsv
           : > /tmp/pr288-cache-metrics/metrics.tsv
           : > /tmp/pr288-cache-metrics/summaries.jsonl
-          declare -A counts
-          counts[baseline]=0
-          counts[candidate]=0
           sequence=(baseline candidate candidate baseline baseline candidate)
-          for variant in "${sequence[@]}"; do
-            counts[$variant]=$((counts[$variant] + 1))
-            sample="${counts[$variant]}"
+          for index in "${!sequence[@]}"; do
+            variant="${sequence[$index]}"
+            sample=$((index / 2 + 1))
             workdir="/tmp/pr288-$variant"
             binary="$workdir/target/release/evosim"
-            sample_start=$(date +%s%N)
-            sample_ticks=0
-            run_count=0
-            while true; do
-              run_count=$((run_count + 1))
-              output="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
-              log="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.log"
-              rm -rf "$workdir/chemistry_library/data"
-              mkdir -p "$workdir/chemistry_library"
-              cp -a "/tmp/pr288-seed-$variant/data" "$workdir/chemistry_library/data"
-              run_start=$(date +%s%N)
-              (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-                --environment-chemistry-experiment --seed 42 --ticks 24000 \
-                --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
-              run_end=$(date +%s%N)
-              run_elapsed=$(awk -v a="$run_start" -v b="$run_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
-              ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-              test "$ticks" = "24000"
-              sample_ticks=$((sample_ticks + ticks))
-              printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$run_elapsed" >> /tmp/pr288-cache-metrics/runs.tsv
-              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/pr288-cache-metrics/summaries.jsonl
-              grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t$run_count\t/" >> /tmp/pr288-cache-metrics/metrics.tsv
-              sample_now=$(date +%s%N)
-              sample_elapsed=$(awk -v a="$sample_start" -v b="$sample_now" 'BEGIN { print (b-a)/1000000000 }')
-              if awk -v elapsed="$sample_elapsed" 'BEGIN { exit !(elapsed >= 60) }'; then
-                break
-              fi
-            done
-            sample_end=$(date +%s%N)
-            elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
-            rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
-            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/pr288-cache-metrics/samples.tsv
+            output="/tmp/pr288-cache-metrics/${variant}-${sample}.jsonl"
+            log="/tmp/pr288-cache-metrics/${variant}-${sample}.log"
+            rm -rf "$workdir/chemistry_library/data"
+            mkdir -p "$workdir/chemistry_library"
+            cp -a "/tmp/pr288-seed-$variant/data" "$workdir/chemistry_library/data"
+            start=$(date +%s%N)
+            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
+              --environment-chemistry-experiment --seed 42 --ticks 18446744073709551615 --seconds 60 \
+              --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
+            end=$(date +%s%N)
+            wall_seconds=$(awk -v a="$start" -v b="$end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
+            summary=$(grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | tail -1)
+            ticks=$(printf '%s\n' "$summary" | sed -n 's/.*tick=\([0-9]*\).*/\1/p')
+            elapsed=$(printf '%s\n' "$summary" | sed -n 's/.*elapsed_seconds=\([0-9.]*\).*/\1/p')
+            rate=$(printf '%s\n' "$summary" | sed -n 's/.*ticks_per_second=\([0-9.]*\).*/\1/p')
+            test -n "$ticks" && test -n "$elapsed" && test -n "$rate"
+            awk -v elapsed="$elapsed" 'BEGIN { exit !(elapsed >= 59.0 && elapsed <= 62.0) }'
+            printf "%s\t%d\t%s\t%s\t%s\t%s\n" "$variant" "$sample" "$ticks" "$elapsed" "$wall_seconds" "$rate" | tee -a /tmp/pr288-cache-metrics/samples.tsv
+            grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/pr288-cache-metrics/summaries.jsonl
+            grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t/" >> /tmp/pr288-cache-metrics/metrics.tsv
           done
           echo "=== THROUGHPUT MEDIANS ==="
           python3 - <<'PY'
@@ -102,7 +83,7 @@ jobs:
           rows = {}
           with open("/tmp/pr288-cache-metrics/samples.tsv", encoding="utf-8") as source:
               for line in source:
-                  variant, sample, ticks, elapsed, runs, rate = line.split()
+                  variant, sample, ticks, elapsed, wall, rate = line.split()
                   rows.setdefault(variant, []).append(float(rate))
           for variant, rates in sorted(rows.items()):
               print(f"{variant}: samples={len(rates)} rates={rates} median_ticks_per_second={statistics.median(rates):.3f}")
@@ -116,21 +97,26 @@ jobs:
           import json
           from collections import defaultdict
           totals = defaultdict(lambda: defaultdict(int))
-          runs = defaultdict(int)
           with open("/tmp/pr288-cache-metrics/metrics.tsv", encoding="utf-8") as source:
               for line in source:
-                  variant, sample, run, payload = line.rstrip("\n").split("\t", 3)
+                  variant, sample, payload = line.rstrip("\n").split("\t", 2)
                   data = json.loads(payload)
-                  runs[variant] += 1
                   for key, value in data.items():
                       totals[variant][key] += value
           for variant in ("baseline", "candidate"):
               t = totals[variant]
               lookups = t["cache_hits"] + t["cache_misses"]
               hit_rate = 100.0 * t["cache_hits"] / lookups if lookups else 0.0
-              avg_calc_us = t["potential_calculation_ns"] / t["potential_calculations"] / 1000 if t["potential_calculations"] else 0.0
               avg_combine_ms = t["combine_discovery_ns"] / t["combine_discovery_calls"] / 1_000_000 if t["combine_discovery_calls"] else 0.0
-              print(f"{variant}: experiment_runs={runs[variant]} lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} potential_calc_total_ms={t['potential_calculation_ns']/1e6:.3f} avg_potential_calc_us={avg_calc_us:.3f} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
+              print(f"{variant}: lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
+          PY
+          echo "=== BREAK/COMBINE SUMMARY ==="
+          python3 - <<'PY'
+          import json
+          rows = [json.loads(line) for line in open("/tmp/pr288-cache-metrics/summaries.jsonl", encoding="utf-8") if line.strip()]
+          for key in ("combine_committed", "combine_rejected", "break_committed", "break_rejected"):
+              print(f"{key}={sum(row[key] for row in rows)}")
+          print(f"summary_records={len(rows)}")
           PY
           echo "=== RAW SAMPLES ==="
           cat /tmp/pr288-cache-metrics/samples.tsv
@@ -151,11 +137,11 @@ jobs:
               raise SystemExit("No experiment summaries were produced")
           expected = {"Carbon":15.0,"Hydrogen":16.0,"Nitrogen":24.0,"Oxygen":20.0,"Phosphorus":17.0,"Sulfur":19.0,"Water":17.0}
           for i, row in enumerate(rows, 1):
-              assert row.get("ticks_observed") == 24000, (i, row)
+              assert isinstance(row.get("ticks_observed"), int) and row["ticks_observed"] > 0, (i, row.get("ticks_observed"))
               assert row.get("final_material_inventory") == expected, (i, row.get("final_material_inventory"))
               residual = row.get("energy_balance_residual")
               assert isinstance(residual, (int, float)) and math.isfinite(residual) and abs(residual) < 1e-4, (i, residual)
-          print(f"Validated {len(rows)} complete runs: 24,000 ticks each, exact material inventory, energy residual < 1e-4")
+          print(f"Validated {len(rows)} timed samples: variable tick counts, exact material inventory, energy residual < 1e-4")
           print("Totals:", {
               "combine_committed": sum(r["combine_committed"] for r in rows),
               "combine_rejected": sum(r["combine_rejected"] for r in rows),
@@ -167,6 +153,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr288-cache-metrics-matched-benchmark
+          name: pr288-cache-metrics-60-second-samples
           path: /tmp/pr288-cache-metrics/
           if-no-files-found: warn
