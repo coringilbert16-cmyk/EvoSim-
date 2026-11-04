@@ -44,7 +44,7 @@ fn restorable_physical(
     // assigned; restoration additionally requires nonpenetrating geometry.
     // Accept a candidate only when the exact stored arrangement restores.
     const DISTANCE_STEPS: usize = 33;
-    const ORIENTATION_STEPS: usize = 16;
+    const ORIENTATION_STEPS: usize = 8;
     for distance_step in 0..DISTANCE_STEPS {
         let center_distance = 0.2 + distance_step as f64 * 0.025;
         for axis_step in 0..ORIENTATION_STEPS {
@@ -78,6 +78,27 @@ fn restorable_physical(
                     ) else {
                         continue;
                     };
+                    let relative = candidate.placements.as_ref().unwrap();
+                    let shape_a = candidate.realized_shape_for_part(0, catalog).unwrap();
+                    let shape_b = candidate.realized_shape_for_part(1, catalog).unwrap();
+                    let part_a = crate::material_geometry::PlacedMaterialPart {
+                        part_index: 0,
+                        form: shape_a.form,
+                        placement: relative[0],
+                    };
+                    let part_b = crate::material_geometry::PlacedMaterialPart {
+                        part_index: 1,
+                        form: shape_b.form,
+                        placement: relative[1],
+                    };
+                    if crate::material_geometry::placed_forms_penetrate(
+                        &part_a,
+                        &part_b,
+                        crate::material_geometry::GEOMETRY_EPSILON,
+                    ) {
+                        continue;
+                    }
+
                     let mut restored = OrganismStructure::new();
                     if crate::material_restoration::restore_material(
                         &mut restored,
