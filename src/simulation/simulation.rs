@@ -927,11 +927,11 @@ impl Simulation {
             let broken_bond_index = Some(operation.bond_index);
             let settlement_result =
                 crate::chemical_reaction::resolve_environmental_preserving_accumulation_detailed(
-                operation,
-                &mut self.environment,
-                &mut self.energy_ledger,
-                &mut self.chemical_reaction_accumulation,
-            );
+                    operation,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
             let committed = settlement_result.is_ok();
             let failure_reason = settlement_result.err().map(str::to_string);
             if committed {
