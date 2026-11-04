@@ -548,6 +548,26 @@ pub(crate) fn run(seed: u64, duration: Duration) {
         simulation.chemical_reaction_accumulation.keys().filter(|key| key.starts_with("environment|environment:")).count(),
         simulation.chemical_reaction_accumulation.iter().take(24).collect::<Vec<_>>()
     );
+    let mut rejection_reasons = BTreeMap::<(String, String), u64>::new();
+    for event in simulation.environmental_chemistry_events.iter().filter(|event| {
+        event.reaction == "BREAK" && event.outcome == "rejected"
+    }) {
+        let parts = event.source_materials.first().cloned().unwrap_or_default();
+        let has = |name: &str| parts.iter().any(|(part, _)| part == name);
+        let recipe = if has("Hydrogen") && has("Sulfur") {
+            "Hydrogen-Sulfur"
+        } else if has("Carbon") && has("Hydrogen") {
+            "Carbon-Hydrogen"
+        } else {
+            "other"
+        };
+        let reason = event.failure_reason.as_deref().unwrap_or("missing_reason");
+        *rejection_reasons
+            .entry((recipe.to_string(), reason.to_string()))
+            .or_default() += 1;
+    }
+    println!("[break-rejection-reasons] by_recipe_and_reason={:?}", rejection_reasons);
+
     let final_inventory = simulation.energy_inventory_snapshot();
     let final_bonds = simulation
         .environment
