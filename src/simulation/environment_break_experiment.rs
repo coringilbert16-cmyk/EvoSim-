@@ -12,7 +12,7 @@ use crate::structure::{OrganismStructure, Placement};
 use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-const REPLICATES_PER_RECIPE: usize = 4;
+const REPLICATES_PER_RECIPE: usize = 40;
 const CANDIDATE_RECIPES: [(&str, &str); 2] = [("Hydrogen", "Sulfur"), ("Carbon", "Hydrogen")];
 
 pub(crate) struct NaturalBreakFixture {
@@ -236,15 +236,15 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
     let mut molecule_count = 0;
 
     // Cluster the candidate molecules around the configured hotspot center.
-    // Eight separated molecule centers fit inside its high-intensity core, so
-    // the normal hotspot can energize them without changing source strength,
-    // resonance rules, field flow, or chemistry scheduling.
+    // Eighty separated molecule centers fit inside the high-intensity core.
+    // Keep source strength, resonance rules, and chemistry scheduling fixed.
     let hotspot = simulation
         .hotspot
         .expect("the default experiment environment must include its hotspot");
     let hotspot_center_x = hotspot.center_x;
     let hotspot_center_y = hotspot.center_y;
-    const HOTSPOT_POPULATION_RADIUS: f64 = 8.0;
+    const GRID_COLUMNS: usize = 10;
+    const GRID_SPACING: f64 = 2.3;
     for (recipe_index, &(a, b)) in CANDIDATE_RECIPES.iter().enumerate() {
         let material = compounds
             .iter()
@@ -252,10 +252,11 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             .unwrap_or_else(|| panic!("existing compound catalog lacks {a}-{b}"));
         for replicate in 0..REPLICATES_PER_RECIPE {
             let index = recipe_index * REPLICATES_PER_RECIPE + replicate;
-            let angle = std::f64::consts::TAU * index as f64
-                / (REPLICATES_PER_RECIPE * CANDIDATE_RECIPES.len()) as f64;
-            let x = hotspot_center_x + HOTSPOT_POPULATION_RADIUS * angle.cos();
-            let y = hotspot_center_y + HOTSPOT_POPULATION_RADIUS * angle.sin();
+            let column = index % GRID_COLUMNS;
+            let row = index / GRID_COLUMNS;
+            let x = hotspot_center_x
+                + (column as f64 - (GRID_COLUMNS as f64 - 1.0) * 0.5) * GRID_SPACING;
+            let y = hotspot_center_y + (row as f64 - 3.5) * GRID_SPACING;
             let rotation = 0.37 * index as f64;
             // Select a geometry that passes both physical realization and the
             // exact restoration checks used by the live chemistry path.
@@ -586,7 +587,7 @@ mod tests {
     fn fixture_uses_existing_weak_bond_recipes_without_preloading_energy() {
         let fixture = build(42);
         let simulation = fixture.simulation;
-        assert_eq!(fixture.molecule_count, 8);
+        assert_eq!(fixture.molecule_count, 80);
         assert!(simulation.organisms.is_empty());
         let materials = simulation
             .environment
@@ -595,7 +596,7 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
-        assert_eq!(materials.len(), 8);
+        assert_eq!(materials.len(), 80);
         let hotspot = simulation.hotspot.expect("fixture must retain its hotspot");
         assert!(
             materials.iter().all(|material| {
