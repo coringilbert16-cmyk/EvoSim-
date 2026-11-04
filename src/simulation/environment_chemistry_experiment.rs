@@ -10,6 +10,69 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
+
+/// Seed exactly 128 individual base resources in a seeded set of randomly
+/// sized and positioned piles. Pile sizes are an unrestricted random partition
+/// of the inventory, not a fixed 6–20 range.
+pub(crate) fn seed_randomized_resources(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    seed: u64,
+    width: f64,
+    height: f64,
+) -> Vec<usize> {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let resource_names = catalog.iter().map(|resource| resource.name.clone()).collect::<Vec<_>>();
+    assert_eq!(resource_names.len(), 7, "the environment requires seven canonical base resources");
+
+    let mut identities = resource_names.clone();
+    while identities.len() < 128 {
+        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+    }
+    identities.shuffle(&mut rng);
+
+    let pile_count = rng.gen_range(4..=16);
+    let mut cuts = (1..128).collect::<Vec<_>>();
+    cuts.shuffle(&mut rng);
+    cuts.truncate(pile_count - 1);
+    cuts.sort_unstable();
+    let mut previous = 0;
+    let mut pile_sizes = Vec::with_capacity(pile_count);
+    for cut in cuts.into_iter().chain(std::iter::once(128)) {
+        pile_sizes.push(cut - previous);
+        previous = cut;
+    }
+
+    let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
+        .expect("the configured world must support the right-bend hotspot");
+    let centers = randomized_pile_centers(
+        pile_sizes.len(), hotspot.center_x, hotspot.center_y, width, height, &mut rng,
+    );
+    let mut identity_index = 0;
+    for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
+        let (center_x, center_y) = centers[pile_index];
+        let columns = (pile_size as f64).sqrt().ceil() as usize;
+        let rows = pile_size.div_ceil(columns);
+        for local_index in 0..pile_size {
+            let column = local_index % columns;
+            let row = local_index / columns;
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5).clamp(1.0, width - 1.0);
+            let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+            let placement = Placement {
+                x, y, rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+            };
+            let material = Material::free_base(&identities[identity_index], 1.0);
+            identity_index += 1;
+            let physical = PhysicalMaterial::realized(material, vec![placement], catalog)
+                .expect("canonical base resources must have valid physical geometry");
+            assert!(field.deposit_physical(x, y, physical, catalog),
+                "randomized pile {pile_index} resource {local_index} must remain in bounds");
+        }
+    }
+    assert_eq!(identity_index, 128);
+    pile_sizes
+}
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
@@ -29,89 +92,18 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         DEFAULT_CELL_SIZE,
     );
 
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let catalog = simulation.environment.catalog.clone();
-    let resource_names = catalog
-        .iter()
-        .map(|resource| resource.name.clone())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        resource_names.len(),
-        7,
-        "the chemistry experiment requires the seven canonical base resources"
-    );
-
-    let mut identities = resource_names.clone();
-    while identities.len() < 128 {
-        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
-    }
-    identities.shuffle(&mut rng);
-
-    let pile_sizes = randomized_pile_sizes(&mut rng);
-    assert_eq!(pile_sizes.iter().sum::<usize>(), 128);
-    assert!(pile_sizes.iter().all(|size| (6..=20).contains(size)));
-
-    let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
+    let pile_sizes = seed_randomized_resources(
+        &mut simulation.environment.field,
+        &catalog,
+        seed,
         simulation.environment.width,
         simulation.environment.height,
-    )
-    .expect("experiment world must support a right-bend hotspot");
-    assert!(simulation.enable_chemistry_experiment_hotspot());
-
-    let centers = randomized_pile_centers(
-        pile_sizes.len(),
-        hotspot.center_x,
-        hotspot.center_y,
-        simulation.environment.width,
-        simulation.environment.height,
-        &mut rng,
-    );
-    let mut identity_index = 0;
-    for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
-        let (center_x, center_y) = centers[pile_index];
-        let columns = (pile_size as f64).sqrt().ceil() as usize;
-        let rows = pile_size.div_ceil(columns);
-        for local_index in 0..pile_size {
-            let column = local_index % columns;
-            let row = local_index / columns;
-            let x = center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.0;
-            let y = center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.0;
-            let rotation_radians = rng.gen_range(0.0..std::f64::consts::TAU);
-            let name = identities[identity_index].clone();
-            identity_index += 1;
-            let material = Material::free_base(&name, 1.0);
-            let placement = Placement {
-                x,
-                y,
-                rotation_radians,
-            };
-            let physical = PhysicalMaterial::realized(material, vec![placement], &catalog)
-                .expect("every canonical base resource must have valid physical geometry");
-            assert!(
-                simulation
-                    .environment
-                    .field
-                    .deposit_physical(x, y, physical, &catalog),
-                "pile {pile_index} resource {local_index} must be inside the world"
-            );
-        }
-    }
-    assert_eq!(identity_index, 128);
-    assert_eq!(
-        simulation
-            .environment
-            .field
-            .cells
-            .iter()
-            .map(|cell| cell.physical_materials.len())
-            .sum::<usize>(),
-        128
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
     // ledger on the actual environment-only tick-zero inventory so no organism
     // energy or structure can act as a hidden environmental source.
-    simulation.energy_ledger = EnergyLedger::default();
+   simulation.energy_ledger = EnergyLedger::default();
     let initial = simulation.energy_inventory_snapshot();
     simulation.energy_ledger.initial_usable_energy_held = initial.current_usable_energy;
     simulation.energy_ledger.total_usable_energy_held = initial.current_usable_energy;
