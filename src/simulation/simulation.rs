@@ -3362,6 +3362,9 @@ mod decomposition_finalization_tests {
         };
         let inventory_before = simulation.energy_inventory_snapshot();
 
+        // This regression isolates biological holder retention from the
+        // default environment's independent external hotspot input.
+        simulation.hotspot = None;
         simulation.step();
 
         assert_eq!(rollback_material_inventory(&simulation), material_before);
