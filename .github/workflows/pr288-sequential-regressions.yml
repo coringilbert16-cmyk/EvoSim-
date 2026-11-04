@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - bench/pr288-sequential-regressions
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
