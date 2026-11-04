@@ -10,6 +10,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut environment_break_experiment = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
 
@@ -18,6 +19,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--environment-break-experiment" => {
+                environment_break_experiment = true;
             }
             "--seed" => {
                 seed = args
@@ -49,6 +53,12 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             _ => {}
         }
+    }
+
+    if environment_break_experiment {
+        let ticks = if max_ticks_provided { max_ticks } else { 24_000 };
+        crate::environment_break_experiment::run(seed, ticks);
+        return;
     }
 
     if environment_chemistry_experiment {
