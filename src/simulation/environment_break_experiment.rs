@@ -50,6 +50,8 @@ fn restorable_physical(
     let mut best_facing = f64::NEG_INFINITY;
     let mut best_contact_factor = 0.0_f64;
     let mut best_engagement = 0.0_f64;
+    let mut best_realization: Option<(PhysicalMaterial, f64, f64, f64, f64)> = None;
+    let mut best_score = 0.0_f64;
     for distance_step in 0..DISTANCE_STEPS {
         let center_distance = distance_step as f64 * 0.025;
         for axis_step in 0..ORIENTATION_STEPS {
@@ -179,11 +181,29 @@ fn restorable_physical(
                     )
                     .is_some()
                     {
-                        return candidate;
+                        let score = contact_factor * engagement;
+                        if score > best_score {
+                            best_score = score;
+                            best_realization = Some((
+                                candidate,
+                                contact.distance,
+                                contact.facing,
+                                contact_factor,
+                                engagement,
+                            ));
+                        }
                     }
                 }
             }
         }
+    }
+
+    if let Some((candidate, distance, facing, contact_factor, engagement)) = best_realization {
+        println!(
+            "[seed-contact] material={:?} distance={:.6} facing={:.6} contact_factor={:.6} engagement={:.6} combined={:.6}",
+            material.parts, distance, facing, contact_factor, engagement, best_score
+        );
+        return candidate;
     }
 
     panic!(
