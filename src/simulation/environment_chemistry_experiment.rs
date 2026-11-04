@@ -46,7 +46,10 @@ pub(crate) fn seed_randomized_resources(
     cuts.sort_unstable();
     let mut previous = 0;
     let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts.into_iter().chain(std::iter::once(ENVIRONMENT_RESOURCE_COUNT)) {
+    for cut in cuts
+        .into_iter()
+        .chain(std::iter::once(ENVIRONMENT_RESOURCE_COUNT))
+    {
         pile_sizes.push(cut - previous);
         previous = cut;
     }
@@ -169,8 +172,9 @@ fn randomized_pile_centers(
             .iter()
             .zip(pile_radii.iter())
             .all(|((x, y), existing_radius)| {
-                let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-                (candidate.0 - *x).hypot(vertical) >= radius + existing_radius + 3.0
+                let vertical =
+                    (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
+                (candidate.0 - *x).hypot(vertical) >= radius + *existing_radius + 3.0
             });
         if separated {
             centers.push(candidate);
@@ -212,7 +216,10 @@ mod tests {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
-        assert_eq!(first.pile_sizes.iter().sum::<usize>(), ENVIRONMENT_RESOURCE_COUNT);
+        assert_eq!(
+            first.pile_sizes.iter().sum::<usize>(),
+            ENVIRONMENT_RESOURCE_COUNT
+        );
         assert!((3..=10).contains(&first.pile_sizes.len()));
         assert!(first.pile_sizes.iter().all(|size| *size >= 1));
         assert!(first.pile_sizes.iter().any(|size| *size < 6 || *size > 20));
