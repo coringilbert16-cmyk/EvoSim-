@@ -503,12 +503,13 @@ fn discover_environmental_bonds(
 }
 
 pub(crate) fn accumulate_environmental(
-    environment: &crate::state::Environment,
+    environment: &mut crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
+    environment.field.assign_missing_material_identities();
     // Environmental progress belongs to the field, not to the organism
     // whose turn happens to discover it. Search the field directly; the
     // bounded candidate budget below keeps this world-owned scan finite.
@@ -632,15 +633,7 @@ pub(crate) fn accumulate_environmental(
         };
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
-        let key = format!(
-            "{}{}:{}:{}:{}:{:?}",
-            ENVIRONMENT_PREFIX,
-            cell_index,
-            material_index,
-            bond_index,
-            material_identity(&instance.material),
-            connection
-        );
+        let key = environmental_break_accumulation_key(instance, bond_index, connection);
         let key_record = ChemistryKey::from_live_geometry(
             &material_a,
             &material_b,
@@ -744,6 +737,17 @@ pub(crate) fn accumulate_environmental(
 
     dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
     operations
+}
+
+fn environmental_break_accumulation_key(
+    instance: &crate::physical_material::PhysicalMaterial,
+    bond_index: usize,
+    connection: &crate::physical_material::PhysicalMaterialBond,
+) -> String {
+    format!(
+        "environment|environment:{}:{}:{:?}",
+        instance.environmental_identity, bond_index, connection
+    )
 }
 
 /// Apply the same bounded, deterministic work policy to environmental reactions
@@ -995,6 +999,57 @@ mod material_identity_tests {
             catalog,
         )
         .expect("test composite should be physically realizable")
+    }
+
+    #[test]
+    fn environmental_break_progress_identity_survives_cell_and_slot_movement() {
+        let mut simulation = crate::state::Simulation::new(941, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let source = environmental_test_composite(&catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("fixture must contain an internal bond")
+            .clone();
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0, source.clone(), &catalog
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0, source, &catalog
+        ));
+        simulation.environment.field.assign_missing_material_identities();
+
+        let first_id = simulation.environment.field.cells[0].physical_materials[0]
+            .environmental_identity;
+        let second_id = simulation.environment.field.cells[0].physical_materials[1]
+            .environmental_identity;
+        assert_ne!(first_id, second_id, "identical molecules must not share progress");
+        let old_key = environmental_break_accumulation_key(
+            &simulation.environment.field.cells[0].physical_materials[0],
+            0,
+            &bond,
+        );
+        let mut accumulation = std::collections::BTreeMap::new();
+        accumulation.insert(old_key.clone(), 0.75);
+
+        let moved = simulation.environment.field.cells[0].physical_materials.remove(0);
+        simulation.environment.field.cells[1].physical_materials.push(moved);
+        let moved_material = &simulation.environment.field.cells[1].physical_materials[0];
+        assert_eq!(moved_material.environmental_identity, first_id);
+        let moved_key = environmental_break_accumulation_key(moved_material, 0, &bond);
+        assert_eq!(moved_key, old_key, "cell and slot changes must not reset progress");
+        assert_eq!(accumulation.get(&moved_key), Some(&0.75));
+
+        dissipate_unupdated_accumulations(
+            &mut accumulation,
+            "environment|environment:",
+            &std::collections::BTreeSet::new(),
+        );
+        assert!(accumulation[&old_key] < 0.75, "invalidated bonds must still dissipate");
     }
 
     fn remove_living_organisms_preserving_inventory(simulation: &mut crate::state::Simulation) {
@@ -1286,7 +1341,7 @@ mod material_identity_tests {
         for tick in 0..max_ticks {
             let mut discovery_budget = 1;
             let operations = accumulate_environmental(
-                &simulation.environment,
+                &mut simulation.environment,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
