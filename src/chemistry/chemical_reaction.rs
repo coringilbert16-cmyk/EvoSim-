@@ -1060,11 +1060,10 @@ mod material_identity_tests {
             source.clone(),
             &catalog,
         ));
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0,
-            source,
-            &catalog,
-        ));
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical_at_index(0, source, &catalog,));
         simulation
             .environment
             .field
@@ -1076,7 +1075,9 @@ mod material_identity_tests {
 
         // Model the index shift caused when an earlier queued BREAK removes
         // the material that originally occupied slot zero.
-        simulation.environment.field.cells[0].physical_materials.remove(0);
+        simulation.environment.field.cells[0]
+            .physical_materials
+            .remove(0);
         assert_eq!(
             environmental_material_location(&simulation.environment, &queued_source, 0, 1),
             Some((0, 0)),
