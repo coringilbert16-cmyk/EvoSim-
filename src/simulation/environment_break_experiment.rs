@@ -48,17 +48,15 @@ fn restorable_physical(
     for distance_step in 0..DISTANCE_STEPS {
         let center_distance = 0.2 + distance_step as f64 * 0.025;
         for axis_step in 0..ORIENTATION_STEPS {
-            let axis = rotation
-                + std::f64::consts::TAU * axis_step as f64 / ORIENTATION_STEPS as f64;
+            let axis =
+                rotation + std::f64::consts::TAU * axis_step as f64 / ORIENTATION_STEPS as f64;
             let (axis_sin, axis_cos) = axis.sin_cos();
             for orientation_a in 0..ORIENTATION_STEPS {
-                let angle_a = rotation
-                    + std::f64::consts::TAU * orientation_a as f64
-                        / ORIENTATION_STEPS as f64;
+                let angle_a =
+                    rotation + std::f64::consts::TAU * orientation_a as f64 / ORIENTATION_STEPS as f64;
                 for orientation_b in 0..ORIENTATION_STEPS {
-                    let angle_b = rotation
-                        + std::f64::consts::TAU * orientation_b as f64
-                            / ORIENTATION_STEPS as f64;
+                    let angle_b =
+                        rotation + std::f64::consts::TAU * orientation_b as f64 / ORIENTATION_STEPS as f64;
                     let candidate_placements = vec![
                         Placement {
                             x: x - center_distance * 0.5 * axis_cos,
@@ -71,11 +69,9 @@ fn restorable_physical(
                             rotation_radians: angle_b,
                         },
                     ];
-                    let Some(candidate) = PhysicalMaterial::realized(
-                        material.clone(),
-                        candidate_placements,
-                        catalog,
-                    ) else {
+                    let Some(candidate) =
+                        PhysicalMaterial::realized(material.clone(), candidate_placements, catalog)
+                    else {
                         continue;
                     };
                     let relative = candidate.placements.as_ref().unwrap();
@@ -126,10 +122,7 @@ fn restorable_physical(
                         continue;
                     };
                     let Some(contact) = crate::contact::connection_pair_candidates(
-                        &restored,
-                        unit_a,
-                        unit_b,
-                        catalog,
+                        &restored, unit_a, unit_b, catalog,
                     )
                     .into_iter()
                     .find(|contact| {
