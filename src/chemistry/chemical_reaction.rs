@@ -1351,7 +1351,10 @@ mod material_identity_tests {
             source,
             &simulation.environment.catalog,
         ));
-        simulation.environment.field.assign_missing_material_identities();
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
 
         let target_prefix = "environment|environment:".to_string();
         let mut accumulation = std::collections::BTreeMap::new();
