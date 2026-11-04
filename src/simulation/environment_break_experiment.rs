@@ -301,6 +301,9 @@ struct BondProgressDiagnostics {
     maximum: f64,
     positive_samples: u64,
     zero_samples: u64,
+    key_present_samples: u64,
+    key_missing_samples: u64,
+    high_exposure_samples: u64,
     decreases: u64,
     exposure_sum: f64,
     exposure_samples: u64,
@@ -332,9 +335,11 @@ fn sample_bond_progress(
             "environment|environment:{}:{}:{:?}",
             material.environmental_identity, 0, connection
         );
-        let progress = simulation.chemical_reaction_accumulation
-            .get(&key).copied().unwrap_or(0.0);
+        let found_progress = simulation.chemical_reaction_accumulation.get(&key).copied();
+        let progress = found_progress.unwrap_or(0.0);
         let entry = diagnostics.entry(material.environmental_identity).or_default();
+        if found_progress.is_some() { entry.key_present_samples += 1; }
+        else { entry.key_missing_samples += 1; }
         if progress > 0.0 {
             entry.positive_samples += 1;
         } else {
@@ -357,6 +362,9 @@ fn sample_bond_progress(
                 let exposure = intensities.iter().sum::<f64>() / intensities.len() as f64;
                 entry.exposure_sum += exposure;
                 entry.exposure_samples += 1;
+                if exposure >= hotspot.peak_energy_per_tick_per_area * 0.85 {
+                    entry.high_exposure_samples += 1;
+                }
                 entry.peak_exposure = entry.peak_exposure.max(exposure);
             }
         }
@@ -396,10 +404,11 @@ fn report_bond_progress(
         let average_exposure = if stats.exposure_samples == 0 { 0.0 }
             else { stats.exposure_sum / stats.exposure_samples as f64 };
         println!(
-            "[bond-progress] id={} recipe={}-{} bond_index=0 progress_now={:.9} progress_max={:.9} activation_signal_max={:.9} barrier={:.9} positive_samples={} zero_samples={} decreases={} hotspot_exposure_avg={:.3} hotspot_exposure_peak={:.3} exposure_samples={} identity={}",
+            "[bond-progress] id={} recipe={}-{} bond_index=0 progress_now={:.9} progress_max={:.9} activation_signal_max={:.9} barrier={:.9} positive_samples={} zero_samples={} key_present_samples={} key_missing_samples={} decreases={} hotspot_exposure_avg={:.3} hotspot_exposure_peak={:.3} high_exposure_samples={} exposure_samples={} identity={}",
             material.environmental_identity, a_name, b_name, stats.previous, stats.maximum,
             stats.max_activation_signal, barrier, stats.positive_samples, stats.zero_samples,
-            stats.decreases, average_exposure, stats.peak_exposure,
+            stats.key_present_samples, stats.key_missing_samples, stats.decreases,
+            average_exposure, stats.peak_exposure, stats.high_exposure_samples,
             stats.exposure_samples, material.environmental_identity
         );
     }
