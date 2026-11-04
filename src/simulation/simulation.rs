@@ -136,7 +136,7 @@ impl Simulation {
 
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
+        let environment = Self::create_environment(seed);
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let mut organism = Self::create_initial_organism();
@@ -197,7 +197,7 @@ impl Simulation {
             seed_scale_reference,
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
-            hotspot: None,
+            hotspot: crate::hotspot::RadialHotspot::right_bend_for_world(environment.width, environment.height),
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
         }
@@ -212,13 +212,14 @@ impl Simulation {
         self.hotspot.is_some()
     }
 
-    fn create_environment() -> Environment {
+    fn create_environment(seed: u64) -> Environment {
         let catalog = crate::resources::default_catalog();
-        let width = 1000.0;
-        let height = 1000.0;
+        let width = 250.0;
+        let height = 250.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
-        crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
-        crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
+        crate::environment_chemistry_experiment::seed_randomized_resources(
+            &mut field, &catalog, seed, width, height,
+        );
         Environment {
             width,
             height,
@@ -243,7 +244,7 @@ impl Simulation {
             "only live-validated Bob suggestions may attach an acquired fluid shape"
         );
 
-        let anchor = Position { x: 500.0, y: 500.0 };
+        let anchor = Position { x: 125.0, y: 125.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
             unit.placement.y += anchor.y;
