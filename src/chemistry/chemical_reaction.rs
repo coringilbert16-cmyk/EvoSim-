@@ -1047,6 +1047,237 @@ mod material_identity_tests {
         .expect("test composite should be physically realizable")
     }
 
+
+    fn environmental_benchmark_composite(
+        catalog: &[crate::resources::BaseResource],
+    ) -> crate::physical_material::PhysicalMaterial {
+        let material = Material {
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Carbon".into(), 1.0),
+            ],
+            internal_bonds: vec![
+                InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                },
+                InternalBond {
+                    part_a: 1,
+                    part_b: 2,
+                },
+            ],
+        };
+        crate::physical_material::PhysicalMaterial::realized(
+            material,
+            vec![
+                crate::structure::Placement {
+                    x: 12.5,
+                    y: 12.5,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 14.3,
+                    y: 12.5,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 16.1,
+                    y: 12.5,
+                    rotation_radians: 0.0,
+                },
+            ],
+            catalog,
+        )
+        .expect("two-bond benchmark composite should be physically realizable")
+    }
+
+    #[derive(Debug, Default, PartialEq)]
+    struct EnvironmentalDiscoveryBenchmarkStats {
+        restoration_attempts: usize,
+        restoration_successes: usize,
+        restoration_failures: usize,
+        restoration_cache_hits: usize,
+        restoration_cache_misses: usize,
+        geometry_candidates_materialized: usize,
+        eligible_bonds:
+            Vec<(usize, usize, usize, crate::contact::ConnectionPairCandidate)>,
+    }
+
+    // Reference the pre-optimization path: restore for every bond and materialize
+    // every endpoint-pair geometry candidate before selecting the recorded bond.
+    fn benchmark_environmental_discovery_reference(
+        environment: &crate::state::Environment,
+        candidates: &[(usize, usize, usize)],
+    ) -> EnvironmentalDiscoveryBenchmarkStats {
+        let mut stats = EnvironmentalDiscoveryBenchmarkStats::default();
+        let mut compatibility_cache = ConnectionCompatibilityCache::new();
+
+        for &(cell_index, material_index, bond_index) in candidates {
+            let Some(instance) = environment
+                .field
+                .cells
+                .get(cell_index)
+                .and_then(|cell| cell.physical_materials.get(material_index))
+            else {
+                continue;
+            };
+            let Some(connection) = instance
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.get(bond_index))
+            else {
+                continue;
+            };
+
+            stats.restoration_attempts += 1;
+            let mut hypothetical = crate::structure::OrganismStructure::new();
+            let Some(restored_indices) = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            ) else {
+                stats.restoration_failures += 1;
+                continue;
+            };
+            stats.restoration_successes += 1;
+
+            let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+                continue;
+            };
+            let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+                continue;
+            };
+            let generated = crate::contact::connection_pair_candidates_cached(
+                &hypothetical,
+                unit_a,
+                unit_b,
+                &environment.catalog,
+                &mut compatibility_cache,
+            );
+            stats.geometry_candidates_materialized += generated.len();
+            let candidate = generated.iter().find(|candidate| {
+                (candidate.endpoint_a == connection.endpoint_a
+                    && candidate.endpoint_b == connection.endpoint_b)
+                    || (candidate.endpoint_a == connection.endpoint_b
+                        && candidate.endpoint_b == connection.endpoint_a)
+            });
+            if let Some(candidate) = candidate {
+                stats.eligible_bonds.push((
+                    cell_index,
+                    material_index,
+                    bond_index,
+                    *candidate,
+                ));
+            }
+        }
+
+        stats
+    }
+
+    // Match the optimized production path: cache both successful and failed
+    // material restorations, then resolve only the endpoints recorded by a bond.
+    fn benchmark_environmental_discovery_optimized(
+        environment: &crate::state::Environment,
+        candidates: &[(usize, usize, usize)],
+    ) -> EnvironmentalDiscoveryBenchmarkStats {
+        let mut stats = EnvironmentalDiscoveryBenchmarkStats::default();
+        let mut restored_materials = std::collections::BTreeMap::new();
+
+        for &(cell_index, material_index, bond_index) in candidates {
+            let Some(instance) = environment
+                .field
+                .cells
+                .get(cell_index)
+                .and_then(|cell| cell.physical_materials.get(material_index))
+            else {
+                continue;
+            };
+            let Some(connection) = instance
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.get(bond_index))
+            else {
+                continue;
+            };
+
+            let material_key = (cell_index, material_index);
+            if !restored_materials.contains_key(&material_key) {
+                stats.restoration_cache_misses += 1;
+                stats.restoration_attempts += 1;
+                let mut hypothetical = crate::structure::OrganismStructure::new();
+                let restored = crate::material_restoration::restore_material(
+                    &mut hypothetical,
+                    instance,
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    &environment.catalog,
+                )
+                .map(|restored_indices| (hypothetical, restored_indices));
+                if restored.is_some() {
+                    stats.restoration_successes += 1;
+                } else {
+                    stats.restoration_failures += 1;
+                }
+                restored_materials.insert(material_key, restored);
+            } else {
+                stats.restoration_cache_hits += 1;
+            }
+
+            let Some(Some((hypothetical, restored_indices))) =
+                restored_materials.get(&material_key)
+            else {
+                continue;
+            };
+            let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+                continue;
+            };
+            let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+                continue;
+            };
+            let candidate = crate::contact::connection_pair_candidate_for_endpoints(
+                hypothetical,
+                unit_a,
+                unit_b,
+                &environment.catalog,
+                connection.endpoint_a,
+                connection.endpoint_b,
+            );
+            if let Some(candidate) = candidate {
+                stats.geometry_candidates_materialized += 1;
+                stats.eligible_bonds.push((
+                    cell_index,
+                    material_index,
+                    bond_index,
+                    candidate,
+                ));
+            }
+        }
+
+        stats
+    }
+
+    fn benchmark_elapsed_nanos<F: FnMut()>(mut run: F, repeats: usize) -> u128 {
+        let start = std::time::Instant::now();
+        for _ in 0..repeats {
+            std::hint::black_box(run());
+        }
+        start.elapsed().as_nanos() / repeats as u128
+    }
+
+    fn benchmark_median(values: &mut [u128]) -> u128 {
+        values.sort_unstable();
+        values[values.len() / 2]
+    }
+
     #[test]
     fn queued_break_source_resolves_after_an_earlier_split_shifts_its_slot() {
         let mut simulation = crate::state::Simulation::new(942, 10.0);
@@ -1411,6 +1642,141 @@ mod material_identity_tests {
                 "distant sparse material must be discoverable at budget={budget}"
             );
         }
+    }
+
+    /// Direct A/B benchmark of environmental BREAK discovery work.
+    /// The deterministic counts are assertions; wall-clock medians are diagnostic only.
+    #[test]
+    #[ignore = "dedicated CI A/B timing run"]
+    fn environmental_discovery_ab_benchmark() {
+        const VALID_MATERIALS: usize = 24;
+        const FAILED_MATERIALS: usize = 8;
+        const REPEATS: usize = 8;
+        const SAMPLES: usize = 7;
+
+        let mut simulation = crate::state::Simulation::new(949, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+
+        let source = environmental_benchmark_composite(&simulation.environment.catalog);
+        assert_eq!(
+            source.internal_connections.as_ref().map(Vec::len),
+            Some(2),
+            "each valid benchmark material must contain two internal bonds"
+        );
+
+        for _ in 0..VALID_MATERIALS {
+            assert!(simulation.environment.field.deposit_physical_at_index(
+                0,
+                source.clone(),
+                &simulation.environment.catalog,
+            ));
+        }
+        // Keep a real bond list for discovery, but make restoration fail. This
+        // verifies that the optimized cache memoizes rejected restorations too.
+        for _ in 0..FAILED_MATERIALS {
+            let mut failed = source.clone();
+            failed.placements = None;
+            simulation.environment.field.cells[0]
+                .physical_materials
+                .push(failed);
+        }
+
+        let (candidates, _) = discover_environmental_bonds(
+            &simulation.environment,
+            0,
+            MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK,
+        );
+        let expected_bonds = (VALID_MATERIALS + FAILED_MATERIALS) * 2;
+        assert_eq!(candidates.len(), expected_bonds);
+
+        let reference = benchmark_environmental_discovery_reference(
+            &simulation.environment,
+            &candidates,
+        );
+        let optimized = benchmark_environmental_discovery_optimized(
+            &simulation.environment,
+            &candidates,
+        );
+
+        assert_eq!(
+            reference.eligible_bonds, optimized.eligible_bonds,
+            "optimized discovery must return the exact same eligible bond identities and geometry"
+        );
+        assert_eq!(reference.eligible_bonds.len(), VALID_MATERIALS * 2);
+        assert_eq!(reference.restoration_attempts, expected_bonds);
+        assert_eq!(reference.restoration_successes, VALID_MATERIALS * 2);
+        assert_eq!(reference.restoration_failures, FAILED_MATERIALS * 2);
+        assert_eq!(optimized.restoration_attempts, VALID_MATERIALS + FAILED_MATERIALS);
+        assert_eq!(optimized.restoration_successes, VALID_MATERIALS);
+        assert_eq!(optimized.restoration_failures, FAILED_MATERIALS);
+        assert_eq!(optimized.restoration_cache_misses, VALID_MATERIALS + FAILED_MATERIALS);
+        assert_eq!(
+            optimized.restoration_cache_hits,
+            expected_bonds - VALID_MATERIALS - FAILED_MATERIALS
+        );
+        assert_eq!(
+            optimized.geometry_candidates_materialized,
+            optimized.eligible_bonds.len(),
+            "targeted lookup should materialize only the recorded candidate"
+        );
+        assert!(
+            reference.geometry_candidates_materialized > optimized.geometry_candidates_materialized,
+            "full enumeration should materialize more geometry candidates than targeted lookup"
+        );
+
+        // Alternate order across samples to reduce systematic warm-cache/order bias.
+        let mut reference_samples = Vec::with_capacity(SAMPLES);
+        let mut optimized_samples = Vec::with_capacity(SAMPLES);
+        for sample in 0..SAMPLES {
+            if sample % 2 == 0 {
+                reference_samples.push(benchmark_elapsed_nanos(
+                    || benchmark_environmental_discovery_reference(&simulation.environment, &candidates),
+                    REPEATS,
+                ));
+                optimized_samples.push(benchmark_elapsed_nanos(
+                    || benchmark_environmental_discovery_optimized(&simulation.environment, &candidates),
+                    REPEATS,
+                ));
+            } else {
+                optimized_samples.push(benchmark_elapsed_nanos(
+                    || benchmark_environmental_discovery_optimized(&simulation.environment, &candidates),
+                    REPEATS,
+                ));
+                reference_samples.push(benchmark_elapsed_nanos(
+                    || benchmark_environmental_discovery_reference(&simulation.environment, &candidates),
+                    REPEATS,
+                ));
+            }
+        }
+        let reference_median = benchmark_median(&mut reference_samples);
+        let optimized_median = benchmark_median(&mut optimized_samples);
+        let speedup = reference_median as f64 / optimized_median.max(1) as f64;
+
+        eprintln!(
+            "environmental BREAK discovery A/B: materials={} valid+{} failed; bonds={}; \
+             restorations reference={}/{} success/{} failed, optimized={}/{} success/{} failed; \
+             cache hits={} misses={}; geometry candidates materialized reference={} optimized={}; \
+             eligible identical={}; median_ns reference={} optimized={} speedup={:.2}x",
+            VALID_MATERIALS,
+            FAILED_MATERIALS,
+            expected_bonds,
+            reference.restoration_attempts,
+            reference.restoration_successes,
+            reference.restoration_failures,
+            optimized.restoration_attempts,
+            optimized.restoration_successes,
+            optimized.restoration_failures,
+            optimized.restoration_cache_hits,
+            optimized.restoration_cache_misses,
+            reference.geometry_candidates_materialized,
+            optimized.geometry_candidates_materialized,
+            reference.eligible_bonds.len(),
+            reference_median,
+            optimized_median,
+            speedup,
+        );
     }
 
     #[test]

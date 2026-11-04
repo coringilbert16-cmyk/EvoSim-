@@ -107,6 +107,10 @@ jobs:
           run_check cargo test --locked failed_prepared_combine_
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
+      - name: Environmental BREAK discovery A/B benchmark
+        if: always()
+        timeout-minutes: 5
+        run: cargo test --locked environmental_discovery_ab_benchmark -- --ignored --nocapture
       - name: Transactions and ownership (focused tests)
         if: always()
         timeout-minutes: 30
