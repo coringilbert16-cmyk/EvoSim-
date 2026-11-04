@@ -844,11 +844,13 @@ mod tests {
         )
         .unwrap();
         let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
-        let expected =
+        let mut expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
+        assert_ne!(objects[0].environmental_identity, 0);
+        expected.environmental_identity = objects[0].environmental_identity;
         assert_eq!(
             objects[0], &expected,
-            "transport may change only world placement and orientation"
+            "transport may change only world placement, orientation, and first-time identity"
         );
     }
 
