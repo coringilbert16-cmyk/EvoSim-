@@ -244,7 +244,7 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
     let hotspot_center_x = hotspot.center_x;
     let hotspot_center_y = hotspot.center_y;
     const GRID_COLUMNS: usize = 10;
-    const GRID_SPACING: f64 = 2.3;
+    const GRID_SPACING: f64 = 1.3;
     for (recipe_index, &(a, b)) in CANDIDATE_RECIPES.iter().enumerate() {
         let material = compounds
             .iter()
@@ -461,14 +461,14 @@ pub(crate) fn run(seed: u64, duration: Duration) {
     let started = Instant::now();
     let mut last_report = started;
     println!(
-        "NATURAL BREAK EXPERIMENT START: seed={seed} duration_seconds={} molecules={} organisms={} world={}x{} hotspot={:?} hotspot_population_radius={}",
+        "NATURAL BREAK EXPERIMENT START: seed={seed} duration_seconds={} molecules={} organisms={} world={}x{} hotspot={:?} population_layout=10x8_grid grid_spacing={}",
         duration.as_secs(),
         fixture.molecule_count,
         simulation.organisms.len(),
         simulation.environment.width,
         simulation.environment.height,
         simulation.hotspot,
-        8.0
+        1.3
     );
 
     let mut total_ready = 0_usize;
