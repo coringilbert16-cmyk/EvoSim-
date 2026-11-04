@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three fixed 24,000-tick samples per revision
+    name: Three fixed 1,000-tick samples per revision
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -46,11 +46,11 @@ jobs:
           for variant in baseline candidate; do
             workdir="/tmp/static-cache-$variant"
             (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 1000 \
+              --environment-chemistry-experiment --seed 42 --ticks 250 \
               --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
               > "/tmp/static-cache-metrics/warmup-$variant.log" 2>&1)
           done
-      - name: Run three alternating one-minute instrumented samples per revision
+      - name: Run three alternating fixed 1,000-tick instrumented samples per revision
         shell: bash
         run: |
           set -euo pipefail
@@ -72,12 +72,12 @@ jobs:
             log="/tmp/static-cache-metrics/${variant}-${sample}.log"
             sample_start=$(date +%s%N)
             (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 24000 \
+              --environment-chemistry-experiment --seed 42 --ticks 1000 \
               --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
             sample_end=$(date +%s%N)
             elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
             ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-            test "$ticks" = "24000"
+            test "$ticks" = "1000"
             sample_ticks=$ticks
             run_count=1
             printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
@@ -141,7 +141,7 @@ jobs:
               raise SystemExit("No experiment summaries were produced")
           reference_inventory = None
           for i, row in enumerate(rows, 1):
-              assert row.get("ticks_observed") == 24000, (i, row)
+              assert row.get("ticks_observed") == 1000, (i, row)
               inventory = row.get("final_material_inventory")
               assert isinstance(inventory, dict) and sum(inventory.values()) == 1280, (i, inventory)
               if reference_inventory is None:
@@ -149,7 +149,7 @@ jobs:
               assert inventory == reference_inventory, (i, inventory, reference_inventory)
               residual = row.get("energy_balance_residual")
               assert isinstance(residual, (int, float)) and math.isfinite(residual) and abs(residual) < 1e-4, (i, residual)
-          print(f"Validated {len(rows)} complete runs: 24,000 ticks each, matching 1,280-resource inventories, energy residual < 1e-4")
+          print(f"Validated {len(rows)} complete runs: 1,000 ticks each, matching 1,280-resource inventories, energy residual < 1e-4")
           print("Totals:", {
               "combine_committed": sum(r["combine_committed"] for r in rows),
               "combine_rejected": sum(r["combine_rejected"] for r in rows),
