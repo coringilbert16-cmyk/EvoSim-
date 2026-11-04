@@ -178,6 +178,10 @@ impl Simulation {
             crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
                 + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
+        let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
+            environment.width,
+            environment.height,
+        );
         Self {
             tick: 0,
             ticks_per_second,
@@ -197,7 +201,7 @@ impl Simulation {
             seed_scale_reference,
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
-            hotspot: crate::hotspot::RadialHotspot::right_bend_for_world(environment.width, environment.height),
+            hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
         }
