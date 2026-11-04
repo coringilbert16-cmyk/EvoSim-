@@ -9,6 +9,7 @@ use crate::physical_material::PhysicalMaterial;
 use crate::resources::{Material, ResourceBaselines};
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement};
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 const REPLICATES_PER_RECIPE: usize = 4;
@@ -294,6 +295,116 @@ fn report_candidate_profiles(simulation: &Simulation) {
     }
 }
 
+#[derive(Default)]
+struct BondProgressDiagnostics {
+    previous: f64,
+    maximum: f64,
+    positive_samples: u64,
+    zero_samples: u64,
+    decreases: u64,
+    exposure_sum: f64,
+    exposure_samples: u64,
+    peak_exposure: f64,
+    max_activation_signal: f64,
+}
+
+fn sample_bond_progress(
+    simulation: &Simulation,
+    diagnostics: &mut BTreeMap<u64, BondProgressDiagnostics>,
+) {
+    let Some(hotspot) = simulation.hotspot else {
+        return;
+    };
+    for material in simulation.environment.field.cells.iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+    {
+        let Some(recipe) = CANDIDATE_RECIPES.iter()
+            .find(|&&(a, b)| contains_recipe(&material.material, a, b))
+        else {
+            continue;
+        };
+        let Some(connection) = material.internal_connections.as_ref()
+            .and_then(|connections| connections.first())
+        else {
+            continue;
+        };
+        let key = format!(
+            "environment|environment:{}:{}:{:?}",
+            material.environmental_identity, 0, connection
+        );
+        let progress = simulation.chemical_reaction_accumulation
+            .get(&key).copied().unwrap_or(0.0);
+        let entry = diagnostics.entry(material.environmental_identity).or_default();
+        if progress > 0.0 {
+            entry.positive_samples += 1;
+        } else {
+            entry.zero_samples += 1;
+        }
+        if progress + 1e-12 < entry.previous {
+            entry.decreases += 1;
+        }
+        entry.previous = progress;
+        entry.maximum = entry.maximum.max(progress);
+        let signal = crate::chemistry::normalized_chemistry_to_activation_signal(progress)
+            .unwrap_or(0.0);
+        entry.max_activation_signal = entry.max_activation_signal.max(signal);
+
+        if let Some(placements) = material.placements.as_ref() {
+            let intensities = placements.iter()
+                .filter_map(|placement| hotspot.intensity_at(placement.x, placement.y))
+                .collect::<Vec<_>>();
+            if !intensities.is_empty() {
+                let exposure = intensities.iter().sum::<f64>() / intensities.len() as f64;
+                entry.exposure_sum += exposure;
+                entry.exposure_samples += 1;
+                entry.peak_exposure = entry.peak_exposure.max(exposure);
+            }
+        }
+        let _ = recipe;
+    }
+}
+
+fn report_bond_progress(
+    simulation: &Simulation,
+    diagnostics: &BTreeMap<u64, BondProgressDiagnostics>,
+) {
+    for material in simulation.environment.field.cells.iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+    {
+        let Some(&(a_name, b_name)) = CANDIDATE_RECIPES.iter()
+            .find(|&&(a, b)| contains_recipe(&material.material, a, b))
+        else {
+            continue;
+        };
+        let Some(connection) = material.internal_connections.as_ref()
+            .and_then(|connections| connections.first())
+        else {
+            continue;
+        };
+        let Some(stats) = diagnostics.get(&material.environmental_identity) else {
+            continue;
+        };
+        let a = simulation.environment.catalog.iter()
+            .find(|resource| resource.name == a_name).unwrap().properties;
+        let b = simulation.environment.catalog.iter()
+            .find(|resource| resource.name == b_name).unwrap().properties;
+        let strength = crate::combine::bond_strength(a, b);
+        let barrier = crate::chemistry::activation_barrier_from_bond_properties(
+            strength, a.reactivity, b.reactivity,
+            ResourceBaselines::from_catalog(&simulation.environment.catalog).reactivity,
+        ).unwrap_or(f64::NAN);
+        let average_exposure = if stats.exposure_samples == 0 { 0.0 }
+            else { stats.exposure_sum / stats.exposure_samples as f64 };
+        println!(
+            "[bond-progress] id={} recipe={}-{} bond_index=0 progress_now={:.9} progress_max={:.9} activation_signal_max={:.9} barrier={:.9} positive_samples={} zero_samples={} decreases={} hotspot_exposure_avg={:.3} hotspot_exposure_peak={:.3} exposure_samples={} identity={}",
+            material.environmental_identity, a_name, b_name, stats.previous, stats.maximum,
+            stats.max_activation_signal, barrier, stats.positive_samples, stats.zero_samples,
+            stats.decreases, average_exposure, stats.peak_exposure,
+            stats.exposure_samples, material.environmental_identity
+        );
+    }
+}
+
 pub(crate) fn run(seed: u64, duration: Duration) {
     let fixture = build(seed);
     let mut simulation = fixture.simulation;
@@ -315,6 +426,7 @@ pub(crate) fn run(seed: u64, duration: Duration) {
     let mut total_scheduled = 0_usize;
     let mut total_committed = 0_usize;
     let mut total_rejected = 0_usize;
+    let mut bond_progress = BTreeMap::<u64, BondProgressDiagnostics>::new();
     while started.elapsed() < duration {
         simulation.step();
         let counters = simulation.environmental_chemistry_diagnostics;
@@ -322,6 +434,7 @@ pub(crate) fn run(seed: u64, duration: Duration) {
         total_scheduled = total_scheduled.saturating_add(counters.break_scheduled);
         total_committed = total_committed.saturating_add(counters.break_committed);
         total_rejected = total_rejected.saturating_add(counters.break_rejected);
+        sample_bond_progress(&simulation, &mut bond_progress);
 
         if last_report.elapsed() >= Duration::from_secs(5) {
             last_report = Instant::now();
@@ -374,9 +487,12 @@ pub(crate) fn run(seed: u64, duration: Duration) {
                 simulation.environment.chemistry_usable_energy,
                 energy.residual()
             );
+            report_bond_progress(&simulation, &bond_progress);
         }
     }
 
+    println!("FINAL PER-BOND PROGRESS:");
+    report_bond_progress(&simulation, &bond_progress);
     let final_inventory = simulation.energy_inventory_snapshot();
     let final_bonds = simulation
         .environment
