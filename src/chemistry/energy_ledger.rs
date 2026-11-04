@@ -736,6 +736,25 @@ impl EnergyLedgerAuthority for EnergyLedger {
         heat_dissipated: f64,
         escaped_energy: f64,
     ) -> bool {
+        macro_rules! fail {
+            ($stage:literal) => {{
+                #[cfg(test)]
+                eprintln!(
+                    "world-tone ledger failed: {} incident={:?} captured={:?} heat={:?} escaped={:?} prior=(external={:?}, resonant={:?}, heat={:?}, escaped={:?})",
+                    $stage,
+                    incident_energy,
+                    resonant_energy_captured,
+                    heat_dissipated,
+                    escaped_energy,
+                    self.total_external_energy_input,
+                    self.total_resonant_energy_held,
+                    self.total_heat_dissipated,
+                    self.total_world_tone_energy_escaped
+                );
+                return false;
+            }};
+        }
+
         let values = [
             incident_energy,
             resonant_energy_captured,
@@ -746,7 +765,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             .iter()
             .any(|value| !value.is_finite() || *value < 0.0)
         {
-            return false;
+            fail!("stage 1");
         }
         let allocated = resonant_energy_captured + heat_dissipated + escaped_energy;
         let residual = incident_energy - allocated;
@@ -755,7 +774,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || residual < 0.0
             || residual > EPSILON * incident_energy.max(1.0)
         {
-            return false;
+            fail!("stage 2");
         }
         let next_external = self.total_external_energy_input + incident_energy;
         let next_resonant = self.total_resonant_energy_held + resonant_energy_captured;
@@ -766,7 +785,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || !next_heat.is_finite()
             || !next_escaped.is_finite()
         {
-            return false;
+            fail!("stage 3");
         }
 
         // Validate the increments that the cumulative f64 counters can
@@ -790,7 +809,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
             || actual_heat < 0.0
             || !cumulative_residual.is_finite()
         {
-            return false;
+            fail!("stage 4");
         }
         if cumulative_residual < 0.0 {
             // The cumulative counters introduced an ulp-scale over-allocation.
@@ -799,23 +818,23 @@ impl EnergyLedgerAuthority for EnergyLedger {
             // than accepting energy creation.
             let overrun = -cumulative_residual;
             if overrun > actual_heat {
-                return false;
+                fail!("stage 5");
             }
             let mut corrected_heat = next_heat - overrun;
             if corrected_heat >= next_heat {
                 if next_heat <= self.total_heat_dissipated {
-                    return false;
+                    fail!("stage 6");
                 }
                 corrected_heat = f64::from_bits(next_heat.to_bits() - 1);
             }
             if !corrected_heat.is_finite() || corrected_heat < self.total_heat_dissipated {
-                return false;
+                fail!("stage 7");
             }
             next_heat = corrected_heat;
             actual_heat = next_heat - self.total_heat_dissipated;
             cumulative_residual = actual_incident - (actual_capture + actual_heat + actual_escape);
             if !actual_heat.is_finite() || actual_heat < 0.0 || cumulative_residual < 0.0 {
-                return false;
+                fail!("stage 8");
             }
         }
 
