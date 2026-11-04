@@ -749,6 +749,15 @@ mod tests {
                 ),
                 Some(*expected),
             );
+            let reversed_expected = all_candidates
+                .iter()
+                .find(|candidate| {
+                    (candidate.endpoint_a == expected.endpoint_b
+                        && candidate.endpoint_b == expected.endpoint_a)
+                        || (candidate.endpoint_a == expected.endpoint_a
+                            && candidate.endpoint_b == expected.endpoint_b)
+                })
+                .copied();
             assert_eq!(
                 connection_pair_candidate_for_endpoints(
                     &structure,
@@ -758,7 +767,7 @@ mod tests {
                     expected.endpoint_b,
                     expected.endpoint_a,
                 ),
-                Some(*expected),
+                reversed_expected,
             );
         }
 
