@@ -502,6 +502,12 @@ pub(crate) fn run(seed: u64, duration: Duration) {
 
     println!("FINAL PER-BOND PROGRESS:");
     report_bond_progress(&simulation, &bond_progress);
+    println!(
+        "ACCUMULATION KEY SAMPLE: total={} environmental={} sample={:?}",
+        simulation.chemical_reaction_accumulation.len(),
+        simulation.chemical_reaction_accumulation.keys().filter(|key| key.starts_with("environment|environment:")).count(),
+        simulation.chemical_reaction_accumulation.iter().take(24).collect::<Vec<_>>()
+    );
     let final_inventory = simulation.energy_inventory_snapshot();
     let final_bonds = simulation
         .environment
