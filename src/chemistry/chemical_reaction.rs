@@ -529,7 +529,7 @@ pub(crate) fn accumulate_environmental(
     let mut updated_keys = std::collections::BTreeSet::new();
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let mut compatibility_cache = ConnectionCompatibilityCache::new();
+    let mut restored_materials = std::collections::BTreeMap::new();
 
     for candidate_index in indices {
         let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
@@ -555,17 +555,32 @@ pub(crate) fn accumulate_environmental(
         // realized environmental material itself. An organism graph is not a
         // valid geometry owner for a world-owned bond: it can carry unrelated
         // units, IDs, and contact context into candidate resolution.
-        let mut hypothetical = crate::structure::OrganismStructure::new();
-        let Some(restored_indices) = crate::material_restoration::restore_material(
-            &mut hypothetical,
-            instance,
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-            &environment.catalog,
-        ) else {
+        // The material and its bonds are immutable throughout this discovery
+        // pass. Restore each realized material once and reuse that authoritative
+        // trial graph for every bond discovered within it.
+        let material_key = (cell_index, material_index);
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            restored_materials.entry(material_key)
+        {
+            let mut hypothetical = crate::structure::OrganismStructure::new();
+            let restored = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            )
+            .map(|restored_indices| (hypothetical, restored_indices));
+            // Failed restorations are stable too; memoize them rather than
+            // repeating the same rejected work for every bond in this material.
+            entry.insert(restored);
+        }
+        let Some(Some((hypothetical, restored_indices))) =
+            restored_materials.get(&material_key)
+        else {
             continue;
         };
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
@@ -592,20 +607,14 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
-        let Some(candidate) = crate::contact::connection_pair_candidates_cached(
-            &hypothetical,
+        let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
+            hypothetical,
             unit_a,
             unit_b,
             &environment.catalog,
-            &mut compatibility_cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            (candidate.endpoint_a == connection.endpoint_a
-                && candidate.endpoint_b == connection.endpoint_b)
-                || (candidate.endpoint_a == connection.endpoint_b
-                    && candidate.endpoint_b == connection.endpoint_a)
-        }) else {
+            connection.endpoint_a,
+            connection.endpoint_b,
+        ) else {
             continue;
         };
         let geometry_material_a = hypothetical.units[unit_a]
