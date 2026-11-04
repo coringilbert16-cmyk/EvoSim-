@@ -36,6 +36,9 @@ jobs:
           git fetch origin "$BASE_SHA" "$CANDIDATE_SHA"
           git worktree add /tmp/pr288-baseline "$BASE_SHA"
           git worktree add /tmp/pr288-candidate "$CANDIDATE_SHA"
+          # Apply the identical time-limit/clean-shutdown harness to both revisions.
+          cp src/simulation/simulation_runner.rs /tmp/pr288-baseline/src/simulation/simulation_runner.rs
+          cp src/simulation/simulation_runner.rs /tmp/pr288-candidate/src/simulation/simulation_runner.rs
           (cd /tmp/pr288-baseline && cargo build --release)
           (cd /tmp/pr288-candidate && cargo build --release)
           for variant in baseline candidate; do
