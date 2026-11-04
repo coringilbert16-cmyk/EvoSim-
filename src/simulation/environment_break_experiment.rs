@@ -25,24 +25,19 @@ fn contains_recipe(material: &Material, a: &str, b: &str) -> bool {
         && material.internal_bonds.len() == 1
 }
 
-fn placements(
-    material: &Material,
-    x: f64,
-    y: f64,
-    rotation: f64,
-    spacing: f64,
-) -> Vec<Placement> {
-    let count = material.parts.len();
-    (0..count)
-        .map(|index| {
-            let angle = rotation + index as f64 * std::f64::consts::TAU / count.max(1) as f64;
-            Placement {
-                x: x + spacing * angle.cos(),
-                y: y + spacing * angle.sin(),
-                rotation_radians: angle,
-            }
-        })
-        .collect()
+fn placements(x: f64, y: f64, rotation: f64, center_separation: f64) -> Vec<Placement> {
+    vec![
+        Placement {
+            x,
+            y,
+            rotation_radians: rotation,
+        },
+        Placement {
+            x: x + center_separation,
+            y,
+            rotation_radians: rotation,
+        },
+    ]
 }
 
 pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
@@ -76,27 +71,28 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             let x = 12.5 + (replicate % 2) as f64 * 25.0;
             let y = 12.5 + (index / 2) as f64 * 25.0;
             let rotation = 0.37 * index as f64;
-            // These center offsets place the canonical shapes just beyond
-            // their nonpenetrating contact distance while retaining a live
-            // endpoint candidate for the existing physical bond.
+            // Vary the live endpoint gap across replicates. Each pair remains
+            // within the existing one-unit bond-contact range, without overlap.
             let contact_gap = 0.2 + replicate as f64 * 0.1;
-            let base_center_separation = if a == "Carbon" {
-                1.5
-            } else {
-                1.125
-            };
-            let spacing = 0.5 * (base_center_separation + contact_gap);
+            let base_center_separation = if a == "Carbon" { 1.5 } else { 1.125 };
+            let center_separation = base_center_separation + contact_gap;
             let physical = PhysicalMaterial::realized(
                 material.clone(),
-                placements(material, x, y, rotation, spacing),
+                placements(x, y, rotation, center_separation),
                 &catalog,
             )
             .unwrap_or_else(|| panic!("existing {a}-{b} compound must realize physically"));
+            let cell_index = simulation
+                .environment
+                .field
+                .index_for_position(x, y)
+                .expect("candidate molecule position must be inside the experiment field");
             assert!(
-                simulation
-                    .environment
-                    .field
-                    .deposit_physical(x, y, physical, &catalog),
+                simulation.environment.field.deposit_physical_at_index(
+                    cell_index,
+                    physical,
+                    &catalog,
+                ),
                 "candidate molecule must remain inside the experiment field"
             );
             molecule_count += 1;
