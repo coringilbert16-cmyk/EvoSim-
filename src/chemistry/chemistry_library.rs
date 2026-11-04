@@ -1174,6 +1174,32 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn cache_metrics_ignore_duplicate_insertions_from_stale_instances() {
+        let root = test_root("cache-metrics-stale-duplicate");
+        let _ = fs::remove_dir_all(&root);
+        let mut writer = ChemistryLibrary::open(&root).unwrap();
+        let mut stale = ChemistryLibrary::open(&root).unwrap();
+        stale.metrics_enabled = true;
+
+        let key = writer.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(writer
+            .insert(ChemistryRecord {
+                key: key.clone(),
+                static_potential: 0.375,
+            })
+            .unwrap());
+
+        assert_eq!(
+            stale.get_or_insert_static_potential(key, 0.875).unwrap(),
+            Some(0.375),
+            "a concurrent persisted value must win over a stale candidate"
+        );
+        assert_eq!(stale.cache_insertions.get(), 0);
+        assert_eq!(stale.len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn write_test_store(root: &Path, schema_version: u32, rows: &[String], manifest_entries: u64) {
         fs::create_dir_all(root).unwrap();
         let mut data = rows.join("\n");
