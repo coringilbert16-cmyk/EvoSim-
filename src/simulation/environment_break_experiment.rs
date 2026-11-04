@@ -475,9 +475,34 @@ pub(crate) fn run(seed: u64, duration: Duration) {
     let mut total_scheduled = 0_usize;
     let mut total_committed = 0_usize;
     let mut total_rejected = 0_usize;
+    let mut rejection_reasons = BTreeMap::<(String, String), u64>::new();
     let mut bond_progress = BTreeMap::<u64, BondProgressDiagnostics>::new();
     while started.elapsed() < duration {
         simulation.step();
+
+        // Simulation event storage is intentionally per-tick and is cleared at
+        // the beginning of the next step. Aggregate rejected BREAK events now,
+        // rather than inspecting only the final tick after the experiment ends.
+        for event in simulation
+            .environmental_chemistry_events
+            .iter()
+            .filter(|event| event.reaction == "BREAK" && event.outcome == "rejected")
+        {
+            let parts = event.source_materials.first().cloned().unwrap_or_default();
+            let has = |name: &str| parts.iter().any(|(part, _)| part == name);
+            let recipe = if has("Hydrogen") && has("Sulfur") {
+                "Hydrogen-Sulfur"
+            } else if has("Carbon") && has("Hydrogen") {
+                "Carbon-Hydrogen"
+            } else {
+                "other"
+            };
+            let reason = event.failure_reason.as_deref().unwrap_or("missing_reason");
+            *rejection_reasons
+                .entry((recipe.to_string(), reason.to_string()))
+                .or_default() += 1;
+        }
+
         let counters = simulation.environmental_chemistry_diagnostics;
         total_ready = total_ready.saturating_add(counters.break_ready_candidates);
         total_scheduled = total_scheduled.saturating_add(counters.break_scheduled);
@@ -548,29 +573,13 @@ pub(crate) fn run(seed: u64, duration: Duration) {
         simulation.chemical_reaction_accumulation.keys().filter(|key| key.starts_with("environment|environment:")).count(),
         simulation.chemical_reaction_accumulation.iter().take(24).collect::<Vec<_>>()
     );
-    let mut rejection_reasons = BTreeMap::<(String, String), u64>::new();
-    for event in simulation
-        .environmental_chemistry_events
-        .iter()
-        .filter(|event| event.reaction == "BREAK" && event.outcome == "rejected")
-    {
-        let parts = event.source_materials.first().cloned().unwrap_or_default();
-        let has = |name: &str| parts.iter().any(|(part, _)| part == name);
-        let recipe = if has("Hydrogen") && has("Sulfur") {
-            "Hydrogen-Sulfur"
-        } else if has("Carbon") && has("Hydrogen") {
-            "Carbon-Hydrogen"
-        } else {
-            "other"
-        };
-        let reason = event.failure_reason.as_deref().unwrap_or("missing_reason");
-        *rejection_reasons
-            .entry((recipe.to_string(), reason.to_string()))
-            .or_default() += 1;
-    }
+    let classified_rejections = rejection_reasons.values().copied().sum::<u64>();
     println!(
-        "[break-rejection-reasons] by_recipe_and_reason={:?}",
-        rejection_reasons
+        "[break-rejection-reasons] by_recipe_and_reason={:?} classified_total={} counter_total={} matches_counter={}",
+        rejection_reasons,
+        classified_rejections,
+        total_rejected,
+        classified_rejections == total_rejected as u64
     );
 
     let final_inventory = simulation.energy_inventory_snapshot();
