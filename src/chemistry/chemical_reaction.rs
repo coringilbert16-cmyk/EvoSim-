@@ -530,11 +530,18 @@ pub(crate) fn accumulate_environmental(
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut compatibility_cache = ConnectionCompatibilityCache::new();
+    let mut stage_counts = [0_u64; 21];
+    macro_rules! skip_stage {
+        ($stage:expr) => {{
+            stage_counts[$stage] += 1;
+            continue;
+        }};
+    }
 
     for candidate_index in indices {
         let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
         else {
-            continue;
+            skip_stage!(0);
         };
         let Some(instance) = environment
             .field
@@ -542,14 +549,14 @@ pub(crate) fn accumulate_environmental(
             .get(cell_index)
             .and_then(|cell| cell.physical_materials.get(material_index))
         else {
-            continue;
+            skip_stage!(1);
         };
         let Some(connection) = instance
             .internal_connections
             .as_ref()
             .and_then(|connections| connections.get(bond_index))
         else {
-            continue;
+            skip_stage!(2);
         };
         // Environmental chemistry must derive its candidate geometry from the
         // realized environmental material itself. An organism graph is not a
@@ -566,31 +573,31 @@ pub(crate) fn accumulate_environmental(
             },
             &environment.catalog,
         ) else {
-            continue;
+            skip_stage!(3);
         };
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
-            continue;
+            skip_stage!(4);
         };
         let Some(&unit_b) = restored_indices.get(connection.part_b) else {
-            continue;
+            skip_stage!(5);
         };
         let Some(a) = hypothetical
             .units
             .get(unit_a)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
-            continue;
+            skip_stage!(6);
         };
         let Some(b) = hypothetical
             .units
             .get(unit_b)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
-            continue;
+            skip_stage!(7);
         };
         let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
         else {
-            continue;
+            skip_stage!(8);
         };
         let Some(candidate) = crate::contact::connection_pair_candidates_cached(
             &hypothetical,
@@ -606,7 +613,7 @@ pub(crate) fn accumulate_environmental(
                 || (candidate.endpoint_a == connection.endpoint_b
                     && candidate.endpoint_b == connection.endpoint_a)
         }) else {
-            continue;
+            skip_stage!(9);
         };
         let geometry_material_a = hypothetical.units[unit_a]
             .material
@@ -628,7 +635,7 @@ pub(crate) fn accumulate_environmental(
             candidate,
             &environment.catalog,
         ) else {
-            continue;
+            skip_stage!(10);
         };
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
@@ -649,7 +656,7 @@ pub(crate) fn accumulate_environmental(
                     crate::chemistry::CHEMICAL_K,
                     crate::chemistry::CHEMICAL_D_MAX,
                 ) else {
-                    continue;
+                    skip_stage!(11);
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
                     Ok(Some(value)) => value,
@@ -661,10 +668,10 @@ pub(crate) fn accumulate_environmental(
             candidate.distance,
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
         ) else {
-            continue;
+            skip_stage!(12);
         };
         let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else {
-            continue;
+            skip_stage!(13);
         };
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
         let Some(next) = crate::chemistry::accumulate_reaction(
@@ -674,12 +681,12 @@ pub(crate) fn accumulate_environmental(
             engagement,
             crate::chemistry::CHEMICAL_DISSIPATION,
         ) else {
-            continue;
+            skip_stage!(14);
         };
         if next <= 0.0 {
             updated_keys.insert(key.clone());
             accumulation.remove(&key);
-            continue;
+            skip_stage!(15);
         }
         let strength = crate::combine::bond_strength(a, b);
         let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
@@ -688,7 +695,7 @@ pub(crate) fn accumulate_environmental(
             b.reactivity,
             baselines.reactivity,
         ) else {
-            continue;
+            skip_stage!(16);
         };
         let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
         let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
@@ -697,19 +704,19 @@ pub(crate) fn accumulate_environmental(
             || !frequency_b.is_finite()
             || frequency_b <= 0.0
         {
-            continue;
+            skip_stage!(17);
         }
         let reaction_frequency_cycles_per_day =
             (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
         if !reaction_frequency_cycles_per_day.is_finite()
             || reaction_frequency_cycles_per_day <= 0.0
         {
-            continue;
+            skip_stage!(18);
         }
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
-            continue;
+            skip_stage!(19);
         };
         // Invalid geometry/barrier candidates must not pause dissipation of
         // prior environmental progress. Mark a key current only after the
@@ -732,6 +739,19 @@ pub(crate) fn accumulate_environmental(
         } else {
             accumulation.insert(key, next);
         }
+        stage_counts[20] += 1;
+    }
+
+    if tick % 10_000 == 0 {
+        let identities = candidates.iter().filter_map(|(cell, material, _)| {
+            environment.field.cells.get(*cell)
+                .and_then(|cell| cell.physical_materials.get(*material))
+                .map(|material| material.environmental_identity)
+        }).collect::<Vec<_>>();
+        println!(
+            "[break-discovery-stages] tick={} candidates={} identities={:?} stages={:?}",
+            tick, candidates.len(), identities, stage_counts
+        );
     }
 
     dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
