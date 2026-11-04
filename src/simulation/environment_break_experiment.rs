@@ -301,6 +301,16 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), 8);
+        let hotspot = simulation.hotspot.expect("fixture must retain its hotspot");
+        assert!(materials.iter().all(|material| {
+            material.placements.as_ref().is_some_and(|placements| {
+                placements.iter().all(|placement| {
+                    hotspot
+                        .intensity_at(placement.x, placement.y)
+                        .is_some_and(|intensity| intensity >= hotspot.peak_energy_per_tick_per_area * 0.85)
+                })
+            })
+        }), "every candidate constituent must start in the hotspot high-intensity core");
         assert!(materials.iter().all(|material| {
             material.material.internal_bonds.len() == 1
                 && material
