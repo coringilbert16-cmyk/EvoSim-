@@ -134,13 +134,20 @@ fn restorable_physical(
                     }) else {
                         continue;
                     };
-                    if crate::chemistry::contact_factor(
+                    let Some(contact_factor) = crate::chemistry::contact_factor(
                         contact.distance,
                         crate::chemistry::CHEMICAL_CONTACT_RADIUS,
-                    )
-                    .is_none()
-                        || crate::chemistry::interface_engagement(contact.facing).is_none()
-                    {
+                    ) else {
+                        continue;
+                    };
+                    let Some(engagement) =
+                        crate::chemistry::interface_engagement(contact.facing)
+                    else {
+                        continue;
+                    };
+                    // Some(0.0) is a valid "no effective contact" result, not
+                    // evidence that this geometry can accumulate chemistry.
+                    if contact_factor <= 0.0 || engagement <= 0.0 {
                         continue;
                     }
                     let geometry_material_a = restored.units[unit_a]
@@ -588,10 +595,34 @@ mod tests {
             assert_eq!(restored_indices.len(), 2);
             assert_eq!(restored.bonds.len(), 1);
             assert_eq!(material.material.internal_bonds.len(), 1);
-            assert_eq!(
-                material.internal_connections.as_ref().unwrap()[0].bond_energy,
-                0.0
+            let connection = &material.internal_connections.as_ref().unwrap()[0];
+            let contact = crate::contact::connection_pair_candidates(
+                &restored,
+                restored_indices[connection.part_a],
+                restored_indices[connection.part_b],
+                &simulation.environment.catalog,
+            )
+            .into_iter()
+            .find(|candidate| {
+                (candidate.endpoint_a == connection.endpoint_a
+                    && candidate.endpoint_b == connection.endpoint_b)
+                    || (candidate.endpoint_a == connection.endpoint_b
+                        && candidate.endpoint_b == connection.endpoint_a)
+            })
+            .expect("seeded bond must resolve to its stored contact endpoints");
+            assert!(
+                crate::chemistry::contact_factor(
+                    contact.distance,
+                    crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                ).is_some_and(|factor| factor > 0.0),
+                "seeded bond must have positive chemical contact, not merely Some(0.0)"
             );
+            assert!(
+                crate::chemistry::interface_engagement(contact.facing)
+                    .is_some_and(|engagement| engagement > 0.0),
+                "seeded bond must have positive interface engagement"
+            );
+            assert_eq!(connection.bond_energy, 0.0);
         }
         assert_eq!(simulation.environment.chemistry_usable_energy, 0.0);
         assert_eq!(
