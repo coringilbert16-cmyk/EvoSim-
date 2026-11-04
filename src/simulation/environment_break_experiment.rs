@@ -389,14 +389,27 @@ mod tests {
             }),
             "every candidate constituent must start in the hotspot high-intensity core"
         );
-        assert!(materials.iter().all(|material| {
-            material.material.internal_bonds.len() == 1
-                && material
-                    .internal_connections
-                    .as_ref()
-                    .is_some_and(|bonds| bonds.len() == 1)
-                && material.internal_connections.as_ref().unwrap()[0].bond_energy == 0.0
-        }));
+        for material in &materials {
+            let mut restored = OrganismStructure::new();
+            let restored_indices = crate::material_restoration::restore_material(
+                &mut restored,
+                material,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &simulation.environment.catalog,
+            )
+            .expect("every seeded molecule must pass the live restoration geometry checks");
+            assert_eq!(restored_indices.len(), 2);
+            assert_eq!(restored.bonds.len(), 1);
+            assert_eq!(material.material.internal_bonds.len(), 1);
+            assert_eq!(
+                material.internal_connections.as_ref().unwrap()[0].bond_energy,
+                0.0
+            );
+        }
         assert_eq!(simulation.environment.chemistry_usable_energy, 0.0);
         assert_eq!(
             simulation.environment.resonant_energy.total_energy(),
