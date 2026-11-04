@@ -149,7 +149,7 @@ fn randomized_pile_centers(
         );
         let separated = centers.iter().all(|(x, y)| {
             let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-            (candidate.0 - *x).hypot(vertical) >= 70.0
+            (candidate.0 - *x).hypot(vertical) >= 22.0
         });
         if separated {
             centers.push(candidate);
@@ -168,14 +168,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn default_simulation_starts_with_128_randomized_base_resources() {
+        let simulation = Simulation::new(73, 10.0);
+        assert_eq!(simulation.environment.width, 250.0);
+        assert_eq!(simulation.environment.height, 250.0);
+        let materials = simulation.environment.field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter()).collect::<Vec<_>>();
+        assert_eq!(materials.len(), 128);
+        assert!(materials.iter().all(|material| material.material.parts.len() == 1
+            && material.material.parts[0].1 == 1.0));
+        assert!(simulation.hotspot.is_some());
+    }
+
+    #[test]
     fn fixture_has_128_whole_resources_in_randomized_valid_piles_and_no_organisms() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
         assert_eq!(first.pile_sizes.iter().sum::<usize>(), 128);
-        assert!(first.pile_sizes.iter().all(|size| (6..=20).contains(size)));
+        assert!(first.pile_sizes.iter().all(|size| *size >= 1));
+        assert!(first.pile_sizes.iter().any(|size| *size < 6 || *size > 20));
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
+        assert_eq!(first.simulation.environment.width, 250.0);
+        assert_eq!(first.simulation.environment.height, 250.0);
         let material_count = first
             .simulation
             .environment
