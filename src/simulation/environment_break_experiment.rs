@@ -9,6 +9,7 @@ use crate::physical_material::PhysicalMaterial;
 use crate::resources::{Material, ResourceBaselines};
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
+use std::time::{Duration, Instant};
 
 const REPLICATES_PER_RECIPE: usize = 4;
 const CANDIDATE_RECIPES: [(&str, &str); 2] = [("Hydrogen", "Sulfur"), ("Carbon", "Hydrogen")];
@@ -25,19 +26,23 @@ fn contains_recipe(material: &Material, a: &str, b: &str) -> bool {
         && material.internal_bonds.len() == 1
 }
 
-fn placements(x: f64, y: f64, rotation: f64, center_separation: f64) -> Vec<Placement> {
-    vec![
-        Placement {
-            x,
-            y,
-            rotation_radians: rotation,
-        },
-        Placement {
-            x: x + center_separation,
-            y,
-            rotation_radians: rotation,
-        },
-    ]
+fn placements(
+    x: f64,
+    y: f64,
+    rotation: f64,
+    spacing: f64,
+    part_count: usize,
+) -> Vec<Placement> {
+    (0..part_count)
+        .map(|index| {
+            let angle = rotation + index as f64 * std::f64::consts::TAU / part_count.max(1) as f64;
+            Placement {
+                x: x + spacing * angle.cos(),
+                y: y + spacing * angle.sin(),
+                rotation_radians: angle,
+            }
+        })
+        .collect()
 }
 
 pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
@@ -71,28 +76,30 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             let x = 12.5 + (replicate % 2) as f64 * 25.0;
             let y = 12.5 + (index / 2) as f64 * 25.0;
             let rotation = 0.37 * index as f64;
-            // Vary the live endpoint gap across replicates. Each pair remains
-            // within the existing one-unit bond-contact range, without overlap.
-            let contact_gap = 0.2 + replicate as f64 * 0.1;
-            let base_center_separation = if a == "Carbon" { 1.5 } else { 1.125 };
-            let center_separation = base_center_separation + contact_gap;
-            let physical = PhysicalMaterial::realized(
-                material.clone(),
-                placements(x, y, rotation, center_separation),
-                &catalog,
-            )
-            .unwrap_or_else(|| panic!("existing {a}-{b} compound must realize physically"));
+            // Use the same radial constituent layout as the existing environmental
+            // compound seeder. Try deterministic spacings and retain only a
+            // realization accepted by the normal physical contact validator.
+            let physical = (0..9)
+                .filter_map(|attempt| {
+                    let spacing = 0.25 + attempt as f64 * 0.05;
+                    PhysicalMaterial::realized(
+                        material.clone(),
+                        placements(x, y, rotation, spacing, material.parts.len()),
+                        &catalog,
+                    )
+                })
+                .next()
+                .unwrap_or_else(|| panic!("existing {a}-{b} compound has no valid physical realization"));
             let cell_index = simulation
                 .environment
                 .field
                 .index_for_position(x, y)
                 .expect("candidate molecule position must be inside the experiment field");
             assert!(
-                simulation.environment.field.deposit_physical_at_index(
-                    cell_index,
-                    physical,
-                    &catalog,
-                ),
+                simulation
+                    .environment
+                    .field
+                    .deposit_physical_at_index(cell_index, physical, &catalog),
                 "candidate molecule must remain inside the experiment field"
             );
             molecule_count += 1;
@@ -157,12 +164,15 @@ fn report_candidate_profiles(simulation: &Simulation) {
     }
 }
 
-pub(crate) fn run(seed: u64, max_ticks: u64) {
+pub(crate) fn run(seed: u64, duration: Duration) {
     let fixture = build(seed);
     let mut simulation = fixture.simulation;
     report_candidate_profiles(&simulation);
+    let started = Instant::now();
+    let mut last_report = started;
     println!(
-        "NATURAL BREAK EXPERIMENT START: seed={seed} ticks={max_ticks} molecules={} organisms={} world={}x{} hotspot={:?}",
+        "NATURAL BREAK EXPERIMENT START: seed={seed} duration_seconds={} molecules={} organisms={} world={}x{} hotspot={:?}",
+        duration.as_secs(),
         fixture.molecule_count,
         simulation.organisms.len(),
         simulation.environment.width,
@@ -174,7 +184,7 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
     let mut total_scheduled = 0_usize;
     let mut total_committed = 0_usize;
     let mut total_rejected = 0_usize;
-    for _ in 0..max_ticks {
+    while started.elapsed() < duration {
         simulation.step();
         let counters = simulation.environmental_chemistry_diagnostics;
         total_ready = total_ready.saturating_add(counters.break_ready_candidates);
@@ -182,7 +192,8 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
         total_committed = total_committed.saturating_add(counters.break_committed);
         total_rejected = total_rejected.saturating_add(counters.break_rejected);
 
-        if simulation.tick % 1_000 == 0 {
+        if last_report.elapsed() >= Duration::from_secs(5) {
+            last_report = Instant::now();
             let material_count = simulation
                 .environment
                 .field
@@ -199,13 +210,24 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
                 .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
                 .sum::<usize>();
             let energy = simulation.energy_inventory_snapshot();
+            let intact_hydrogen_sulfur = simulation.environment.field.cells.iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .filter(|physical| contains_recipe(&physical.material, "Hydrogen", "Sulfur"))
+                .count();
+            let intact_carbon_hydrogen = simulation.environment.field.cells.iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .filter(|physical| contains_recipe(&physical.material, "Carbon", "Hydrogen"))
+                .count();
             println!(
-                "[natural-break] tick={} ready/scheduled/committed/rejected={}/{}/{}/{} bonds={} materials={} accumulation_entries={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[natural-break] elapsed_seconds={:.3} tick={} ready/scheduled/committed/rejected={}/{}/{}/{} intact_HS={} intact_CH={} bonds={} materials={} accumulation_entries={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                started.elapsed().as_secs_f64(),
                 simulation.tick,
                 total_ready,
                 total_scheduled,
                 total_committed,
                 total_rejected,
+                intact_hydrogen_sulfur,
+                intact_carbon_hydrogen,
                 bond_count,
                 material_count,
                 counters.accumulation_entries,
@@ -233,7 +255,8 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
         .map(|cell| cell.physical_materials.len())
         .sum::<usize>();
     println!(
-        "NATURAL BREAK EXPERIMENT END: tick={} ready/scheduled/committed/rejected={}/{}/{}/{} remaining_bonds={} remaining_materials={} energy_balanced={} energy_residual={:?}",
+        "NATURAL BREAK EXPERIMENT END: elapsed_seconds={:.3} ticks={} ready/scheduled/committed/rejected={}/{}/{}/{} remaining_bonds={} remaining_materials={} energy_balanced={} energy_residual={:?}",
+        started.elapsed().as_secs_f64(),
         simulation.tick,
         total_ready,
         total_scheduled,
