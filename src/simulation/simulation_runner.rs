@@ -1,4 +1,5 @@
 use crate::state::Simulation;
+use std::time::{Duration, Instant};
 
 const DEFAULT_MAX_TICKS: u64 = 10_000;
 const DEFAULT_TARGET_BIRTHS: u64 = 3;
@@ -12,6 +13,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut environment_chemistry_experiment = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
+    let mut duration_seconds: Option<u64> = None;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -24,6 +26,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .next()
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(42);
+            }
+            "--duration-seconds" => {
+                duration_seconds = args.next().and_then(|value| value.parse().ok());
             }
             "--ticks" => {
                 max_ticks = args
@@ -60,6 +65,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         run_environment_chemistry_experiment(
             seed,
             ticks,
+            duration_seconds,
             diagnostics_path
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
@@ -184,6 +190,7 @@ fn report(simulation: &Simulation, label: &str) {
 fn run_environment_chemistry_experiment(
     seed: u64,
     max_ticks: u64,
+    duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
@@ -201,13 +208,15 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} duration_seconds={duration_seconds:?} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot
     );
 
-    for _ in 0..max_ticks {
+    let started = Instant::now();
+    let deadline = duration_seconds.map(|seconds| started + Duration::from_secs(seconds));
+    while deadline.map_or(simulation.tick < max_ticks, |end| Instant::now() < end) {
         simulation.step();
         diagnostics
             .observe(&simulation)
@@ -245,8 +254,9 @@ fn run_environment_chemistry_experiment(
         .expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
-        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY END: tick={} elapsed_seconds={:.3} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
         simulation.tick,
+        started.elapsed().as_secs_f64(),
         simulation.environment.field.cells.iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>(),
