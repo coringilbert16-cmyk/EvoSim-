@@ -30,7 +30,7 @@ jobs:
         shell: bash
         env:
           BASE_SHA: 400bf1689ea05d0377716906dbffa8560e0a0af7
-          CANDIDATE_SHA: b1f893383c0dc8a8cfd063c77e53f41ce79bb823
+          CANDIDATE_SHA: 6bc43446520a961042334cedb368e22e67bd2ca1
           DURATION_RUNNER_SHA: e20f38ca78151eb75f56d548bd6181686716f4be
         run: |
           set -euo pipefail
