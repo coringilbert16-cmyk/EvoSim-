@@ -69,8 +69,8 @@ pub(crate) fn seed_randomized_resources(
             let row = local_index / columns;
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
                 .clamp(1.0, width - 1.0);
-            let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, height - 1.0);
+            let y =
+                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
             let placement = Placement {
                 x,
                 y,
