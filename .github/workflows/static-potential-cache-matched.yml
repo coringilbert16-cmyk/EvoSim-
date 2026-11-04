@@ -30,7 +30,7 @@ jobs:
         shell: bash
         env:
           BASE_SHA: 02114ede20874f732b39e83ae79b2ad444eb9580
-          CANDIDATE_SHA: a8a176f2ce34c182c0f1015083592318add697a5
+          CANDIDATE_SHA: 090dd345493fc468b6beb4f37ae7e76dce5e47aa
           DURATION_RUNNER_SHA: e20f38ca78151eb75f56d548bd6181686716f4be
         run: |
           set -euo pipefail
@@ -89,6 +89,21 @@ jobs:
           done
           echo "=== MATCHED THROUGHPUT ==="
           cat /tmp/static-cache-results/throughput.tsv
+          echo "=== CANDIDATE CACHE METRICS ==="
+          cat /tmp/static-cache-results/candidate-cache-metrics.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines = Path("/tmp/static-cache-results/candidate-cache-metrics.txt").read_text().splitlines()
+          matches = [re.fullmatch(r"CHEMISTRY_CACHE_METRICS hits=(\\d+) misses=(\\d+) insertions=(\\d+) entries=(\\d+)", line) for line in lines]
+          matches = [m for m in matches if m]
+          if not matches:
+              raise SystemExit("Candidate emitted no parseable cache metrics")
+          totals = [sum(int(m.group(i)) for m in matches) for i in range(1, 5)]
+          if totals[0] + totals[1] <= 0:
+              raise SystemExit(f"No cache lookups recorded: {totals}")
+          print(f"PASS: cache lookups observed; hits={totals[0]} misses={totals[1]} insertions={totals[2]} entries_reported={totals[3]}")
+          PY
           python3 - <<'PY'
           rows = {}
           with open("/tmp/static-cache-results/throughput.tsv", encoding="utf-8") as source:
