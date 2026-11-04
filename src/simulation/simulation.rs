@@ -925,7 +925,8 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let settlement_result = crate::chemical_reaction::resolve_environmental_preserving_accumulation_detailed(
+            let settlement_result =
+                crate::chemical_reaction::resolve_environmental_preserving_accumulation_detailed(
                 operation,
                 &mut self.environment,
                 &mut self.energy_ledger,
