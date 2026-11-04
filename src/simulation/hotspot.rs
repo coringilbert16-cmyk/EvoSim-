@@ -143,8 +143,15 @@ pub(crate) fn settle_environment_inputs(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> bool {
+    macro_rules! fail {
+        ($stage:literal) => {{
+            #[cfg(test)]
+            eprintln!("hotspot settlement failed: {}", $stage);
+            fail!("stage 1");
+        }};
+    }
     if !hotspot.is_valid() {
-        return false;
+        fail!("stage 2");
     }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut staged_reservoir = environment.resonant_energy.clone();
@@ -155,40 +162,40 @@ pub(crate) fn settle_environment_inputs(
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
             let Some(placements) = physical.placements.as_ref() else {
-                return false;
+                fail!("stage 3");
             };
             if placements.len() != physical.material.parts.len() {
-                return false;
+                fail!("stage 4");
             }
             for (index, (name, amount)) in physical.material.parts.iter().enumerate() {
                 if !amount.is_finite() || *amount <= 0.0 {
-                    return false;
+                    fail!("stage 5");
                 }
                 let Some(placement) = placements.get(index) else {
-                    return false;
+                    fail!("stage 6");
                 };
                 if !placement.x.is_finite()
                     || !placement.y.is_finite()
                     || !placement.rotation_radians.is_finite()
                 {
-                    return false;
+                    fail!("stage 7");
                 }
                 let Some(intensity) = hotspot.intensity_at(placement.x, placement.y) else {
-                    return false;
+                    fail!("stage 8");
                 };
                 if intensity <= f64::EPSILON {
                     continue;
                 }
                 let Some(resource) = environment.catalog.iter().find(|item| item.name == *name)
                 else {
-                    return false;
+                    fail!("stage 9");
                 };
                 let Some(area) = form_area(&resource.shape.form) else {
-                    return false;
+                    fail!("stage 10");
                 };
                 let incident = intensity * area * amount;
                 if !incident.is_finite() || incident < 0.0 {
-                    return false;
+                    fail!("stage 11");
                 }
                 if incident <= f64::EPSILON {
                     continue;
@@ -209,18 +216,18 @@ pub(crate) fn settle_environment_inputs(
                     baselines,
                     &signal,
                 ) else {
-                    return false;
+                    fail!("stage 12");
                 };
                 let Some(response_energy) = spectrum_energy(&response) else {
-                    return false;
+                    fail!("stage 13");
                 };
                 if response_energy > incident + 1e-9 * incident.max(1.0) {
-                    return false;
+                    fail!("stage 14");
                 }
                 let response_energy = response_energy.min(incident);
                 let damping = crate::harmonics::damping_ratio(resource.properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
-                    return false;
+                    fail!("stage 15");
                 }
                 let damping_heat = response_energy * damping.clamp(0.0, 1.0);
                 let retained_budget = (response_energy - damping_heat).max(0.0);
@@ -230,11 +237,11 @@ pub(crate) fn settle_environment_inputs(
                     &signal,
                     retained_budget,
                 ) else {
-                    return false;
+                    fail!("stage 16");
                 };
 
                 let Some(before) = staged_reservoir.total_energy() else {
-                    return false;
+                    fail!("stage 17");
                 };
                 let mut candidate = staged_reservoir.clone();
                 let mut deposit_ok = true;
@@ -249,11 +256,11 @@ pub(crate) fn settle_environment_inputs(
                 }
                 let captured = if deposit_ok {
                     let Some(after) = candidate.total_energy() else {
-                        return false;
+                        fail!("stage 18");
                     };
                     let delta = after - before;
                     if !delta.is_finite() || delta < 0.0 || delta > response_energy + 1e-9 {
-                        return false;
+                        fail!("stage 19");
                     }
                     staged_reservoir = candidate;
                     delta.min(response_energy)
@@ -268,7 +275,7 @@ pub(crate) fn settle_environment_inputs(
                     .iter()
                     .all(|value| value.is_finite() && *value >= 0.0)
                 {
-                    return false;
+                    fail!("stage 20");
                 }
             }
         }
@@ -281,10 +288,10 @@ pub(crate) fn settle_environment_inputs(
     // reconcile from the same aggregate arithmetic.
     let total_escaped = total_incident - total_captured - total_heat;
     if !total_escaped.is_finite() || total_escaped < 0.0 {
-        return false;
+        fail!("stage 21");
     }
     if !ledger.settle_world_tone_paths(total_incident, total_captured, total_heat, total_escaped) {
-        return false;
+        fail!("stage 22");
     }
     environment.resonant_energy = staged_reservoir;
     true
