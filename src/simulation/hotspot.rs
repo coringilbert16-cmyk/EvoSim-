@@ -1,9 +1,9 @@
-//! Localized radial energy source used by the environmental chemistry experiment.
+//! Permanent localized radial energy source in the default environment.
 //!
-//! The hotspot contributes an ordinary 440 cycles per simulated day resonant signal. Its spatial
-//! intensity is a smooth radial gradient; material properties determine the
-//! response, and only energy actually retained by the environmental resonance
-//! reservoir is made available to chemistry.
+//! The hotspot contributes a 2,000-cycle-per-simulated-day resonant signal.
+//! Its spatial intensity is a smooth radial gradient; material properties
+//! determine the response, and only energy actually retained by the
+//! environmental resonance reservoir is made available to chemistry.
 
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::resources::Form;
@@ -15,6 +15,8 @@ pub(crate) struct RadialHotspot {
     pub(crate) center_y: f64,
     pub(crate) radius: f64,
     /// Incident energy per tick per unit of realized material area at the center.
+    /// The configured rate is 1,000 energy per simulated second; one simulated
+    /// day is 24,000 physics ticks (86,400 simulated seconds).
     pub(crate) peak_energy_per_tick_per_area: f64,
     #[serde(alias = "frequency_hz")]
     pub(crate) frequency_cycles_per_day: f64,
@@ -33,8 +35,8 @@ impl RadialHotspot {
             center_x: width * x_fraction,
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
-            peak_energy_per_tick_per_area: 100.0,
-            frequency_cycles_per_day: crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
+            peak_energy_per_tick_per_area: 1000.0 * 86_400.0 / 24_000.0,
+            frequency_cycles_per_day: 2_000.0,
         };
         hotspot.is_valid().then_some(hotspot)
     }
@@ -141,8 +143,15 @@ pub(crate) fn settle_environment_inputs(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> bool {
+    macro_rules! fail {
+        ($stage:literal) => {{
+            #[cfg(test)]
+            eprintln!("hotspot settlement failed: {}", $stage);
+            return false;
+        }};
+    }
     if !hotspot.is_valid() {
-        return false;
+        fail!("stage 2");
     }
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut staged_reservoir = environment.resonant_energy.clone();
@@ -153,40 +162,40 @@ pub(crate) fn settle_environment_inputs(
     for cell in &environment.field.cells {
         for physical in &cell.physical_materials {
             let Some(placements) = physical.placements.as_ref() else {
-                return false;
+                fail!("stage 3");
             };
             if placements.len() != physical.material.parts.len() {
-                return false;
+                fail!("stage 4");
             }
             for (index, (name, amount)) in physical.material.parts.iter().enumerate() {
                 if !amount.is_finite() || *amount <= 0.0 {
-                    return false;
+                    fail!("stage 5");
                 }
                 let Some(placement) = placements.get(index) else {
-                    return false;
+                    fail!("stage 6");
                 };
                 if !placement.x.is_finite()
                     || !placement.y.is_finite()
                     || !placement.rotation_radians.is_finite()
                 {
-                    return false;
+                    fail!("stage 7");
                 }
                 let Some(intensity) = hotspot.intensity_at(placement.x, placement.y) else {
-                    return false;
+                    fail!("stage 8");
                 };
                 if intensity <= f64::EPSILON {
                     continue;
                 }
                 let Some(resource) = environment.catalog.iter().find(|item| item.name == *name)
                 else {
-                    return false;
+                    fail!("stage 9");
                 };
                 let Some(area) = form_area(&resource.shape.form) else {
-                    return false;
+                    fail!("stage 10");
                 };
                 let incident = intensity * area * amount;
                 if !incident.is_finite() || incident < 0.0 {
-                    return false;
+                    fail!("stage 11");
                 }
                 if incident <= f64::EPSILON {
                     continue;
@@ -207,18 +216,18 @@ pub(crate) fn settle_environment_inputs(
                     baselines,
                     &signal,
                 ) else {
-                    return false;
+                    fail!("stage 12");
                 };
                 let Some(response_energy) = spectrum_energy(&response) else {
-                    return false;
+                    fail!("stage 13");
                 };
                 if response_energy > incident + 1e-9 * incident.max(1.0) {
-                    return false;
+                    fail!("stage 14");
                 }
                 let response_energy = response_energy.min(incident);
                 let damping = crate::harmonics::damping_ratio(resource.properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
-                    return false;
+                    fail!("stage 15");
                 }
                 let damping_heat = response_energy * damping.clamp(0.0, 1.0);
                 let retained_budget = (response_energy - damping_heat).max(0.0);
@@ -228,11 +237,11 @@ pub(crate) fn settle_environment_inputs(
                     &signal,
                     retained_budget,
                 ) else {
-                    return false;
+                    fail!("stage 16");
                 };
 
                 let Some(before) = staged_reservoir.total_energy() else {
-                    return false;
+                    fail!("stage 17");
                 };
                 let mut candidate = staged_reservoir.clone();
                 let mut deposit_ok = true;
@@ -247,11 +256,11 @@ pub(crate) fn settle_environment_inputs(
                 }
                 let captured = if deposit_ok {
                     let Some(after) = candidate.total_energy() else {
-                        return false;
+                        fail!("stage 18");
                     };
                     let delta = after - before;
                     if !delta.is_finite() || delta < 0.0 || delta > response_energy + 1e-9 {
-                        return false;
+                        fail!("stage 19");
                     }
                     staged_reservoir = candidate;
                     delta.min(response_energy)
@@ -266,7 +275,7 @@ pub(crate) fn settle_environment_inputs(
                     .iter()
                     .all(|value| value.is_finite() && *value >= 0.0)
                 {
-                    return false;
+                    fail!("stage 20");
                 }
             }
         }
@@ -279,10 +288,10 @@ pub(crate) fn settle_environment_inputs(
     // reconcile from the same aggregate arithmetic.
     let total_escaped = total_incident - total_captured - total_heat;
     if !total_escaped.is_finite() || total_escaped < 0.0 {
-        return false;
+        fail!("stage 21");
     }
     if !ledger.settle_world_tone_paths(total_incident, total_captured, total_heat, total_escaped) {
-        return false;
+        fail!("stage 22");
     }
     environment.resonant_energy = staged_reservoir;
     true
@@ -301,14 +310,14 @@ mod tests {
     }
 
     #[test]
-    fn right_bend_hotspot_has_a_smooth_radial_gradient_and_100_unit_peak() {
+    fn right_bend_hotspot_has_a_smooth_radial_gradient_and_1000_per_second_peak() {
         let hotspot = RadialHotspot::right_bend_for_world(1000.0, 1000.0)
             .expect("the default world should have a valid right-bend hotspot");
         assert!(
             (hotspot
                 .intensity_at(hotspot.center_x, hotspot.center_y)
                 .unwrap()
-                - 100.0)
+                - (1000.0 * 86_400.0 / 24_000.0))
                 .abs()
                 < 1e-12
         );
@@ -316,7 +325,7 @@ mod tests {
             (hotspot
                 .intensity_at(hotspot.center_x + hotspot.radius * 0.5, hotspot.center_y)
                 .unwrap()
-                - 50.0)
+                - (500.0 * 86_400.0 / 24_000.0))
                 .abs()
                 < 1e-10
         );
@@ -342,15 +351,16 @@ mod tests {
     }
 
     #[test]
-    fn hotspot_is_opt_in_and_does_not_change_the_default_world() {
-        let mut simulation = crate::state::Simulation::new(911, 1.0);
-        assert!(simulation.hotspot.is_none());
-        assert!(simulation.enable_chemistry_experiment_hotspot());
+    fn default_world_has_the_permanent_hotspot_configuration() {
+        let simulation = crate::state::Simulation::new(911, 1.0);
         let hotspot = simulation
             .hotspot
-            .expect("explicit experiment setup should enable the source");
-        assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
-        assert!((hotspot.center_x - 720.0).abs() < 1e-10);
+            .expect("default environment must include its hotspot");
+        assert!((hotspot.peak_energy_per_tick_per_area - 3600.0).abs() < f64::EPSILON);
+        assert!((hotspot.frequency_cycles_per_day - 2000.0).abs() < f64::EPSILON);
+        assert!((hotspot.center_x - 180.0).abs() < 1e-10);
+        assert_eq!(simulation.environment.width, 250.0);
+        assert_eq!(simulation.environment.height, 250.0);
     }
 
     #[test]
@@ -365,8 +375,8 @@ mod tests {
             cell.physical_materials.clear();
         }
         let hotspot = RadialHotspot {
-            center_x: 500.0,
-            center_y: 500.0,
+            center_x: 125.0,
+            center_y: 125.0,
             radius: 100.0,
             peak_energy_per_tick_per_area: 100.0,
             frequency_cycles_per_day: 440.0,
@@ -374,16 +384,16 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
             vec![Placement {
-                x: 500.0,
-                y: 500.0,
+                x: 125.0,
+                y: 125.0,
                 rotation_radians: 0.0,
             }],
             &simulation.environment.catalog,
         )
         .expect("test material should have physical geometry");
         assert!(simulation.environment.field.deposit_physical(
-            500.0,
-            500.0,
+            125.0,
+            125.0,
             physical,
             &simulation.environment.catalog
         ));

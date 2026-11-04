@@ -136,7 +136,7 @@ impl Simulation {
 
     pub(crate) fn new(seed: u64, ticks_per_second: f64) -> Self {
         let rng = ChaCha8Rng::seed_from_u64(seed);
-        let environment = Self::create_environment();
+        let environment = Self::create_environment(seed);
         let seed_scale_reference =
             crate::juvenile::confirmed_seed_scale_reference(&environment.catalog).ok();
         let mut organism = Self::create_initial_organism();
@@ -178,6 +178,10 @@ impl Simulation {
             crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
                 + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
+        let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
+            environment.width,
+            environment.height,
+        );
         Self {
             tick: 0,
             ticks_per_second,
@@ -197,28 +201,19 @@ impl Simulation {
             seed_scale_reference,
             world_tone: Some(world_tone),
             world_tone_cycle: Some(world_tone_cycle),
-            hotspot: None,
+            hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
         }
     }
-    /// Enable the localized source only for an explicitly configured chemistry
-    /// experiment; the ordinary default simulation remains unchanged.
-    pub(crate) fn enable_chemistry_experiment_hotspot(&mut self) -> bool {
-        self.hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
-            self.environment.width,
-            self.environment.height,
-        );
-        self.hotspot.is_some()
-    }
-
-    fn create_environment() -> Environment {
+    fn create_environment(seed: u64) -> Environment {
         let catalog = crate::resources::default_catalog();
-        let width = 1000.0;
-        let height = 1000.0;
+        let width = 250.0;
+        let height = 250.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
-        crate::environmental_materials::seed_initial_landscape(&mut field, &catalog);
-        crate::environmental_materials::seed_initial_resource_cloud(&mut field, &catalog);
+        crate::environment_chemistry_experiment::seed_randomized_resources(
+            &mut field, &catalog, seed, width, height,
+        );
         Environment {
             width,
             height,
@@ -243,7 +238,7 @@ impl Simulation {
             "only live-validated Bob suggestions may attach an acquired fluid shape"
         );
 
-        let anchor = Position { x: 500.0, y: 500.0 };
+        let anchor = Position { x: 125.0, y: 125.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
             unit.placement.y += anchor.y;
@@ -3357,6 +3352,9 @@ mod decomposition_finalization_tests {
         };
         let inventory_before = simulation.energy_inventory_snapshot();
 
+        // This regression isolates biological holder retention from the
+        // default environment's independent external hotspot input.
+        simulation.hotspot = None;
         simulation.step();
 
         assert_eq!(rollback_material_inventory(&simulation), material_before);

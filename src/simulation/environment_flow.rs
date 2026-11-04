@@ -45,6 +45,7 @@ impl Velocity {
 }
 
 const FLOW_BIN_SIZE: f64 = 5.0;
+const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
@@ -473,7 +474,7 @@ fn angular_displacement(
         }
     };
 
-    let angle = response * mobility(total_mass) * 0.15;
+    let angle = response * mobility(total_mass) * FLOW_RESPONSE_SCALE;
     if angle.is_finite() {
         angle
     } else {
@@ -626,7 +627,7 @@ pub(crate) fn transport_field(
             nearby,
             height,
         );
-        let scale = mobility(mass) * 0.15;
+        let scale = mobility(mass) * FLOW_RESPONSE_SCALE;
         let mut dx = velocity.x * scale;
         let dy = velocity.y * scale;
         let Some(clamped_dx) = clamp_horizontal_displacement(&material, dx, width) else {
@@ -831,7 +832,7 @@ mod tests {
         );
         let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
-        let displacement_scale = mobility(original.material.mass(&catalog)) * 0.15;
+        let displacement_scale = mobility(original.material.mass(&catalog)) * FLOW_RESPONSE_SCALE;
         let translated_expected = translated(
             &original,
             velocity.x * displacement_scale,

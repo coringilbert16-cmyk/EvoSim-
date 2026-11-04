@@ -1410,6 +1410,11 @@ mod material_identity_tests {
     #[test]
     fn environmental_chemical_break_charges_work_and_splits_material_atomically() {
         let mut simulation = crate::state::Simulation::new(933, 10.0);
+        // This regression owns its own source material; clear the default
+        // environmental inventory so the selected cell index is deterministic.
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         let source = environmental_test_composite(&simulation.environment.catalog);
         let bond = source
             .internal_connections

@@ -201,7 +201,7 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=128 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot

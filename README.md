@@ -24,6 +24,19 @@ This README is the current repository guide and implementation-status summary. O
 - **Architecture status:** aggregate-owned reproductive construction uses stable physical IDs as its sole physical authority; its persisted `developing_structure` stays empty and its separate `developing_energy` stays zero. Detached legacy construction remains serializable and separately counted until fully migrated. The staged `partition_subgraph_for_division` primitive preserves stable constituent IDs, keeps child-internal bonds and energy with the child, removes crossing bonds from both graphs, and returns crossing-bond energy for explicit ledger settlement. Successful growth/division conservation and the full lifecycle migration remain unfinished. Parent-child contact still requires integration with the shared physical bond-formation transaction. See [PR #204's living plan](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204).
 - **Documentation plan PR #204:** latest known plan update is `66447f9c0a03c7918193f370090ae294247c07ea`; it records exact-head evidence, the baseline seed failure, and the CI sequencing fix. Clippy remains failing under repository warnings-as-errors; do not report it green.
 
+## Permanent renderer-tested environment baseline
+
+The default simulation now uses the established renderer configuration; this is the normal environment, not an opt-in experiment:
+
+- World dimensions: **250 × 250**.
+- Starting inventory: **1,280 individual base resources**, represented across all seven canonical resource types.
+- Resources are seeded deterministically from the simulation seed into **3–10 randomly sized piles**. Pile sizes are a random partition of 1,280 and are not constrained to 6–20.
+- One right-bend hotspot with a smooth radial falloff, **1,000 energy per simulated second** (3,600 energy per physics tick at 24,000 ticks per 86,400-second simulated day), and a **2,000-cycle/day** signal.
+- S-shaped left-to-right flow with its renderer-tested response doubled; the existing speed falloff, bend vortices, mass mobility, and obstacle wakes are retained.
+- The 2,400-tick day/night world-tone cycle remains independent of runtime playback speed.
+
+The 1,280-resource setup, hotspot, and flow are part of the default simulation. The organism-free chemistry fixture reuses the same resource seeding logic rather than defining a separate environment.
+
 ## Design and implementation invariants
 
 - **Organisms are more than cavities.** An enclosed genome cavity is a structural milestone, not proof of a viable organism. Long-term goals include cells, niches, populations, and later multicellularity emerging from interaction.
