@@ -26,13 +26,7 @@ fn contains_recipe(material: &Material, a: &str, b: &str) -> bool {
         && material.internal_bonds.len() == 1
 }
 
-fn placements(
-    x: f64,
-    y: f64,
-    rotation: f64,
-    spacing: f64,
-    part_count: usize,
-) -> Vec<Placement> {
+fn placements(x: f64, y: f64, rotation: f64, spacing: f64, part_count: usize) -> Vec<Placement> {
     (0..part_count)
         .map(|index| {
             let angle = rotation + index as f64 * std::f64::consts::TAU / part_count.max(1) as f64;
@@ -212,11 +206,19 @@ pub(crate) fn run(seed: u64, duration: Duration) {
                 .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
                 .sum::<usize>();
             let energy = simulation.energy_inventory_snapshot();
-            let intact_hydrogen_sulfur = simulation.environment.field.cells.iter()
+            let intact_hydrogen_sulfur = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
                 .filter(|physical| contains_recipe(&physical.material, "Hydrogen", "Sulfur"))
                 .count();
-            let intact_carbon_hydrogen = simulation.environment.field.cells.iter()
+            let intact_carbon_hydrogen = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
                 .filter(|physical| contains_recipe(&physical.material, "Carbon", "Hydrogen"))
                 .count();
