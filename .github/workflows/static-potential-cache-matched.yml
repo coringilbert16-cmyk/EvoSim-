@@ -82,7 +82,9 @@ jobs:
             ticks="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["ticks_observed"])' "$summary")"
             rate="$(awk -v t="$ticks" -v s="$elapsed" 'BEGIN { printf "%.3f", t/s }')"
             printf "%s\t%s\t%s\t%s\n" "$variant" "$ticks" "$elapsed" "$rate" | tee -a /tmp/static-cache-results/throughput.tsv
-            grep '^CHEMISTRY_CACHE_METRICS ' "$log" > "/tmp/static-cache-results/$variant-cache-metrics.txt"
+            if ! grep '^CHEMISTRY_CACHE_METRICS ' "$log" > "/tmp/static-cache-results/$variant-cache-metrics.txt"; then
+              printf "CACHE METRICS NOT EMITTED BY THIS REVISION\\n" > "/tmp/static-cache-results/$variant-cache-metrics.txt"
+            fi
             grep 'ENVIRONMENTAL CHEMISTRY START\|ENVIRONMENTAL CHEMISTRY END' "$log"
           done
           echo "=== MATCHED THROUGHPUT ==="
