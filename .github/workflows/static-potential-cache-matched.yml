@@ -83,11 +83,11 @@ jobs:
             test "$ticks" = "24000"
             sample_ticks=$ticks
             run_count=1
-            printf "%s\t%d\t%d\t%s\\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
+            printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
             grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
             grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t1\t/" >> /tmp/static-cache-metrics/metrics.tsv
             rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
-            printf "%s\t%d\t%d\t%s\t%d\t%s\\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
+            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
           done
           echo "=== THROUGHPUT MEDIANS ==="
           python3 - <<'PY'
