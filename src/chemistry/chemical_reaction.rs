@@ -1015,19 +1015,29 @@ mod material_identity_tests {
             .and_then(|connections| connections.first())
             .expect("fixture must contain an internal bond")
             .clone();
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0, source.clone(), &catalog
-        ));
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0, source, &catalog
-        ));
+        assert!(
+            simulation
+                .environment
+                .field
+                .deposit_physical_at_index(0, source.clone(), &catalog)
+        );
+        assert!(
+            simulation
+                .environment
+                .field
+                .deposit_physical_at_index(0, source, &catalog)
+        );
         simulation.environment.field.assign_missing_material_identities();
 
         let first_id = simulation.environment.field.cells[0].physical_materials[0]
             .environmental_identity;
         let second_id = simulation.environment.field.cells[0].physical_materials[1]
             .environmental_identity;
-        assert_ne!(first_id, second_id, "identical molecules must not share progress");
+        assert_ne!(
+            first_id,
+            second_id,
+            "identical molecules must not share progress"
+        );
         let old_key = environmental_break_accumulation_key(
             &simulation.environment.field.cells[0].physical_materials[0],
             0,
@@ -1036,12 +1046,21 @@ mod material_identity_tests {
         let mut accumulation = std::collections::BTreeMap::new();
         accumulation.insert(old_key.clone(), 0.75);
 
-        let moved = simulation.environment.field.cells[0].physical_materials.remove(0);
+        let moved = simulation
+            .environment
+            .field
+            .cells[0]
+            .physical_materials
+            .remove(0);
         simulation.environment.field.cells[1].physical_materials.push(moved);
         let moved_material = &simulation.environment.field.cells[1].physical_materials[0];
         assert_eq!(moved_material.environmental_identity, first_id);
         let moved_key = environmental_break_accumulation_key(moved_material, 0, &bond);
-        assert_eq!(moved_key, old_key, "cell and slot changes must not reset progress");
+        assert_eq!(
+            moved_key,
+            old_key,
+            "cell and slot changes must not reset progress"
+        );
         assert_eq!(accumulation.get(&moved_key), Some(&0.75));
 
         dissipate_unupdated_accumulations(
@@ -1049,7 +1068,10 @@ mod material_identity_tests {
             "environment|environment:",
             &std::collections::BTreeSet::new(),
         );
-        assert!(accumulation[&old_key] < 0.75, "invalidated bonds must still dissipate");
+        assert!(
+            accumulation[&old_key] < 0.75,
+            "invalidated bonds must still dissipate"
+        );
     }
 
     fn remove_living_organisms_preserving_inventory(simulation: &mut crate::state::Simulation) {
