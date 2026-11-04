@@ -84,7 +84,9 @@ pub struct ActiveMaterialField {
     pub(crate) next_material_identity: u64,
 }
 
-fn initial_material_identity() -> u64 { 1 }
+fn initial_material_identity() -> u64 {
+    1
+}
 
 pub(crate) enum FieldDeposit {
     Logical(Material),
