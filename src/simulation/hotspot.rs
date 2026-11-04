@@ -345,7 +345,7 @@ mod tests {
 
     #[test]
     fn default_world_has_the_permanent_hotspot_configuration() {
-        let mut simulation = crate::state::Simulation::new(911, 1.0);
+        let simulation = crate::state::Simulation::new(911, 1.0);
         let hotspot = simulation.hotspot.expect("default environment must include its hotspot");
         assert!((hotspot.peak_energy_per_tick_per_area - 3600.0).abs() < f64::EPSILON);
         assert!((hotspot.frequency_cycles_per_day - 2000.0).abs() < f64::EPSILON);
