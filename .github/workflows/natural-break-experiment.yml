@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - experiment/natural-break-880-validation
+      - experiment/natural-break-rejection-diagnostics
 
 permissions:
   contents: read

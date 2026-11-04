@@ -925,12 +925,15 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
-                operation,
-                &mut self.environment,
-                &mut self.energy_ledger,
-                &mut self.chemical_reaction_accumulation,
-            );
+            let settlement_result =
+                crate::chemical_reaction::resolve_environmental_preserving_accumulation_detailed(
+                    operation,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
+            let committed = settlement_result.is_ok();
+            let failure_reason = settlement_result.err().map(str::to_string);
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
             } else {
@@ -964,9 +967,7 @@ impl Simulation {
                     accumulated_reaction,
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
-                    failure_reason: (!committed).then(|| {
-                        "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
-                    }),
+                    failure_reason,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
