@@ -157,6 +157,22 @@ fn reaction_key(bond: &Bond, interface_signature: &str) -> String {
     )
 }
 
+fn constituent_chemical_properties(
+    material: &crate::resources::Material,
+    catalog: &[BaseResource],
+) -> Option<crate::resources::ResourceProperties> {
+    let [(name, amount)] = material.parts.as_slice() else {
+        return None;
+    };
+    if (*amount - 1.0).abs() > 1e-9 {
+        return None;
+    }
+    catalog
+        .iter()
+        .find(|resource| resource.name == *name)
+        .map(|resource| resource.properties)
+}
+
 fn material_identity(material: &crate::resources::Material) -> String {
     // Preserve the established base-resource keys used by the checked-in
     // chemistry cache. A one-part, one-unit material is still identified by
@@ -245,7 +261,7 @@ pub(crate) fn accumulate(
             .structure
             .units
             .get(unit_a)
-            .and_then(|u| u.properties(catalog))
+            .and_then(|unit| constituent_chemical_properties(&unit.material, catalog))
         else {
             continue;
         };
@@ -253,7 +269,7 @@ pub(crate) fn accumulate(
             .structure
             .units
             .get(unit_b)
-            .and_then(|u| u.properties(catalog))
+            .and_then(|unit| constituent_chemical_properties(&unit.material, catalog))
         else {
             continue;
         };
@@ -584,14 +600,14 @@ pub(crate) fn accumulate_environmental(
         let Some(a) = hypothetical
             .units
             .get(unit_a)
-            .and_then(|unit| unit.properties(&environment.catalog))
+            .and_then(|unit| constituent_chemical_properties(&unit.material, &environment.catalog))
         else {
             skip_stage!(6);
         };
         let Some(b) = hypothetical
             .units
             .get(unit_b)
-            .and_then(|unit| unit.properties(&environment.catalog))
+            .and_then(|unit| constituent_chemical_properties(&unit.material, &environment.catalog))
         else {
             skip_stage!(7);
         };
