@@ -509,7 +509,6 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
-    environment.field.assign_missing_material_identities();
     // Environmental progress belongs to the field, not to the organism
     // whose turn happens to discover it. Search the field directly; the
     // bounded candidate budget below keeps this world-owned scan finite.
@@ -1352,8 +1351,9 @@ mod material_identity_tests {
             source,
             &simulation.environment.catalog,
         ));
+        simulation.environment.field.assign_missing_material_identities();
 
-        let target_prefix = format!("environment|environment:{cell_index}:");
+        let target_prefix = "environment|environment:".to_string();
         let mut accumulation = std::collections::BTreeMap::new();
         let mut found = false;
         let max_ticks = cell_index as u64 + 8;
