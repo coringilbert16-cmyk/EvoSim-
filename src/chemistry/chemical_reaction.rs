@@ -845,14 +845,12 @@ pub(crate) fn resolve_environmental(
     {
         return false;
     }
-    let Some((source_cell_index, source_material_index)) =
-        environmental_material_location(
-            environment,
-            &operation.source_material,
-            operation.cell_index,
-            operation.material_index,
-        )
-    else {
+    let Some((source_cell_index, source_material_index)) = environmental_material_location(
+        environment,
+        &operation.source_material,
+        operation.cell_index,
+        operation.material_index,
+    ) else {
         return false;
     };
     let Some(source) = environment
