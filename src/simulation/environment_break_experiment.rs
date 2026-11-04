@@ -44,14 +44,14 @@ fn restorable_physical(
     // PhysicalMaterial::realized() only proves that bond endpoints can be
     // assigned; restoration additionally requires nonpenetrating geometry.
     // Accept a candidate only when the exact stored arrangement restores.
-    const DISTANCE_STEPS: usize = 33;
-    const ORIENTATION_STEPS: usize = 8;
+    const DISTANCE_STEPS: usize = 41;
+    const ORIENTATION_STEPS: usize = 16;
     let mut best_contact_distance = f64::INFINITY;
     let mut best_facing = f64::NEG_INFINITY;
     let mut best_contact_factor = 0.0_f64;
     let mut best_engagement = 0.0_f64;
     for distance_step in 0..DISTANCE_STEPS {
-        let center_distance = 0.2 + distance_step as f64 * 0.025;
+        let center_distance = distance_step as f64 * 0.025;
         for axis_step in 0..ORIENTATION_STEPS {
             let axis =
                 rotation + std::f64::consts::TAU * axis_step as f64 / ORIENTATION_STEPS as f64;
@@ -144,7 +144,9 @@ fn restorable_physical(
                     ).unwrap_or(0.0);
                     let engagement =
                         crate::chemistry::interface_engagement(contact.facing).unwrap_or(0.0);
-                    if contact_factor * engagement > best_contact_factor * best_engagement {
+                    if best_contact_distance.is_infinite()
+                        || contact_factor * engagement > best_contact_factor * best_engagement
+                    {
                         best_contact_distance = contact.distance;
                         best_facing = contact.facing;
                         best_contact_factor = contact_factor;
