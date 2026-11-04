@@ -79,7 +79,11 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             // These center offsets place the canonical shapes just beyond
             // their nonpenetrating contact distance while retaining a live
             // endpoint candidate for the existing physical bond.
-            let spacing = if a == "Carbon" { 0.76 } else { 0.57 };
+            let spacing = if a == "Carbon" {
+                0.76
+            } else {
+                0.57
+            };
             let physical = PhysicalMaterial::realized(
                 material.clone(),
                 placements(material, x, y, rotation, spacing),
