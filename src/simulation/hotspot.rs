@@ -147,7 +147,7 @@ pub(crate) fn settle_environment_inputs(
         ($stage:literal) => {{
             #[cfg(test)]
             eprintln!("hotspot settlement failed: {}", $stage);
-            fail!("stage 1");
+            return false;
         }};
     }
     if !hotspot.is_valid() {
