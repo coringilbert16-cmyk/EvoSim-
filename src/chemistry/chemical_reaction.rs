@@ -799,6 +799,46 @@ pub(crate) fn schedule_environmental_operations(
     ready.into_iter().map(|(_, operation)| operation).collect()
 }
 
+fn environmental_material_location(
+    environment: &crate::state::Environment,
+    source_material: &crate::physical_material::PhysicalMaterial,
+) -> Option<(usize, usize)> {
+    // Zero is reserved for legacy/unassigned materials. Preserve the captured
+    // index fallback for those snapshots; assigned materials resolve by identity.
+    if source_material.environmental_identity == 0 {
+        return environment
+            .field
+            .cells
+            .get(0)
+            .and_then(|_| {
+                environment
+                    .field
+                    .cells
+                    .iter()
+                    .enumerate()
+                    .find_map(|(cell_index, cell)| {
+                        cell.physical_materials
+                            .iter()
+                            .position(|material| material == source_material)
+                            .map(|material_index| (cell_index, material_index))
+                    })
+            });
+    }
+    environment
+        .field
+        .cells
+        .iter()
+        .enumerate()
+        .find_map(|(cell_index, cell)| {
+            cell.physical_materials
+                .iter()
+                .position(|material| {
+                    material.environmental_identity == source_material.environmental_identity
+                })
+                .map(|material_index| (cell_index, material_index))
+        })
+}
+
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalChemicalBreakOperation,
     environment: &mut crate::state::Environment,
@@ -814,36 +854,9 @@ pub(crate) fn resolve_environmental(
     {
         return false;
     }
-    // Material indices can shift when an earlier BREAK splits a material
-    // in the same cell. Resolve the captured source by persistent identity,
-    // then validate the exact snapshot and bond before committing.
-    let source_location = if operation.source_material.environmental_identity == 0 {
-        environment
-            .field
-            .cells
-            .get(operation.cell_index)
-            .and_then(|cell| {
-                cell.physical_materials
-                    .get(operation.material_index)
-                    .map(|_| (operation.cell_index, operation.material_index))
-            })
-    } else {
-        environment
-            .field
-            .cells
-            .iter()
-            .enumerate()
-            .find_map(|(cell_index, cell)| {
-                cell.physical_materials
-                    .iter()
-                    .position(|material| {
-                        material.environmental_identity
-                            == operation.source_material.environmental_identity
-                    })
-                    .map(|material_index| (cell_index, material_index))
-            })
-    };
-    let Some((source_cell_index, source_material_index)) = source_location else {
+    let Some((source_cell_index, source_material_index)) =
+        environmental_material_location(environment, &operation.source_material)
+    else {
         return false;
     };
     let Some(source) = environment
@@ -1038,6 +1051,46 @@ mod material_identity_tests {
             catalog,
         )
         .expect("test composite should be physically realizable")
+    }
+
+    #[test]
+    fn queued_break_source_resolves_after_an_earlier_split_shifts_its_slot() {
+        let mut simulation = crate::state::Simulation::new(942, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let source = environmental_test_composite(&catalog);
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source.clone(),
+            &catalog,
+        ));
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source,
+            &catalog,
+        ));
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+
+        let queued_source = simulation.environment.field.cells[0].physical_materials[1].clone();
+        let queued_identity = queued_source.environmental_identity;
+        assert_ne!(queued_identity, 0);
+
+        // Model the index shift caused when an earlier queued BREAK removes
+        // the material that originally occupied slot zero.
+        simulation.environment.field.cells[0].physical_materials.remove(0);
+        assert_eq!(
+            environmental_material_location(&simulation.environment, &queued_source),
+            Some((0, 0)),
+        );
+        assert_eq!(
+            simulation.environment.field.cells[0].physical_materials[0].environmental_identity,
+            queued_identity,
+        );
     }
 
     #[test]
