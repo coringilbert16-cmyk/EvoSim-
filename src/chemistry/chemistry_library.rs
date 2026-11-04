@@ -1150,6 +1150,30 @@ mod tests {
         ))
     }
 
+    #[test]
+    fn cache_metrics_count_runtime_lookups_and_successful_insertions() {
+        let root = test_root("cache-metrics");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        library.metrics_enabled = true;
+
+        let key = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(library.get(&key).is_none());
+        assert_eq!(
+            library.get_or_insert_static_potential(key.clone(), 0.625).unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library.get(&key).map(|record| record.static_potential),
+            Some(0.625)
+        );
+
+        assert_eq!(library.cache_hits.get(), 1);
+        assert_eq!(library.cache_misses.get(), 1);
+        assert_eq!(library.cache_insertions.get(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
     fn write_test_store(root: &Path, schema_version: u32, rows: &[String], manifest_entries: u64) {
         fs::create_dir_all(root).unwrap();
         let mut data = rows.join("\n");
