@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/static-cache-metrics
           for variant in baseline candidate; do
-            workdir="/tmp/pr288-$variant"
+            workdir="/tmp/static-cache-$variant"
             (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
               --environment-chemistry-experiment --seed 42 --ticks 24000 \
               --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
@@ -66,7 +66,7 @@ jobs:
           for variant in "${sequence[@]}"; do
             counts[$variant]=$((counts[$variant] + 1))
             sample="${counts[$variant]}"
-            workdir="/tmp/pr288-$variant"
+            workdir="/tmp/static-cache-$variant"
             binary="$workdir/target/release/evosim"
             sample_start=$(date +%s%N)
             sample_ticks=0
