@@ -951,8 +951,12 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> bool {
     resolve_environmental_preserving_accumulation_detailed(
-        operation, environment, ledger, accumulation
-    ).is_ok()
+        operation,
+        environment,
+        ledger,
+        accumulation,
+    )
+    .is_ok()
 }
 
 pub(crate) fn resolve(
