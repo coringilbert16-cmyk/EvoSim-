@@ -1,4 +1,4 @@
-name: PR 288 Static Potential One-Minute Matched Benchmark
+name: PR 288 Cache Metrics Matched Benchmark
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - bench/pr288-static-potential-candidate
 
 concurrency:
-  group: pr288-static-potential-one-minute
+  group: pr288-cache-metrics-matched
   cancel-in-progress: false
 
 permissions:
@@ -14,9 +14,9 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three one-minute matched samples per revision
+    name: Three one-minute instrumented samples per revision
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Check out benchmark harness
         uses: actions/checkout@v4
@@ -26,11 +26,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
-      - name: Prepare exact baseline and candidate revisions
+      - name: Prepare exact validated revisions
         shell: bash
         env:
-          BASE_SHA: 7b3ff2f6ca5956e34c1ce035054bffbceb42659d
-          CANDIDATE_SHA: 1d412c84ebff0371ed223fa21b49e09887be1e92
+          BASE_SHA: 5001a505a8654f672f47520109626c081e9e0b47
+          CANDIDATE_SHA: 49a94bacf13b4d147a9dba37819ebc0ac4eeaab8
         run: |
           set -euo pipefail
           git fetch origin "$BASE_SHA" "$CANDIDATE_SHA"
@@ -42,20 +42,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p /tmp/pr288-cache-metrics
           for variant in baseline candidate; do
             workdir="/tmp/pr288-$variant"
-            (cd "$workdir" && "$workdir/target/release/evosim" --headless \
+            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
               --environment-chemistry-experiment --seed 42 --ticks 24000 \
-              --diagnostic-interval 1000 --diagnostics "/tmp/pr288-warmup-$variant.jsonl")
+              --diagnostic-interval 1000 --diagnostics "/tmp/pr288-cache-metrics/warmup-$variant.jsonl" \
+              > "/tmp/pr288-cache-metrics/warmup-$variant.log" 2>&1)
           done
-      - name: Run three alternating one-minute samples per revision
+      - name: Run three alternating one-minute instrumented samples per revision
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/pr288-one-minute
-          : > /tmp/pr288-one-minute/samples.tsv
-          : > /tmp/pr288-one-minute/runs.tsv
-          : > /tmp/pr288-one-minute/summaries.jsonl
+          mkdir -p /tmp/pr288-cache-metrics
+          : > /tmp/pr288-cache-metrics/samples.tsv
+          : > /tmp/pr288-cache-metrics/runs.tsv
+          : > /tmp/pr288-cache-metrics/metrics.tsv
+          : > /tmp/pr288-cache-metrics/summaries.jsonl
           declare -A counts
           counts[baseline]=0
           counts[candidate]=0
@@ -70,18 +73,20 @@ jobs:
             run_count=0
             while true; do
               run_count=$((run_count + 1))
-              output="/tmp/pr288-one-minute/${variant}-${sample}-run-${run_count}.jsonl"
+              output="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
+              log="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.log"
               run_start=$(date +%s%N)
-              (cd "$workdir" && "$binary" --headless \
+              (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
                 --environment-chemistry-experiment --seed 42 --ticks 24000 \
-                --diagnostic-interval 1000 --diagnostics "$output")
+                --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
               run_end=$(date +%s%N)
               run_elapsed=$(awk -v a="$run_start" -v b="$run_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
               ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
               test "$ticks" = "24000"
               sample_ticks=$((sample_ticks + ticks))
-              printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$run_elapsed" >> /tmp/pr288-one-minute/runs.tsv
-              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/pr288-one-minute/summaries.jsonl
+              printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$run_elapsed" >> /tmp/pr288-cache-metrics/runs.tsv
+              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/pr288-cache-metrics/summaries.jsonl
+              grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t$run_count\t/" >> /tmp/pr288-cache-metrics/metrics.tsv
               sample_now=$(date +%s%N)
               sample_elapsed=$(awk -v a="$sample_start" -v b="$sample_now" 'BEGIN { print (b-a)/1000000000 }')
               if awk -v elapsed="$sample_elapsed" 'BEGIN { exit !(elapsed >= 60) }'; then
@@ -91,13 +96,13 @@ jobs:
             sample_end=$(date +%s%N)
             elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
             rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
-            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/pr288-one-minute/samples.tsv
+            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/pr288-cache-metrics/samples.tsv
           done
-          echo "=== SAMPLE MEDIANS ==="
+          echo "=== THROUGHPUT MEDIANS ==="
           python3 - <<'PY'
           import statistics
           rows = {}
-          with open("/tmp/pr288-one-minute/samples.tsv", encoding="utf-8") as source:
+          with open("/tmp/pr288-cache-metrics/samples.tsv", encoding="utf-8") as source:
               for line in source:
                   variant, sample, ticks, elapsed, runs, rate = line.split()
                   rows.setdefault(variant, []).append(float(rate))
@@ -108,17 +113,38 @@ jobs:
           print(f"candidate_vs_baseline_percent={(candidate / baseline - 1.0) * 100.0:.2f}%")
           assert len(rows["baseline"]) == 3 and len(rows["candidate"]) == 3
           PY
+          echo "=== CACHE METRICS TOTALS ==="
+          python3 - <<'PY'
+          import json
+          from collections import defaultdict
+          totals = defaultdict(lambda: defaultdict(int))
+          runs = defaultdict(int)
+          with open("/tmp/pr288-cache-metrics/metrics.tsv", encoding="utf-8") as source:
+              for line in source:
+                  variant, sample, run, payload = line.rstrip("\n").split("\t", 3)
+                  data = json.loads(payload)
+                  runs[variant] += 1
+                  for key, value in data.items():
+                      totals[variant][key] += value
+          for variant in ("baseline", "candidate"):
+              t = totals[variant]
+              lookups = t["cache_hits"] + t["cache_misses"]
+              hit_rate = 100.0 * t["cache_hits"] / lookups if lookups else 0.0
+              avg_calc_us = t["potential_calculation_ns"] / t["potential_calculations"] / 1000 if t["potential_calculations"] else 0.0
+              avg_combine_ms = t["combine_discovery_ns"] / t["combine_discovery_calls"] / 1_000_000 if t["combine_discovery_calls"] else 0.0
+              print(f"{variant}: experiment_runs={runs[variant]} lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} potential_calc_total_ms={t['potential_calculation_ns']/1e6:.3f} avg_potential_calc_us={avg_calc_us:.3f} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
+          PY
           echo "=== RAW SAMPLES ==="
-          cat /tmp/pr288-one-minute/samples.tsv
-          echo "=== PER-RUN WALL TIMES ==="
-          cat /tmp/pr288-one-minute/runs.tsv
+          cat /tmp/pr288-cache-metrics/samples.tsv
+          echo "=== RAW METRICS ==="
+          cat /tmp/pr288-cache-metrics/metrics.tsv
       - name: Validate inventory and energy conservation
         if: always()
         shell: bash
         run: |
           python3 - <<'PY'
           import json, math
-          path = "/tmp/pr288-one-minute/summaries.jsonl"
+          path = "/tmp/pr288-cache-metrics/summaries.jsonl"
           try:
               rows = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
           except FileNotFoundError:
@@ -139,10 +165,10 @@ jobs:
               "break_rejected": sum(r["break_rejected"] for r in rows),
           })
           PY
-      - name: Upload one-minute matched benchmark data
+      - name: Upload instrumented benchmark data
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr288-one-minute-matched-benchmark
-          path: /tmp/pr288-one-minute/
+          name: pr288-cache-metrics-matched-benchmark
+          path: /tmp/pr288-cache-metrics/
           if-no-files-found: warn
