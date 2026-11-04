@@ -6,6 +6,7 @@ use crate::geometry_reference_library::{
     GeometryRigidContactFamily, GeometryRigidPointContactFamily,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -271,6 +272,10 @@ pub struct ChemistryLibrary {
     root: PathBuf,
     entries: HashMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
+    metrics_enabled: bool,
+    cache_hits: Cell<u64>,
+    cache_misses: Cell<u64>,
+    cache_insertions: Cell<u64>,
 }
 
 impl ChemistryLibrary {
@@ -366,11 +371,26 @@ impl ChemistryLibrary {
             root,
             entries,
             manifest,
+            metrics_enabled: std::env::var("EVOSIM_CHEMISTRY_CACHE_METRICS")
+                .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+            cache_hits: Cell::new(0),
+            cache_misses: Cell::new(0),
+            cache_insertions: Cell::new(0),
         })
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
-        self.entries.get(key)
+        let record = self.entries.get(key);
+        if self.metrics_enabled {
+            let counter = if record.is_some() {
+                &self.cache_hits
+            } else {
+                &self.cache_misses
+            };
+            counter.set(counter.get().saturating_add(1));
+        }
+        record
     }
 
     /// Build a canonical static-potential key using this store's validated
@@ -399,15 +419,22 @@ impl ChemistryLibrary {
         if !static_potential.is_finite() || static_potential < 0.0 {
             return Ok(None);
         }
-        if let Some(record) = self.get(&key) {
+        // Runtime callers perform and count the lookup before calculating a
+        // missing potential. Keep this internal check uncounted to avoid
+        // counting the same logical lookup twice.
+        if let Some(record) = self.entries.get(&key) {
             return Ok(Some(record.static_potential));
         }
         let record = ChemistryRecord {
             key: key.clone(),
             static_potential,
         };
-        self.insert(record)?;
-        Ok(self.get(&key).map(|record| record.static_potential))
+        if self.insert(record)? {
+            return Ok(Some(static_potential));
+        }
+        // Another library instance may have inserted the key while this
+        // instance waited for the persistence lock.
+        Ok(self.entries.get(&key).map(|record| record.static_potential))
     }
     #[cfg(test)]
     pub fn len(&self) -> usize {
@@ -450,9 +477,10 @@ impl ChemistryLibrary {
         let _lock = lock_chemistry_store(&self.root)?;
         // Another instance may have changed the store since this instance opened.
         // Refresh under the lock before duplicate detection or manifest counting.
-        let current = Self::open_unlocked(self.root.clone())?;
-        self.entries = current.entries;
-        self.manifest = current.manifest;
+        let mut current = Self::open_unlocked(self.root.clone())?;
+        current.metrics_enabled = false;
+        self.entries = std::mem::take(&mut current.entries);
+        self.manifest = current.manifest.clone();
 
         let key = record.key.clone();
         if self.entries.contains_key(&key) {
@@ -489,6 +517,10 @@ impl ChemistryLibrary {
 
         // Publish the new in-memory state only after both persisted updates succeed.
         self.entries.insert(key, record);
+        if self.metrics_enabled {
+            self.cache_insertions
+                .set(self.cache_insertions.get().saturating_add(1));
+        }
         self.manifest = next_manifest;
         Ok(true)
     }
@@ -574,6 +606,20 @@ fn persist_manifest_atomically(
 
 pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
     ChemistryLibrary::open("chemistry_library/data")
+}
+
+impl Drop for ChemistryLibrary {
+    fn drop(&mut self) {
+        if self.metrics_enabled {
+            println!(
+                "CHEMISTRY_CACHE_METRICS hits={} misses={} insertions={} entries={}",
+                self.cache_hits.get(),
+                self.cache_misses.get(),
+                self.cache_insertions.get(),
+                self.entries.len(),
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1117,6 +1163,58 @@ mod tests {
             "evosim-chemistry-{label}-{}-{nonce}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn cache_metrics_count_runtime_lookups_and_successful_insertions() {
+        let root = test_root("cache-metrics");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        library.metrics_enabled = true;
+
+        let key = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(library.get(&key).is_none());
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(key.clone(), 0.625)
+                .unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library.get(&key).map(|record| record.static_potential),
+            Some(0.625)
+        );
+
+        assert_eq!(library.cache_hits.get(), 1);
+        assert_eq!(library.cache_misses.get(), 1);
+        assert_eq!(library.cache_insertions.get(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_metrics_ignore_duplicate_insertions_from_stale_instances() {
+        let root = test_root("cache-metrics-stale-duplicate");
+        let _ = fs::remove_dir_all(&root);
+        let mut writer = ChemistryLibrary::open(&root).unwrap();
+        let mut stale = ChemistryLibrary::open(&root).unwrap();
+        stale.metrics_enabled = true;
+
+        let key = writer.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(writer
+            .insert(ChemistryRecord {
+                key: key.clone(),
+                static_potential: 0.375,
+            })
+            .unwrap());
+
+        assert_eq!(
+            stale.get_or_insert_static_potential(key, 0.875).unwrap(),
+            Some(0.375),
+            "a concurrent persisted value must win over a stale candidate"
+        );
+        assert_eq!(stale.cache_insertions.get(), 0);
+        assert_eq!(stale.len(), 1);
+        let _ = fs::remove_dir_all(root);
     }
 
     fn write_test_store(root: &Path, schema_version: u32, rows: &[String], manifest_entries: u64) {
