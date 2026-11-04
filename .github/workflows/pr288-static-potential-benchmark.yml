@@ -38,17 +38,12 @@ jobs:
           git worktree add /tmp/pr288-candidate "$CANDIDATE_SHA"
           (cd /tmp/pr288-baseline && cargo build --release)
           (cd /tmp/pr288-candidate && cargo build --release)
-      - name: Warm both revisions outside measured samples
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/pr288-cache-metrics
+          # Preserve each revision's checked-in starting library. Every measured
+          # experiment restores this pristine snapshot so previous runs cannot
+          # turn later samples into warm-cache-only measurements.
           for variant in baseline candidate; do
-            workdir="/tmp/pr288-$variant"
-            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 24000 \
-              --diagnostic-interval 1000 --diagnostics "/tmp/pr288-cache-metrics/warmup-$variant.jsonl" \
-              > "/tmp/pr288-cache-metrics/warmup-$variant.log" 2>&1)
+            mkdir -p "/tmp/pr288-seed-$variant"
+            cp -a "/tmp/pr288-$variant/chemistry_library/data" "/tmp/pr288-seed-$variant/data"
           done
       - name: Run three alternating one-minute instrumented samples per revision
         shell: bash
@@ -75,6 +70,9 @@ jobs:
               run_count=$((run_count + 1))
               output="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
               log="/tmp/pr288-cache-metrics/${variant}-${sample}-run-${run_count}.log"
+              rm -rf "$workdir/chemistry_library/data"
+              mkdir -p "$workdir/chemistry_library"
+              cp -a "/tmp/pr288-seed-$variant/data" "$workdir/chemistry_library/data"
               run_start=$(date +%s%N)
               (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
                 --environment-chemistry-experiment --seed 42 --ticks 24000 \
