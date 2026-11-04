@@ -56,7 +56,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     }
 
     if environment_break_experiment {
-        let ticks = if max_ticks_provided { max_ticks } else { 24_000 };
+        let ticks = if max_ticks_provided {
+            max_ticks
+        } else {
+            24_000
+        };
         crate::environment_break_experiment::run(seed, ticks);
         return;
     }
