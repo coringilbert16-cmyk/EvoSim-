@@ -100,7 +100,7 @@ fn restorable_physical(
                     }
 
                     let mut restored = OrganismStructure::new();
-                    if crate::material_restoration::restore_material(
+                    let Some(restored_indices) = crate::material_restoration::restore_material(
                         &mut restored,
                         &candidate,
                         Placement {
@@ -108,6 +108,65 @@ fn restorable_physical(
                             y: 0.0,
                             rotation_radians: 0.0,
                         },
+                        catalog,
+                    ) else {
+                        continue;
+                    };
+                    let Some(connection) = candidate
+                        .internal_connections
+                        .as_ref()
+                        .and_then(|connections| connections.first())
+                    else {
+                        continue;
+                    };
+                    let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+                        continue;
+                    };
+                    let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+                        continue;
+                    };
+                    let Some(contact) = crate::contact::connection_pair_candidates(
+                        &restored,
+                        unit_a,
+                        unit_b,
+                        catalog,
+                    )
+                    .into_iter()
+                    .find(|contact| {
+                        (contact.endpoint_a == connection.endpoint_a
+                            && contact.endpoint_b == connection.endpoint_b)
+                            || (contact.endpoint_a == connection.endpoint_b
+                                && contact.endpoint_b == connection.endpoint_a)
+                    }) else {
+                        continue;
+                    };
+                    if crate::chemistry::contact_factor(
+                        contact.distance,
+                        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                    )
+                    .is_none()
+                        || crate::chemistry::interface_engagement(contact.facing).is_none()
+                    {
+                        continue;
+                    }
+                    let geometry_material_a = restored.units[unit_a]
+                        .material
+                        .parts
+                        .first()
+                        .map(|part| part.0.as_str())
+                        .unwrap_or("unknown");
+                    let geometry_material_b = restored.units[unit_b]
+                        .material
+                        .parts
+                        .first()
+                        .map(|part| part.0.as_str())
+                        .unwrap_or("unknown");
+                    if crate::geometry_reference_library::resolve_live_contact_candidate(
+                        geometry_material_a,
+                        &restored.units[unit_a],
+                        geometry_material_b,
+                        &restored.units[unit_b],
+                        contact,
                         catalog,
                     )
                     .is_some()
