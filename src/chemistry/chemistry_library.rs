@@ -608,6 +608,20 @@ pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
     ChemistryLibrary::open("chemistry_library/data")
 }
 
+impl Drop for ChemistryLibrary {
+    fn drop(&mut self) {
+        if self.metrics_enabled {
+            println!(
+                "CHEMISTRY_CACHE_METRICS hits={} misses={} insertions={} entries={}",
+                self.cache_hits.get(),
+                self.cache_misses.get(),
+                self.cache_insertions.get(),
+                self.entries.len(),
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1498,16 +1512,3 @@ mod tests {
     }
 }
 
-impl Drop for ChemistryLibrary {
-    fn drop(&mut self) {
-        if self.metrics_enabled {
-            println!(
-                "CHEMISTRY_CACHE_METRICS hits={} misses={} insertions={} entries={}",
-                self.cache_hits.get(),
-                self.cache_misses.get(),
-                self.cache_insertions.get(),
-                self.entries.len(),
-            );
-        }
-    }
-}
