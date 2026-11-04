@@ -79,6 +79,21 @@ jobs:
           : > /tmp/static-cache-metrics/runs.tsv
           : > /tmp/static-cache-metrics/metrics.tsv
           : > /tmp/static-cache-metrics/summaries.jsonl
+          make_isolated_runtime_dir() {
+            local source="$1"
+            local destination="$2"
+            mkdir -p "$destination"
+            shopt -s dotglob nullglob
+            for entry in "$source"/*; do
+              local name
+              name="$(basename "$entry")"
+              if [[ "$name" == "chemistry_library" ]]; then
+                continue
+              fi
+              ln -s "$entry" "$destination/$name"
+            done
+            mkdir -p "$destination/chemistry_library/data"
+          }
           declare -A counts
           counts[baseline]=0
           counts[candidate]=0
