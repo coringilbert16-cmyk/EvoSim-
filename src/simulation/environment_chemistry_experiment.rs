@@ -169,8 +169,7 @@ fn randomized_pile_centers(
             .iter()
             .zip(pile_radii.iter())
             .all(|((x, y), existing_radius)| {
-                let vertical =
-                    (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
+                let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
                 (candidate.0 - *x).hypot(vertical) >= radius + *existing_radius + 3.0
             });
         if separated {
