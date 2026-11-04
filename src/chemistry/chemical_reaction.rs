@@ -503,7 +503,7 @@ fn discover_environmental_bonds(
 }
 
 pub(crate) fn accumulate_environmental(
-    environment: &mut crate::state::Environment,
+    environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     chemistry_library: &mut ChemistryLibrary,
     tick: u64,
@@ -1363,7 +1363,7 @@ mod material_identity_tests {
         for tick in 0..max_ticks {
             let mut discovery_budget = 1;
             let operations = accumulate_environmental(
-                &mut simulation.environment,
+                &simulation.environment,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
