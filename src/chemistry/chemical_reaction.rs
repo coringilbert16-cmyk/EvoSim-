@@ -1015,27 +1015,26 @@ mod material_identity_tests {
             .and_then(|connections| connections.first())
             .expect("fixture must contain an internal bond")
             .clone();
-        assert!(
-            simulation
-                .environment
-                .field
-                .deposit_physical_at_index(0, source.clone(), &catalog)
-        );
-        assert!(
-            simulation
-                .environment
-                .field
-                .deposit_physical_at_index(0, source, &catalog)
-        );
-        simulation.environment.field.assign_missing_material_identities();
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source.clone(),
+            &catalog
+        ));
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical_at_index(0, source, &catalog));
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
 
-        let first_id = simulation.environment.field.cells[0].physical_materials[0]
-            .environmental_identity;
-        let second_id = simulation.environment.field.cells[0].physical_materials[1]
-            .environmental_identity;
+        let first_id =
+            simulation.environment.field.cells[0].physical_materials[0].environmental_identity;
+        let second_id =
+            simulation.environment.field.cells[0].physical_materials[1].environmental_identity;
         assert_ne!(
-            first_id,
-            second_id,
+            first_id, second_id,
             "identical molecules must not share progress"
         );
         let old_key = environmental_break_accumulation_key(
@@ -1046,19 +1045,17 @@ mod material_identity_tests {
         let mut accumulation = std::collections::BTreeMap::new();
         accumulation.insert(old_key.clone(), 0.75);
 
-        let moved = simulation
-            .environment
-            .field
-            .cells[0]
+        let moved = simulation.environment.field.cells[0]
             .physical_materials
             .remove(0);
-        simulation.environment.field.cells[1].physical_materials.push(moved);
+        simulation.environment.field.cells[1]
+            .physical_materials
+            .push(moved);
         let moved_material = &simulation.environment.field.cells[1].physical_materials[0];
         assert_eq!(moved_material.environmental_identity, first_id);
         let moved_key = environmental_break_accumulation_key(moved_material, 0, &bond);
         assert_eq!(
-            moved_key,
-            old_key,
+            moved_key, old_key,
             "cell and slot changes must not reset progress"
         );
         assert_eq!(accumulation.get(&moved_key), Some(&0.75));
@@ -1690,6 +1687,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                environmental_identity: 0,
                 placements: None,
                 internal_connections: None,
                 owner_relative_origin: None,
@@ -1741,6 +1739,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                environmental_identity: 0,
                 placements: None,
                 internal_connections: None,
                 owner_relative_origin: None,
