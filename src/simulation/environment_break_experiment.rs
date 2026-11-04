@@ -307,7 +307,9 @@ mod tests {
                 placements.iter().all(|placement| {
                     hotspot
                         .intensity_at(placement.x, placement.y)
-                        .is_some_and(|intensity| intensity >= hotspot.peak_energy_per_tick_per_area * 0.85)
+                        .is_some_and(|intensity| {
+                            intensity >= hotspot.peak_energy_per_tick_per_area * 0.85
+                        })
                 })
             })
         }), "every candidate constituent must start in the hotspot high-intensity core");
