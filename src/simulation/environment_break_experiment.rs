@@ -25,14 +25,20 @@ fn contains_recipe(material: &Material, a: &str, b: &str) -> bool {
         && material.internal_bonds.len() == 1
 }
 
-fn placements(material: &Material, x: f64, y: f64, rotation: f64) -> Vec<Placement> {
+fn placements(
+    material: &Material,
+    x: f64,
+    y: f64,
+    rotation: f64,
+    spacing: f64,
+) -> Vec<Placement> {
     let count = material.parts.len();
     (0..count)
         .map(|index| {
             let angle = rotation + index as f64 * std::f64::consts::TAU / count.max(1) as f64;
             Placement {
-                x: x + 0.45 * angle.cos(),
-                y: y + 0.45 * angle.sin(),
+                x: x + spacing * angle.cos(),
+                y: y + spacing * angle.sin(),
                 rotation_radians: angle,
             }
         })
@@ -70,9 +76,13 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             let x = 12.5 + (replicate % 2) as f64 * 25.0;
             let y = 12.5 + (index / 2) as f64 * 25.0;
             let rotation = 0.37 * index as f64;
+            // These center offsets place the canonical shapes just beyond
+            // their nonpenetrating contact distance while retaining a live
+            // endpoint candidate for the existing physical bond.
+            let spacing = if a == "Carbon" { 0.76 } else { 0.57 };
             let physical = PhysicalMaterial::realized(
                 material.clone(),
-                placements(material, x, y, rotation),
+                placements(material, x, y, rotation, spacing),
                 &catalog,
             )
             .unwrap_or_else(|| panic!("existing {a}-{b} compound must realize physically"));
