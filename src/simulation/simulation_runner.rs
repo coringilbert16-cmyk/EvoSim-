@@ -176,6 +176,7 @@ fn run_environment_chemistry_experiment(
     let elapsed = started.elapsed();
     diagnostics.finish(&simulation).expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
+    println!("CHEMISTRY_CACHE_METRICS {}", crate::chemistry_cache_metrics::summary_json());
     println!(
         "ENVIRONMENTAL CHEMISTRY END: tick={} elapsed_seconds={:.6} ticks_per_second={:.3} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
         simulation.tick, elapsed.as_secs_f64(), simulation.tick as f64 / elapsed.as_secs_f64(),
