@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - bench/static-potential-cache-matched
+  pull_request:
+    branches:
+      - main
 
 concurrency:
   group: static-potential-cache-matched
