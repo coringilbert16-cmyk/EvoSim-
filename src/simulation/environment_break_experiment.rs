@@ -57,9 +57,16 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
     let compounds = crate::environmental_materials::seed_compounds();
     let mut molecule_count = 0;
 
-    // Put a few isolated copies near the same exposed side of the world. The
-    // normal rotating source, hotspot, field flow, and chemistry scheduler stay
-    // enabled; only the starting molecular population is controlled.
+    // Cluster the candidate molecules around the configured hotspot center.
+    // Eight separated molecule centers fit inside its high-intensity core, so
+    // the normal hotspot can energize them without changing source strength,
+    // resonance rules, field flow, or chemistry scheduling.
+    let hotspot = simulation
+        .hotspot
+        .expect("the default experiment environment must include its hotspot");
+    let hotspot_center_x = hotspot.center_x;
+    let hotspot_center_y = hotspot.center_y;
+    const HOTSPOT_POPULATION_RADIUS: f64 = 8.0;
     for (recipe_index, &(a, b)) in CANDIDATE_RECIPES.iter().enumerate() {
         let material = compounds
             .iter()
@@ -67,8 +74,10 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             .unwrap_or_else(|| panic!("existing compound catalog lacks {a}-{b}"));
         for replicate in 0..REPLICATES_PER_RECIPE {
             let index = recipe_index * REPLICATES_PER_RECIPE + replicate;
-            let x = 12.5 + (replicate % 2) as f64 * 25.0;
-            let y = 12.5 + (index / 2) as f64 * 25.0;
+            let angle = std::f64::consts::TAU * index as f64
+                / (REPLICATES_PER_RECIPE * CANDIDATE_RECIPES.len()) as f64;
+            let x = hotspot_center_x + HOTSPOT_POPULATION_RADIUS * angle.cos();
+            let y = hotspot_center_y + HOTSPOT_POPULATION_RADIUS * angle.sin();
             let rotation = 0.37 * index as f64;
             // Use the same radial constituent layout as the existing environmental
             // compound seeder. Try deterministic spacings and retain only a
@@ -167,13 +176,14 @@ pub(crate) fn run(seed: u64, duration: Duration) {
     let started = Instant::now();
     let mut last_report = started;
     println!(
-        "NATURAL BREAK EXPERIMENT START: seed={seed} duration_seconds={} molecules={} organisms={} world={}x{} hotspot={:?}",
+        "NATURAL BREAK EXPERIMENT START: seed={seed} duration_seconds={} molecules={} organisms={} world={}x{} hotspot={:?} hotspot_population_radius={}",
         duration.as_secs(),
         fixture.molecule_count,
         simulation.organisms.len(),
         simulation.environment.width,
         simulation.environment.height,
-        simulation.hotspot
+        simulation.hotspot,
+        8.0
     );
 
     let mut total_ready = 0_usize;
