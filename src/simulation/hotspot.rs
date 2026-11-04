@@ -36,7 +36,7 @@ impl RadialHotspot {
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
             peak_energy_per_tick_per_area: 1000.0 * 86_400.0 / 24_000.0,
-            frequency_cycles_per_day: crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
+            frequency_cycles_per_day: 2_000.0,
         };
         hotspot.is_valid().then_some(hotspot)
     }
@@ -303,14 +303,14 @@ mod tests {
     }
 
     #[test]
-    fn right_bend_hotspot_has_a_smooth_radial_gradient_and_100_unit_peak() {
+    fn right_bend_hotspot_has_a_smooth_radial_gradient_and_1000_per_second_peak() {
         let hotspot = RadialHotspot::right_bend_for_world(1000.0, 1000.0)
             .expect("the default world should have a valid right-bend hotspot");
         assert!(
             (hotspot
                 .intensity_at(hotspot.center_x, hotspot.center_y)
                 .unwrap()
-                - 100.0)
+                - (1000.0 * 86_400.0 / 24_000.0))
                 .abs()
                 < 1e-12
         );
@@ -318,7 +318,7 @@ mod tests {
             (hotspot
                 .intensity_at(hotspot.center_x + hotspot.radius * 0.5, hotspot.center_y)
                 .unwrap()
-                - 50.0)
+                - (500.0 * 86_400.0 / 24_000.0))
                 .abs()
                 < 1e-10
         );
@@ -344,15 +344,14 @@ mod tests {
     }
 
     #[test]
-    fn hotspot_is_opt_in_and_does_not_change_the_default_world() {
+    fn default_world_has_the_permanent_hotspot_configuration() {
         let mut simulation = crate::state::Simulation::new(911, 1.0);
-        assert!(simulation.hotspot.is_none());
-        assert!(simulation.enable_chemistry_experiment_hotspot());
-        let hotspot = simulation
-            .hotspot
-            .expect("explicit experiment setup should enable the source");
-        assert!((hotspot.peak_energy_per_tick_per_area - 100.0).abs() < f64::EPSILON);
-        assert!((hotspot.center_x - 720.0).abs() < 1e-10);
+        let hotspot = simulation.hotspot.expect("default environment must include its hotspot");
+        assert!((hotspot.peak_energy_per_tick_per_area - 3600.0).abs() < f64::EPSILON);
+        assert!((hotspot.frequency_cycles_per_day - 2000.0).abs() < f64::EPSILON);
+        assert!((hotspot.center_x - 180.0).abs() < 1e-10);
+        assert_eq!(simulation.environment.width, 250.0);
+        assert_eq!(simulation.environment.height, 250.0);
     }
 
     #[test]
