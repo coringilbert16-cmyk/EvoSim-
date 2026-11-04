@@ -325,10 +325,7 @@ pub(crate) fn accumulate(
         let potential = match cache_record {
             Some(record) => record.static_potential,
             None => {
-                let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(
-                    position_a,
-                    position_b,
-                ) else {
+                let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(position_a, position_b) else {
                     continue;
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
@@ -653,10 +650,7 @@ pub(crate) fn accumulate_environmental(
         let potential = match cache_record {
             Some(record) => record.static_potential,
             None => {
-                let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(
-                    position_a,
-                    position_b,
-                ) else {
+                let Some(calculated) = crate::chemistry_cache_metrics::calculate_static_potential(position_a, position_b) else {
                     continue;
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
