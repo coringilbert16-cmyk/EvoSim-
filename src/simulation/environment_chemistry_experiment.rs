@@ -38,7 +38,7 @@ pub(crate) fn seed_randomized_resources(
     identities.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts = (1..128).collect::<Vec<_>>();
+    let mut cuts: Vec<usize> = (1_usize..128).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
