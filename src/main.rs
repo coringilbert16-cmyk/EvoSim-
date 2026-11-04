@@ -5,10 +5,10 @@
 mod developmental_blueprint;
 #[path = "simulation/environment.rs"]
 mod environment;
-#[path = "simulation/environment_chemistry_experiment.rs"]
-mod environment_chemistry_experiment;
 #[path = "simulation/environment_break_experiment.rs"]
 mod environment_break_experiment;
+#[path = "simulation/environment_chemistry_experiment.rs"]
+mod environment_chemistry_experiment;
 #[path = "simulation/environment_flow.rs"]
 mod environment_flow;
 #[path = "materials/environmental_materials.rs"]
