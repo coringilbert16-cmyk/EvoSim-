@@ -491,13 +491,25 @@ impl Material {
                 cohesion: 0.0,
             };
         }
+        let chemical_position = if let [(name, amount)] = self.parts.as_slice() {
+            if *amount > 0.0 {
+                catalog
+                    .iter()
+                    .find(|base| base.name == *name)
+                    .and_then(|base| base.properties.chemical_position)
+            } else {
+                None
+            }
+        } else {
+            // Chemical position is intentionally not averaged across a
+            // formation. Mixed materials must retain constituent identities.
+            None
+        };
         ResourceProperties {
             mass: mass / w,
             potential_energy: pe / w,
             reactivity: reac / w,
-            // Chemical position is intentionally not averaged across a
-            // formation. Mixed materials must retain constituent identities.
-            chemical_position: None,
+            chemical_position,
             cohesion: coh / w,
         }
     }
@@ -546,6 +558,37 @@ impl Material {
 #[cfg(test)]
 mod material_contract_tests {
     use super::*;
+
+    #[test]
+    fn single_constituent_weighted_properties_preserve_chemical_identity() {
+        let catalog = default_catalog();
+        for name in ["Carbon", "Hydrogen", "Sulfur"] {
+            let expected = catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .and_then(|resource| resource.properties.chemical_position);
+            assert!(expected.is_some(), "{name} must have a catalog chemical position");
+            let actual = Material::free_base(name, 1.0).weighted_properties(&catalog);
+            assert_eq!(
+                actual.chemical_position,
+                expected,
+                "single-constituent {name} must retain its base chemical position"
+            );
+        }
+    }
+
+    #[test]
+    fn multi_constituent_weighted_properties_do_not_average_chemical_identity() {
+        let catalog = default_catalog();
+        let mixed = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+        };
+        assert!(
+            mixed.weighted_properties(&catalog).chemical_position.is_none(),
+            "mixed materials must not synthesize an averaged chemical position"
+        );
+    }
 
     #[test]
     fn material_counts_are_whole_and_catalog_bound() {
