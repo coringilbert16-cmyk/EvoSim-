@@ -477,9 +477,10 @@ impl ChemistryLibrary {
         let _lock = lock_chemistry_store(&self.root)?;
         // Another instance may have changed the store since this instance opened.
         // Refresh under the lock before duplicate detection or manifest counting.
-        let current = Self::open_unlocked(self.root.clone())?;
-        self.entries = current.entries;
-        self.manifest = current.manifest;
+        let mut current = Self::open_unlocked(self.root.clone())?;
+        current.metrics_enabled = false;
+        self.entries = std::mem::take(&mut current.entries);
+        self.manifest = current.manifest.clone();
 
         let key = record.key.clone();
         if self.entries.contains_key(&key) {
@@ -1160,7 +1161,9 @@ mod tests {
         let key = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
         assert!(library.get(&key).is_none());
         assert_eq!(
-            library.get_or_insert_static_potential(key.clone(), 0.625).unwrap(),
+            library
+                .get_or_insert_static_potential(key.clone(), 0.625)
+                .unwrap(),
             Some(0.625)
         );
         assert_eq!(
