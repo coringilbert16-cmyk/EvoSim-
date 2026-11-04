@@ -1,4 +1,5 @@
 use crate::state::Simulation;
+use std::time::Duration;
 
 const DEFAULT_MAX_TICKS: u64 = 10_000;
 const DEFAULT_TARGET_BIRTHS: u64 = 3;
@@ -13,6 +14,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut environment_break_experiment = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
+    let mut duration_seconds = 60_u64;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -28,6 +30,12 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .next()
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(42);
+            }
+            "--duration-seconds" => {
+                duration_seconds = args
+                    .next()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(60);
             }
             "--ticks" => {
                 max_ticks = args
@@ -56,24 +64,14 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     }
 
     if environment_break_experiment {
-        let ticks = if max_ticks_provided {
-            max_ticks
-        } else {
-            24_000
-        };
-        crate::environment_break_experiment::run(seed, ticks);
+        crate::environment_break_experiment::run(seed, Duration::from_secs(duration_seconds));
         return;
     }
 
     if environment_chemistry_experiment {
-        let ticks = if max_ticks_provided {
-            max_ticks
-        } else {
-            24_000
-        };
         run_environment_chemistry_experiment(
             seed,
-            ticks,
+            Duration::from_secs(duration_seconds),
             diagnostics_path
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
@@ -197,7 +195,7 @@ fn report(simulation: &Simulation, label: &str) {
 
 fn run_environment_chemistry_experiment(
     seed: u64,
-    max_ticks: u64,
+    duration: Duration,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
@@ -214,19 +212,23 @@ fn run_environment_chemistry_experiment(
         panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
     });
 
+    let started = std::time::Instant::now();
+    let mut last_report = started;
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        duration.as_secs(),
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot
     );
 
-    for _ in 0..max_ticks {
+    while started.elapsed() < duration {
         simulation.step();
         diagnostics
             .observe(&simulation)
             .expect("failed to write environmental chemistry diagnostics");
-        if simulation.tick % 1_000 == 0 {
+        if last_report.elapsed() >= Duration::from_secs(5) {
+            last_report = std::time::Instant::now();
             let counters = simulation.environmental_chemistry_diagnostics;
             let energy = simulation.energy_inventory_snapshot();
             println!(
@@ -259,7 +261,8 @@ fn run_environment_chemistry_experiment(
         .expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
-        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY END: elapsed_seconds={:.3} ticks={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        started.elapsed().as_secs_f64(),
         simulation.tick,
         simulation.environment.field.cells.iter()
             .map(|cell| cell.physical_materials.len())
