@@ -877,7 +877,7 @@ impl Simulation {
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let environmental_break_operations = crate::chemical_reaction::accumulate_environmental(
-            &mut self.environment,
+            &self.environment,
             &mut self.chemical_reaction_accumulation,
             &mut self.chemistry_library,
             self.tick,
