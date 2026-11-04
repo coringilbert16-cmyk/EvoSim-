@@ -10,7 +10,6 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
-
 /// Seed exactly 128 individual base resources in a seeded set of randomly
 /// sized and positioned piles. Pile sizes are an unrestricted random partition
 /// of the inventory, not a fixed 6–20 range.
@@ -22,8 +21,15 @@ pub(crate) fn seed_randomized_resources(
     height: f64,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let resource_names = catalog.iter().map(|resource| resource.name.clone()).collect::<Vec<_>>();
-    assert_eq!(resource_names.len(), 7, "the environment requires seven canonical base resources");
+    let resource_names = catalog
+        .iter()
+        .map(|resource| resource.name.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        resource_names.len(),
+        7,
+        "the environment requires seven canonical base resources"
+    );
 
     let mut identities = resource_names.clone();
     while identities.len() < 128 {
@@ -46,7 +52,12 @@ pub(crate) fn seed_randomized_resources(
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
     let centers = randomized_pile_centers(
-        pile_sizes.len(), hotspot.center_x, hotspot.center_y, width, height, &mut rng,
+        pile_sizes.len(),
+        hotspot.center_x,
+        hotspot.center_y,
+        width,
+        height,
+        &mut rng,
     );
     let mut identity_index = 0;
     for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
@@ -56,17 +67,23 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5).clamp(1.0, width - 1.0);
-            let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+                .clamp(1.0, width - 1.0);
+            let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
+                .clamp(1.0, height - 1.0);
             let placement = Placement {
-                x, y, rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+                x,
+                y,
+                rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
             };
             let material = Material::free_base(&identities[identity_index], 1.0);
             identity_index += 1;
             let physical = PhysicalMaterial::realized(material, vec![placement], catalog)
                 .expect("canonical base resources must have valid physical geometry");
-            assert!(field.deposit_physical(x, y, physical, catalog),
-                "randomized pile {pile_index} resource {local_index} must remain in bounds");
+            assert!(
+                field.deposit_physical(x, y, physical, catalog),
+                "randomized pile {pile_index} resource {local_index} must remain in bounds"
+            );
         }
     }
     assert_eq!(identity_index, 128);
@@ -104,7 +121,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     // The default constructor's organism is deliberately removed. Rebase the
     // ledger on the actual environment-only tick-zero inventory so no organism
     // energy or structure can act as a hidden environmental source.
-   simulation.energy_ledger = EnergyLedger::default();
+    simulation.energy_ledger = EnergyLedger::default();
     let initial = simulation.energy_inventory_snapshot();
     simulation.energy_ledger.initial_usable_energy_held = initial.current_usable_energy;
     simulation.energy_ledger.total_usable_energy_held = initial.current_usable_energy;
@@ -160,11 +177,17 @@ mod tests {
         let simulation = Simulation::new(73, 10.0);
         assert_eq!(simulation.environment.width, 250.0);
         assert_eq!(simulation.environment.height, 250.0);
-        let materials = simulation.environment.field.cells.iter()
-            .flat_map(|cell| cell.physical_materials.iter()).collect::<Vec<_>>();
+        let materials = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect::<Vec<_>>();
         assert_eq!(materials.len(), 128);
-        assert!(materials.iter().all(|material| material.material.parts.len() == 1
-            && material.material.parts[0].1 == 1.0));
+        assert!(materials.iter().all(|material| {
+            material.material.parts.len() == 1 && material.material.parts[0].1 == 1.0
+        }));
         assert!(simulation.hotspot.is_some());
     }
 
