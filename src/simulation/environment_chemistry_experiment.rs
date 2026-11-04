@@ -31,7 +31,7 @@ pub(crate) fn seed_randomized_resources(
     }
     identities.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(4..=16);
+    let pile_count = rng.gen_range(3..=10);
     let mut cuts = (1..128).collect::<Vec<_>>();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
@@ -91,6 +91,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         DEFAULT_CELL_SIZE,
     );
+    let catalog = simulation.environment.catalog.clone();
 
     let pile_sizes = seed_randomized_resources(
         &mut simulation.environment.field,
@@ -116,19 +117,6 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation,
         pile_sizes,
     }
-}
-
-fn randomized_pile_sizes(rng: &mut ChaCha8Rng) -> Vec<usize> {
-    let mut remaining = 128;
-    let mut sizes = Vec::new();
-    while remaining > 20 {
-        let maximum = 20.min(remaining - 6);
-        let size = rng.gen_range(6..=maximum);
-        sizes.push(size);
-        remaining -= size;
-    }
-    sizes.push(remaining);
-    sizes
 }
 
 fn randomized_pile_centers(
