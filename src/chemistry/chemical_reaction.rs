@@ -1047,7 +1047,6 @@ mod material_identity_tests {
         .expect("test composite should be physically realizable")
     }
 
-
     fn environmental_benchmark_composite(
         catalog: &[crate::resources::BaseResource],
     ) -> crate::physical_material::PhysicalMaterial {
@@ -1207,7 +1206,9 @@ mod material_identity_tests {
             };
 
             let material_key = (cell_index, material_index);
-            if !restored_materials.contains_key(&material_key) {
+            if let std::collections::btree_map::Entry::Vacant(entry) =
+                restored_materials.entry(material_key)
+            {
                 stats.restoration_cache_misses += 1;
                 stats.restoration_attempts += 1;
                 let mut hypothetical = crate::structure::OrganismStructure::new();
@@ -1227,7 +1228,7 @@ mod material_identity_tests {
                 } else {
                     stats.restoration_failures += 1;
                 }
-                restored_materials.insert(material_key, restored);
+                entry.insert(restored);
             } else {
                 stats.restoration_cache_hits += 1;
             }
@@ -1732,20 +1733,40 @@ mod material_identity_tests {
         for sample in 0..SAMPLES {
             if sample % 2 == 0 {
                 reference_samples.push(benchmark_elapsed_nanos(
-                    || benchmark_environmental_discovery_reference(&simulation.environment, &candidates),
+                    || {
+                        benchmark_environmental_discovery_reference(
+                            &simulation.environment,
+                            &candidates,
+                        )
+                    },
                     REPEATS,
                 ));
                 optimized_samples.push(benchmark_elapsed_nanos(
-                    || benchmark_environmental_discovery_optimized(&simulation.environment, &candidates),
+                    || {
+                        benchmark_environmental_discovery_optimized(
+                            &simulation.environment,
+                            &candidates,
+                        )
+                    },
                     REPEATS,
                 ));
             } else {
                 optimized_samples.push(benchmark_elapsed_nanos(
-                    || benchmark_environmental_discovery_optimized(&simulation.environment, &candidates),
+                    || {
+                        benchmark_environmental_discovery_optimized(
+                            &simulation.environment,
+                            &candidates,
+                        )
+                    },
                     REPEATS,
                 ));
                 reference_samples.push(benchmark_elapsed_nanos(
-                    || benchmark_environmental_discovery_reference(&simulation.environment, &candidates),
+                    || {
+                        benchmark_environmental_discovery_reference(
+                            &simulation.environment,
+                            &candidates,
+                        )
+                    },
                     REPEATS,
                 ));
             }
