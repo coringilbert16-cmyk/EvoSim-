@@ -1,9 +1,9 @@
-//! Localized radial energy source used by the environmental chemistry experiment.
+//! Permanent localized radial energy source in the default environment.
 //!
-//! The hotspot contributes an ordinary 440 cycles per simulated day resonant signal. Its spatial
-//! intensity is a smooth radial gradient; material properties determine the
-//! response, and only energy actually retained by the environmental resonance
-//! reservoir is made available to chemistry.
+//! The hotspot contributes a 2,000-cycle-per-simulated-day resonant signal.
+//! Its spatial intensity is a smooth radial gradient; material properties
+//! determine the response, and only energy actually retained by the
+//! environmental resonance reservoir is made available to chemistry.
 
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::resources::Form;
