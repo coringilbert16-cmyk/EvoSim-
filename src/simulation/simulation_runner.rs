@@ -13,7 +13,6 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut environment_chemistry_experiment = false;
     let mut environment_break_experiment = false;
     let mut seed = 42_u64;
-    let mut max_ticks_provided = false;
     let mut duration_seconds = 60_u64;
 
     let mut args = args.skip(1);
@@ -42,7 +41,6 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .next()
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(DEFAULT_MAX_TICKS);
-                max_ticks_provided = true;
             }
             "--births" => {
                 target_births = args
