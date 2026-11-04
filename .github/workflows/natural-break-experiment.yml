@@ -20,7 +20,14 @@ jobs:
       - name: Run naturally powered molecule population
         timeout-minutes: 20
         run: |
-          cargo run --release --locked -- --headless --environment-break-experiment --seed 42 --ticks 24000 | tee natural-break-experiment.log
+          set -o pipefail
+          cargo run --release --locked -- --headless --environment-break-experiment --seed 42 --duration-seconds 60 2>&1 | tee natural-break-experiment.log
+          restoration_logs="$(grep -E 'restore_material (rejected|penetration|bond insertion rejected)' natural-break-experiment.log || true)"
+          if [ -n "$restoration_logs" ]; then
+            printf '%s\n' "$restoration_logs" | tee -a natural-break-experiment.log
+          else
+            echo "RESTORATION DIAGNOSTICS: no restore_material rejection messages observed" | tee -a natural-break-experiment.log
+          fi
       - name: Preserve experiment output
         if: always()
         uses: actions/upload-artifact@v4
