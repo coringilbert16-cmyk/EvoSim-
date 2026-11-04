@@ -15,6 +15,8 @@ pub(crate) struct RadialHotspot {
     pub(crate) center_y: f64,
     pub(crate) radius: f64,
     /// Incident energy per tick per unit of realized material area at the center.
+    /// The configured rate is 1,000 energy per simulated second; one simulated
+    /// day is 24,000 physics ticks (86,400 simulated seconds).
     pub(crate) peak_energy_per_tick_per_area: f64,
     #[serde(alias = "frequency_hz")]
     pub(crate) frequency_cycles_per_day: f64,
@@ -33,7 +35,7 @@ impl RadialHotspot {
             center_x: width * x_fraction,
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
-            peak_energy_per_tick_per_area: 100.0,
+            peak_energy_per_tick_per_area: 1000.0 * 86_400.0 / 24_000.0,
             frequency_cycles_per_day: crate::harmonics::WORLD_TONE_CYCLES_PER_DAY,
         };
         hotspot.is_valid().then_some(hotspot)
