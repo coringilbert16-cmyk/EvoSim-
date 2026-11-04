@@ -123,8 +123,10 @@ fn report_candidate_profiles(simulation: &Simulation) {
             crate::chemistry::CHEMICAL_D_MAX,
         )
         .unwrap_or(f64::NAN);
-        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(properties_a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(properties_b, baselines);
+        let frequency_a =
+            crate::harmonics::natural_frequency_cycles_per_day(properties_a, baselines);
+        let frequency_b =
+            crate::harmonics::natural_frequency_cycles_per_day(properties_b, baselines);
         let pair_frequency = (frequency_a * frequency_b).sqrt();
         println!(
             "BREAK CANDIDATE {a}-{b}: bond_strength={strength:.6} activation_barrier={barrier:.6} static_potential={potential:.6} natural_pair_frequency={pair_frequency:.3} cycles/day"
