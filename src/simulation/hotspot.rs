@@ -366,8 +366,8 @@ mod tests {
             cell.physical_materials.clear();
         }
         let hotspot = RadialHotspot {
-            center_x: 500.0,
-            center_y: 500.0,
+            center_x: 125.0,
+            center_y: 125.0,
             radius: 100.0,
             peak_energy_per_tick_per_area: 100.0,
             frequency_cycles_per_day: 440.0,
@@ -375,16 +375,16 @@ mod tests {
         let physical = PhysicalMaterial::realized(
             Material::free_base("Nitrogen", 1.0),
             vec![Placement {
-                x: 500.0,
-                y: 500.0,
+                x: 125.0,
+                y: 125.0,
                 rotation_radians: 0.0,
             }],
             &simulation.environment.catalog,
         )
         .expect("test material should have physical geometry");
         assert!(simulation.environment.field.deposit_physical(
-            500.0,
-            500.0,
+            125.0,
+            125.0,
             physical,
             &simulation.environment.catalog
         ));
