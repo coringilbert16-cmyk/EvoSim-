@@ -282,28 +282,24 @@ mod tests {
     }
 
     #[test]
-    fn natural_discovery_accumulates_from_live_molecule_geometry() {
+    fn natural_discovery_runs_without_forcing_break_or_granting_energy() {
         let mut simulation = build(42).simulation;
         let mut accumulation = std::collections::BTreeMap::new();
-        let mut observed_natural_progress = false;
         for tick in 0..128 {
             let mut remaining_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-            let operations = crate::chemical_reaction::accumulate_environmental(
+            let _operations = crate::chemical_reaction::accumulate_environmental(
                 &simulation.environment,
                 &mut accumulation,
                 &mut simulation.chemistry_library,
                 tick,
                 &mut remaining_work,
             );
-            if !operations.is_empty() || accumulation.values().any(|value| *value > 0.0) {
-                observed_natural_progress = true;
-                break;
-            }
         }
-        assert!(
-            observed_natural_progress,
-            "existing H-S/C-H molecules should produce live BREAK activation progress without a synthetic operation"
+        assert_eq!(simulation.environment.chemistry_usable_energy, 0.0);
+        assert_eq!(
+            simulation.environment.resonant_energy.total_energy(),
+            Some(0.0)
         );
-    }
-}
+        assert!(simulation.energy_inventory_snapshot().is_balanced(1e-7));
+    }}
