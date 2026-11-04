@@ -827,7 +827,7 @@ pub(crate) fn schedule_environmental_operations(
     ready.into_iter().map(|(_, operation)| operation).collect()
 }
 
-pub(crate) fn resolve_environmental(
+pub(crate) fn resolve_environmental_detailed(
     operation: EnvironmentalChemicalBreakOperation,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
@@ -840,7 +840,7 @@ pub(crate) fn resolve_environmental(
         || !operation.reaction_frequency_cycles_per_day.is_finite()
         || operation.reaction_frequency_cycles_per_day <= 0.0
     {
-        return false;
+        return Err("invalid_operation_parameters");
     }
     let Some(source) = environment
         .field
@@ -848,7 +848,7 @@ pub(crate) fn resolve_environmental(
         .get(operation.cell_index)
         .and_then(|cell| cell.physical_materials.get(operation.material_index))
     else {
-        return false;
+        return Err("source_material_missing");
     };
     if source != &operation.source_material
         || source
@@ -857,10 +857,10 @@ pub(crate) fn resolve_environmental(
             .and_then(|connections| connections.get(operation.bond_index))
             != Some(&operation.bond)
     {
-        return false;
+        return Err("source_snapshot_stale_or_bond_missing");
     }
     let Some(pieces) = source.break_internal_bond(&operation.bond) else {
-        return false;
+        return Err("bond_split_preparation_failed");
     };
     // Environmental chemistry may spend only energy that actually reached
     // the field through the world-tone path. Stage compatible resonance
@@ -872,7 +872,7 @@ pub(crate) fn resolve_environmental(
         operation.disruption_cost,
     );
     if !resonant_work.is_finite() || resonant_work < 0.0 {
-        return false;
+        return Err("resonance_withdrawal_invalid");
     }
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         environment.chemistry_usable_energy,
@@ -882,7 +882,7 @@ pub(crate) fn resolve_environmental(
         operation.disruption_cost,
         resonant_work,
     ) else {
-        return false;
+        return Err("energy_settlement_unfunded_or_invalid");
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
@@ -901,7 +901,7 @@ pub(crate) fn resolve_environmental(
         || !next_total_resonant.is_finite()
         || next_total_resonant < 0.0
     {
-        return false;
+        return Err("energy_ledger_validation_failed");
     }
     if !environment.field.split_physical_at_index(
         operation.cell_index,
@@ -910,7 +910,7 @@ pub(crate) fn resolve_environmental(
         pieces,
         &environment.catalog,
     ) {
-        return false;
+        return Err("physical_material_split_rejected");
     }
     environment.chemistry_usable_energy = prepared.usable_energy;
     environment.resonant_energy = staged_resonance;
@@ -918,7 +918,30 @@ pub(crate) fn resolve_environmental(
     ledger.total_usable_energy_held = next_total_usable;
     ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
-    true
+    Ok(())
+}
+
+pub(crate) fn resolve_environmental(
+    operation: EnvironmentalChemicalBreakOperation,
+    environment: &mut crate::state::Environment,
+    ledger: &mut crate::state::EnergyLedger,
+) -> bool {
+    resolve_environmental_detailed(operation, environment, ledger).is_ok()
+}
+
+pub(crate) fn resolve_environmental_preserving_accumulation_detailed(
+    operation: EnvironmentalChemicalBreakOperation,
+    environment: &mut crate::state::Environment,
+    ledger: &mut crate::state::EnergyLedger,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+) -> Result<(), &'static str> {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let result = resolve_environmental_detailed(operation, environment, ledger);
+    if result.is_err() {
+        accumulation.insert(key, accumulated_reaction);
+    }
+    result
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
@@ -927,13 +950,9 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     ledger: &mut crate::state::EnergyLedger,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
 ) -> bool {
-    let key = operation.accumulation_key.clone();
-    let accumulated_reaction = operation.accumulated_reaction;
-    let success = resolve_environmental(operation, environment, ledger);
-    if !success {
-        accumulation.insert(key, accumulated_reaction);
-    }
-    success
+    resolve_environmental_preserving_accumulation_detailed(
+        operation, environment, ledger, accumulation
+    ).is_ok()
 }
 
 pub(crate) fn resolve(
