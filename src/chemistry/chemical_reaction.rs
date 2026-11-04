@@ -1099,8 +1099,7 @@ mod material_identity_tests {
         restoration_cache_hits: usize,
         restoration_cache_misses: usize,
         geometry_candidates_materialized: usize,
-        eligible_bonds:
-            Vec<(usize, usize, usize, crate::contact::ConnectionPairCandidate)>,
+        eligible_bonds: Vec<(usize, usize, usize, crate::contact::ConnectionPairCandidate)>,
     }
 
     // Reference the pre-optimization path: restore for every bond and materialize
@@ -1167,12 +1166,9 @@ mod material_identity_tests {
                         && candidate.endpoint_b == connection.endpoint_a)
             });
             if let Some(candidate) = candidate {
-                stats.eligible_bonds.push((
-                    cell_index,
-                    material_index,
-                    bond_index,
-                    *candidate,
-                ));
+                stats
+                    .eligible_bonds
+                    .push((cell_index, material_index, bond_index, *candidate));
             }
         }
 
@@ -1254,12 +1250,9 @@ mod material_identity_tests {
             );
             if let Some(candidate) = candidate {
                 stats.geometry_candidates_materialized += 1;
-                stats.eligible_bonds.push((
-                    cell_index,
-                    material_index,
-                    bond_index,
-                    candidate,
-                ));
+                stats
+                    .eligible_bonds
+                    .push((cell_index, material_index, bond_index, candidate));
             }
         }
 
@@ -1695,14 +1688,10 @@ mod material_identity_tests {
         let expected_bonds = (VALID_MATERIALS + FAILED_MATERIALS) * 2;
         assert_eq!(candidates.len(), expected_bonds);
 
-        let reference = benchmark_environmental_discovery_reference(
-            &simulation.environment,
-            &candidates,
-        );
-        let optimized = benchmark_environmental_discovery_optimized(
-            &simulation.environment,
-            &candidates,
-        );
+        let reference =
+            benchmark_environmental_discovery_reference(&simulation.environment, &candidates);
+        let optimized =
+            benchmark_environmental_discovery_optimized(&simulation.environment, &candidates);
 
         assert_eq!(
             reference.eligible_bonds, optimized.eligible_bonds,
@@ -1712,10 +1701,16 @@ mod material_identity_tests {
         assert_eq!(reference.restoration_attempts, expected_bonds);
         assert_eq!(reference.restoration_successes, VALID_MATERIALS * 2);
         assert_eq!(reference.restoration_failures, FAILED_MATERIALS * 2);
-        assert_eq!(optimized.restoration_attempts, VALID_MATERIALS + FAILED_MATERIALS);
+        assert_eq!(
+            optimized.restoration_attempts,
+            VALID_MATERIALS + FAILED_MATERIALS
+        );
         assert_eq!(optimized.restoration_successes, VALID_MATERIALS);
         assert_eq!(optimized.restoration_failures, FAILED_MATERIALS);
-        assert_eq!(optimized.restoration_cache_misses, VALID_MATERIALS + FAILED_MATERIALS);
+        assert_eq!(
+            optimized.restoration_cache_misses,
+            VALID_MATERIALS + FAILED_MATERIALS
+        );
         assert_eq!(
             optimized.restoration_cache_hits,
             expected_bonds - VALID_MATERIALS - FAILED_MATERIALS
