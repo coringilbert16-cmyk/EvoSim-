@@ -1266,7 +1266,10 @@ mod material_identity_tests {
         stats
     }
 
-    fn benchmark_elapsed_nanos<F: FnMut()>(mut run: F, repeats: usize) -> u128 {
+    fn benchmark_elapsed_nanos<F, T>(mut run: F, repeats: usize) -> u128
+    where
+        F: FnMut() -> T,
+    {
         let start = std::time::Instant::now();
         for _ in 0..repeats {
             std::hint::black_box(run());
