@@ -46,6 +46,10 @@ fn restorable_physical(
     // Accept a candidate only when the exact stored arrangement restores.
     const DISTANCE_STEPS: usize = 33;
     const ORIENTATION_STEPS: usize = 8;
+    let mut best_contact_distance = f64::INFINITY;
+    let mut best_facing = f64::NEG_INFINITY;
+    let mut best_contact_factor = 0.0_f64;
+    let mut best_engagement = 0.0_f64;
     for distance_step in 0..DISTANCE_STEPS {
         let center_distance = 0.2 + distance_step as f64 * 0.025;
         for axis_step in 0..ORIENTATION_STEPS {
@@ -134,17 +138,18 @@ fn restorable_physical(
                     }) else {
                         continue;
                     };
-                    let Some(contact_factor) = crate::chemistry::contact_factor(
+                    let contact_factor = crate::chemistry::contact_factor(
                         contact.distance,
                         crate::chemistry::CHEMICAL_CONTACT_RADIUS,
-                    ) else {
-                        continue;
-                    };
-                    let Some(engagement) =
-                        crate::chemistry::interface_engagement(contact.facing)
-                    else {
-                        continue;
-                    };
+                    ).unwrap_or(0.0);
+                    let engagement =
+                        crate::chemistry::interface_engagement(contact.facing).unwrap_or(0.0);
+                    if contact_factor * engagement > best_contact_factor * best_engagement {
+                        best_contact_distance = contact.distance;
+                        best_facing = contact.facing;
+                        best_contact_factor = contact_factor;
+                        best_engagement = engagement;
+                    }
                     // Some(0.0) is a valid "no effective contact" result, not
                     // evidence that this geometry can accumulate chemistry.
                     if contact_factor <= 0.0 || engagement <= 0.0 {
@@ -180,8 +185,13 @@ fn restorable_physical(
     }
 
     panic!(
-        "existing compound {:?} has no nonpenetrating, restorable physical realization",
-        material.parts
+        "existing compound {:?} has no positive-contact physical realization; best_distance={:.6} best_facing={:.6} best_contact_factor={:.6} best_engagement={:.6} radius={:.6}",
+        material.parts,
+        best_contact_distance,
+        best_facing,
+        best_contact_factor,
+        best_engagement,
+        crate::chemistry::CHEMICAL_CONTACT_RADIUS
     );
 }
 
