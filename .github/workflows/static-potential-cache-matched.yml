@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three fixed 1,000-tick samples per revision
+    name: Three alternating 60-second samples per revision
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -70,7 +70,7 @@ jobs:
               --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
               > "/tmp/static-cache-metrics/warmup-$variant.log" 2>&1)
           done
-      - name: Run three alternating fixed 1,000-tick instrumented samples per revision
+      - name: Run three alternating 60-second instrumented samples per revision
         shell: bash
         run: |
           set -euo pipefail
@@ -105,22 +105,27 @@ jobs:
             sample_dir="/tmp/static-cache-sample-$variant-$sample"
             make_isolated_runtime_dir "$worktree" "$sample_dir"
             binary="$worktree/target/release/evosim"
-            output="/tmp/static-cache-metrics/${variant}-${sample}.jsonl"
-            log="/tmp/static-cache-metrics/${variant}-${sample}.log"
             sample_start=$(date +%s%N)
-            (cd "$sample_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 1000 \
-              --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
-            sample_end=$(date +%s%N)
+            sample_end=$sample_start
+            sample_ticks=0
+            run_count=0
+            while (( (sample_end - sample_start) < 60000000000 )); do
+              run_count=$((run_count + 1))
+              output="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
+              log="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.log"
+              (cd "$sample_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
+                --environment-chemistry-experiment --seed 42 --ticks 1000 \
+                --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
+              ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
+              test "$ticks" = "1000"
+              sample_ticks=$((sample_ticks + ticks))
+              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
+              grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /${variant}\t${sample}\t${run_count}\t/" >> /tmp/static-cache-metrics/metrics.tsv
+              sample_end=$(date +%s%N)
+            done
             elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
-            ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-            test "$ticks" = "1000"
-            sample_ticks=$ticks
-            run_count=1
-            printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
-            grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
-            grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t1\t/" >> /tmp/static-cache-metrics/metrics.tsv
             rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
+            printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
             printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
           done
           echo "=== THROUGHPUT MEDIANS ==="
@@ -157,7 +162,7 @@ jobs:
               hit_rate = 100.0 * t["cache_hits"] / lookups if lookups else 0.0
               avg_calc_us = t["potential_calculation_ns"] / t["potential_calculations"] / 1000 if t["potential_calculations"] else 0.0
               avg_combine_ms = t["combine_discovery_ns"] / t["combine_discovery_calls"] / 1_000_000 if t["combine_discovery_calls"] else 0.0
-              print(f"{variant}: experiment_runs={runs[variant]} lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} potential_calc_total_ms={t['potential_calculation_ns']/1e6:.3f} avg_potential_calc_us={avg_calc_us:.3f} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
+              print(f"{variant}: invocations={runs[variant]} lookups={lookups} hits={t['cache_hits']} misses={t['cache_misses']} hit_rate={hit_rate:.2f}% potential_calculations={t['potential_calculations']} potential_calc_total_ms={t['potential_calculation_ns']/1e6:.3f} avg_potential_calc_us={avg_calc_us:.3f} combine_discovery_calls={t['combine_discovery_calls']} combine_discovery_total_ms={t['combine_discovery_ns']/1e6:.3f} avg_combine_discovery_ms={avg_combine_ms:.6f}")
           PY
           echo "=== RAW SAMPLES ==="
           cat /tmp/static-cache-metrics/samples.tsv
@@ -186,7 +191,7 @@ jobs:
               assert inventory == reference_inventory, (i, inventory, reference_inventory)
               residual = row.get("energy_balance_residual")
               assert isinstance(residual, (int, float)) and math.isfinite(residual) and abs(residual) < 1e-4, (i, residual)
-          print(f"Validated {len(rows)} complete runs: 1,000 ticks each, matching 1,280-resource inventories, energy residual < 1e-4")
+          print(f"Validated {len(rows)} complete 1,000-tick invocations across six 60-second samples, matching 1,280-resource inventories, energy residual < 1e-4")
           print("Totals:", {
               "combine_committed": sum(r["combine_committed"] for r in rows),
               "combine_rejected": sum(r["combine_rejected"] for r in rows),
