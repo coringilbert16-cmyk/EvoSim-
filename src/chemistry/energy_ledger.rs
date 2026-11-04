@@ -771,8 +771,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let residual = incident_energy - allocated;
         if !allocated.is_finite()
             || !residual.is_finite()
-            || residual < 0.0
-            || residual > EPSILON * incident_energy.max(1.0)
+            || residual.abs() > EPSILON * incident_energy.max(1.0)
         {
             fail!("stage 2");
         }
