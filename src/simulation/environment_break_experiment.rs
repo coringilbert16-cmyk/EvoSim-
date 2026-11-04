@@ -8,7 +8,7 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{Material, ResourceBaselines};
 use crate::state::{EnergyLedger, Simulation};
-use crate::structure::Placement;
+use crate::structure::{OrganismStructure, Placement};
 use std::time::{Duration, Instant};
 
 const REPLICATES_PER_RECIPE: usize = 4;
@@ -26,17 +26,82 @@ fn contains_recipe(material: &Material, a: &str, b: &str) -> bool {
         && material.internal_bonds.len() == 1
 }
 
-fn placements(x: f64, y: f64, rotation: f64, spacing: f64, part_count: usize) -> Vec<Placement> {
-    (0..part_count)
-        .map(|index| {
-            let angle = rotation + index as f64 * std::f64::consts::TAU / part_count.max(1) as f64;
-            Placement {
-                x: x + spacing * angle.cos(),
-                y: y + spacing * angle.sin(),
-                rotation_radians: angle,
+fn restorable_physical(
+    material: &Material,
+    catalog: &[crate::resources::BaseResource],
+    x: f64,
+    y: f64,
+    rotation: f64,
+) -> PhysicalMaterial {
+    assert_eq!(
+        material.parts.len(),
+        2,
+        "natural BREAK candidates must remain two-constituent molecules"
+    );
+
+    // Search real constituent shapes and orientations. A successful
+    // PhysicalMaterial::realized() only proves that bond endpoints can be
+    // assigned; restoration additionally requires nonpenetrating geometry.
+    // Accept a candidate only when the exact stored arrangement restores.
+    const DISTANCE_STEPS: usize = 33;
+    const ORIENTATION_STEPS: usize = 16;
+    for distance_step in 0..DISTANCE_STEPS {
+        let center_distance = 0.2 + distance_step as f64 * 0.025;
+        for axis_step in 0..ORIENTATION_STEPS {
+            let axis = rotation
+                + std::f64::consts::TAU * axis_step as f64 / ORIENTATION_STEPS as f64;
+            let (axis_sin, axis_cos) = axis.sin_cos();
+            for orientation_a in 0..ORIENTATION_STEPS {
+                let angle_a = rotation
+                    + std::f64::consts::TAU * orientation_a as f64
+                        / ORIENTATION_STEPS as f64;
+                for orientation_b in 0..ORIENTATION_STEPS {
+                    let angle_b = rotation
+                        + std::f64::consts::TAU * orientation_b as f64
+                            / ORIENTATION_STEPS as f64;
+                    let candidate_placements = vec![
+                        Placement {
+                            x: x - center_distance * 0.5 * axis_cos,
+                            y: y - center_distance * 0.5 * axis_sin,
+                            rotation_radians: angle_a,
+                        },
+                        Placement {
+                            x: x + center_distance * 0.5 * axis_cos,
+                            y: y + center_distance * 0.5 * axis_sin,
+                            rotation_radians: angle_b,
+                        },
+                    ];
+                    let Some(candidate) = PhysicalMaterial::realized(
+                        material.clone(),
+                        candidate_placements,
+                        catalog,
+                    ) else {
+                        continue;
+                    };
+                    let mut restored = OrganismStructure::new();
+                    if crate::material_restoration::restore_material(
+                        &mut restored,
+                        &candidate,
+                        Placement {
+                            x: 0.0,
+                            y: 0.0,
+                            rotation_radians: 0.0,
+                        },
+                        catalog,
+                    )
+                    .is_some()
+                    {
+                        return candidate;
+                    }
+                }
             }
-        })
-        .collect()
+        }
+    }
+
+    panic!(
+        "existing compound {:?} has no nonpenetrating, restorable physical realization",
+        material.parts
+    );
 }
 
 pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
@@ -79,22 +144,9 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             let x = hotspot_center_x + HOTSPOT_POPULATION_RADIUS * angle.cos();
             let y = hotspot_center_y + HOTSPOT_POPULATION_RADIUS * angle.sin();
             let rotation = 0.37 * index as f64;
-            // Use the same radial constituent layout as the existing environmental
-            // compound seeder. Try deterministic spacings and retain only a
-            // realization accepted by the normal physical contact validator.
-            let physical = (0..9)
-                .filter_map(|attempt| {
-                    let spacing = 0.25 + attempt as f64 * 0.05;
-                    PhysicalMaterial::realized(
-                        material.clone(),
-                        placements(x, y, rotation, spacing, material.parts.len()),
-                        &catalog,
-                    )
-                })
-                .next()
-                .unwrap_or_else(|| {
-                    panic!("existing {a}-{b} compound has no valid physical realization")
-                });
+            // Select a geometry that passes both physical realization and the
+            // exact restoration checks used by the live chemistry path.
+            let physical = restorable_physical(material, &catalog, x, y, rotation);
             let cell_index = simulation
                 .environment
                 .field
