@@ -6,6 +6,7 @@ use crate::geometry_reference_library::{
     GeometryRigidContactFamily, GeometryRigidPointContactFamily,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -271,6 +272,10 @@ pub struct ChemistryLibrary {
     root: PathBuf,
     entries: HashMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
+    metrics_enabled: bool,
+    cache_hits: Cell<u64>,
+    cache_misses: Cell<u64>,
+    cache_insertions: Cell<u64>,
 }
 
 impl ChemistryLibrary {
@@ -366,11 +371,26 @@ impl ChemistryLibrary {
             root,
             entries,
             manifest,
+            metrics_enabled: std::env::var("EVOSIM_CHEMISTRY_CACHE_METRICS")
+                .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+            cache_hits: Cell::new(0),
+            cache_misses: Cell::new(0),
+            cache_insertions: Cell::new(0),
         })
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
-        self.entries.get(key)
+        let record = self.entries.get(key);
+        if self.metrics_enabled {
+            let counter = if record.is_some() {
+                &self.cache_hits
+            } else {
+                &self.cache_misses
+            };
+            counter.set(counter.get().saturating_add(1));
+        }
+        record
     }
 
     /// Build a canonical static-potential key using this store's validated
@@ -399,15 +419,22 @@ impl ChemistryLibrary {
         if !static_potential.is_finite() || static_potential < 0.0 {
             return Ok(None);
         }
-        if let Some(record) = self.get(&key) {
+        // Runtime callers perform and count the lookup before calculating a
+        // missing potential. Keep this internal check uncounted to avoid
+        // counting the same logical lookup twice.
+        if let Some(record) = self.entries.get(&key) {
             return Ok(Some(record.static_potential));
         }
         let record = ChemistryRecord {
             key: key.clone(),
             static_potential,
         };
-        self.insert(record)?;
-        Ok(self.get(&key).map(|record| record.static_potential))
+        if self.insert(record)? {
+            return Ok(Some(static_potential));
+        }
+        // Another library instance may have inserted the key while this
+        // instance waited for the persistence lock.
+        Ok(self.entries.get(&key).map(|record| record.static_potential))
     }
     #[cfg(test)]
     pub fn len(&self) -> usize {
@@ -489,6 +516,10 @@ impl ChemistryLibrary {
 
         // Publish the new in-memory state only after both persisted updates succeed.
         self.entries.insert(key, record);
+        if self.metrics_enabled {
+            self.cache_insertions
+                .set(self.cache_insertions.get().saturating_add(1));
+        }
         self.manifest = next_manifest;
         Ok(true)
     }
@@ -1411,5 +1442,19 @@ mod tests {
             .expect("corrupt store must be rejected");
         assert!(error.to_string().contains("invalid chemistry record"));
         let _ = fs::remove_dir_all(root);
+    }
+}
+
+impl Drop for ChemistryLibrary {
+    fn drop(&mut self) {
+        if self.metrics_enabled {
+            println!(
+                "CHEMISTRY_CACHE_METRICS hits={} misses={} insertions={} entries={}",
+                self.cache_hits.get(),
+                self.cache_misses.get(),
+                self.cache_insertions.get(),
+                self.entries.len(),
+            );
+        }
     }
 }
