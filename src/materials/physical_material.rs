@@ -34,6 +34,10 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
+    /// Stable identity for environmental chemistry; preserved by transport.
+    /// Zero means not yet assigned to an active field instance.
+    #[serde(default)]
+    pub(crate) environmental_identity: u64,
     pub(crate) placements: Option<Vec<Placement>>,
     #[serde(default)]
     pub(crate) internal_connections: Option<Vec<PhysicalMaterialBond>>,
@@ -137,6 +141,7 @@ impl PhysicalMaterial {
 
         Some(Self {
             material,
+            environmental_identity: 0,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
             owner_relative_origin: None,
@@ -338,6 +343,7 @@ impl PhysicalMaterial {
                     parts,
                     internal_bonds,
                 },
+                environmental_identity: 0,
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin,
@@ -431,6 +437,7 @@ impl PhysicalMaterial {
             .collect();
         Some(Self {
             material: self.material,
+            environmental_identity: self.environmental_identity,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
             owner_relative_origin: self.owner_relative_origin,
@@ -518,6 +525,7 @@ mod tests {
             }]),
             internal_connections: Some(Vec::new()),
             owner_relative_origin: None,
+            environmental_identity: 0,
             realized_shapes: Some(vec![shape.clone()]),
         };
 
@@ -547,6 +555,7 @@ mod tests {
             }]),
             internal_connections: Some(Vec::new()),
             owner_relative_origin: None,
+            environmental_identity: 0,
             realized_shapes: Some(vec![underfilled_shape]),
         };
         assert_eq!(underfilled.realized_shape_for_part(0, &catalog), None);
