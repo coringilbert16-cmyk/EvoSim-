@@ -831,7 +831,7 @@ pub(crate) fn resolve_environmental_detailed(
     operation: EnvironmentalChemicalBreakOperation,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
-) -> bool {
+) -> Result<(), &'static str> {
     if !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
