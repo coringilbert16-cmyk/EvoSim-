@@ -30,7 +30,7 @@ The default simulation now uses the established renderer configuration; this is 
 
 - World dimensions: **250 × 250**.
 - Starting inventory: **128 individual base resources**, represented across all seven canonical resource types.
-- Resources are seeded deterministically from the simulation seed into **4–16 randomly sized piles**. Pile sizes are a random partition of 128 and are not constrained to 6–20.
+- Resources are seeded deterministically from the simulation seed into **3–10 randomly sized piles**. Pile sizes are a random partition of 128 and are not constrained to 6–20.
 - One right-bend hotspot with a smooth radial falloff, **1,000 energy per simulated second** (3,600 energy per physics tick at 24,000 ticks per 86,400-second simulated day), and a **2,000-cycle/day** signal.
 - S-shaped left-to-right flow with its renderer-tested response doubled; the existing speed falloff, bend vortices, mass mobility, and obstacle wakes are retained.
 - The 2,400-tick day/night world-tone cycle remains independent of runtime playback speed.
