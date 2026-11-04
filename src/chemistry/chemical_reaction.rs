@@ -578,8 +578,7 @@ pub(crate) fn accumulate_environmental(
             // repeating the same rejected work for every bond in this material.
             entry.insert(restored);
         }
-        let Some(Some((hypothetical, restored_indices))) =
-            restored_materials.get(&material_key)
+        let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
         else {
             continue;
         };
