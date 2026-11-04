@@ -842,11 +842,32 @@ pub(crate) fn resolve_environmental_detailed(
     {
         return Err("invalid_operation_parameters");
     }
+    // Material indices are only stable until another BREAK splits a
+    // material in the same cell. Earlier operations in this tick can shift
+    // the cell's material vector, so resolve the source by its stable
+    // environmental identity and validate the captured snapshot before use.
+    let source_location = environment
+        .field
+        .cells
+        .iter()
+        .enumerate()
+        .find_map(|(cell_index, cell)| {
+            cell.physical_materials
+                .iter()
+                .position(|material| {
+                    material.environmental_identity
+                        == operation.source_material.environmental_identity
+                })
+                .map(|material_index| (cell_index, material_index))
+        });
+    let Some((source_cell_index, source_material_index)) = source_location else {
+        return Err("source_material_missing");
+    };
     let Some(source) = environment
         .field
         .cells
-        .get(operation.cell_index)
-        .and_then(|cell| cell.physical_materials.get(operation.material_index))
+        .get(source_cell_index)
+        .and_then(|cell| cell.physical_materials.get(source_material_index))
     else {
         return Err("source_material_missing");
     };
@@ -904,8 +925,8 @@ pub(crate) fn resolve_environmental_detailed(
         return Err("energy_ledger_validation_failed");
     }
     if !environment.field.split_physical_at_index(
-        operation.cell_index,
-        operation.material_index,
+        source_cell_index,
+        source_material_index,
         &operation.source_material,
         pieces,
         &environment.catalog,
