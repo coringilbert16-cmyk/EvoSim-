@@ -730,6 +730,55 @@ mod tests {
     }
 
     #[test]
+    fn targeted_candidate_lookup_matches_full_enumeration_in_both_endpoint_orders() {
+        let catalog = crate::resources::default_catalog();
+        let (structure, _) = test_structure();
+        let all_candidates = connection_pair_candidates(&structure, 0, 1, &catalog);
+        assert!(!all_candidates.is_empty());
+
+        for expected in &all_candidates {
+            assert_eq!(
+                connection_pair_candidate_for_endpoints(
+                    &structure,
+                    0,
+                    1,
+                    &catalog,
+                    expected.endpoint_a,
+                    expected.endpoint_b,
+                ),
+                Some(*expected),
+            );
+            assert_eq!(
+                connection_pair_candidate_for_endpoints(
+                    &structure,
+                    0,
+                    1,
+                    &catalog,
+                    expected.endpoint_b,
+                    expected.endpoint_a,
+                ),
+                Some(*expected),
+            );
+        }
+
+        assert_eq!(
+            connection_pair_candidate_for_endpoints(
+                &structure,
+                0,
+                1,
+                &catalog,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: 123.456,
+                },
+                ConnectionEndpoint::Boundary {
+                    angle_radians: -98.765,
+                },
+            ),
+            None,
+        );
+    }
+
+    #[test]
     fn try_add_bond_rejects_repeated_connection_points_in_either_endpoint_order() {
         let catalog = crate::resources::default_catalog();
         let (mut structure, [id_a, id_b]) = test_structure();
