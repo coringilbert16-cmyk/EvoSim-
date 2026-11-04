@@ -559,18 +559,21 @@ pub(crate) fn transport_field(
         return 0;
     }
 
-    let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field
-        .cells
-        .iter()
-        .enumerate()
-        .flat_map(|(cell_index, cell)| {
-            cell.physical_materials
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(move |(material_index, material)| (cell_index, material_index, material))
-        })
-        .collect();
+    // Assign identities while building the existing transport snapshot, so
+    // this does not add another full-field traversal to every simulation tick.
+    let mut next_identity = field.next_material_identity;
+    let mut snapshot = Vec::new();
+    for (cell_index, cell) in field.cells.iter_mut().enumerate() {
+        for (material_index, material) in cell.physical_materials.iter_mut().enumerate() {
+            if material.environmental_identity == 0 && next_identity != 0 {
+                let identity = next_identity;
+                next_identity = identity.checked_add(1).unwrap_or(0);
+                material.environmental_identity = identity;
+            }
+            snapshot.push((cell_index, material_index, material.clone()));
+        }
+    }
+    field.next_material_identity = next_identity;
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
