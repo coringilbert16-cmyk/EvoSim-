@@ -1,0 +1,30 @@
+name: Natural BREAK molecule experiment
+
+on:
+  push:
+    branches:
+      - experiment/natural-break-molecule-population
+
+permissions:
+  contents: read
+
+jobs:
+  natural-break:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run naturally powered molecule population
+        timeout-minutes: 20
+        run: |
+          cargo run --release --locked -- --headless --environment-break-experiment --seed 42 --ticks 24000 | tee natural-break-experiment.log
+      - name: Preserve experiment output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: natural-break-experiment
+          path: natural-break-experiment.log
+          if-no-files-found: warn
