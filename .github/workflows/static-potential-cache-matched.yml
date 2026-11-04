@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Three one-minute instrumented samples per revision
+    name: Three fixed 24,000-tick samples per revision
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -49,7 +49,7 @@ jobs:
           for variant in baseline candidate; do
             workdir="/tmp/static-cache-$variant"
             (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
-              --environment-chemistry-experiment --seed 42 --ticks 24000 \
+              --environment-chemistry-experiment --seed 42 --ticks 1000 \
               --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
               > "/tmp/static-cache-metrics/warmup-$variant.log" 2>&1)
           done
@@ -71,35 +71,23 @@ jobs:
             sample="${counts[$variant]}"
             workdir="/tmp/static-cache-$variant"
             binary="$workdir/target/release/evosim"
+            output="/tmp/static-cache-metrics/${variant}-${sample}.jsonl"
+            log="/tmp/static-cache-metrics/${variant}-${sample}.log"
             sample_start=$(date +%s%N)
-            sample_ticks=0
-            run_count=0
-            while true; do
-              run_count=$((run_count + 1))
-              output="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.jsonl"
-              log="/tmp/static-cache-metrics/${variant}-${sample}-run-${run_count}.log"
-              run_start=$(date +%s%N)
-              (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
-                --environment-chemistry-experiment --seed 42 --ticks 24000 \
-                --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
-              run_end=$(date +%s%N)
-              run_elapsed=$(awk -v a="$run_start" -v b="$run_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
-              ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
-              test "$ticks" = "24000"
-              sample_ticks=$((sample_ticks + ticks))
-              printf "%s\t%d\t%d\t%s\n" "$variant" "$sample" "$run_count" "$run_elapsed" >> /tmp/static-cache-metrics/runs.tsv
-              grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
-              grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\t$sample\t$run_count\t/" >> /tmp/static-cache-metrics/metrics.tsv
-              sample_now=$(date +%s%N)
-              sample_elapsed=$(awk -v a="$sample_start" -v b="$sample_now" 'BEGIN { print (b-a)/1000000000 }')
-              if awk -v elapsed="$sample_elapsed" 'BEGIN { exit !(elapsed >= 60) }'; then
-                break
-              fi
-            done
+            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
+              --environment-chemistry-experiment --seed 42 --ticks 24000 \
+              --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
             sample_end=$(date +%s%N)
             elapsed=$(awk -v a="$sample_start" -v b="$sample_end" 'BEGIN { printf "%.6f", (b-a)/1000000000 }')
+            ticks=$(grep -o '"ticks_observed":[0-9]*' "$output" | tail -1 | cut -d: -f2)
+            test "$ticks" = "24000"
+            sample_ticks=$ticks
+            run_count=1
+            printf "%s\\t%d\\t%d\\t%s\\n" "$variant" "$sample" "$run_count" "$elapsed" >> /tmp/static-cache-metrics/runs.tsv
+            grep '"event":"environmental_chemistry_summary"' "$output" >> /tmp/static-cache-metrics/summaries.jsonl
+            grep '^CHEMISTRY_CACHE_METRICS ' "$log" | sed "s/^CHEMISTRY_CACHE_METRICS /$variant\\t$sample\\t1\\t/" >> /tmp/static-cache-metrics/metrics.tsv
             rate=$(awk -v ticks="$sample_ticks" -v seconds="$elapsed" 'BEGIN { printf "%.3f", ticks/seconds }')
-            printf "%s\t%d\t%d\t%s\t%d\t%s\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
+            printf "%s\\t%d\\t%d\\t%s\\t%d\\t%s\\n" "$variant" "$sample" "$sample_ticks" "$elapsed" "$run_count" "$rate" | tee -a /tmp/static-cache-metrics/samples.tsv
           done
           echo "=== THROUGHPUT MEDIANS ==="
           python3 - <<'PY'
