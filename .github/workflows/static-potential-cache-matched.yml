@@ -43,9 +43,29 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/static-cache-metrics
+          make_isolated_runtime_dir() {
+            local source="$1"
+            local destination="$2"
+            mkdir -p "$destination"
+            shopt -s dotglob nullglob
+            for entry in "$source"/*; do
+              local name
+              name="$(basename "$entry")"
+              # The chemistry store is the only persistent state intentionally
+              # isolated between samples. Other generated libraries remain shared.
+              if [[ "$name" == "chemistry_library" ]]; then
+                continue
+              fi
+              ln -s "$entry" "$destination/$name"
+            done
+            mkdir -p "$destination/chemistry_library/data"
+          }
           for variant in baseline candidate; do
-            workdir="/tmp/static-cache-$variant"
-            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$workdir/target/release/evosim" --headless \
+            worktree="/tmp/static-cache-$variant"
+            warmup_dir="/tmp/static-cache-warmup-$variant"
+            make_isolated_runtime_dir "$worktree" "$warmup_dir"
+            binary="$worktree/target/release/evosim"
+            (cd "$warmup_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
               --environment-chemistry-experiment --seed 42 --ticks 250 \
               --diagnostic-interval 1000 --diagnostics "/tmp/static-cache-metrics/warmup-$variant.jsonl" \
               > "/tmp/static-cache-metrics/warmup-$variant.log" 2>&1)
@@ -66,12 +86,14 @@ jobs:
           for variant in "${sequence[@]}"; do
             counts[$variant]=$((counts[$variant] + 1))
             sample="${counts[$variant]}"
-            workdir="/tmp/static-cache-$variant"
-            binary="$workdir/target/release/evosim"
+            worktree="/tmp/static-cache-$variant"
+            sample_dir="/tmp/static-cache-sample-$variant-$sample"
+            make_isolated_runtime_dir "$worktree" "$sample_dir"
+            binary="$worktree/target/release/evosim"
             output="/tmp/static-cache-metrics/${variant}-${sample}.jsonl"
             log="/tmp/static-cache-metrics/${variant}-${sample}.log"
             sample_start=$(date +%s%N)
-            (cd "$workdir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
+            (cd "$sample_dir" && EVOSIM_CHEMISTRY_CACHE_METRICS=1 "$binary" --headless \
               --environment-chemistry-experiment --seed 42 --ticks 1000 \
               --diagnostic-interval 1000 --diagnostics "$output" > "$log" 2>&1)
             sample_end=$(date +%s%N)
