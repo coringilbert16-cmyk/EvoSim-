@@ -77,7 +77,10 @@ pub(crate) fn build(seed: u64) -> NaturalBreakFixture {
             )
             .unwrap_or_else(|| panic!("existing {a}-{b} compound must realize physically"));
             assert!(
-                simulation.environment.field.deposit_physical(x, y, physical, &catalog),
+                simulation
+                    .environment
+                    .field
+                    .deposit_physical(x, y, physical, &catalog),
                 "candidate molecule must remain inside the experiment field"
             );
             molecule_count += 1;
@@ -106,8 +109,16 @@ fn report_candidate_profiles(simulation: &Simulation) {
     let catalog = &simulation.environment.catalog;
     let baselines = ResourceBaselines::from_catalog(catalog);
     for &(a, b) in &CANDIDATE_RECIPES {
-        let properties_a = catalog.iter().find(|resource| resource.name == a).unwrap().properties;
-        let properties_b = catalog.iter().find(|resource| resource.name == b).unwrap().properties;
+        let properties_a = catalog
+            .iter()
+            .find(|resource| resource.name == a)
+            .unwrap()
+            .properties;
+        let properties_b = catalog
+            .iter()
+            .find(|resource| resource.name == b)
+            .unwrap()
+            .properties;
         let strength = crate::combine::bond_strength(properties_a, properties_b);
         let barrier = crate::chemistry::activation_barrier_from_bond_properties(
             strength,
@@ -160,10 +171,18 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
         total_rejected = total_rejected.saturating_add(counters.break_rejected);
 
         if simulation.tick % 1_000 == 0 {
-            let material_count = simulation.environment.field.cells.iter()
+            let material_count = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .map(|cell| cell.physical_materials.len())
                 .sum::<usize>();
-            let bond_count = simulation.environment.field.cells.iter()
+            let bond_count = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
                 .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
                 .sum::<usize>();
@@ -186,11 +205,19 @@ pub(crate) fn run(seed: u64, max_ticks: u64) {
     }
 
     let final_inventory = simulation.energy_inventory_snapshot();
-    let final_bonds = simulation.environment.field.cells.iter()
+    let final_bonds = simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .flat_map(|cell| cell.physical_materials.iter())
         .map(|material| material.internal_connections.as_ref().map_or(0, Vec::len))
         .sum::<usize>();
-    let final_materials = simulation.environment.field.cells.iter()
+    let final_materials = simulation
+        .environment
+        .field
+        .cells
+        .iter()
         .map(|cell| cell.physical_materials.len())
         .sum::<usize>();
     println!(
@@ -217,17 +244,27 @@ mod tests {
         let simulation = fixture.simulation;
         assert_eq!(fixture.molecule_count, 8);
         assert!(simulation.organisms.is_empty());
-        let materials = simulation.environment.field.cells.iter()
+        let materials = simulation
+            .environment
+            .field
+            .cells
+            .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), 8);
         assert!(materials.iter().all(|material| {
             material.material.internal_bonds.len() == 1
-                && material.internal_connections.as_ref().is_some_and(|bonds| bonds.len() == 1)
+                && material
+                    .internal_connections
+                    .as_ref()
+                    .is_some_and(|bonds| bonds.len() == 1)
                 && material.internal_connections.as_ref().unwrap()[0].bond_energy == 0.0
         }));
         assert_eq!(simulation.environment.chemistry_usable_energy, 0.0);
-        assert_eq!(simulation.environment.resonant_energy.total_energy(), Some(0.0));
+        assert_eq!(
+            simulation.environment.resonant_energy.total_energy(),
+            Some(0.0)
+        );
         assert_eq!(simulation.energy_ledger.total_external_energy_input, 0.0);
         assert!(simulation.energy_inventory_snapshot().is_balanced(1e-9));
     }
