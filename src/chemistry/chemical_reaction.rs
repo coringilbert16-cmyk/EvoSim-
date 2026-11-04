@@ -802,6 +802,8 @@ pub(crate) fn schedule_environmental_operations(
 fn environmental_material_location(
     environment: &crate::state::Environment,
     source_material: &crate::physical_material::PhysicalMaterial,
+    fallback_cell_index: usize,
+    fallback_material_index: usize,
 ) -> Option<(usize, usize)> {
     // Zero is reserved for legacy/unassigned materials. Preserve the captured
     // index fallback for those snapshots; assigned materials resolve by identity.
@@ -809,20 +811,9 @@ fn environmental_material_location(
         return environment
             .field
             .cells
-            .get(0)
-            .and_then(|_| {
-                environment
-                    .field
-                    .cells
-                    .iter()
-                    .enumerate()
-                    .find_map(|(cell_index, cell)| {
-                        cell.physical_materials
-                            .iter()
-                            .position(|material| material == source_material)
-                            .map(|material_index| (cell_index, material_index))
-                    })
-            });
+            .get(fallback_cell_index)
+            .and_then(|cell| cell.physical_materials.get(fallback_material_index))
+            .map(|_| (fallback_cell_index, fallback_material_index));
     }
     environment
         .field
@@ -855,7 +846,12 @@ pub(crate) fn resolve_environmental(
         return false;
     }
     let Some((source_cell_index, source_material_index)) =
-        environmental_material_location(environment, &operation.source_material)
+        environmental_material_location(
+            environment,
+            &operation.source_material,
+            operation.cell_index,
+            operation.material_index,
+        )
     else {
         return false;
     };
@@ -1084,7 +1080,7 @@ mod material_identity_tests {
         // the material that originally occupied slot zero.
         simulation.environment.field.cells[0].physical_materials.remove(0);
         assert_eq!(
-            environmental_material_location(&simulation.environment, &queued_source),
+            environmental_material_location(&simulation.environment, &queued_source, 0, 1),
             Some((0, 0)),
         );
         assert_eq!(
