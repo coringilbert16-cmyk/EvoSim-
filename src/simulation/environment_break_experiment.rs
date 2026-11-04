@@ -302,4 +302,5 @@ mod tests {
             Some(0.0)
         );
         assert!(simulation.energy_inventory_snapshot().is_balanced(1e-7));
-    }}
+    }
+}
