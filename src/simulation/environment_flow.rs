@@ -45,7 +45,7 @@ impl Velocity {
 }
 
 const FLOW_BIN_SIZE: f64 = 5.0;
-const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
+const FLOW_RESPONSE_SCALE: f64 = 0.15; // half-speed isolated BREAK validation (baseline: 0.30)
 
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
