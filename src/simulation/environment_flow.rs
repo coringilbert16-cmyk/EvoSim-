@@ -558,6 +558,22 @@ pub(crate) fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
+    transport_field_with_singleton_center_velocity_reuse::<true>(
+        field,
+        catalog,
+        world_width,
+        world_height,
+    )
+}
+
+fn transport_field_with_singleton_center_velocity_reuse<
+    const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+>(
+    field: &mut ActiveMaterialField,
+    catalog: &[BaseResource],
+    world_width: f64,
+    world_height: f64,
+) -> usize {
     #[cfg(test)]
     let transport_started = std::time::Instant::now();
     #[cfg(test)]
@@ -660,7 +676,8 @@ pub(crate) fn transport_field(
             width,
             height,
             nearby,
-            (material.material.parts.len() == 1).then_some(velocity),
+            (REUSE_SINGLETON_CENTER_VELOCITY && material.material.parts.len() == 1)
+                .then_some(velocity),
             source_cell,
             source_index,
         );
@@ -686,10 +703,16 @@ pub(crate) fn transport_field(
     }
     #[cfg(test)]
     let candidate_ms = candidate_started.elapsed().as_secs_f64() * 1_000.0;
+    #[cfg(test)]
+    let benchmark_label = if REUSE_SINGLETON_CENTER_VELOCITY {
+        "EXPERIMENT"
+    } else {
+        "BASELINE"
+    };
     if staged.is_empty() {
         #[cfg(test)]
         println!(
-            "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}",
+            "TRANSPORT {benchmark_label} PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}",
             transport_started.elapsed().as_secs_f64() * 1_000.0
         );
         return 0;
@@ -728,7 +751,7 @@ pub(crate) fn transport_field(
     }
     #[cfg(test)]
     println!(
-        "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}",
+        "TRANSPORT {benchmark_label} PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}",
         commit_started.elapsed().as_secs_f64() * 1_000.0,
         transport_started.elapsed().as_secs_f64() * 1_000.0
     );
@@ -1177,18 +1200,23 @@ mod tests {
         transport_molecular_candidate_evaluation_benchmark();
     }
 
-    /// Manual, same-seed candidate-evaluation benchmark. Run with:
-    /// cargo test --locked
-    /// transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
+    /// Paired same-process comparison of the original and optimized transport paths.
+    /// Run with: cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
     #[test]
-    #[ignore = "manual transport experiment timing; run with --ignored --nocapture"]
+    #[ignore = "manual paired transport experiment; invoked by the CI benchmark hook"]
     fn transport_molecular_candidate_evaluation_benchmark() {
-        use std::time::Instant;
+        use std::time::{Duration, Instant};
 
         const SEED: u64 = 42;
         const SAMPLES: usize = 5;
 
-        let run_once = || {
+        fn run_once<const REUSE: bool>() -> (
+            Duration,
+            usize,
+            usize,
+            usize,
+            Vec<PhysicalMaterial>,
+        ) {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let catalog = fixture.simulation.environment.catalog.clone();
             let field = &mut fixture.simulation.environment.field;
@@ -1204,34 +1232,86 @@ mod tests {
                 .map(|material| material.material.parts.len())
                 .sum::<usize>();
             let started = Instant::now();
-            let moved = transport_field(field, &catalog, 250.0, 250.0);
-            (started.elapsed(), moved, object_count, constituent_count)
-        };
+            let moved = transport_field_with_singleton_center_velocity_reuse::<REUSE>(
+                field,
+                &catalog,
+                250.0,
+                250.0,
+            );
+            let elapsed = started.elapsed();
+            let mut final_state = field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter().cloned())
+                .collect::<Vec<_>>();
+            final_state.sort_unstable_by_key(|material| material.environmental_identity);
+            (
+                elapsed,
+                moved,
+                object_count,
+                constituent_count,
+                final_state,
+            )
+        }
 
-        let warmup = run_once();
-        assert_eq!(warmup.2, 1_280);
-        assert_eq!(warmup.3, 1_360);
-        println!(
-            "TRANSPORT EXPERIMENT WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
-            warmup.2, warmup.3, warmup.1, warmup.0.as_secs_f64() * 1_000.0
-        );
-
-        let mut elapsed_ms = Vec::with_capacity(SAMPLES);
-        for sample in 0..SAMPLES {
-            let (elapsed, moved, objects, constituents) = run_once();
-            assert_eq!(objects, 1_280);
-            assert_eq!(constituents, 1_360);
-            elapsed_ms.push(elapsed.as_secs_f64() * 1_000.0);
+        let baseline_warmup = run_once::<false>();
+        let experiment_warmup = run_once::<true>();
+        for (warmup, label) in [
+            (&baseline_warmup, "BASELINE"),
+            (&experiment_warmup, "EXPERIMENT"),
+        ] {
+            assert_eq!(warmup.2, 1_280);
+            assert_eq!(warmup.3, 1_360);
+            assert_eq!(warmup.1, 1_280);
             println!(
-                "TRANSPORT EXPERIMENT SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
-                sample + 1,
-                elapsed_ms[sample]
+                "TRANSPORT {label} WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
+                warmup.2,
+                warmup.3,
+                warmup.1,
+                warmup.0.as_secs_f64() * 1_000.0
             );
         }
-        elapsed_ms.sort_by(f64::total_cmp);
+        assert_eq!(
+            baseline_warmup.4, experiment_warmup.4,
+            "baseline and optimized warm-ups must produce identical physical states"
+        );
+
+        let mut baseline_ms = Vec::with_capacity(SAMPLES);
+        let mut experiment_ms = Vec::with_capacity(SAMPLES);
+        for sample in 0..SAMPLES {
+            let (baseline, experiment) = if sample % 2 == 0 {
+                (run_once::<false>(), run_once::<true>())
+            } else {
+                let experiment = run_once::<true>();
+                let baseline = run_once::<false>();
+                (baseline, experiment)
+            };
+            for (result, label) in [(&baseline, "BASELINE"), (&experiment, "EXPERIMENT")] {
+                assert_eq!(result.2, 1_280);
+                assert_eq!(result.3, 1_360);
+                assert_eq!(result.1, 1_280);
+                println!(
+                    "TRANSPORT {label} SAMPLE: sample={} seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
+                    sample + 1,
+                    result.2,
+                    result.3,
+                    result.1,
+                    result.0.as_secs_f64() * 1_000.0
+                );
+            }
+            assert_eq!(baseline.1, experiment.1);
+            assert_eq!(baseline.4, experiment.4, "paired runs must produce identical physical states");
+            baseline_ms.push(baseline.0.as_secs_f64() * 1_000.0);
+            experiment_ms.push(experiment.0.as_secs_f64() * 1_000.0);
+        }
+
+        baseline_ms.sort_by(f64::total_cmp);
+        experiment_ms.sort_by(f64::total_cmp);
+        let baseline_median = baseline_ms[SAMPLES / 2];
+        let experiment_median = experiment_ms[SAMPLES / 2];
+        let improvement = (baseline_median - experiment_median) / baseline_median * 100.0;
         println!(
-            "TRANSPORT EXPERIMENT SUMMARY: seed={SEED} samples={SAMPLES} min_ms={:.3} median_ms={:.3} max_ms={:.3}",
-            elapsed_ms[0], elapsed_ms[SAMPLES / 2], elapsed_ms[SAMPLES - 1]
+            "TRANSPORT PAIRED SUMMARY: seed={SEED} samples={SAMPLES} baseline_median_ms={baseline_median:.3} experiment_median_ms={experiment_median:.3} improvement_pct={improvement:.2}"
         );
     }
 }
