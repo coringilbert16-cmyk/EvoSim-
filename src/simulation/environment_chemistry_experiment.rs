@@ -22,7 +22,6 @@ pub(crate) fn seed_randomized_resources(
     seed: u64,
     width: f64,
     height: f64,
-    include_molecules: bool,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -36,16 +35,88 @@ pub(crate) fn seed_randomized_resources(
     );
 
     let mut identities = resource_names.clone();
-    let single_resource_count = if include_molecules {
-        ENVIRONMENT_SINGLE_RESOURCE_COUNT
-    } else {
-        ENVIRONMENT_OBJECT_COUNT
-    };
-    let molecule_count = if include_molecules {
-        ENVIRONMENT_MOLECULE_COUNT
-    } else {
-        0
-    };
+    while identities.len() < ENVIRONMENT_RESOURCE_COUNT {
+        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+    }
+    identities.shuffle(&mut rng);
+
+    let pile_count = rng.gen_range(3..=10);
+    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_RESOURCE_COUNT).collect();
+    cuts.shuffle(&mut rng);
+    cuts.truncate(pile_count - 1);
+    cuts.sort_unstable();
+    let mut previous = 0;
+    let mut pile_sizes = Vec::with_capacity(pile_count);
+    for cut in cuts
+        .into_iter()
+        .chain(std::iter::once(ENVIRONMENT_RESOURCE_COUNT))
+    {
+        pile_sizes.push(cut - previous);
+        previous = cut;
+    }
+
+    let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
+        .expect("the configured world must support the right-bend hotspot");
+    let centers = randomized_pile_centers(
+        &pile_sizes,
+        hotspot.center_x,
+        hotspot.center_y,
+        width,
+        height,
+        &mut rng,
+    );
+    let mut identity_index = 0;
+    for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
+        let (center_x, center_y) = centers[pile_index];
+        let columns = (pile_size as f64).sqrt().ceil() as usize;
+        let rows = pile_size.div_ceil(columns);
+        for local_index in 0..pile_size {
+            let column = local_index % columns;
+            let row = local_index / columns;
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+                .clamp(1.0, width - 1.0);
+            let y =
+                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+            let placement = Placement {
+                x,
+                y,
+                rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+            };
+            let material = Material::free_base(&identities[identity_index], 1.0);
+            identity_index += 1;
+            let physical = PhysicalMaterial::realized(material, vec![placement], catalog)
+                .expect("canonical base resources must have valid physical geometry");
+            assert!(
+                field.deposit_physical(x, y, physical, catalog),
+                "randomized pile {pile_index} resource {local_index} must remain in bounds"
+            );
+        }
+    }
+    assert_eq!(identity_index, ENVIRONMENT_RESOURCE_COUNT);
+    pile_sizes
+}
+
+fn seed_randomized_molecular_resources(
+    field: &mut ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+    seed: u64,
+    width: f64,
+    height: f64,
+) -> Vec<usize> {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let resource_names = catalog
+        .iter()
+        .map(|resource| resource.name.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        resource_names.len(),
+        7,
+        "the environment requires seven canonical base resources"
+    );
+
+    let mut identities = resource_names.clone();
+    let single_resource_count = ENVIRONMENT_SINGLE_RESOURCE_COUNT;
+    let molecule_count = ENVIRONMENT_MOLECULE_COUNT;
     while identities.len() < single_resource_count {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
@@ -55,13 +126,10 @@ pub(crate) fn seed_randomized_resources(
         .map(|name| (vec![name], false))
         .collect();
     for _ in 0..molecule_count / 2 {
-        let hydrogen_sulfur = (vec!["Hydrogen".into(), "Sulfur".into()], true);
-        let carbon_hydrogen = (vec!["Carbon".into(), "Hydrogen".into()], true);
-        let hs_index = rng.gen_range(0..=objects.len());
-        objects.insert(hs_index, hydrogen_sulfur);
-        let ch_index = rng.gen_range(0..=objects.len());
-        objects.insert(ch_index, carbon_hydrogen);
+        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
+        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
     }
+    objects.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
     let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
@@ -97,11 +165,7 @@ pub(crate) fn seed_randomized_resources(
             let column = local_index % columns;
             let row = local_index / columns;
             let (parts, is_molecule) = &objects[object_index];
-            let max_x = if *is_molecule {
-                width - 2.8
-            } else {
-                width - 1.0
-            };
+            let max_x = width - 2.8;
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
                 .clamp(1.0, max_x);
             let y =
@@ -168,13 +232,12 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     );
     let catalog = simulation.environment.catalog.clone();
 
-    let pile_sizes = seed_randomized_resources(
+    let pile_sizes = seed_randomized_molecular_resources(
         &mut simulation.environment.field,
         &catalog,
         seed,
         simulation.environment.width,
         simulation.environment.height,
-        true,
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
