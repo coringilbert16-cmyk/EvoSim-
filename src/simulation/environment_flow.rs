@@ -50,6 +50,8 @@ const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TransportWorkspace {
     obstacle_bins: Vec<Vec<Obstacle>>,
+    #[cfg(test)]
+    obstacle_bin_build_duration: std::time::Duration,
 }
 
 impl TransportWorkspace {
@@ -59,6 +61,11 @@ impl TransportWorkspace {
             bin.clear();
         }
         &mut self.obstacle_bins
+    }
+
+    #[cfg(test)]
+    fn obstacle_bin_build_duration(&self) -> std::time::Duration {
+        self.obstacle_bin_build_duration
     }
 }
 
@@ -627,6 +634,8 @@ pub(crate) fn transport_field_with_reuse<
         .collect();
     let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+    #[cfg(test)]
+    let bin_build_started = std::time::Instant::now();
     let mut fresh_obstacle_bins = Vec::new();
     let obstacle_bins = if REUSE_OBSTACLE_BIN_BUFFERS {
         workspace.obstacle_bins_mut(flow_cols * flow_rows)
@@ -658,6 +667,10 @@ pub(crate) fn transport_field_with_reuse<
                 obstacle_bins[row * flow_cols + col].push(obstacle);
             }
         }
+    }
+    #[cfg(test)]
+    {
+        workspace.obstacle_bin_build_duration += bin_build_started.elapsed();
     }
     let mut staged = Vec::new();
 
@@ -1170,6 +1183,25 @@ mod tests {
     }
 
     #[test]
+    fn obstacle_bin_workspace_clears_membership_without_dropping_capacity() {
+        let mut workspace = TransportWorkspace::default();
+        let bins = workspace.obstacle_bins_mut(2);
+        bins[0].push(Obstacle {
+            source_cell: 1,
+            source_index: 2,
+            x: 3.0,
+            y: 4.0,
+            radius: 5.0,
+            solidity: 1.0,
+        });
+        let capacity = bins[0].capacity();
+        let bins = workspace.obstacle_bins_mut(2);
+        assert!(bins[0].is_empty(), "no obstacle from an earlier tick may survive");
+        assert!(bins[0].capacity() >= capacity, "clearing must retain allocation");
+        assert_eq!(bins.len(), 2);
+    }
+
+    #[test]
     fn dense_obstacle_shelters_its_downstream_wake() {
         let obstacle = Obstacle {
             source_cell: 9,
@@ -1211,6 +1243,8 @@ mod tests {
             start_constituents: usize,
             end_objects: usize,
             end_constituents: usize,
+            end_inventory: Vec<(String, f64)>,
+            obstacle_bin_build_duration: Duration,
             initial_state: Vec<PhysicalMaterial>,
         }
 
@@ -1266,10 +1300,15 @@ mod tests {
                 .flat_map(|cell| cell.physical_materials.iter())
                 .map(|material| material.material.parts.len())
                 .sum::<usize>();
+            let mut end_inventory = simulation.environment.field.total_material();
+            end_inventory.sort_by(|a, b| a.0.cmp(&b.0));
+            let obstacle_bin_build_duration =
+                simulation.transport_workspace.obstacle_bin_build_duration();
             let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
             println!(
-                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
+                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents} obstacle_bin_build_seconds={:.6}",
                 elapsed.as_secs_f64(),
+                obstacle_bin_build_duration.as_secs_f64(),
             );
             RunResult {
                 ticks,
@@ -1278,6 +1317,8 @@ mod tests {
                 start_constituents,
                 end_objects,
                 end_constituents,
+                end_inventory,
+                obstacle_bin_build_duration,
                 initial_state,
             }
         }
@@ -1288,15 +1329,20 @@ mod tests {
         assert_eq!(baseline.start_objects, experiment.start_objects);
         assert_eq!(baseline.start_constituents, experiment.start_constituents);
         assert_eq!(baseline.initial_state, experiment.initial_state);
+        assert_eq!(baseline.end_objects, experiment.end_objects);
+        assert_eq!(baseline.end_constituents, experiment.end_constituents);
+        assert_eq!(baseline.end_inventory, experiment.end_inventory);
 
         let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
         let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
         let improvement = (experiment_rate - baseline_rate) / baseline_rate * 100.0;
         println!(
-            "TRANSPORT 60S PAIRED SUMMARY: seed={SEED} baseline_ticks={} experiment_ticks={} baseline_ticks_per_second={baseline_rate:.2} experiment_ticks_per_second={experiment_rate:.2} throughput_improvement_pct={improvement:.2} baseline_end_objects={} experiment_end_objects={} baseline_end_constituents={} experiment_end_constituents={}",
+            "TRANSPORT 60S PAIRED SUMMARY: seed={SEED} baseline_ticks={} experiment_ticks={} baseline_ticks_per_second={baseline_rate:.2} experiment_ticks_per_second={experiment_rate:.2} throughput_improvement_pct={improvement:.2} baseline_end_objects={} experiment_end_objects={} baseline_end_constituents={} experiment_end_constituents={} baseline_bin_build_seconds={:.6} experiment_bin_build_seconds={:.6}",
             baseline.ticks, experiment.ticks,
             baseline.end_objects, experiment.end_objects,
             baseline.end_constituents, experiment.end_constituents,
+            baseline.obstacle_bin_build_duration.as_secs_f64(),
+            experiment.obstacle_bin_build_duration.as_secs_f64(),
         );
     }
 }
