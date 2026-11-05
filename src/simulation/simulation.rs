@@ -744,10 +744,13 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
-        self.step_with_transport_reuse::<true>();
+        self.step_with_transport_reuse::<true, false>();
     }
 
-    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
+    pub(crate) fn step_with_transport_reuse<
+        const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+        const COMBINE_TRANSFORMS: bool,
+    >(
         &mut self,
     ) {
         self.environmental_chemistry_diagnostics =
@@ -841,6 +844,7 @@ impl Simulation {
         // rules are not relaxed to guarantee any particular reaction.
         crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
             REUSE_SINGLETON_CENTER_VELOCITY,
+            COMBINE_TRANSFORMS,
         >(
             &mut self.environment.field,
             &self.environment.catalog,
