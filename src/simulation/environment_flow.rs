@@ -773,7 +773,6 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
 mod tests {
     use super::*;
 
-
     /// One-minute diagnostic profile of the unchanged transport algorithm.
     /// Stage timers are test-only and deliberately excluded from production builds.
     #[test]
@@ -852,7 +851,10 @@ mod tests {
             ticks as f64 / elapsed.as_secs_f64(),
             total_profiled as f64 / 1_000_000.0,
         );
-        assert_eq!(end_objects, start_objects, "transport must conserve object count");
+        assert_eq!(
+            end_objects, start_objects,
+            "transport must conserve object count"
+        );
         assert_eq!(
             end_constituents, start_constituents,
             "transport must conserve constituents"
