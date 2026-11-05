@@ -524,6 +524,80 @@ mod tests {
     }
 
     #[test]
+    fn committed_trial_updates_graph_energy_and_products_together() {
+        let catalog = default_catalog();
+        let (mut source, old_bond, candidate, investment) =
+            three_participant_fixture(&catalog);
+        let mut ledger = crate::state::EnergyLedger::default();
+        let mut usable_energy = 0.0;
+        let trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("valid displacement trial");
+
+        let products = commit_displacement_trial(
+            &mut source,
+            trial,
+            &mut ledger,
+            &mut usable_energy,
+        )
+        .expect("favorable trial should commit atomically");
+
+        assert_eq!(source.bonds.len(), 1);
+        assert_eq!(products.len(), 2);
+        assert!(usable_energy.is_finite() && usable_energy > 0.0);
+        assert_eq!(ledger.total_structural_energy_held, -source.bonds[0].bond_energy);
+    }
+
+    #[test]
+    fn stale_trial_cannot_commit_or_change_energy_holders() {
+        let catalog = default_catalog();
+        let (mut source, old_bond, candidate, investment) =
+            three_participant_fixture(&catalog);
+        let trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("valid displacement trial");
+        source.units[0].placement.x += 0.01;
+        let graph_before = source.clone();
+        let mut ledger = crate::state::EnergyLedger::default();
+        let ledger_before = ledger;
+        let mut usable_energy = 0.0;
+
+        assert!(commit_displacement_trial(
+            &mut source,
+            trial,
+            &mut ledger,
+            &mut usable_energy,
+        )
+        .is_none());
+        assert_eq!(source.units, graph_before.units);
+        assert_eq!(source.bonds, graph_before.bonds);
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(usable_energy, 0.0);
+    }
+
+    #[test]
     fn trial_replacement_rejects_insufficient_incoming_activation_without_mutation() {
         let catalog = default_catalog();
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
