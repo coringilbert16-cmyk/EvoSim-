@@ -1221,7 +1221,8 @@ mod tests {
     }
 
     /// Manual, same-seed candidate-evaluation benchmark. Run with:
-    /// cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
+    /// cargo test --locked
+    /// transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
     #[test]
     #[ignore = "manual transport experiment timing; run with --ignored --nocapture"]
     fn transport_molecular_candidate_evaluation_benchmark() {
