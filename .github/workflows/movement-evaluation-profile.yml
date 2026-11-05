@@ -1,0 +1,22 @@
+name: Movement evaluation profiling
+
+on:
+  pull_request:
+    paths:
+      - 'src/simulation/environment_flow.rs'
+      - '.github/workflows/movement-evaluation-profile.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: movement-evaluation-profile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run opt-in movement evaluation profile
+        run: cargo test --locked movement_evaluation_profile_10s -- --ignored --nocapture
