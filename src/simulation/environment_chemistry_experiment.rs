@@ -127,7 +127,7 @@ fn seed_randomized_molecular_resources(
         .into_iter()
         .map(|name| (vec![name], false))
         .collect();
-    for _ in 0..molecule_count / 2 {
+    for _ in 0..(molecule_count / 2) {
         objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
         objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
     }
