@@ -41,7 +41,7 @@ pub(crate) fn seed_randomized_resources(
     identities.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
+    let mut cuts: Vec<usize> = (1_usize..object_count).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
@@ -49,7 +49,7 @@ pub(crate) fn seed_randomized_resources(
     let mut pile_sizes = Vec::with_capacity(pile_count);
     for cut in cuts
         .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+        .chain(std::iter::once(object_count))
     {
         pile_sizes.push(cut - previous);
         previous = cut;
@@ -104,7 +104,7 @@ fn seed_randomized_molecular_resources(
     seed: u64,
     width: f64,
     height: f64,
-    include_molecules: bool,
+    object_count: usize,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -118,16 +118,9 @@ fn seed_randomized_molecular_resources(
     );
 
     let mut identities = resource_names.clone();
-    let single_resource_count = if include_molecules {
-        ENVIRONMENT_SINGLE_RESOURCE_COUNT
-    } else {
-        ENVIRONMENT_OBJECT_COUNT
-    };
-    let molecule_count = if include_molecules {
-        ENVIRONMENT_MOLECULE_COUNT
-    } else {
-        0
-    };
+    assert!(object_count >= resource_names.len());
+    let molecule_count = object_count / 16;
+    let single_resource_count = object_count - molecule_count;
     while identities.len() < single_resource_count {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
@@ -143,7 +136,7 @@ fn seed_randomized_molecular_resources(
     objects.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
+    let mut cuts: Vec<usize> = (1_usize..object_count).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
@@ -151,7 +144,7 @@ fn seed_randomized_molecular_resources(
     let mut pile_sizes = Vec::with_capacity(pile_count);
     for cut in cuts
         .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+        .chain(std::iter::once(object_count))
     {
         pile_sizes.push(cut - previous);
         previous = cut;
@@ -218,7 +211,7 @@ fn seed_randomized_molecular_resources(
             );
         }
     }
-    assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(object_index, object_count);
     pile_sizes
 }
 pub(crate) struct EnvironmentalChemistryFixture {
@@ -227,6 +220,13 @@ pub(crate) struct EnvironmentalChemistryFixture {
 }
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
+    build_with_object_count(seed, ENVIRONMENT_OBJECT_COUNT)
+}
+
+pub(crate) fn build_with_object_count(
+    seed: u64,
+    object_count: usize,
+) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
     simulation.organisms.clear();
     simulation.active_transformations.clear();
@@ -247,7 +247,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         seed,
         simulation.environment.width,
         simulation.environment.height,
-        true,
+        object_count,
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
