@@ -1409,6 +1409,18 @@ mod tests {
         }
         let angular_elapsed = angular_started.elapsed();
 
+        let mut lookup_evaluations = 0_u64;
+        let lookup_started = Instant::now();
+        while lookup_started.elapsed() < PHASE_DURATION {
+            for (_, _, material) in &snapshot {
+                for (name, _) in &material.material.parts {
+                    black_box(resource_for_part(name, &catalog));
+                    lookup_evaluations += 1;
+                }
+            }
+        }
+        let lookup_elapsed = lookup_started.elapsed();
+
         let mut transform_evaluations = 0_u64;
         let mut transformed_placements = 0_u64;
         let transform_started = Instant::now();
@@ -1448,14 +1460,21 @@ mod tests {
                 / velocity_evaluations.max(1) as f64,
         );
         println!(
-            "MOVEMENT PROFILE ANGULAR: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} constituents_processed={} estimated_catalog_lookup_sites={} average_us_per_evaluation={:.3}",
+            "MOVEMENT PROFILE ANGULAR: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} constituents_processed={} average_us_per_evaluation={:.3}",
             angular_elapsed.as_secs_f64(),
             angular_evaluations,
             angular_evaluations as f64 / angular_elapsed.as_secs_f64(),
             angular_constituents,
-            angular_constituents * 2,
             angular_elapsed.as_secs_f64() * 1_000_000.0
                 / angular_evaluations.max(1) as f64,
+        );
+        println!(
+            "MOVEMENT PROFILE CATALOG LOOKUP: elapsed_s={:.3} lookups={} lookups_per_second={:.1} average_ns_per_lookup={:.1}",
+            lookup_elapsed.as_secs_f64(),
+            lookup_evaluations,
+            lookup_evaluations as f64 / lookup_elapsed.as_secs_f64(),
+            lookup_elapsed.as_secs_f64() * 1_000_000_000.0
+                / lookup_evaluations.max(1) as f64,
         );
         println!(
             "MOVEMENT PROFILE TRANSFORM: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} placements_processed={} average_us_per_evaluation={:.3}",
