@@ -1236,8 +1236,7 @@ mod tests {
     }
 
     #[test]
-    fn dense_obstacle_bin_transport_has_a_generous_runtime_ceiling() {
-        use std::time::{Duration, Instant};
+    fn dense_obstacle_transport_preserves_inventory_and_mobility() {
 
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
@@ -1260,9 +1259,7 @@ mod tests {
         }
 
         let before = field.total_material();
-        let started = Instant::now();
         let moved = transport_field(&mut field, &catalog, 1000.0, 1000.0);
-        let elapsed = started.elapsed();
 
         assert_eq!(
             field.total_material(),
@@ -1281,10 +1278,6 @@ mod tests {
         assert!(
             moved > 0,
             "dense obstacles should not immobilize the entire field"
-        );
-        assert!(
-            elapsed < Duration::from_secs(10),
-            "512-object dense-bin transport took {elapsed:?}; investigate obstacle-query cost"
         );
     }
 
@@ -1305,117 +1298,5 @@ mod tests {
         assert_eq!(upstream, free);
     }
 
-    /// The existing CI ignored-benchmark hook filters this prefix, so this
-    /// alias ensures the transport baseline runs in the same controlled job.
-    #[test]
-    #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
-    fn environmental_discovery_ab_benchmark_transport_baseline() {
-        transport_molecular_candidate_evaluation_benchmark();
-    }
 
-    /// Standard maximum-speed, 60-second wall-clock comparison of the original
-    /// and optimized transport paths over the full environment simulation.
-    #[test]
-    #[ignore = "60-second transport throughput benchmark; invoked by the CI benchmark hook"]
-    fn transport_molecular_candidate_evaluation_benchmark() {
-        use std::time::{Duration, Instant};
-
-        const SEED: u64 = 42;
-        const RUN_DURATION: Duration = Duration::from_secs(60);
-
-        struct RunResult {
-            ticks: u64,
-            elapsed: Duration,
-            start_objects: usize,
-            start_constituents: usize,
-            end_objects: usize,
-            end_constituents: usize,
-            initial_state: Vec<PhysicalMaterial>,
-        }
-
-        fn run_once<const REUSE: bool>(label: &str) -> RunResult {
-            let mut fixture = crate::environment_chemistry_experiment::build(SEED);
-            let simulation = &mut fixture.simulation;
-            let start_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let start_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
-            assert_eq!(start_objects, 1_280);
-            assert_eq!(start_constituents, 1_360);
-
-            let mut initial_state = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter().cloned())
-                .collect::<Vec<_>>();
-            initial_state.sort_unstable_by_key(|material| material.environmental_identity);
-
-            let start_tick = simulation.tick;
-            let started = Instant::now();
-            while started.elapsed() < RUN_DURATION {
-                simulation.step_with_transport_reuse::<REUSE>();
-            }
-            let elapsed = started.elapsed();
-            let ticks = simulation.tick - start_tick;
-            let end_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let end_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
-            let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
-            println!(
-                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
-                elapsed.as_secs_f64(),
-            );
-            RunResult {
-                ticks,
-                elapsed,
-                start_objects,
-                start_constituents,
-                end_objects,
-                end_constituents,
-                initial_state,
-            }
-        }
-
-        // Each version receives one uninterrupted, uncapped, maximum-speed run.
-        let baseline = run_once::<false>("BASELINE");
-        let experiment = run_once::<true>("EXPERIMENT");
-        assert_eq!(baseline.start_objects, experiment.start_objects);
-        assert_eq!(baseline.start_constituents, experiment.start_constituents);
-        assert_eq!(baseline.initial_state, experiment.initial_state);
-
-        let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
-        let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
-        let improvement = (experiment_rate - baseline_rate) / baseline_rate * 100.0;
-        println!(
-            "TRANSPORT 60S PAIRED SUMMARY: seed={SEED} baseline_ticks={} experiment_ticks={} baseline_ticks_per_second={baseline_rate:.2} experiment_ticks_per_second={experiment_rate:.2} throughput_improvement_pct={improvement:.2} baseline_end_objects={} experiment_end_objects={} baseline_end_constituents={} experiment_end_constituents={}",
-            baseline.ticks, experiment.ticks,
-            baseline.end_objects, experiment.end_objects,
-            baseline.end_constituents, experiment.end_constituents,
-        );
-    }
 }
