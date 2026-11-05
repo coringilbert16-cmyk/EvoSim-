@@ -201,6 +201,23 @@ jobs:
           run_check cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
+      - name: Run standard 60-second environmental displacement observation
+        timeout-minutes: 10
+        run: |
+          cargo run --locked -- \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics environmental-displacement-60s.jsonl \
+            --diagnostic-interval 100
+      - name: Upload environmental displacement diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-displacement-60s
+          path: environmental-displacement-60s.jsonl
+          if-no-files-found: warn
+          retention-days: 14
       - name: Run Rust tests
         if: always()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
