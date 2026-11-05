@@ -552,20 +552,6 @@ fn rotated(
 /// Advance the field by one small deterministic transport slice. All candidate
 /// destinations are computed from a snapshot, then committed together so
 /// iteration order cannot change which current an object samples.
-pub(crate) fn transport_field(
-    field: &mut ActiveMaterialField,
-    catalog: &[BaseResource],
-    world_width: f64,
-    world_height: f64,
-) -> usize {
-    transport_field_with_singleton_center_velocity_reuse::<true>(
-        field,
-        catalog,
-        world_width,
-        world_height,
-    )
-}
-
 pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     const REUSE_SINGLETON_CENTER_VELOCITY: bool,
 >(
@@ -1239,8 +1225,9 @@ mod tests {
                 .flat_map(|cell| cell.physical_materials.iter())
                 .map(|material| material.material.parts.len())
                 .sum::<usize>();
+            let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
             println!(
-                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
+                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
                 elapsed.as_secs_f64(),
             );
             RunResult {
