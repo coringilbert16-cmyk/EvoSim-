@@ -553,6 +553,10 @@ pub(crate) fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
+    #[cfg(test)]
+    let transport_started = std::time::Instant::now();
+    #[cfg(test)]
+    let snapshot_started = std::time::Instant::now();
     let width = world_width.min(field.width_cells as f64 * field.cell_size);
     let height = world_height.min(field.height_cells as f64 * field.cell_size);
     if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
@@ -574,6 +578,10 @@ pub(crate) fn transport_field(
         }
     }
     field.next_material_identity = next_identity;
+    #[cfg(test)]
+    let snapshot_ms = snapshot_started.elapsed().as_secs_f64() * 1_000.0;
+    #[cfg(test)]
+    let discovery_started = std::time::Instant::now();
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
@@ -611,6 +619,10 @@ pub(crate) fn transport_field(
             }
         }
     }
+    #[cfg(test)]
+    let discovery_ms = discovery_started.elapsed().as_secs_f64() * 1_000.0;
+    #[cfg(test)]
+    let candidate_started = std::time::Instant::now();
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -666,9 +678,15 @@ pub(crate) fn transport_field(
             staged.push((source_cell, source_index, destination_cell, moved));
         }
     }
+    #[cfg(test)]
+    let candidate_ms = candidate_started.elapsed().as_secs_f64() * 1_000.0;
     if staged.is_empty() {
+        #[cfg(test)]
+        println!("TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}", transport_started.elapsed().as_secs_f64() * 1_000.0);
         return 0;
     }
+    #[cfg(test)]
+    let commit_started = std::time::Instant::now();
 
     let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
@@ -699,6 +717,8 @@ pub(crate) fn transport_field(
             field.mark_changed_at_index(index);
         }
     }
+    #[cfg(test)]
+    println!("TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}", commit_started.elapsed().as_secs_f64() * 1_000.0, transport_started.elapsed().as_secs_f64() * 1_000.0);
     moved_count
 }
 
