@@ -197,7 +197,6 @@ fn run_environment_chemistry_experiment(
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
-    let started_at = Instant::now();
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,
         diagnostic_interval,
@@ -220,6 +219,7 @@ fn run_environment_chemistry_experiment(
         simulation.hotspot
     );
 
+    let started_at = Instant::now();
     while duration_seconds.map_or(simulation.tick < max_ticks, |seconds| {
         started_at.elapsed() < Duration::from_secs(seconds)
     }) {
