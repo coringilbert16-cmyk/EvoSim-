@@ -1,10 +1,12 @@
 //! Persistent chemistry knowledge keyed by canonical physical interfaces.
+#[cfg(test)]
 use crate::geometry_reference_library::LiveGeometryInterface;
 #[cfg(test)]
 use crate::geometry_reference_library::{
     GeometryRigidContactFamily, GeometryRigidPointContactFamily,
 };
 use serde::{Deserialize, Serialize};
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
@@ -123,6 +125,7 @@ impl ChemistryKey {
         )
     }
 
+    #[cfg(test)]
     pub fn from_live_geometry(
         a: impl Into<String>,
         b: impl Into<String>,
@@ -143,6 +146,36 @@ impl ChemistryKey {
             material_b,
             interface.interface_class,
             interface.signature.clone(),
+        );
+        key.chemical_position_a = Some(quantize_chemical_position(position_a));
+        key.chemical_position_b = Some(quantize_chemical_position(position_b));
+        key
+    }
+
+    /// Identify an invariant chemical interaction independently of the live
+    /// geometry used to establish physical contact. The library manifest
+    /// fingerprint is embedded in the signature so a changed chemistry
+    /// equation/catalog cannot reuse a previous static-potential entry.
+    fn from_chemical_pair(
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+        equation_fingerprint: &str,
+    ) -> Self {
+        let mut material_a = a.into();
+        let mut material_b = b.into();
+        let (position_a, position_b) = if material_a <= material_b {
+            (chemical_position_a, chemical_position_b)
+        } else {
+            std::mem::swap(&mut material_a, &mut material_b);
+            (chemical_position_b, chemical_position_a)
+        };
+        let mut key = Self::new(
+            material_a,
+            material_b,
+            "static_potential",
+            format!("static-potential-v1|equations={equation_fingerprint}"),
         );
         key.chemical_position_a = Some(quantize_chemical_position(position_a));
         key.chemical_position_b = Some(quantize_chemical_position(position_b));
@@ -239,6 +272,10 @@ pub struct ChemistryLibrary {
     root: PathBuf,
     entries: HashMap<ChemistryKey, ChemistryRecord>,
     manifest: ChemistryLibraryManifest,
+    metrics_enabled: bool,
+    cache_hits: Cell<u64>,
+    cache_misses: Cell<u64>,
+    cache_insertions: Cell<u64>,
 }
 
 impl ChemistryLibrary {
@@ -334,12 +371,46 @@ impl ChemistryLibrary {
             root,
             entries,
             manifest,
+            metrics_enabled: std::env::var("EVOSIM_CHEMISTRY_CACHE_METRICS")
+                .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+                .unwrap_or(false),
+            cache_hits: Cell::new(0),
+            cache_misses: Cell::new(0),
+            cache_insertions: Cell::new(0),
         })
     }
 
     pub fn get(&self, key: &ChemistryKey) -> Option<&ChemistryRecord> {
-        self.entries.get(key)
+        let record = self.entries.get(key);
+        if self.metrics_enabled {
+            let counter = if record.is_some() {
+                &self.cache_hits
+            } else {
+                &self.cache_misses
+            };
+            counter.set(counter.get().saturating_add(1));
+        }
+        record
     }
+
+    /// Build a canonical static-potential key using this store's validated
+    /// equation/catalog fingerprint. Geometry is intentionally excluded.
+    pub fn key_from_chemical_pair(
+        &self,
+        a: impl Into<String>,
+        b: impl Into<String>,
+        chemical_position_a: f64,
+        chemical_position_b: f64,
+    ) -> ChemistryKey {
+        ChemistryKey::from_chemical_pair(
+            a,
+            b,
+            chemical_position_a,
+            chemical_position_b,
+            &self.manifest.equation_fingerprint,
+        )
+    }
+
     pub fn get_or_insert_static_potential(
         &mut self,
         key: ChemistryKey,
@@ -348,15 +419,22 @@ impl ChemistryLibrary {
         if !static_potential.is_finite() || static_potential < 0.0 {
             return Ok(None);
         }
-        if let Some(record) = self.get(&key) {
+        // Runtime callers perform and count the lookup before calculating a
+        // missing potential. Keep this internal check uncounted to avoid
+        // counting the same logical lookup twice.
+        if let Some(record) = self.entries.get(&key) {
             return Ok(Some(record.static_potential));
         }
         let record = ChemistryRecord {
             key: key.clone(),
             static_potential,
         };
-        self.insert(record)?;
-        Ok(self.get(&key).map(|record| record.static_potential))
+        if self.insert(record)? {
+            return Ok(Some(static_potential));
+        }
+        // Another library instance may have inserted the key while this
+        // instance waited for the persistence lock.
+        Ok(self.entries.get(&key).map(|record| record.static_potential))
     }
     #[cfg(test)]
     pub fn len(&self) -> usize {
@@ -399,9 +477,10 @@ impl ChemistryLibrary {
         let _lock = lock_chemistry_store(&self.root)?;
         // Another instance may have changed the store since this instance opened.
         // Refresh under the lock before duplicate detection or manifest counting.
-        let current = Self::open_unlocked(self.root.clone())?;
-        self.entries = current.entries;
-        self.manifest = current.manifest;
+        let mut current = Self::open_unlocked(self.root.clone())?;
+        current.metrics_enabled = false;
+        self.entries = std::mem::take(&mut current.entries);
+        self.manifest = current.manifest.clone();
 
         let key = record.key.clone();
         if self.entries.contains_key(&key) {
@@ -438,6 +517,10 @@ impl ChemistryLibrary {
 
         // Publish the new in-memory state only after both persisted updates succeed.
         self.entries.insert(key, record);
+        if self.metrics_enabled {
+            self.cache_insertions
+                .set(self.cache_insertions.get().saturating_add(1));
+        }
         self.manifest = next_manifest;
         Ok(true)
     }
@@ -523,6 +606,20 @@ fn persist_manifest_atomically(
 
 pub fn open_default_library() -> std::io::Result<ChemistryLibrary> {
     ChemistryLibrary::open("chemistry_library/data")
+}
+
+impl Drop for ChemistryLibrary {
+    fn drop(&mut self) {
+        if self.metrics_enabled {
+            println!(
+                "CHEMISTRY_CACHE_METRICS hits={} misses={} insertions={} entries={}",
+                self.cache_hits.get(),
+                self.cache_misses.get(),
+                self.cache_insertions.get(),
+                self.entries.len(),
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -707,6 +804,62 @@ mod tests {
             reopened.get(&key).map(|record| record.static_potential),
             Some(0.625)
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn static_potential_key_reuses_canonical_pair_across_geometry_variants() {
+        let root = test_root("static-potential-geometry-independent");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+
+        let forward = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        let reversed = library.key_from_chemical_pair("Hydrogen", "Carbon", 5.5, 10.5);
+        assert_eq!(forward, reversed);
+        assert_eq!(forward.interface_class, "static_potential");
+        assert!(forward
+            .interface_signature
+            .contains(&library.manifest.equation_fingerprint));
+        assert_ne!(
+            forward,
+            ChemistryKey::new(
+                "Carbon",
+                "Hydrogen",
+                "rigid_point",
+                "live-v1|Carbon:corner:0|Hydrogen:line:0",
+            ),
+            "static-potential identity must remain separate from live geometry identity"
+        );
+
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(forward.clone(), 0.625)
+                .unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(reversed.clone(), 0.75)
+                .unwrap(),
+            Some(0.625),
+            "reversed material order must reuse the existing static potential"
+        );
+        assert_ne!(
+            forward,
+            library.key_from_chemical_pair("Carbon", "Hydrogen", 10.25, 5.5),
+            "different chemical positions must not share a cache entry"
+        );
+        assert_ne!(
+            forward,
+            library.key_from_chemical_pair("Carbon", "Oxygen", 10.5, 5.5),
+            "different constituent identities must not share a cache entry"
+        );
+        let reopened = ChemistryLibrary::open(&root).unwrap();
+        assert_eq!(
+            reopened.get(&forward).map(|record| record.static_potential),
+            Some(0.625)
+        );
+        assert_eq!(reopened.len(), 1);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -1010,6 +1163,58 @@ mod tests {
             "evosim-chemistry-{label}-{}-{nonce}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn cache_metrics_count_runtime_lookups_and_successful_insertions() {
+        let root = test_root("cache-metrics");
+        let _ = fs::remove_dir_all(&root);
+        let mut library = ChemistryLibrary::open(&root).unwrap();
+        library.metrics_enabled = true;
+
+        let key = library.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(library.get(&key).is_none());
+        assert_eq!(
+            library
+                .get_or_insert_static_potential(key.clone(), 0.625)
+                .unwrap(),
+            Some(0.625)
+        );
+        assert_eq!(
+            library.get(&key).map(|record| record.static_potential),
+            Some(0.625)
+        );
+
+        assert_eq!(library.cache_hits.get(), 1);
+        assert_eq!(library.cache_misses.get(), 1);
+        assert_eq!(library.cache_insertions.get(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cache_metrics_ignore_duplicate_insertions_from_stale_instances() {
+        let root = test_root("cache-metrics-stale-duplicate");
+        let _ = fs::remove_dir_all(&root);
+        let mut writer = ChemistryLibrary::open(&root).unwrap();
+        let mut stale = ChemistryLibrary::open(&root).unwrap();
+        stale.metrics_enabled = true;
+
+        let key = writer.key_from_chemical_pair("Carbon", "Hydrogen", 10.5, 5.5);
+        assert!(writer
+            .insert(ChemistryRecord {
+                key: key.clone(),
+                static_potential: 0.375,
+            })
+            .unwrap());
+
+        assert_eq!(
+            stale.get_or_insert_static_potential(key, 0.875).unwrap(),
+            Some(0.375),
+            "a concurrent persisted value must win over a stale candidate"
+        );
+        assert_eq!(stale.cache_insertions.get(), 0);
+        assert_eq!(stale.len(), 1);
+        let _ = fs::remove_dir_all(root);
     }
 
     fn write_test_store(root: &Path, schema_version: u32, rows: &[String], manifest_entries: u64) {
