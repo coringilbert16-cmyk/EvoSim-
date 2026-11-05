@@ -40,10 +40,12 @@ impl DisplacementPreflight {
             && crate::chemistry::activated(self.incoming_activation, self.disruption_barrier)
     }
 
+    #[cfg(test)]
     pub(crate) fn is_energy_favorable_without_external_input(self) -> bool {
         self.energy.required_external_input <= 1e-12
     }
 
+    #[cfg(test)]
     pub(crate) fn can_commit(self, legitimate_external_input: f64) -> bool {
         self.is_activated() && self.energy.can_commit_with(legitimate_external_input)
     }
@@ -113,11 +115,16 @@ pub(crate) fn accumulate_incoming_activation(
 /// Nothing in this value has been committed to the live environment.
 #[derive(Clone, Debug)]
 pub(crate) struct DisplacementTrial {
+    #[cfg(test)]
     pub(crate) structure: OrganismStructure,
+    #[cfg(test)]
     source_units: Vec<crate::structure::StructuralUnit>,
+    #[cfg(test)]
     source_bonds: Vec<Bond>,
     pub(crate) products: Vec<crate::physical_material::PhysicalMaterial>,
+    #[cfg(test)]
     pub(crate) removed_bond: Bond,
+    #[cfg(test)]
     pub(crate) replacement_bond: Bond,
     pub(crate) energy: ReactionEnergyBalance,
     pub(crate) formation_work: f64,
@@ -248,11 +255,16 @@ pub(crate) fn build_displacement_trial(
     }
 
     Some(DisplacementTrial {
+        #[cfg(test)]
         structure: trial,
+        #[cfg(test)]
         source_units: source.units.clone(),
+        #[cfg(test)]
         source_bonds: source.bonds.clone(),
         products,
+        #[cfg(test)]
         removed_bond: old_bond,
+        #[cfg(test)]
         replacement_bond,
         energy,
         formation_work,
@@ -263,6 +275,7 @@ pub(crate) fn build_displacement_trial(
 /// Commit a previously evaluated trial against the unchanged source graph.
 /// Energy settlement is staged first; the graph, ledger, and usable holder are
 /// updated only after every validation and affordability check succeeds.
+#[cfg(test)]
 pub(crate) fn commit_displacement_trial(
     source: &mut OrganismStructure,
     trial: DisplacementTrial,
@@ -732,7 +745,7 @@ pub(crate) fn accumulate_environmental(
                                     &combined,
                                     anchor_unit,
                                     incoming_unit,
-                                    old_bond.clone(),
+                                    old_bond,
                                     freed_endpoint,
                                     &environment.catalog,
                                 ) else {
