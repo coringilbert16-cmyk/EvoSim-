@@ -236,6 +236,62 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
+#[derive(Clone, Copy, Debug)]
+struct AngularVelocitySample {
+    mass: f64,
+    rx: f64,
+    ry: f64,
+    x: f64,
+    y: f64,
+    velocity: Velocity,
+}
+
+/// Evaluate all constituent samples together. Each obstacle's invariant
+/// influence radii and eligibility are computed once, while every sample still
+/// receives obstacles in the same order and with the same equations as the
+/// scalar path.
+fn obstacle_adjust_angular_samples(
+    samples: &mut [AngularVelocitySample],
+    source_cell: usize,
+    source_index: usize,
+    obstacles: &[Obstacle],
+    height: f64,
+) {
+    for obstacle in obstacles {
+        if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
+            continue;
+        }
+        if obstacle.solidity <= 1e-6 {
+            continue;
+        }
+        let radius = obstacle.radius.max(0.5);
+        let influence_radius = radius * 2.5;
+        let wake_length = radius * 6.0;
+        let wake_half_width = radius * 2.0;
+        for sample in samples.iter_mut() {
+            let dx = sample.x - obstacle.x;
+            let dy = (sample.y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+            let distance = dx.hypot(dy).max(1e-9);
+            if distance < influence_radius {
+                let influence =
+                    obstacle.solidity * (1.0 - distance / influence_radius).powi(2);
+                let side = if dy >= 0.0 { 1.0 } else { -1.0 };
+                sample.velocity = sample.velocity.add(Velocity {
+                    x: -dx.signum() * influence * 0.22,
+                    y: side * influence * 0.65,
+                });
+            }
+            if dx > 0.0 && dx < wake_length && dy.abs() < wake_half_width {
+                let longitudinal = 1.0 - dx / wake_length;
+                let lateral = 1.0 - dy.abs() / wake_half_width;
+                let attenuation =
+                    (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                sample.velocity = sample.velocity.scale(1.0 - attenuation);
+            }
+        }
+    }
+}
+
 fn clamp_horizontal_displacement(
     material: &PhysicalMaterial,
     requested_dx: f64,
@@ -352,6 +408,7 @@ fn angular_displacement(
     });
     let mut torque = 0.0;
     let mut moment = 0.0;
+    let mut samples = Vec::with_capacity(placements.len());
     for (index, placement) in placements.iter().enumerate() {
         let Some((name, amount)) = material.material.parts.get(index) else {
             continue;
@@ -373,21 +430,30 @@ fn angular_displacement(
             .map(|shape| &shape.form)
             .unwrap_or(&resource.shape.form);
         moment += part_mass * radius_sq + intrinsic_moment_of_inertia(form, part_mass);
-        if radius_sq <= f64::EPSILON {
-            continue;
+        if radius_sq > f64::EPSILON {
+            samples.push(AngularVelocitySample {
+                mass: part_mass,
+                rx,
+                ry,
+                x: placement.x,
+                y: placement.y,
+                velocity: background_velocity(placement.x, placement.y, width, height),
+            });
         }
-        let local_velocity = obstacle_adjusted_velocity(
-            background_velocity(placement.x, placement.y, width, height),
-            placement.x,
-            placement.y,
+    }
+    if placements.len() > 1 {
+        obstacle_adjust_angular_samples(
+            &mut samples,
             source_cell,
             source_index,
             obstacles,
             height,
         );
-        torque += part_mass
-            * (rx * (local_velocity.y - center_velocity.y)
-                - ry * (local_velocity.x - center_velocity.x));
+        for sample in samples {
+            torque += sample.mass
+                * (sample.rx * (sample.velocity.y - center_velocity.y)
+                    - sample.ry * (sample.velocity.x - center_velocity.x));
+        }
     }
 
     let response = if placements.len() > 1 && moment > f64::EPSILON {
@@ -730,6 +796,82 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn batched_angular_obstacle_evaluation_matches_scalar_samples() {
+        let obstacles = vec![
+            Obstacle { source_cell: 0, source_index: 0, x: 12.0, y: 18.0, radius: 2.0, solidity: 0.8 },
+            Obstacle { source_cell: 1, source_index: 2, x: 16.0, y: 20.0, radius: 3.5, solidity: 0.4 },
+            Obstacle { source_cell: 2, source_index: 1, x: 8.0, y: 22.0, radius: 1.0, solidity: 0.0 },
+        ];
+        let points = [(10.0, 18.0), (17.0, 20.0), (24.0, 18.0), (12.0, 29.0)];
+        let mut samples = points.iter().map(|(x, y)| AngularVelocitySample {
+            mass: 1.0,
+            rx: 0.0,
+            ry: 0.0,
+            x: *x,
+            y: *y,
+            velocity: background_velocity(*x, *y, 100.0, 80.0),
+        }).collect::<Vec<_>>();
+        obstacle_adjust_angular_samples(&mut samples, 9, 9, &obstacles, 80.0);
+        for (sample, (x, y)) in samples.iter().zip(points) {
+            let expected = obstacle_adjusted_velocity(
+                background_velocity(x, y, 100.0, 80.0),
+                x, y, 9, 9, &obstacles, 80.0,
+            );
+            assert_eq!(sample.velocity, expected, "batched result differed at ({x}, {y})");
+        }
+    }
+
+    /// Candidate-only throughput check. The reference rate is the stored
+    /// 30-second, 1,280-object baseline from PR #305; this test does not rerun it.
+    #[test]
+    #[ignore = "30-second candidate-only transport benchmark; invoked by the focused CI workflow"]
+    fn transport_compound_angular_batch_candidate_30s() {
+        use std::time::{Duration, Instant};
+
+        const SEED: u64 = 42;
+        const RUN_DURATION: Duration = Duration::from_secs(30);
+        const STORED_BASELINE_TICKS_PER_SECOND: f64 = 19.798;
+
+        let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &mut fixture.simulation;
+        let field = &simulation.environment.field;
+        let start_objects = field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
+        let start_parts = field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len()).sum::<usize>();
+        let start_atoms = field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+            .flat_map(|material| material.material.parts.iter())
+            .map(|(_, amount)| *amount).sum::<f64>();
+        assert_eq!(start_objects, 1_280);
+        assert_eq!(start_parts, 1_360);
+
+        let start_tick = simulation.tick;
+        let started = Instant::now();
+        while started.elapsed() < RUN_DURATION {
+            simulation.step();
+        }
+        let elapsed = started.elapsed();
+        let ticks = simulation.tick - start_tick;
+        let end_field = &simulation.environment.field;
+        let end_objects = end_field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
+        let end_parts = end_field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len()).sum::<usize>();
+        let end_atoms = end_field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+            .flat_map(|material| material.material.parts.iter())
+            .map(|(_, amount)| *amount).sum::<f64>();
+        assert_eq!(end_objects, start_objects, "transport changed object count");
+        assert_eq!(end_parts, start_parts, "transport changed constituent count");
+        assert!((end_atoms - start_atoms).abs() < 1e-6, "transport changed atom quantity");
+
+        let rate = ticks as f64 / elapsed.as_secs_f64();
+        let improvement = (rate - STORED_BASELINE_TICKS_PER_SECOND)
+            / STORED_BASELINE_TICKS_PER_SECOND * 100.0;
+        println!(
+            "TRANSPORT ANGULAR BATCH CANDIDATE: seed={SEED} objects={start_objects} parts={start_parts} target_seconds={} actual_seconds={:.3} ticks={ticks} candidate_ticks_per_second={rate:.3} stored_baseline_ticks_per_second={STORED_BASELINE_TICKS_PER_SECOND:.3} change_vs_stored_baseline_pct={improvement:.3} end_objects={end_objects} end_parts={end_parts}",
+            RUN_DURATION.as_secs(), elapsed.as_secs_f64(),
+        );
+    }
 
     #[test]
     fn background_flow_is_finite_deterministic_and_left_to_right() {
