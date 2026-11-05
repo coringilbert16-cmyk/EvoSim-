@@ -204,6 +204,7 @@ impl Simulation {
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
+            transport_workspace: crate::environment_flow::TransportWorkspace::default(),
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -744,10 +745,13 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
-        self.step_with_transport_reuse::<true>();
+        self.step_with_transport_reuse::<true, true>();
     }
 
-    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
+    pub(crate) fn step_with_transport_reuse<
+        const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+        const REUSE_OBSTACLE_BIN_BUFFERS: bool,
+    >(
         &mut self,
     ) {
         self.environmental_chemistry_diagnostics =
@@ -839,13 +843,15 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
+        crate::environment_flow::transport_field_with_reuse::<
             REUSE_SINGLETON_CENTER_VELOCITY,
+            REUSE_OBSTACLE_BIN_BUFFERS,
         >(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
             self.environment.height,
+            &mut self.transport_workspace,
         );
 
         let decision_parameters = self.decision_parameters;
