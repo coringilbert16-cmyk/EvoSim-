@@ -54,6 +54,9 @@ struct Obstacle {
     x: f64,
     y: f64,
     radius: f64,
+    influence_radius: f64,
+    wake_length: f64,
+    wake_half_width: f64,
     solidity: f64,
 }
 
@@ -144,12 +147,16 @@ fn obstacle_for(
     }
     let cohesion = weighted_cohesion / total;
     let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
+    let effective_radius = radius.max(0.5);
     Some(Obstacle {
         source_cell,
         source_index,
         x,
         y,
         radius,
+        influence_radius: effective_radius * 2.5,
+        wake_length: effective_radius * 6.0,
+        wake_half_width: effective_radius * 2.0,
         solidity: (1.0 - permeability).clamp(0.0, 1.0),
     })
 }
@@ -215,10 +222,11 @@ fn obstacle_adjusted_velocity(
         let dx = x - obstacle.x;
         let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
         let distance = dx.hypot(dy).max(1e-9);
-        let radius = obstacle.radius.max(0.5);
-        // Dense geometry pushes nearby flow around its sides.
-        if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+        // Dense geometry pushes nearby flow around its sides. These dimensions
+        // are precomputed once when the obstacle snapshot is built.
+        if distance < obstacle.influence_radius {
+            let influence =
+                obstacle.solidity * (1.0 - distance / obstacle.influence_radius).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
@@ -226,9 +234,12 @@ fn obstacle_adjusted_velocity(
             });
         }
         // Downstream wake is sheltered and slower; upstream flow is unchanged.
-        if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
-            let longitudinal = 1.0 - dx / (radius * 6.0);
-            let lateral = 1.0 - dy.abs() / (radius * 2.0);
+        if dx > 0.0
+            && dx < obstacle.wake_length
+            && dy.abs() < obstacle.wake_half_width
+        {
+            let longitudinal = 1.0 - dx / obstacle.wake_length;
+            let lateral = 1.0 - dy.abs() / obstacle.wake_half_width;
             let attenuation = (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
             velocity = velocity.scale(1.0 - attenuation);
         }
@@ -809,6 +820,9 @@ mod tests {
             x: 10.0,
             y: 10.0,
             radius: 3.0,
+            influence_radius: 7.5,
+            wake_length: 18.0,
+            wake_half_width: 6.0,
             solidity: 0.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
@@ -1152,6 +1166,9 @@ mod tests {
             x: 10.0,
             y: 10.0,
             radius: 3.0,
+            influence_radius: 7.5,
+            wake_length: 18.0,
+            wake_half_width: 6.0,
             solidity: 1.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
