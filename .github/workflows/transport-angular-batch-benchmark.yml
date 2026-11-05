@@ -18,6 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Print rustfmt changes for the candidate
+        run: |
+          if ! cargo fmt --all -- --check; then
+            cargo fmt --all
+            git diff -- src/simulation/environment_flow.rs
+          fi
       - name: Verify batched obstacle evaluation preserves scalar results
         run: cargo test --locked batched_angular_obstacle_evaluation_matches_scalar_samples
       - name: Run 30-second candidate-only benchmark
