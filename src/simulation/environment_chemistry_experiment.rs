@@ -41,7 +41,7 @@ pub(crate) fn seed_randomized_resources(
     identities.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..object_count).collect();
+    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
@@ -49,7 +49,7 @@ pub(crate) fn seed_randomized_resources(
     let mut pile_sizes = Vec::with_capacity(pile_count);
     for cut in cuts
         .into_iter()
-        .chain(std::iter::once(object_count))
+        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
     {
         pile_sizes.push(cut - previous);
         previous = cut;
