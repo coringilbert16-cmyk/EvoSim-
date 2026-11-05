@@ -1105,4 +1105,54 @@ mod tests {
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
     }
+
+    /// Manual, same-seed transport baseline. Run with:
+    /// cargo test --locked transport_molecular_baseline_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore = "manual transport baseline timing; run with --ignored --nocapture"]
+    fn transport_molecular_baseline_benchmark() {
+        use std::time::Instant;
+
+        const SEED: u64 = 42;
+        const SAMPLES: usize = 5;
+
+        let run_once = || {
+            let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+            let catalog = fixture.simulation.environment.catalog.clone();
+            let field = &mut fixture.simulation.environment.field;
+            let object_count = field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
+            let constituent_count = field.cells.iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .map(|material| material.material.parts.len()).sum::<usize>();
+            let started = Instant::now();
+            let moved = transport_field(field, &catalog, 250.0, 250.0);
+            (started.elapsed(), moved, object_count, constituent_count)
+        };
+
+        let warmup = run_once();
+        assert_eq!(warmup.2, 1_280);
+        assert_eq!(warmup.3, 1_360);
+        println!(
+            "TRANSPORT BASELINE WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
+            warmup.2, warmup.3, warmup.1, warmup.0.as_secs_f64() * 1_000.0
+        );
+
+        let mut elapsed_ms = Vec::with_capacity(SAMPLES);
+        for sample in 0..SAMPLES {
+            let (elapsed, moved, objects, constituents) = run_once();
+            assert_eq!(objects, 1_280);
+            assert_eq!(constituents, 1_360);
+            elapsed_ms.push(elapsed.as_secs_f64() * 1_000.0);
+            println!(
+                "TRANSPORT BASELINE SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
+                sample + 1, elapsed_ms[sample]
+            );
+        }
+        elapsed_ms.sort_by(f64::total_cmp);
+        println!(
+            "TRANSPORT BASELINE SUMMARY: seed={SEED} samples={SAMPLES} min_ms={:.3} median_ms={:.3} max_ms={:.3}",
+            elapsed_ms[0], elapsed_ms[SAMPLES / 2], elapsed_ms[SAMPLES - 1]
+        );
+    }
+
 }
