@@ -1488,14 +1488,10 @@ mod tests {
         let indices_b = crate::material_restoration::restore_material(
             &mut combined,
             &reactants[1],
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
+            source.units[2].placement,
             &catalog,
         )
-        .expect("incoming field source should restore");
+        .expect("incoming field source should restore at its fixture contact pose");
         assert!(
             !indices_b.iter().any(|index| {
                 crate::construction_runtime::placed_unit_overlaps(
