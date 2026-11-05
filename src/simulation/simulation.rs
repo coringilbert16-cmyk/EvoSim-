@@ -744,6 +744,12 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        self.step_with_transport_reuse::<true>();
+    }
+
+    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
+        &mut self,
+    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
@@ -833,7 +839,9 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field(
+        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
+            REUSE_SINGLETON_CENTER_VELOCITY,
+        >(
             &mut self.environment.field,
             &self.environment.catalog,
             self.environment.width,
