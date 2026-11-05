@@ -6079,8 +6079,6 @@ mod bob_lookup_contract_tests {
 
         let _ = std::fs::remove_dir_all(root);
     }
-
-
 }
 
 #[cfg(test)]
