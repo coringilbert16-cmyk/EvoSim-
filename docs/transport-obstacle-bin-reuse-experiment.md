@@ -2,7 +2,7 @@
 
 ## Status
 
-Experiment setup only. This document records the previously measured bottleneck and the isolated candidate to implement and benchmark. It does not claim a performance improvement.
+Implementation is present on PR #303. Correctness, exact-head CI, and the standard 60-second throughput benchmark are pending; no performance improvement is claimed until those results are available.
 
 ## Prior profiling evidence
 
@@ -43,7 +43,7 @@ Use the merged PR #301 molecular transport fixture and the same 60-second full-s
 - Independently rebuild the identical initial physical state for baseline and candidate.
 - Run one uninterrupted 60-second wall-clock interval per implementation at maximum simulation speed; no tick cap or fixed tick batching.
 - Record elapsed time, completed ticks, ticks/second, final object/constituent counts, and conservation checks.
-- Also retain stage-level measurements to confirm whether bin construction/allocation actually fell and to quantify its contribution to total tick time.
+- Record cumulative obstacle-bin construction time for both paths, alongside total elapsed time and completed ticks, to quantify the stage-level change and its contribution to total throughput.
 
 Do not merge unless exact-head CI passes, correctness is equivalent, and the full 60-second simulation shows a measurable total-throughput improvement. A reduction in bin-stage time alone is insufficient if it does not improve total simulation throughput.
 
