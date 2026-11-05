@@ -553,6 +553,10 @@ pub(crate) fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
+    #[cfg(test)]
+    let transport_started = std::time::Instant::now();
+    #[cfg(test)]
+    let snapshot_started = std::time::Instant::now();
     let width = world_width.min(field.width_cells as f64 * field.cell_size);
     let height = world_height.min(field.height_cells as f64 * field.cell_size);
     if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
@@ -574,6 +578,10 @@ pub(crate) fn transport_field(
         }
     }
     field.next_material_identity = next_identity;
+    #[cfg(test)]
+    let snapshot_ms = snapshot_started.elapsed().as_secs_f64() * 1_000.0;
+    #[cfg(test)]
+    let discovery_started = std::time::Instant::now();
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
@@ -611,6 +619,10 @@ pub(crate) fn transport_field(
             }
         }
     }
+    #[cfg(test)]
+    let discovery_ms = discovery_started.elapsed().as_secs_f64() * 1_000.0;
+    #[cfg(test)]
+    let candidate_started = std::time::Instant::now();
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -666,9 +678,18 @@ pub(crate) fn transport_field(
             staged.push((source_cell, source_index, destination_cell, moved));
         }
     }
+    #[cfg(test)]
+    let candidate_ms = candidate_started.elapsed().as_secs_f64() * 1_000.0;
     if staged.is_empty() {
+        #[cfg(test)]
+        println!(
+            "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}",
+            transport_started.elapsed().as_secs_f64() * 1_000.0
+        );
         return 0;
     }
+    #[cfg(test)]
+    let commit_started = std::time::Instant::now();
 
     let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
@@ -699,6 +720,12 @@ pub(crate) fn transport_field(
             field.mark_changed_at_index(index);
         }
     }
+    #[cfg(test)]
+    println!(
+        "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}",
+        commit_started.elapsed().as_secs_f64() * 1_000.0,
+        transport_started.elapsed().as_secs_f64() * 1_000.0
+    );
     moved_count
 }
 
@@ -1104,5 +1131,70 @@ mod tests {
         assert!(wake.length() < free.length());
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
+    }
+
+    /// The existing CI ignored-benchmark hook filters this prefix, so this
+    /// alias ensures the transport baseline runs in the same controlled job.
+    #[test]
+    #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
+    fn environmental_discovery_ab_benchmark_transport_baseline() {
+        transport_molecular_baseline_benchmark();
+    }
+
+    /// Manual, same-seed transport baseline. Run with:
+    /// cargo test --locked transport_molecular_baseline_benchmark -- --ignored --nocapture
+    #[test]
+    #[ignore = "manual transport baseline timing; run with --ignored --nocapture"]
+    fn transport_molecular_baseline_benchmark() {
+        use std::time::Instant;
+
+        const SEED: u64 = 42;
+        const SAMPLES: usize = 5;
+
+        let run_once = || {
+            let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+            let catalog = fixture.simulation.environment.catalog.clone();
+            let field = &mut fixture.simulation.environment.field;
+            let object_count = field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>();
+            let constituent_count = field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .map(|material| material.material.parts.len())
+                .sum::<usize>();
+            let started = Instant::now();
+            let moved = transport_field(field, &catalog, 250.0, 250.0);
+            (started.elapsed(), moved, object_count, constituent_count)
+        };
+
+        let warmup = run_once();
+        assert_eq!(warmup.2, 1_280);
+        assert_eq!(warmup.3, 1_360);
+        println!(
+            "TRANSPORT BASELINE WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
+            warmup.2, warmup.3, warmup.1, warmup.0.as_secs_f64() * 1_000.0
+        );
+
+        let mut elapsed_ms = Vec::with_capacity(SAMPLES);
+        for sample in 0..SAMPLES {
+            let (elapsed, moved, objects, constituents) = run_once();
+            assert_eq!(objects, 1_280);
+            assert_eq!(constituents, 1_360);
+            elapsed_ms.push(elapsed.as_secs_f64() * 1_000.0);
+            println!(
+                "TRANSPORT BASELINE SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
+                sample + 1,
+                elapsed_ms[sample]
+            );
+        }
+        elapsed_ms.sort_by(f64::total_cmp);
+        println!(
+            "TRANSPORT BASELINE SUMMARY: seed={SEED} samples={SAMPLES} min_ms={:.3} median_ms={:.3} max_ms={:.3}",
+            elapsed_ms[0], elapsed_ms[SAMPLES / 2], elapsed_ms[SAMPLES - 1]
+        );
     }
 }
