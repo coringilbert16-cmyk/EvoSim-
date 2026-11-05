@@ -212,7 +212,7 @@ impl Simulation {
         let height = 250.0;
         let mut field = ActiveMaterialField::new(width, height, DEFAULT_CELL_SIZE);
         crate::environment_chemistry_experiment::seed_randomized_resources(
-            &mut field, &catalog, seed, width, height,
+            &mut field, &catalog, seed, width, height, false,
         );
         Environment {
             width,
