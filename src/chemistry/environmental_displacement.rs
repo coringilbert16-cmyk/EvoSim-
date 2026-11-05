@@ -143,9 +143,9 @@ mod tests {
     }
 
     #[test]
-    fn carbon_oxygen_can_replace_carbon_nitrogen_when_incoming_contact_activates_it() {
+    fn carbon_oxygen_can_replace_carbon_hydrogen_when_incoming_contact_activates_it() {
         let anchor = properties("Carbon");
-        let displaced = properties("Nitrogen");
+        let displaced = properties("Hydrogen");
         let incoming = properties("Oxygen");
         let old_strength = bond_strength(anchor, displaced);
         let provisional = evaluate_displacement_preflight(
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn favorable_replacement_is_rejected_without_sufficient_incoming_activation() {
         let anchor = properties("Carbon");
-        let displaced = properties("Nitrogen");
+        let displaced = properties("Hydrogen");
         let incoming = properties("Oxygen");
         let old_strength = bond_strength(anchor, displaced);
         let provisional = evaluate_displacement_preflight(
