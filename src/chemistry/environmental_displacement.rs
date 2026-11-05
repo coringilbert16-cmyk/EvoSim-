@@ -210,8 +210,9 @@ pub(crate) fn build_displacement_trial(
         total_work,
         dissipated_heat,
     )?;
-    let products =
-        crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)?;
+    let products = crate::environmental_combine::physical_materials_from_structure_components(
+        &trial, catalog,
+    )?;
     if products.len() < 2 {
         return None;
     }
@@ -725,5 +726,4 @@ mod tests {
         assert_eq!(source.units, before.units);
         assert_eq!(source.bonds, before.bonds);
     }
-
 }
