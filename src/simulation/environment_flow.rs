@@ -786,19 +786,36 @@ mod tests {
         for counter in &TRANSPORT_STAGE_NANOS {
             counter.store(0, Ordering::Relaxed);
         }
+
         let mut fixture = crate::environment_chemistry_experiment::build(SEED);
         let simulation = &mut fixture.simulation;
-        let start_objects = simulation.environment.field.cells.iter()
-            .map(|cell| cell.physical_materials.len()).sum::<usize>();
-        let start_constituents = simulation.environment.field.cells.iter()
+        let catalog = simulation.environment.catalog.clone();
+        let width = simulation.environment.width;
+        let height = simulation.environment.height;
+        let field = &mut simulation.environment.field;
+        let start_objects = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        let start_constituents = field
+            .cells
+            .iter()
             .flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| material.material.parts.len()).sum::<usize>();
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
         assert_eq!(start_objects, 1_280);
         assert_eq!(start_constituents, 1_360);
 
+        // Isolate transport itself: chemistry and the rest of Simulation::step
+        // are deliberately excluded from this stage-cost diagnostic.
         let started = Instant::now();
+        let mut ticks = 0_u64;
         while started.elapsed() < RUN_DURATION {
-            simulation.step();
+            transport_field_with_singleton_center_velocity_reuse::<true>(
+                field, &catalog, width, height,
+            );
+            ticks += 1;
         }
         let elapsed = started.elapsed();
         let labels = [
@@ -812,26 +829,34 @@ mod tests {
         for (index, label) in labels.iter().enumerate() {
             let nanos = TRANSPORT_STAGE_NANOS[index].load(Ordering::Relaxed);
             total_profiled += nanos;
-            println!("TRANSPORT PROFILE {label}: total_ms={:.3} average_us_per_tick={:.3}",
+            println!(
+                "TRANSPORT PROFILE {label}: total_ms={:.3} average_us_per_tick={:.3}",
                 nanos as f64 / 1_000_000.0,
-                nanos as f64 / simulation.tick.max(1) as f64 / 1_000.0);
+                nanos as f64 / ticks.max(1) as f64 / 1_000.0
+            );
         }
+        let end_objects = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        let end_constituents = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
         println!(
-            "TRANSPORT PROFILE SUMMARY: seed={SEED} duration_s={:.3} ticks={} ticks_per_second={:.2} profiled_stage_ms={:.3} objects={start_objects} constituents={start_constituents}",
+            "TRANSPORT PROFILE SUMMARY: seed={SEED} duration_s={:.3} transport_ticks={ticks} transport_ticks_per_second={:.2} profiled_stage_ms={:.3} start_objects={start_objects} end_objects={end_objects} start_constituents={start_constituents} end_constituents={end_constituents}",
             elapsed.as_secs_f64(),
-            simulation.tick,
-            simulation.tick as f64 / elapsed.as_secs_f64(),
+            ticks as f64 / elapsed.as_secs_f64(),
             total_profiled as f64 / 1_000_000.0,
         );
-        let end_objects = simulation.environment.field.cells.iter()
-            .map(|cell| cell.physical_materials.len()).sum::<usize>();
-        let end_constituents = simulation.environment.field.cells.iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| material.material.parts.len()).sum::<usize>();
-        println!("TRANSPORT PROFILE INVENTORY: end_objects={end_objects} end_constituents={end_constituents}");
-        assert_eq!(end_constituents, start_constituents, "transport profiling must conserve constituents");
-        assert!(simulation.energy_inventory_snapshot().is_balanced(1e-6),
-            "transport profiling must preserve energy accounting");
+        assert_eq!(end_objects, start_objects, "transport must conserve object count");
+        assert_eq!(
+            end_constituents, start_constituents,
+            "transport must conserve constituents"
+        );
     }
 
     #[test]
