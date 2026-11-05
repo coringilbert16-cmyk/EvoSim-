@@ -1453,24 +1453,19 @@ mod tests {
             unit.placement.x += 10.0;
             unit.placement.y += 10.0;
         }
-        let mut reactants = crate::environmental_combine::physical_materials_from_structure_components(
-            &source, &catalog,
-        )
-        .expect("the bonded reactant and incoming constituent should realize separately");
+        let mut reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source, &catalog,
+            )
+            .expect("the bonded reactant and incoming constituent should realize separately");
         assert_eq!(reactants.len(), 2);
         reactants.sort_by_key(|material| {
-            material
-                .internal_connections
-                .as_ref()
-                .map_or(0, Vec::len)
-                == 0
+            material.internal_connections.as_ref().map_or(0, Vec::len) == 0
         });
-        assert!(
-            reactants[0]
-                .internal_connections
-                .as_ref()
-                .is_some_and(|connections| !connections.is_empty())
-        );
+        assert!(reactants[0]
+            .internal_connections
+            .as_ref()
+            .is_some_and(|connections| !connections.is_empty()));
         let field_cell = simulation
             .environment
             .field
