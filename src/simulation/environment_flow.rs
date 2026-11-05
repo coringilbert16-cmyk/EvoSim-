@@ -1179,7 +1179,8 @@ mod tests {
             elapsed_ms.push(elapsed.as_secs_f64() * 1_000.0);
             println!(
                 "TRANSPORT BASELINE SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
-                sample + 1, elapsed_ms[sample]
+                sample + 1,
+                elapsed_ms[sample]
             );
         }
         elapsed_ms.sort_by(f64::total_cmp);
@@ -1188,5 +1189,4 @@ mod tests {
             elapsed_ms[0], elapsed_ms[SAMPLES / 2], elapsed_ms[SAMPLES - 1]
         );
     }
-
 }
