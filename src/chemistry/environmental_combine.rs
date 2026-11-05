@@ -655,6 +655,31 @@ fn physical_material_from_structure(
     physical.is_realized().then_some(physical)
 }
 
+/// Export every connected product from a trial reaction graph. This is
+/// intentionally separate from the single-product COMBINE conversion so a
+/// coupled replacement can release a displaced constituent without losing
+/// constituent identity, geometry, or retained bond-energy allocations.
+pub(crate) fn physical_materials_from_structure_components(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<Vec<PhysicalMaterial>> {
+    let components = structure.connected_components();
+    if components.is_empty() {
+        return None;
+    }
+
+    let mut products = Vec::with_capacity(components.len());
+    for component in components {
+        let ids = component
+            .iter()
+            .map(|index| structure.physical_id(*index))
+            .collect::<Option<Vec<_>>>()?;
+        let subgraph = structure.subgraph_for_physical_ids(&ids, &[])?;
+        products.push(physical_material_from_structure(&subgraph, catalog)?);
+    }
+    Some(products)
+}
+
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,
