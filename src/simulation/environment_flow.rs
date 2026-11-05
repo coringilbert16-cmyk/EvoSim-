@@ -441,13 +441,7 @@ fn angular_displacement(
         }
     }
     if placements.len() > 1 {
-        obstacle_adjust_angular_samples(
-            &mut samples,
-            source_cell,
-            source_index,
-            obstacles,
-            height,
-        );
+        obstacle_adjust_angular_samples(&mut samples, source_cell, source_index, obstacles, height);
         for sample in samples {
             torque += sample.mass
                 * (sample.rx * (sample.velocity.y - center_velocity.y)
@@ -847,7 +841,10 @@ mod tests {
                 &obstacles,
                 80.0,
             );
-            assert_eq!(sample.velocity, expected, "batched result differed at ({x}, {y})");
+            assert_eq!(
+                sample.velocity, expected,
+                "batched result differed at ({x}, {y})"
+            );
         }
     }
 
@@ -912,13 +909,18 @@ mod tests {
             .flat_map(|material| material.material.parts.iter())
             .map(|(_, amount)| *amount)
             .sum::<f64>();
-        assert_eq!(end_parts, start_parts, "transport changed constituent count");
-        assert!((end_atoms - start_atoms).abs() < 1e-6, "transport changed atom quantity");
+        assert_eq!(
+            end_parts, start_parts,
+            "transport changed constituent count"
+        );
+        assert!(
+            (end_atoms - start_atoms).abs() < 1e-6,
+            "transport changed atom quantity"
+        );
 
         let rate = ticks as f64 / elapsed.as_secs_f64();
-        let improvement = (rate - STORED_BASELINE_TICKS_PER_SECOND)
-            / STORED_BASELINE_TICKS_PER_SECOND
-            * 100.0;
+        let improvement =
+            (rate - STORED_BASELINE_TICKS_PER_SECOND) / STORED_BASELINE_TICKS_PER_SECOND * 100.0;
         println!(
             "TRANSPORT ANGULAR BATCH CANDIDATE: seed={SEED} objects={start_objects} parts={start_parts} target_seconds={} actual_seconds={:.3} ticks={ticks} candidate_ticks_per_second={rate:.3} stored_baseline_ticks_per_second={STORED_BASELINE_TICKS_PER_SECOND:.3} change_vs_stored_baseline_pct={improvement:.3} end_objects={end_objects} end_parts={end_parts}",
             RUN_DURATION.as_secs(),
