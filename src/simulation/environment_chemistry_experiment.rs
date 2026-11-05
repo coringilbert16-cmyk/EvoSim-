@@ -10,7 +10,9 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
-const ENVIRONMENT_RESOURCE_COUNT: usize = 1_280; // Baseline fixture update pending.
+const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
+const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
+const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
 
 /// Seed exactly 1,280 individual base resources in a seeded set of randomly
 /// sized and positioned piles. Pile sizes are an unrestricted random partition
@@ -34,13 +36,20 @@ pub(crate) fn seed_randomized_resources(
     );
 
     let mut identities = resource_names.clone();
-    while identities.len() < ENVIRONMENT_RESOURCE_COUNT {
+    while identities.len() < ENVIRONMENT_SINGLE_RESOURCE_COUNT {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
     identities.shuffle(&mut rng);
+    let mut objects: Vec<(Vec<String>, bool)> = identities.into_iter()
+        .map(|name| (vec![name], false)).collect();
+    for _ in 0..40 {
+        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
+        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
+    }
+    objects.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_RESOURCE_COUNT).collect();
+    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
@@ -48,7 +57,7 @@ pub(crate) fn seed_randomized_resources(
     let mut pile_sizes = Vec::with_capacity(pile_count);
     for cut in cuts
         .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_RESOURCE_COUNT))
+        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
     {
         pile_sizes.push(cut - previous);
         previous = cut;
@@ -91,7 +100,7 @@ pub(crate) fn seed_randomized_resources(
             );
         }
     }
-    assert_eq!(identity_index, ENVIRONMENT_RESOURCE_COUNT);
+    assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
 
@@ -203,7 +212,7 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
-        assert_eq!(materials.len(), ENVIRONMENT_RESOURCE_COUNT);
+        assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
         assert!(materials.iter().all(|material| {
             material.material.parts.len() == 1 && material.material.parts[0].1 == 1.0
         }));
@@ -217,7 +226,7 @@ mod tests {
         assert_eq!(first.pile_sizes, second.pile_sizes);
         assert_eq!(
             first.pile_sizes.iter().sum::<usize>(),
-            ENVIRONMENT_RESOURCE_COUNT
+            ENVIRONMENT_OBJECT_COUNT
         );
         assert!((3..=10).contains(&first.pile_sizes.len()));
         assert!(first.pile_sizes.iter().all(|size| *size >= 1));
@@ -234,7 +243,7 @@ mod tests {
             .iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
-        assert_eq!(material_count, ENVIRONMENT_RESOURCE_COUNT);
+        assert_eq!(material_count, ENVIRONMENT_OBJECT_COUNT);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -269,7 +278,7 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - ENVIRONMENT_RESOURCE_COUNT as f64).abs() < 1e-6);
+        assert!((total_material - ENVIRONMENT_OBJECT_COUNT as f64).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
