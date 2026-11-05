@@ -1,0 +1,14 @@
+name: Transport movement profile
+
+on:
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run 60-second transport movement profile
+        run: cargo test --locked transport_movement_stage_profile_60s -- --ignored --nocapture
