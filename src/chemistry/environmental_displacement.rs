@@ -6,6 +6,8 @@
 //! explicit prevents an unrelated BREAK followed by COMBINE from masquerading
 //! as displacement.
 
+#![expect(dead_code, reason = "Displacement API awaits live environmental scheduler integration")]
+
 use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
@@ -152,7 +154,9 @@ pub(crate) fn build_displacement_trial(
         0.0,
         dissipated_heat,
     )?;
-    if (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9 {
+    if !preflight.is_activated()
+        || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
+    {
         return None;
     }
 
@@ -604,8 +608,7 @@ mod tests {
                 && product.material.internal_bonds.is_empty()
         }));
         assert!(
-            trial.disruption_work > 0.0
-                && trial.energy.required_external_input > 0.0,
+            trial.disruption_work > 0.0 && trial.energy.required_external_input > 0.0,
             "a favorable replacement still has to fund the old bond's physical disruption work"
         );
         assert_eq!(trial.removed_bond, old_bond);
@@ -625,7 +628,8 @@ mod tests {
         let catalog = default_catalog();
         let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let mut ledger = crate::state::EnergyLedger {
-            total_structural_energy_held: crate::energy_ledger::structural_potential(&source).unwrap(),
+            total_structural_energy_held: crate::energy_ledger::structural_potential(&source)
+                .unwrap(),
             ..Default::default()
         };
         let trial = build_displacement_trial(
@@ -664,8 +668,7 @@ mod tests {
     #[test]
     fn stale_trial_cannot_commit_or_change_energy_holders() {
         let catalog = default_catalog();
-        let (mut source, old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let trial = build_displacement_trial(
             &source,
             0,
