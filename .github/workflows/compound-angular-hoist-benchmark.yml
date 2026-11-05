@@ -1,0 +1,38 @@
+name: Compound angular hoisted-obstacle benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'src/simulation/environment_flow.rs'
+      - '.github/workflows/compound-angular-hoist-benchmark.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: compound-angular-hoist-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  angular-profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Measure compound angular evaluation directly
+        run: cargo test --locked compound_angular_evaluation_microbenchmark_10s -- --ignored --nocapture
+
+  candidate:
+    needs: angular-profile
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repeat: [1, 2, 3]
+    timeout-minutes: 15
+    name: Candidate-only repeat ${{ matrix.repeat }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run 30-second candidate-only benchmark
+        run: cargo test --locked transport_compound_angular_hoist_candidate_30s -- --ignored --nocapture
