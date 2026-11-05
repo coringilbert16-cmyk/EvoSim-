@@ -664,6 +664,8 @@ pub(crate) struct Simulation {
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
+    /// Retains transport obstacle-bin allocations across simulation ticks.
+    pub(crate) transport_workspace: crate::environment_flow::TransportWorkspace,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
