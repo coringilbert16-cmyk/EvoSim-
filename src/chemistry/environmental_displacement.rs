@@ -13,7 +13,6 @@ use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::state::{EnergyLedger, Environment};
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
-use crate::contact::ConnectionPairCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
 use crate::resources::{BaseResource, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure};
@@ -616,7 +615,9 @@ pub(crate) fn accumulate_environmental(
                 body.min_y - 2.1,
                 body.max_y + 2.1,
                 DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work),
-                (tick as usize).wrapping_add(cell_a).wrapping_add(material_a),
+                (tick as usize)
+                    .wrapping_add(cell_a)
+                    .wrapping_add(material_a),
             );
 
             for &cell_b in &target_cells {
@@ -709,10 +710,9 @@ pub(crate) fn accumulate_environmental(
                             (connection.part_a, connection.part_b, connection.endpoint_a),
                             (connection.part_b, connection.part_a, connection.endpoint_b),
                         ] {
-                            let (Some(&anchor_unit), Some(&displaced_unit)) = (
-                                indices_a.get(anchor_part),
-                                indices_a.get(displaced_part),
-                            ) else {
+                            let (Some(&anchor_unit), Some(&displaced_unit)) =
+                                (indices_a.get(anchor_part), indices_a.get(displaced_part))
+                            else {
                                 continue;
                             };
                             let Some(frequency) = displacement_reaction_frequency(
@@ -762,7 +762,9 @@ pub(crate) fn accumulate_environmental(
                                     continue;
                                 }
                                 let Some(activation_signal) =
-                                    crate::chemistry::normalized_chemistry_to_activation_signal(next)
+                                    crate::chemistry::normalized_chemistry_to_activation_signal(
+                                        next,
+                                    )
                                 else {
                                     continue;
                                 };
@@ -882,7 +884,8 @@ pub(crate) fn resolve_environmental(
         return false;
     }
 
-    let Some((mut combined, indices_a)) = restore_displacement_source(&operation.source_a, environment)
+    let Some((mut combined, indices_a)) =
+        restore_displacement_source(&operation.source_a, environment)
     else {
         return false;
     };
@@ -1054,11 +1057,16 @@ pub(crate) fn resolve_environmental(
         {
             return false;
         }
-        let Some(placement) = product.placements.as_ref().and_then(|placements| placements.first())
+        let Some(placement) = product
+            .placements
+            .as_ref()
+            .and_then(|placements| placements.first())
         else {
             return false;
         };
-        let Some(destination) = environment.field.index_for_position(placement.x, placement.y)
+        let Some(destination) = environment
+            .field
+            .index_for_position(placement.x, placement.y)
         else {
             return false;
         };
@@ -1092,7 +1100,9 @@ pub(crate) fn resolve_environmental(
     changed_cells.insert(operation.cell_a);
     changed_cells.insert(operation.cell_b);
     for (destination, product) in staged_products {
-        environment.field.cells[destination].physical_materials.push(product);
+        environment.field.cells[destination]
+            .physical_materials
+            .push(product);
         changed_cells.insert(destination);
     }
     for cell in changed_cells {
@@ -1409,17 +1419,15 @@ mod tests {
             cell.physical_materials.clear();
         }
 
-        let (mut source, _old_bond, _candidate, _investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, _old_bond, _candidate, _investment) = three_participant_fixture(&catalog);
         for unit in &mut source.units {
             unit.placement.x += 10.0;
             unit.placement.y += 10.0;
         }
-        let reactants =
-            crate::environmental_combine::physical_materials_from_structure_components(
-                &source, &catalog,
-            )
-            .expect("the bonded reactant and incoming constituent should realize separately");
+        let reactants = crate::environmental_combine::physical_materials_from_structure_components(
+            &source, &catalog,
+        )
+        .expect("the bonded reactant and incoming constituent should realize separately");
         assert_eq!(reactants.len(), 2);
         let field_cell = simulation
             .environment
@@ -1429,14 +1437,14 @@ mod tests {
         simulation.environment.field.cells[field_cell]
             .physical_materials
             .extend(reactants);
-        simulation.environment.field.assign_missing_material_identities();
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
 
-        let frequency = displacement_reaction_frequency(
-            &source.units[0],
-            &source.units[1],
-            &catalog,
-        )
-        .expect("the old bond has a valid natural reaction frequency");
+        let frequency =
+            displacement_reaction_frequency(&source.units[0], &source.units[1], &catalog)
+                .expect("the old bond has a valid natural reaction frequency");
         let mut accumulation = BTreeMap::new();
         let mut ready = None;
         for tick in 0..512 {
@@ -1453,7 +1461,8 @@ mod tests {
                 break;
             }
         }
-        let operation = ready.expect("live incoming contact should eventually activate displacement");
+        let operation =
+            ready.expect("live incoming contact should eventually activate displacement");
         assert!(operation.work_required > 0.0);
         assert!(operation.activation_signal > 0.0);
 
@@ -1467,7 +1476,12 @@ mod tests {
             ),
             "an unfunded displacement must not mutate the field or energy holders"
         );
-        assert_eq!(simulation.environment.field.cells[field_cell].physical_materials.len(), 2);
+        assert_eq!(
+            simulation.environment.field.cells[field_cell]
+                .physical_materials
+                .len(),
+            2
+        );
         assert_eq!(simulation.energy_ledger, ledger_before);
         assert_eq!(
             simulation.environment.resonant_energy,
