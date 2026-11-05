@@ -201,7 +201,7 @@ fn seed_randomized_molecular_resources(
                 vec![
                     placement,
                     Placement {
-                        x: x + 1.8,
+                        x: x + 0.838,
                         y,
                         rotation_radians: rotation,
                     },
