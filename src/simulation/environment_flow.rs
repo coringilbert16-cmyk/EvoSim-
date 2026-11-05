@@ -72,8 +72,7 @@ fn build_obstacle_bins(
     for obstacle in obstacles.iter().copied() {
         let radius = obstacle.radius.max(0.5).min(width.max(height));
         let min_col = ((obstacle.x - radius * 2.5).max(0.0) / bin_size).floor() as usize;
-        let max_col =
-            ((obstacle.x + radius * 6.0).min(width - 1e-6) / bin_size).floor() as usize;
+        let max_col = ((obstacle.x + radius * 6.0).min(width - 1e-6) / bin_size).floor() as usize;
         let max_col = max_col.min(flow_cols.saturating_sub(1));
         if min_col > max_col {
             continue;
@@ -841,9 +840,7 @@ mod tests {
                 cell.physical_materials
                     .iter()
                     .enumerate()
-                    .map(move |(material_index, material)| {
-                        (cell_index, material_index, material)
-                    })
+                    .map(move |(material_index, material)| (cell_index, material_index, material))
             })
             .collect::<Vec<_>>();
         let obstacles = snapshot
@@ -876,8 +873,7 @@ mod tests {
             let started = Instant::now();
             while started.elapsed() < PHASE_DURATION {
                 let build_started = Instant::now();
-                let (cols, rows, bins) =
-                    build_obstacle_bins(&obstacles, width, height, bin_size);
+                let (cols, rows, bins) = build_obstacle_bins(&obstacles, width, height, bin_size);
                 total_build_time += build_started.elapsed();
                 bin_builds += 1;
                 total_memberships = bins.iter().map(Vec::len).sum::<usize>();
@@ -976,8 +972,7 @@ mod tests {
                     let candidates = &bins[row * cols + col];
                     let expected =
                         obstacle_adjusted_velocity(free, x, y, 99, 99, &obstacles, height);
-                    let actual =
-                        obstacle_adjusted_velocity(free, x, y, 99, 99, candidates, height);
+                    let actual = obstacle_adjusted_velocity(free, x, y, 99, 99, candidates, height);
                     assert_eq!(
                         actual, expected,
                         "bin size {bin_size} changed velocity at ({x}, {y})"
