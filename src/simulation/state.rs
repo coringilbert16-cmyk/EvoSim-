@@ -666,7 +666,8 @@ pub(crate) struct Simulation {
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
     /// Ephemeral transport scratch shared by history snapshots rather than copied
     /// with every Simulation clone. Each pass clears and rebuilds the bins.
-    pub(crate) transport_workspace: std::sync::Arc<parking_lot::Mutex<crate::environment_flow::TransportWorkspace>>,
+    pub(crate) transport_workspace:
+        std::sync::Arc<parking_lot::Mutex<crate::environment_flow::TransportWorkspace>>,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
