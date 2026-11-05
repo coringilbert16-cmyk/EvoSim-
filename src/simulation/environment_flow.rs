@@ -47,11 +47,13 @@ impl Velocity {
 const FLOW_BIN_SIZE: f64 = 5.0;
 const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
 
+#[cfg(test)]
+static OBSTACLE_BIN_BUILD_NANOS: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TransportWorkspace {
     obstacle_bins: Vec<Vec<Obstacle>>,
-    #[cfg(test)]
-    obstacle_bin_build_duration: std::time::Duration,
 }
 
 impl TransportWorkspace {
@@ -63,10 +65,6 @@ impl TransportWorkspace {
         &mut self.obstacle_bins
     }
 
-    #[cfg(test)]
-    fn obstacle_bin_build_duration(&self) -> std::time::Duration {
-        self.obstacle_bin_build_duration
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -670,7 +668,11 @@ pub(crate) fn transport_field_with_reuse<
     }
     #[cfg(test)]
     {
-        workspace.obstacle_bin_build_duration += bin_build_started.elapsed();
+        let elapsed_nanos = bin_build_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        OBSTACLE_BIN_BUILD_NANOS.fetch_add(
+            elapsed_nanos,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
     let mut staged = Vec::new();
 
@@ -1279,6 +1281,7 @@ mod tests {
             initial_state.sort_unstable_by_key(|material| material.environmental_identity);
 
             let start_tick = simulation.tick;
+            OBSTACLE_BIN_BUILD_NANOS.store(0, std::sync::atomic::Ordering::Relaxed);
             let started = Instant::now();
             while started.elapsed() < RUN_DURATION {
                 simulation.step_with_transport_reuse::<true, REUSE>();
@@ -1302,8 +1305,9 @@ mod tests {
                 .sum::<usize>();
             let mut end_inventory = simulation.environment.field.total_material();
             end_inventory.sort_by(|a, b| a.0.cmp(&b.0));
-            let obstacle_bin_build_duration =
-                simulation.transport_workspace.obstacle_bin_build_duration();
+            let obstacle_bin_build_duration = Duration::from_nanos(
+                OBSTACLE_BIN_BUILD_NANOS.swap(0, std::sync::atomic::Ordering::Relaxed),
+            );
             let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
             println!(
                 "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents} obstacle_bin_build_seconds={:.6}",
