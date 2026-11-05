@@ -571,6 +571,62 @@ fn rotated(
     Some(result)
 }
 
+
+/// Apply translation and rotation to one owned clone. Equivalent to translated()
+/// followed by rotated(), but avoids the second full PhysicalMaterial clone.
+fn translated_and_rotated(
+    material: &PhysicalMaterial, dx: f64, dy: f64, angle: f64,
+    catalog: &[BaseResource], width: f64, height: f64,
+) -> Option<PhysicalMaterial> {
+    if !dx.is_finite() || !dy.is_finite() || !angle.is_finite()
+        || !height.is_finite() || height <= 0.0 { return None; }
+    let mut result = material.clone();
+    {
+        let placements = result.placements.as_mut()?;
+        if placements.is_empty() { return None; }
+        for placement in placements.iter_mut() {
+            placement.x += dx;
+            placement.y = (placement.y + dy).rem_euclid(height);
+            if !placement.x.is_finite() || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite() { return None; }
+        }
+        let anchor_y = placements[0].y;
+        let mut total_mass = 0.0;
+        let mut weighted_x = 0.0;
+        let mut weighted_y = 0.0;
+        for (index, placement) in placements.iter().enumerate() {
+            let (name, amount) = material.material.parts.get(index)?;
+            let resource = resource_for_part(name, catalog)?;
+            let mass = resource.properties.mass * *amount;
+            if !mass.is_finite() || mass <= 0.0 { return None; }
+            total_mass += mass;
+            weighted_x += placement.x * mass;
+            weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
+                - height * 0.5) * mass;
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 { return None; }
+        let center_x = weighted_x / total_mass;
+        let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+        let (sin, cos) = angle.sin_cos();
+        for placement in placements.iter_mut() {
+            let offset_x = placement.x - center_x;
+            let offset_y = (placement.y - center_y + height * 0.5).rem_euclid(height)
+                - height * 0.5;
+            placement.x = center_x + offset_x * cos - offset_y * sin;
+            placement.y = (center_y + offset_x * sin + offset_y * cos).rem_euclid(height);
+            placement.rotation_radians =
+                (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+            if !placement.x.is_finite() || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite() { return None; }
+        }
+    }
+    let boundary_dx = clamp_horizontal_displacement(&result, 0.0, width)?;
+    if boundary_dx != 0.0 {
+        for placement in result.placements.as_mut()? { placement.x += boundary_dx; }
+    }
+    Some(result)
+}
+
 /// Test-only default-path adapter for focused transport unit tests.
 #[cfg(test)]
 fn transport_field(
@@ -579,7 +635,7 @@ fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
-    transport_field_with_singleton_center_velocity_reuse::<true>(
+    transport_field_with_singleton_center_velocity_reuse::<true, false>(
         field,
         catalog,
         world_width,
@@ -592,6 +648,7 @@ fn transport_field(
 /// iteration order cannot change which current an object samples.
 pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+    const COMBINE_TRANSFORMS: bool,
 >(
     field: &mut ActiveMaterialField,
     catalog: &[BaseResource],
@@ -710,12 +767,18 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         if dx.abs() + dy.abs() <= 1e-12 && angular_step.abs() <= 1e-12 {
             continue;
         }
-        let Some(translated_material) = translated(&material, dx, dy, height) else {
-            continue;
-        };
-        let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
-        else {
-            continue;
+        let moved = if COMBINE_TRANSFORMS {
+            let Some(moved) = translated_and_rotated(
+                &material, dx, dy, angular_step, catalog, width, height,
+            ) else { continue; };
+            moved
+        } else {
+            let Some(translated_material) = translated(&material, dx, dy, height) else {
+                continue;
+            };
+            let Some(moved) = rotated(&translated_material, angular_step, catalog, width, height)
+            else { continue; };
+            moved
         };
         let Some(anchor) = moved.placements.as_ref().and_then(|p| p.first()) else {
             continue;
@@ -811,7 +874,7 @@ mod tests {
         let started = Instant::now();
         let mut ticks = 0_u64;
         while started.elapsed() < RUN_DURATION {
-            transport_field_with_singleton_center_velocity_reuse::<true>(
+            transport_field_with_singleton_center_velocity_reuse::<true, false>(
                 field, &catalog, width, height,
             );
             ticks += 1;
@@ -1173,6 +1236,31 @@ mod tests {
     }
 
     #[test]
+    fn combined_transform_matches_separate_translation_and_rotation() {
+        let catalog = crate::resources::default_catalog();
+        let compound = PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+            },
+            vec![
+                crate::structure::Placement { x: 99.2, y: 79.8, rotation_radians: 0.1 },
+                crate::structure::Placement { x: 99.8, y: 0.2, rotation_radians: 0.4 },
+            ],
+            &catalog,
+        ).expect("seam-crossing compound should realize");
+        let (width, height) = (100.0, 80.0);
+        let dx = clamp_horizontal_displacement(&compound, 0.4, width).unwrap();
+        let (dy, angle) = (0.75, 0.13);
+        let translated_material = translated(&compound, dx, dy, height).unwrap();
+        let separate = rotated(&translated_material, angle, &catalog, width, height).unwrap();
+        let combined = translated_and_rotated(
+            &compound, dx, dy, angle, &catalog, width, height,
+        ).unwrap();
+        assert_eq!(combined, separate);
+    }
+
+    #[test]
     fn rotation_preserves_compound_distances_and_bond_state() {
         let catalog = crate::resources::default_catalog();
         let compound = PhysicalMaterial::realized(
@@ -1319,7 +1407,7 @@ mod tests {
             initial_state: Vec<PhysicalMaterial>,
         }
 
-        fn run_once<const REUSE: bool>(label: &str) -> RunResult {
+        fn run_once<const COMBINE: bool>(label: &str) -> RunResult {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let simulation = &mut fixture.simulation;
             let start_objects = simulation
@@ -1352,7 +1440,7 @@ mod tests {
             let start_tick = simulation.tick;
             let started = Instant::now();
             while started.elapsed() < RUN_DURATION {
-                simulation.step_with_transport_reuse::<REUSE>();
+                simulation.step_with_transport_reuse::<true, COMBINE>();
             }
             let elapsed = started.elapsed();
             let ticks = simulation.tick - start_tick;
@@ -1388,11 +1476,14 @@ mod tests {
         }
 
         // Each version receives one uninterrupted, uncapped, maximum-speed run.
-        let baseline = run_once::<false>("BASELINE");
-        let experiment = run_once::<true>("EXPERIMENT");
+        // Hold singleton velocity reuse constant; vary only transform composition.
+        let baseline = run_once::<false>("SEPARATE_TRANSFORMS_BASELINE");
+        let experiment = run_once::<true>("COMBINED_TRANSFORM_EXPERIMENT");
         assert_eq!(baseline.start_objects, experiment.start_objects);
         assert_eq!(baseline.start_constituents, experiment.start_constituents);
         assert_eq!(baseline.initial_state, experiment.initial_state);
+        assert_eq!(baseline.end_objects, experiment.end_objects);
+        assert_eq!(baseline.end_constituents, experiment.end_constituents);
 
         let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
         let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
