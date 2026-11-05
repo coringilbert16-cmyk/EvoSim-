@@ -211,7 +211,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_simulation_starts_with_1280_randomized_base_resources() {
+    fn default_simulation_starts_with_1280_objects_including_80_molecules() {
         let simulation = Simulation::new(73, 10.0);
         assert_eq!(simulation.environment.width, 250.0);
         assert_eq!(simulation.environment.height, 250.0);
@@ -223,14 +223,18 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
-        assert!(materials.iter().all(|material| {
-            material.material.parts.len() == 1 && material.material.parts[0].1 == 1.0
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 1).count(), ENVIRONMENT_SINGLE_RESOURCE_COUNT);
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 2).count(), ENVIRONMENT_MOLECULE_COUNT);
+        assert!(materials.iter().filter(|m| m.material.parts.len() == 2).all(|m| {
+            m.material.internal_bonds.len() == 1
+                && m.placements.as_ref().is_some_and(|p| p.len() == 2)
+                && m.internal_connections.as_ref().is_some_and(|b| b.len() == 1)
         }));
         assert!(simulation.hotspot.is_some());
     }
 
     #[test]
-    fn fixture_has_1280_whole_resources_in_randomized_valid_piles_and_no_organisms() {
+    fn fixture_has_1280_objects_with_80_intact_molecules_and_no_organisms() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
@@ -254,6 +258,16 @@ mod tests {
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>();
         assert_eq!(material_count, ENVIRONMENT_OBJECT_COUNT);
+        let materials = first.simulation.environment.field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter()).collect::<Vec<_>>();
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 1).count(), ENVIRONMENT_SINGLE_RESOURCE_COUNT);
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 2).count(), ENVIRONMENT_MOLECULE_COUNT);
+        let hs = materials.iter().filter(|m| m.material.parts.iter().any(|p| p.0 == "Sulfur")
+            && m.material.parts.iter().any(|p| p.0 == "Hydrogen")).count();
+        let ch = materials.iter().filter(|m| m.material.parts.iter().any(|p| p.0 == "Carbon")
+            && m.material.parts.iter().any(|p| p.0 == "Hydrogen")).count();
+        assert_eq!(hs, 40);
+        assert_eq!(ch, 40);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -288,7 +302,7 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - ENVIRONMENT_OBJECT_COUNT as f64).abs() < 1e-6);
+        assert!((total_material - (ENVIRONMENT_SINGLE_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT) as f64).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
