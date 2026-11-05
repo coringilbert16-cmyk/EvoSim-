@@ -1147,10 +1147,17 @@ mod tests {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let catalog = fixture.simulation.environment.catalog.clone();
             let field = &mut fixture.simulation.environment.field;
-            let object_count = field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
-            let constituent_count = field.cells.iter()
+            let object_count = field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>();
+            let constituent_count = field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len()).sum::<usize>();
+                .map(|material| material.material.parts.len())
+                .sum::<usize>();
             let started = Instant::now();
             let moved = transport_field(field, &catalog, 250.0, 250.0);
             (started.elapsed(), moved, object_count, constituent_count)
