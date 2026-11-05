@@ -1,6 +1,10 @@
 name: Transport movement profile
 
 on:
+  pull_request:
+    paths:
+      - 'src/simulation/environment_flow.rs'
+      - '.github/workflows/transport-movement-profile.yml'
   workflow_dispatch:
 
 jobs:
