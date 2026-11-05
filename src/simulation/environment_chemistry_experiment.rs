@@ -23,6 +23,7 @@ pub(crate) fn seed_randomized_resources(
     seed: u64,
     width: f64,
     height: f64,
+    include_molecules: bool,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -36,13 +37,15 @@ pub(crate) fn seed_randomized_resources(
     );
 
     let mut identities = resource_names.clone();
-    while identities.len() < ENVIRONMENT_SINGLE_RESOURCE_COUNT {
+    let single_resource_count = if include_molecules { ENVIRONMENT_SINGLE_RESOURCE_COUNT } else { ENVIRONMENT_OBJECT_COUNT };
+    let molecule_count = if include_molecules { ENVIRONMENT_MOLECULE_COUNT } else { 0 };
+    while identities.len() < single_resource_count {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
     identities.shuffle(&mut rng);
     let mut objects: Vec<(Vec<String>, bool)> = identities.into_iter()
         .map(|name| (vec![name], false)).collect();
-    for _ in 0..40 {
+    for _ in 0..(molecule_count / 2) {
         objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
         objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
     }
@@ -140,6 +143,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         seed,
         simulation.environment.width,
         simulation.environment.height,
+        true,
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
@@ -223,8 +227,8 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
-        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 1).count(), ENVIRONMENT_SINGLE_RESOURCE_COUNT);
-        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 2).count(), ENVIRONMENT_MOLECULE_COUNT);
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 1).count(), ENVIRONMENT_OBJECT_COUNT);
+        assert_eq!(materials.iter().filter(|m| m.material.parts.len() == 2).count(), 0);
         assert!(materials.iter().filter(|m| m.material.parts.len() == 2).all(|m| {
             m.material.internal_bonds.len() == 1
                 && m.placements.as_ref().is_some_and(|p| p.len() == 2)
