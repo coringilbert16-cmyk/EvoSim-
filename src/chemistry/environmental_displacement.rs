@@ -1316,7 +1316,7 @@ mod tests {
             "Oxygen",
             crate::structure::Placement {
                 x: 1.577_350_269_189_625_8,
-                y: 0.0,
+                y: 0.12,
                 rotation_radians: std::f64::consts::PI,
             },
         ));
@@ -1488,10 +1488,14 @@ mod tests {
         let indices_b = crate::material_restoration::restore_material(
             &mut combined,
             &reactants[1],
-            source.units[2].placement,
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
             &catalog,
         )
-        .expect("incoming field source should restore at its fixture contact pose");
+        .expect("incoming field source should restore in the shared material frame");
         assert!(
             !indices_b.iter().any(|index| {
                 crate::construction_runtime::placed_unit_overlaps(
