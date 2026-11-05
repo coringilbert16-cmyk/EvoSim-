@@ -276,20 +276,11 @@ fn chemical_step(
     let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
         reject_step!();
     };
-    let Some(interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-        material_name_a,
-        &structure.units[selected.unit_a],
-        material_name_b,
-        &structure.units[selected.unit_b],
-        selected.candidate,
-        &environment.catalog,
-    ) else {
-        reject_step!();
-    };
-    let cache_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+    // The static potential depends on canonical chemistry identity and
+    // chemical positions, not the geometry variant that happens to be touching.
+    let cache_key = chemistry_library.key_from_chemical_pair(
         material_name_a,
         material_name_b,
-        &interface,
         position_a,
         position_b,
     );
@@ -309,6 +300,18 @@ fn chemical_step(
                 Ok(None) | Err(_) => calculated,
             }
         }
+    };
+    // Resolve exact live geometry after the invariant cache lookup. This
+    // remains mandatory for contact, facing, engagement, and reaction checks.
+    let Some(_interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+        material_name_a,
+        &structure.units[selected.unit_a],
+        material_name_b,
+        &structure.units[selected.unit_b],
+        selected.candidate,
+        &environment.catalog,
+    ) else {
+        reject_step!();
     };
     let Some(contact) = crate::chemistry::contact_factor(
         selected.candidate.distance,
@@ -3235,7 +3238,7 @@ mod tests {
         assert_eq!(
             chemistry_library.len(),
             1,
-            "the live chemistry step must cache the selected physical interface"
+            "the live chemistry step must cache one canonical static-potential pair"
         );
         assert!(
             !accumulation.is_empty() || !operations.is_empty(),
@@ -3250,21 +3253,24 @@ mod tests {
             &catalog,
         )
         .expect("the selected live interface must remain resolvable");
+        assert!(
+            !interface.signature.is_empty(),
+            "live geometry identity must resolve independently of the static-potential cache"
+        );
         let selected_position = constituent_chemical_position(selected_unit, &catalog)
             .expect("selected constituent must retain its chemical position");
         let external_position =
             constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
                 .expect("external constituent must retain its chemical position");
-        let chemistry_key = crate::chemistry_library::ChemistryKey::from_live_geometry(
+        let chemistry_key = chemistry_library.key_from_chemical_pair(
             selected_name,
             external_name,
-            &interface,
             selected_position,
             external_position,
         );
         let cached = chemistry_library
             .get(&chemistry_key)
-            .expect("chemical step must key its record by the exact constituent interface");
+            .expect("chemical step must reuse the canonical static-potential cache key");
         let expected_potential = crate::chemistry::interaction_potential(
             selected_position,
             external_position,
