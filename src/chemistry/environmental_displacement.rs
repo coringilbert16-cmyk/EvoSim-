@@ -974,6 +974,24 @@ pub(crate) fn resolve_environmental(
     ) else {
         return false;
     };
+    let Some(derived_activation) =
+        crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
+    else {
+        return false;
+    };
+    if (derived_activation - operation.activation_signal).abs() > 1e-9 {
+        return false;
+    }
+    let Some(expected_frequency) = displacement_reaction_frequency(
+        &combined.units[anchor_unit],
+        &combined.units[displaced_unit],
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
+        return false;
+    }
     let Some(transaction) = trial.energy.settlement_transaction(EnergyReason::Combine) else {
         return false;
     };
