@@ -54,7 +54,7 @@ pub(crate) fn seed_randomized_resources(
         .into_iter()
         .map(|name| (vec![name], false))
         .collect();
-    for _ in 0..(molecule_count / 2) {
+    for _ in 0..molecule_count / 2 {
         let hydrogen_sulfur = (vec!["Hydrogen".into(), "Sulfur".into()], true);
         let carbon_hydrogen = (vec!["Carbon".into(), "Hydrogen".into()], true);
         let hs_index = rng.gen_range(0..=objects.len());
