@@ -31,7 +31,8 @@ pub(crate) struct DisplacementPreflight {
 
 impl DisplacementPreflight {
     pub(crate) fn is_activated(self) -> bool {
-        crate::chemistry::activated(self.incoming_activation, self.disruption_barrier)
+        self.incoming_activation > 0.0
+            && crate::chemistry::activated(self.incoming_activation, self.disruption_barrier)
     }
 
     pub(crate) fn is_energy_favorable_without_external_input(self) -> bool {
@@ -124,7 +125,6 @@ pub(crate) fn build_displacement_trial(
 
     let anchor_id = source.physical_id(anchor_unit)?;
     let displaced_id = source.physical_id(displaced_unit)?;
-    let incoming_id = source.physical_id(incoming_unit)?;
     let old_connects_expected_pair = (old_bond.endpoint_a.constituent_id == anchor_id
         && old_bond.endpoint_b.constituent_id == displaced_id)
         || (old_bond.endpoint_b.constituent_id == anchor_id
@@ -541,10 +541,12 @@ mod tests {
         .into_iter()
         .find(|candidate| {
             candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.facing.is_finite()
+                && candidate.facing > 0.0
                 && candidate.available_a
                 && candidate.available_b
         })
-        .expect("freed Carbon endpoint should contact incoming Oxygen");
+        .expect("freed Carbon endpoint should expose an engaged incoming Oxygen contact");
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             &replacement_trial,
             0,
@@ -601,7 +603,11 @@ mod tests {
             product.material.parts == vec![("Hydrogen".to_owned(), 1.0)]
                 && product.material.internal_bonds.is_empty()
         }));
-        assert!(trial.energy.required_external_input <= 1e-9);
+        assert!(
+            trial.disruption_work > 0.0
+                && trial.energy.required_external_input > 0.0,
+            "a favorable replacement still has to fund the old bond's physical disruption work"
+        );
         assert_eq!(trial.removed_bond, old_bond);
         let bonded_product = trial
             .products
@@ -618,10 +624,10 @@ mod tests {
     fn committed_trial_updates_graph_energy_and_products_together() {
         let catalog = default_catalog();
         let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
-        let mut ledger = crate::state::EnergyLedger::default();
-        ledger.total_structural_energy_held =
-            crate::energy_ledger::structural_potential(&source).unwrap();
-        let mut usable_energy = 0.0;
+        let mut ledger = crate::state::EnergyLedger {
+            total_structural_energy_held: crate::energy_ledger::structural_potential(&source).unwrap(),
+            ..Default::default()
+        };
         let trial = build_displacement_trial(
             &source,
             0,
@@ -637,13 +643,18 @@ mod tests {
         )
         .expect("valid displacement trial");
 
+        let available_energy = trial.energy.required_external_input;
+        assert!(available_energy > 0.0);
+        ledger.total_usable_energy_held = available_energy;
+        let mut usable_energy = available_energy;
         let products =
             commit_displacement_trial(&mut source, trial, &mut ledger, &mut usable_energy)
-                .expect("favorable trial should commit atomically");
+                .expect("funded favorable trial should commit atomically");
 
         assert_eq!(source.bonds.len(), 1);
         assert_eq!(products.len(), 2);
-        assert!(usable_energy.is_finite() && usable_energy > 0.0);
+        assert!(usable_energy.is_finite() && usable_energy >= 0.0);
+        assert!(usable_energy < available_energy);
         assert_eq!(
             ledger.total_structural_energy_held,
             -source.bonds[0].bond_energy
