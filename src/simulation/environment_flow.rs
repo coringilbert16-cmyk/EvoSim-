@@ -299,6 +299,7 @@ fn angular_displacement(
     width: f64,
     height: f64,
     obstacles: &[Obstacle],
+    center_velocity: Option<Velocity>,
     source_cell: usize,
     source_index: usize,
 ) -> f64 {
@@ -336,15 +337,19 @@ fn angular_displacement(
     let center_x = weighted_x / total_mass;
     let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
 
-    let center_velocity = obstacle_adjusted_velocity(
-        background_velocity(center_x, center_y, width, height),
-        center_x,
-        center_y,
-        source_cell,
-        source_index,
-        obstacles,
-        height,
-    );
+    // Single-part materials have identical arithmetic and mass-weighted centers.
+    // Reuse the translational sample instead of scanning the same obstacles again.
+    let center_velocity = center_velocity.unwrap_or_else(|| {
+        obstacle_adjusted_velocity(
+            background_velocity(center_x, center_y, width, height),
+            center_x,
+            center_y,
+            source_cell,
+            source_index,
+            obstacles,
+            height,
+        )
+    });
     let mut torque = 0.0;
     let mut moment = 0.0;
     for (index, placement) in placements.iter().enumerate() {
@@ -655,6 +660,7 @@ pub(crate) fn transport_field(
             width,
             height,
             nearby,
+            (material.material.parts.len() == 1).then_some(velocity),
             source_cell,
             source_index,
         );
@@ -870,7 +876,7 @@ mod tests {
             1000.0,
         )
         .unwrap();
-        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
+        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], None, 0, 0);
         let mut expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
         assert_ne!(objects[0].environmental_identity, 0);
@@ -976,7 +982,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog resource should realize");
-        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], 0, 0);
+        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], None, 0, 0);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
@@ -1006,12 +1012,49 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], 0, 1);
+        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], None, 0, 1);
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
             "a compound spanning a flow gradient should experience angular response"
         );
+    }
+
+    #[test]
+    fn singleton_angular_response_matches_reused_center_velocity() {
+        let catalog = crate::resources::default_catalog();
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 25.0,
+                y: 40.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog resource should realize");
+        let (x, y) = material_center(&material, 80.0).unwrap();
+        let velocity = obstacle_adjusted_velocity(
+            background_velocity(x, y, 100.0, 80.0),
+            x,
+            y,
+            0,
+            0,
+            &[],
+            80.0,
+        );
+        let recomputed = angular_displacement(&material, &catalog, 100.0, 80.0, &[], None, 0, 0);
+        let reused = angular_displacement(
+            &material,
+            &catalog,
+            100.0,
+            80.0,
+            &[],
+            Some(velocity),
+            0,
+            0,
+        );
+        assert_eq!(recomputed, reused);
     }
 
     #[test]
@@ -1138,14 +1181,14 @@ mod tests {
     #[test]
     #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
     fn environmental_discovery_ab_benchmark_transport_baseline() {
-        transport_molecular_baseline_benchmark();
+        transport_molecular_candidate_evaluation_benchmark();
     }
 
-    /// Manual, same-seed transport baseline. Run with:
-    /// cargo test --locked transport_molecular_baseline_benchmark -- --ignored --nocapture
+    /// Manual, same-seed candidate-evaluation benchmark. Run with:
+    /// cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
     #[test]
-    #[ignore = "manual transport baseline timing; run with --ignored --nocapture"]
-    fn transport_molecular_baseline_benchmark() {
+    #[ignore = "manual transport experiment timing; run with --ignored --nocapture"]
+    fn transport_molecular_candidate_evaluation_benchmark() {
         use std::time::Instant;
 
         const SEED: u64 = 42;
@@ -1175,7 +1218,7 @@ mod tests {
         assert_eq!(warmup.2, 1_280);
         assert_eq!(warmup.3, 1_360);
         println!(
-            "TRANSPORT BASELINE WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
+            "TRANSPORT EXPERIMENT WARMUP: seed={SEED} objects={} constituents={} moved={} elapsed_ms={:.3}",
             warmup.2, warmup.3, warmup.1, warmup.0.as_secs_f64() * 1_000.0
         );
 
@@ -1186,14 +1229,14 @@ mod tests {
             assert_eq!(constituents, 1_360);
             elapsed_ms.push(elapsed.as_secs_f64() * 1_000.0);
             println!(
-                "TRANSPORT BASELINE SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
+                "TRANSPORT EXPERIMENT SAMPLE: sample={} seed={SEED} objects={objects} constituents={constituents} moved={moved} elapsed_ms={:.3}",
                 sample + 1,
                 elapsed_ms[sample]
             );
         }
         elapsed_ms.sort_by(f64::total_cmp);
         println!(
-            "TRANSPORT BASELINE SUMMARY: seed={SEED} samples={SAMPLES} min_ms={:.3} median_ms={:.3} max_ms={:.3}",
+            "TRANSPORT EXPERIMENT SUMMARY: seed={SEED} samples={SAMPLES} min_ms={:.3} median_ms={:.3} max_ms={:.3}",
             elapsed_ms[0], elapsed_ms[SAMPLES / 2], elapsed_ms[SAMPLES - 1]
         );
     }
