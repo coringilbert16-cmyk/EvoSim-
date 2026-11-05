@@ -665,17 +665,6 @@ pub(crate) fn accumulate_environmental(
         ) else {
             continue;
         };
-        // Static potential reuse never bypasses live interface eligibility.
-        let Some(_interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
-            geometry_material_a,
-            &hypothetical.units[unit_a],
-            geometry_material_b,
-            &hypothetical.units[unit_b],
-            candidate,
-            &environment.catalog,
-        ) else {
-            continue;
-        };
         let Some(contact_factor) = crate::chemistry::contact_factor(
             candidate.distance,
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
