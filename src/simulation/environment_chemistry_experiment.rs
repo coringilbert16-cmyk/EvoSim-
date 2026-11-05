@@ -14,8 +14,8 @@ const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
 const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
 
-/// Seed 1,280 physical objects in randomized piles. The benchmark variant
-/// substitutes 80 intact molecules for 80 single-resource objects.
+/// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
+/// are an unrestricted random partition, not a fixed 6–20 range.
 pub(crate) fn seed_randomized_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -35,13 +35,13 @@ pub(crate) fn seed_randomized_resources(
     );
 
     let mut identities = resource_names.clone();
-    while identities.len() < ENVIRONMENT_RESOURCE_COUNT {
+    while identities.len() < ENVIRONMENT_OBJECT_COUNT {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
     identities.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_RESOURCE_COUNT).collect();
+    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
     cuts.shuffle(&mut rng);
     cuts.truncate(pile_count - 1);
     cuts.sort_unstable();
@@ -49,7 +49,7 @@ pub(crate) fn seed_randomized_resources(
     let mut pile_sizes = Vec::with_capacity(pile_count);
     for cut in cuts
         .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_RESOURCE_COUNT))
+        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
     {
         pile_sizes.push(cut - previous);
         previous = cut;
@@ -92,10 +92,12 @@ pub(crate) fn seed_randomized_resources(
             );
         }
     }
-    assert_eq!(identity_index, ENVIRONMENT_RESOURCE_COUNT);
+    assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
 
+/// Seed 1,280 physical objects for transport benchmarking: 1,200 free resources
+/// plus 80 intact molecules (40 H-S and 40 C-H) in randomized piles.
 fn seed_randomized_molecular_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
