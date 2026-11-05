@@ -868,15 +868,20 @@ mod tests {
             samples.len(),
         );
         for bin_size in [5.0, 2.5, 1.25] {
-            let build_started = Instant::now();
-            let (cols, rows, bins) =
-                build_obstacle_bins(&obstacles, width, height, bin_size);
-            let build_elapsed = build_started.elapsed();
-            let total_memberships = bins.iter().map(Vec::len).sum::<usize>();
             let mut evaluations = 0_u64;
             let mut candidate_visits = 0_u64;
+            let mut bin_builds = 0_u64;
+            let mut total_build_time = Duration::ZERO;
+            let mut total_memberships = 0_usize;
             let started = Instant::now();
             while started.elapsed() < PHASE_DURATION {
+                let build_started = Instant::now();
+                let (cols, rows, bins) =
+                    build_obstacle_bins(&obstacles, width, height, bin_size);
+                total_build_time += build_started.elapsed();
+                bin_builds += 1;
+                total_memberships = bins.iter().map(Vec::len).sum::<usize>();
+
                 for (cell, index, x, y) in &samples {
                     let col = ((*x / bin_size).floor() as usize).min(cols.saturating_sub(1));
                     let row = ((*y / bin_size).floor() as usize).min(rows.saturating_sub(1));
@@ -897,10 +902,13 @@ mod tests {
             }
             let elapsed = started.elapsed();
             println!(
-                "OBSTACLE BIN RESULT: bin_size={bin_size:.2} bins={} bin_memberships={} build_ms={:.3} elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} candidate_visits={} candidates_per_evaluation={:.2}",
-                bins.len(),
+                "OBSTACLE BIN RESULT: bin_size={bin_size:.2} bins={} bin_memberships={} bin_builds={} total_build_ms={:.3} average_build_ms={:.3} elapsed_s={:.3} evaluations={} evaluations_per_second_including_build={:.1} candidate_visits={} candidates_per_evaluation={:.2}",
+                ((width / bin_size).ceil().max(1.0) as usize)
+                    * ((height / bin_size).ceil().max(1.0) as usize),
                 total_memberships,
-                build_elapsed.as_secs_f64() * 1000.0,
+                bin_builds,
+                total_build_time.as_secs_f64() * 1000.0,
+                total_build_time.as_secs_f64() * 1000.0 / bin_builds.max(1) as f64,
                 elapsed.as_secs_f64(),
                 evaluations,
                 evaluations as f64 / elapsed.as_secs_f64(),
