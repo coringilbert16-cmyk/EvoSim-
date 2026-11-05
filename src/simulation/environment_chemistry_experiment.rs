@@ -73,7 +73,7 @@ pub(crate) fn seed_randomized_resources(
         height,
         &mut rng,
     );
-    let mut identity_index = 0;
+    let mut object_index = 0;
     for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
         let (center_x, center_y) = centers[pile_index];
         let columns = (pile_size as f64).sqrt().ceil() as usize;
@@ -82,25 +82,35 @@ pub(crate) fn seed_randomized_resources(
             let column = local_index % columns;
             let row = local_index / columns;
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 1.0);
+                .clamp(1.0, width - 2.8);
             let y =
                 (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
-            let placement = Placement {
-                x,
-                y,
-                rotation_radians: rng.gen_range(0.0..std::f64::consts::TAU),
+            let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
+            let placement = Placement { x, y, rotation_radians: rotation };
+            let (parts, is_molecule) = &objects[object_index];
+            let material = if *is_molecule {
+                Material {
+                    parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
+                    internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+                }
+            } else {
+                Material::free_base(&parts[0], 1.0)
             };
-            let material = Material::free_base(&identities[identity_index], 1.0);
-            identity_index += 1;
-            let physical = PhysicalMaterial::realized(material, vec![placement], catalog)
-                .expect("canonical base resources must have valid physical geometry");
+            let placements = if *is_molecule {
+                vec![placement, Placement { x: x + 1.8, y, rotation_radians: rotation }]
+            } else {
+                vec![placement]
+            };
+            let physical = PhysicalMaterial::realized(material, placements, catalog)
+                .expect("seeded resource or molecule must have valid physical geometry");
+            object_index += 1;
             assert!(
                 field.deposit_physical(x, y, physical, catalog),
-                "randomized pile {pile_index} resource {local_index} must remain in bounds"
+                "randomized pile {pile_index} object {local_index} must remain in bounds"
             );
         }
     }
-    assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
 
