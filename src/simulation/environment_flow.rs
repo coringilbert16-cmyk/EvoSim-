@@ -1133,14 +1133,6 @@ mod tests {
         assert_eq!(upstream, free);
     }
 
-    /// The existing CI ignored-benchmark hook filters this prefix, so this
-    /// alias ensures the transport baseline runs in the same controlled job.
-    #[test]
-    #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
-    fn environmental_discovery_ab_benchmark_transport_baseline() {
-        transport_molecular_baseline_benchmark();
-    }
-
     /// Manual, same-seed transport baseline. Run with:
     /// cargo test --locked transport_molecular_baseline_benchmark -- --ignored --nocapture
     #[test]
