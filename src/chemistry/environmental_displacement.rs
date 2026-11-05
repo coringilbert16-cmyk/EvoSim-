@@ -125,11 +125,10 @@ pub(crate) fn build_displacement_trial(
     let anchor_id = source.physical_id(anchor_unit)?;
     let displaced_id = source.physical_id(displaced_unit)?;
     let incoming_id = source.physical_id(incoming_unit)?;
-    let old_connects_expected_pair =
-        (old_bond.endpoint_a.constituent_id == anchor_id
-            && old_bond.endpoint_b.constituent_id == displaced_id)
-            || (old_bond.endpoint_b.constituent_id == anchor_id
-                && old_bond.endpoint_a.constituent_id == displaced_id);
+    let old_connects_expected_pair = (old_bond.endpoint_a.constituent_id == anchor_id
+        && old_bond.endpoint_b.constituent_id == displaced_id)
+        || (old_bond.endpoint_b.constituent_id == anchor_id
+            && old_bond.endpoint_a.constituent_id == displaced_id);
     if !old_connects_expected_pair
         || !source
             .bonds
@@ -243,9 +242,7 @@ pub(crate) fn commit_displacement_trial(
         return None;
     }
 
-    let transaction = trial
-        .energy
-        .settlement_transaction(EnergyReason::Combine)?;
+    let transaction = trial.energy.settlement_transaction(EnergyReason::Combine)?;
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = *usable_energy;
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
@@ -307,8 +304,7 @@ pub(crate) fn evaluate_displacement_preflight(
     }
 
     let old_bond_energy = intrinsic_bond_potential(anchor, displaced, old_bond_strength);
-    let replacement_bond_energy =
-        intrinsic_bond_potential(anchor, incoming, replacement_strength);
+    let replacement_bond_energy = intrinsic_bond_potential(anchor, incoming, replacement_strength);
     if !old_bond_energy.is_finite()
         || old_bond_energy < 0.0
         || !replacement_bond_energy.is_finite()
@@ -525,14 +521,8 @@ mod tests {
         let displaced = source.units[1].properties(catalog).unwrap();
         let strength = bond_strength(anchor, displaced);
         let old_bond = Bond {
-            endpoint_a: BondEndpoint::new(
-                source.physical_id(0).unwrap(),
-                old_candidate.endpoint_a,
-            ),
-            endpoint_b: BondEndpoint::new(
-                source.physical_id(1).unwrap(),
-                old_candidate.endpoint_b,
-            ),
+            endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
+            endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
             strength,
             bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
         };
@@ -569,13 +559,11 @@ mod tests {
     #[test]
     fn incoming_activation_is_accumulated_from_the_replacement_contact() {
         let catalog = default_catalog();
-        let (source, _old_bond, candidate, _investment) =
-            three_participant_fixture(&catalog);
+        let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
         let anchor = source.units[0].properties(&catalog).unwrap();
         let incoming = source.units[2].properties(&catalog).unwrap();
-        let activation =
-            accumulate_incoming_activation(anchor, incoming, candidate, 0.0)
-                .expect("valid live contact should accumulate incoming influence");
+        let activation = accumulate_incoming_activation(anchor, incoming, candidate, 0.0)
+            .expect("valid live contact should accumulate incoming influence");
         assert!(activation > 0.0);
         assert!(activation.is_finite());
     }
@@ -629,8 +617,7 @@ mod tests {
     #[test]
     fn committed_trial_updates_graph_energy_and_products_together() {
         let catalog = default_catalog();
-        let (mut source, old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let mut ledger = crate::state::EnergyLedger::default();
         ledger.total_structural_energy_held =
             crate::energy_ledger::structural_potential(&source).unwrap();
@@ -650,18 +637,17 @@ mod tests {
         )
         .expect("valid displacement trial");
 
-        let products = commit_displacement_trial(
-            &mut source,
-            trial,
-            &mut ledger,
-            &mut usable_energy,
-        )
-        .expect("favorable trial should commit atomically");
+        let products =
+            commit_displacement_trial(&mut source, trial, &mut ledger, &mut usable_energy)
+                .expect("favorable trial should commit atomically");
 
         assert_eq!(source.bonds.len(), 1);
         assert_eq!(products.len(), 2);
         assert!(usable_energy.is_finite() && usable_energy > 0.0);
-        assert_eq!(ledger.total_structural_energy_held, -source.bonds[0].bond_energy);
+        assert_eq!(
+            ledger.total_structural_energy_held,
+            -source.bonds[0].bond_energy
+        );
     }
 
     #[test]
@@ -689,13 +675,10 @@ mod tests {
         let ledger_before = ledger;
         let mut usable_energy = 0.0;
 
-        assert!(commit_displacement_trial(
-            &mut source,
-            trial,
-            &mut ledger,
-            &mut usable_energy,
-        )
-        .is_none());
+        assert!(
+            commit_displacement_trial(&mut source, trial, &mut ledger, &mut usable_energy,)
+                .is_none()
+        );
         assert_eq!(source.units, graph_before.units);
         assert_eq!(source.bonds, graph_before.bonds);
         assert_eq!(ledger, ledger_before);
@@ -707,22 +690,20 @@ mod tests {
         let catalog = default_catalog();
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let before = source.clone();
-        assert!(
-            build_displacement_trial(
-                &source,
-                0,
-                1,
-                2,
-                old_bond,
-                candidate,
-                investment,
-                0.0,
-                catalog_reactivity_baseline(),
-                0.0,
-                &catalog,
-            )
-            .is_none()
-        );
+        assert!(build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            0.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .is_none());
         assert_eq!(source.units, before.units);
         assert_eq!(source.bonds, before.bonds);
     }
