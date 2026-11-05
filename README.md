@@ -43,6 +43,34 @@ The ignored benchmark test completed successfully: **1 passed, 0 failed**, in **
 
 **Next optimization target:** per-material movement evaluation. The preceding transport profile (PR [#304](https://github.com/coringilbert16-cmyk/EvoSim-/pull/304)) measured this stage at **50.903 seconds / 85.2%** of a 60-second transport-only profile; snapshot/identity assignment was 3.1%, obstacle construction 4.1%, obstacle-bin construction 4.4%, and movement commit 3.3%. The next experiment should profile and optimize work *inside* this dominant per-material evaluation stage, retaining exact candidate coverage and the existing movement equations. Do not spend effort optimizing obstacle-bin construction based on the current evidence.
 
+## Closed obstacle-bin resolution experiment — PR #309
+
+**Outcome: failed as a performance optimization; PR #309 was closed without merging.** The experiment compared 5.0, 2.5, and 1.25 world-unit obstacle bins using the same seed-42 fixture. The benchmark included obstacle-index construction in its timed throughput, so it measured the end-to-end trade-off rather than candidate scanning alone.
+
+Fixture: **1,280 objects, 1,280 obstacles, and 1,360 velocity samples**. Each resolution ran for a fixed two-second wall-clock phase.
+
+| Bin size | Candidate visits / evaluation | Evaluations/s (including index build) | Bin count | Average index-build time |
+|---|---:|---:|---:|---:|
+| 5.0 (current) | 33.23 | **953,587** | 2,500 | 0.295 ms |
+| 2.5 | 19.97 | 808,475 | 10,000 | 0.738 ms |
+| 1.25 | 14.11 | 486,732 | 40,000 | 1.593 ms |
+
+The 2.5-unit bins reduced candidate visits by about **40%**, but reduced total throughput by about **15%**. The 1.25-unit bins reduced candidate visits by about **58%**, but reduced throughput by about **49%**. Index construction and the larger index outweighed the savings from shorter candidate lists.
+
+The dedicated benchmark workflow passed (**1 passed, 0 failed**). That workflow ran the timed benchmark only; it did **not** run the separate exact-output differential test. The differential test was added to the PR's normal Rust test suite, whose latest run was still in progress when this result was documented. These benchmark results are sufficient to reject smaller bins as a performance change, but they are not evidence that the full PR CI passed.
+
+**Decision:** retain the production 5.0-unit bin size. Do not merge or reuse the smaller-bin configurations as an optimization. The experiment changed no production default and is preserved here as negative performance evidence.
+
+**Next experiment — early geometric rejection inside the existing 5.0-unit bins:** profile and benchmark a cheap axis-aligned bounds check in `obstacle_adjusted_velocity` before calculating Euclidean distance. A candidate can be skipped exactly when it lies outside both possible influence regions: the proximity radius (`2.5 × obstacle radius`) and the downstream-wake rectangle (`6 × radius` horizontally, `2 × radius` vertically). This should avoid unnecessary `hypot` calls for distant candidates while retaining candidate order and the existing influence equations.
+
+Guardrails for that experiment:
+- Keep `FLOW_BIN_SIZE = 5.0`; do not change the spatial index.
+- Preserve the exact order of candidate processing and all existing movement equations.
+- Skip only candidates that cannot affect either proximity flow or the downstream wake; do not cap candidate counts.
+- Add exact-output differential coverage against the current evaluator over boundary cases and a broad position grid.
+- Benchmark the evaluator and full movement path with the same fixed seed and wall-clock methodology; report candidate visits, early rejects, distance calculations, and end-to-end throughput.
+- Use the stored PR #308 profile as the comparison baseline; do not rerun the baseline for each experimental variant.
+
 ## Permanent renderer-tested environment baseline
 
 The default simulation now uses the established renderer configuration; this is the normal environment, not an opt-in experiment:
