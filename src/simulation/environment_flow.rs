@@ -1190,15 +1190,29 @@ mod tests {
         fn run_once<const REUSE: bool>(label: &str) -> RunResult {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let simulation = &mut fixture.simulation;
-            let start_objects = simulation.environment.field.cells.iter()
-                .map(|cell| cell.physical_materials.len()).sum::<usize>();
-            let start_constituents = simulation.environment.field.cells.iter()
+            let start_objects = simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>();
+            let start_constituents = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len()).sum::<usize>();
+                .map(|material| material.material.parts.len())
+                .sum::<usize>();
             assert_eq!(start_objects, 1_280);
             assert_eq!(start_constituents, 1_360);
 
-            let mut initial_state = simulation.environment.field.cells.iter()
+            let mut initial_state = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter().cloned())
                 .collect::<Vec<_>>();
             initial_state.sort_unstable_by_key(|material| material.environmental_identity);
@@ -1210,11 +1224,21 @@ mod tests {
             }
             let elapsed = started.elapsed();
             let ticks = simulation.tick - start_tick;
-            let end_objects = simulation.environment.field.cells.iter()
-                .map(|cell| cell.physical_materials.len()).sum::<usize>();
-            let end_constituents = simulation.environment.field.cells.iter()
+            let end_objects = simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .map(|cell| cell.physical_materials.len())
+                .sum::<usize>();
+            let end_constituents = simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len()).sum::<usize>();
+                .map(|material| material.material.parts.len())
+                .sum::<usize>();
             println!(
                 "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
                 elapsed.as_secs_f64(),
