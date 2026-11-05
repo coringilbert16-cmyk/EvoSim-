@@ -214,8 +214,16 @@ fn obstacle_adjusted_velocity(
         }
         let dx = x - obstacle.x;
         let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
-        let distance = dx.hypot(dy).max(1e-9);
         let radius = obstacle.radius.max(0.5);
+        // Neither proximity deflection nor the downstream wake can reach a
+        // point outside this union's enclosing axis-aligned bounds. Reject it
+        // before the comparatively expensive Euclidean distance calculation.
+        // The strict bounds mirror the existing strict influence comparisons.
+        let proximity_extent = radius * 2.5;
+        if dx <= -proximity_extent || dx >= radius * 6.0 || dy.abs() >= proximity_extent {
+            continue;
+        }
+        let distance = dx.hypot(dy).max(1e-9);
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
             let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
@@ -1089,6 +1097,266 @@ mod tests {
         assert_eq!(rotated.material, compound.material);
         assert_eq!(rotated.internal_connections, compound.internal_connections);
         assert_eq!(rotated.realized_shapes, compound.realized_shapes);
+    }
+
+    #[test]
+    fn obstacle_early_rejection_matches_full_scan_across_influence_boundaries() {
+        fn reference(
+            mut velocity: Velocity,
+            x: f64,
+            y: f64,
+            source_cell: usize,
+            source_index: usize,
+            obstacles: &[Obstacle],
+            height: f64,
+        ) -> Velocity {
+            for obstacle in obstacles {
+                if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
+                    continue;
+                }
+                if obstacle.solidity <= 1e-6 {
+                    continue;
+                }
+                let dx = x - obstacle.x;
+                let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+                let distance = dx.hypot(dy).max(1e-9);
+                let radius = obstacle.radius.max(0.5);
+                if distance < radius * 2.5 {
+                    let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+                    let side = if dy >= 0.0 { 1.0 } else { -1.0 };
+                    velocity = velocity.add(Velocity {
+                        x: -dx.signum() * influence * 0.22,
+                        y: side * influence * 0.65,
+                    });
+                }
+                if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
+                    let longitudinal = 1.0 - dx / (radius * 6.0);
+                    let lateral = 1.0 - dy.abs() / (radius * 2.0);
+                    let attenuation =
+                        (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                    velocity = velocity.scale(1.0 - attenuation);
+                }
+            }
+            velocity
+        }
+
+        let obstacles = [
+            Obstacle {
+                source_cell: 1,
+                source_index: 1,
+                x: 20.0,
+                y: 30.0,
+                radius: 0.5,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 2,
+                source_index: 2,
+                x: 40.0,
+                y: 50.0,
+                radius: 1.0,
+                solidity: 0.65,
+            },
+            Obstacle {
+                source_cell: 3,
+                source_index: 3,
+                x: 60.0,
+                y: 70.0,
+                radius: 3.0,
+                solidity: 0.9,
+            },
+            Obstacle {
+                source_cell: 4,
+                source_index: 4,
+                x: 80.0,
+                y: 90.0,
+                radius: 8.0,
+                solidity: 0.4,
+            },
+            Obstacle {
+                source_cell: 5,
+                source_index: 5,
+                x: 99.0,
+                y: 2.0,
+                radius: 2.0,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 6,
+                source_index: 6,
+                x: 5.0,
+                y: 98.0,
+                radius: 1.5,
+                solidity: 1e-7,
+            },
+        ];
+        let velocity = Velocity { x: 0.73, y: -0.21 };
+        let height = 100.0;
+
+        // Include exact bounds, just-inside/outside values, the vertical wrap
+        // seam, and a broad deterministic grid of query points.
+        let mut points = vec![
+            (20.0 - 1.25, 30.0),
+            (20.0 + 1.25, 30.0),
+            (20.0 + 3.0, 30.0),
+            (20.0 + 0.5, 30.0 + 1.0),
+            (20.0 + 0.5, 30.0 + 1.25),
+            (20.0 + 0.5, 30.0 + 1.2500001),
+            (99.0, 0.0),
+            (5.0, 0.0),
+        ];
+        for xi in -20..=120 {
+            for yi in -20..=120 {
+                points.push((xi as f64, yi as f64));
+            }
+        }
+        for (x, y) in points {
+            for (source_cell, source_index) in [(0, 0), (1, 1), (9, 9)] {
+                let expected = reference(
+                    velocity,
+                    x,
+                    y,
+                    source_cell,
+                    source_index,
+                    &obstacles,
+                    height,
+                );
+                let actual = obstacle_adjusted_velocity(
+                    velocity,
+                    x,
+                    y,
+                    source_cell,
+                    source_index,
+                    &obstacles,
+                    height,
+                );
+                assert_eq!(actual, expected, "output differs at ({x}, {y})");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "manual fixed-duration obstacle early-rejection microbenchmark"]
+    fn obstacle_early_rejection_benchmark() {
+        use std::time::{Duration, Instant};
+
+        const RUN_DURATION: Duration = Duration::from_secs(2);
+        const SAMPLE_COUNT: usize = 1_360;
+        const CANDIDATES_PER_SAMPLE: usize = 34;
+
+        fn reference(
+            mut velocity: Velocity,
+            x: f64,
+            y: f64,
+            obstacles: &[Obstacle],
+            height: f64,
+        ) -> Velocity {
+            for obstacle in obstacles {
+                if obstacle.solidity <= 1e-6 {
+                    continue;
+                }
+                let dx = x - obstacle.x;
+                let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+                let distance = dx.hypot(dy).max(1e-9);
+                let radius = obstacle.radius.max(0.5);
+                if distance < radius * 2.5 {
+                    let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+                    let side = if dy >= 0.0 { 1.0 } else { -1.0 };
+                    velocity = velocity.add(Velocity {
+                        x: -dx.signum() * influence * 0.22,
+                        y: side * influence * 0.65,
+                    });
+                }
+                if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
+                    let longitudinal = 1.0 - dx / (radius * 6.0);
+                    let lateral = 1.0 - dy.abs() / (radius * 2.0);
+                    let attenuation =
+                        (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                    velocity = velocity.scale(1.0 - attenuation);
+                }
+            }
+            velocity
+        }
+
+        let mut samples = Vec::with_capacity(SAMPLE_COUNT);
+        for sample in 0..SAMPLE_COUNT {
+            let x = ((sample * 7919) % 100_000) as f64 / 100.0;
+            let y = ((sample * 104729) % 100_000) as f64 / 100.0;
+            let candidates = (0..CANDIDATES_PER_SAMPLE)
+                .map(|candidate| {
+                    let index = sample * CANDIDATES_PER_SAMPLE + candidate;
+                    Obstacle {
+                        source_cell: index,
+                        source_index: candidate,
+                        x: x + ((candidate * 37 % 101) as f64 - 50.0) * 0.35,
+                        y: y + ((candidate * 61 % 97) as f64 - 48.0) * 0.35,
+                        radius: 0.5 + (candidate % 8) as f64 * 0.35,
+                        solidity: if candidate % 11 == 0 { 0.0 } else { 0.8 },
+                    }
+                })
+                .collect::<Vec<_>>();
+            samples.push((x, y, candidates));
+        }
+
+        let mut solid_candidates = 0usize;
+        let mut early_rejects = 0usize;
+        let mut potential_candidates = 0usize;
+        for (x, y, obstacles) in &samples {
+            for obstacle in obstacles {
+                if obstacle.solidity <= 1e-6 {
+                    continue;
+                }
+                solid_candidates += 1;
+                let dx = x - obstacle.x;
+                let dy = (y - obstacle.y + 500.0).rem_euclid(1000.0) - 500.0;
+                let extent = obstacle.radius.max(0.5) * 2.5;
+                if dx <= -extent || dx >= obstacle.radius.max(0.5) * 6.0 || dy.abs() >= extent {
+                    early_rejects += 1;
+                } else {
+                    potential_candidates += 1;
+                }
+            }
+        }
+
+        let run = |label: &str, optimized: bool| {
+            let started = Instant::now();
+            let mut evaluations = 0u64;
+            let mut checksum = 0.0;
+            while started.elapsed() < RUN_DURATION {
+                for (x, y, obstacles) in &samples {
+                    let result = if optimized {
+                        obstacle_adjusted_velocity(
+                            Velocity { x: 0.73, y: -0.21 },
+                            *x,
+                            *y,
+                            usize::MAX,
+                            usize::MAX,
+                            obstacles,
+                            1000.0,
+                        )
+                    } else {
+                        reference(Velocity { x: 0.73, y: -0.21 }, *x, *y, obstacles, 1000.0)
+                    };
+                    checksum += result.x + result.y;
+                    evaluations += 1;
+                }
+            }
+            let elapsed = started.elapsed();
+            let distance_calculations = if optimized {
+                potential_candidates
+            } else {
+                solid_candidates
+            };
+            println!(
+                "OBSTACLE EARLY REJECTION {label}: samples={SAMPLE_COUNT} candidates_per_sample={CANDIDATES_PER_SAMPLE} candidate_visits={} solid_candidates={solid_candidates} early_rejects={early_rejects} potential_candidates={potential_candidates} distance_calculations={distance_calculations} evaluations={evaluations} elapsed_s={:.3} evaluations_per_second={:.1} checksum={checksum:.9}",
+                SAMPLE_COUNT * CANDIDATES_PER_SAMPLE,
+                elapsed.as_secs_f64(),
+                evaluations as f64 / elapsed.as_secs_f64(),
+            );
+        };
+
+        run("REFERENCE", false);
+        run("EARLY_REJECTION", true);
     }
 
     #[test]
