@@ -229,7 +229,7 @@ pub(crate) fn build_displacement_trial(
     {
         return None;
     }
-    let replacement_bond = crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+    crate::combine_runtime::admit_selected_candidate_to_trial_structure(
         &mut trial,
         anchor_unit,
         incoming_unit,
@@ -786,7 +786,7 @@ pub(crate) fn accumulate_environmental(
                                     anchor_unit,
                                     displaced_unit,
                                     incoming_unit,
-                                    old_bond.clone(),
+                                    old_bond,
                                     candidate,
                                     investment,
                                     activation_signal,
