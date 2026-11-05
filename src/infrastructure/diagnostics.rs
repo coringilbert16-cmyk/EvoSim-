@@ -609,7 +609,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         interval: u64,
         seed: u64,
         duration_seconds: Option<u64>,
-        planned_ticks: u64,
+        planned_ticks: Option<u64>,
         simulation: &Simulation,
         pile_sizes: &[usize],
     ) -> std::io::Result<Self> {
@@ -626,7 +626,6 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "tick_zero": 0,
             "requested_duration_seconds": duration_seconds,
             "planned_ticks": planned_ticks,
-            "ticks_per_second": simulation.ticks_per_second,
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
             "initial_independent_resource_count": 1200,
