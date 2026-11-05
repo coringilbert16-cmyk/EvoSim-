@@ -58,7 +58,9 @@ pub(crate) fn seed_randomized_resources(
         objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
         objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
     }
-    objects.shuffle(&mut rng);
+    if include_molecules {
+        objects.shuffle(&mut rng);
+    }
 
     let pile_count = rng.gen_range(3..=10);
     let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
@@ -93,8 +95,14 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
+            let (parts, is_molecule) = &objects[object_index];
+            let max_x = if *is_molecule {
+                width - 2.8
+            } else {
+                width - 1.0
+            };
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 2.8);
+                .clamp(1.0, max_x);
             let y =
                 (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
             let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
@@ -103,7 +111,6 @@ pub(crate) fn seed_randomized_resources(
                 y,
                 rotation_radians: rotation,
             };
-            let (parts, is_molecule) = &objects[object_index];
             let material = if *is_molecule {
                 Material {
                     parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
