@@ -1,4 +1,5 @@
 use crate::state::Simulation;
+use std::time::{Duration, Instant};
 
 const DEFAULT_MAX_TICKS: u64 = 10_000;
 const DEFAULT_TARGET_BIRTHS: u64 = 3;
@@ -195,16 +196,14 @@ fn run_environment_chemistry_experiment(
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
-    let max_ticks = duration_seconds
-        .map(|seconds| (seconds as f64 * simulation.ticks_per_second).round() as u64)
-        .unwrap_or(max_ticks);
-    let simulated_seconds = max_ticks as f64 / simulation.ticks_per_second;
+    let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
+    let started_at = Instant::now();
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,
         diagnostic_interval,
         seed,
         duration_seconds,
-        max_ticks,
+        planned_ticks,
         &simulation,
         &fixture.pile_sizes,
     )
@@ -213,14 +212,17 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} simulated_seconds={simulated_seconds:.1} ticks_per_second={} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
-        simulation.ticks_per_second,
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        duration_seconds,
+        planned_ticks,
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot
     );
 
-    for _ in 0..max_ticks {
+    while duration_seconds.map_or(simulation.tick < max_ticks, |seconds| {
+        started_at.elapsed() < Duration::from_secs(seconds)
+    }) {
         simulation.step();
         diagnostics
             .observe(&simulation)
@@ -262,8 +264,9 @@ fn run_environment_chemistry_experiment(
         .expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
-        "ENVIRONMENTAL CHEMISTRY END: tick={} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY END: tick={} elapsed_wall_seconds={:.3} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
         simulation.tick,
+        started_at.elapsed().as_secs_f64(),
         simulation.environment.field.cells.iter()
             .map(|cell| cell.physical_materials.len())
             .sum::<usize>(),
