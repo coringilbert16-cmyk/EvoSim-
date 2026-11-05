@@ -96,11 +96,7 @@ pub(crate) fn seed_randomized_resources(
             let column = local_index % columns;
             let row = local_index / columns;
             let (parts, is_molecule) = &objects[object_index];
-            let max_x = if *is_molecule {
-                width - 2.8
-            } else {
-                width - 1.0
-            };
+            let max_x = if *is_molecule { width - 2.8 } else { width - 1.0 };
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
                 .clamp(1.0, max_x);
             let y =
