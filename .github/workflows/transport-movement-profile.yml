@@ -1,5 +1,9 @@
 name: Transport movement profile
 
+concurrency:
+  group: transport-movement-profile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
