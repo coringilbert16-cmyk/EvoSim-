@@ -682,7 +682,10 @@ pub(crate) fn transport_field(
     let candidate_ms = candidate_started.elapsed().as_secs_f64() * 1_000.0;
     if staged.is_empty() {
         #[cfg(test)]
-        println!("TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}", transport_started.elapsed().as_secs_f64() * 1_000.0);
+        println!(
+            "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms=0.000 total_ms={:.3}",
+            transport_started.elapsed().as_secs_f64() * 1_000.0
+        );
         return 0;
     }
     #[cfg(test)]
@@ -718,7 +721,11 @@ pub(crate) fn transport_field(
         }
     }
     #[cfg(test)]
-    println!("TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}", commit_started.elapsed().as_secs_f64() * 1_000.0, transport_started.elapsed().as_secs_f64() * 1_000.0);
+    println!(
+        "TRANSPORT PHASES: snapshot_ms={snapshot_ms:.3} discovery_ms={discovery_ms:.3} candidate_ms={candidate_ms:.3} commit_ms={:.3} total_ms={:.3}",
+        commit_started.elapsed().as_secs_f64() * 1_000.0,
+        transport_started.elapsed().as_secs_f64() * 1_000.0
+    );
     moved_count
 }
 
