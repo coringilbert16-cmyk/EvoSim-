@@ -6,10 +6,11 @@
 //! explicit prevents an unrelated BREAK followed by COMBINE from masquerading
 //! as displacement.
 
-#![expect(
-    dead_code,
-    reason = "Displacement API awaits live environmental scheduler integration"
-)]
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+use crate::physical_material::PhysicalMaterial;
+use crate::state::{EnergyLedger, Environment};
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
@@ -375,6 +376,686 @@ pub(crate) fn evaluate_displacement_preflight(
         disruption_work: disruption_barrier,
         energy,
     })
+}
+
+const ENVIRONMENTAL_DISPLACEMENT_PREFIX: &str = "environment|displacement:";
+const DISPLACEMENT_FIELD_ANCHOR_LIMIT: usize = 64;
+const DISPLACEMENT_TARGET_CELL_LIMIT: usize = 64;
+const DISPLACEMENT_CONTACT_PAIR_LIMIT: usize = 128;
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EnvironmentalDisplacementOperation {
+    pub(crate) cell_a: usize,
+    pub(crate) material_a: usize,
+    pub(crate) source_a: PhysicalMaterial,
+    pub(crate) cell_b: usize,
+    pub(crate) material_b: usize,
+    pub(crate) source_b: PhysicalMaterial,
+    pub(crate) anchor_unit: usize,
+    pub(crate) displaced_unit: usize,
+    pub(crate) incoming_unit: usize,
+    pub(crate) old_bond: Bond,
+    pub(crate) candidate: ConnectionPairCandidate,
+    pub(crate) investment: f64,
+    pub(crate) activation_signal: f64,
+    pub(crate) reaction_frequency_cycles_per_day: f64,
+    pub(crate) accumulation_key: String,
+    pub(crate) accumulated_reaction: f64,
+    pub(crate) work_required: f64,
+}
+
+fn restore_displacement_source(
+    source: &PhysicalMaterial,
+    environment: &Environment,
+) -> Option<(OrganismStructure, Vec<usize>)> {
+    if !source.is_realized()
+        || source.material.is_empty()
+        || !source.material.is_valid_for_catalog(&environment.catalog)
+    {
+        return None;
+    }
+    let mut structure = OrganismStructure::new();
+    let indices = crate::material_restoration::restore_material(
+        &mut structure,
+        source,
+        crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        &environment.catalog,
+    )?;
+    Some((structure, indices))
+}
+
+fn displacement_accumulation_key(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    bond_index: usize,
+    anchor_part: usize,
+    incoming_part: usize,
+    candidate: ConnectionPairCandidate,
+) -> String {
+    format!(
+        "{ENVIRONMENTAL_DISPLACEMENT_PREFIX}{}:{}:{bond_index}:{anchor_part}:{incoming_part}:{:?}:{:?}",
+        if source_a.environmental_identity == 0 {
+            format!("{source_a:?}")
+        } else {
+            source_a.environmental_identity.to_string()
+        },
+        if source_b.environmental_identity == 0 {
+            format!("{source_b:?}")
+        } else {
+            source_b.environmental_identity.to_string()
+        },
+        candidate.endpoint_a,
+        candidate.endpoint_b,
+    )
+}
+
+fn dissipate_unupdated_displacement_accumulations(
+    accumulation: &mut BTreeMap<String, f64>,
+    updated_keys: &BTreeSet<String>,
+) {
+    accumulation.retain(|key, value| {
+        if !key.starts_with(ENVIRONMENTAL_DISPLACEMENT_PREFIX) || updated_keys.contains(key) {
+            return true;
+        }
+        *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        value.is_finite() && *value > 0.0
+    });
+}
+
+fn best_freed_endpoint_contact(
+    combined: &OrganismStructure,
+    anchor_unit: usize,
+    incoming_unit: usize,
+    old_bond: Bond,
+    freed_endpoint: crate::structure::ConnectionEndpoint,
+    catalog: &[BaseResource],
+) -> Option<(ConnectionPairCandidate, f64)> {
+    let mut topology_trial = combined.clone();
+    topology_trial.break_matching_bond(old_bond)?;
+    let mut cache = ConnectionCompatibilityCache::new();
+    let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
+    for candidate in crate::contact::connection_pair_candidates_cached(
+        &topology_trial,
+        anchor_unit,
+        incoming_unit,
+        catalog,
+        &mut cache,
+    ) {
+        if candidate.endpoint_a != freed_endpoint
+            || !candidate.available_a
+            || !candidate.available_b
+            || !candidate.distance.is_finite()
+            || candidate.distance < 0.0
+            || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            || !candidate.facing.is_finite()
+            || candidate.facing <= 0.0
+        {
+            continue;
+        }
+        let Some((_evaluation, _formation_work, investment, required_energy)) =
+            crate::combine_runtime::selected_candidate_evaluation(
+                &topology_trial,
+                anchor_unit,
+                incoming_unit,
+                candidate,
+                catalog,
+            )
+        else {
+            continue;
+        };
+        let replace = best.is_none_or(|(current, _, current_energy)| {
+            required_energy
+                .partial_cmp(&current_energy)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    candidate
+                        .distance
+                        .partial_cmp(&current.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .is_lt()
+        });
+        if replace {
+            best = Some((candidate, investment, required_energy));
+        }
+    }
+    best.map(|(candidate, investment, _)| (candidate, investment))
+}
+
+fn displacement_reaction_frequency(
+    anchor: &crate::structure::StructuralUnit,
+    displaced: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+    let frequency_a =
+        crate::harmonics::natural_frequency_cycles_per_day(anchor.properties(catalog)?, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(
+        displaced.properties(catalog)?,
+        baselines,
+    );
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
+        return None;
+    }
+    let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    (frequency.is_finite() && frequency > 0.0).then_some(frequency)
+}
+
+/// Discover live A-B + C contacts. The old bond is removed only on a trial
+/// graph before candidate generation, so C must physically occupy the endpoint
+/// that A-B actually frees.
+pub(crate) fn accumulate_environmental(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+) -> Vec<EnvironmentalDisplacementOperation> {
+    if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
+        dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
+        return Vec::new();
+    }
+
+    let mut anchor_work = (*remaining_discovery_work)
+        .min(DISPLACEMENT_FIELD_ANCHOR_LIMIT)
+        .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let cell_count = environment.field.cells.len();
+    let cell_scan_count = cell_count.min(DISPLACEMENT_FIELD_ANCHOR_LIMIT);
+    let cell_start = tick as usize % cell_count;
+    let mut operations = Vec::new();
+    let mut updated_keys = BTreeSet::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+
+    'anchors: for cell_offset in 0..cell_scan_count {
+        if anchor_work == 0 || *remaining_discovery_work == 0 {
+            break;
+        }
+        let cell_a = (cell_start + cell_offset) % cell_count;
+        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+        let material_count = environment.field.cells[cell_a].physical_materials.len();
+        if material_count == 0 {
+            continue;
+        }
+        let material_start = (tick as usize + cell_a) % material_count;
+        for material_offset in 0..material_count {
+            if anchor_work == 0 || *remaining_discovery_work == 0 {
+                break 'anchors;
+            }
+            anchor_work -= 1;
+            *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+            let material_a = (material_start + material_offset) % material_count;
+            let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
+            let Some(connections) = source_a.internal_connections.as_ref() else {
+                continue;
+            };
+            if connections.is_empty() {
+                continue;
+            }
+            let Some((source_structure, indices_a)) =
+                restore_displacement_source(&source_a, environment)
+            else {
+                continue;
+            };
+            let Some(body) =
+                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                    &source_structure,
+                )
+            else {
+                continue;
+            };
+            let target_cells = environment.field.cells_intersecting_bounds_limited(
+                body.min_x - 2.1,
+                body.max_x + 2.1,
+                body.min_y - 2.1,
+                body.max_y + 2.1,
+                DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work),
+                (tick as usize).wrapping_add(cell_a).wrapping_add(material_a),
+            );
+
+            for &cell_b in &target_cells {
+                if *remaining_discovery_work == 0 {
+                    break 'anchors;
+                }
+                *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                let target_count = environment.field.cells[cell_b].physical_materials.len();
+                if target_count == 0 {
+                    continue;
+                }
+                let target_start = (tick as usize + cell_b + material_a) % target_count;
+                for target_offset in 0..target_count {
+                    if *remaining_discovery_work == 0 {
+                        break 'anchors;
+                    }
+                    *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                    let material_b = (target_start + target_offset) % target_count;
+                    if cell_a == cell_b && material_a == material_b {
+                        continue;
+                    }
+                    let source_b =
+                        environment.field.cells[cell_b].physical_materials[material_b].clone();
+                    let Some(mut combined) = Some(source_structure.clone()) else {
+                        continue;
+                    };
+                    let Some(indices_b) = crate::material_restoration::restore_material(
+                        &mut combined,
+                        &source_b,
+                        crate::structure::Placement {
+                            x: 0.0,
+                            y: 0.0,
+                            rotation_radians: 0.0,
+                        },
+                        &environment.catalog,
+                    ) else {
+                        continue;
+                    };
+                    if indices_b.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &combined,
+                            &combined.units[*index],
+                            &indices_b,
+                            &environment.catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+
+                    for (bond_index, connection) in connections.iter().enumerate() {
+                        if *remaining_discovery_work == 0 {
+                            break 'anchors;
+                        }
+                        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                        let (Some(&part_a), Some(&part_b)) = (
+                            indices_a.get(connection.part_a),
+                            indices_a.get(connection.part_b),
+                        ) else {
+                            continue;
+                        };
+                        let (Some(id_a), Some(id_b)) =
+                            (combined.physical_id(part_a), combined.physical_id(part_b))
+                        else {
+                            continue;
+                        };
+                        let expected_bond = Bond {
+                            endpoint_a: crate::structure::BondEndpoint::new(
+                                id_a,
+                                connection.endpoint_a,
+                            ),
+                            endpoint_b: crate::structure::BondEndpoint::new(
+                                id_b,
+                                connection.endpoint_b,
+                            ),
+                            strength: combined.units[part_a]
+                                .properties(&environment.catalog)
+                                .zip(combined.units[part_b].properties(&environment.catalog))
+                                .map(|(a, b)| bond_strength(a, b))
+                                .unwrap_or(f64::NAN),
+                            bond_energy: connection.bond_energy,
+                        };
+                        let Some(old_bond) = combined
+                            .bonds
+                            .iter()
+                            .find(|bond| bond.has_same_identity(&expected_bond))
+                            .cloned()
+                        else {
+                            continue;
+                        };
+
+                        for (anchor_part, displaced_part, freed_endpoint) in [
+                            (connection.part_a, connection.part_b, connection.endpoint_a),
+                            (connection.part_b, connection.part_a, connection.endpoint_b),
+                        ] {
+                            let (Some(&anchor_unit), Some(&displaced_unit)) = (
+                                indices_a.get(anchor_part),
+                                indices_a.get(displaced_part),
+                            ) else {
+                                continue;
+                            };
+                            let Some(frequency) = displacement_reaction_frequency(
+                                &combined.units[anchor_unit],
+                                &combined.units[displaced_unit],
+                                &environment.catalog,
+                            ) else {
+                                continue;
+                            };
+                            for (incoming_part, &incoming_unit) in indices_b.iter().enumerate() {
+                                if *remaining_discovery_work == 0 {
+                                    break 'anchors;
+                                }
+                                *remaining_discovery_work =
+                                    remaining_discovery_work.saturating_sub(1);
+                                let Some((candidate, investment)) = best_freed_endpoint_contact(
+                                    &combined,
+                                    anchor_unit,
+                                    incoming_unit,
+                                    old_bond.clone(),
+                                    freed_endpoint,
+                                    &environment.catalog,
+                                ) else {
+                                    continue;
+                                };
+                                let key = displacement_accumulation_key(
+                                    &source_a,
+                                    &source_b,
+                                    bond_index,
+                                    anchor_part,
+                                    incoming_part,
+                                    candidate,
+                                );
+                                let previous = accumulation.get(&key).copied().unwrap_or(0.0);
+                                let Some(next) = accumulate_incoming_activation(
+                                    &combined.units[anchor_unit],
+                                    &combined.units[incoming_unit],
+                                    candidate,
+                                    previous,
+                                    &environment.catalog,
+                                ) else {
+                                    continue;
+                                };
+                                updated_keys.insert(key.clone());
+                                if next <= 0.0 {
+                                    accumulation.remove(&key);
+                                    continue;
+                                }
+                                let Some(activation_signal) =
+                                    crate::chemistry::normalized_chemistry_to_activation_signal(next)
+                                else {
+                                    continue;
+                                };
+                                let Some(trial) = build_displacement_trial(
+                                    &combined,
+                                    anchor_unit,
+                                    displaced_unit,
+                                    incoming_unit,
+                                    old_bond.clone(),
+                                    candidate,
+                                    investment,
+                                    activation_signal,
+                                    baselines.reactivity,
+                                    0.0,
+                                    &environment.catalog,
+                                ) else {
+                                    accumulation.insert(key, next);
+                                    continue;
+                                };
+                                let work_required = trial.formation_work + trial.disruption_work;
+                                operations.push(EnvironmentalDisplacementOperation {
+                                    cell_a,
+                                    material_a,
+                                    source_a: source_a.clone(),
+                                    cell_b,
+                                    material_b,
+                                    source_b: source_b.clone(),
+                                    anchor_unit: anchor_part,
+                                    displaced_unit: displaced_part,
+                                    incoming_unit: incoming_part,
+                                    old_bond: old_bond.clone(),
+                                    candidate,
+                                    investment,
+                                    activation_signal,
+                                    reaction_frequency_cycles_per_day: frequency,
+                                    accumulation_key: key.clone(),
+                                    accumulated_reaction: next,
+                                    work_required,
+                                });
+                                accumulation.remove(&key);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
+    operations
+}
+
+/// Keep field-owned displacement commits mutually exclusive with other
+/// operations touching either source cell. Deferred activation remains stored.
+pub(crate) fn schedule_environmental_operations(
+    mut operations: Vec<EnvironmentalDisplacementOperation>,
+    tick: u64,
+    remaining_work: &mut usize,
+    accumulation: &mut BTreeMap<String, f64>,
+) -> Vec<EnvironmentalDisplacementOperation> {
+    if operations.is_empty() || *remaining_work == 0 {
+        for operation in operations {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| *current = (*current).max(operation.accumulated_reaction))
+                .or_insert(operation.accumulated_reaction);
+        }
+        return Vec::new();
+    }
+    operations.sort_by(|left, right| left.accumulation_key.cmp(&right.accumulation_key));
+    let rotate = tick as usize % operations.len();
+    operations.rotate_left(rotate);
+    let mut used_cells = HashSet::new();
+    let mut ready = Vec::new();
+    for operation in operations {
+        let cells_available =
+            !used_cells.contains(&operation.cell_a) && !used_cells.contains(&operation.cell_b);
+        if cells_available && *remaining_work > 0 {
+            used_cells.insert(operation.cell_a);
+            used_cells.insert(operation.cell_b);
+            *remaining_work -= 1;
+            ready.push(operation);
+        } else {
+            accumulation
+                .entry(operation.accumulation_key)
+                .and_modify(|current| *current = (*current).max(operation.accumulated_reaction))
+                .or_insert(operation.accumulated_reaction);
+        }
+    }
+    ready.sort_by(|left, right| left.accumulation_key.cmp(&right.accumulation_key));
+    ready
+}
+
+pub(crate) fn resolve_environmental(
+    operation: EnvironmentalDisplacementOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+) -> bool {
+    let Some(source_a) = environment
+        .field
+        .cells
+        .get(operation.cell_a)
+        .and_then(|cell| cell.physical_materials.get(operation.material_a))
+    else {
+        return false;
+    };
+    let Some(source_b) = environment
+        .field
+        .cells
+        .get(operation.cell_b)
+        .and_then(|cell| cell.physical_materials.get(operation.material_b))
+    else {
+        return false;
+    };
+    if source_a != &operation.source_a || source_b != &operation.source_b {
+        return false;
+    }
+
+    let Some((mut combined, indices_a)) = restore_displacement_source(&operation.source_a, environment)
+    else {
+        return false;
+    };
+    let Some(indices_b) = crate::material_restoration::restore_material(
+        &mut combined,
+        &operation.source_b,
+        crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    if indices_b.iter().any(|index| {
+        crate::construction_runtime::placed_unit_overlaps(
+            &combined,
+            &combined.units[*index],
+            &indices_b,
+            &environment.catalog,
+        )
+    }) {
+        return false;
+    }
+    let (Some(&anchor_unit), Some(&displaced_unit), Some(&incoming_unit)) = (
+        indices_a.get(operation.anchor_unit),
+        indices_a.get(operation.displaced_unit),
+        indices_b.get(operation.incoming_unit),
+    ) else {
+        return false;
+    };
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let Some(trial) = build_displacement_trial(
+        &combined,
+        anchor_unit,
+        displaced_unit,
+        incoming_unit,
+        operation.old_bond.clone(),
+        operation.candidate,
+        operation.investment,
+        operation.activation_signal,
+        baselines.reactivity,
+        0.0,
+        &environment.catalog,
+    ) else {
+        return false;
+    };
+    let Some(transaction) = trial.energy.settlement_transaction(EnergyReason::Combine) else {
+        return false;
+    };
+
+    // Resonance is a legitimate source for displacement work only when its
+    // spectrum is compatible with the old bond's reaction frequency. Stage
+    // withdrawal and the complete reaction settlement together.
+    let mut staged_resonance = environment.resonant_energy.clone();
+    let resonant_before = staged_resonance.total_energy()?;
+    let resonant_work = staged_resonance.withdraw_compatible(
+        operation.reaction_frequency_cycles_per_day,
+        trial.energy.required_external_input,
+    );
+    let resonant_after = staged_resonance.total_energy()?;
+    if !resonant_work.is_finite()
+        || resonant_work < 0.0
+        || !resonant_before.is_finite()
+        || !resonant_after.is_finite()
+        || (resonant_before - resonant_after - resonant_work).abs() > 1e-9
+    {
+        return false;
+    }
+    let usable_required = (trial.energy.required_external_input - resonant_work).max(0.0);
+    if !usable_required.is_finite() || usable_required > environment.chemistry_usable_energy {
+        return false;
+    }
+
+    let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
+        return false;
+    }
+    let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
+    let structural_delta = trial.energy.net_reaction_change;
+    let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_total_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
+    let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+        || !next_total_resonant.is_finite()
+        || next_total_resonant < 0.0
+        || !next_total_structural.is_finite()
+    {
+        return false;
+    }
+    staged_ledger.total_usable_energy_held = next_total_usable;
+    staged_ledger.total_resonant_energy_held = next_total_resonant;
+    staged_ledger.total_structural_energy_held = next_total_structural;
+
+    let mut staged_products = Vec::with_capacity(trial.products.len());
+    for product in trial.products {
+        if !product.is_realized()
+            || product.material.is_empty()
+            || !product.material.is_valid_for_catalog(&environment.catalog)
+        {
+            return false;
+        }
+        let Some(placement) = product.placements.as_ref().and_then(|placements| placements.first())
+        else {
+            return false;
+        };
+        let Some(destination) = environment.field.index_for_position(placement.x, placement.y)
+        else {
+            return false;
+        };
+        staged_products.push((destination, product));
+    }
+    if staged_products.len() < 2 {
+        return false;
+    }
+
+    // All validation and energy work is staged. Remove both source objects
+    // without index drift, then deposit each physical component at its own
+    // retained world position.
+    if operation.cell_a == operation.cell_b {
+        let cell = &mut environment.field.cells[operation.cell_a];
+        let high = operation.material_a.max(operation.material_b);
+        let low = operation.material_a.min(operation.material_b);
+        if high == low || cell.physical_materials.get(high) != Some(&operation.source_a)
+            && cell.physical_materials.get(high) != Some(&operation.source_b)
+        {
+            return false;
+        }
+        cell.physical_materials.remove(high);
+        cell.physical_materials.remove(low);
+    } else {
+        environment.field.cells[operation.cell_a]
+            .physical_materials
+            .remove(operation.material_a);
+        environment.field.cells[operation.cell_b]
+            .physical_materials
+            .remove(operation.material_b);
+    }
+    let mut changed_cells = BTreeSet::new();
+    changed_cells.insert(operation.cell_a);
+    changed_cells.insert(operation.cell_b);
+    for (destination, product) in staged_products {
+        environment.field.cells[destination].physical_materials.push(product);
+        changed_cells.insert(destination);
+    }
+    for cell in changed_cells {
+        environment.field.mark_changed_at_index(cell);
+    }
+    environment.field.assign_missing_material_identities();
+    environment.chemistry_usable_energy = staged_usable_energy;
+    environment.resonant_energy = staged_resonance;
+    *ledger = staged_ledger;
+    true
+}
+
+pub(crate) fn resolve_environmental_preserving_accumulation(
+    operation: EnvironmentalDisplacementOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+    accumulation: &mut BTreeMap<String, f64>,
+) -> bool {
+    let key = operation.accumulation_key.clone();
+    let accumulated_reaction = operation.accumulated_reaction;
+    let success = resolve_environmental(operation, environment, ledger);
+    if !success {
+        accumulation.insert(key, accumulated_reaction);
+    }
+    success
 }
 
 #[cfg(test)]
