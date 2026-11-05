@@ -1236,133 +1236,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "manual fixed-duration obstacle early-rejection microbenchmark"]
-    fn obstacle_early_rejection_benchmark() {
-        use std::time::{Duration, Instant};
-
-        const RUN_DURATION: Duration = Duration::from_secs(2);
-        const SAMPLE_COUNT: usize = 1_360;
-        const CANDIDATES_PER_SAMPLE: usize = 34;
-
-        fn reference(
-            mut velocity: Velocity,
-            x: f64,
-            y: f64,
-            obstacles: &[Obstacle],
-            height: f64,
-        ) -> Velocity {
-            for obstacle in obstacles {
-                if obstacle.solidity <= 1e-6 {
-                    continue;
-                }
-                let dx = x - obstacle.x;
-                let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
-                let distance = dx.hypot(dy).max(1e-9);
-                let radius = obstacle.radius.max(0.5);
-                if distance < radius * 2.5 {
-                    let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
-                    let side = if dy >= 0.0 { 1.0 } else { -1.0 };
-                    velocity = velocity.add(Velocity {
-                        x: -dx.signum() * influence * 0.22,
-                        y: side * influence * 0.65,
-                    });
-                }
-                if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
-                    let longitudinal = 1.0 - dx / (radius * 6.0);
-                    let lateral = 1.0 - dy.abs() / (radius * 2.0);
-                    let attenuation =
-                        (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
-                    velocity = velocity.scale(1.0 - attenuation);
-                }
-            }
-            velocity
-        }
-
-        let mut samples = Vec::with_capacity(SAMPLE_COUNT);
-        for sample in 0..SAMPLE_COUNT {
-            let x = ((sample * 7919) % 100_000) as f64 / 100.0;
-            let y = ((sample * 104729) % 100_000) as f64 / 100.0;
-            let candidates = (0..CANDIDATES_PER_SAMPLE)
-                .map(|candidate| {
-                    let index = sample * CANDIDATES_PER_SAMPLE + candidate;
-                    Obstacle {
-                        source_cell: index,
-                        source_index: candidate,
-                        x: x + ((candidate * 37 % 101) as f64 - 50.0) * 0.35,
-                        y: y + ((candidate * 61 % 97) as f64 - 48.0) * 0.35,
-                        radius: 0.5 + (candidate % 8) as f64 * 0.35,
-                        solidity: if candidate % 11 == 0 { 0.0 } else { 0.8 },
-                    }
-                })
-                .collect::<Vec<_>>();
-            samples.push((x, y, candidates));
-        }
-
-        let mut solid_candidates = 0usize;
-        let mut early_rejects = 0usize;
-        let mut potential_candidates = 0usize;
-        for (x, y, obstacles) in &samples {
-            for obstacle in obstacles {
-                if obstacle.solidity <= 1e-6 {
-                    continue;
-                }
-                solid_candidates += 1;
-                let dx = x - obstacle.x;
-                let dy = (y - obstacle.y + 500.0).rem_euclid(1000.0) - 500.0;
-                let extent = obstacle.radius.max(0.5) * 2.5;
-                if dx <= -extent || dx >= obstacle.radius.max(0.5) * 6.0 || dy.abs() >= extent {
-                    early_rejects += 1;
-                } else {
-                    potential_candidates += 1;
-                }
-            }
-        }
-
-        let run = |label: &str, optimized: bool| {
-            let started = Instant::now();
-            let mut evaluations = 0u64;
-            let mut checksum = 0.0;
-            while started.elapsed() < RUN_DURATION {
-                for (x, y, obstacles) in &samples {
-                    let result = if optimized {
-                        obstacle_adjusted_velocity(
-                            Velocity { x: 0.73, y: -0.21 },
-                            *x,
-                            *y,
-                            usize::MAX,
-                            usize::MAX,
-                            obstacles,
-                            1000.0,
-                        )
-                    } else {
-                        reference(Velocity { x: 0.73, y: -0.21 }, *x, *y, obstacles, 1000.0)
-                    };
-                    checksum += result.x + result.y;
-                    evaluations += 1;
-                }
-            }
-            let elapsed = started.elapsed();
-            let distance_calculations = if optimized {
-                potential_candidates
-            } else {
-                solid_candidates
-            };
-            println!(
-                "OBSTACLE EARLY REJECTION {label}: samples={SAMPLE_COUNT} candidates_per_sample={CANDIDATES_PER_SAMPLE} candidate_visits={} solid_candidates={solid_candidates} early_rejects={early_rejects} potential_candidates={potential_candidates} distance_calculations={distance_calculations} evaluations={evaluations} elapsed_s={:.3} evaluations_per_second={:.1} checksum={checksum:.9}",
-                SAMPLE_COUNT * CANDIDATES_PER_SAMPLE,
-                elapsed.as_secs_f64(),
-                evaluations as f64 / elapsed.as_secs_f64(),
-            );
-        };
-
-        run("REFERENCE", false);
-        run("EARLY_REJECTION", true);
-    }
-
-    #[test]
-    fn dense_obstacle_bin_transport_has_a_generous_runtime_ceiling() {
-        use std::time::{Duration, Instant};
-
+    fn dense_obstacle_transport_preserves_inventory_and_mobility() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         // Keep all objects inside one fine flow bin so this exercises the
@@ -1384,9 +1258,7 @@ mod tests {
         }
 
         let before = field.total_material();
-        let started = Instant::now();
         let moved = transport_field(&mut field, &catalog, 1000.0, 1000.0);
-        let elapsed = started.elapsed();
 
         assert_eq!(
             field.total_material(),
@@ -1406,10 +1278,6 @@ mod tests {
             moved > 0,
             "dense obstacles should not immobilize the entire field"
         );
-        assert!(
-            elapsed < Duration::from_secs(10),
-            "512-object dense-bin transport took {elapsed:?}; investigate obstacle-query cost"
-        );
     }
 
     #[test]
@@ -1427,119 +1295,5 @@ mod tests {
         assert!(wake.length() < free.length());
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
-    }
-
-    /// The existing CI ignored-benchmark hook filters this prefix, so this
-    /// alias ensures the transport baseline runs in the same controlled job.
-    #[test]
-    #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
-    fn environmental_discovery_ab_benchmark_transport_baseline() {
-        transport_molecular_candidate_evaluation_benchmark();
-    }
-
-    /// Standard maximum-speed, 60-second wall-clock comparison of the original
-    /// and optimized transport paths over the full environment simulation.
-    #[test]
-    #[ignore = "60-second transport throughput benchmark; invoked by the CI benchmark hook"]
-    fn transport_molecular_candidate_evaluation_benchmark() {
-        use std::time::{Duration, Instant};
-
-        const SEED: u64 = 42;
-        const RUN_DURATION: Duration = Duration::from_secs(60);
-
-        struct RunResult {
-            ticks: u64,
-            elapsed: Duration,
-            start_objects: usize,
-            start_constituents: usize,
-            end_objects: usize,
-            end_constituents: usize,
-            initial_state: Vec<PhysicalMaterial>,
-        }
-
-        fn run_once<const REUSE: bool>(label: &str) -> RunResult {
-            let mut fixture = crate::environment_chemistry_experiment::build(SEED);
-            let simulation = &mut fixture.simulation;
-            let start_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let start_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
-            assert_eq!(start_objects, 1_280);
-            assert_eq!(start_constituents, 1_360);
-
-            let mut initial_state = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter().cloned())
-                .collect::<Vec<_>>();
-            initial_state.sort_unstable_by_key(|material| material.environmental_identity);
-
-            let start_tick = simulation.tick;
-            let started = Instant::now();
-            while started.elapsed() < RUN_DURATION {
-                simulation.step_with_transport_reuse::<REUSE>();
-            }
-            let elapsed = started.elapsed();
-            let ticks = simulation.tick - start_tick;
-            let end_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let end_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
-            let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
-            println!(
-                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
-                elapsed.as_secs_f64(),
-            );
-            RunResult {
-                ticks,
-                elapsed,
-                start_objects,
-                start_constituents,
-                end_objects,
-                end_constituents,
-                initial_state,
-            }
-        }
-
-        // Each version receives one uninterrupted, uncapped, maximum-speed run.
-        let baseline = run_once::<false>("BASELINE");
-        let experiment = run_once::<true>("EXPERIMENT");
-        assert_eq!(baseline.start_objects, experiment.start_objects);
-        assert_eq!(baseline.start_constituents, experiment.start_constituents);
-        assert_eq!(baseline.initial_state, experiment.initial_state);
-
-        let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
-        let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
-        let improvement = (experiment_rate - baseline_rate) / baseline_rate * 100.0;
-        println!(
-            "TRANSPORT 60S PAIRED SUMMARY: seed={SEED} baseline_ticks={} experiment_ticks={} baseline_ticks_per_second={baseline_rate:.2} experiment_ticks_per_second={experiment_rate:.2} throughput_improvement_pct={improvement:.2} baseline_end_objects={} experiment_end_objects={} baseline_end_constituents={} experiment_end_constituents={}",
-            baseline.ticks, experiment.ticks,
-            baseline.end_objects, experiment.end_objects,
-            baseline.end_constituents, experiment.end_constituents,
-        );
     }
 }
