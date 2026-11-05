@@ -7,8 +7,10 @@
 //! as displacement.
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
+use crate::contact::ConnectionPairCandidate;
 use crate::energy_ledger::ReactionEnergyBalance;
-use crate::resources::ResourceProperties;
+use crate::resources::{BaseResource, ResourceProperties};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure, PhysicalConstituentId};
 
 /// Energy and activation assessment for one proposed constituent replacement.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -39,6 +41,150 @@ impl DisplacementPreflight {
     pub(crate) fn can_commit(self, legitimate_external_input: f64) -> bool {
         self.is_activated() && self.energy.can_commit_with(legitimate_external_input)
     }
+}
+
+/// Fully evaluated trial topology and its independently exported physical products.
+/// Nothing in this value has been committed to the live environment.
+#[derive(Clone, Debug)]
+pub(crate) struct DisplacementTrial {
+    pub(crate) structure: OrganismStructure,
+    pub(crate) products: Vec<crate::physical_material::PhysicalMaterial>,
+    pub(crate) removed_bond: Bond,
+    pub(crate) replacement_bond: Bond,
+    pub(crate) energy: ReactionEnergyBalance,
+    pub(crate) formation_work: f64,
+    pub(crate) disruption_work: f64,
+}
+
+/// Build the proposed topology on a clone. The caller must discover the supplied
+/// replacement candidate after the old A-B bond has been removed from an
+/// equivalent trial graph, so the freed endpoint is available to contact search.
+pub(crate) fn build_displacement_trial(
+    source: &OrganismStructure,
+    anchor_unit: usize,
+    displaced_unit: usize,
+    incoming_unit: usize,
+    old_bond: Bond,
+    replacement_candidate: ConnectionPairCandidate,
+    investment: f64,
+    incoming_activation: f64,
+    reactivity_baseline: f64,
+    dissipated_heat: f64,
+    catalog: &[BaseResource],
+) -> Option<DisplacementTrial> {
+    if anchor_unit >= source.units.len()
+        || displaced_unit >= source.units.len()
+        || incoming_unit >= source.units.len()
+        || anchor_unit == displaced_unit
+        || anchor_unit == incoming_unit
+        || displaced_unit == incoming_unit
+    {
+        return None;
+    }
+
+    let anchor_id = source.physical_id(anchor_unit)?;
+    let displaced_id = source.physical_id(displaced_unit)?;
+    let incoming_id = source.physical_id(incoming_unit)?;
+    let old_connects_expected_pair =
+        (old_bond.endpoint_a.constituent_id == anchor_id
+            && old_bond.endpoint_b.constituent_id == displaced_id)
+            || (old_bond.endpoint_b.constituent_id == anchor_id
+                && old_bond.endpoint_a.constituent_id == displaced_id);
+    if !old_connects_expected_pair
+        || !source
+            .bonds
+            .iter()
+            .any(|bond| bond.has_same_identity(&old_bond))
+    {
+        return None;
+    }
+
+    let anchor = source.units[anchor_unit].properties(catalog)?;
+    let displaced = source.units[displaced_unit].properties(catalog)?;
+    let incoming = source.units[incoming_unit].properties(catalog)?;
+    let old_strength = old_bond.strength;
+    let preflight = evaluate_displacement_preflight(
+        anchor,
+        displaced,
+        incoming,
+        old_strength,
+        incoming_activation,
+        reactivity_baseline,
+        0.0,
+        dissipated_heat,
+    )?;
+    if (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9 {
+        return None;
+    }
+
+    let mut trial = source.clone();
+    trial.break_matching_bond(old_bond)?;
+
+    // Revalidate the replacement contact and chemistry against the trial graph,
+    // where the old endpoint is now genuinely available.
+    let (formation, formation_work, required_investment, _) =
+        crate::combine_runtime::selected_candidate_evaluation(
+            &trial,
+            anchor_unit,
+            incoming_unit,
+            replacement_candidate,
+            catalog,
+        )?;
+    if !crate::combine::formation_succeeds(formation, investment)
+        || (required_investment - investment).abs() > 1e-9
+    {
+        return None;
+    }
+
+    let anchor_id = trial.physical_id(anchor_unit)?;
+    let incoming_id = trial.physical_id(incoming_unit)?;
+    if anchor_id != source.physical_id(anchor_unit)?
+        || incoming_id != source.physical_id(incoming_unit)?
+    {
+        return None;
+    }
+    let strength = bond_strength(anchor, incoming);
+    let bond_energy = intrinsic_bond_potential(anchor, incoming, strength);
+    if !strength.is_finite()
+        || !(0.0..=1.0).contains(&strength)
+        || !bond_energy.is_finite()
+        || bond_energy < 0.0
+    {
+        return None;
+    }
+    let replacement_bond = Bond {
+        endpoint_a: BondEndpoint::new(anchor_id, replacement_candidate.endpoint_a),
+        endpoint_b: BondEndpoint::new(incoming_id, replacement_candidate.endpoint_b),
+        strength,
+        bond_energy,
+    };
+    crate::contact::try_add_bond(&mut trial, replacement_bond, catalog).ok()?;
+
+    let reactant_structural = crate::energy_ledger::structural_potential(source)?;
+    let product_structural = crate::energy_ledger::structural_potential(&trial)?;
+    let disruption_work = preflight.disruption_work;
+    let total_work = formation_work + disruption_work;
+    let energy = ReactionEnergyBalance::calculate(
+        reactant_structural,
+        product_structural,
+        total_work,
+        dissipated_heat,
+    )?;
+    let products =
+        crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)?;
+    if products.len() < 2 {
+        return None;
+    }
+
+    Some(DisplacementTrial {
+        structure: trial,
+        products,
+        removed_bond: old_bond,
+        replacement_bond,
+        energy,
+        formation_work,
+        disruption_work,
+    })
 }
 
 /// Evaluate the coupled A-B -> A-C replacement without mutating any graph or
