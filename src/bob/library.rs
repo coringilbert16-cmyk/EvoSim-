@@ -5427,28 +5427,6 @@ mod bob_lookup_contract_tests {
     }
     use crate::resources::default_catalog;
 
-    fn edge_query(library: &GeometryLibrary) -> Option<LiveGeometryInterface> {
-        let family = library.rigid_contact_families().next()?;
-        let formation = library.get(&family.formation_signature)?;
-        let anchor = formation.constituents.get(family.anchor_constituent)?;
-        let anchor_parameter = (family.anchor_parameter_start + family.anchor_parameter_end) * 0.5;
-
-        Some(LiveGeometryInterface {
-            interface_class: "rigid_edge",
-            signature: String::new(),
-            query: Some(LiveGeometryQuery::RigidEdge {
-                a_material: family.candidate_resource.clone(),
-                a_edge: family.candidate_edge,
-                a_parameter: 0,
-                a_rotation: (family.candidate_rotation_radians * 1_000_000_000.0) as i64,
-                b_material: anchor.resource.clone(),
-                b_edge: family.anchor_edge,
-                b_parameter: (anchor_parameter * 1_000_000_000.0) as i64,
-                b_rotation: 0,
-            }),
-        })
-    }
-
     #[test]
     fn canonicalized_formation_preserves_constituent_index_mapping() {
         let catalog = default_catalog();
