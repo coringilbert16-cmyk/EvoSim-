@@ -250,6 +250,19 @@ pub(crate) fn commit_displacement_trial(
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
         return None;
     }
+    let usable_delta = staged_usable_energy - *usable_energy;
+    let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
+    let next_total_structural =
+        staged_ledger.total_structural_energy_held + trial.energy.net_reaction_change;
+    if !usable_delta.is_finite()
+        || !next_total_usable.is_finite()
+        || next_total_usable < 0.0
+        || !next_total_structural.is_finite()
+    {
+        return None;
+    }
+    staged_ledger.total_usable_energy_held = next_total_usable;
+    staged_ledger.total_structural_energy_held = next_total_structural;
 
     *source = trial.structure;
     *ledger = staged_ledger;
@@ -618,6 +631,8 @@ mod tests {
         let (mut source, old_bond, candidate, investment) =
             three_participant_fixture(&catalog);
         let mut ledger = crate::state::EnergyLedger::default();
+        ledger.total_structural_energy_held =
+            crate::energy_ledger::structural_potential(&source).unwrap();
         let mut usable_energy = 0.0;
         let trial = build_displacement_trial(
             &source,
