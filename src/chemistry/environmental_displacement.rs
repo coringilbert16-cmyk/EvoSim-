@@ -55,7 +55,8 @@ pub(crate) fn accumulate_incoming_activation(
     candidate: ConnectionPairCandidate,
     previous: f64,
 ) -> Option<f64> {
-    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+    if candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
         || !candidate.available_b
     {
@@ -544,7 +545,8 @@ mod tests {
         )
         .into_iter()
         .find(|candidate| {
-            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            candidate.distance >= 0.0
+                && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                 && candidate.facing.is_finite()
                 && candidate.facing > 0.0
                 && candidate.available_a
