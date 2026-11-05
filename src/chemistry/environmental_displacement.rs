@@ -6,7 +6,10 @@
 //! explicit prevents an unrelated BREAK followed by COMBINE from masquerading
 //! as displacement.
 
-#![expect(dead_code, reason = "Displacement API awaits live environmental scheduler integration")]
+#![expect(
+    dead_code,
+    reason = "Displacement API awaits live environmental scheduler integration"
+)]
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
@@ -167,8 +170,7 @@ pub(crate) fn build_displacement_trial(
         0.0,
         dissipated_heat,
     )?;
-    if !preflight.is_activated()
-        || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
+    if !preflight.is_activated() || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
     {
         return None;
     }
@@ -518,9 +520,9 @@ mod tests {
         source.add_unit(crate::structure::StructuralUnit::new(
             "Oxygen",
             crate::structure::Placement {
-                x: -1.577_350_269_189_625_8,
+                x: 1.577_350_269_189_625_8,
                 y: 0.0,
-                rotation_radians: 0.0,
+                rotation_radians: std::f64::consts::PI,
             },
         ));
 
@@ -557,7 +559,8 @@ mod tests {
         )
         .into_iter()
         .find(|candidate| {
-            candidate.distance >= 0.0
+            candidate.endpoint_a == old_candidate.endpoint_a
+                && candidate.distance >= 0.0
                 && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                 && candidate.facing.is_finite()
                 && candidate.facing > 0.0
@@ -641,6 +644,7 @@ mod tests {
     fn replacement_must_use_the_endpoint_freed_by_the_displaced_bond() {
         let catalog = default_catalog();
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        assert_eq!(candidate.endpoint_a, old_bond.endpoint_a.location);
         let mut unrelated_candidate = candidate;
         unrelated_candidate.endpoint_a = match candidate.endpoint_a {
             crate::structure::ConnectionEndpoint::Corner { point_index } => {
