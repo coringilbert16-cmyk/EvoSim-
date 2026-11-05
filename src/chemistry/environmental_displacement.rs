@@ -229,13 +229,15 @@ pub(crate) fn build_displacement_trial(
     {
         return None;
     }
-    crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+    let replacement_bond = crate::combine_runtime::admit_selected_candidate_to_trial_structure(
         &mut trial,
         anchor_unit,
         incoming_unit,
         replacement_candidate,
         catalog,
     )?;
+    #[cfg(not(test))]
+    let _ = replacement_bond;
 
     let reactant_structural = crate::energy_ledger::structural_potential(source)?;
     let product_structural = crate::energy_ledger::structural_potential(&trial)?;
