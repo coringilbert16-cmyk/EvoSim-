@@ -837,12 +837,24 @@ mod tests {
         let mut fixture = crate::environment_chemistry_experiment::build(SEED);
         let simulation = &mut fixture.simulation;
         let field = &simulation.environment.field;
-        let start_objects = field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
-        let start_parts = field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| material.material.parts.len()).sum::<usize>();
-        let start_atoms = field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+        let start_objects = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        let start_parts = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
+        let start_atoms = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
             .flat_map(|material| material.material.parts.iter())
-            .map(|(_, amount)| *amount).sum::<f64>();
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
         assert_eq!(start_objects, 1_280);
         assert_eq!(start_parts, 1_360);
 
@@ -854,15 +866,32 @@ mod tests {
         let elapsed = started.elapsed();
         let ticks = simulation.tick - start_tick;
         let end_field = &simulation.environment.field;
-        let end_objects = end_field.cells.iter().map(|cell| cell.physical_materials.len()).sum::<usize>();
-        let end_parts = end_field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
-            .map(|material| material.material.parts.len()).sum::<usize>();
-        let end_atoms = end_field.cells.iter().flat_map(|cell| cell.physical_materials.iter())
+        let end_objects = end_field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        let end_parts = end_field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
+        let end_atoms = end_field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
             .flat_map(|material| material.material.parts.iter())
-            .map(|(_, amount)| *amount).sum::<f64>();
-        assert_eq!(end_objects, start_objects, "transport changed object count");
-        assert_eq!(end_parts, start_parts, "transport changed constituent count");
-        assert!((end_atoms - start_atoms).abs() < 1e-6, "transport changed atom quantity");
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        assert_eq!(
+            end_parts, start_parts,
+            "transport changed constituent count"
+        );
+        assert!(
+            (end_atoms - start_atoms).abs() < 1e-6,
+            "transport changed atom quantity"
+        );
 
         let rate = ticks as f64 / elapsed.as_secs_f64();
         let improvement = (rate - STORED_BASELINE_TICKS_PER_SECOND)
