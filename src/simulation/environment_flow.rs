@@ -64,7 +64,6 @@ impl TransportWorkspace {
         }
         &mut self.obstacle_bins
     }
-
 }
 
 #[derive(Clone, Copy, Debug)]
