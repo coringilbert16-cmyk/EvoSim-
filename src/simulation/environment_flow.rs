@@ -1203,6 +1203,50 @@ mod tests {
             "clearing must retain allocation"
         );
         assert_eq!(bins.len(), 2);
+
+        let bins = workspace.obstacle_bins_mut(1);
+        assert_eq!(bins.len(), 1, "shrinking must discard excess bins");
+        assert!(bins[0].is_empty());
+        let bins = workspace.obstacle_bins_mut(3);
+        assert_eq!(bins.len(), 3, "growing must recreate missing bins");
+        assert!(bins.iter().all(Vec::is_empty));
+    }
+
+    #[test]
+    fn reused_obstacle_bins_match_fresh_build_transport_state() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let simulation = fixture.simulation;
+        let catalog = simulation.environment.catalog.clone();
+        let width = simulation.environment.width;
+        let height = simulation.environment.height;
+        let mut fresh_field = simulation.environment.field.clone();
+        let mut reused_field = fresh_field.clone();
+        let mut fresh_workspace = TransportWorkspace::default();
+        let mut reused_workspace = TransportWorkspace::default();
+
+        let fresh_moved = transport_field_with_reuse::<true, false>(
+            &mut fresh_field,
+            &catalog,
+            width,
+            height,
+            &mut fresh_workspace,
+        );
+        let reused_moved = transport_field_with_reuse::<true, true>(
+            &mut reused_field,
+            &catalog,
+            width,
+            height,
+            &mut reused_workspace,
+        );
+
+        assert_eq!(fresh_moved, reused_moved);
+        assert_eq!(fresh_field.cells, reused_field.cells);
+        assert_eq!(fresh_field.revision, reused_field.revision);
+        assert_eq!(fresh_field.cell_revisions, reused_field.cell_revisions);
+        assert_eq!(
+            fresh_field.next_material_identity,
+            reused_field.next_material_identity
+        );
     }
 
     #[test]
