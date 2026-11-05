@@ -104,6 +104,7 @@ fn seed_randomized_molecular_resources(
     seed: u64,
     width: f64,
     height: f64,
+    include_molecules: bool,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -117,8 +118,16 @@ fn seed_randomized_molecular_resources(
     );
 
     let mut identities = resource_names.clone();
-    let single_resource_count = ENVIRONMENT_SINGLE_RESOURCE_COUNT;
-    let molecule_count = ENVIRONMENT_MOLECULE_COUNT;
+    let single_resource_count = if include_molecules {
+        ENVIRONMENT_SINGLE_RESOURCE_COUNT
+    } else {
+        ENVIRONMENT_OBJECT_COUNT
+    };
+    let molecule_count = if include_molecules {
+        ENVIRONMENT_MOLECULE_COUNT
+    } else {
+        0
+    };
     while identities.len() < single_resource_count {
         identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
@@ -166,10 +175,8 @@ fn seed_randomized_molecular_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let (parts, is_molecule) = &objects[object_index];
-            let max_x = width - 2.8;
             let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, max_x);
+                .clamp(1.0, width - 2.8);
             let y =
                 (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
             let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
@@ -178,6 +185,7 @@ fn seed_randomized_molecular_resources(
                 y,
                 rotation_radians: rotation,
             };
+            let (parts, is_molecule) = &objects[object_index];
             let material = if *is_molecule {
                 Material {
                     parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
@@ -213,7 +221,6 @@ fn seed_randomized_molecular_resources(
     assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
-
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
@@ -240,6 +247,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         seed,
         simulation.environment.width,
         simulation.environment.height,
+        true,
     );
 
     // The default constructor's organism is deliberately removed. Rebase the
