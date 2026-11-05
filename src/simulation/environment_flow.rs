@@ -9,6 +9,28 @@ use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{BaseResource, Form};
 
+#[cfg(test)]
+use std::sync::atomic::{AtomicU64, Ordering};
+#[cfg(test)]
+use std::time::Instant;
+
+#[cfg(test)]
+static TRANSPORT_STAGE_NANOS: [AtomicU64; 5] = [
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+    AtomicU64::new(0),
+];
+
+#[cfg(test)]
+fn record_transport_stage(index: usize, started: Instant) {
+    TRANSPORT_STAGE_NANOS[index].fetch_add(
+        started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+        Ordering::Relaxed,
+    );
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Velocity {
     x: f64,
@@ -582,6 +604,8 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         return 0;
     }
 
+    #[cfg(test)]
+    let stage_started = Instant::now();
     // Assign identities while building the existing transport snapshot, so
     // this does not add another full-field traversal to every simulation tick.
     let mut next_identity = field.next_material_identity;
@@ -597,6 +621,10 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         }
     }
     field.next_material_identity = next_identity;
+    #[cfg(test)]
+    record_transport_stage(0, stage_started);
+    #[cfg(test)]
+    let stage_started = Instant::now();
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
@@ -606,6 +634,10 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             obstacle_for(*cell, *index, material, catalog, height)
         })
         .collect();
+    #[cfg(test)]
+    record_transport_stage(1, stage_started);
+    #[cfg(test)]
+    let stage_started = Instant::now();
     let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
@@ -634,6 +666,10 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             }
         }
     }
+    #[cfg(test)]
+    record_transport_stage(2, stage_started);
+    #[cfg(test)]
+    let stage_started = Instant::now();
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -691,10 +727,14 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             staged.push((source_cell, source_index, destination_cell, moved));
         }
     }
+    #[cfg(test)]
+    record_transport_stage(3, stage_started);
     if staged.is_empty() {
         return 0;
     }
 
+    #[cfg(test)]
+    let stage_started = Instant::now();
     let moved_count = staged.len();
     let mut changed = vec![false; field.cells.len()];
     for (source_cell, source_index, _, _) in &staged {
@@ -724,12 +764,75 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             field.mark_changed_at_index(index);
         }
     }
+    #[cfg(test)]
+    record_transport_stage(4, stage_started);
     moved_count
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    /// One-minute diagnostic profile of the unchanged transport algorithm.
+    /// Stage timers are test-only and deliberately excluded from production builds.
+    #[test]
+    #[ignore = "60-second movement-stage profile; invoked manually or by the profiling CI hook"]
+    fn transport_movement_stage_profile_60s() {
+        use std::time::{Duration, Instant};
+
+        const RUN_DURATION: Duration = Duration::from_secs(60);
+        const SEED: u64 = 42;
+        for counter in &TRANSPORT_STAGE_NANOS {
+            counter.store(0, Ordering::Relaxed);
+        }
+        let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &mut fixture.simulation;
+        let start_objects = simulation.environment.field.cells.iter()
+            .map(|cell| cell.physical_materials.len()).sum::<usize>();
+        let start_constituents = simulation.environment.field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len()).sum::<usize>();
+        assert_eq!(start_objects, 1_280);
+        assert_eq!(start_constituents, 1_360);
+
+        let started = Instant::now();
+        while started.elapsed() < RUN_DURATION {
+            simulation.step();
+        }
+        let elapsed = started.elapsed();
+        let labels = [
+            "snapshot_and_identity",
+            "obstacle_construction",
+            "obstacle_bin_build",
+            "movement_evaluation",
+            "movement_commit",
+        ];
+        let mut total_profiled = 0_u64;
+        for (index, label) in labels.iter().enumerate() {
+            let nanos = TRANSPORT_STAGE_NANOS[index].load(Ordering::Relaxed);
+            total_profiled += nanos;
+            println!("TRANSPORT PROFILE {label}: total_ms={:.3} average_us_per_tick={:.3}",
+                nanos as f64 / 1_000_000.0,
+                nanos as f64 / simulation.tick.max(1) as f64 / 1_000.0);
+        }
+        println!(
+            "TRANSPORT PROFILE SUMMARY: seed={SEED} duration_s={:.3} ticks={} ticks_per_second={:.2} profiled_stage_ms={:.3} objects={start_objects} constituents={start_constituents}",
+            elapsed.as_secs_f64(),
+            simulation.tick,
+            simulation.tick as f64 / elapsed.as_secs_f64(),
+            total_profiled as f64 / 1_000_000.0,
+        );
+        let end_objects = simulation.environment.field.cells.iter()
+            .map(|cell| cell.physical_materials.len()).sum::<usize>();
+        let end_constituents = simulation.environment.field.cells.iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len()).sum::<usize>();
+        assert_eq!(end_objects, start_objects, "transport profiling must conserve object count");
+        assert_eq!(end_constituents, start_constituents, "transport profiling must conserve constituents");
+        assert!(simulation.energy_inventory_snapshot().is_balanced(1e-6),
+            "transport profiling must preserve energy accounting");
+    }
 
     #[test]
     fn background_flow_is_finite_deterministic_and_left_to_right() {
