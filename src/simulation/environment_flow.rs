@@ -1291,4 +1291,184 @@ mod tests {
             baseline.end_constituents, experiment.end_constituents,
         );
     }
+
+    /// Focused 10-second measurement of compound angular evaluation using the
+    /// same obstacle-bin construction and candidate selection as transport.
+    #[test]
+    #[ignore = "10-second compound angular microbenchmark; invoked by focused CI"]
+    fn compound_angular_evaluation_microbenchmark_10s() {
+        use std::hint::black_box;
+        use std::time::{Duration, Instant};
+
+        const SEED: u64 = 42;
+        const RUN_DURATION: Duration = Duration::from_secs(10);
+        let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &mut fixture.simulation;
+        let field = &simulation.environment.field;
+        let catalog = simulation.environment.catalog.clone();
+        let width = simulation.environment.width;
+        let height = simulation.environment.height;
+
+        let mut snapshot = Vec::new();
+        for (cell_index, cell) in field.cells.iter().enumerate() {
+            for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                snapshot.push((cell_index, material_index, material));
+            }
+        }
+        let obstacles: Vec<Obstacle> = snapshot
+            .iter()
+            .filter_map(|(cell, index, material)| {
+                obstacle_for(*cell, *index, material, &catalog, height)
+            })
+            .collect();
+        let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
+        for obstacle in obstacles {
+            let radius = obstacle.radius.max(0.5).min(width.max(height));
+            let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col =
+                ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col = max_col.min(flow_cols.saturating_sub(1));
+            if min_col > max_col {
+                continue;
+            }
+            let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
+            let rows = if row_count >= flow_rows {
+                (0..flow_rows).collect::<Vec<_>>()
+            } else {
+                (0..row_count)
+                    .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
+                    .collect::<Vec<_>>()
+            };
+            for row in rows {
+                for col in min_col..=max_col {
+                    obstacle_bins[row * flow_cols + col].push(obstacle);
+                }
+            }
+        }
+
+        let compounds: Vec<_> = snapshot
+            .into_iter()
+            .filter_map(|(cell, index, material)| {
+                (material.material.parts.len() > 1)
+                    .then(|| (cell, index, material))
+            })
+            .collect();
+        assert!(!compounds.is_empty(), "fixture must contain compounds");
+
+        let started = Instant::now();
+        let mut evaluations = 0_u64;
+        let mut checksum = 0.0_f64;
+        while started.elapsed() < RUN_DURATION {
+            for (source_cell, source_index, material) in &compounds {
+                let Some((x, y)) = material_center(material, height) else {
+                    continue;
+                };
+                let col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
+                let row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
+                let nearby = &obstacle_bins[row * flow_cols + col];
+                checksum += angular_displacement(
+                    material,
+                    &catalog,
+                    width,
+                    height,
+                    nearby,
+                    None,
+                    *source_cell,
+                    *source_index,
+                );
+                evaluations += 1;
+            }
+            black_box(checksum);
+        }
+        let elapsed = started.elapsed();
+        println!(
+            "COMPOUND ANGULAR PROFILE: seed={SEED} compounds={} evaluations={evaluations} elapsed_s={:.3} evaluations_per_second={:.1} average_us_per_evaluation={:.3} checksum={:.9}",
+            compounds.len(),
+            elapsed.as_secs_f64(),
+            evaluations as f64 / elapsed.as_secs_f64(),
+            elapsed.as_secs_f64() * 1_000_000.0 / evaluations.max(1) as f64,
+            checksum,
+        );
+    }
+
+    /// Candidate-only full simulation benchmark. The accepted PR #305 baseline
+    /// remains stored and is not rerun by this experiment.
+    #[test]
+    #[ignore = "30-second candidate-only transport benchmark; invoked by focused CI"]
+    fn transport_compound_angular_hoist_candidate_30s() {
+        use std::time::{Duration, Instant};
+
+        const SEED: u64 = 42;
+        const RUN_DURATION: Duration = Duration::from_secs(30);
+        const STORED_BASELINE_TICKS_PER_SECOND: f64 = 19.798;
+
+        let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &mut fixture.simulation;
+        let field = &simulation.environment.field;
+        let start_parts = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
+        let start_atoms = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .flat_map(|material| material.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        let start_objects = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        assert_eq!(start_objects, 1_280);
+        assert_eq!(start_parts, 1_360);
+
+        let start_tick = simulation.tick;
+        let started = Instant::now();
+        while started.elapsed() < RUN_DURATION {
+            simulation.step();
+        }
+        let elapsed = started.elapsed();
+        let ticks = simulation.tick - start_tick;
+        let end_field = &simulation.environment.field;
+        let end_parts = end_field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
+        let end_atoms = end_field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .flat_map(|material| material.material.parts.iter())
+            .map(|(_, amount)| *amount)
+            .sum::<f64>();
+        let end_objects = end_field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        assert_eq!(end_parts, start_parts, "candidate changed constituent count");
+        assert!(
+            (end_atoms - start_atoms).abs() < 1e-6,
+            "candidate changed atom quantity"
+        );
+        let rate = ticks as f64 / elapsed.as_secs_f64();
+        let change = (rate - STORED_BASELINE_TICKS_PER_SECOND)
+            / STORED_BASELINE_TICKS_PER_SECOND
+            * 100.0;
+        println!(
+            "TRANSPORT ANGULAR HOIST CANDIDATE: seed={SEED} objects={start_objects} parts={start_parts} actual_seconds={:.3} ticks={ticks} candidate_ticks_per_second={rate:.3} stored_baseline_ticks_per_second={STORED_BASELINE_TICKS_PER_SECOND:.3} change_vs_stored_baseline_pct={change:.3} end_objects={end_objects} end_parts={end_parts}",
+            elapsed.as_secs_f64(),
+        );
+    }
+
 }
