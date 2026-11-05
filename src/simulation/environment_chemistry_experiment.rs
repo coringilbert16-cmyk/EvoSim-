@@ -10,7 +10,7 @@ use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
 use crate::structure::Placement;
 
-const ENVIRONMENT_RESOURCE_COUNT: usize = 1_280;
+const ENVIRONMENT_RESOURCE_COUNT: usize = 1_280; // Baseline fixture update pending.
 
 /// Seed exactly 1,280 individual base resources in a seeded set of randomly
 /// sized and positioned piles. Pile sizes are an unrestricted random partition
