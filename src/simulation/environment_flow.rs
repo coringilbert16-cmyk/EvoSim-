@@ -1237,7 +1237,6 @@ mod tests {
 
     #[test]
     fn dense_obstacle_transport_preserves_inventory_and_mobility() {
-
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         // Keep all objects inside one fine flow bin so this exercises the
@@ -1297,6 +1296,4 @@ mod tests {
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
     }
-
-
 }
