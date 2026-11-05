@@ -1244,8 +1244,13 @@ mod tests {
                 elapsed.as_secs_f64(),
             );
             RunResult {
-                ticks, elapsed, start_objects, start_constituents,
-                end_objects, end_constituents, initial_state,
+                ticks,
+                elapsed,
+                start_objects,
+                start_constituents,
+                end_objects,
+                end_constituents,
+                initial_state,
             }
         }
 
