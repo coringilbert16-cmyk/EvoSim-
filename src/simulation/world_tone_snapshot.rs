@@ -906,6 +906,7 @@ fn physical_material_from_structure(
     }
     Some(PhysicalMaterial {
         material,
+        environmental_identity: 0,
         placements: Some(placements),
         internal_connections: None,
         owner_relative_origin: None,
