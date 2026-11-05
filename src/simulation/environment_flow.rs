@@ -407,7 +407,10 @@ fn angular_displacement(
     });
     let mut torque = 0.0;
     let mut moment = 0.0;
-    let mut samples = Vec::with_capacity(placements.len());
+    let mut samples = Vec::new();
+    if placements.len() > 1 {
+        samples.reserve(placements.len());
+    }
     for (index, placement) in placements.iter().enumerate() {
         let Some((name, amount)) = material.material.parts.get(index) else {
             continue;
