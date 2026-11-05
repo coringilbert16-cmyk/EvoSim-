@@ -10,7 +10,7 @@ use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
 use crate::energy_ledger::ReactionEnergyBalance;
 use crate::resources::{BaseResource, ResourceProperties};
-use crate::structure::{Bond, BondEndpoint, OrganismStructure, PhysicalConstituentId};
+use crate::structure::{Bond, BondEndpoint, OrganismStructure};
 
 /// Energy and activation assessment for one proposed constituent replacement.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -397,4 +397,120 @@ mod tests {
         )
         .is_none());
     }
+
+    fn three_participant_fixture(
+        catalog: &[BaseResource],
+    ) -> (OrganismStructure, Bond, ConnectionPairCandidate, f64) {
+        let mut source = OrganismStructure::new();
+        source.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+        ));
+        source.add_unit(crate::structure::StructuralUnit::new(
+            "Hydrogen",
+            crate::structure::Placement { x: 1.5, y: 0.0, rotation_radians: 0.0 },
+        ));
+        source.add_unit(crate::structure::StructuralUnit::new(
+            "Oxygen",
+            crate::structure::Placement { x: -1.577_350_269_189_625_8, y: 0.0, rotation_radians: 0.0 },
+        ));
+
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let old_candidate = crate::contact::connection_pair_candidates_cached(
+            &source, 0, 1, catalog, &mut cache,
+        )
+        .into_iter()
+        .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a && candidate.available_b)
+        .expect("Carbon-Hydrogen physical contact");
+        let anchor = source.units[0].properties(catalog).unwrap();
+        let displaced = source.units[1].properties(catalog).unwrap();
+        let strength = bond_strength(anchor, displaced);
+        let old_bond = Bond {
+            endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
+            endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
+            strength,
+            bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
+        };
+        crate::contact::try_add_bond(&mut source, old_bond, catalog)
+            .expect("initial A-B bond should be physically valid");
+
+        let mut replacement_trial = source.clone();
+        replacement_trial.break_matching_bond(old_bond).unwrap();
+        let replacement_candidate = crate::contact::connection_pair_candidates_cached(
+            &replacement_trial, 0, 2, catalog, &mut cache,
+        )
+        .into_iter()
+        .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            && candidate.available_a && candidate.available_b)
+        .expect("freed Carbon endpoint should contact incoming Oxygen");
+        let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
+            &replacement_trial, 0, 2, replacement_candidate, catalog,
+        )
+        .expect("replacement candidate should pass ordinary COMBINE evaluation");
+        (source, old_bond, replacement_candidate, investment)
+    }
+
+    #[test]
+    fn trial_replacement_splits_displaced_constituent_and_preserves_source() {
+        let catalog = default_catalog();
+        let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let source_before = source.clone();
+        let trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("favorable activated replacement should produce a trial");
+
+        assert_eq!(source.units, source_before.units);
+        assert_eq!(source.bonds, source_before.bonds);
+        assert_eq!(trial.structure.bonds.len(), 1);
+        assert_eq!(trial.products.len(), 2);
+        assert!(trial.products.iter().any(|product| {
+            product.material.parts.iter().any(|part| part.0 == "Carbon")
+                && product.material.parts.iter().any(|part| part.0 == "Oxygen")
+                && product.material.internal_bonds.len() == 1
+        }));
+        assert!(trial.products.iter().any(|product| {
+            product.material.parts == vec![("Hydrogen".to_owned(), 1.0)]
+                && product.material.internal_bonds.is_empty()
+        }));
+        assert!(trial.energy.required_external_input <= 1e-9);
+        assert_eq!(trial.removed_bond, old_bond);
+        assert_eq!(trial.replacement_bond.bond_energy, trial.products.iter()
+            .find(|product| product.material.parts.len() == 2)
+            .unwrap().internal_connections.as_ref().unwrap()[0].bond_energy);
+    }
+
+    #[test]
+    fn trial_replacement_rejects_insufficient_incoming_activation_without_mutation() {
+        let catalog = default_catalog();
+        let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let before = source.clone();
+        assert!(build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            0.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        ).is_none());
+        assert_eq!(source.units, before.units);
+        assert_eq!(source.bonds, before.bonds);
+    }
+
 }
