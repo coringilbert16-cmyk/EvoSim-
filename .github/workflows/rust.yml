@@ -110,7 +110,16 @@ jobs:
       - name: Environmental BREAK discovery A/B benchmark
         if: always()
         timeout-minutes: 5
-        run: cargo test --locked environmental_discovery_ab_benchmark -- --ignored --nocapture
+        run: |
+          output="$RUNNER_TEMP/transport-obstacle-bin-benchmark.log"
+          set +e
+          cargo test --locked environmental_discovery_ab_benchmark -- --ignored --nocapture > "$output" 2>&1
+          status=$?
+          grep -E 'environmental BREAK discovery A/B:|TRANSPORT .*RESULT|TRANSPORT 60S PAIRED SUMMARY|test result:' "$output" || true
+          if [ "$status" -ne 0 ]; then
+            tail -n 80 "$output"
+          fi
+          exit "$status"
       - name: Transactions and ownership (focused tests)
         if: always()
         timeout-minutes: 30
