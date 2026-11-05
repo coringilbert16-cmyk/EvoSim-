@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
-use crate::physical_material::PhysicalMaterial;
+use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::state::{EnergyLedger, Environment};
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
@@ -394,7 +394,8 @@ pub(crate) struct EnvironmentalDisplacementOperation {
     pub(crate) anchor_unit: usize,
     pub(crate) displaced_unit: usize,
     pub(crate) incoming_unit: usize,
-    pub(crate) old_bond: Bond,
+    pub(crate) bond_index: usize,
+    pub(crate) old_connection: PhysicalMaterialBond,
     pub(crate) candidate: ConnectionPairCandidate,
     pub(crate) investment: f64,
     pub(crate) activation_signal: f64,
@@ -507,7 +508,7 @@ fn best_freed_endpoint_contact(
         else {
             continue;
         };
-        let replace = best.is_none_or(|(current, _, current_energy)| {
+        let replace = best.map_or(true, |(current, _, current_energy)| {
             required_energy
                 .partial_cmp(&current_energy)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -793,7 +794,8 @@ pub(crate) fn accumulate_environmental(
                                     anchor_unit: anchor_part,
                                     displaced_unit: displaced_part,
                                     incoming_unit: incoming_part,
-                                    old_bond: old_bond.clone(),
+                                    bond_index,
+                                    old_connection: connection.clone(),
                                     candidate,
                                     investment,
                                     activation_signal,
@@ -915,12 +917,49 @@ pub(crate) fn resolve_environmental(
         return false;
     };
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let Some(old_connection) = operation
+        .source_a
+        .internal_connections
+        .as_ref()
+        .and_then(|connections| connections.get(operation.bond_index))
+    else {
+        return false;
+    };
+    if old_connection != &operation.old_connection {
+        return false;
+    }
+    let (Some(anchor_id), Some(displaced_id)) = (
+        combined.physical_id(anchor_unit),
+        combined.physical_id(displaced_unit),
+    ) else {
+        return false;
+    };
+    let (Some(anchor_properties), Some(displaced_properties)) = (
+        combined.units[anchor_unit].properties(&environment.catalog),
+        combined.units[displaced_unit].properties(&environment.catalog),
+    ) else {
+        return false;
+    };
+    let expected_old_bond = Bond {
+        endpoint_a: crate::structure::BondEndpoint::new(anchor_id, old_connection.endpoint_a),
+        endpoint_b: crate::structure::BondEndpoint::new(displaced_id, old_connection.endpoint_b),
+        strength: bond_strength(anchor_properties, displaced_properties),
+        bond_energy: old_connection.bond_energy,
+    };
+    let Some(old_bond) = combined
+        .bonds
+        .iter()
+        .find(|bond| bond.has_same_identity(&expected_old_bond))
+        .cloned()
+    else {
+        return false;
+    };
     let Some(trial) = build_displacement_trial(
         &combined,
         anchor_unit,
         displaced_unit,
         incoming_unit,
-        operation.old_bond.clone(),
+        old_bond,
         operation.candidate,
         operation.investment,
         operation.activation_signal,
