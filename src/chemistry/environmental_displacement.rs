@@ -474,31 +474,51 @@ mod tests {
         let mut source = OrganismStructure::new();
         source.add_unit(crate::structure::StructuralUnit::new(
             "Carbon",
-            crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         source.add_unit(crate::structure::StructuralUnit::new(
             "Hydrogen",
-            crate::structure::Placement { x: 1.5, y: 0.0, rotation_radians: 0.0 },
+            crate::structure::Placement {
+                x: 1.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
         source.add_unit(crate::structure::StructuralUnit::new(
             "Oxygen",
-            crate::structure::Placement { x: -1.577_350_269_189_625_8, y: 0.0, rotation_radians: 0.0 },
+            crate::structure::Placement {
+                x: -1.577_350_269_189_625_8,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
         ));
 
         let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let old_candidate = crate::contact::connection_pair_candidates_cached(
-            &source, 0, 1, catalog, &mut cache,
-        )
-        .into_iter()
-        .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            && candidate.available_a && candidate.available_b)
-        .expect("Carbon-Hydrogen physical contact");
+        let old_candidate =
+            crate::contact::connection_pair_candidates_cached(&source, 0, 1, catalog, &mut cache)
+                .into_iter()
+                .find(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+                .expect("Carbon-Hydrogen physical contact");
         let anchor = source.units[0].properties(catalog).unwrap();
         let displaced = source.units[1].properties(catalog).unwrap();
         let strength = bond_strength(anchor, displaced);
         let old_bond = Bond {
-            endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
-            endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
+            endpoint_a: BondEndpoint::new(
+                source.physical_id(0).unwrap(),
+                old_candidate.endpoint_a,
+            ),
+            endpoint_b: BondEndpoint::new(
+                source.physical_id(1).unwrap(),
+                old_candidate.endpoint_b,
+            ),
             strength,
             bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
         };
@@ -508,14 +528,25 @@ mod tests {
         let mut replacement_trial = source.clone();
         replacement_trial.break_matching_bond(old_bond).unwrap();
         let replacement_candidate = crate::contact::connection_pair_candidates_cached(
-            &replacement_trial, 0, 2, catalog, &mut cache,
+            &replacement_trial,
+            0,
+            2,
+            catalog,
+            &mut cache,
         )
         .into_iter()
-        .find(|candidate| candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            && candidate.available_a && candidate.available_b)
+        .find(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+        })
         .expect("freed Carbon endpoint should contact incoming Oxygen");
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
-            &replacement_trial, 0, 2, replacement_candidate, catalog,
+            &replacement_trial,
+            0,
+            2,
+            replacement_candidate,
+            catalog,
         )
         .expect("replacement candidate should pass ordinary COMBINE evaluation");
         (source, old_bond, replacement_candidate, investment)
@@ -570,9 +601,15 @@ mod tests {
         }));
         assert!(trial.energy.required_external_input <= 1e-9);
         assert_eq!(trial.removed_bond, old_bond);
-        assert_eq!(trial.replacement_bond.bond_energy, trial.products.iter()
+        let bonded_product = trial
+            .products
+            .iter()
             .find(|product| product.material.parts.len() == 2)
-            .unwrap().internal_connections.as_ref().unwrap()[0].bond_energy);
+            .expect("A-C component should contain two constituents");
+        assert_eq!(
+            trial.replacement_bond.bond_energy,
+            bonded_product.internal_connections.as_ref().unwrap()[0].bond_energy
+        );
     }
 
     #[test]
@@ -654,19 +691,22 @@ mod tests {
         let catalog = default_catalog();
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let before = source.clone();
-        assert!(build_displacement_trial(
-            &source,
-            0,
-            1,
-            2,
-            old_bond,
-            candidate,
-            investment,
-            0.0,
-            catalog_reactivity_baseline(),
-            0.0,
-            &catalog,
-        ).is_none());
+        assert!(
+            build_displacement_trial(
+                &source,
+                0,
+                1,
+                2,
+                old_bond,
+                candidate,
+                investment,
+                0.0,
+                catalog_reactivity_baseline(),
+                0.0,
+                &catalog,
+            )
+            .is_none()
+        );
         assert_eq!(source.units, before.units);
         assert_eq!(source.bonds, before.bonds);
     }
