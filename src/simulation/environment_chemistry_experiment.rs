@@ -14,9 +14,8 @@ const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
 const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
 
-/// Seed exactly 1,280 individual base resources in a seeded set of randomly
-/// sized and positioned piles. Pile sizes are an unrestricted random partition
-/// of the inventory, not a fixed 6–20 range.
+/// Seed 1,280 physical objects in randomized piles. The benchmark variant
+/// substitutes 80 intact molecules for 80 single-resource objects.
 pub(crate) fn seed_randomized_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -215,7 +214,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_simulation_starts_with_1280_objects_including_80_molecules() {
+    fn default_simulation_keeps_1280_individual_base_resources() {
         let simulation = Simulation::new(73, 10.0);
         assert_eq!(simulation.environment.width, 250.0);
         assert_eq!(simulation.environment.height, 250.0);
