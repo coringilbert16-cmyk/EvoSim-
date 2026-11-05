@@ -57,6 +57,46 @@ struct Obstacle {
     solidity: f64,
 }
 
+/// Build the obstacle broad-phase index at a caller-selected spatial resolution.
+/// The influence bounds intentionally cover both the proximity field and the
+/// downstream wake; candidates remain in original obstacle order.
+fn build_obstacle_bins(
+    obstacles: &[Obstacle],
+    width: f64,
+    height: f64,
+    bin_size: f64,
+) -> (usize, usize, Vec<Vec<Obstacle>>) {
+    let flow_cols = (width / bin_size).ceil().max(1.0) as usize;
+    let flow_rows = (height / bin_size).ceil().max(1.0) as usize;
+    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
+    for obstacle in obstacles.iter().copied() {
+        let radius = obstacle.radius.max(0.5).min(width.max(height));
+        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / bin_size).floor() as usize;
+        let max_col =
+            ((obstacle.x + radius * 6.0).min(width - 1e-6) / bin_size).floor() as usize;
+        let max_col = max_col.min(flow_cols.saturating_sub(1));
+        if min_col > max_col {
+            continue;
+        }
+        let min_row = ((obstacle.y - radius * 2.5) / bin_size).floor() as isize;
+        let max_row = ((obstacle.y + radius * 2.5) / bin_size).floor() as isize;
+        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
+        let rows = if row_count >= flow_rows {
+            (0..flow_rows).collect::<Vec<_>>()
+        } else {
+            (0..row_count)
+                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
+                .collect::<Vec<_>>()
+        };
+        for row in rows {
+            for col in min_col..=max_col {
+                obstacle_bins[row * flow_cols + col].push(obstacle);
+            }
+        }
+    }
+    (flow_cols, flow_rows, obstacle_bins)
+}
+
 fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a BaseResource> {
     catalog.iter().find(|resource| resource.name == name)
 }
@@ -606,34 +646,8 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             obstacle_for(*cell, *index, material, catalog, height)
         })
         .collect();
-    let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
-    let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
-    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
-    for obstacle in obstacles {
-        let radius = obstacle.radius.max(0.5).min(width.max(height));
-        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col =
-            ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = max_col.min(flow_cols.saturating_sub(1));
-        if min_col > max_col {
-            continue;
-        }
-        let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
-        let rows = if row_count >= flow_rows {
-            (0..flow_rows).collect::<Vec<_>>()
-        } else {
-            (0..row_count)
-                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
-                .collect::<Vec<_>>()
-        };
-        for row in rows {
-            for col in min_col..=max_col {
-                obstacle_bins[row * flow_cols + col].push(obstacle);
-            }
-        }
-    }
+    let (flow_cols, flow_rows, obstacle_bins) =
+        build_obstacle_bins(&obstacles, width, height, FLOW_BIN_SIZE);
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -799,6 +813,38 @@ mod tests {
             carbon_obstacle.radius > water_obstacle.radius,
             "the obstacle footprint should come from the material's actual catalog shape"
         );
+    }
+
+    #[test]
+    fn obstacle_bin_sizes_preserve_exact_velocity_results() {
+        let obstacles = vec![
+            Obstacle { source_cell: 0, source_index: 0, x: 0.2, y: 0.1, radius: 0.5, solidity: 1.0 },
+            Obstacle { source_cell: 0, source_index: 1, x: 18.0, y: 19.5, radius: 2.0, solidity: 0.7 },
+            Obstacle { source_cell: 1, source_index: 0, x: 49.5, y: 0.2, radius: 4.0, solidity: 1.0 },
+            Obstacle { source_cell: 2, source_index: 0, x: 25.0, y: 10.0, radius: 8.0, solidity: 0.4 },
+            Obstacle { source_cell: 3, source_index: 0, x: 12.0, y: 15.0, radius: 1.25, solidity: 0.0 },
+        ];
+        let (width, height) = (50.0, 20.0);
+        let free = Velocity { x: 0.73, y: -0.21 };
+
+        for bin_size in [5.0, 2.5, 1.25] {
+            let (cols, rows, bins) = build_obstacle_bins(&obstacles, width, height, bin_size);
+            for step_x in 0..200 {
+                for step_y in 0..80 {
+                    let x = (step_x as f64 + 0.37) * width / 200.0;
+                    let y = (step_y as f64 + 0.61) * height / 80.0;
+                    let col = ((x / bin_size).floor() as usize).min(cols.saturating_sub(1));
+                    let row = ((y / bin_size).floor() as usize).min(rows.saturating_sub(1));
+                    let candidates = &bins[row * cols + col];
+                    let expected = obstacle_adjusted_velocity(free, x, y, 99, 99, &obstacles, height);
+                    let actual = obstacle_adjusted_velocity(free, x, y, 99, 99, candidates, height);
+                    assert_eq!(
+                        actual, expected,
+                        "bin size {bin_size} changed velocity at ({x}, {y})"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
