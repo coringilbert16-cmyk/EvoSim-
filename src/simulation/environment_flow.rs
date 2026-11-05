@@ -1210,13 +1210,7 @@ mod tests {
         const SEED: u64 = 42;
         const SAMPLES: usize = 5;
 
-        fn run_once<const REUSE: bool>() -> (
-            Duration,
-            usize,
-            usize,
-            usize,
-            Vec<PhysicalMaterial>,
-        ) {
+        fn run_once<const REUSE: bool>() -> (Duration, usize, usize, usize, Vec<PhysicalMaterial>) {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let catalog = fixture.simulation.environment.catalog.clone();
             let field = &mut fixture.simulation.environment.field;
@@ -1233,10 +1227,7 @@ mod tests {
                 .sum::<usize>();
             let started = Instant::now();
             let moved = transport_field_with_singleton_center_velocity_reuse::<REUSE>(
-                field,
-                &catalog,
-                250.0,
-                250.0,
+                field, &catalog, 250.0, 250.0,
             );
             let elapsed = started.elapsed();
             let mut final_state = field
@@ -1245,13 +1236,7 @@ mod tests {
                 .flat_map(|cell| cell.physical_materials.iter().cloned())
                 .collect::<Vec<_>>();
             final_state.sort_unstable_by_key(|material| material.environmental_identity);
-            (
-                elapsed,
-                moved,
-                object_count,
-                constituent_count,
-                final_state,
-            )
+            (elapsed, moved, object_count, constituent_count, final_state)
         }
 
         let baseline_warmup = run_once::<false>();
