@@ -607,6 +607,18 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) combine_rejected: usize,
     pub(crate) combine_discovery_work_remaining: usize,
     pub(crate) combine_realization_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) displacement_ready_candidates: usize,
+    #[serde(default)]
+    pub(crate) displacement_scheduled: usize,
+    #[serde(default)]
+    pub(crate) displacement_committed: usize,
+    #[serde(default)]
+    pub(crate) displacement_rejected: usize,
+    #[serde(default)]
+    pub(crate) displacement_discovery_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) displacement_realization_work_remaining: usize,
     pub(crate) accumulation_entries: usize,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }
