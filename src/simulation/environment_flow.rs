@@ -876,7 +876,16 @@ mod tests {
             1000.0,
         )
         .unwrap();
-        let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], None, 0, 0);
+        let angular_step = angular_displacement(
+            &original,
+            &catalog,
+            1000.0,
+            1000.0,
+            &[],
+            None,
+            0,
+            0,
+        );
         let mut expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
         assert_ne!(objects[0].environmental_identity, 0);
@@ -982,7 +991,16 @@ mod tests {
             &catalog,
         )
         .expect("catalog resource should realize");
-        let angle = angular_displacement(&resource, &catalog, 100.0, 80.0, &[], None, 0, 0);
+        let angle = angular_displacement(
+            &resource,
+            &catalog,
+            100.0,
+            80.0,
+            &[],
+            None,
+            0,
+            0,
+        );
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
@@ -1012,7 +1030,16 @@ mod tests {
             &catalog,
         )
         .expect("compound should realize");
-        let angle = angular_displacement(&compound, &catalog, 100.0, 80.0, &[], None, 0, 1);
+        let angle = angular_displacement(
+            &compound,
+            &catalog,
+            100.0,
+            80.0,
+            &[],
+            None,
+            0,
+            1,
+        );
         assert!(angle.is_finite());
         assert!(
             angle.abs() > 1e-12,
@@ -1043,7 +1070,16 @@ mod tests {
             &[],
             80.0,
         );
-        let recomputed = angular_displacement(&material, &catalog, 100.0, 80.0, &[], None, 0, 0);
+        let recomputed = angular_displacement(
+            &material,
+            &catalog,
+            100.0,
+            80.0,
+            &[],
+            None,
+            0,
+            0,
+        );
         let reused = angular_displacement(
             &material,
             &catalog,
