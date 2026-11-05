@@ -928,22 +928,28 @@ pub(crate) fn resolve_environmental(
     if old_connection != &operation.old_connection {
         return false;
     }
-    let (Some(anchor_id), Some(displaced_id)) = (
-        combined.physical_id(anchor_unit),
-        combined.physical_id(displaced_unit),
+    let (Some(part_a_unit), Some(part_b_unit)) = (
+        indices_a.get(old_connection.part_a).copied(),
+        indices_a.get(old_connection.part_b).copied(),
     ) else {
         return false;
     };
-    let (Some(anchor_properties), Some(displaced_properties)) = (
-        combined.units[anchor_unit].properties(&environment.catalog),
-        combined.units[displaced_unit].properties(&environment.catalog),
+    let (Some(part_a_id), Some(part_b_id)) = (
+        combined.physical_id(part_a_unit),
+        combined.physical_id(part_b_unit),
+    ) else {
+        return false;
+    };
+    let (Some(part_a_properties), Some(part_b_properties)) = (
+        combined.units[part_a_unit].properties(&environment.catalog),
+        combined.units[part_b_unit].properties(&environment.catalog),
     ) else {
         return false;
     };
     let expected_old_bond = Bond {
-        endpoint_a: crate::structure::BondEndpoint::new(anchor_id, old_connection.endpoint_a),
-        endpoint_b: crate::structure::BondEndpoint::new(displaced_id, old_connection.endpoint_b),
-        strength: bond_strength(anchor_properties, displaced_properties),
+        endpoint_a: crate::structure::BondEndpoint::new(part_a_id, old_connection.endpoint_a),
+        endpoint_b: crate::structure::BondEndpoint::new(part_b_id, old_connection.endpoint_b),
+        strength: bond_strength(part_a_properties, part_b_properties),
         bond_energy: old_connection.bond_energy,
     };
     let Some(old_bond) = combined
