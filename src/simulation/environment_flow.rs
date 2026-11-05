@@ -1387,19 +1387,20 @@ mod tests {
         transport_molecular_candidate_evaluation_benchmark();
     }
 
-    /// Standard maximum-speed, 60-second wall-clock comparison of the original
-    /// and optimized transport paths over the full environment simulation.
+    /// Fixed-tick paired comparison of the original and optimized transport paths.
+    /// Both arms receive identical seeded states and exactly the same number of ticks.
     #[test]
-    #[ignore = "60-second transport throughput benchmark; invoked by the CI benchmark hook"]
+    #[ignore = "fixed-tick paired transport throughput benchmark; invoked by the CI benchmark hook"]
     fn transport_molecular_candidate_evaluation_benchmark() {
-        use std::time::{Duration, Instant};
+        use std::time::Instant;
 
         const SEED: u64 = 42;
-        const RUN_DURATION: Duration = Duration::from_secs(60);
+        const TICKS_PER_RUN: u64 = 1_890;
+        const PAIRS: usize = 5;
 
         struct RunResult {
             ticks: u64,
-            elapsed: Duration,
+            elapsed: std::time::Duration,
             start_objects: usize,
             start_constituents: usize,
             end_objects: usize,
@@ -1411,99 +1412,113 @@ mod tests {
         fn run_once<const COMBINE: bool>(label: &str) -> RunResult {
             let mut fixture = crate::environment_chemistry_experiment::build(SEED);
             let simulation = &mut fixture.simulation;
-            let start_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let start_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
+            let start_objects = simulation.environment.field.cells.iter()
+                .map(|cell| cell.physical_materials.len()).sum::<usize>();
+            let start_constituents = simulation.environment.field.cells.iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
+                .map(|material| material.material.parts.len()).sum::<usize>();
             assert_eq!(start_objects, 1_280);
             assert_eq!(start_constituents, 1_360);
 
-            let mut initial_state = simulation
-                .environment
-                .field
-                .cells
-                .iter()
+            let mut initial_state = simulation.environment.field.cells.iter()
                 .flat_map(|cell| cell.physical_materials.iter().cloned())
                 .collect::<Vec<_>>();
             initial_state.sort_unstable_by_key(|material| material.environmental_identity);
 
             let start_tick = simulation.tick;
             let started = Instant::now();
-            while started.elapsed() < RUN_DURATION {
+            while simulation.tick - start_tick < TICKS_PER_RUN {
                 simulation.step_with_transport_reuse::<true, COMBINE>();
             }
             let elapsed = started.elapsed();
             let ticks = simulation.tick - start_tick;
-            let end_objects = simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .map(|cell| cell.physical_materials.len())
-                .sum::<usize>();
-            let end_constituents = simulation
-                .environment
-                .field
-                .cells
-                .iter()
+            assert_eq!(ticks, TICKS_PER_RUN, "each benchmark arm must run exactly {TICKS_PER_RUN} ticks");
+
+            let end_objects = simulation.environment.field.cells.iter()
+                .map(|cell| cell.physical_materials.len()).sum::<usize>();
+            let end_constituents = simulation.environment.field.cells.iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .map(|material| material.material.parts.len())
-                .sum::<usize>();
-            let mut end_state = simulation
-                .environment
-                .field
-                .cells
-                .iter()
+                .map(|material| material.material.parts.len()).sum::<usize>();
+            let mut end_state = simulation.environment.field.cells.iter()
                 .flat_map(|cell| cell.physical_materials.iter().cloned())
                 .collect::<Vec<_>>();
             end_state.sort_unstable_by_key(|material| material.environmental_identity);
+
             let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
             println!(
-                "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
+                "TRANSPORT {label} RESULT: seed={SEED} target_ticks={TICKS_PER_RUN} actual_ticks={ticks} elapsed_seconds={:.3} ticks_per_second={ticks_per_second:.3} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
                 elapsed.as_secs_f64(),
             );
             RunResult {
-                ticks,
-                elapsed,
-                start_objects,
-                start_constituents,
-                end_objects,
-                end_constituents,
-                initial_state,
-                end_state,
+                ticks, elapsed, start_objects, start_constituents,
+                end_objects, end_constituents, initial_state, end_state,
             }
         }
 
-        // Each version receives one uninterrupted, uncapped, maximum-speed run.
-        // Hold singleton velocity reuse constant; vary only transform composition.
-        let baseline = run_once::<false>("SEPARATE_TRANSFORMS_BASELINE");
-        let experiment = run_once::<true>("COMBINED_TRANSFORM_EXPERIMENT");
-        assert_eq!(baseline.start_objects, experiment.start_objects);
-        assert_eq!(baseline.start_constituents, experiment.start_constituents);
-        assert_eq!(baseline.initial_state, experiment.initial_state);
-        assert_eq!(baseline.end_objects, experiment.end_objects);
-        assert_eq!(baseline.end_constituents, experiment.end_constituents);
-        assert_eq!(baseline.end_state, experiment.end_state);
+        fn median(mut values: Vec<f64>) -> f64 {
+            assert!(!values.is_empty());
+            values.sort_by(f64::total_cmp);
+            let middle = values.len() / 2;
+            if values.len() % 2 == 0 {
+                (values[middle - 1] + values[middle]) * 0.5
+            } else {
+                values[middle]
+            }
+        }
 
-        let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
-        let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
-        let improvement = (experiment_rate - baseline_rate) / baseline_rate * 100.0;
+        let mut baseline_rates = Vec::with_capacity(PAIRS);
+        let mut experiment_rates = Vec::with_capacity(PAIRS);
+        let mut improvements = Vec::with_capacity(PAIRS);
+        let mut baseline_elapsed = std::time::Duration::ZERO;
+        let mut experiment_elapsed = std::time::Duration::ZERO;
+
+        for pair in 0..PAIRS {
+            // Alternate which arm runs first to reduce systematic order bias.
+            let (baseline, experiment) = if pair % 2 == 0 {
+                (
+                    run_once::<false>(&format!("PAIR_{}_SEPARATE_BASELINE", pair + 1)),
+                    run_once::<true>(&format!("PAIR_{}_COMBINED_EXPERIMENT", pair + 1)),
+                )
+            } else {
+                let experiment = run_once::<true>(&format!("PAIR_{}_COMBINED_EXPERIMENT", pair + 1));
+                let baseline = run_once::<false>(&format!("PAIR_{}_SEPARATE_BASELINE", pair + 1));
+                (baseline, experiment)
+            };
+
+            assert_eq!(baseline.ticks, experiment.ticks);
+            assert_eq!(baseline.start_objects, experiment.start_objects);
+            assert_eq!(baseline.start_constituents, experiment.start_constituents);
+            assert_eq!(baseline.initial_state, experiment.initial_state);
+            assert_eq!(baseline.end_objects, experiment.end_objects,
+                "object count differs after the same fixed tick count in pair {}", pair + 1);
+            assert_eq!(baseline.end_constituents, experiment.end_constituents,
+                "constituent count differs after the same fixed tick count in pair {}", pair + 1);
+            assert_eq!(baseline.end_state, experiment.end_state,
+                "complete material state differs after the same fixed tick count in pair {}", pair + 1);
+
+            let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
+            let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
+            let improvement = (experiment_rate - baseline_rate) / baseline_rate * 100.0;
+            baseline_rates.push(baseline_rate);
+            experiment_rates.push(experiment_rate);
+            improvements.push(improvement);
+            baseline_elapsed += baseline.elapsed;
+            experiment_elapsed += experiment.elapsed;
+            println!(
+                "TRANSPORT PAIRED RESULT: pair={} ticks={} baseline_seconds={:.3} experiment_seconds={:.3} baseline_ticks_per_second={baseline_rate:.3} experiment_ticks_per_second={experiment_rate:.3} improvement_pct={improvement:.3}",
+                pair + 1, baseline.ticks,
+                baseline.elapsed.as_secs_f64(), experiment.elapsed.as_secs_f64(),
+            );
+        }
+
+        let baseline_median = median(baseline_rates);
+        let experiment_median = median(experiment_rates);
+        let median_improvement = median(improvements.clone());
+        let min_improvement = improvements.iter().copied().fold(f64::INFINITY, f64::min);
+        let max_improvement = improvements.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         println!(
-            "TRANSPORT 60S PAIRED SUMMARY: seed={SEED} baseline_ticks={} experiment_ticks={} baseline_ticks_per_second={baseline_rate:.2} experiment_ticks_per_second={experiment_rate:.2} throughput_improvement_pct={improvement:.2} baseline_end_objects={} experiment_end_objects={} baseline_end_constituents={} experiment_end_constituents={}",
-            baseline.ticks, experiment.ticks,
-            baseline.end_objects, experiment.end_objects,
-            baseline.end_constituents, experiment.end_constituents,
+            "TRANSPORT FIXED-TICK SUMMARY: seed={SEED} pairs={PAIRS} ticks_per_run={TICKS_PER_RUN} runs_per_arm={PAIRS} baseline_total_seconds={:.3} experiment_total_seconds={:.3} baseline_median_ticks_per_second={baseline_median:.3} experiment_median_ticks_per_second={experiment_median:.3} median_paired_improvement_pct={median_improvement:.3} min_paired_improvement_pct={min_improvement:.3} max_paired_improvement_pct={max_improvement:.3}",
+            baseline_elapsed.as_secs_f64(), experiment_elapsed.as_secs_f64(),
         );
     }
 }
