@@ -1478,7 +1478,7 @@ mod tests {
             .expect("fixture is inside the environment");
         simulation.environment.field.cells[field_cell]
             .physical_materials
-            .extend(reactants);
+            .extend(reactants.iter().cloned());
         simulation
             .environment
             .field
