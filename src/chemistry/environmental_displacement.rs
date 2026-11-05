@@ -21,6 +21,8 @@ pub(crate) struct DisplacementPreflight {
     pub(crate) old_bond_energy: f64,
     /// Stored potential magnitude of the proposed A-C bond.
     pub(crate) replacement_bond_energy: f64,
+    /// Existing BREAK authority's physical disruption work requirement.
+    pub(crate) disruption_work: f64,
     /// Complete signed bond-graph energy budget for the replacement.
     pub(crate) energy: ReactionEnergyBalance,
 }
@@ -92,12 +94,19 @@ pub(crate) fn evaluate_displacement_preflight(
         reactivity_baseline,
     )?;
 
+    // Existing environmental BREAK treats the activation barrier as required
+    // physical disruption work, separately from the stored bond potential.
+    // Include that work and the new-bond formation work in one net transaction.
+    let total_work = physical_work + disruption_barrier;
+    if !total_work.is_finite() {
+        return None;
+    }
     // Structural potential is negative for a retained stable bond. Replacing
     // one bond with another is evaluated as one complete pre/post-state change.
     let energy = ReactionEnergyBalance::calculate(
         -old_bond_energy,
         -replacement_bond_energy,
-        physical_work,
+        total_work,
         dissipated_heat,
     )?;
 
@@ -106,6 +115,7 @@ pub(crate) fn evaluate_displacement_preflight(
         disruption_barrier,
         old_bond_energy,
         replacement_bond_energy,
+        disruption_work: disruption_barrier,
         energy,
     })
 }
