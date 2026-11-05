@@ -659,6 +659,7 @@ fn physical_material_from_structure(
 /// intentionally separate from the single-product COMBINE conversion so a
 /// coupled replacement can release a displaced constituent without losing
 /// constituent identity, geometry, or retained bond-energy allocations.
+#[expect(dead_code, reason = "Used by pending environmental displacement scheduler integration")]
 pub(crate) fn physical_materials_from_structure_components(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
