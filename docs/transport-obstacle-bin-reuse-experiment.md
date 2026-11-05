@@ -29,7 +29,7 @@ The current transport pass rebuilds the `Vec<Vec<Obstacle>>` bin grid and its pe
 ## Correctness gates
 
 - Compare baseline and candidate movement decisions and resulting physical state for deterministic small fixtures.
-- Preserve exact material inventory, object count, constituent count, internal bonds, realized shapes, and field revisions.
+- Preserve exact material inventory and constituent count within each run, along with internal bonds, realized shapes, and field revisions. Record object counts, but do not require equal final object counts across runs because different completed tick counts can allow different chemistry.
 - Verify every candidate returned by the reused workspace matches the fresh-build path for distributed, dense, seam-wrapping, large-radius, and changing-object-count cases.
 - Exercise workspace resize/shrink/grow behavior and ensure removed obstacles cannot survive a clear/rebuild cycle.
 - Run formatting, architecture checks, focused transport tests, full Rust tests, and Clippy on the exact PR head.
@@ -42,7 +42,7 @@ Use the merged PR #301 molecular transport fixture and the same 60-second full-s
 - 1,280 physical objects: 1,200 individual resources plus 80 intact two-constituent molecules (1,360 constituents).
 - Independently rebuild the identical initial physical state for baseline and candidate.
 - Run one uninterrupted 60-second wall-clock interval per implementation at maximum simulation speed; no tick cap or fixed tick batching.
-- Record elapsed time, completed ticks, ticks/second, final object/constituent counts, and conservation checks.
+- Record elapsed time, completed ticks, ticks/second, final object/constituent counts, and cumulative obstacle-bin build time. Assert each run's final material inventory matches its own initial inventory and its constituent count is conserved; compare starting states across runs, not end object counts.
 - Record cumulative obstacle-bin construction time for both paths, alongside total elapsed time and completed ticks, to quantify the stage-level change and its contribution to total throughput.
 
 Do not merge unless exact-head CI passes, correctness is equivalent, and the full 60-second simulation shows a measurable total-throughput improvement. A reduction in bin-stage time alone is insufficient if it does not improve total simulation throughput.
