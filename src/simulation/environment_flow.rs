@@ -1440,6 +1440,167 @@ mod tests {
         }
         let transform_elapsed = transform_started.elapsed();
 
+        // Count obstacle-branch outcomes in a separate untimed pass. Keeping
+        // this out of the timed loops avoids charging instrumentation to the hot path.
+        let mut self_skips = 0_u64;
+        let mut non_solid_skips = 0_u64;
+        let mut solid_candidates = 0_u64;
+        let mut proximity_adjustments = 0_u64;
+        let mut wake_adjustments = 0_u64;
+        let mut velocity_obstacle_queries = 0_u64;
+        for (cell, index, material, nearby) in &velocity_samples {
+            if let Some(placements) = material.placements.as_ref() {
+                for placement in placements {
+                    velocity_obstacle_queries += 1;
+                    for obstacle in *nearby {
+                        if obstacle.source_cell == *cell && obstacle.source_index == *index {
+                            self_skips += 1;
+                            continue;
+                        }
+                        if obstacle.solidity <= 1e-6 {
+                            non_solid_skips += 1;
+                            continue;
+                        }
+                        solid_candidates += 1;
+                        let dx = placement.x - obstacle.x;
+                        let dy = (placement.y - obstacle.y + height * 0.5)
+                            .rem_euclid(height) - height * 0.5;
+                        let distance = dx.hypot(dy).max(1e-9);
+                        let radius = obstacle.radius.max(0.5);
+                        if distance < radius * 2.5 {
+                            proximity_adjustments += 1;
+                        }
+                        if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
+                            wake_adjustments += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Count the distinct obstacle-adjusted samples made by compound angular
+        // evaluation: one mass-weighted center sample plus each nonzero lever arm.
+        let mut angular_center_queries = 0_u64;
+        let mut angular_constituent_queries = 0_u64;
+        for (cell, index, material, _) in &angular_samples {
+            let Some(placements) = material.placements.as_ref() else {
+                continue;
+            };
+            let total_mass = material.material.mass(&catalog);
+            if !total_mass.is_finite() || total_mass <= 0.0 {
+                continue;
+            }
+            let anchor_y = placements[0].y;
+            let mut weighted_x = 0.0;
+            let mut weighted_y = 0.0;
+            let mut valid_center = true;
+            for (part_index, placement) in placements.iter().enumerate() {
+                let Some((name, amount)) = material.material.parts.get(part_index) else {
+                    valid_center = false;
+                    break;
+                };
+                let Some(resource) = resource_for_part(name, &catalog) else {
+                    valid_center = false;
+                    break;
+                };
+                let part_mass = resource.properties.mass * *amount;
+                if !part_mass.is_finite() || part_mass <= 0.0 {
+                    valid_center = false;
+                    break;
+                }
+                weighted_x += placement.x * part_mass;
+                weighted_y += ((placement.y - anchor_y + height * 0.5)
+                    .rem_euclid(height)
+                    - height * 0.5)
+                    * part_mass;
+            }
+            if !valid_center {
+                continue;
+            }
+            let center_x = weighted_x / total_mass;
+            let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+            black_box((*cell, *index, center_x, center_y));
+            angular_center_queries += 1;
+            for placement in placements {
+                let rx = placement.x - center_x;
+                let ry = (placement.y - center_y + height * 0.5)
+                    .rem_euclid(height)
+                    - height * 0.5;
+                if rx * rx + ry * ry > f64::EPSILON {
+                    angular_constituent_queries += 1;
+                }
+            }
+        }
+
+        // Isolate background field evaluation from the obstacle scan using the
+        // same seed-42 material positions and fixed-duration measurement windows.
+        let background_started = Instant::now();
+        let mut background_evaluations = 0_u64;
+        while background_started.elapsed() < PHASE_DURATION {
+            for (_, _, material, _) in &velocity_samples {
+                if let Some(placements) = material.placements.as_ref() {
+                    for placement in placements {
+                        black_box(background_velocity(placement.x, placement.y, width, height));
+                        background_evaluations += 1;
+                    }
+                }
+            }
+        }
+        let background_elapsed = background_started.elapsed();
+
+        let obstacle_started = Instant::now();
+        let mut obstacle_evaluations = 0_u64;
+        while obstacle_started.elapsed() < PHASE_DURATION {
+            for (cell, index, material, nearby) in &velocity_samples {
+                if let Some(placements) = material.placements.as_ref() {
+                    for placement in placements {
+                        black_box(obstacle_adjusted_velocity(
+                            Velocity::default(),
+                            placement.x,
+                            placement.y,
+                            *cell,
+                            *index,
+                            nearby,
+                            height,
+                        ));
+                        obstacle_evaluations += 1;
+                    }
+                }
+            }
+        }
+        let obstacle_elapsed = obstacle_started.elapsed();
+
+        println!(
+            "MOVEMENT PROFILE COUNTS: velocity_obstacle_queries={} obstacle_candidates={} self_skips={} non_solid_skips={} solid_candidates={} proximity_adjustments={} wake_adjustments={} angular_center_queries={} angular_constituent_queries={}",
+            velocity_obstacle_queries,
+            self_skips + non_solid_skips + solid_candidates,
+            self_skips,
+            non_solid_skips,
+            solid_candidates,
+            proximity_adjustments,
+            wake_adjustments,
+            angular_center_queries,
+            angular_constituent_queries,
+        );
+        println!(
+            "MOVEMENT PROFILE BACKGROUND: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} average_us_per_evaluation={:.3}",
+            background_elapsed.as_secs_f64(),
+            background_evaluations,
+            background_evaluations as f64 / background_elapsed.as_secs_f64(),
+            background_elapsed.as_secs_f64() * 1_000_000.0
+                / background_evaluations.max(1) as f64,
+        );
+        println!(
+            "MOVEMENT PROFILE OBSTACLE SCAN: elapsed_s={:.3} evaluations={} candidates_per_evaluation={:.2} evaluations_per_second={:.1} average_us_per_evaluation={:.3}",
+            obstacle_elapsed.as_secs_f64(),
+            obstacle_evaluations,
+            (self_skips + non_solid_skips + solid_candidates) as f64
+                / velocity_obstacle_queries.max(1) as f64,
+            obstacle_evaluations as f64 / obstacle_elapsed.as_secs_f64(),
+            obstacle_elapsed.as_secs_f64() * 1_000_000.0
+                / obstacle_evaluations.max(1) as f64,
+        );
+
         println!(
             "MOVEMENT PROFILE SETUP: seed={SEED} objects={} obstacles={} compounds={} snapshot_and_obstacle_build_ms={:.3} obstacle_bin_build_ms={:.3} bins={}",
             snapshot.len(),
