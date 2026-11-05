@@ -668,7 +668,10 @@ pub(crate) fn transport_field_with_reuse<
     }
     #[cfg(test)]
     {
-        let elapsed_nanos = bin_build_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        let elapsed_nanos = bin_build_started
+            .elapsed()
+            .as_nanos()
+            .min(u64::MAX as u128) as u64;
         OBSTACLE_BIN_BUILD_NANOS.fetch_add(
             elapsed_nanos,
             std::sync::atomic::Ordering::Relaxed,
