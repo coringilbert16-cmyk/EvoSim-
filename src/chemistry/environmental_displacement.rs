@@ -381,7 +381,6 @@ pub(crate) fn evaluate_displacement_preflight(
 const ENVIRONMENTAL_DISPLACEMENT_PREFIX: &str = "environment|displacement:";
 const DISPLACEMENT_FIELD_ANCHOR_LIMIT: usize = 64;
 const DISPLACEMENT_TARGET_CELL_LIMIT: usize = 64;
-const DISPLACEMENT_CONTACT_PAIR_LIMIT: usize = 128;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct EnvironmentalDisplacementOperation {
@@ -1380,6 +1379,118 @@ mod tests {
         assert_eq!(
             trial.replacement_bond.bond_energy,
             bonded_product.internal_connections.as_ref().unwrap()[0].bond_energy
+        );
+    }
+
+    #[test]
+    fn live_environmental_displacement_commits_two_products_with_resonance_funding() {
+        let mut simulation = crate::state::Simulation::new(23029, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+
+        let (mut source, _old_bond, _candidate, _investment) =
+            three_participant_fixture(&catalog);
+        for unit in &mut source.units {
+            unit.placement.x += 10.0;
+            unit.placement.y += 10.0;
+        }
+        let reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source, &catalog,
+            )
+            .expect("the bonded reactant and incoming constituent should realize separately");
+        assert_eq!(reactants.len(), 2);
+        let field_cell = simulation
+            .environment
+            .field
+            .index_for_position(10.0, 10.0)
+            .expect("fixture is inside the environment");
+        simulation.environment.field.cells[field_cell]
+            .physical_materials
+            .extend(reactants);
+        simulation.environment.field.assign_missing_material_identities();
+
+        let frequency = displacement_reaction_frequency(
+            &source.units[0],
+            &source.units[1],
+            &catalog,
+        )
+        .expect("the old bond has a valid natural reaction frequency");
+        let mut accumulation = BTreeMap::new();
+        let mut ready = None;
+        for tick in 0..512 {
+            let mut discovery_work =
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                tick,
+                &mut discovery_work,
+            );
+            if let Some(operation) = operations.into_iter().next() {
+                ready = Some(operation);
+                break;
+            }
+        }
+        let operation = ready.expect("live incoming contact should eventually activate displacement");
+        assert!(operation.work_required > 0.0);
+        assert!(operation.activation_signal > 0.0);
+
+        let environment_before = simulation.environment.clone();
+        let ledger_before = simulation.energy_ledger;
+        assert!(
+            !resolve_environmental(
+                operation.clone(),
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
+            ),
+            "an unfunded displacement must not mutate the field or energy holders"
+        );
+        assert_eq!(simulation.environment.field.cells[field_cell].physical_materials.len(), 2);
+        assert_eq!(simulation.energy_ledger, ledger_before);
+        assert_eq!(
+            simulation.environment.resonant_energy,
+            environment_before.resonant_energy
+        );
+
+        assert!(simulation
+            .environment
+            .resonant_energy
+            .deposit(frequency, 1000.0));
+        simulation.energy_ledger.total_resonant_energy_held += 1000.0;
+        let resonant_before = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("valid staged resonance");
+        assert!(resolve_environmental(
+            operation,
+            &mut simulation.environment,
+            &mut simulation.energy_ledger,
+        ));
+
+        let products = &simulation.environment.field.cells[field_cell].physical_materials;
+        assert_eq!(products.len(), 2);
+        assert!(products.iter().any(|product| {
+            product.material.parts.iter().any(|part| part.0 == "Carbon")
+                && product.material.parts.iter().any(|part| part.0 == "Oxygen")
+                && product.material.internal_bonds.len() == 1
+        }));
+        assert!(products.iter().any(|product| {
+            product.material.parts == vec![("Hydrogen".to_owned(), 1.0)]
+                && product.material.internal_bonds.is_empty()
+        }));
+        let resonant_after = simulation
+            .environment
+            .resonant_energy
+            .total_energy()
+            .expect("valid committed resonance");
+        assert!(resonant_after < resonant_before);
+        assert!(
+            (simulation.energy_ledger.total_resonant_energy_held - resonant_after).abs() < 1e-8
         );
     }
 
