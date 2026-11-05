@@ -15,6 +15,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Run 60-second transport movement profile
-        run: cargo test --locked transport_movement_stage_profile_60s -- --ignored --nocapture
-      - name: Run paired 60-second separate-vs-combined transform benchmark
-        run: cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
+        run: |
+          if cargo test --locked transport_movement_stage_profile_60s -- --ignored --nocapture > /tmp/transport-profile.log 2>&1; then
+            grep -E 'TRANSPORT|test result:' /tmp/transport-profile.log | tail -n 40 || true
+          else
+            tail -n 200 /tmp/transport-profile.log
+            exit 1
+          fi
+      - name: Run five-pair fixed-tick separate-vs-combined benchmark
+        run: |
+          if cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture > /tmp/transport-benchmark.log 2>&1; then
+            grep -E 'TRANSPORT (PAIR|FIXED|.*RESULT)|test result:' /tmp/transport-benchmark.log | tail -n 80 || true
+          else
+            tail -n 200 /tmp/transport-benchmark.log
+            exit 1
+          fi
