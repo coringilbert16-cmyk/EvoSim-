@@ -741,6 +741,7 @@ mod tests {
         // Batch preflight must reject this malformed later member atomically.
         let fractional = PhysicalMaterial {
             material: Material::free_base("Carbon", 1.5),
+            environmental_identity: 0,
             placements: Some(vec![Placement {
                 x: 1.0,
                 y: 2.0,

@@ -1,6 +1,6 @@
 //! Permanent localized radial energy source in the default environment.
 //!
-//! The hotspot contributes a 2,000-cycle-per-simulated-day resonant signal.
+//! The hotspot contributes an 880-cycle-per-simulated-day resonant signal.
 //! Its spatial intensity is a smooth radial gradient; material properties
 //! determine the response, and only energy actually retained by the
 //! environmental resonance reservoir is made available to chemistry.
@@ -36,7 +36,7 @@ impl RadialHotspot {
             center_y: height * 0.5 + height * 0.23 * phase.sin(),
             radius: height.min(width) * 0.15,
             peak_energy_per_tick_per_area: 1000.0 * 86_400.0 / 24_000.0,
-            frequency_cycles_per_day: 2_000.0,
+            frequency_cycles_per_day: 880.0,
         };
         hotspot.is_valid().then_some(hotspot)
     }
@@ -357,7 +357,7 @@ mod tests {
             .hotspot
             .expect("default environment must include its hotspot");
         assert!((hotspot.peak_energy_per_tick_per_area - 3600.0).abs() < f64::EPSILON);
-        assert!((hotspot.frequency_cycles_per_day - 2000.0).abs() < f64::EPSILON);
+        assert!((hotspot.frequency_cycles_per_day - 880.0).abs() < f64::EPSILON);
         assert!((hotspot.center_x - 180.0).abs() < 1e-10);
         assert_eq!(simulation.environment.width, 250.0);
         assert_eq!(simulation.environment.height, 250.0);

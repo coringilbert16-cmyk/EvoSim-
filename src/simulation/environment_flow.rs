@@ -559,18 +559,21 @@ pub(crate) fn transport_field(
         return 0;
     }
 
-    let snapshot: Vec<(usize, usize, PhysicalMaterial)> = field
-        .cells
-        .iter()
-        .enumerate()
-        .flat_map(|(cell_index, cell)| {
-            cell.physical_materials
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(move |(material_index, material)| (cell_index, material_index, material))
-        })
-        .collect();
+    // Assign identities while building the existing transport snapshot, so
+    // this does not add another full-field traversal to every simulation tick.
+    let mut next_identity = field.next_material_identity;
+    let mut snapshot = Vec::new();
+    for (cell_index, cell) in field.cells.iter_mut().enumerate() {
+        for (material_index, material) in cell.physical_materials.iter_mut().enumerate() {
+            if material.environmental_identity == 0 && next_identity != 0 {
+                let identity = next_identity;
+                next_identity = identity.checked_add(1).unwrap_or(0);
+                material.environmental_identity = identity;
+            }
+            snapshot.push((cell_index, material_index, material.clone()));
+        }
+    }
+    field.next_material_identity = next_identity;
     // Use finer bins than the material field. Spatial indexing narrows each
     // query to the local region, but every obstacle in that region contributes;
     // do not truncate physical influence with a per-object candidate cap.
@@ -841,11 +844,13 @@ mod tests {
         )
         .unwrap();
         let angular_step = angular_displacement(&original, &catalog, 1000.0, 1000.0, &[], 0, 0);
-        let expected =
+        let mut expected =
             rotated(&translated_expected, angular_step, &catalog, 1000.0, 1000.0).unwrap();
+        assert_ne!(objects[0].environmental_identity, 0);
+        expected.environmental_identity = objects[0].environmental_identity;
         assert_eq!(
             objects[0], &expected,
-            "transport may change only world placement and orientation"
+            "transport may change only world placement, orientation, and first-time identity"
         );
     }
 

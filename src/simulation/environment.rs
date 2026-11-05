@@ -79,6 +79,13 @@ pub struct ActiveMaterialField {
     pub(crate) revision: u64,
     #[serde(default)]
     pub(crate) cell_revisions: Vec<u64>,
+    /// Monotonic allocator for stable physical-material identities.
+    #[serde(default = "initial_material_identity")]
+    pub(crate) next_material_identity: u64,
+}
+
+fn initial_material_identity() -> u64 {
+    1
 }
 
 pub(crate) enum FieldDeposit {
@@ -113,6 +120,33 @@ impl ActiveMaterialField {
             cells,
             revision: 0,
             cell_revisions: vec![0; width_cells * height_cells],
+            next_material_identity: initial_material_identity(),
+        }
+    }
+
+    /// Assign stable identities once, in deterministic cell/material order.
+    /// IDs are retained by complete-object transport and are never inferred from
+    /// the object's changing cell or vector slot.
+    pub(crate) fn assign_missing_material_identities(&mut self) {
+        let max_existing = self
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.environmental_identity)
+            .max()
+            .unwrap_or(0);
+        if self.next_material_identity != 0 && self.next_material_identity <= max_existing {
+            self.next_material_identity = max_existing.checked_add(1).unwrap_or(0);
+        }
+        for cell in &mut self.cells {
+            for material in &mut cell.physical_materials {
+                if material.environmental_identity != 0 || self.next_material_identity == 0 {
+                    continue;
+                }
+                let identity = self.next_material_identity;
+                self.next_material_identity = identity.checked_add(1).unwrap_or(0);
+                material.environmental_identity = identity;
+            }
         }
     }
 
