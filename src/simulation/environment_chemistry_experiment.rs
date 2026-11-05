@@ -55,11 +55,12 @@ pub(crate) fn seed_randomized_resources(
         .map(|name| (vec![name], false))
         .collect();
     for _ in 0..(molecule_count / 2) {
-        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
-        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
-    }
-    if include_molecules {
-        objects.shuffle(&mut rng);
+        let hydrogen_sulfur = (vec!["Hydrogen".into(), "Sulfur".into()], true);
+        let carbon_hydrogen = (vec!["Carbon".into(), "Hydrogen".into()], true);
+        let hs_index = rng.gen_range(0..=objects.len());
+        objects.insert(hs_index, hydrogen_sulfur);
+        let ch_index = rng.gen_range(0..=objects.len());
+        objects.insert(ch_index, carbon_hydrogen);
     }
 
     let pile_count = rng.gen_range(3..=10);
