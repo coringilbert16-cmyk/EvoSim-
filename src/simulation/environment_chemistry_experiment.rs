@@ -250,24 +250,8 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
         assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
-        assert_eq!(
-            materials
-                .iter()
-                .filter(|m| m.material.parts.len() == 1)
-                .count(),
-            ENVIRONMENT_OBJECT_COUNT
-        );
-        assert_eq!(
-            materials
-                .iter()
-                .filter(|m| m.material.parts.len() == 2)
-                .count(),
-            0
-        );
-        assert!(materials.iter().filter(|m| m.material.parts.len() == 2).all(|m| {
-            m.material.internal_bonds.len() == 1
-                && m.placements.as_ref().is_some_and(|p| p.len() == 2)
-                && m.internal_connections.as_ref().is_some_and(|b| b.len() == 1)
+        assert!(materials.iter().all(|material| {
+            material.material.parts.len() == 1 && material.material.parts[0].1 == 1.0
         }));
         assert!(simulation.hotspot.is_some());
     }
