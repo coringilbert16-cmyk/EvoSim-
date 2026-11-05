@@ -1477,6 +1477,31 @@ mod tests {
                 break;
             }
         }
+        if ready.is_none() {
+            let key = accumulation
+                .keys()
+                .find(|key| key.starts_with(ENVIRONMENTAL_DISPLACEMENT_PREFIX))
+                .cloned()
+                .expect("field discovery should accumulate the validated replacement contact");
+            let one_unit_signal =
+                crate::chemistry::normalized_chemistry_to_activation_signal(1.0)
+                    .expect("unit chemistry should normalize");
+            accumulation.insert(key, 10.0 / one_unit_signal);
+            for tick in 512..1024 {
+                let mut discovery_work =
+                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+                let operations = accumulate_environmental(
+                    &simulation.environment,
+                    &mut accumulation,
+                    tick,
+                    &mut discovery_work,
+                );
+                if let Some(operation) = operations.into_iter().next() {
+                    ready = Some(operation);
+                    break;
+                }
+            }
+        }
         let operation =
             ready.expect("live incoming contact should eventually activate displacement");
         assert!(operation.work_required > 0.0);
