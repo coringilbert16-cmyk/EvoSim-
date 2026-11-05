@@ -1357,9 +1357,7 @@ mod tests {
                     let placement = crate::structure::Placement {
                         x: f64::from(x_step) * 0.2,
                         y: f64::from(y_step) * 0.2,
-                        rotation_radians: std::f64::consts::TAU
-                            * f64::from(rotation_step)
-                            / 16.0,
+                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
                     };
                     replacement_trial.units[2].placement = placement;
                     let incoming = replacement_trial.units[2].clone();
