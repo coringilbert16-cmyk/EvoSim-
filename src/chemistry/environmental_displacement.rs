@@ -15,7 +15,7 @@ use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
 use crate::resources::{BaseResource, ResourceProperties};
-use crate::structure::{Bond, BondEndpoint, OrganismStructure};
+use crate::structure::{Bond, OrganismStructure};
 
 /// Energy and activation assessment for one proposed constituent replacement.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -52,11 +52,30 @@ impl DisplacementPreflight {
 /// Accumulate one tick of activation from the incoming constituent's live
 /// contact with the anchor. This mirrors environmental COMBINE's approved
 /// static-potential, contact-falloff, facing-engagement, and dissipation equation.
+fn displacement_chemical_properties(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<ResourceProperties> {
+    let mut properties = unit.properties(catalog)?;
+    if let [(name, _)] = unit.material.parts.as_slice() {
+        properties.chemical_position = catalog
+            .iter()
+            .find(|resource| &resource.name == name)
+            .and_then(|resource| resource.properties.chemical_position);
+    }
+    Some(properties)
+}
+
+/// Accumulate one tick of activation from the incoming constituent's live
+/// contact with the anchor. Elemental chemical positions are read from the
+/// catalog here, without changing aggregate material properties or assigning
+/// an averaged coordinate to a mixed compound.
 pub(crate) fn accumulate_incoming_activation(
-    anchor: ResourceProperties,
-    incoming: ResourceProperties,
+    anchor: &crate::structure::StructuralUnit,
+    incoming: &crate::structure::StructuralUnit,
     candidate: ConnectionPairCandidate,
     previous: f64,
+    catalog: &[BaseResource],
 ) -> Option<f64> {
     if candidate.distance < 0.0
         || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -65,6 +84,8 @@ pub(crate) fn accumulate_incoming_activation(
     {
         return None;
     }
+    let anchor = displacement_chemical_properties(anchor, catalog)?;
+    let incoming = displacement_chemical_properties(incoming, catalog)?;
     let interaction = crate::combine::chemical_interaction(
         anchor,
         incoming,
@@ -201,14 +222,13 @@ pub(crate) fn build_displacement_trial(
     {
         return None;
     }
-    let replacement_bond =
-        crate::combine_runtime::admit_selected_candidate_to_trial_structure(
-            &mut trial,
-            anchor_unit,
-            incoming_unit,
-            replacement_candidate,
-            catalog,
-        )?;
+    let replacement_bond = crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+        &mut trial,
+        anchor_unit,
+        incoming_unit,
+        replacement_candidate,
+        catalog,
+    )?;
 
     let reactant_structural = crate::energy_ledger::structural_potential(source)?;
     let product_structural = crate::energy_ledger::structural_potential(&trial)?;
@@ -361,6 +381,7 @@ pub(crate) fn evaluate_displacement_preflight(
 mod tests {
     use super::*;
     use crate::resources::default_catalog;
+    use crate::structure::BondEndpoint;
 
     fn properties(name: &str) -> ResourceProperties {
         default_catalog()
@@ -575,10 +596,14 @@ mod tests {
     fn incoming_activation_is_accumulated_from_the_replacement_contact() {
         let catalog = default_catalog();
         let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
-        let anchor = source.units[0].properties(&catalog).unwrap();
-        let incoming = source.units[2].properties(&catalog).unwrap();
-        let activation = accumulate_incoming_activation(anchor, incoming, candidate, 0.0)
-            .expect("valid live contact should accumulate incoming influence");
+        let activation = accumulate_incoming_activation(
+            &source.units[0],
+            &source.units[2],
+            candidate,
+            0.0,
+            &catalog,
+        )
+        .expect("valid live contact should accumulate incoming influence");
         assert!(activation > 0.0);
         assert!(activation.is_finite());
     }
