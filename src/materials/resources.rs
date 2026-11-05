@@ -491,21 +491,13 @@ impl Material {
                 cohesion: 0.0,
             };
         }
-        let chemical_position = if let [(name, _)] = self.parts.as_slice() {
-            catalog
-                .iter()
-                .find(|base| &base.name == name)
-                .and_then(|base| base.properties.chemical_position)
-        } else {
-            None
-        };
         ResourceProperties {
             mass: mass / w,
             potential_energy: pe / w,
             reactivity: reac / w,
-            // A pure material retains its base-resource position. Mixed
-            // materials retain constituent identities rather than averaging.
-            chemical_position,
+            // Chemical position is intentionally not averaged across a
+            // formation. Mixed materials must retain constituent identities.
+            chemical_position: None,
             cohesion: coh / w,
         }
     }
@@ -1385,22 +1377,6 @@ mod shape_tests {
         );
         assert_eq!(aggregate.mass, expected_mass / total_amount);
         assert_eq!(aggregate.potential_energy, expected_capacity / total_amount);
-    }
-
-    #[test]
-    fn pure_material_retains_its_base_chemical_position() {
-        let catalog = default_catalog();
-        let carbon = Material::free_base("Carbon", 1.0);
-        assert_eq!(
-            carbon.weighted_properties(&catalog).chemical_position,
-            Some(10.5)
-        );
-
-        let mixed = Material {
-            parts: vec![("Carbon".to_owned(), 1.0), ("Oxygen".to_owned(), 1.0)],
-            internal_bonds: Vec::new(),
-        };
-        assert_eq!(mixed.weighted_properties(&catalog).chemical_position, None);
     }
 
     #[test]
