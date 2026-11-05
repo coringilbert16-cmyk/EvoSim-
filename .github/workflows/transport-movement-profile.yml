@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/simulation/environment_flow.rs'
+      - 'src/simulation/environment_chemistry_experiment.rs'
       - '.github/workflows/transport-movement-profile.yml'
   workflow_dispatch:
 
@@ -22,10 +23,10 @@ jobs:
             tail -n 200 /tmp/transport-profile.log
             exit 1
           fi
-      - name: Run five-pair fixed-tick separate-vs-combined benchmark
+      - name: Run four sequential five-pair wall-clock scaling benchmarks
         run: |
           if cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture > /tmp/transport-benchmark.log 2>&1; then
-            grep -E 'TRANSPORT (PAIR|FIXED|.*RESULT)|test result:' /tmp/transport-benchmark.log | tail -n 80 || true
+            grep -E 'TRANSPORT (SCENARIO|.*RESULT)|test result:' /tmp/transport-benchmark.log | tail -n 80 || true
           else
             tail -n 200 /tmp/transport-benchmark.log
             exit 1
