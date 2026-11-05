@@ -141,6 +141,18 @@ pub(crate) fn build_displacement_trial(
         return None;
     }
 
+    // A displacement must occupy the endpoint actually freed by A-B. Merely
+    // forming A-C at some other available site while independently removing
+    // A-B would be a BREAK plus COMBINE, not a physical replacement.
+    let freed_anchor_endpoint = if old_bond.endpoint_a.constituent_id == anchor_id {
+        old_bond.endpoint_a.location
+    } else {
+        old_bond.endpoint_b.location
+    };
+    if replacement_candidate.endpoint_a != freed_anchor_endpoint {
+        return None;
+    }
+
     let anchor = source.units[anchor_unit].properties(catalog)?;
     let displaced = source.units[displaced_unit].properties(catalog)?;
     let incoming = source.units[incoming_unit].properties(catalog)?;
@@ -623,6 +635,48 @@ mod tests {
             trial.replacement_bond.bond_energy,
             bonded_product.internal_connections.as_ref().unwrap()[0].bond_energy
         );
+    }
+
+    #[test]
+    fn replacement_must_use_the_endpoint_freed_by_the_displaced_bond() {
+        let catalog = default_catalog();
+        let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let mut unrelated_candidate = candidate;
+        unrelated_candidate.endpoint_a = match candidate.endpoint_a {
+            crate::structure::ConnectionEndpoint::Corner { point_index } => {
+                crate::structure::ConnectionEndpoint::Corner {
+                    point_index: point_index.wrapping_add(1),
+                }
+            }
+            crate::structure::ConnectionEndpoint::LineEndpoint { point_index } => {
+                crate::structure::ConnectionEndpoint::LineEndpoint {
+                    point_index: point_index.wrapping_add(1),
+                }
+            }
+            crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
+                crate::structure::ConnectionEndpoint::Boundary {
+                    angle_radians: angle_radians + 0.1,
+                }
+            }
+            crate::structure::ConnectionEndpoint::Fluid { x, y } => {
+                crate::structure::ConnectionEndpoint::Fluid { x: x + 0.1, y }
+            }
+        };
+        assert_ne!(unrelated_candidate.endpoint_a, old_bond.endpoint_a.location);
+        assert!(build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            unrelated_candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .is_none());
     }
 
     #[test]
