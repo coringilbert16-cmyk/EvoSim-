@@ -1317,9 +1317,9 @@ mod tests {
         source.add_unit(crate::structure::StructuralUnit::new(
             "Oxygen",
             crate::structure::Placement {
-                x: 1.577_350_269_189_625_8,
-                y: 0.12,
-                rotation_radians: std::f64::consts::PI,
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
             },
         ));
 
@@ -1347,24 +1347,69 @@ mod tests {
 
         let mut replacement_trial = source.clone();
         replacement_trial.break_matching_bond(old_bond).unwrap();
-        let replacement_candidate = crate::contact::connection_pair_candidates_cached(
-            &replacement_trial,
-            0,
-            2,
-            catalog,
-            &mut cache,
-        )
-        .into_iter()
-        .find(|candidate| {
-            candidate.endpoint_a == old_candidate.endpoint_a
-                && candidate.distance >= 0.0
-                && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                && candidate.facing.is_finite()
-                && candidate.facing > 0.0
-                && candidate.available_a
-                && candidate.available_b
-        })
-        .expect("freed Carbon endpoint should expose an engaged incoming Oxygen contact");
+        // Search physically valid Oxygen poses rather than relying on a guessed
+        // offset. The selected pose must touch the exact freed Carbon endpoint,
+        // be engaged, and avoid penetrating either existing source constituent.
+        let mut replacement = None;
+        'poses: for x_step in -8..=8 {
+            for y_step in -8..=8 {
+                for rotation_step in 0..16 {
+                    let placement = crate::structure::Placement {
+                        x: f64::from(x_step) * 0.2,
+                        y: f64::from(y_step) * 0.2,
+                        rotation_radians: std::f64::consts::TAU
+                            * f64::from(rotation_step)
+                            / 16.0,
+                    };
+                    replacement_trial.units[2].placement = placement;
+                    let incoming = replacement_trial.units[2].clone();
+                    if crate::construction_runtime::placed_unit_overlaps(
+                        &replacement_trial,
+                        &incoming,
+                        &[2],
+                        catalog,
+                    ) {
+                        continue;
+                    }
+                    let candidate = crate::contact::connection_pair_candidates_cached(
+                        &replacement_trial,
+                        0,
+                        2,
+                        catalog,
+                        &mut cache,
+                    )
+                    .into_iter()
+                    .find(|candidate| {
+                        candidate.endpoint_a == old_candidate.endpoint_a
+                            && candidate.distance >= 0.0
+                            && candidate.distance
+                                <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            && candidate.facing.is_finite()
+                            && candidate.facing > 0.0
+                            && candidate.available_a
+                            && candidate.available_b
+                    });
+                    if let Some(candidate) = candidate {
+                        if crate::combine_runtime::selected_candidate_evaluation(
+                            &replacement_trial,
+                            0,
+                            2,
+                            candidate,
+                            catalog,
+                        )
+                        .is_some()
+                        {
+                            replacement = Some((placement, candidate));
+                            break 'poses;
+                        }
+                    }
+                }
+            }
+        }
+        let (incoming_placement, replacement_candidate) = replacement
+            .expect("freed Carbon endpoint should expose a non-overlapping engaged Oxygen contact");
+        source.units[2].placement = incoming_placement;
+        replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             &replacement_trial,
             0,
