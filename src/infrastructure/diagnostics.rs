@@ -595,6 +595,12 @@ struct EnvironmentalChemistryDiagnosticTotals {
     combine_scheduled: u64,
     combine_committed: u64,
     combine_rejected: u64,
+    displacement_ready_candidates: u64,
+    displacement_scheduled: u64,
+    displacement_committed: u64,
+    displacement_rejected: u64,
+    displacement_participant_sets: BTreeMap<String, u64>,
+    displacement_failure_reasons: BTreeMap<String, u64>,
 }
 
 impl EnvironmentalChemistryDiagnosticsRecorder {
@@ -602,6 +608,8 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         path: &str,
         interval: u64,
         seed: u64,
+        duration_seconds: Option<u64>,
+        planned_ticks: u64,
         simulation: &Simulation,
         pile_sizes: &[usize],
     ) -> std::io::Result<Self> {
@@ -616,8 +624,13 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "version": 1,
             "seed": seed,
             "tick_zero": 0,
+            "requested_duration_seconds": duration_seconds,
+            "planned_ticks": planned_ticks,
+            "ticks_per_second": simulation.ticks_per_second,
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80,
             "initial_material_inventory": environmental_material_inventory(simulation),
             "pile_sizes": pile_sizes,
             "hotspot": simulation.hotspot,
@@ -631,6 +644,24 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for event in &simulation.environmental_chemistry_events {
+            if event.reaction == "DISPLACEMENT" {
+                let participant_key = serde_json::to_string(&event.source_materials)
+                    .unwrap_or_else(|_| "unserializable_participants".to_string());
+                *self
+                    .totals
+                    .displacement_participant_sets
+                    .entry(participant_key)
+                    .or_default() += 1;
+                let reason = event
+                    .failure_reason
+                    .clone()
+                    .unwrap_or_else(|| "none".to_string());
+                *self
+                    .totals
+                    .displacement_failure_reasons
+                    .entry(reason)
+                    .or_default() += 1;
+            }
             self.write_event(json!({
                 "event": "environmental_reaction",
                 "reaction": event
@@ -670,6 +701,22 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .combine_rejected
             .saturating_add(diagnostics.combine_rejected as u64);
+        self.totals.displacement_ready_candidates = self
+            .totals
+            .displacement_ready_candidates
+            .saturating_add(diagnostics.displacement_ready_candidates as u64);
+        self.totals.displacement_scheduled = self
+            .totals
+            .displacement_scheduled
+            .saturating_add(diagnostics.displacement_scheduled as u64);
+        self.totals.displacement_committed = self
+            .totals
+            .displacement_committed
+            .saturating_add(diagnostics.displacement_committed as u64);
+        self.totals.displacement_rejected = self
+            .totals
+            .displacement_rejected
+            .saturating_add(diagnostics.displacement_rejected as u64);
 
         if diagnostics.break_ready_candidates > 0
             || diagnostics.break_scheduled > 0
@@ -679,6 +726,10 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.combine_scheduled > 0
             || diagnostics.combine_committed > 0
             || diagnostics.combine_rejected > 0
+            || diagnostics.displacement_ready_candidates > 0
+            || diagnostics.displacement_scheduled > 0
+            || diagnostics.displacement_committed > 0
+            || diagnostics.displacement_rejected > 0
             || diagnostics.hotspot_settlement_succeeded == Some(false)
         {
             self.write_event(json!({
@@ -709,6 +760,12 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "combine_scheduled": self.totals.combine_scheduled,
             "combine_committed": self.totals.combine_committed,
             "combine_rejected": self.totals.combine_rejected,
+            "displacement_ready_candidates": self.totals.displacement_ready_candidates,
+            "displacement_scheduled": self.totals.displacement_scheduled,
+            "displacement_committed": self.totals.displacement_committed,
+            "displacement_rejected": self.totals.displacement_rejected,
+            "displacement_participant_sets": self.totals.displacement_participant_sets,
+            "displacement_failure_reasons": self.totals.displacement_failure_reasons,
             "final_material_inventory": environmental_material_inventory(simulation),
             "final_physical_material_count": physical_material_count(simulation),
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
