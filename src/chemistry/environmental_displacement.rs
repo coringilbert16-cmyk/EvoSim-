@@ -640,9 +640,7 @@ pub(crate) fn accumulate_environmental(
                     }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
-                    let Some(mut combined) = Some(source_structure.clone()) else {
-                        continue;
-                    };
+                    let mut combined = source_structure.clone();
                     let Some(indices_b) = crate::material_restoration::restore_material(
                         &mut combined,
                         &source_b,
@@ -940,12 +938,16 @@ pub(crate) fn resolve_environmental(
     // spectrum is compatible with the old bond's reaction frequency. Stage
     // withdrawal and the complete reaction settlement together.
     let mut staged_resonance = environment.resonant_energy.clone();
-    let resonant_before = staged_resonance.total_energy()?;
+    let Some(resonant_before) = staged_resonance.total_energy() else {
+        return false;
+    };
     let resonant_work = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         trial.energy.required_external_input,
     );
-    let resonant_after = staged_resonance.total_energy()?;
+    let Some(resonant_after) = staged_resonance.total_energy() else {
+        return false;
+    };
     if !resonant_work.is_finite()
         || resonant_work < 0.0
         || !resonant_before.is_finite()
@@ -1011,9 +1013,7 @@ pub(crate) fn resolve_environmental(
         let cell = &mut environment.field.cells[operation.cell_a];
         let high = operation.material_a.max(operation.material_b);
         let low = operation.material_a.min(operation.material_b);
-        if high == low || cell.physical_materials.get(high) != Some(&operation.source_a)
-            && cell.physical_materials.get(high) != Some(&operation.source_b)
-        {
+        if high == low {
             return false;
         }
         cell.physical_materials.remove(high);
