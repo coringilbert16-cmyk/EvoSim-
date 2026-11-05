@@ -995,20 +995,20 @@ pub(crate) fn resolve_environmental(
     if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
         return false;
     }
-    let Some(transaction) = trial.energy.settlement_transaction(EnergyReason::Combine) else {
-        return false;
-    };
-
-    // Resonance is a legitimate source for displacement work only when its
-    // spectrum is compatible with the old bond's reaction frequency. Stage
-    // withdrawal and the complete reaction settlement together.
+    // Resonance directly funds physical work; it is not first credited to the
+    // usable-energy holder. This keeps the usable debit equal to the unfunded
+    // remainder while the ledger still records the complete physical work.
     let mut staged_resonance = environment.resonant_energy.clone();
     let Some(resonant_before) = staged_resonance.total_energy() else {
         return false;
     };
+    let resonance_work_budget = trial
+        .energy
+        .physical_work
+        .min(trial.energy.required_external_input);
     let resonant_work = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
-        trial.energy.required_external_input,
+        resonance_work_budget,
     );
     let Some(resonant_after) = staged_resonance.total_energy() else {
         return false;
@@ -1017,37 +1017,53 @@ pub(crate) fn resolve_environmental(
         || resonant_work < 0.0
         || !resonant_before.is_finite()
         || !resonant_after.is_finite()
+        || resonant_work > resonance_work_budget + 1e-9
         || (resonant_before - resonant_after - resonant_work).abs() > 1e-9
     {
         return false;
     }
-    let usable_required = (trial.energy.required_external_input - resonant_work).max(0.0);
-    if !usable_required.is_finite() || usable_required > environment.chemistry_usable_energy {
+
+    let remaining_physical_work = trial.energy.physical_work - resonant_work;
+    let Some(funded_energy) = ReactionEnergyBalance::calculate(
+        trial.energy.reactant_energy,
+        trial.energy.product_energy,
+        remaining_physical_work,
+        trial.energy.dissipated_heat,
+    ) else {
+        return false;
+    };
+    if funded_energy.required_external_input > environment.chemistry_usable_energy {
         return false;
     }
+    let Some(transaction) = funded_energy.settlement_transaction(EnergyReason::Combine) else {
+        return false;
+    };
 
     let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_work;
+    let mut staged_usable_energy = environment.chemistry_usable_energy;
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
         return false;
     }
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let structural_delta = trial.energy.net_reaction_change;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    let next_total_resonant = staged_ledger.total_resonant_energy_held - resonant_work;
+    let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
+    let next_total_work = ledger.total_work_expended + trial.energy.physical_work;
     if !usable_delta.is_finite()
         || !next_total_usable.is_finite()
         || next_total_usable < 0.0
         || !next_total_resonant.is_finite()
         || next_total_resonant < 0.0
         || !next_total_structural.is_finite()
+        || !next_total_work.is_finite()
     {
         return false;
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
     staged_ledger.total_resonant_energy_held = next_total_resonant;
     staged_ledger.total_structural_energy_held = next_total_structural;
+    staged_ledger.total_work_expended = next_total_work;
 
     let mut staged_products = Vec::with_capacity(trial.products.len());
     for product in trial.products {
