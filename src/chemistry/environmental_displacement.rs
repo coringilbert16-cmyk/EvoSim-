@@ -8,7 +8,7 @@
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::contact::ConnectionPairCandidate;
-use crate::energy_ledger::ReactionEnergyBalance;
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
 use crate::resources::{BaseResource, ResourceProperties};
 use crate::structure::{Bond, BondEndpoint, OrganismStructure};
 
@@ -48,6 +48,8 @@ impl DisplacementPreflight {
 #[derive(Clone, Debug)]
 pub(crate) struct DisplacementTrial {
     pub(crate) structure: OrganismStructure,
+    source_units: Vec<crate::structure::StructuralUnit>,
+    source_bonds: Vec<Bond>,
     pub(crate) products: Vec<crate::physical_material::PhysicalMaterial>,
     pub(crate) removed_bond: Bond,
     pub(crate) replacement_bond: Bond,
@@ -178,6 +180,8 @@ pub(crate) fn build_displacement_trial(
 
     Some(DisplacementTrial {
         structure: trial,
+        source_units: source.units.clone(),
+        source_bonds: source.bonds.clone(),
         products,
         removed_bond: old_bond,
         replacement_bond,
@@ -185,6 +189,34 @@ pub(crate) fn build_displacement_trial(
         formation_work,
         disruption_work,
     })
+}
+
+/// Commit a previously evaluated trial against the unchanged source graph.
+/// Energy settlement is staged first; the graph, ledger, and usable holder are
+/// updated only after every validation and affordability check succeeds.
+pub(crate) fn commit_displacement_trial(
+    source: &mut OrganismStructure,
+    trial: DisplacementTrial,
+    ledger: &mut crate::state::EnergyLedger,
+    usable_energy: &mut f64,
+) -> Option<Vec<crate::physical_material::PhysicalMaterial>> {
+    if source.units != trial.source_units || source.bonds != trial.source_bonds {
+        return None;
+    }
+
+    let transaction = trial
+        .energy
+        .settlement_transaction(EnergyReason::Combine)?;
+    let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = *usable_energy;
+    if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
+        return None;
+    }
+
+    *source = trial.structure;
+    *ledger = staged_ledger;
+    *usable_energy = staged_usable_energy;
+    Some(trial.products)
 }
 
 /// Evaluate the coupled A-B -> A-C replacement without mutating any graph or
