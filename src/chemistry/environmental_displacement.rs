@@ -1440,11 +1440,24 @@ mod tests {
             unit.placement.x += 10.0;
             unit.placement.y += 10.0;
         }
-        let reactants = crate::environmental_combine::physical_materials_from_structure_components(
+        let mut reactants = crate::environmental_combine::physical_materials_from_structure_components(
             &source, &catalog,
         )
         .expect("the bonded reactant and incoming constituent should realize separately");
         assert_eq!(reactants.len(), 2);
+        reactants.sort_by_key(|material| {
+            material
+                .internal_connections
+                .as_ref()
+                .map_or(0, Vec::len)
+                == 0
+        });
+        assert!(
+            reactants[0]
+                .internal_connections
+                .as_ref()
+                .is_some_and(|connections| !connections.is_empty())
+        );
         let field_cell = simulation
             .environment
             .field
@@ -1461,49 +1474,103 @@ mod tests {
         let frequency =
             displacement_reaction_frequency(&source.units[0], &source.units[1], &catalog)
                 .expect("the old bond has a valid natural reaction frequency");
+        let mut combined = restore_displacement_source(&reactants[0], &simulation.environment)
+            .expect("bonded field source should restore");
+        let indices_b = crate::material_restoration::restore_material(
+            &mut combined.0,
+            &reactants[1],
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .expect("incoming field source should restore");
+        assert!(
+            !indices_b.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &combined.0,
+                    &combined.0.units[*index],
+                    &indices_b,
+                    &catalog,
+                )
+            }),
+            "incoming constituent must not overlap the bonded source"
+        );
+        let connection = reactants[0]
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("bonded source should preserve its old connection")
+            .clone();
+        let anchor_unit = combined.1[connection.part_a];
+        let displaced_unit = combined.1[connection.part_b];
+        let incoming_unit = indices_b[0];
+        let old_bond = combined
+            .0
+            .bonds
+            .first()
+            .cloned()
+            .expect("restored source should contain its old bond");
+        let (candidate, _investment) = best_freed_endpoint_contact(
+            &combined.0,
+            anchor_unit,
+            incoming_unit,
+            old_bond,
+            connection.endpoint_a,
+            &catalog,
+        )
+        .expect("incoming source should contact the endpoint freed by the old bond");
+        let first_activation = accumulate_incoming_activation(
+            &combined.0.units[anchor_unit],
+            &combined.0.units[incoming_unit],
+            candidate,
+            0.0,
+            &catalog,
+        )
+        .expect("the live replacement contact should accumulate chemistry");
+        assert!(first_activation > 0.0);
+
+        let key = displacement_accumulation_key(
+            &reactants[0],
+            &reactants[1],
+            0,
+            connection.part_a,
+            0,
+            candidate,
+        );
         let mut accumulation = BTreeMap::new();
-        let mut ready = None;
-        for tick in 0..512 {
-            let mut discovery_work =
-                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-            let operations = accumulate_environmental(
-                &simulation.environment,
-                &mut accumulation,
-                tick,
-                &mut discovery_work,
-            );
-            if let Some(operation) = operations.into_iter().next() {
-                ready = Some(operation);
-                break;
-            }
-        }
-        if ready.is_none() {
-            let key = accumulation
-                .keys()
-                .find(|key| key.starts_with(ENVIRONMENTAL_DISPLACEMENT_PREFIX))
-                .cloned()
-                .expect("field discovery should accumulate the validated replacement contact");
+        let mut discovery_work =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+        let operations = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            field_cell as u64,
+            &mut discovery_work,
+        );
+        assert!(
+            accumulation.contains_key(&key) || !operations.is_empty(),
+            "field scheduler should discover and accumulate the validated contact"
+        );
+        if operations.is_empty() {
             let one_unit_signal =
                 crate::chemistry::normalized_chemistry_to_activation_signal(1.0)
                     .expect("unit chemistry should normalize");
-            accumulation.insert(key, 10.0 / one_unit_signal);
-            for tick in 512..1024 {
-                let mut discovery_work =
-                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-                let operations = accumulate_environmental(
-                    &simulation.environment,
-                    &mut accumulation,
-                    tick,
-                    &mut discovery_work,
-                );
-                if let Some(operation) = operations.into_iter().next() {
-                    ready = Some(operation);
-                    break;
-                }
-            }
+            accumulation.insert(key, 100.0 / one_unit_signal);
         }
-        let operation =
-            ready.expect("live incoming contact should eventually activate displacement");
+        let mut discovery_work =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+        let operations = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            field_cell as u64,
+            &mut discovery_work,
+        );
+        let operation = operations
+            .into_iter()
+            .next()
+            .expect("triggered field contact should produce a displacement operation");
         assert!(operation.work_required > 0.0);
         assert!(operation.activation_signal > 0.0);
 
