@@ -14,7 +14,13 @@ concurrency:
 jobs:
   candidate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        repeat: [1, 2, 3]
     timeout-minutes: 15
+    name: Candidate-only repeat ${{ matrix.repeat }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
