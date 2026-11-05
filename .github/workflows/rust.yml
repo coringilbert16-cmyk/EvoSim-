@@ -107,10 +107,6 @@ jobs:
           run_check cargo test --locked failed_prepared_combine_
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
-      - name: Environmental BREAK discovery A/B benchmark
-        if: always()
-        timeout-minutes: 5
-        run: cargo test --locked environmental_discovery_ab_benchmark -- --ignored --nocapture
       - name: Transactions and ownership (focused tests)
         if: always()
         timeout-minutes: 30
@@ -215,5 +211,3 @@ jobs:
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
-      # Manual performance measurement; run on demand after environmental-discovery changes:
-      # cargo test --locked environmental_discovery_timing_benchmark -- --ignored --nocapture
