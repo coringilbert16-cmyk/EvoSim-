@@ -47,6 +47,21 @@ impl Velocity {
 const FLOW_BIN_SIZE: f64 = 5.0;
 const FLOW_RESPONSE_SCALE: f64 = 0.30; // permanent 2× renderer-tested current
 
+#[derive(Clone, Debug, Default)]
+pub(crate) struct TransportWorkspace {
+    obstacle_bins: Vec<Vec<Obstacle>>,
+}
+
+impl TransportWorkspace {
+    fn obstacle_bins_mut(&mut self, count: usize) -> &mut Vec<Vec<Obstacle>> {
+        self.obstacle_bins.resize_with(count, Vec::new);
+        for bin in &mut self.obstacle_bins {
+            bin.clear();
+        }
+        &mut self.obstacle_bins
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Obstacle {
     source_cell: usize,
@@ -557,24 +572,28 @@ fn transport_field(
     world_width: f64,
     world_height: f64,
 ) -> usize {
-    transport_field_with_singleton_center_velocity_reuse::<true>(
+    let mut workspace = TransportWorkspace::default();
+    transport_field_with_reuse::<true, false>(
         field,
         catalog,
         world_width,
         world_height,
+        &mut workspace,
     )
 }
 
 /// Advance the field by one small deterministic transport slice. All candidate
 /// destinations are computed from a snapshot, then committed together so
 /// iteration order cannot change which current an object samples.
-pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
+pub(crate) fn transport_field_with_reuse<
     const REUSE_SINGLETON_CENTER_VELOCITY: bool,
+    const REUSE_OBSTACLE_BIN_BUFFERS: bool,
 >(
     field: &mut ActiveMaterialField,
     catalog: &[BaseResource],
     world_width: f64,
     world_height: f64,
+    workspace: &mut TransportWorkspace,
 ) -> usize {
     let width = world_width.min(field.width_cells as f64 * field.cell_size);
     let height = world_height.min(field.height_cells as f64 * field.cell_size);
@@ -608,7 +627,13 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         .collect();
     let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
     let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
-    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
+    let mut fresh_obstacle_bins = Vec::new();
+    let obstacle_bins = if REUSE_OBSTACLE_BIN_BUFFERS {
+        workspace.obstacle_bins_mut(flow_cols * flow_rows)
+    } else {
+        fresh_obstacle_bins.resize_with(flow_cols * flow_rows, Vec::<Obstacle>::new);
+        &mut fresh_obstacle_bins
+    };
     for obstacle in obstacles {
         let radius = obstacle.radius.max(0.5).min(width.max(height));
         let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
@@ -1166,14 +1191,14 @@ mod tests {
     #[test]
     #[ignore = "manual transport baseline timing; invoked by the CI benchmark hook"]
     fn environmental_discovery_ab_benchmark_transport_baseline() {
-        transport_molecular_candidate_evaluation_benchmark();
+        transport_obstacle_bin_buffer_reuse_benchmark();
     }
 
-    /// Standard maximum-speed, 60-second wall-clock comparison of the original
-    /// and optimized transport paths over the full environment simulation.
+    /// Standard maximum-speed, 60-second wall-clock comparison of fresh obstacle-bin
+    /// allocation against retained bin buffers over the full environment simulation.
     #[test]
     #[ignore = "60-second transport throughput benchmark; invoked by the CI benchmark hook"]
-    fn transport_molecular_candidate_evaluation_benchmark() {
+    fn transport_obstacle_bin_buffer_reuse_benchmark() {
         use std::time::{Duration, Instant};
 
         const SEED: u64 = 42;
@@ -1222,7 +1247,7 @@ mod tests {
             let start_tick = simulation.tick;
             let started = Instant::now();
             while started.elapsed() < RUN_DURATION {
-                simulation.step_with_transport_reuse::<REUSE>();
+                simulation.step_with_transport_reuse::<true, REUSE>();
             }
             let elapsed = started.elapsed();
             let ticks = simulation.tick - start_tick;
@@ -1258,8 +1283,8 @@ mod tests {
         }
 
         // Each version receives one uninterrupted, uncapped, maximum-speed run.
-        let baseline = run_once::<false>("BASELINE");
-        let experiment = run_once::<true>("EXPERIMENT");
+        let baseline = run_once::<false>("BASELINE_FRESH_BINS");
+        let experiment = run_once::<true>("EXPERIMENT_REUSED_BINS");
         assert_eq!(baseline.start_objects, experiment.start_objects);
         assert_eq!(baseline.start_constituents, experiment.start_constituents);
         assert_eq!(baseline.initial_state, experiment.initial_state);
