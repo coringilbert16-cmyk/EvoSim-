@@ -913,11 +913,46 @@ mod tests {
     #[test]
     fn obstacle_bin_sizes_preserve_exact_velocity_results() {
         let obstacles = vec![
-            Obstacle { source_cell: 0, source_index: 0, x: 0.2, y: 0.1, radius: 0.5, solidity: 1.0 },
-            Obstacle { source_cell: 0, source_index: 1, x: 18.0, y: 19.5, radius: 2.0, solidity: 0.7 },
-            Obstacle { source_cell: 1, source_index: 0, x: 49.5, y: 0.2, radius: 4.0, solidity: 1.0 },
-            Obstacle { source_cell: 2, source_index: 0, x: 25.0, y: 10.0, radius: 8.0, solidity: 0.4 },
-            Obstacle { source_cell: 3, source_index: 0, x: 12.0, y: 15.0, radius: 1.25, solidity: 0.0 },
+            Obstacle {
+                source_cell: 0,
+                source_index: 0,
+                x: 0.2,
+                y: 0.1,
+                radius: 0.5,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 0,
+                source_index: 1,
+                x: 18.0,
+                y: 19.5,
+                radius: 2.0,
+                solidity: 0.7,
+            },
+            Obstacle {
+                source_cell: 1,
+                source_index: 0,
+                x: 49.5,
+                y: 0.2,
+                radius: 4.0,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 2,
+                source_index: 0,
+                x: 25.0,
+                y: 10.0,
+                radius: 8.0,
+                solidity: 0.4,
+            },
+            Obstacle {
+                source_cell: 3,
+                source_index: 0,
+                x: 12.0,
+                y: 15.0,
+                radius: 1.25,
+                solidity: 0.0,
+            },
         ];
         let (width, height) = (50.0, 20.0);
         let free = Velocity { x: 0.73, y: -0.21 };
@@ -931,8 +966,10 @@ mod tests {
                     let col = ((x / bin_size).floor() as usize).min(cols.saturating_sub(1));
                     let row = ((y / bin_size).floor() as usize).min(rows.saturating_sub(1));
                     let candidates = &bins[row * cols + col];
-                    let expected = obstacle_adjusted_velocity(free, x, y, 99, 99, &obstacles, height);
-                    let actual = obstacle_adjusted_velocity(free, x, y, 99, 99, candidates, height);
+                    let expected =
+                        obstacle_adjusted_velocity(free, x, y, 99, 99, &obstacles, height);
+                    let actual =
+                        obstacle_adjusted_velocity(free, x, y, 99, 99, candidates, height);
                     assert_eq!(
                         actual, expected,
                         "bin size {bin_size} changed velocity at ({x}, {y})"
