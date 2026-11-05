@@ -16,3 +16,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Run 60-second transport movement profile
         run: cargo test --locked transport_movement_stage_profile_60s -- --ignored --nocapture
+      - name: Run paired 60-second separate-vs-combined transform benchmark
+        run: cargo test --locked transport_molecular_candidate_evaluation_benchmark -- --ignored --nocapture
