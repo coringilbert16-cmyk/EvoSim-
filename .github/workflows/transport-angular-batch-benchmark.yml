@@ -1,0 +1,30 @@
+name: Compound angular transport candidate benchmark
+
+on:
+  pull_request:
+    paths:
+      - 'src/simulation/environment_flow.rs'
+      - '.github/workflows/transport-angular-batch-benchmark.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: transport-angular-batch-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify batched obstacle evaluation preserves scalar results
+        run: cargo test --locked batched_angular_obstacle_evaluation_matches_scalar_samples
+      - name: Run 30-second candidate-only benchmark
+        run: |
+          if cargo test --locked transport_compound_angular_batch_candidate_30s -- --ignored --nocapture > /tmp/transport-angular-candidate.log 2>&1; then
+            grep -E 'TRANSPORT ANGULAR BATCH CANDIDATE|test result:' /tmp/transport-angular-candidate.log | tail -n 20 || true
+          else
+            tail -n 200 /tmp/transport-angular-candidate.log
+            exit 1
+          fi
