@@ -43,6 +43,44 @@ impl DisplacementPreflight {
     }
 }
 
+/// Accumulate one tick of activation from the incoming constituent's live
+/// contact with the anchor. This mirrors environmental COMBINE's approved
+/// static-potential, contact-falloff, facing-engagement, and dissipation equation.
+pub(crate) fn accumulate_incoming_activation(
+    anchor: ResourceProperties,
+    incoming: ResourceProperties,
+    candidate: ConnectionPairCandidate,
+    previous: f64,
+) -> Option<f64> {
+    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let interaction = crate::combine::chemical_interaction(
+        anchor,
+        incoming,
+        candidate,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        crate::chemistry::CHEMICAL_MAX_FORCE,
+    )?;
+    let contact = crate::chemistry::contact_factor(
+        candidate.distance,
+        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+    )?;
+    let engagement = crate::chemistry::interface_engagement(candidate.facing)?;
+    crate::chemistry::accumulate_reaction(
+        previous,
+        interaction.static_potential,
+        contact,
+        engagement,
+        crate::chemistry::CHEMICAL_DISSIPATION,
+    )
+}
+
 /// Fully evaluated trial topology and its independently exported physical products.
 /// Nothing in this value has been committed to the live environment.
 #[derive(Clone, Debug)]
@@ -481,6 +519,20 @@ mod tests {
         )
         .expect("replacement candidate should pass ordinary COMBINE evaluation");
         (source, old_bond, replacement_candidate, investment)
+    }
+
+    #[test]
+    fn incoming_activation_is_accumulated_from_the_replacement_contact() {
+        let catalog = default_catalog();
+        let (source, _old_bond, candidate, _investment) =
+            three_participant_fixture(&catalog);
+        let anchor = source.units[0].properties(&catalog).unwrap();
+        let incoming = source.units[2].properties(&catalog).unwrap();
+        let activation =
+            accumulate_incoming_activation(anchor, incoming, candidate, 0.0)
+                .expect("valid live contact should accumulate incoming influence");
+        assert!(activation > 0.0);
+        assert!(activation.is_finite());
     }
 
     #[test]
