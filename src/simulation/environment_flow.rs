@@ -1198,8 +1198,14 @@ mod tests {
         });
         let capacity = bins[0].capacity();
         let bins = workspace.obstacle_bins_mut(2);
-        assert!(bins[0].is_empty(), "no obstacle from an earlier tick may survive");
-        assert!(bins[0].capacity() >= capacity, "clearing must retain allocation");
+        assert!(
+            bins[0].is_empty(),
+            "no obstacle from an earlier tick may survive"
+        );
+        assert!(
+            bins[0].capacity() >= capacity,
+            "clearing must retain allocation"
+        );
         assert_eq!(bins.len(), 2);
     }
 
