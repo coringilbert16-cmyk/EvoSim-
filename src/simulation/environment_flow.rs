@@ -815,6 +815,101 @@ mod tests {
         );
     }
 
+    /// Fixed-duration comparison of obstacle-bin resolutions using the
+    /// same seed-42 fixture and real velocity evaluator. Kept opt-in so normal
+    /// CI does not pay the timing cost.
+    #[test]
+    #[ignore = "2-second-per-resolution obstacle-bin experiment; invoked by focused CI"]
+    fn obstacle_bin_size_experiment_10s() {
+        use std::hint::black_box;
+        use std::time::{Duration, Instant};
+
+        const SEED: u64 = 42;
+        const PHASE_DURATION: Duration = Duration::from_secs(2);
+        let fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &fixture.simulation;
+        let field = &simulation.environment.field;
+        let catalog = &simulation.environment.catalog;
+        let width = simulation.environment.width;
+        let height = simulation.environment.height;
+
+        let snapshot = field
+            .cells
+            .iter()
+            .enumerate()
+            .flat_map(|(cell_index, cell)| {
+                cell.physical_materials
+                    .iter()
+                    .enumerate()
+                    .map(move |(material_index, material)| {
+                        (cell_index, material_index, material)
+                    })
+            })
+            .collect::<Vec<_>>();
+        let obstacles = snapshot
+            .iter()
+            .filter_map(|(cell, index, material)| {
+                obstacle_for(*cell, *index, material, catalog, height)
+            })
+            .collect::<Vec<_>>();
+        let mut samples = Vec::new();
+        for (cell, index, material) in &snapshot {
+            if let Some(placements) = material.placements.as_ref() {
+                for placement in placements {
+                    samples.push((*cell, *index, placement.x, placement.y));
+                }
+            }
+        }
+
+        println!(
+            "OBSTACLE BIN EXPERIMENT FIXTURE: seed={SEED} objects={} obstacles={} velocity_samples={}",
+            snapshot.len(),
+            obstacles.len(),
+            samples.len(),
+        );
+        for bin_size in [5.0, 2.5, 1.25] {
+            let build_started = Instant::now();
+            let (cols, rows, bins) =
+                build_obstacle_bins(&obstacles, width, height, bin_size);
+            let build_elapsed = build_started.elapsed();
+            let total_memberships = bins.iter().map(Vec::len).sum::<usize>();
+            let mut evaluations = 0_u64;
+            let mut candidate_visits = 0_u64;
+            let started = Instant::now();
+            while started.elapsed() < PHASE_DURATION {
+                for (cell, index, x, y) in &samples {
+                    let col = ((*x / bin_size).floor() as usize).min(cols.saturating_sub(1));
+                    let row = ((*y / bin_size).floor() as usize).min(rows.saturating_sub(1));
+                    let nearby = &bins[row * cols + col];
+                    let velocity = obstacle_adjusted_velocity(
+                        background_velocity(*x, *y, width, height),
+                        *x,
+                        *y,
+                        *cell,
+                        *index,
+                        nearby,
+                        height,
+                    );
+                    black_box(velocity);
+                    evaluations += 1;
+                    candidate_visits += nearby.len() as u64;
+                }
+            }
+            let elapsed = started.elapsed();
+            println!(
+                "OBSTACLE BIN RESULT: bin_size={bin_size:.2} bins={} bin_memberships={} build_ms={:.3} elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} candidate_visits={} candidates_per_evaluation={:.2}",
+                bins.len(),
+                total_memberships,
+                build_elapsed.as_secs_f64() * 1000.0,
+                elapsed.as_secs_f64(),
+                evaluations,
+                evaluations as f64 / elapsed.as_secs_f64(),
+                candidate_visits,
+                candidate_visits as f64 / evaluations.max(1) as f64,
+            );
+        }
+    }
+
     #[test]
     fn obstacle_bin_sizes_preserve_exact_velocity_results() {
         let obstacles = vec![
