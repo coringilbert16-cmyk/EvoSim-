@@ -220,10 +220,7 @@ fn obstacle_adjusted_velocity(
         // before the comparatively expensive Euclidean distance calculation.
         // The strict bounds mirror the existing strict influence comparisons.
         let proximity_extent = radius * 2.5;
-        if dx <= -proximity_extent
-            || dx >= radius * 6.0
-            || dy.abs() >= proximity_extent
-        {
+        if dx <= -proximity_extent || dx >= radius * 6.0 || dy.abs() >= proximity_extent {
             continue;
         }
         let distance = dx.hypot(dy).max(1e-9);
@@ -1144,12 +1141,54 @@ mod tests {
         }
 
         let obstacles = [
-            Obstacle { source_cell: 1, source_index: 1, x: 20.0, y: 30.0, radius: 0.5, solidity: 1.0 },
-            Obstacle { source_cell: 2, source_index: 2, x: 40.0, y: 50.0, radius: 1.0, solidity: 0.65 },
-            Obstacle { source_cell: 3, source_index: 3, x: 60.0, y: 70.0, radius: 3.0, solidity: 0.9 },
-            Obstacle { source_cell: 4, source_index: 4, x: 80.0, y: 90.0, radius: 8.0, solidity: 0.4 },
-            Obstacle { source_cell: 5, source_index: 5, x: 99.0, y: 2.0, radius: 2.0, solidity: 1.0 },
-            Obstacle { source_cell: 6, source_index: 6, x: 5.0, y: 98.0, radius: 1.5, solidity: 1e-7 },
+            Obstacle {
+                source_cell: 1,
+                source_index: 1,
+                x: 20.0,
+                y: 30.0,
+                radius: 0.5,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 2,
+                source_index: 2,
+                x: 40.0,
+                y: 50.0,
+                radius: 1.0,
+                solidity: 0.65,
+            },
+            Obstacle {
+                source_cell: 3,
+                source_index: 3,
+                x: 60.0,
+                y: 70.0,
+                radius: 3.0,
+                solidity: 0.9,
+            },
+            Obstacle {
+                source_cell: 4,
+                source_index: 4,
+                x: 80.0,
+                y: 90.0,
+                radius: 8.0,
+                solidity: 0.4,
+            },
+            Obstacle {
+                source_cell: 5,
+                source_index: 5,
+                x: 99.0,
+                y: 2.0,
+                radius: 2.0,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 6,
+                source_index: 6,
+                x: 5.0,
+                y: 98.0,
+                radius: 1.5,
+                solidity: 1e-7,
+            },
         ];
         let velocity = Velocity { x: 0.73, y: -0.21 };
         let height = 100.0;
@@ -1173,9 +1212,23 @@ mod tests {
         }
         for (x, y) in points {
             for (source_cell, source_index) in [(0, 0), (1, 1), (9, 9)] {
-                let expected = reference(velocity, x, y, source_cell, source_index, &obstacles, height);
+                let expected = reference(
+                    velocity,
+                    x,
+                    y,
+                    source_cell,
+                    source_index,
+                    &obstacles,
+                    height,
+                );
                 let actual = obstacle_adjusted_velocity(
-                    velocity, x, y, source_cell, source_index, &obstacles, height,
+                    velocity,
+                    x,
+                    y,
+                    source_cell,
+                    source_index,
+                    &obstacles,
+                    height,
                 );
                 assert_eq!(actual, expected, "output differs at ({x}, {y})");
             }
@@ -1265,7 +1318,7 @@ mod tests {
             }
         }
 
-        let mut run = |label: &str, optimized: bool| {
+        let run = |label: &str, optimized: bool| {
             let started = Instant::now();
             let mut evaluations = 0u64;
             let mut checksum = 0.0;
@@ -1273,8 +1326,13 @@ mod tests {
                 for (x, y, obstacles) in &samples {
                     let result = if optimized {
                         obstacle_adjusted_velocity(
-                            Velocity { x: 0.73, y: -0.21 }, *x, *y, usize::MAX, usize::MAX,
-                            obstacles, 1000.0,
+                            Velocity { x: 0.73, y: -0.21 },
+                            *x,
+                            *y,
+                            usize::MAX,
+                            usize::MAX,
+                            obstacles,
+                            1000.0,
                         )
                     } else {
                         reference(Velocity { x: 0.73, y: -0.21 }, *x, *y, obstacles, 1000.0)
