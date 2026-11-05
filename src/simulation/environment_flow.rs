@@ -1405,6 +1405,7 @@ mod tests {
             end_objects: usize,
             end_constituents: usize,
             initial_state: Vec<PhysicalMaterial>,
+            end_state: Vec<PhysicalMaterial>,
         }
 
         fn run_once<const COMBINE: bool>(label: &str) -> RunResult {
@@ -1459,6 +1460,14 @@ mod tests {
                 .flat_map(|cell| cell.physical_materials.iter())
                 .map(|material| material.material.parts.len())
                 .sum::<usize>();
+            let mut end_state = simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter().cloned())
+                .collect::<Vec<_>>();
+            end_state.sort_unstable_by_key(|material| material.environmental_identity);
             let ticks_per_second = ticks as f64 / elapsed.as_secs_f64();
             println!(
                 "TRANSPORT {label} 60S RESULT: seed={SEED} target_seconds=60 actual_seconds={:.3} ticks={ticks} ticks_per_second={ticks_per_second:.2} start_objects={start_objects} start_constituents={start_constituents} end_objects={end_objects} end_constituents={end_constituents}",
@@ -1472,6 +1481,7 @@ mod tests {
                 end_objects,
                 end_constituents,
                 initial_state,
+                end_state,
             }
         }
 
@@ -1484,6 +1494,7 @@ mod tests {
         assert_eq!(baseline.initial_state, experiment.initial_state);
         assert_eq!(baseline.end_objects, experiment.end_objects);
         assert_eq!(baseline.end_constituents, experiment.end_constituents);
+        assert_eq!(baseline.end_state, experiment.end_state);
 
         let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
         let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
