@@ -845,16 +845,33 @@ impl Simulation {
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field_with_reuse::<
-            REUSE_SINGLETON_CENTER_VELOCITY,
-            REUSE_OBSTACLE_BIN_BUFFERS,
-        >(
-            &mut self.environment.field,
-            &self.environment.catalog,
-            self.environment.width,
-            self.environment.height,
-            &mut self.transport_workspace.lock(),
-        );
+        if REUSE_OBSTACLE_BIN_BUFFERS {
+            let mut workspace = self.transport_workspace.lock();
+            crate::environment_flow::transport_field_with_reuse::<
+                REUSE_SINGLETON_CENTER_VELOCITY,
+                true,
+            >(
+                &mut self.environment.field,
+                &self.environment.catalog,
+                self.environment.width,
+                self.environment.height,
+                &mut workspace,
+            );
+        } else {
+            // Keep the comparison path equivalent to the pre-workspace baseline:
+            // it must not pay the candidate's shared-workspace mutex cost.
+            let mut workspace = crate::environment_flow::TransportWorkspace::default();
+            crate::environment_flow::transport_field_with_reuse::<
+                REUSE_SINGLETON_CENTER_VELOCITY,
+                false,
+            >(
+                &mut self.environment.field,
+                &self.environment.catalog,
+                self.environment.width,
+                self.environment.height,
+                &mut workspace,
+            );
+        }
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
