@@ -201,22 +201,14 @@ pub(crate) fn build_displacement_trial(
     {
         return None;
     }
-    let strength = bond_strength(anchor, incoming);
-    let bond_energy = intrinsic_bond_potential(anchor, incoming, strength);
-    if !strength.is_finite()
-        || !(0.0..=1.0).contains(&strength)
-        || !bond_energy.is_finite()
-        || bond_energy < 0.0
-    {
-        return None;
-    }
-    let replacement_bond = Bond {
-        endpoint_a: BondEndpoint::new(anchor_id, replacement_candidate.endpoint_a),
-        endpoint_b: BondEndpoint::new(incoming_id, replacement_candidate.endpoint_b),
-        strength,
-        bond_energy,
-    };
-    crate::contact::try_add_bond(&mut trial, replacement_bond, catalog).ok()?;
+    let replacement_bond =
+        crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+            &mut trial,
+            anchor_unit,
+            incoming_unit,
+            replacement_candidate,
+            catalog,
+        )?;
 
     let reactant_structural = crate::energy_ledger::structural_potential(source)?;
     let product_structural = crate::energy_ledger::structural_potential(&trial)?;
