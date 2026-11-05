@@ -205,6 +205,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cargo run --locked -- \
+            --headless \
             --environment-chemistry-experiment \
             --seconds 60 \
             --seed 42 \
