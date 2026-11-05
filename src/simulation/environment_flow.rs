@@ -817,8 +817,30 @@ mod tests {
                 radius: 1.0,
                 solidity: 0.0,
             },
+            Obstacle {
+                source_cell: 9,
+                source_index: 9,
+                x: 10.0,
+                y: 18.0,
+                radius: 8.0,
+                solidity: 1.0,
+            },
+            Obstacle {
+                source_cell: 3,
+                source_index: 3,
+                x: 12.0,
+                y: 2.0,
+                radius: 2.0,
+                solidity: 0.7,
+            },
         ];
-        let points = [(10.0, 18.0), (17.0, 20.0), (24.0, 18.0), (12.0, 29.0)];
+        let points = [
+            (10.0, 18.0),
+            (17.0, 20.0),
+            (24.0, 18.0),
+            (12.0, 29.0),
+            (12.0, 79.0),
+        ];
         let mut samples = points
             .iter()
             .map(|(x, y)| AngularVelocitySample {
