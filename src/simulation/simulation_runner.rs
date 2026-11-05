@@ -12,6 +12,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut environment_chemistry_experiment = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
+    let mut duration_seconds: Option<u64> = None;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -31,6 +32,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     .and_then(|value| value.parse().ok())
                     .unwrap_or(DEFAULT_MAX_TICKS);
                 max_ticks_provided = true;
+            }
+            "--seconds" => {
+                duration_seconds = args.next().and_then(|value| value.parse().ok());
             }
             "--births" => {
                 target_births = args
@@ -52,7 +56,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     }
 
     if environment_chemistry_experiment {
-        let ticks = if max_ticks_provided {
+        let ticks = if max_ticks_provided || duration_seconds.is_some() {
             max_ticks
         } else {
             24_000
@@ -60,6 +64,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         run_environment_chemistry_experiment(
             seed,
             ticks,
+            duration_seconds,
             diagnostics_path
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
@@ -184,15 +189,22 @@ fn report(simulation: &Simulation, label: &str) {
 fn run_environment_chemistry_experiment(
     seed: u64,
     max_ticks: u64,
+    duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
+    let max_ticks = duration_seconds
+        .map(|seconds| (seconds as f64 * simulation.ticks_per_second).round() as u64)
+        .unwrap_or(max_ticks);
+    let simulated_seconds = max_ticks as f64 / simulation.ticks_per_second;
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,
         diagnostic_interval,
         seed,
+        duration_seconds,
+        max_ticks,
         &simulation,
         &fixture.pile_sizes,
     )
@@ -201,7 +213,8 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} organisms={} physical_resources=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} ticks={max_ticks} simulated_seconds={simulated_seconds:.1} ticks_per_second={} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        simulation.ticks_per_second,
         simulation.organisms.len(),
         fixture.pile_sizes,
         simulation.hotspot
@@ -212,12 +225,16 @@ fn run_environment_chemistry_experiment(
         diagnostics
             .observe(&simulation)
             .expect("failed to write environmental chemistry diagnostics");
-        if simulation.tick % 1_000 == 0 {
+        if simulation.tick % 100 == 0 || simulation.tick == max_ticks {
             let counters = simulation.environmental_chemistry_diagnostics;
             let energy = simulation.energy_inventory_snapshot();
             println!(
-                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[chemistry] tick={} displacement ready/scheduled/committed/rejected={}/{}/{}/{} COMBINE={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
+                counters.displacement_ready_candidates,
+                counters.displacement_scheduled,
+                counters.displacement_committed,
+                counters.displacement_rejected,
                 counters.combine_ready_candidates,
                 counters.combine_scheduled,
                 counters.combine_committed,
