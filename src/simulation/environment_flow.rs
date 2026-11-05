@@ -549,6 +549,22 @@ fn rotated(
     Some(result)
 }
 
+/// Test-only default-path adapter for focused transport unit tests.
+#[cfg(test)]
+fn transport_field(
+    field: &mut ActiveMaterialField,
+    catalog: &[BaseResource],
+    world_width: f64,
+    world_height: f64,
+) -> usize {
+    transport_field_with_singleton_center_velocity_reuse::<true>(
+        field,
+        catalog,
+        world_width,
+        world_height,
+    )
+}
+
 /// Advance the field by one small deterministic transport slice. All candidate
 /// destinations are computed from a snapshot, then committed together so
 /// iteration order cannot change which current an object samples.
