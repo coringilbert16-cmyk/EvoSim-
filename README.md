@@ -24,6 +24,25 @@ This README is the current repository guide and implementation-status summary. O
 - **Architecture status:** aggregate-owned reproductive construction uses stable physical IDs as its sole physical authority; its persisted `developing_structure` stays empty and its separate `developing_energy` stays zero. Detached legacy construction remains serializable and separately counted until fully migrated. The staged `partition_subgraph_for_division` primitive preserves stable constituent IDs, keeps child-internal bonds and energy with the child, removes crossing bonds from both graphs, and returns crossing-bond energy for explicit ledger settlement. Successful growth/division conservation and the full lifecycle migration remain unfinished. Parent-child contact still requires integration with the shared physical bond-formation transaction. See [PR #204's living plan](https://github.com/coringilbert16-cmyk/EvoSim-/pull/204).
 - **Documentation plan PR #204:** latest known plan update is `66447f9c0a03c7918193f370090ae294247c07ea`; it records exact-head evidence, the baseline seed failure, and the CI sequencing fix. Clippy remains failing under repository warnings-as-errors; do not report it green.
 
+### Closed transport optimization experiment — PR #305
+
+**Outcome: unsuccessful as a performance optimization; PR #305 was closed without merging.** The experiment combined translation and rotation to avoid cloning each `PhysicalMaterial` twice. The complete wall-clock benchmark passed its correctness and conservation checks, but the throughput gains were negligible and inconsistent. This method should not be pursued further as a transport optimization.
+
+The benchmark used seed 42, five paired trials per scenario, alternating baseline/combined execution order. Each arm ran for the requested wall-clock duration (ticks completed were measured outcomes, not fixed targets). Every run preserved total constituent-part count and atom quantity, and paired runs began from identical seeded states.
+
+| Scenario | Starting objects | Duration per arm | Baseline median ticks/s | Combined median ticks/s | Median paired change | Paired-change range |
+|---|---:|---:|---:|---:|---:|---:|
+| Half resources | 640 | 60 s | 40.997 | 41.440 | **+0.659%** | +0.544% to +2.795% |
+| Double resources | 2,560 | 60 s | 7.778 | 7.809 | **+0.668%** | -0.463% to +1.970% |
+| Half duration | 1,280 | 30 s | 19.798 | 19.672 | **-0.990%** | -2.099% to +1.136% |
+| Double duration | 1,280 | 120 s | 19.794 | 20.137 | **+0.949%** | +0.102% to +4.212% |
+
+The ignored benchmark test completed successfully: **1 passed, 0 failed**, in **2,708.37 seconds** (about 45.1 minutes). The four scenarios together show no meaningful scaling benefit: doubling the object count barely changed the measured improvement, and the short-duration case regressed. The isolated +4.212% pair is not representative of the paired medians.
+
+**Decision:** do not merge or reuse the combined-transform implementation on performance grounds. Preserve this result as a negative experiment so the same method is not repeated.
+
+**Next optimization target:** per-material movement evaluation. The preceding transport profile (PR [#304](https://github.com/coringilbert16-cmyk/EvoSim-/pull/304)) measured this stage at **50.903 seconds / 85.2%** of a 60-second transport-only profile; snapshot/identity assignment was 3.1%, obstacle construction 4.1%, obstacle-bin construction 4.4%, and movement commit 3.3%. The next experiment should profile and optimize work *inside* this dominant per-material evaluation stage, retaining exact candidate coverage and the existing movement equations. Do not spend effort optimizing obstacle-bin construction based on the current evidence.
+
 ## Permanent renderer-tested environment baseline
 
 The default simulation now uses the established renderer configuration; this is the normal environment, not an opt-in experiment:
