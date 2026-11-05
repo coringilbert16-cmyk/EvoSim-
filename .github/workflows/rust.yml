@@ -201,22 +201,32 @@ jobs:
           run_check cargo test --locked ancestral_seed_realizes_a_physically_valid_developmental_structure
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
-      - name: Run standard 60-second environmental displacement observation
-        timeout-minutes: 10
+      - name: Run one-time environmental displacement duration series
+        if: github.event_name == 'pull_request' && github.event.pull_request.title == 'Prove environmental displacement and replacement reactions [ONE-TIME DURATION SERIES]'
+        timeout-minutes: 25
         run: |
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 60 \
-            --seed 42 \
-            --diagnostics environmental-displacement-60s.jsonl \
-            --diagnostic-interval 100
-      - name: Upload environmental displacement diagnostics
-        if: always()
+          set -euo pipefail
+          combined=environmental-displacement-duration-series.jsonl
+          : > "$combined"
+          for seconds in 30 60 180 300 600; do
+            diagnostics="environmental-displacement-${seconds}s.jsonl"
+            printf '{"record_type":"duration_series_boundary","requested_duration_seconds":%s,"seed":42}\n' "$seconds" >> "$combined"
+            echo "=== Starting independent ${seconds}-second standard environment run (seed 42) ==="
+            cargo run --locked -- \
+              --headless \
+              --environment-chemistry-experiment \
+              --seconds "$seconds" \
+              --seed 42 \
+              --diagnostics "$diagnostics" \
+              --diagnostic-interval 100
+            cat "$diagnostics" >> "$combined"
+          done
+      - name: Upload one-time environmental displacement duration series
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.title == 'Prove environmental displacement and replacement reactions [ONE-TIME DURATION SERIES]'
         uses: actions/upload-artifact@v4
         with:
-          name: environmental-displacement-60s
-          path: environmental-displacement-60s.jsonl
+          name: environmental-displacement-duration-series
+          path: environmental-displacement-duration-series.jsonl
           if-no-files-found: warn
           retention-days: 14
       - name: Run Rust tests
