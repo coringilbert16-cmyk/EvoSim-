@@ -1314,11 +1314,9 @@ mod tests {
         let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
         for obstacle in obstacles.iter().copied() {
             let radius = obstacle.radius.max(0.5).min(width.max(height));
-            let min_col =
-                ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-            let max_col = ((obstacle.x + radius * 6.0).min(width - 1e-6)
-                / FLOW_BIN_SIZE)
-                .floor() as usize;
+            let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col =
+                ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
             let max_col = max_col.min(flow_cols.saturating_sub(1));
             if min_col > max_col {
                 continue;
@@ -1348,10 +1346,8 @@ mod tests {
         let mut transform_samples = Vec::new();
         for (cell, index, material) in &snapshot {
             if let Some((x, y)) = material_center(material, height) {
-                let col = ((x / FLOW_BIN_SIZE).floor() as usize)
-                    .min(flow_cols.saturating_sub(1));
-                let row = ((y / FLOW_BIN_SIZE).floor() as usize)
-                    .min(flow_rows.saturating_sub(1));
+                let col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
+                let row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
                 let nearby = &obstacle_bins[row * flow_cols + col];
                 velocity_samples.push((*cell, *index, material, nearby));
                 if material.material.parts.len() > 1 {
@@ -1360,8 +1356,14 @@ mod tests {
                 transform_samples.push(material);
             }
         }
-        assert!(!velocity_samples.is_empty(), "fixture must contain materials");
-        assert!(!angular_samples.is_empty(), "fixture must contain compounds");
+        assert!(
+            !velocity_samples.is_empty(),
+            "fixture must contain materials"
+        );
+        assert!(
+            !angular_samples.is_empty(),
+            "fixture must contain compounds"
+        );
 
         let mut velocity_evaluations = 0_u64;
         let mut obstacle_candidate_visits = 0_u64;
@@ -1393,14 +1395,7 @@ mod tests {
         while angular_started.elapsed() < PHASE_DURATION {
             for (cell, index, material, nearby) in &angular_samples {
                 let angle = angular_displacement(
-                    material,
-                    &catalog,
-                    width,
-                    height,
-                    nearby,
-                    None,
-                    *cell,
-                    *index,
+                    material, &catalog, width, height, nearby, None, *cell, *index,
                 );
                 black_box(angle);
                 angular_evaluations += 1;
@@ -1463,8 +1458,8 @@ mod tests {
                         }
                         solid_candidates += 1;
                         let dx = placement.x - obstacle.x;
-                        let dy = (placement.y - obstacle.y + height * 0.5)
-                            .rem_euclid(height) - height * 0.5;
+                        let dy = (placement.y - obstacle.y + height * 0.5).rem_euclid(height)
+                            - height * 0.5;
                         let distance = dx.hypot(dy).max(1e-9);
                         let radius = obstacle.radius.max(0.5);
                         if distance < radius * 2.5 {
@@ -1487,7 +1482,10 @@ mod tests {
                 continue;
             };
             let total_mass = material.material.mass(&catalog);
-            if !total_mass.is_finite() || total_mass <= 0.0 {
+            if placements.len() != material.material.parts.len()
+                || !total_mass.is_finite()
+                || total_mass <= 0.0
+            {
                 continue;
             }
             let anchor_y = placements[0].y;
@@ -1509,8 +1507,7 @@ mod tests {
                     break;
                 }
                 weighted_x += placement.x * part_mass;
-                weighted_y += ((placement.y - anchor_y + height * 0.5)
-                    .rem_euclid(height)
+                weighted_y += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
                     - height * 0.5)
                     * part_mass;
             }
@@ -1523,9 +1520,7 @@ mod tests {
             angular_center_queries += 1;
             for placement in placements {
                 let rx = placement.x - center_x;
-                let ry = (placement.y - center_y + height * 0.5)
-                    .rem_euclid(height)
-                    - height * 0.5;
+                let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
                 if rx * rx + ry * ry > f64::EPSILON {
                     angular_constituent_queries += 1;
                 }
