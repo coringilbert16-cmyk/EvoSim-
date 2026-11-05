@@ -1300,7 +1300,11 @@ mod tests {
                 );
             }
             assert_eq!(baseline.1, experiment.1);
-            assert_eq!(baseline.4, experiment.4, "paired runs must produce identical physical states");
+            assert_eq!(
+                baseline.4,
+                experiment.4,
+                "paired runs must produce identical physical states"
+            );
             baseline_ms.push(baseline.0.as_secs_f64() * 1_000.0);
             experiment_ms.push(experiment.0.as_secs_f64() * 1_000.0);
         }
