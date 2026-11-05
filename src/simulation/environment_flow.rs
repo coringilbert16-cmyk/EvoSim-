@@ -1247,6 +1247,7 @@ mod tests {
             start_constituents: usize,
             end_objects: usize,
             end_constituents: usize,
+            start_inventory: Vec<(String, f64)>,
             end_inventory: Vec<(String, f64)>,
             obstacle_bin_build_duration: Duration,
             initial_state: Vec<PhysicalMaterial>,
@@ -1281,6 +1282,8 @@ mod tests {
                 .flat_map(|cell| cell.physical_materials.iter().cloned())
                 .collect::<Vec<_>>();
             initial_state.sort_unstable_by_key(|material| material.environmental_identity);
+            let mut start_inventory = simulation.environment.field.total_material();
+            start_inventory.sort_by(|a, b| a.0.cmp(&b.0));
 
             let start_tick = simulation.tick;
             OBSTACLE_BIN_BUILD_NANOS.store(0, std::sync::atomic::Ordering::Relaxed);
@@ -1323,6 +1326,7 @@ mod tests {
                 start_constituents,
                 end_objects,
                 end_constituents,
+                start_inventory,
                 end_inventory,
                 obstacle_bin_build_duration,
                 initial_state,
@@ -1335,9 +1339,11 @@ mod tests {
         assert_eq!(baseline.start_objects, experiment.start_objects);
         assert_eq!(baseline.start_constituents, experiment.start_constituents);
         assert_eq!(baseline.initial_state, experiment.initial_state);
-        assert_eq!(baseline.end_objects, experiment.end_objects);
-        assert_eq!(baseline.end_constituents, experiment.end_constituents);
-        assert_eq!(baseline.end_inventory, experiment.end_inventory);
+        assert_eq!(baseline.start_inventory, experiment.start_inventory);
+        assert_eq!(baseline.start_inventory, baseline.end_inventory);
+        assert_eq!(experiment.start_inventory, experiment.end_inventory);
+        assert_eq!(baseline.start_constituents, baseline.end_constituents);
+        assert_eq!(experiment.start_constituents, experiment.end_constituents);
 
         let baseline_rate = baseline.ticks as f64 / baseline.elapsed.as_secs_f64();
         let experiment_rate = experiment.ticks as f64 / experiment.elapsed.as_secs_f64();
