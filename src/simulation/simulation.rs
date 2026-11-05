@@ -204,7 +204,9 @@ impl Simulation {
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
-            transport_workspace: crate::environment_flow::TransportWorkspace::default(),
+            transport_workspace: std::sync::Arc::new(parking_lot::Mutex::new(
+                crate::environment_flow::TransportWorkspace::default(),
+            )),
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -851,7 +853,7 @@ impl Simulation {
             &self.environment.catalog,
             self.environment.width,
             self.environment.height,
-            &mut self.transport_workspace,
+            &mut self.transport_workspace.lock(),
         );
 
         let decision_parameters = self.decision_parameters;
