@@ -1079,10 +1079,10 @@ impl Simulation {
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
             );
-        self.environmental_chemistry_diagnostics.displacement_ready_candidates =
-            environmental_displacement_operations.len();
-        self.environmental_chemistry_diagnostics.displacement_discovery_work_remaining =
-            environmental_displacement_discovery_remaining;
+        self.environmental_chemistry_diagnostics
+            .displacement_ready_candidates = environmental_displacement_operations.len();
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery_work_remaining = environmental_displacement_discovery_remaining;
 
         let mut environmental_displacement_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
@@ -1093,10 +1093,10 @@ impl Simulation {
                 &mut environmental_displacement_work_remaining,
                 &mut self.chemical_reaction_accumulation,
             );
-        self.environmental_chemistry_diagnostics.displacement_scheduled =
-            environmental_displacement_operations.len();
-        self.environmental_chemistry_diagnostics.displacement_realization_work_remaining =
-            environmental_displacement_work_remaining;
+        self.environmental_chemistry_diagnostics
+            .displacement_scheduled = environmental_displacement_operations.len();
+        self.environmental_chemistry_diagnostics
+            .displacement_realization_work_remaining = environmental_displacement_work_remaining;
         for operation in environmental_displacement_operations {
             let source_cells = vec![operation.cell_a, operation.cell_b];
             let source_material_indices = vec![operation.material_a, operation.material_b];
@@ -1118,9 +1118,11 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             if committed {
-                self.environmental_chemistry_diagnostics.displacement_committed += 1;
+                self.environmental_chemistry_diagnostics
+                    .displacement_committed += 1;
             } else {
-                self.environmental_chemistry_diagnostics.displacement_rejected += 1;
+                self.environmental_chemistry_diagnostics
+                    .displacement_rejected += 1;
             }
             let mut post_commit_source_cell_materials = Vec::new();
             if committed {
