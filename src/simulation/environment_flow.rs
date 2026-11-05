@@ -270,12 +270,10 @@ fn obstacle_adjust_angular_samples(
         let wake_half_width = radius * 2.0;
         for sample in samples.iter_mut() {
             let dx = sample.x - obstacle.x;
-            let dy =
-                (sample.y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+            let dy = (sample.y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
             let distance = dx.hypot(dy).max(1e-9);
             if distance < influence_radius {
-                let influence =
-                    obstacle.solidity * (1.0 - distance / influence_radius).powi(2);
+                let influence = obstacle.solidity * (1.0 - distance / influence_radius).powi(2);
                 let side = if dy >= 0.0 { 1.0 } else { -1.0 };
                 sample.velocity = sample.velocity.add(Velocity {
                     x: -dx.signum() * influence * 0.22,
@@ -849,10 +847,7 @@ mod tests {
                 &obstacles,
                 80.0,
             );
-            assert_eq!(
-                sample.velocity, expected,
-                "batched result differed at ({x}, {y})"
-            );
+            assert_eq!(sample.velocity, expected, "batched result differed at ({x}, {y})");
         }
     }
 
@@ -917,14 +912,8 @@ mod tests {
             .flat_map(|material| material.material.parts.iter())
             .map(|(_, amount)| *amount)
             .sum::<f64>();
-        assert_eq!(
-            end_parts, start_parts,
-            "transport changed constituent count"
-        );
-        assert!(
-            (end_atoms - start_atoms).abs() < 1e-6,
-            "transport changed atom quantity"
-        );
+        assert_eq!(end_parts, start_parts, "transport changed constituent count");
+        assert!((end_atoms - start_atoms).abs() < 1e-6, "transport changed atom quantity");
 
         let rate = ticks as f64 / elapsed.as_secs_f64();
         let improvement = (rate - STORED_BASELINE_TICKS_PER_SECOND)
