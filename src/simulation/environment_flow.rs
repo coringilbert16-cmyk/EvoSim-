@@ -1274,4 +1274,198 @@ mod tests {
             baseline.end_constituents, experiment.end_constituents,
         );
     }
+
+    /// Profiles the expensive operations inside movement evaluation using the
+    /// real chemistry fixture, obstacle bins, and private transport routines.
+    /// This is an opt-in diagnostic; it does not alter the simulation path.
+    #[test]
+    #[ignore = "10-second movement evaluation profile; invoked by focused CI"]
+    fn movement_evaluation_profile_10s() {
+        use std::hint::black_box;
+        use std::time::{Duration, Instant};
+
+        const SEED: u64 = 42;
+        const PHASE_DURATION: Duration = Duration::from_secs(2);
+        let mut fixture = crate::environment_chemistry_experiment::build(SEED);
+        let simulation = &mut fixture.simulation;
+        let field = &simulation.environment.field;
+        let catalog = simulation.environment.catalog.clone();
+        let width = simulation.environment.width;
+        let height = simulation.environment.height;
+
+        let setup_started = Instant::now();
+        let mut snapshot = Vec::new();
+        for (cell_index, cell) in field.cells.iter().enumerate() {
+            for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                snapshot.push((cell_index, material_index, material.clone()));
+            }
+        }
+        let obstacles: Vec<Obstacle> = snapshot
+            .iter()
+            .filter_map(|(cell, index, material)| {
+                obstacle_for(*cell, *index, material, &catalog, height)
+            })
+            .collect();
+        let snapshot_obstacle_build = setup_started.elapsed();
+
+        let bin_started = Instant::now();
+        let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
+        for obstacle in obstacles.iter().copied() {
+            let radius = obstacle.radius.max(0.5).min(width.max(height));
+            let min_col =
+                ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col = ((obstacle.x + radius * 6.0).min(width - 1e-6)
+                / FLOW_BIN_SIZE)
+                .floor() as usize;
+            let max_col = max_col.min(flow_cols.saturating_sub(1));
+            if min_col > max_col {
+                continue;
+            }
+            let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
+            let rows = if row_count >= flow_rows {
+                (0..flow_rows).collect::<Vec<_>>()
+            } else {
+                (0..row_count)
+                    .map(|offset| {
+                        (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize
+                    })
+                    .collect::<Vec<_>>()
+            };
+            for row in rows {
+                for col in min_col..=max_col {
+                    obstacle_bins[row * flow_cols + col].push(obstacle);
+                }
+            }
+        }
+        let obstacle_bin_build = bin_started.elapsed();
+
+        let mut velocity_samples = Vec::new();
+        let mut angular_samples = Vec::new();
+        let mut transform_samples = Vec::new();
+        for (cell, index, material) in &snapshot {
+            if let Some((x, y)) = material_center(material, height) {
+                let col = ((x / FLOW_BIN_SIZE).floor() as usize)
+                    .min(flow_cols.saturating_sub(1));
+                let row = ((y / FLOW_BIN_SIZE).floor() as usize)
+                    .min(flow_rows.saturating_sub(1));
+                let nearby = &obstacle_bins[row * flow_cols + col];
+                velocity_samples.push((*cell, *index, material, nearby));
+                if material.material.parts.len() > 1 {
+                    angular_samples.push((*cell, *index, material, nearby));
+                }
+                transform_samples.push(material);
+            }
+        }
+        assert!(!velocity_samples.is_empty(), "fixture must contain materials");
+        assert!(!angular_samples.is_empty(), "fixture must contain compounds");
+
+        let mut velocity_evaluations = 0_u64;
+        let mut obstacle_candidate_visits = 0_u64;
+        let velocity_started = Instant::now();
+        while velocity_started.elapsed() < PHASE_DURATION {
+            for (cell, index, material, nearby) in &velocity_samples {
+                let placements = material.placements.as_ref().expect("sample placements");
+                for placement in placements {
+                    let velocity = obstacle_adjusted_velocity(
+                        background_velocity(placement.x, placement.y, width, height),
+                        placement.x,
+                        placement.y,
+                        *cell,
+                        *index,
+                        nearby,
+                        height,
+                    );
+                    black_box(velocity);
+                    velocity_evaluations += 1;
+                    obstacle_candidate_visits += nearby.len() as u64;
+                }
+            }
+        }
+        let velocity_elapsed = velocity_started.elapsed();
+
+        let mut angular_evaluations = 0_u64;
+        let mut angular_constituents = 0_u64;
+        let angular_started = Instant::now();
+        while angular_started.elapsed() < PHASE_DURATION {
+            for (cell, index, material, nearby) in &angular_samples {
+                let angle = angular_displacement(
+                    material,
+                    &catalog,
+                    width,
+                    height,
+                    nearby,
+                    None,
+                    *cell,
+                    *index,
+                );
+                black_box(angle);
+                angular_evaluations += 1;
+                angular_constituents += material.material.parts.len() as u64;
+            }
+        }
+        let angular_elapsed = angular_started.elapsed();
+
+        let mut transform_evaluations = 0_u64;
+        let mut transformed_placements = 0_u64;
+        let transform_started = Instant::now();
+        while transform_started.elapsed() < PHASE_DURATION {
+            for material in &transform_samples {
+                let Some(moved) = translated(material, 0.01, 0.01, height) else {
+                    continue;
+                };
+                let rotated_material = rotated(&moved, 0.001, &catalog, width, height);
+                black_box(rotated_material);
+                transform_evaluations += 1;
+                transformed_placements += material
+                    .placements
+                    .as_ref()
+                    .map_or(0, |placements| placements.len() as u64);
+            }
+        }
+        let transform_elapsed = transform_started.elapsed();
+
+        println!(
+            "MOVEMENT PROFILE SETUP: seed={SEED} objects={} obstacles={} compounds={} snapshot_and_obstacle_build_ms={:.3} obstacle_bin_build_ms={:.3} bins={}",
+            snapshot.len(),
+            obstacles.len(),
+            angular_samples.len(),
+            snapshot_obstacle_build.as_secs_f64() * 1000.0,
+            obstacle_bin_build.as_secs_f64() * 1000.0,
+            obstacle_bins.len(),
+        );
+        println!(
+            "MOVEMENT PROFILE VELOCITY: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} obstacle_candidate_visits={} candidates_per_evaluation={:.2} average_us_per_evaluation={:.3}",
+            velocity_elapsed.as_secs_f64(),
+            velocity_evaluations,
+            velocity_evaluations as f64 / velocity_elapsed.as_secs_f64(),
+            obstacle_candidate_visits,
+            obstacle_candidate_visits as f64 / velocity_evaluations.max(1) as f64,
+            velocity_elapsed.as_secs_f64() * 1_000_000.0
+                / velocity_evaluations.max(1) as f64,
+        );
+        println!(
+            "MOVEMENT PROFILE ANGULAR: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} constituents_processed={} estimated_catalog_lookup_sites={} average_us_per_evaluation={:.3}",
+            angular_elapsed.as_secs_f64(),
+            angular_evaluations,
+            angular_evaluations as f64 / angular_elapsed.as_secs_f64(),
+            angular_constituents,
+            angular_constituents * 2,
+            angular_elapsed.as_secs_f64() * 1_000_000.0
+                / angular_evaluations.max(1) as f64,
+        );
+        println!(
+            "MOVEMENT PROFILE TRANSFORM: elapsed_s={:.3} evaluations={} evaluations_per_second={:.1} placements_processed={} average_us_per_evaluation={:.3}",
+            transform_elapsed.as_secs_f64(),
+            transform_evaluations,
+            transform_evaluations as f64 / transform_elapsed.as_secs_f64(),
+            transformed_placements,
+            transform_elapsed.as_secs_f64() * 1_000_000.0
+                / transform_evaluations.max(1) as f64,
+        );
+    }
+
 }
