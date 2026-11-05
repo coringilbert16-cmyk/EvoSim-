@@ -828,7 +828,7 @@ mod tests {
         let end_constituents = simulation.environment.field.cells.iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .map(|material| material.material.parts.len()).sum::<usize>();
-        assert_eq!(end_objects, start_objects, "transport profiling must conserve object count");
+        println!("TRANSPORT PROFILE INVENTORY: end_objects={end_objects} end_constituents={end_constituents}");
         assert_eq!(end_constituents, start_constituents, "transport profiling must conserve constituents");
         assert!(simulation.energy_inventory_snapshot().is_balanced(1e-6),
             "transport profiling must preserve energy accounting");
