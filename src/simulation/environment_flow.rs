@@ -1245,6 +1245,7 @@ mod tests {
             samples.push((x, y, candidates));
         }
 
+        let mut solid_candidates = 0usize;
         let mut early_rejects = 0usize;
         let mut potential_candidates = 0usize;
         for (x, y, obstacles) in &samples {
@@ -1252,6 +1253,7 @@ mod tests {
                 if obstacle.solidity <= 1e-6 {
                     continue;
                 }
+                solid_candidates += 1;
                 let dx = x - obstacle.x;
                 let dy = (y - obstacle.y + 500.0).rem_euclid(1000.0) - 500.0;
                 let extent = obstacle.radius.max(0.5) * 2.5;
@@ -1283,9 +1285,10 @@ mod tests {
             }
             let elapsed = started.elapsed();
             println!(
-                "OBSTACLE EARLY REJECTION {label}: samples={SAMPLE_COUNT} candidates_per_sample={CANDIDATES_PER_SAMPLE} candidate_visits={} early_rejects={early_rejects} distance_calculations_per_evaluation={} evaluations={evaluations} elapsed_s={:.3} evaluations_per_second={:.1} checksum={checksum:.9}",
+                "OBSTACLE EARLY REJECTION {label}: samples={SAMPLE_COUNT} candidates_per_sample={CANDIDATES_PER_SAMPLE} candidate_visits={} solid_candidates={solid_candidates} early_rejects={early_rejects} potential_candidates={potential_candidates} distance_calculations={distance_calculations} evaluations={evaluations} elapsed_s={:.3} evaluations_per_second={:.1} checksum={checksum:.9}",
                 SAMPLE_COUNT * CANDIDATES_PER_SAMPLE,
-                if optimized { potential_candidates } else { SAMPLE_COUNT * CANDIDATES_PER_SAMPLE },
+                if optimized { potential_candidates } else { solid_candidates },
+                if optimized { potential_candidates } else { solid_candidates },
                 elapsed.as_secs_f64(),
                 evaluations as f64 / elapsed.as_secs_f64(),
             );
