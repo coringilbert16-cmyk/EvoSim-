@@ -186,6 +186,23 @@ fn material_identity(material: &crate::resources::Material) -> String {
         .join("+")
 }
 
+/// Aggregate material properties deliberately omit chemical position because
+/// a compound has no single constituent position. Environmental BREAK operates
+/// on an existing bond between restored base constituents, so resolve each
+/// position from that constituent's catalog record.
+fn constituent_chemical_position(
+    unit: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let [(material_name, _)] = unit.material.parts.as_slice() else {
+        return None;
+    };
+    catalog
+        .iter()
+        .find(|resource| resource.name == *material_name)
+        .and_then(|resource| resource.properties.chemical_position)
+}
+
 fn dissipate_unupdated_accumulations(
     accumulation: &mut std::collections::BTreeMap<String, f64>,
     current_prefix: &str,
@@ -550,6 +567,7 @@ fn discover_environmental_bonds(
     }
 }
 
+#[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
 pub(crate) fn accumulate_environmental(
     environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
@@ -696,11 +714,15 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_mapping_rejections =
+                diagnostics.candidate_mapping_rejections.saturating_add(1);
             continue;
         };
         let Some(&unit_b) = restored_indices.get(connection.part_b) else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_mapping_rejections =
+                diagnostics.candidate_mapping_rejections.saturating_add(1);
             continue;
         };
         let Some(a) = hypothetical
@@ -710,6 +732,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_property_rejections =
+                diagnostics.candidate_property_rejections.saturating_add(1);
             continue;
         };
         let Some(b) = hypothetical
@@ -719,12 +743,18 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_property_rejections =
+                diagnostics.candidate_property_rejections.saturating_add(1);
             continue;
         };
-        let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
-        else {
-            diagnostics.candidate_geometry_rejections =
-                diagnostics.candidate_geometry_rejections.saturating_add(1);
+        let (Some(position_a), Some(position_b)) = (
+            constituent_chemical_position(&hypothetical.units[unit_a], &environment.catalog),
+            constituent_chemical_position(&hypothetical.units[unit_b], &environment.catalog),
+        ) else {
+            diagnostics.candidate_position_rejections =
+                diagnostics.candidate_position_rejections.saturating_add(1);
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
         let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
@@ -737,6 +767,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         ) else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_endpoint_rejections =
+                diagnostics.candidate_endpoint_rejections.saturating_add(1);
             continue;
         };
         let geometry_material_a = hypothetical.units[unit_a]
@@ -789,6 +821,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         ) else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_interface_rejections =
+                diagnostics.candidate_interface_rejections.saturating_add(1);
             continue;
         };
         let Some(contact_factor) = crate::chemistry::contact_factor(

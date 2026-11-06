@@ -121,6 +121,30 @@ pub(crate) fn realize_natural_molecule(
         .and_then(|bonds| bonds.first())
         .expect("exported molecule must retain its physical bond");
     assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
+    let mut restored = OrganismStructure::new();
+    let restored_indices = crate::material_restoration::restore_material(
+        &mut restored,
+        &molecule,
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        catalog,
+    )
+    .expect("ordinary COMBINE molecule must restore for environmental BREAK");
+    assert!(
+        crate::contact::connection_pair_candidate_for_endpoints(
+            &restored,
+            restored_indices[connection.part_a],
+            restored_indices[connection.part_b],
+            catalog,
+            connection.endpoint_a,
+            connection.endpoint_b,
+        )
+        .is_some(),
+        "ordinary COMBINE molecule must resolve its recorded bond endpoints after restoration"
+    );
     molecule
 }
 

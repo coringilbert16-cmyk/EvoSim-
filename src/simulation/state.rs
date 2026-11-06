@@ -606,6 +606,16 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) material_restoration_rejections: u64,
     /// Candidates rejected before contact geometry could be resolved.
     pub(crate) candidate_geometry_rejections: u64,
+    /// Recorded bond endpoints that no longer resolve on restored constituents.
+    pub(crate) candidate_endpoint_rejections: u64,
+    /// Physical constituent indices that could not map into the restored graph.
+    pub(crate) candidate_mapping_rejections: u64,
+    /// Restored units missing their runtime chemical properties.
+    pub(crate) candidate_property_rejections: u64,
+    /// Restored units missing required chemical positions.
+    pub(crate) candidate_position_rejections: u64,
+    /// Candidates rejected by the live material-pair interface resolver.
+    pub(crate) candidate_interface_rejections: u64,
     /// Candidates rejected by static chemistry or live contact eligibility.
     pub(crate) candidate_chemistry_rejections: u64,
     /// Candidates that produced a valid activation update.
@@ -644,6 +654,21 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.candidate_geometry_rejections = self
             .candidate_geometry_rejections
             .saturating_add(tick.candidate_geometry_rejections);
+        self.candidate_endpoint_rejections = self
+            .candidate_endpoint_rejections
+            .saturating_add(tick.candidate_endpoint_rejections);
+        self.candidate_mapping_rejections = self
+            .candidate_mapping_rejections
+            .saturating_add(tick.candidate_mapping_rejections);
+        self.candidate_property_rejections = self
+            .candidate_property_rejections
+            .saturating_add(tick.candidate_property_rejections);
+        self.candidate_position_rejections = self
+            .candidate_position_rejections
+            .saturating_add(tick.candidate_position_rejections);
+        self.candidate_interface_rejections = self
+            .candidate_interface_rejections
+            .saturating_add(tick.candidate_interface_rejections);
         self.candidate_chemistry_rejections = self
             .candidate_chemistry_rejections
             .saturating_add(tick.candidate_chemistry_rejections);
