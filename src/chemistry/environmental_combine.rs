@@ -409,7 +409,12 @@ pub(crate) fn accumulate_environmental(
 ) -> Vec<EnvironmentalCombineOperation> {
     let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
     accumulate_environmental_with_diagnostics(
-        environment, accumulation, chemistry_library, tick, remaining_discovery_work, &mut diagnostics,
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        &mut diagnostics,
     )
 }
 
@@ -486,7 +491,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
-            let target_cell_limit = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
+            let target_cell_limit =
+                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
             let target_cells = environment.field.cells_intersecting_bounds_limited(
                 body.min_x - BOUNDS_PADDING,
                 body.max_x + BOUNDS_PADDING,
