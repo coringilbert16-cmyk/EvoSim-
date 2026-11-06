@@ -950,17 +950,44 @@ pub(crate) fn accumulate_environmental(
                                                     diagnostics
                                                         .trial_rejections_old_bond_energy
                                                         .saturating_add(1);
+                                                if let (
+                                                    Some(stored),
+                                                    Some(expected),
+                                                    Some(abs_error),
+                                                ) = (
+                                                    trial_diagnostic.old_bond_energy_stored,
+                                                    trial_diagnostic.old_bond_energy_expected,
+                                                    trial_diagnostic.old_bond_energy_abs_error,
+                                                ) {
+                                                    if abs_error > diagnostics.old_bond_energy_max_abs_error {
+                                                        diagnostics.old_bond_energy_max_abs_error = abs_error;
+                                                        diagnostics.old_bond_energy_stored_at_max_error = stored;
+                                                        diagnostics.old_bond_energy_expected_at_max_error = expected;
+                                                    }
+                                                }
                                             }
                                             DisplacementTrialFailureStage::Topology => {
                                                 diagnostics.trial_rejections_topology = diagnostics
                                                     .trial_rejections_topology
                                                     .saturating_add(1);
                                             }
-                                            DisplacementTrialFailureStage::Replacement => {
+                                            DisplacementTrialFailureStage::CandidateRevalidation => {
                                                 diagnostics.trial_rejections_replacement =
-                                                    diagnostics
-                                                        .trial_rejections_replacement
-                                                        .saturating_add(1);
+                                                    diagnostics.trial_rejections_replacement.saturating_add(1);
+                                                diagnostics.trial_rejections_candidate_revalidation =
+                                                    diagnostics.trial_rejections_candidate_revalidation.saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::FormationInvestment => {
+                                                diagnostics.trial_rejections_replacement =
+                                                    diagnostics.trial_rejections_replacement.saturating_add(1);
+                                                diagnostics.trial_rejections_formation_investment =
+                                                    diagnostics.trial_rejections_formation_investment.saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::PhysicalInsertion => {
+                                                diagnostics.trial_rejections_replacement =
+                                                    diagnostics.trial_rejections_replacement.saturating_add(1);
+                                                diagnostics.trial_rejections_physical_insertion =
+                                                    diagnostics.trial_rejections_physical_insertion.saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Energy => {
                                                 diagnostics.trial_rejections_energy = diagnostics
