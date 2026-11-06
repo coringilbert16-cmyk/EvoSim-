@@ -18,7 +18,7 @@ Run from the repository root:
 .\scripts\run_environmental_chemistry_replicates.ps1
 ```
 
-The script writes one JSONL diagnostics artifact and one console log per seed under the ignored `.evosim-experiments/` directory. The default 100-tick diagnostic interval exposes progress during a run without writing a full world snapshot every tick. Use `-DurationSeconds 300` for a shorter first pass or `-Seeds @(42)` to reproduce the original seed.
+The script writes one JSONL diagnostics artifact and one console log per seed under the ignored `.evosim-experiments/` directory. The default 100-tick diagnostic interval exposes progress during a run without writing a full world snapshot every tick. Use `-DurationSeconds 300` for a shorter first pass or `-Seeds 42` to reproduce the original seed. Verbose material-restoration rejection details are opt-in through `EVOSIM_DEBUG_MATERIAL_RESTORATION=1` so normal experiment output stays readable.
 
 ### Readouts
 

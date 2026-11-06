@@ -9,6 +9,7 @@ use crate::resources::BaseResource;
 use crate::structure::{Bond, BondEndpoint, OrganismStructure, Placement, StructuralUnit};
 
 const EPSILON: f64 = 1e-9;
+const DEBUG_RESTORATION_ENV: &str = "EVOSIM_DEBUG_MATERIAL_RESTORATION";
 
 fn is_finite_placement(placement: Placement) -> bool {
     placement.x.is_finite() && placement.y.is_finite() && placement.rotation_radians.is_finite()
@@ -39,9 +40,12 @@ pub(crate) fn restore_material(
     origin: Placement,
     catalog: &[BaseResource],
 ) -> Option<Vec<usize>> {
+    let debug_rejections = std::env::var_os(DEBUG_RESTORATION_ENV).is_some();
     macro_rules! reject {
         () => {{
-            eprintln!("restore_material rejected at line {}", line!());
+            if debug_rejections {
+                eprintln!("restore_material rejected at line {}", line!());
+            }
             return None;
         }};
     }
@@ -129,16 +133,18 @@ pub(crate) fn restore_material(
                 &right_part,
                 crate::material_geometry::GEOMETRY_EPSILON,
             ) {
-                eprintln!(
-                    "restore_material penetration: parts=({}, {}), placements=({:?}, {:?}), forms=({:?}, {:?}), intrinsic_placements={:?}",
-                    left,
-                    right,
-                    left_part.placement,
-                    right_part.placement,
-                    left_part.form,
-                    right_part.form,
-                    relative
-                );
+                if debug_rejections {
+                    eprintln!(
+                        "restore_material penetration: parts=({}, {}), placements=({:?}, {:?}), forms=({:?}, {:?}), intrinsic_placements={:?}",
+                        left,
+                        right,
+                        left_part.placement,
+                        right_part.placement,
+                        left_part.form,
+                        right_part.form,
+                        relative
+                    );
+                }
                 reject!();
             }
         }
@@ -164,10 +170,12 @@ pub(crate) fn restore_material(
             bond_energy: connection.bond_energy,
         };
         if let Err(reason) = crate::contact::try_add_bond(&mut trial, bond, catalog) {
-            eprintln!(
-                "restore_material bond insertion rejected at line {}: {reason}",
-                line!()
-            );
+            if debug_rejections {
+                eprintln!(
+                    "restore_material bond insertion rejected at line {}: {reason}",
+                    line!()
+                );
+            }
             return None;
         }
     }
