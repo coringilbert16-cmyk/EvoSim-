@@ -741,7 +741,8 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.combine_scheduled > 0
             || diagnostics.combine_committed > 0
             || diagnostics.combine_rejected > 0
-            || diagnostics.combine_search != crate::state::EnvironmentalCombineSearchDiagnostics::default()
+            || diagnostics.combine_search
+                != crate::state::EnvironmentalCombineSearchDiagnostics::default()
             || diagnostics.displacement_ready_candidates > 0
             || diagnostics.displacement_scheduled > 0
             || diagnostics.displacement_committed > 0
