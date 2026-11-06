@@ -1008,10 +1008,7 @@ mod tests {
             "a bounded search that does not revisit an interface must not dissipate its progress"
         );
         assert_eq!(diagnostics.accumulation_keys_preserved_unsearched, 1);
-        assert_eq!(
-            diagnostics.accumulation_value_preserved_unsearched,
-            0.75
-        );
+        assert_eq!(diagnostics.accumulation_value_preserved_unsearched, 0.75);
         assert_eq!(diagnostics.accumulation_keys_dissipated, 0);
         assert_eq!(diagnostics.accumulation_value_dissipated, 0.0);
     }
@@ -3116,13 +3113,11 @@ mod tests {
             "the rotated window must report its physically valid constituent pair"
         );
         assert_eq!(
-            search_diagnostics.constituent_pairs_suppressed_by_global_selection,
-            0,
+            search_diagnostics.constituent_pairs_suppressed_by_global_selection, 0,
             "every inspected constituent pair with a valid interface must reach chemistry"
         );
         assert_eq!(
-            search_diagnostics.interfaces_suppressed_by_global_selection,
-            0,
+            search_diagnostics.interfaces_suppressed_by_global_selection, 0,
             "no physically valid interface may be suppressed by a single-contact selector"
         );
         assert_eq!(
