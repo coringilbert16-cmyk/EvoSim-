@@ -2129,93 +2129,151 @@ mod tests {
         assert_eq!(source.bonds[0].bond_energy, hs_connection.bond_energy);
 
         let old_bond = source.bonds[0];
-        let (anchor_unit, displaced_unit, freed_endpoint) =
+        let (unit_a, unit_b) =
             if old_bond.endpoint_a.constituent_id == source.physical_id(indices_a[0]).unwrap() {
-                (indices_a[0], indices_a[1], old_bond.endpoint_a.location)
+                (indices_a[0], indices_a[1])
             } else {
-                (indices_a[1], indices_a[0], old_bond.endpoint_b.location)
+                (indices_a[1], indices_a[0])
             };
+        let orientations = [
+            (unit_a, unit_b, old_bond.endpoint_a.location),
+            (unit_b, unit_a, old_bond.endpoint_b.location),
+        ];
         let source_before = source.clone();
         let reactivity_baseline = catalog_reactivity_baseline();
         let mut successful_trial = None;
         let mut non_overlapping_poses = 0_usize;
+        let mut eligible_contact_candidates = 0_usize;
+        let mut freed_endpoint_candidates = 0_usize;
         let mut candidate_contacts = 0_usize;
         let mut trial_rejections_by_stage = [0_usize; 8];
 
         // Preserve each molecule's internally COMBINE-created geometry. Search
-        // only rigid-body placements and rotations of the incoming molecule.
-        'poses: for rotation_step in 0..16 {
-            let rotation = std::f64::consts::TAU * f64::from(rotation_step) / 16.0;
-            for x_step in -15..=15 {
-                for y_step in -15..=15 {
-                    let mut combined = source.clone();
-                    let placement = crate::structure::Placement {
-                        x: f64::from(x_step) * 0.2,
-                        y: f64::from(y_step) * 0.2,
-                        rotation_radians: rotation,
-                    };
-                    let indices_b = crate::material_restoration::restore_material(
-                        &mut combined,
-                        &ch,
-                        placement,
-                        &catalog,
-                    )
-                    .expect("ordinary-COMBINE C-H molecule must restore");
-
-                    if indices_b.iter().any(|index| {
-                        crate::construction_runtime::placed_unit_overlaps(
-                            &combined,
-                            &combined.units[*index],
-                            &indices_b,
+        // rigid-body placements and rotations, testing both ends of the old bond
+        // as the possible anchor rather than manufacturing a new bond endpoint.
+        'poses: for (anchor_unit, displaced_unit, freed_endpoint) in orientations {
+            for rotation_step in 0..8 {
+                let rotation = std::f64::consts::TAU * f64::from(rotation_step) / 8.0;
+                for x_step in -25..=25 {
+                    for y_step in -25..=25 {
+                        let mut combined = source.clone();
+                        let placement = crate::structure::Placement {
+                            x: f64::from(x_step) * 0.1,
+                            y: f64::from(y_step) * 0.1,
+                            rotation_radians: rotation,
+                        };
+                        let indices_b = crate::material_restoration::restore_material(
+                            &mut combined,
+                            &ch,
+                            placement,
                             &catalog,
                         )
-                    }) {
-                        continue;
-                    }
-                    non_overlapping_poses += 1;
+                        .expect("ordinary-COMBINE C-H molecule must restore");
 
-                    for incoming_unit in indices_b.iter().copied() {
-                        let Some((candidate, investment)) = best_freed_endpoint_contact(
-                            &combined,
-                            anchor_unit,
-                            incoming_unit,
-                            old_bond,
-                            freed_endpoint,
-                            &catalog,
-                        ) else {
+                        if indices_b.iter().any(|index| {
+                            crate::construction_runtime::placed_unit_overlaps(
+                                &combined,
+                                &combined.units[*index],
+                                &indices_b,
+                                &catalog,
+                            )
+                        }) {
                             continue;
-                        };
-                        candidate_contacts += 1;
-                        let mut diagnostic = DisplacementTrialDiagnostic::default();
-                        let trial = build_displacement_trial_with_activation_status(
-                            &combined,
-                            anchor_unit,
-                            displaced_unit,
-                            incoming_unit,
-                            old_bond,
-                            candidate,
-                            investment,
-                            10.0,
-                            reactivity_baseline,
-                            0.0,
-                            &catalog,
-                            Some(&mut diagnostic),
-                        );
-                        if let Some(trial) = trial {
-                            successful_trial = Some(trial);
-                            break 'poses;
                         }
-                        let stage_index = match diagnostic.failure_stage {
-                            DisplacementTrialFailureStage::OldBondEnergy => 0,
-                            DisplacementTrialFailureStage::Topology => 1,
-                            DisplacementTrialFailureStage::CandidateCheck => 2,
-                            DisplacementTrialFailureStage::Formation => 3,
-                            DisplacementTrialFailureStage::Insertion => 4,
-                            DisplacementTrialFailureStage::Energy => 5,
-                            DisplacementTrialFailureStage::Products => 6,
-                            DisplacementTrialFailureStage::Other => 7,
-                        };
-                        trial_rejections_by_stage[stage_index] += 1;
+                        non_overlapping_poses += 1;
+
+                        for incoming_unit in indices_b.iter().copied() {
+                            let mut topology_trial = combined.clone();
+                            topology_trial
+                                .break_matching_bond(old_bond)
+                                .expect("the trial graph must free the old bond endpoint");
+                            let mut cache = ConnectionCompatibilityCache::new();
+                            let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
+                            for candidate in crate::contact::connection_pair_candidates_cached(
+                                &topology_trial,
+                                anchor_unit,
+                                incoming_unit,
+                                &catalog,
+                                &mut cache,
+                            ) {
+                                if !candidate.available_a
+                                    || !candidate.available_b
+                                    || !candidate.distance.is_finite()
+                                    || candidate.distance < 0.0
+                                    || candidate.distance
+                                        > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                                    || !candidate.facing.is_finite()
+                                    || candidate.facing <= 0.0
+                                {
+                                    continue;
+                                }
+                                eligible_contact_candidates += 1;
+                                if candidate.endpoint_a != freed_endpoint {
+                                    continue;
+                                }
+                                freed_endpoint_candidates += 1;
+                                let Some((_, _, investment, required_energy)) =
+                                    crate::combine_runtime::selected_candidate_evaluation(
+                                        &topology_trial,
+                                        anchor_unit,
+                                        incoming_unit,
+                                        candidate,
+                                        &catalog,
+                                    )
+                                else {
+                                    continue;
+                                };
+                                let replace = best.map_or(true, |(current, _, current_energy)| {
+                                    required_energy
+                                        .partial_cmp(&current_energy)
+                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                        .then_with(|| {
+                                            candidate
+                                                .distance
+                                                .partial_cmp(&current.distance)
+                                                .unwrap_or(std::cmp::Ordering::Equal)
+                                        })
+                                        .is_lt()
+                                });
+                                if replace {
+                                    best = Some((candidate, investment, required_energy));
+                                }
+                            }
+                            let Some((candidate, investment, _)) = best else {
+                                continue;
+                            };
+                            candidate_contacts += 1;
+                            let mut diagnostic = DisplacementTrialDiagnostic::default();
+                            let trial = build_displacement_trial_with_activation_status(
+                                &combined,
+                                anchor_unit,
+                                displaced_unit,
+                                incoming_unit,
+                                old_bond,
+                                candidate,
+                                investment,
+                                10.0,
+                                reactivity_baseline,
+                                0.0,
+                                &catalog,
+                                Some(&mut diagnostic),
+                            );
+                            if let Some(trial) = trial {
+                                successful_trial = Some(trial);
+                                break 'poses;
+                            }
+                            let stage_index = match diagnostic.failure_stage {
+                                DisplacementTrialFailureStage::OldBondEnergy => 0,
+                                DisplacementTrialFailureStage::Topology => 1,
+                                DisplacementTrialFailureStage::CandidateCheck => 2,
+                                DisplacementTrialFailureStage::Formation => 3,
+                                DisplacementTrialFailureStage::Insertion => 4,
+                                DisplacementTrialFailureStage::Energy => 5,
+                                DisplacementTrialFailureStage::Products => 6,
+                                DisplacementTrialFailureStage::Other => 7,
+                            };
+                            trial_rejections_by_stage[stage_index] += 1;
+                        }
                     }
                 }
             }
@@ -2223,7 +2281,7 @@ mod tests {
 
         let Some(trial) = successful_trial else {
             panic!(
-                "no natural H-S/C-H replacement trial: non_overlapping_poses={non_overlapping_poses}, candidate_contacts={candidate_contacts}, trial_rejections_by_stage={trial_rejections_by_stage:?}"
+                "no natural H-S/C-H replacement trial: non_overlapping_poses={non_overlapping_poses}, eligible_contact_candidates={eligible_contact_candidates}, freed_endpoint_candidates={freed_endpoint_candidates}, candidate_contacts={candidate_contacts}, trial_rejections_by_stage={trial_rejections_by_stage:?}"
             );
         };
         assert_eq!(source.units, source_before.units);
