@@ -400,6 +400,7 @@ fn chemical_step(
     }
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "Compatibility wrapper for existing callers and tests"))]
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
@@ -503,9 +504,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
-            diagnostics.target_cell_windows_capped += usize::from(
-                target_cell_limit > 0 && target_cells.len() == target_cell_limit,
-            );
+            diagnostics.target_cell_windows_capped +=
+                usize::from(target_cell_limit > 0 && target_cells.len() == target_cell_limit);
             for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
