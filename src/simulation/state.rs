@@ -723,6 +723,19 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalCombineSearchDiagnostics {
+    pub(crate) anchor_cells_inspected: usize,
+    pub(crate) anchor_materials_inspected: usize,
+    pub(crate) target_cells_inspected: usize,
+    pub(crate) target_materials_inspected: usize,
+    pub(crate) constituent_pairs_inspected: usize,
+    pub(crate) physically_evaluable_interfaces: usize,
+    pub(crate) discarded_interfaces_after_single_selection: usize,
+    pub(crate) target_cell_windows_capped: usize,
+    pub(crate) budget_exhausted: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
@@ -737,6 +750,8 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) combine_rejected: usize,
     pub(crate) combine_discovery_work_remaining: usize,
     pub(crate) combine_realization_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) combine_search: EnvironmentalCombineSearchDiagnostics,
     #[serde(default)]
     pub(crate) displacement_ready_candidates: usize,
     #[serde(default)]
