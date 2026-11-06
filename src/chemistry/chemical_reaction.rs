@@ -452,7 +452,11 @@ fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
-) -> (Vec<(usize, usize, usize)>, usize, Vec<(u64, usize)>) {
+) -> (
+    Vec<(usize, usize, usize)>,
+    usize,
+    Vec<(u64, usize)>,
+) {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
@@ -1310,12 +1314,14 @@ mod material_identity_tests {
             .expect("fixture must contain an internal bond")
             .clone();
         source.internal_connections = Some(Vec::new());
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0,
-            source,
-            &catalog,
-        ));
-        simulation.environment.field.assign_missing_material_identities();
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical_at_index(0, source, &catalog,));
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
         let material = &simulation.environment.field.cells[0].physical_materials[0];
         let stale_key = environmental_break_accumulation_key(material, 0, &old_bond);
         let mut accumulation = std::collections::BTreeMap::from([(stale_key.clone(), 0.75)]);
@@ -1352,7 +1358,10 @@ mod material_identity_tests {
             source,
             &simulation.environment.catalog,
         ));
-        simulation.environment.field.assign_missing_material_identities();
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
         let material = &simulation.environment.field.cells[last_cell].physical_materials[0];
         let unvisited_key = environmental_break_accumulation_key(material, 0, &bond);
         let mut accumulation = std::collections::BTreeMap::from([(unvisited_key.clone(), 0.75)]);
