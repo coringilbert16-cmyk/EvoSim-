@@ -214,8 +214,7 @@ fn select_best_contact_from_offset(
             });
             if let Some(input) = chemical_input {
                 best_chemical_input_any_interface = Some(
-                    best_chemical_input_any_interface
-                        .map_or(input, |current| current.max(input)),
+                    best_chemical_input_any_interface.map_or(input, |current| current.max(input)),
                 );
             }
             valid_interfaces_across_window += 1;
@@ -283,8 +282,7 @@ fn select_best_contact_from_offset(
             if loss > 1e-12 {
                 diagnostics.selected_interface_not_best_chemical_input += 1;
                 diagnostics.chemical_input_loss_total += loss;
-                diagnostics.max_chemical_input_loss =
-                    diagnostics.max_chemical_input_loss.max(loss);
+                diagnostics.max_chemical_input_loss = diagnostics.max_chemical_input_loss.max(loss);
             }
         }
     }
