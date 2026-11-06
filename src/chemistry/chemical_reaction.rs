@@ -1306,14 +1306,13 @@ mod material_identity_tests {
             cell.physical_materials.clear();
         }
         let catalog = simulation.environment.catalog.clone();
-        let mut source = environmental_test_composite(&catalog);
+        let source = environmental_test_composite(&catalog);
         let old_bond = source
             .internal_connections
             .as_ref()
             .and_then(|connections| connections.first())
             .expect("fixture must contain an internal bond")
             .clone();
-        source.internal_connections = Some(Vec::new());
         assert!(simulation
             .environment
             .field
@@ -1322,6 +1321,8 @@ mod material_identity_tests {
             .environment
             .field
             .assign_missing_material_identities();
+        simulation.environment.field.cells[0].physical_materials[0].internal_connections =
+            Some(Vec::new());
         let material = &simulation.environment.field.cells[0].physical_materials[0];
         let stale_key = environmental_break_accumulation_key(material, 0, &old_bond);
         let mut accumulation = std::collections::BTreeMap::from([(stale_key.clone(), 0.75)]);
