@@ -515,11 +515,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.accumulation_value_before_search = initial_accumulation_value;
     if *remaining_discovery_work == 0 {
         diagnostics.budget_exhausted = true;
-        dissipate_unupdated_accumulations(
-            accumulation,
-            &BTreeSet::new(),
-            diagnostics,
-        );
+        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
         return Vec::new();
     }
     let field_cell_count = environment.field.cells.len();
