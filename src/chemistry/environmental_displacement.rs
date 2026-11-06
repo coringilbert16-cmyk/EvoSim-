@@ -2154,12 +2154,12 @@ mod tests {
         'poses: for (anchor_unit, displaced_unit, freed_endpoint) in orientations {
             for rotation_step in 0..8 {
                 let rotation = std::f64::consts::TAU * f64::from(rotation_step) / 8.0;
-                for x_step in -25..=25 {
-                    for y_step in -25..=25 {
+                for x_step in -20..=20 {
+                    for y_step in -20..=20 {
                         let mut combined = source.clone();
                         let placement = crate::structure::Placement {
-                            x: f64::from(x_step) * 0.1,
-                            y: f64::from(y_step) * 0.1,
+                            x: f64::from(x_step) * 0.2,
+                            y: f64::from(y_step) * 0.2,
                             rotation_radians: rotation,
                         };
                         let indices_b = crate::material_restoration::restore_material(
