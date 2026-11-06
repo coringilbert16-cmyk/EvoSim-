@@ -152,11 +152,7 @@ fn realize_natural_molecule(
 
                 let mut cache = crate::contact::ConnectionCompatibilityCache::new();
                 for candidate in crate::contact::connection_pair_candidates_cached(
-                    &structure,
-                    unit_a,
-                    unit_b,
-                    catalog,
-                    &mut cache,
+                    &structure, unit_a, unit_b, catalog, &mut cache,
                 ) {
                     if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
                         || !candidate.available_a
@@ -168,11 +164,7 @@ fn realize_natural_molecule(
                     }
                     let Some((_, _, investment, required_energy)) =
                         crate::combine_runtime::selected_candidate_evaluation(
-                            &structure,
-                            unit_a,
-                            unit_b,
-                            candidate,
-                            catalog,
+                            &structure, unit_a, unit_b, candidate, catalog,
                         )
                     else {
                         continue;
@@ -214,11 +206,10 @@ fn realize_natural_molecule(
         structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0,
         "ordinary COMBINE must assign the molecule its calculated intrinsic bond energy"
     );
-    let mut products =
-        crate::environmental_combine::physical_materials_from_structure_components(
-            &structure, catalog,
-        )
-        .expect("ordinary COMBINE product must export as a physical molecule");
+    let mut products = crate::environmental_combine::physical_materials_from_structure_components(
+        &structure, catalog,
+    )
+    .expect("ordinary COMBINE product must export as a physical molecule");
     assert_eq!(products.len(), 1);
     let molecule = products.pop().expect("one bonded component must be exported");
     let connection = molecule
