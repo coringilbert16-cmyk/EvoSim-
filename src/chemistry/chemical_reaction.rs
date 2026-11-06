@@ -1412,6 +1412,149 @@ mod material_identity_tests {
     }
 
     #[test]
+    fn environmental_break_unsearched_progress_is_preserved() {
+        let key = "environment|environment:41:0:bond".to_string();
+        let mut accumulation = std::collections::BTreeMap::from([(key.clone(), 0.75)]);
+        dissipate_checked_unupdated_accumulations(
+            &mut accumulation,
+            "environment|environment:",
+            &std::collections::BTreeSet::new(),
+            &std::collections::BTreeSet::new(),
+        );
+        assert_eq!(accumulation.get(&key), Some(&0.75));
+    }
+
+    #[test]
+    fn environmental_break_checked_invalid_progress_dissipates() {
+        let key = "environment|environment:42:0:bond".to_string();
+        let mut accumulation = std::collections::BTreeMap::from([(key.clone(), 0.75)]);
+        dissipate_checked_unupdated_accumulations(
+            &mut accumulation,
+            "environment|environment:",
+            &std::collections::BTreeSet::from([key.clone()]),
+            &std::collections::BTreeSet::new(),
+        );
+        assert_eq!(
+            accumulation.get(&key),
+            Some(&(0.75 * (1.0 - crate::chemistry::CHEMICAL_DISSIPATION)))
+        );
+    }
+
+    #[test]
+    fn environmental_break_removed_bond_dissipates_when_material_is_revisited() {
+        let mut simulation = crate::state::Simulation::new(943, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let mut source = environmental_test_composite(&catalog);
+        let old_bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("fixture must contain an internal bond")
+            .clone();
+        source.internal_connections = Some(Vec::new());
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source,
+            &catalog,
+        ));
+        simulation.environment.field.assign_missing_material_identities();
+        let material = &simulation.environment.field.cells[0].physical_materials[0];
+        let stale_key = environmental_break_accumulation_key(material, 0, &old_bond);
+        let mut accumulation = std::collections::BTreeMap::from([(stale_key.clone(), 0.75)]);
+        let mut discovery_budget = 64;
+        let _ = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            &mut simulation.chemistry_library,
+            0,
+            &mut discovery_budget,
+        );
+        assert!(
+            accumulation[&stale_key] < 0.75,
+            "revisiting a material must dissipate progress for a bond no longer present"
+        );
+    }
+
+    #[test]
+    fn environmental_break_bounded_search_preserves_unvisited_bond_progress() {
+        let mut simulation = crate::state::Simulation::new(944, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let source = environmental_test_composite(&simulation.environment.catalog);
+        let bond = source
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("fixture must contain an internal bond")
+            .clone();
+        let last_cell = simulation.environment.field.cells.len() - 1;
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            last_cell,
+            source,
+            &simulation.environment.catalog,
+        ));
+        simulation.environment.field.assign_missing_material_identities();
+        let material = &simulation.environment.field.cells[last_cell].physical_materials[0];
+        let unvisited_key = environmental_break_accumulation_key(material, 0, &bond);
+        let mut accumulation = std::collections::BTreeMap::from([(unvisited_key.clone(), 0.75)]);
+        let mut discovery_budget = 1;
+        let _ = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            &mut simulation.chemistry_library,
+            0,
+            &mut discovery_budget,
+        );
+        assert_eq!(
+            accumulation.get(&unvisited_key),
+            Some(&0.75),
+            "a material outside the bounded scan window must retain its reaction progress"
+        );
+    }
+
+    #[test]
+    fn environmental_break_discovered_invalid_bond_dissipates_progress() {
+        let mut simulation = crate::state::Simulation::new(945, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let mut source = environmental_test_composite(&catalog);
+        let connection = source
+            .internal_connections
+            .as_mut()
+            .and_then(|connections| connections.first_mut())
+            .expect("fixture must contain an internal bond");
+        connection.part_a = usize::MAX;
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source,
+            &catalog,
+        ));
+        simulation.environment.field.assign_missing_material_identities();
+        let material = &simulation.environment.field.cells[0].physical_materials[0];
+        let connection = material.internal_connections.as_ref().unwrap().first().unwrap();
+        let invalid_key = environmental_break_accumulation_key(material, 0, connection);
+        let mut accumulation = std::collections::BTreeMap::from([(invalid_key.clone(), 0.75)]);
+        let mut discovery_budget = 64;
+        let _ = accumulate_environmental(
+            &simulation.environment,
+            &mut accumulation,
+            &mut simulation.chemistry_library,
+            0,
+            &mut discovery_budget,
+        );
+        assert!(
+            accumulation[&invalid_key] < 0.75,
+            "a discovered bond rejected during validation must dissipate prior progress"
+        );
+    }
+
+    #[test]
     fn sunlight_captured_by_environment_powers_chemical_break_without_energy_injection() {
         let mut simulation = crate::state::Simulation::new(932, 10.0);
         for cell in &mut simulation.environment.field.cells {
