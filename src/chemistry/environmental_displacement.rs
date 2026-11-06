@@ -2248,15 +2248,13 @@ mod tests {
             2,
             "the incoming molecule's original bond and the replacement bond must both survive"
         );
-        assert!(
-            trial
-                .products
-                .iter()
-                .flat_map(|product| { product.internal_connections.as_ref().into_iter().flatten() })
-                .all(|connection| {
-                    connection.bond_energy.is_finite() && connection.bond_energy > 0.0
-                })
-        );
+        assert!(trial
+            .products
+            .iter()
+            .flat_map(|product| { product.internal_connections.as_ref().into_iter().flatten() })
+            .all(|connection| {
+                connection.bond_energy.is_finite() && connection.bond_energy > 0.0
+            }));
         assert!(
             trial.products.iter().any(|product| {
                 product.material.parts.len() == 1 && product.material.internal_bonds.is_empty()
