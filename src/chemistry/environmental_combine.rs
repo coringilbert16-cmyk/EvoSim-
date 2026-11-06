@@ -210,9 +210,8 @@ fn select_best_contact_from_offset(
                 Some(potential * contact * engagement)
             });
             if let Some(input) = chemical_input {
-                best_chemical_input = Some(
-                    best_chemical_input.map_or(input, |current| current.max(input)),
-                );
+                best_chemical_input =
+                    Some(best_chemical_input.map_or(input, |current| current.max(input)));
             }
             let proposed = SelectedContact {
                 unit_a,
