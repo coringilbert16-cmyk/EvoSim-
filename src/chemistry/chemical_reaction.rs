@@ -452,11 +452,7 @@ fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
-) -> (
-    Vec<(usize, usize, usize)>,
-    usize,
-    Vec<(u64, usize)>,
-) {
+) -> (Vec<(usize, usize, usize)>, usize, Vec<(u64, usize)>) {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
@@ -1389,12 +1385,14 @@ mod material_identity_tests {
         }
         let catalog = simulation.environment.catalog.clone();
         let source = environmental_test_composite(&catalog);
-        assert!(simulation.environment.field.deposit_physical_at_index(
-            0,
-            source,
-            &catalog,
-        ));
-        simulation.environment.field.assign_missing_material_identities();
+        assert!(simulation
+            .environment
+            .field
+            .deposit_physical_at_index(0, source, &catalog,));
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
         let connection = {
             let material = &mut simulation.environment.field.cells[0].physical_materials[0];
             let connection = material
