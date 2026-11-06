@@ -655,6 +655,30 @@ fn physical_material_from_structure(
     physical.is_realized().then_some(physical)
 }
 
+/// Export each connected structure component as a realized physical material.
+/// Used by the chemistry experiment fixture to seed bonds produced by the
+/// ordinary COMBINE path.
+pub(crate) fn physical_materials_from_structure_components(
+    structure: &OrganismStructure,
+    catalog: &[BaseResource],
+) -> Option<Vec<PhysicalMaterial>> {
+    let components = structure.connected_components();
+    if components.is_empty() {
+        return None;
+    }
+    components
+        .into_iter()
+        .map(|component| {
+            let ids = component
+                .iter()
+                .map(|index| structure.physical_id(*index))
+                .collect::<Option<Vec<_>>>()?;
+            let subgraph = structure.subgraph_for_physical_ids(&ids, &[])?;
+            physical_material_from_structure(&subgraph, catalog)
+        })
+        .collect()
+}
+
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,

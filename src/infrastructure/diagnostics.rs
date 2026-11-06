@@ -595,6 +595,7 @@ struct EnvironmentalChemistryDiagnosticTotals {
     combine_scheduled: u64,
     combine_committed: u64,
     combine_rejected: u64,
+    break_discovery: crate::state::EnvironmentalBreakDiscoveryDiagnostics,
 }
 
 impl EnvironmentalChemistryDiagnosticsRecorder {
@@ -613,7 +614,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         };
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
-            "version": 1,
+            "version": 2,
             "seed": seed,
             "tick_zero": 0,
             "organism_count": simulation.organisms.len(),
@@ -654,6 +655,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .break_rejected
             .saturating_add(diagnostics.break_rejected as u64);
+        self.totals
+            .break_discovery
+            .accumulate(diagnostics.break_discovery);
         self.totals.combine_ready_candidates = self
             .totals
             .combine_ready_candidates
@@ -675,6 +679,11 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.break_scheduled > 0
             || diagnostics.break_committed > 0
             || diagnostics.break_rejected > 0
+            || diagnostics.break_discovery.scan_entries_inspected > 0
+            || diagnostics.break_discovery.bond_candidates_inspected > 0
+            || diagnostics.break_discovery.activation_updates > 0
+            || diagnostics.break_discovery.progress_preserved_unsearched > 0
+            || diagnostics.break_discovery.progress_dissipated_checked > 0
             || diagnostics.combine_ready_candidates > 0
             || diagnostics.combine_scheduled > 0
             || diagnostics.combine_committed > 0
@@ -705,6 +714,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "break_scheduled": self.totals.break_scheduled,
             "break_committed": self.totals.break_committed,
             "break_rejected": self.totals.break_rejected,
+            "break_discovery": self.totals.break_discovery,
             "combine_ready_candidates": self.totals.combine_ready_candidates,
             "combine_scheduled": self.totals.combine_scheduled,
             "combine_committed": self.totals.combine_committed,

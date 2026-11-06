@@ -205,17 +205,25 @@ fn dissipate_checked_unupdated_accumulations(
     current_prefix: &str,
     checked_keys: &std::collections::BTreeSet<String>,
     updated_keys: &std::collections::BTreeSet<String>,
-) {
+) -> (u64, u64) {
+    let mut preserved_unsearched = 0_u64;
+    let mut dissipated_checked = 0_u64;
     accumulation.retain(|key, value| {
-        if !key.starts_with(current_prefix)
-            || !checked_keys.contains(key)
-            || updated_keys.contains(key)
-        {
+        if !key.starts_with(current_prefix) {
             return true;
         }
+        if !checked_keys.contains(key) {
+            preserved_unsearched = preserved_unsearched.saturating_add(1);
+            return true;
+        }
+        if updated_keys.contains(key) {
+            return true;
+        }
+        dissipated_checked = dissipated_checked.saturating_add(1);
         *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
         value.is_finite() && *value > 0.0
     });
+    (preserved_unsearched, dissipated_checked)
 }
 
 pub(crate) fn accumulate(
@@ -549,6 +557,25 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
+    let mut diagnostics = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+    accumulate_environmental_with_diagnostics(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        &mut diagnostics,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_diagnostics(
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
     // Environmental progress belongs to the field, not to the organism
     // whose turn happens to discover it. Search the field directly; the
     // bounded candidate budget below keeps this world-owned scan finite.
@@ -556,8 +583,9 @@ pub(crate) fn accumulate_environmental(
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let discovery = discover_environmental_bonds(environment, tick, count);
-    let _inspected_entries = discovery.inspected_entries;
+    diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     let candidates = discovery.candidates;
+    diagnostics.bond_candidates_inspected = candidates.len() as u64;
     let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
@@ -578,6 +606,8 @@ pub(crate) fn accumulate_environmental(
             };
             if existing_index >= bond_count {
                 checked_keys.insert(key.clone());
+                diagnostics.stale_progress_invalidated =
+                    diagnostics.stale_progress_invalidated.saturating_add(1);
             }
         }
     }
@@ -605,6 +635,7 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
+        diagnostics.bond_candidates_checked = diagnostics.bond_candidates_checked.saturating_add(1);
         let key = environmental_break_accumulation_key(instance, bond_index, connection);
         if instance.environmental_identity != 0 {
             let bond_prefix = format!(
@@ -614,6 +645,8 @@ pub(crate) fn accumulate_environmental(
             for previous_key in accumulation.keys() {
                 if previous_key.starts_with(&bond_prefix) && previous_key != &key {
                     checked_keys.insert(previous_key.clone());
+                    diagnostics.stale_progress_invalidated =
+                        diagnostics.stale_progress_invalidated.saturating_add(1);
                 }
             }
         }
@@ -641,18 +674,33 @@ pub(crate) fn accumulate_environmental(
                 &environment.catalog,
             )
             .map(|restored_indices| (hypothetical, restored_indices));
+            if restored.is_some() {
+                diagnostics.material_restorations_succeeded = diagnostics
+                    .material_restorations_succeeded
+                    .saturating_add(1);
+            } else {
+                diagnostics.material_restoration_rejections = diagnostics
+                    .material_restoration_rejections
+                    .saturating_add(1);
+            }
             // Failed restorations are stable too; memoize them rather than
             // repeating the same rejected work for every bond in this material.
             entry.insert(restored);
         }
         let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
         else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(a) = hypothetical
@@ -660,6 +708,8 @@ pub(crate) fn accumulate_environmental(
             .get(unit_a)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(b) = hypothetical
@@ -667,10 +717,14 @@ pub(crate) fn accumulate_environmental(
             .get(unit_b)
             .and_then(|unit| unit.properties(&environment.catalog))
         else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let (Some(position_a), Some(position_b)) = (a.chemical_position, b.chemical_position)
         else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
@@ -681,6 +735,8 @@ pub(crate) fn accumulate_environmental(
             connection.endpoint_a,
             connection.endpoint_b,
         ) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let geometry_material_a = hypothetical.units[unit_a]
@@ -712,6 +768,8 @@ pub(crate) fn accumulate_environmental(
                     crate::chemistry::CHEMICAL_K,
                     crate::chemistry::CHEMICAL_D_MAX,
                 ) else {
+                    diagnostics.candidate_chemistry_rejections =
+                        diagnostics.candidate_chemistry_rejections.saturating_add(1);
                     continue;
                 };
                 match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
@@ -729,18 +787,25 @@ pub(crate) fn accumulate_environmental(
             candidate,
             &environment.catalog,
         ) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
             continue;
         };
         let Some(contact_factor) = crate::chemistry::contact_factor(
             candidate.distance,
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
         ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
         let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
+        diagnostics.max_accumulated_reaction = diagnostics.max_accumulated_reaction.max(previous);
         let Some(next) = crate::chemistry::accumulate_reaction(
             previous,
             potential,
@@ -748,8 +813,11 @@ pub(crate) fn accumulate_environmental(
             engagement,
             crate::chemistry::CHEMICAL_DISSIPATION,
         ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
+        diagnostics.activation_updates = diagnostics.activation_updates.saturating_add(1);
         if next <= 0.0 {
             updated_keys.insert(key.clone());
             accumulation.remove(&key);
@@ -762,6 +830,8 @@ pub(crate) fn accumulate_environmental(
             b.reactivity,
             baselines.reactivity,
         ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
         let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
@@ -771,6 +841,8 @@ pub(crate) fn accumulate_environmental(
             || !frequency_b.is_finite()
             || frequency_b <= 0.0
         {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         }
         let reaction_frequency_cycles_per_day =
@@ -778,11 +850,15 @@ pub(crate) fn accumulate_environmental(
         if !reaction_frequency_cycles_per_day.is_finite()
             || reaction_frequency_cycles_per_day <= 0.0
         {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         }
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
         // Invalid geometry/barrier candidates must not pause dissipation of
@@ -790,6 +866,8 @@ pub(crate) fn accumulate_environmental(
         // candidate completes a valid reaction evaluation.
         updated_keys.insert(key.clone());
         if crate::chemistry::activated(activation_signal, disruption_cost) {
+            diagnostics.activation_threshold_met =
+                diagnostics.activation_threshold_met.saturating_add(1);
             operations.push(EnvironmentalChemicalBreakOperation {
                 cell_index,
                 material_index,
@@ -804,16 +882,20 @@ pub(crate) fn accumulate_environmental(
             });
             accumulation.remove(&operations.last().expect("just pushed").accumulation_key);
         } else {
+            diagnostics.activation_below_threshold =
+                diagnostics.activation_below_threshold.saturating_add(1);
             accumulation.insert(key, next);
         }
     }
 
-    dissipate_checked_unupdated_accumulations(
+    let (preserved, dissipated) = dissipate_checked_unupdated_accumulations(
         accumulation,
         &current_prefix,
         &checked_keys,
         &updated_keys,
     );
+    diagnostics.progress_preserved_unsearched = preserved;
+    diagnostics.progress_dissipated_checked = dissipated;
     operations
 }
 

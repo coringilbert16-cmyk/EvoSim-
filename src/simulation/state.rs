@@ -593,6 +593,87 @@ pub(crate) struct Environment {
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
+    /// Cell, material, and bond entries traversed by bounded discovery.
+    pub(crate) scan_entries_inspected: u64,
+    /// Physical bond records yielded by the candidate window.
+    pub(crate) bond_candidates_inspected: u64,
+    /// Candidates with a valid realized connection record and accumulation key.
+    pub(crate) bond_candidates_checked: u64,
+    /// Materials restored successfully into an authoritative trial graph.
+    pub(crate) material_restorations_succeeded: u64,
+    /// Materials rejected during physical restoration.
+    pub(crate) material_restoration_rejections: u64,
+    /// Candidates rejected before contact geometry could be resolved.
+    pub(crate) candidate_geometry_rejections: u64,
+    /// Candidates rejected by static chemistry or live contact eligibility.
+    pub(crate) candidate_chemistry_rejections: u64,
+    /// Candidates that produced a valid activation update.
+    pub(crate) activation_updates: u64,
+    /// Valid activation updates that remained below the disruption barrier.
+    pub(crate) activation_below_threshold: u64,
+    /// Valid activation updates that reached the disruption barrier.
+    pub(crate) activation_threshold_met: u64,
+    /// Existing bond keys invalidated after their material or bond identity changed.
+    pub(crate) stale_progress_invalidated: u64,
+    /// Unsearched progress entries retained by bounded discovery.
+    pub(crate) progress_preserved_unsearched: u64,
+    /// Checked but unupdated progress entries that dissipated.
+    pub(crate) progress_dissipated_checked: u64,
+    /// Largest incoming bond activation accumulation observed.
+    pub(crate) max_accumulated_reaction: f64,
+}
+
+impl EnvironmentalBreakDiscoveryDiagnostics {
+    pub(crate) fn accumulate(&mut self, tick: Self) {
+        self.scan_entries_inspected = self
+            .scan_entries_inspected
+            .saturating_add(tick.scan_entries_inspected);
+        self.bond_candidates_inspected = self
+            .bond_candidates_inspected
+            .saturating_add(tick.bond_candidates_inspected);
+        self.bond_candidates_checked = self
+            .bond_candidates_checked
+            .saturating_add(tick.bond_candidates_checked);
+        self.material_restorations_succeeded = self
+            .material_restorations_succeeded
+            .saturating_add(tick.material_restorations_succeeded);
+        self.material_restoration_rejections = self
+            .material_restoration_rejections
+            .saturating_add(tick.material_restoration_rejections);
+        self.candidate_geometry_rejections = self
+            .candidate_geometry_rejections
+            .saturating_add(tick.candidate_geometry_rejections);
+        self.candidate_chemistry_rejections = self
+            .candidate_chemistry_rejections
+            .saturating_add(tick.candidate_chemistry_rejections);
+        self.activation_updates = self
+            .activation_updates
+            .saturating_add(tick.activation_updates);
+        self.activation_below_threshold = self
+            .activation_below_threshold
+            .saturating_add(tick.activation_below_threshold);
+        self.activation_threshold_met = self
+            .activation_threshold_met
+            .saturating_add(tick.activation_threshold_met);
+        self.stale_progress_invalidated = self
+            .stale_progress_invalidated
+            .saturating_add(tick.stale_progress_invalidated);
+        self.progress_preserved_unsearched = self
+            .progress_preserved_unsearched
+            .saturating_add(tick.progress_preserved_unsearched);
+        self.progress_dissipated_checked = self
+            .progress_dissipated_checked
+            .saturating_add(tick.progress_dissipated_checked);
+        if tick.max_accumulated_reaction.is_finite() {
+            self.max_accumulated_reaction = self
+                .max_accumulated_reaction
+                .max(tick.max_accumulated_reaction);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
@@ -600,6 +681,7 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) break_committed: usize,
     pub(crate) break_rejected: usize,
     pub(crate) break_discovery_work_remaining: usize,
+    pub(crate) break_discovery: EnvironmentalBreakDiscoveryDiagnostics,
     pub(crate) break_realization_work_remaining: usize,
     pub(crate) combine_ready_candidates: usize,
     pub(crate) combine_scheduled: usize,

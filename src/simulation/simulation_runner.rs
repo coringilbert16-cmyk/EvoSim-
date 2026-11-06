@@ -216,7 +216,7 @@ fn run_environment_chemistry_experiment(
             let counters = simulation.environmental_chemistry_diagnostics;
             let energy = simulation.energy_inventory_snapshot();
             println!(
-                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[chemistry] tick={} COMBINE ready/scheduled/committed/rejected={}/{}/{}/{} BREAK={}/{}/{}/{} scan/candidates/checked={}/{}/{} restore_ok/fail={}/{} geometry/chemistry_reject={}/{} activation/below/met={}/{}/{} preserved/dissipated={}/{} remaining={} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
                 counters.combine_ready_candidates,
                 counters.combine_scheduled,
@@ -226,6 +226,19 @@ fn run_environment_chemistry_experiment(
                 counters.break_scheduled,
                 counters.break_committed,
                 counters.break_rejected,
+                counters.break_discovery.scan_entries_inspected,
+                counters.break_discovery.bond_candidates_inspected,
+                counters.break_discovery.bond_candidates_checked,
+                counters.break_discovery.material_restorations_succeeded,
+                counters.break_discovery.material_restoration_rejections,
+                counters.break_discovery.candidate_geometry_rejections,
+                counters.break_discovery.candidate_chemistry_rejections,
+                counters.break_discovery.activation_updates,
+                counters.break_discovery.activation_below_threshold,
+                counters.break_discovery.activation_threshold_met,
+                counters.break_discovery.progress_preserved_unsearched,
+                counters.break_discovery.progress_dissipated_checked,
+                counters.break_discovery_work_remaining,
                 simulation.environment.field.cells.iter()
                     .map(|cell| cell.physical_materials.len())
                     .sum::<usize>(),

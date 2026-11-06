@@ -8,11 +8,121 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
-use crate::structure::Placement;
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
 const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
+
+/// Build the seeded molecule using the same eligibility and bond-energy path as
+/// an ordinary COMBINE operation, so environmental BREAK sees realistic bonds.
+pub(crate) fn realize_natural_molecule(
+    parts: &[String],
+    placement: Placement,
+    catalog: &[crate::resources::BaseResource],
+) -> PhysicalMaterial {
+    assert_eq!(
+        parts.len(),
+        2,
+        "seed molecules must contain two constituents"
+    );
+    let mut structure = OrganismStructure::new();
+    let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
+    let unit_b = structure.add_unit(StructuralUnit::new(parts[1].clone(), placement));
+    assert!(structure
+        .units
+        .iter_mut()
+        .all(|unit| unit.realize_default_geometry(catalog)));
+
+    let mut selected_contact = None;
+    'poses: for direction_step in 0..16 {
+        let direction =
+            placement.rotation_radians + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
+        let (sin, cos) = direction.sin_cos();
+        for distance_step in 20..=100 {
+            let separation = f64::from(distance_step) * 0.025;
+            for rotation_step in 0..16 {
+                structure.units[unit_b].placement = Placement {
+                    x: placement.x + separation * cos,
+                    y: placement.y + separation * sin,
+                    rotation_radians: placement.rotation_radians
+                        + std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                };
+                let incoming = structure.units[unit_b].clone();
+                if crate::construction_runtime::placed_unit_overlaps(
+                    &structure,
+                    &incoming,
+                    &[unit_b],
+                    catalog,
+                ) {
+                    continue;
+                }
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    &structure, unit_a, unit_b, catalog, &mut cache,
+                ) {
+                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        || !candidate.available_a
+                        || !candidate.available_b
+                        || !candidate.facing.is_finite()
+                        || candidate.facing <= 0.0
+                    {
+                        continue;
+                    }
+                    let Some((_, _, investment, required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &structure, unit_a, unit_b, candidate, catalog,
+                        )
+                    else {
+                        continue;
+                    };
+                    selected_contact = Some((candidate, investment, required_energy));
+                    break 'poses;
+                }
+            }
+        }
+    }
+    let (candidate, investment, required_energy) =
+        selected_contact.expect("seeded molecule pair must admit an ordinary COMBINE contact");
+    let mut usable_energy = required_energy;
+    let mut ledger = EnergyLedger {
+        total_usable_energy_held: usable_energy,
+        initial_usable_energy_held: usable_energy,
+        total_structural_energy_held: crate::energy_ledger::structural_potential(&structure)
+            .expect("unbonded seed structure must have valid structural energy"),
+        ..EnergyLedger::default()
+    };
+    ledger.initial_structural_energy_held = ledger.total_structural_energy_held;
+    crate::combine_runtime::form_selected_bond(
+        &mut structure,
+        unit_a,
+        unit_b,
+        candidate,
+        investment,
+        catalog,
+        &mut crate::contact::ConnectionCompatibilityCache::new(),
+        &mut ledger,
+        &mut usable_energy,
+    )
+    .expect("seeded molecule must form through ordinary COMBINE");
+    assert_eq!(structure.bonds.len(), 1);
+    assert!(structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0);
+    let mut products = crate::environmental_combine::physical_materials_from_structure_components(
+        &structure, catalog,
+    )
+    .expect("ordinary COMBINE product must export as a physical molecule");
+    assert_eq!(products.len(), 1);
+    let molecule = products
+        .pop()
+        .expect("one bonded component must be exported");
+    let connection = molecule
+        .internal_connections
+        .as_ref()
+        .and_then(|bonds| bonds.first())
+        .expect("exported molecule must retain its physical bond");
+    assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
+    molecule
+}
 
 /// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
 /// are an unrestricted random partition, not a fixed 6–20 range.
@@ -209,8 +319,12 @@ fn seed_randomized_molecular_resources(
             } else {
                 vec![placement]
             };
-            let physical = PhysicalMaterial::realized(material, placements, catalog)
-                .expect("seeded resource or molecule must have valid physical geometry");
+            let physical = if *is_molecule {
+                realize_natural_molecule(parts, placement, catalog)
+            } else {
+                PhysicalMaterial::realized(material, placements, catalog)
+                    .expect("seeded resource must have valid physical geometry")
+            };
             object_index += 1;
             assert!(
                 field.deposit_physical(x, y, physical, catalog),
