@@ -40,9 +40,33 @@ The script writes one JSONL diagnostics artifact and one console log per seed un
 
 Do not tune activation thresholds or add a displacement bonus based only on the number of commits. First identify which funnel stage is limiting and preserve matter/energy invariants.
 
+### Replicated baseline results
+
+The completed 600-second runs produced the following summary:
+
+| Seed | Ticks | COMBINE | Valid replacement contacts | Activation reached | Trial rejected after activation | Main rejection stage | Displacement commits | Energy residual |
+| --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| 42 (first baseline) | 8,410 | 71 | 4 | 2 | 2 | Not yet instrumented | 0 | -3.30e-5 |
+| 7 | 8,451 | 65 | 4 | 4 | 4 | Not yet instrumented | 0 | -2.69e-5 |
+| 101 | 7,059 | 61 | 3 | 0 | 0 | Not applicable | 0 | -2.37e-5 |
+| 42 (failure-stage follow-up) | 8,497 | 72 | 4 | 2 | 2 | Stored old-bond energy differed from the value recomputed from its endpoint properties and strength | 0 | -3.36e-5 |
+
+The failure-stage follow-up also performed 44,248 replacement-contact searches and exhausted the displacement discovery share on all 8,497 ticks. It preserved the exact constituent inventory. The two activated candidates stopped at the old-bond energy consistency check; no candidate reached replacement validation, energy settlement, or product export. This narrows the next investigation but does not yet identify why those stored energies differ. It is not evidence that the discovery budget caused the failed trials.
+
+## Next experiments
+
+Run these in order and keep the unchanged standard baseline as the control:
+
+1. **Audit stored bond-energy provenance.** For each internal bond in the 80 seeded molecules and each newly formed environmental bond, compare the stored `bond_energy` with `intrinsic_bond_potential(endpoint_a, endpoint_b, stored_strength)`. Record the material or source IDs, endpoint resource names, stored strength, recomputed strength, stored energy, recomputed energy, and difference. This determines whether the two failures came from seeded library bonds, restoration, or a later transformation. Do not loosen the `1e-9` consistency guard until the source is known.
+2. **Exercise a generated bond in a live field.** Build a deterministic fixture by forming A-B through the ordinary COMBINE path, then place C at a valid replacement contact. Advance normal `Simulation::step` ticks so activation accumulates naturally. Capture the same bond-energy parity fields, activation, rejection stage, transaction, products, and inventory. This separates a library-data discrepancy from a runtime bond lifecycle issue.
+3. **Validate the fix with the standard environment.** Only after Experiment 1 or 2 identifies and resolves the discrepancy, rerun seed 42 for 600 seconds. Require a candidate to pass replacement validation; if it commits, require two product components, exact constituent inventory, and a bounded energy residual. Keep seeds 7 and 101 for the later replication pass.
+4. **Follow successful products through turnover.** Continue without resetting the successful products and track subsequent COMBINE, BREAK, and displacement participation, product persistence, and bond-energy parity. Then assess acquisition and use by an organism in a separate experiment.
+
+The next measurement should be the per-bond provenance audit. Changing the displacement threshold, reaction rate, work budget, or bond-energy tolerance before that audit would mix the suspected data/lifecycle issue with unrelated chemistry parameters.
+
 ## Experiment 2: controlled in-world displacement observation
 
-After the standard baseline, prepare a small deterministic field fixture containing one bonded A-B molecule and one incoming C at a valid live replacement contact. Let ordinary simulation ticks accumulate C's contact activation; do not seed accumulated activation or force the resolver to commit. Record the event, both product components, their field locations, the energy settlement, and the source inventory before and after. The existing unit-level transaction test remains the control for funded commit and rollback; this field observation must use `Simulation::step` and the environmental scheduler.
+After the bond-energy provenance audit, prepare a small deterministic field fixture containing one bonded A-B molecule and one incoming C at a valid live replacement contact. Let ordinary simulation ticks accumulate C's contact activation; do not seed accumulated activation or force the resolver to commit. Record bond-energy parity, the event, both product components, their field locations, the energy settlement, and the source inventory before and after. The existing unit-level transaction test remains the control for funded commit and rollback; this field observation must use `Simulation::step` and the environmental scheduler.
 
 If the system cannot fund a natural commit in this fixture, retain the failed observation and report the precise settlement requirement. Do not silently add energy to make it pass.
 
