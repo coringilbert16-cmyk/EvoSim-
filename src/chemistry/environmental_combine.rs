@@ -77,17 +77,35 @@ fn source_pair_key(
     )
 }
 
+fn environmental_accumulation_totals(accumulation: &BTreeMap<String, f64>) -> (usize, f64) {
+    accumulation
+        .iter()
+        .filter(|(key, _)| key.starts_with(ENVIRONMENT_PREFIX))
+        .fold((0, 0.0), |(count, total), (_, value)| {
+            (count + 1, total + *value)
+        })
+}
+
 fn dissipate_unupdated_accumulations(
     accumulation: &mut BTreeMap<String, f64>,
     updated_keys: &BTreeSet<String>,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) {
     accumulation.retain(|key, value| {
         if !key.starts_with(ENVIRONMENT_PREFIX) || updated_keys.contains(key) {
             return true;
         }
+        let before = *value;
         *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        if before.is_finite() && value.is_finite() {
+            diagnostics.accumulation_keys_dissipated += 1;
+            diagnostics.accumulation_value_dissipated += (before - *value).max(0.0);
+        }
         value.is_finite() && *value > 0.0
     });
+    let (entries, total) = environmental_accumulation_totals(accumulation);
+    diagnostics.accumulation_entries_after_search = entries;
+    diagnostics.accumulation_value_after_search = total;
 }
 
 fn restored_source(
@@ -491,14 +509,26 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) -> Vec<EnvironmentalCombineOperation> {
+    let (initial_accumulation_entries, initial_accumulation_value) =
+        environmental_accumulation_totals(accumulation);
+    diagnostics.accumulation_entries_before_search = initial_accumulation_entries;
+    diagnostics.accumulation_value_before_search = initial_accumulation_value;
     if *remaining_discovery_work == 0 {
         diagnostics.budget_exhausted = true;
-        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+        dissipate_unupdated_accumulations(
+            accumulation,
+            &BTreeSet::new(),
+            diagnostics,
+        );
         return Vec::new();
     }
     let field_cell_count = environment.field.cells.len();
     if field_cell_count == 0 {
-        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+        dissipate_unupdated_accumulations(
+            accumulation,
+            &BTreeSet::new(),
+            diagnostics,
+        );
         return Vec::new();
     }
 
@@ -675,7 +705,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     }
 
     diagnostics.budget_exhausted = *remaining_discovery_work == 0;
-    dissipate_unupdated_accumulations(accumulation, &updated_keys);
+    diagnostics.accumulation_keys_updated = updated_keys.len();
+    dissipate_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
     operations
 }
 
