@@ -8,7 +8,7 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
-use crate::structure::Placement;
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
@@ -94,6 +94,106 @@ pub(crate) fn seed_randomized_resources(
     }
     assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
+}
+
+/// Create a seeded molecule by executing the ordinary COMBINE authority.
+///
+/// The seed supplies only the two physical constituents and their starting pose.
+/// Contact selection, formation investment, bond strength, intrinsic bond energy,
+/// endpoint identity, and product export all come from the same runtime path used
+/// by environmental COMBINE. Any required input is the exact amount calculated
+/// by COMBINE, not a molecule-specific energy grant.
+fn realize_natural_molecule(
+    parts: &[String],
+    placement: Placement,
+    catalog: &[crate::resources::BaseResource],
+) -> PhysicalMaterial {
+    assert_eq!(parts.len(), 2, "seed molecules must contain two constituents");
+    let mut structure = OrganismStructure::new();
+    let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
+    let unit_b = structure.add_unit(StructuralUnit::new(
+        parts[1].clone(),
+        Placement {
+            x: placement.x + 0.838,
+            y: placement.y,
+            rotation_radians: placement.rotation_radians,
+        },
+    ));
+    assert!(structure.units.iter_mut().all(|unit| unit.realize_default_geometry(catalog)));
+
+    let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+    let (candidate, investment, required_energy) =
+        crate::contact::connection_pair_candidates_cached(
+            &structure,
+            unit_a,
+            unit_b,
+            catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .filter_map(|candidate| {
+            let (_, _, investment, required_energy) =
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &structure,
+                    unit_a,
+                    unit_b,
+                    candidate,
+                    catalog,
+                )?;
+            Some((candidate, investment, required_energy))
+        })
+        .min_by(|left, right| {
+            left.2
+                .total_cmp(&right.2)
+                .then_with(|| left.0.distance.total_cmp(&right.0.distance))
+        })
+        .expect("seeded molecule pose must provide a valid ordinary COMBINE contact");
+
+    let mut usable_energy = required_energy;
+    let mut ledger = EnergyLedger {
+        total_usable_energy_held: usable_energy,
+        initial_usable_energy_held: usable_energy,
+        total_structural_energy_held: crate::energy_ledger::structural_potential(&structure)
+            .expect("unbonded seed structure must have valid structural energy"),
+        initial_structural_energy_held: 0.0,
+        ..EnergyLedger::default()
+    };
+    ledger.initial_structural_energy_held = ledger.total_structural_energy_held;
+    crate::combine_runtime::form_selected_bond(
+        &mut structure,
+        unit_a,
+        unit_b,
+        candidate,
+        investment,
+        catalog,
+        &mut cache,
+        &mut ledger,
+        &mut usable_energy,
+    )
+    .expect("seeded molecule must form through ordinary COMBINE");
+
+    assert_eq!(structure.bonds.len(), 1);
+    assert!(
+        structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0,
+        "ordinary COMBINE must assign the molecule its calculated intrinsic bond energy"
+    );
+    let mut products =
+        crate::environmental_combine::physical_materials_from_structure_components(
+            &structure, catalog,
+        )
+        .expect("ordinary COMBINE product must export as a physical molecule");
+    assert_eq!(products.len(), 1);
+    let molecule = products.pop().expect("one bonded component must be exported");
+    let connection = molecule
+        .internal_connections
+        .as_ref()
+        .and_then(|connections| connections.first())
+        .expect("exported molecule must retain its physical bond");
+    assert!(
+        connection.bond_energy.is_finite() && connection.bond_energy > 0.0,
+        "exported molecule must preserve its ordinary COMBINE bond energy"
+    );
+    molecule
 }
 
 /// Seed 1,280 physical objects for transport benchmarking: 1,200 free resources
@@ -186,31 +286,16 @@ fn seed_randomized_molecular_resources(
                 rotation_radians: rotation,
             };
             let (parts, is_molecule) = &objects[object_index];
-            let material = if *is_molecule {
-                Material {
-                    parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
-                    internal_bonds: vec![crate::resources::InternalBond {
-                        part_a: 0,
-                        part_b: 1,
-                    }],
-                }
+            let physical = if *is_molecule {
+                realize_natural_molecule(parts, placement, catalog)
             } else {
-                Material::free_base(&parts[0], 1.0)
+                PhysicalMaterial::realized(
+                    Material::free_base(&parts[0], 1.0),
+                    vec![placement],
+                    catalog,
+                )
+                .expect("canonical base resource must have valid physical geometry")
             };
-            let placements = if *is_molecule {
-                vec![
-                    placement,
-                    Placement {
-                        x: x + 0.838,
-                        y,
-                        rotation_radians: rotation,
-                    },
-                ]
-            } else {
-                vec![placement]
-            };
-            let physical = PhysicalMaterial::realized(material, placements, catalog)
-                .expect("seeded resource or molecule must have valid physical geometry");
             object_index += 1;
             assert!(
                 field.deposit_physical(x, y, physical, catalog),
