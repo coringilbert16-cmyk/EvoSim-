@@ -422,6 +422,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) -> Vec<EnvironmentalCombineOperation> {
     if *remaining_discovery_work == 0 {
+        diagnostics.budget_exhausted = true;
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
     }
@@ -559,7 +560,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut cache,
                         pair_start,
                         &mut component_work,
-                        Some(diagnostics),
+                        Some(&mut *diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
@@ -2976,6 +2977,7 @@ mod tests {
             &mut cache,
             component_pair_start(0, pair_count),
             &mut first_window_work,
+            None,
         );
         assert!(
             first_window.is_none(),
@@ -2992,6 +2994,7 @@ mod tests {
             &mut cache,
             component_pair_start(41, pair_count),
             &mut second_window_work,
+            None,
         )
         .expect("the rotated window must reach the late physical contact within the cycle");
         assert_eq!(late_window.unit_a, indices_a[12]);
