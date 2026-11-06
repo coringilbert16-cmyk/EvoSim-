@@ -2118,12 +2118,8 @@ mod tests {
 
         let hs_connection = hs.internal_connections.as_ref().unwrap()[0].clone();
         let ch_connection = ch.internal_connections.as_ref().unwrap()[0].clone();
-        assert!(
-            hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0
-        );
-        assert!(
-            ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0
-        );
+        assert!(hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0);
+        assert!(ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0);
 
         let mut source = OrganismStructure::new();
         let indices_a =
