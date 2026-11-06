@@ -258,8 +258,7 @@ fn build_displacement_trial_with_activation_status(
         diagnostic.old_bond_energy_expected = Some(preflight.old_bond_energy);
         diagnostic.old_bond_energy_abs_error = Some(old_bond_energy_abs_error);
     }
-    if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9
-    {
+    if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9 {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
         }
@@ -960,9 +959,12 @@ pub(crate) fn accumulate_environmental(
                                                     trial_diagnostic.old_bond_energy_abs_error,
                                                 ) {
                                                     if abs_error > diagnostics.old_bond_energy_max_abs_error {
-                                                        diagnostics.old_bond_energy_max_abs_error = abs_error;
-                                                        diagnostics.old_bond_energy_stored_at_max_error = stored;
-                                                        diagnostics.old_bond_energy_expected_at_max_error = expected;
+                                                        diagnostics.old_bond_energy_max_abs_error =
+                                                            abs_error;
+                                                        diagnostics.old_bond_energy_stored_at_max_error =
+                                                            stored;
+                                                        diagnostics.old_bond_energy_expected_at_max_error =
+                                                            expected;
                                                     }
                                                 }
                                             }
@@ -974,20 +976,23 @@ pub(crate) fn accumulate_environmental(
                                             DisplacementTrialFailureStage::CandidateRevalidation => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_candidate_revalidation =
-                                                    diagnostics.trial_rejections_candidate_revalidation.saturating_add(1);
+                                                diagnostics.trial_rejections_candidate_revalidation = diagnostics
+                                                    .trial_rejections_candidate_revalidation
+                                                    .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::FormationInvestment => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_formation_investment =
-                                                    diagnostics.trial_rejections_formation_investment.saturating_add(1);
+                                                diagnostics.trial_rejections_formation_investment = diagnostics
+                                                    .trial_rejections_formation_investment
+                                                    .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::PhysicalInsertion => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_physical_insertion =
-                                                    diagnostics.trial_rejections_physical_insertion.saturating_add(1);
+                                                diagnostics.trial_rejections_physical_insertion = diagnostics
+                                                    .trial_rejections_physical_insertion
+                                                    .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Energy => {
                                                 diagnostics.trial_rejections_energy = diagnostics
