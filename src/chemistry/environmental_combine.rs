@@ -278,10 +278,8 @@ fn select_best_contact_from_offset(
         // physically evaluable interface in every inspected constituent pair.
         // This is intentionally diagnostic-only; required-energy selection remains
         // exactly as before.
-        if let (Some(best_input), Some(selected_input)) =
-            (best_chemical_input_any_interface, selected_chemical_input)
-        {
-            let loss = (best_input - selected_input).max(0.0);
+        if let Some(best_input) = best_chemical_input_any_interface {
+            let loss = (best_input - selected_chemical_input.unwrap_or(0.0)).max(0.0);
             if loss > 1e-12 {
                 diagnostics.selected_interface_not_best_chemical_input += 1;
                 diagnostics.chemical_input_loss_total += loss;
@@ -598,9 +596,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         diagnostics.backward_ordered_target_materials += 1;
                         continue;
                     }
-                    diagnostics.ordered_target_material_pairs += 1;
+                    diagnostics.forward_ordered_target_material_pair_inspections += 1;
                     if cell_a == cell_b {
-                        diagnostics.overlapping_target_material_pairs += 1;
+                        diagnostics.same_cell_source_pair_inspections += 1;
                     }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
@@ -615,6 +613,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         origin(),
                         &environment.catalog,
                     ) else {
+                        diagnostics.target_material_pairs_restore_failed += 1;
                         continue;
                     };
                     diagnostics.target_material_pairs_restored += 1;
