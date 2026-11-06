@@ -723,15 +723,33 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) anchor_cells_inspected: usize,
     pub(crate) anchor_materials_inspected: usize,
     pub(crate) target_cells_inspected: usize,
     pub(crate) target_materials_inspected: usize,
+    /// Target material entries inspected but rejected by canonical pair ordering.
+    pub(crate) backward_ordered_target_materials: usize,
+    /// Unique forward-ordered source-material pairs reaching later validation.
+    pub(crate) ordered_target_material_pairs: usize,
+    pub(crate) unrealized_target_material_pairs: usize,
+    pub(crate) overlapping_target_material_pairs: usize,
+    pub(crate) target_material_pairs_restored: usize,
+    pub(crate) target_material_pairs_rejected_for_overlap: usize,
+    pub(crate) constituent_pairs_available: usize,
     pub(crate) constituent_pairs_inspected: usize,
+    pub(crate) constituent_pairs_uninspected_by_window: usize,
+    pub(crate) constituent_pair_windows_truncated: usize,
+    pub(crate) constituent_pairs_with_valid_interfaces: usize,
+    pub(crate) constituent_pairs_suppressed_by_global_selection: usize,
     pub(crate) physically_evaluable_interfaces: usize,
+    /// Extra interfaces discarded within each constituent-pair evaluation.
     pub(crate) discarded_interfaces_after_single_selection: usize,
+    /// Valid interfaces suppressed because only one contact is selected for the entire source-material pair.
+    pub(crate) interfaces_suppressed_by_global_selection: usize,
     pub(crate) chemically_favorable_pairs_with_multiple_interfaces: usize,
+    /// Counts source-material-pair evaluations where the selected contact is chemically inferior to another valid contact in the complete scanned window.
     pub(crate) selected_interface_not_best_chemical_input: usize,
     pub(crate) chemical_input_loss_total: f64,
     pub(crate) max_chemical_input_loss: f64,
