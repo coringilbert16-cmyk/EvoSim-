@@ -190,7 +190,6 @@ fn select_best_contact_from_offset(
                     crate::chemistry::CHEMICAL_D_MAX,
                 )
             });
-        let mut best_chemical_input = None::<f64>;
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
@@ -214,8 +213,6 @@ fn select_best_contact_from_offset(
                 Some(potential * contact * engagement)
             });
             if let Some(input) = chemical_input {
-                best_chemical_input =
-                    Some(best_chemical_input.map_or(input, |current| current.max(input)));
                 best_chemical_input_any_interface = Some(
                     best_chemical_input_any_interface
                         .map_or(input, |current| current.max(input)),
@@ -267,20 +264,6 @@ fn select_best_contact_from_offset(
                 pair_valid_interfaces.saturating_sub(1);
             if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
                 diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
-            }
-            // This pair-local comparison is retained as an additional diagnostic:
-            // it reveals inferior endpoint choice even before comparing different
-            // constituent identities in the complete source-pair window.
-            if let (Some(best_input), Some(selected_input)) =
-                (best_chemical_input, selected_chemical_input)
-            {
-                let loss = (best_input - selected_input).max(0.0);
-                if loss > 1e-12 {
-                    diagnostics.selected_interface_not_best_chemical_input += 1;
-                    diagnostics.chemical_input_loss_total += loss;
-                    diagnostics.max_chemical_input_loss =
-                        diagnostics.max_chemical_input_loss.max(loss);
-                }
             }
         }
     }
