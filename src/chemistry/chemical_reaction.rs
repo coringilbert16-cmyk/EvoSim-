@@ -450,11 +450,7 @@ fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
-) -> (
-    Vec<(usize, usize, usize)>,
-    usize,
-    Vec<(u64, usize)>,
-) {
+) -> (Vec<(usize, usize, usize)>, usize, Vec<(u64, usize)>) {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
