@@ -1639,6 +1639,51 @@ mod tests {
     }
 
     #[test]
+    fn old_bond_energy_mismatch_reports_stored_and_expected_values() {
+        let catalog = default_catalog();
+        let (mut source, _old_bond, candidate, investment) =
+            three_participant_fixture(&catalog);
+        source.bonds[0].bond_energy = 0.0;
+        let old_bond = source.bonds[0];
+        let mut diagnostic = DisplacementTrialDiagnostic::default();
+
+        assert!(
+            build_displacement_trial_with_activation_status(
+                &source,
+                0,
+                1,
+                2,
+                old_bond,
+                candidate,
+                investment,
+                10.0,
+                catalog_reactivity_baseline(),
+                0.0,
+                &catalog,
+                Some(&mut diagnostic),
+            )
+            .is_none()
+        );
+        let expected = intrinsic_bond_potential(
+            source.units[0].properties(&catalog).unwrap(),
+            source.units[1].properties(&catalog).unwrap(),
+            old_bond.strength,
+        );
+        assert_eq!(diagnostic.activation_sufficient, Some(true));
+        assert_eq!(
+            diagnostic.failure_stage,
+            DisplacementTrialFailureStage::OldBondEnergy
+        );
+        assert_eq!(diagnostic.old_bond_energy_stored, Some(0.0));
+        assert_eq!(diagnostic.old_bond_energy_expected, Some(expected));
+        assert_eq!(
+            diagnostic.old_bond_energy_abs_error,
+            Some(expected.abs())
+        );
+        assert!(expected > 0.0);
+    }
+
+    #[test]
     fn incoming_activation_is_accumulated_from_the_replacement_contact() {
         let catalog = default_catalog();
         let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
