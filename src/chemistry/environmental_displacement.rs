@@ -135,9 +135,9 @@ pub(crate) struct DisplacementTrial {
 enum DisplacementTrialFailureStage {
     OldBondEnergy,
     Topology,
-    CandidateRevalidation,
-    FormationInvestment,
-    PhysicalInsertion,
+    CandidateCheck,
+    Formation,
+    Insertion,
     Energy,
     Products,
     #[default]
@@ -285,7 +285,7 @@ fn build_displacement_trial_with_activation_status(
         )
     else {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::CandidateRevalidation;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::CandidateCheck;
         }
         return None;
     };
@@ -293,7 +293,7 @@ fn build_displacement_trial_with_activation_status(
         || (required_investment - investment).abs() > 1e-9
     {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::FormationInvestment;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Formation;
         }
         return None;
     }
@@ -315,7 +315,7 @@ fn build_displacement_trial_with_activation_status(
         )
     else {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::PhysicalInsertion;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Insertion;
         }
         return None;
     };
@@ -958,12 +958,16 @@ pub(crate) fn accumulate_environmental(
                                                     trial_diagnostic.old_bond_energy_expected,
                                                     trial_diagnostic.old_bond_energy_abs_error,
                                                 ) {
-                                                    if abs_error > diagnostics.old_bond_energy_max_abs_error {
+                                                    let previous_max_error =
+                                                        diagnostics.old_bond_energy_max_abs_error;
+                                                    if abs_error > previous_max_error {
                                                         diagnostics.old_bond_energy_max_abs_error =
                                                             abs_error;
-                                                        diagnostics.old_bond_energy_stored_at_max_error =
+                                                        diagnostics
+                                                            .old_bond_energy_stored_at_max_error =
                                                             stored;
-                                                        diagnostics.old_bond_energy_expected_at_max_error =
+                                                        diagnostics
+                                                            .old_bond_energy_expected_at_max_error =
                                                             expected;
                                                     }
                                                 }
@@ -973,7 +977,7 @@ pub(crate) fn accumulate_environmental(
                                                     .trial_rejections_topology
                                                     .saturating_add(1);
                                             }
-                                            DisplacementTrialFailureStage::CandidateRevalidation => {
+                                            DisplacementTrialFailureStage::CandidateCheck => {
                                                 diagnostics.trial_rejections_replacement = diagnostics
                                                     .trial_rejections_replacement
                                                     .saturating_add(1);
@@ -982,15 +986,17 @@ pub(crate) fn accumulate_environmental(
                                                         .trial_rejections_candidate_revalidation
                                                         .saturating_add(1);
                                             }
-                                            DisplacementTrialFailureStage::FormationInvestment => {
+                                            DisplacementTrialFailureStage::Formation => {
                                                 diagnostics.trial_rejections_replacement =
-                                                    diagnostics.trial_rejections_replacement.saturating_add(1);
+                                                    diagnostics
+                                                        .trial_rejections_replacement
+                                                        .saturating_add(1);
                                                 diagnostics.trial_rejections_formation_investment =
                                                     diagnostics
                                                         .trial_rejections_formation_investment
                                                         .saturating_add(1);
                                             }
-                                            DisplacementTrialFailureStage::PhysicalInsertion => {
+                                            DisplacementTrialFailureStage::Insertion => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
                                                 diagnostics.trial_rejections_physical_insertion =
