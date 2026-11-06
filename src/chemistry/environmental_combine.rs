@@ -57,6 +57,23 @@ fn material_signature(material: &PhysicalMaterial) -> String {
     format!("{material:?}")
 }
 
+fn source_pair_accumulation_prefix(
+    cell_a: usize,
+    material_a: usize,
+    source_a: &PhysicalMaterial,
+    cell_b: usize,
+    material_b: usize,
+    source_b: &PhysicalMaterial,
+    unit_a: usize,
+    unit_b: usize,
+) -> String {
+    format!(
+        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|",
+        material_signature(source_a),
+        material_signature(source_b),
+    )
+}
+
 fn source_pair_key(
     cell_a: usize,
     material_a: usize,
@@ -69,9 +86,10 @@ fn source_pair_key(
     candidate: ConnectionPairCandidate,
 ) -> String {
     format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|{:?}|{:?}",
-        material_signature(source_a),
-        material_signature(source_b),
+        "{}{:?}|{:?}",
+        source_pair_accumulation_prefix(
+            cell_a, material_a, source_a, cell_b, material_b, source_b, unit_a, unit_b,
+        ),
         candidate.endpoint_a,
         candidate.endpoint_b,
     )
@@ -106,6 +124,31 @@ fn record_unupdated_accumulations(
     let (entries, total) = environmental_accumulation_totals(accumulation);
     diagnostics.accumulation_entries_after_search = entries;
     diagnostics.accumulation_value_after_search = total;
+}
+
+fn invalidate_unupdated_constituent_accumulations(
+    accumulation: &mut BTreeMap<String, f64>,
+    checked_prefixes: &BTreeSet<String>,
+    updated_keys: &BTreeSet<String>,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+) {
+    if checked_prefixes.is_empty() {
+        return;
+    }
+    accumulation.retain(|key, value| {
+        let was_checked = checked_prefixes
+            .iter()
+            .any(|prefix| key.starts_with(prefix));
+        if key.starts_with(ENVIRONMENT_PREFIX) && was_checked && !updated_keys.contains(key) {
+            diagnostics.accumulation_keys_invalidated += 1;
+            if value.is_finite() {
+                diagnostics.accumulation_value_invalidated += *value;
+            }
+            false
+        } else {
+            true
+        }
+    });
 }
 
 fn restored_source(
@@ -644,6 +687,18 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
+                    let mut checked_prefixes = BTreeSet::new();
+                    if pair_count > 0 {
+                        for offset in 0..component_work_used {
+                            let pair_index = pair_start.wrapping_add(offset) % pair_count;
+                            let unit_a = indices_a[pair_index / indices_b.len()];
+                            let unit_b = indices_b[pair_index % indices_b.len()];
+                            checked_prefixes.insert(source_pair_accumulation_prefix(
+                                cell_a, material_a, &source_a, cell_b, material_b, &source_b,
+                                unit_a, unit_b,
+                            ));
+                        }
+                    }
                     for selected in selected {
                         chemical_step(
                             environment,
@@ -663,6 +718,12 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             &mut operations,
                         );
                     }
+                    invalidate_unupdated_constituent_accumulations(
+                        accumulation,
+                        &checked_prefixes,
+                        &updated_keys,
+                        diagnostics,
+                    );
                 }
             }
         }
