@@ -1376,22 +1376,25 @@ mod material_identity_tests {
             cell.physical_materials.clear();
         }
         let catalog = simulation.environment.catalog.clone();
-        let mut source = environmental_test_composite(&catalog);
-        let connection = source
-            .internal_connections
-            .as_mut()
-            .and_then(|connections| connections.first_mut())
-            .expect("fixture must contain an internal bond");
-        connection.part_a = usize::MAX;
+        let source = environmental_test_composite(&catalog);
         assert!(simulation.environment.field.deposit_physical_at_index(
             0,
             source,
             &catalog,
         ));
         simulation.environment.field.assign_missing_material_identities();
+        let connection = {
+            let material = &mut simulation.environment.field.cells[0].physical_materials[0];
+            let connection = material
+                .internal_connections
+                .as_mut()
+                .and_then(|connections| connections.first_mut())
+                .expect("fixture must contain an internal bond");
+            connection.part_a = usize::MAX;
+            connection.clone()
+        };
         let material = &simulation.environment.field.cells[0].physical_materials[0];
-        let connection = material.internal_connections.as_ref().unwrap().first().unwrap();
-        let invalid_key = environmental_break_accumulation_key(material, 0, connection);
+        let invalid_key = environmental_break_accumulation_key(material, 0, &connection);
         let mut accumulation = std::collections::BTreeMap::from([(invalid_key.clone(), 0.75)]);
         let mut discovery_budget = 64;
         let _ = accumulate_environmental(
