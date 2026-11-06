@@ -224,17 +224,9 @@ fn build_displacement_trial_with_activation_status(
         return None;
     }
 
-    // A displacement must occupy the endpoint actually freed by A-B. Merely
-    // forming A-C at some other available site while independently removing
-    // A-B would be a BREAK plus COMBINE, not a physical replacement.
-    let freed_anchor_endpoint = if old_bond.endpoint_a.constituent_id == anchor_id {
-        old_bond.endpoint_a.location
-    } else {
-        old_bond.endpoint_b.location
-    };
-    if replacement_candidate.endpoint_a != freed_anchor_endpoint {
-        return None;
-    }
+    // A replacement may use any compatible, available anchor endpoint. It
+    // need not reuse the endpoint occupied by the displaced bond; the new
+    // physical contact and bond competition determine whether replacement is valid.
 
     let anchor = source.units[anchor_unit].properties(catalog)?;
     let displaced = source.units[displaced_unit].properties(catalog)?;
@@ -260,6 +252,16 @@ fn build_displacement_trial_with_activation_status(
     if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9 {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
+        }
+        return None;
+    }
+
+    // Bond energy stores the magnitude of stable structural potential. A
+    // stronger replacement has a greater magnitude; ties and weaker bonds
+    // cannot displace the existing bond.
+    if preflight.replacement_bond_energy <= preflight.old_bond_energy {
+        if let Some(diagnostic) = diagnostic.as_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Other;
         }
         return None;
     }
@@ -582,12 +584,11 @@ fn dissipate_unupdated_displacement_accumulations(
     });
 }
 
-fn best_freed_endpoint_contact(
+fn best_replacement_contact(
     combined: &OrganismStructure,
     anchor_unit: usize,
     incoming_unit: usize,
     old_bond: Bond,
-    freed_endpoint: crate::structure::ConnectionEndpoint,
     catalog: &[BaseResource],
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
@@ -601,8 +602,7 @@ fn best_freed_endpoint_contact(
         catalog,
         &mut cache,
     ) {
-        if candidate.endpoint_a != freed_endpoint
-            || !candidate.available_a
+        if !candidate.available_a
             || !candidate.available_b
             || !candidate.distance.is_finite()
             || candidate.distance < 0.0
@@ -666,8 +666,8 @@ fn displacement_reaction_frequency(
 }
 
 /// Discover live A-B + C contacts. The old bond is removed only on a trial
-/// graph before candidate generation, so C must physically occupy the endpoint
-/// that A-B actually frees.
+/// graph before candidate generation, making every compatible, available anchor
+/// endpoint eligible for a replacement contact.
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
@@ -833,9 +833,9 @@ pub(crate) fn accumulate_environmental(
                             continue;
                         };
 
-                        for (anchor_part, displaced_part, freed_endpoint) in [
-                            (connection.part_a, connection.part_b, connection.endpoint_a),
-                            (connection.part_b, connection.part_a, connection.endpoint_b),
+                        for (anchor_part, displaced_part) in [
+                            (connection.part_a, connection.part_b),
+                            (connection.part_b, connection.part_a),
                         ] {
                             let (Some(&anchor_unit), Some(&displaced_unit)) =
                                 (indices_a.get(anchor_part), indices_a.get(displaced_part))
@@ -857,12 +857,11 @@ pub(crate) fn accumulate_environmental(
                                     diagnostics.replacement_contact_searches.saturating_add(1);
                                 *remaining_discovery_work =
                                     remaining_discovery_work.saturating_sub(1);
-                                let Some((candidate, investment)) = best_freed_endpoint_contact(
+                                let Some((candidate, investment)) = best_replacement_contact(
                                     &combined,
                                     anchor_unit,
                                     incoming_unit,
                                     old_bond,
-                                    freed_endpoint,
                                     &environment.catalog,
                                 ) else {
                                     continue;
@@ -1575,8 +1574,8 @@ mod tests {
         let mut replacement_trial = source.clone();
         replacement_trial.break_matching_bond(old_bond).unwrap();
         // Search physically valid Oxygen poses rather than relying on a guessed
-        // offset. The selected pose must touch the exact freed Carbon endpoint,
-        // be engaged, and avoid penetrating either existing source constituent.
+        // offset. The selected pose must engage a different available Carbon
+        // endpoint and avoid penetrating either existing source constituent.
         let mut replacement = None;
         'poses: for x_step in -8..=8 {
             for y_step in -8..=8 {
@@ -1605,7 +1604,7 @@ mod tests {
                     )
                     .into_iter()
                     .find(|candidate| {
-                        candidate.endpoint_a == old_candidate.endpoint_a
+                        candidate.endpoint_a != old_candidate.endpoint_a
                             && candidate.distance >= 0.0
                             && candidate.distance
                                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -1831,15 +1830,14 @@ mod tests {
             .first()
             .copied()
             .expect("restored source should contain its old bond");
-        let (candidate, _investment) = best_freed_endpoint_contact(
+        let (candidate, _investment) = best_replacement_contact(
             &combined,
             anchor_unit,
             incoming_unit,
             old_bond,
-            connection.endpoint_a,
             &catalog,
         )
-        .expect("incoming source should contact the endpoint freed by the old bond");
+        .expect("incoming source should contact a compatible available anchor endpoint");
         let first_activation = accumulate_incoming_activation(
             &combined.units[anchor_unit],
             &combined.units[incoming_unit],
@@ -1956,46 +1954,26 @@ mod tests {
     }
 
     #[test]
-    fn replacement_must_use_the_endpoint_freed_by_the_displaced_bond() {
+    fn replacement_may_use_a_different_available_anchor_endpoint() {
         let catalog = default_catalog();
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
-        assert_eq!(candidate.endpoint_a, old_bond.endpoint_a.location);
-        let mut unrelated_candidate = candidate;
-        unrelated_candidate.endpoint_a = match candidate.endpoint_a {
-            crate::structure::ConnectionEndpoint::Corner { point_index } => {
-                crate::structure::ConnectionEndpoint::Corner {
-                    point_index: point_index.wrapping_add(1),
-                }
-            }
-            crate::structure::ConnectionEndpoint::LineEndpoint { point_index } => {
-                crate::structure::ConnectionEndpoint::LineEndpoint {
-                    point_index: point_index.wrapping_add(1),
-                }
-            }
-            crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
-                crate::structure::ConnectionEndpoint::Boundary {
-                    angle_radians: angle_radians + 0.1,
-                }
-            }
-            crate::structure::ConnectionEndpoint::Fluid { x, y } => {
-                crate::structure::ConnectionEndpoint::Fluid { x: x + 0.1, y }
-            }
-        };
-        assert_ne!(unrelated_candidate.endpoint_a, old_bond.endpoint_a.location);
-        assert!(build_displacement_trial(
+        assert_ne!(candidate.endpoint_a, old_bond.endpoint_a.location);
+        let trial = build_displacement_trial(
             &source,
             0,
             1,
             2,
             old_bond,
-            unrelated_candidate,
+            candidate,
             investment,
             10.0,
             catalog_reactivity_baseline(),
             0.0,
             &catalog,
         )
-        .is_none());
+        .expect("a valid stronger bond may replace through another available endpoint");
+        assert_eq!(trial.structure.bonds.len(), 1);
+        assert_ne!(trial.replacement_bond.endpoint_a.location, old_bond.endpoint_a.location);
     }
 
     #[test]
