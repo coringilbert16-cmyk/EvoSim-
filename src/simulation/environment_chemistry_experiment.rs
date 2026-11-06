@@ -126,54 +126,61 @@ fn realize_natural_molecule(
     // Find a genuine non-overlapping contact in the actual realized geometry.
     // The pose search changes only the initial arrangement; ordinary COMBINE
     // still decides whether the contact is chemically and physically eligible.
-    let (sin, cos) = placement.rotation_radians.sin_cos();
     let mut selected_contact = None;
-    'poses: for distance_step in 20..=100 {
-        let separation = f64::from(distance_step) * 0.025;
-        structure.units[unit_b].placement = Placement {
-            x: placement.x + separation * cos,
-            y: placement.y + separation * sin,
-            rotation_radians: placement.rotation_radians,
-        };
-        let incoming = structure.units[unit_b].clone();
-        if crate::construction_runtime::placed_unit_overlaps(
-            &structure,
-            &incoming,
-            &[unit_b],
-            catalog,
-        ) {
-            continue;
-        }
+    'poses: for direction_step in 0..16 {
+        let direction = placement.rotation_radians
+            + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
+        let (sin, cos) = direction.sin_cos();
+        for distance_step in 20..=100 {
+            let separation = f64::from(distance_step) * 0.025;
+            for rotation_step in 0..16 {
+                structure.units[unit_b].placement = Placement {
+                    x: placement.x + separation * cos,
+                    y: placement.y + separation * sin,
+                    rotation_radians: placement.rotation_radians
+                        + std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                };
+                let incoming = structure.units[unit_b].clone();
+                if crate::construction_runtime::placed_unit_overlaps(
+                    &structure,
+                    &incoming,
+                    &[unit_b],
+                    catalog,
+                ) {
+                    continue;
+                }
 
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        for candidate in crate::contact::connection_pair_candidates_cached(
-            &structure,
-            unit_a,
-            unit_b,
-            catalog,
-            &mut cache,
-        ) {
-            if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                || !candidate.available_a
-                || !candidate.available_b
-                || !candidate.facing.is_finite()
-                || candidate.facing <= 0.0
-            {
-                continue;
-            }
-            let Some((_, _, investment, required_energy)) =
-                crate::combine_runtime::selected_candidate_evaluation(
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
                     &structure,
                     unit_a,
                     unit_b,
-                    candidate,
                     catalog,
-                )
-            else {
-                continue;
-            };
-            selected_contact = Some((candidate, investment, required_energy));
-            break 'poses;
+                    &mut cache,
+                ) {
+                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        || !candidate.available_a
+                        || !candidate.available_b
+                        || !candidate.facing.is_finite()
+                        || candidate.facing <= 0.0
+                    {
+                        continue;
+                    }
+                    let Some((_, _, investment, required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &structure,
+                            unit_a,
+                            unit_b,
+                            candidate,
+                            catalog,
+                        )
+                    else {
+                        continue;
+                    };
+                    selected_contact = Some((candidate, investment, required_energy));
+                    break 'poses;
+                }
+            }
         }
     }
     let (candidate, investment, required_energy) = selected_contact
