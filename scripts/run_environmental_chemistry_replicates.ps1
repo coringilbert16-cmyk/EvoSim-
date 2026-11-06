@@ -20,6 +20,8 @@ try {
         Write-Output "Starting standard environment chemistry run: seed=$seed duration=${DurationSeconds}s"
         Write-Output "Diagnostics: $diagnosticsPath"
 
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         & cargo run --locked -- `
             --headless `
             --environment-chemistry-experiment `
@@ -28,9 +30,11 @@ try {
             --diagnostics $diagnosticsPath `
             --diagnostic-interval $DiagnosticInterval 2>&1 |
             Tee-Object -FilePath $consolePath
+        $cargoExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
 
-        if ($LASTEXITCODE -ne 0) {
-            throw "Chemistry baseline failed for seed $seed (exit code $LASTEXITCODE). See $consolePath"
+        if ($cargoExitCode -ne 0) {
+            throw "Chemistry baseline failed for seed $seed (exit code $cargoExitCode). See $consolePath"
         }
     }
 }
