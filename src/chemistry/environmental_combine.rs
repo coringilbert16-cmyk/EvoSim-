@@ -3070,8 +3070,7 @@ mod tests {
         assert_eq!(first_window_work, 0);
 
         let mut second_window_work = FIELD_COMPONENT_PAIR_LIMIT;
-        let mut search_diagnostics =
-            crate::state::EnvironmentalCombineSearchDiagnostics::default();
+        let mut search_diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
         let late_window = select_best_contact_from_offset(
             &structure,
             &indices_a,
