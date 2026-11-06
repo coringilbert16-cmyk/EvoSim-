@@ -1524,25 +1524,24 @@ mod tests {
     fn three_participant_fixture(
         catalog: &[BaseResource],
     ) -> (OrganismStructure, Bond, ConnectionPairCandidate, f64) {
-        let origin = crate::structure::Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        };
-        let molecule = crate::environment_chemistry_experiment::realize_natural_molecule(
-            &["Carbon".to_owned(), "Hydrogen".to_owned()],
-            origin,
-            catalog,
-        );
         let mut source = OrganismStructure::new();
-        let indices = crate::material_restoration::restore_material(
-            &mut source,
-            &molecule,
-            origin,
-            catalog,
-        )
-        .expect("ordinary-COMBINE C-H molecule must restore");
-        let incoming_unit = source.add_unit(crate::structure::StructuralUnit::new(
+        source.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        source.add_unit(crate::structure::StructuralUnit::new(
+            "Hydrogen",
+            crate::structure::Placement {
+                x: 1.5,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        source.add_unit(crate::structure::StructuralUnit::new(
             "Oxygen",
             crate::structure::Placement {
                 x: 10.0,
@@ -1550,57 +1549,63 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
-        assert_eq!(indices, vec![0, 1]);
-        assert_eq!(incoming_unit, 2);
-        assert_eq!(source.bonds.len(), 1);
 
-        let old_bond = source.bonds[0];
-        let carbon_id = source.physical_id(indices[0]).unwrap();
-        let freed_endpoint = if old_bond.endpoint_a.constituent_id == carbon_id {
-            old_bond.endpoint_a.location
-        } else {
-            old_bond.endpoint_b.location
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+        let old_candidate =
+            crate::contact::connection_pair_candidates_cached(&source, 0, 1, catalog, &mut cache)
+                .into_iter()
+                .find(|candidate| {
+                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        && candidate.available_a
+                        && candidate.available_b
+                })
+                .expect("Carbon-Hydrogen physical contact");
+        let anchor = source.units[0].properties(catalog).unwrap();
+        let displaced = source.units[1].properties(catalog).unwrap();
+        let strength = bond_strength(anchor, displaced);
+        let old_bond = Bond {
+            endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
+            endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
+            strength,
+            bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
         };
+        crate::contact::try_add_bond(&mut source, old_bond, catalog)
+            .expect("initial A-B bond should be physically valid");
 
         let mut replacement_trial = source.clone();
-        replacement_trial
-            .break_matching_bond(old_bond)
-            .expect("ordinary-COMBINE C-H bond should be removable in trial state");
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let mut replacement = None;
+        replacement_trial.break_matching_bond(old_bond).unwrap();
         // Search physically valid Oxygen poses rather than relying on a guessed
-        // offset. The selected pose must touch the exact endpoint freed by C-H,
+        // offset. The selected pose must touch the exact freed Carbon endpoint,
         // be engaged, and avoid penetrating either existing source constituent.
+        let mut replacement = None;
         'poses: for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
                     let placement = crate::structure::Placement {
                         x: f64::from(x_step) * 0.2,
                         y: f64::from(y_step) * 0.2,
-                        rotation_radians: std::f64::consts::TAU
-                            * f64::from(rotation_step)
-                            / 16.0,
+                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
                     };
-                    replacement_trial.units[incoming_unit].placement = placement;
-                    let incoming = replacement_trial.units[incoming_unit].clone();
+                    replacement_trial.units[2].placement = placement;
+                    let incoming = replacement_trial.units[2].clone();
                     if crate::construction_runtime::placed_unit_overlaps(
                         &replacement_trial,
                         &incoming,
-                        &[incoming_unit],
+                        &[2],
                         catalog,
                     ) {
                         continue;
                     }
                     let candidate = crate::contact::connection_pair_candidates_cached(
                         &replacement_trial,
-                        indices[0],
-                        incoming_unit,
+                        0,
+                        2,
                         catalog,
                         &mut cache,
                     )
                     .into_iter()
                     .find(|candidate| {
-                        candidate.endpoint_a == freed_endpoint
+                        candidate.endpoint_a == old_candidate.endpoint_a
                             && candidate.distance >= 0.0
                             && candidate.distance
                                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -1612,8 +1617,8 @@ mod tests {
                     if let Some(candidate) = candidate {
                         if crate::combine_runtime::selected_candidate_evaluation(
                             &replacement_trial,
-                            indices[0],
-                            incoming_unit,
+                            0,
+                            2,
                             candidate,
                             catalog,
                         )
@@ -1628,12 +1633,12 @@ mod tests {
         }
         let (incoming_placement, replacement_candidate) = replacement
             .expect("freed Carbon endpoint should expose a non-overlapping engaged Oxygen contact");
-        source.units[incoming_unit].placement = incoming_placement;
-        replacement_trial.units[incoming_unit].placement = incoming_placement;
+        source.units[2].placement = incoming_placement;
+        replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             &replacement_trial,
-            indices[0],
-            incoming_unit,
+            0,
+            2,
             replacement_candidate,
             catalog,
         )
