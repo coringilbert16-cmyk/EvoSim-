@@ -286,7 +286,7 @@ fn build_displacement_trial_with_activation_status(
         )
     else {
         if let Some(diagnostic) = diagnostic.as_deref_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::CandidateRevalidation;
         }
         return None;
     };
@@ -294,7 +294,7 @@ fn build_displacement_trial_with_activation_status(
         || (required_investment - investment).abs() > 1e-9
     {
         if let Some(diagnostic) = diagnostic.as_deref_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::FormationInvestment;
         }
         return None;
     }
@@ -316,7 +316,7 @@ fn build_displacement_trial_with_activation_status(
         )
     else {
         if let Some(diagnostic) = diagnostic.as_deref_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::PhysicalInsertion;
         }
         return None;
     };
