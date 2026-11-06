@@ -206,13 +206,13 @@ fn select_best_contact_from_offset(
                     evaluation.candidate.distance,
                     crate::chemistry::CHEMICAL_CONTACT_RADIUS,
                 )?;
-                let engagement = crate::chemistry::interface_engagement(evaluation.candidate.facing)?;
+                let engagement =
+                    crate::chemistry::interface_engagement(evaluation.candidate.facing)?;
                 Some(potential * contact * engagement)
             });
             if let Some(input) = chemical_input {
-                best_chemical_input = Some(
-                    best_chemical_input.map_or(input, |current| current.max(input)),
-                );
+                best_chemical_input =
+                    Some(best_chemical_input.map_or(input, |current| current.max(input)));
             }
             let proposed = SelectedContact {
                 unit_a,
@@ -254,9 +254,7 @@ fn select_best_contact_from_offset(
             diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
             diagnostics.discarded_interfaces_after_single_selection +=
                 pair_valid_interfaces.saturating_sub(1);
-            if pair_valid_interfaces > 1
-                && chemical_potential.is_some_and(|value| value > 0.0)
-            {
+            if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
                 diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
             }
             if let (Some(best_input), Some(selected_input)) =
