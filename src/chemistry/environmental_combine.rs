@@ -3088,7 +3088,10 @@ mod tests {
         assert_eq!(late_window.unit_a, indices_a[12]);
         assert_eq!(late_window.unit_b, indices_b[12]);
         assert_eq!(second_window_work, 0);
-        assert_eq!(search_diagnostics.constituent_pairs_inspected, FIELD_COMPONENT_PAIR_LIMIT);
+        assert_eq!(
+            search_diagnostics.constituent_pairs_inspected,
+            FIELD_COMPONENT_PAIR_LIMIT
+        );
         assert!(
             search_diagnostics.constituent_pairs_with_valid_interfaces > 0,
             "the rotated window must report its physically valid constituent pair"
