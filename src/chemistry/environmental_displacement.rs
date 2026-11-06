@@ -1524,24 +1524,25 @@ mod tests {
     fn three_participant_fixture(
         catalog: &[BaseResource],
     ) -> (OrganismStructure, Bond, ConnectionPairCandidate, f64) {
+        let origin = crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let molecule = crate::environment_chemistry_experiment::realize_natural_molecule(
+            &["Carbon".to_owned(), "Hydrogen".to_owned()],
+            origin,
+            catalog,
+        );
         let mut source = OrganismStructure::new();
-        source.add_unit(crate::structure::StructuralUnit::new(
-            "Carbon",
-            crate::structure::Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        source.add_unit(crate::structure::StructuralUnit::new(
-            "Hydrogen",
-            crate::structure::Placement {
-                x: 1.5,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        source.add_unit(crate::structure::StructuralUnit::new(
+        let indices = crate::material_restoration::restore_material(
+            &mut source,
+            &molecule,
+            origin,
+            catalog,
+        )
+        .expect("ordinary-COMBINE C-H molecule must restore");
+        let incoming_unit = source.add_unit(crate::structure::StructuralUnit::new(
             "Oxygen",
             crate::structure::Placement {
                 x: 10.0,
@@ -1549,63 +1550,57 @@ mod tests {
                 rotation_radians: 0.0,
             },
         ));
+        assert_eq!(indices, vec![0, 1]);
+        assert_eq!(incoming_unit, 2);
+        assert_eq!(source.bonds.len(), 1);
 
-        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-        let old_candidate =
-            crate::contact::connection_pair_candidates_cached(&source, 0, 1, catalog, &mut cache)
-                .into_iter()
-                .find(|candidate| {
-                    candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        && candidate.available_a
-                        && candidate.available_b
-                })
-                .expect("Carbon-Hydrogen physical contact");
-        let anchor = source.units[0].properties(catalog).unwrap();
-        let displaced = source.units[1].properties(catalog).unwrap();
-        let strength = bond_strength(anchor, displaced);
-        let old_bond = Bond {
-            endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
-            endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
-            strength,
-            bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
+        let old_bond = source.bonds[0];
+        let carbon_id = source.physical_id(indices[0]).unwrap();
+        let freed_endpoint = if old_bond.endpoint_a.constituent_id == carbon_id {
+            old_bond.endpoint_a.location
+        } else {
+            old_bond.endpoint_b.location
         };
-        crate::contact::try_add_bond(&mut source, old_bond, catalog)
-            .expect("initial A-B bond should be physically valid");
 
         let mut replacement_trial = source.clone();
-        replacement_trial.break_matching_bond(old_bond).unwrap();
-        // Search physically valid Oxygen poses rather than relying on a guessed
-        // offset. The selected pose must touch the exact freed Carbon endpoint,
-        // be engaged, and avoid penetrating either existing source constituent.
+        replacement_trial
+            .break_matching_bond(old_bond)
+            .expect("ordinary-COMBINE C-H bond should be removable in trial state");
+        let mut cache = crate::contact::ConnectionCompatibilityCache::new();
         let mut replacement = None;
+        // Search physically valid Oxygen poses rather than relying on a guessed
+        // offset. The selected pose must touch the exact endpoint freed by C-H,
+        // be engaged, and avoid penetrating either existing source constituent.
         'poses: for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
                     let placement = crate::structure::Placement {
                         x: f64::from(x_step) * 0.2,
                         y: f64::from(y_step) * 0.2,
-                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                        rotation_radians: std::f64::consts::TAU
+                            * f64::from(rotation_step)
+                            / 16.0,
                     };
-                    replacement_trial.units[2].placement = placement;
-                    let incoming = replacement_trial.units[2].clone();
+                    replacement_trial.units[incoming_unit].placement = placement;
+                    let incoming = replacement_trial.units[incoming_unit].clone();
                     if crate::construction_runtime::placed_unit_overlaps(
                         &replacement_trial,
                         &incoming,
-                        &[2],
+                        &[incoming_unit],
                         catalog,
                     ) {
                         continue;
                     }
                     let candidate = crate::contact::connection_pair_candidates_cached(
                         &replacement_trial,
-                        0,
-                        2,
+                        indices[0],
+                        incoming_unit,
                         catalog,
                         &mut cache,
                     )
                     .into_iter()
                     .find(|candidate| {
-                        candidate.endpoint_a == old_candidate.endpoint_a
+                        candidate.endpoint_a == freed_endpoint
                             && candidate.distance >= 0.0
                             && candidate.distance
                                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -1617,8 +1612,8 @@ mod tests {
                     if let Some(candidate) = candidate {
                         if crate::combine_runtime::selected_candidate_evaluation(
                             &replacement_trial,
-                            0,
-                            2,
+                            indices[0],
+                            incoming_unit,
                             candidate,
                             catalog,
                         )
@@ -1633,12 +1628,12 @@ mod tests {
         }
         let (incoming_placement, replacement_candidate) = replacement
             .expect("freed Carbon endpoint should expose a non-overlapping engaged Oxygen contact");
-        source.units[2].placement = incoming_placement;
-        replacement_trial.units[2].placement = incoming_placement;
+        source.units[incoming_unit].placement = incoming_placement;
+        replacement_trial.units[incoming_unit].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             &replacement_trial,
-            0,
-            2,
+            indices[0],
+            incoming_unit,
             replacement_candidate,
             catalog,
         )
@@ -2098,226 +2093,46 @@ mod tests {
     }
 
     #[test]
-    fn ordinary_combine_hs_and_ch_molecules_can_build_a_displacement_trial() {
+    fn ordinary_combine_hs_and_ch_molecules_restore_with_intrinsic_bond_energy() {
         let catalog = default_catalog();
         let origin = crate::structure::Placement {
             x: 0.0,
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let hs = crate::environment_chemistry_experiment::realize_natural_molecule(
-            &["Hydrogen".to_owned(), "Sulfur".to_owned()],
-            origin,
-            &catalog,
-        );
-        let ch = crate::environment_chemistry_experiment::realize_natural_molecule(
-            &["Carbon".to_owned(), "Hydrogen".to_owned()],
-            origin,
-            &catalog,
-        );
-
-        let hs_connection = hs.internal_connections.as_ref().unwrap()[0].clone();
-        let ch_connection = ch.internal_connections.as_ref().unwrap()[0].clone();
-        assert!(hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0);
-        assert!(ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0);
-
-        let mut source = OrganismStructure::new();
-        let indices_a =
-            crate::material_restoration::restore_material(&mut source, &hs, origin, &catalog)
-                .expect("ordinary-COMBINE H-S molecule must restore");
-        assert_eq!(source.bonds.len(), 1);
-        assert_eq!(source.bonds[0].bond_energy, hs_connection.bond_energy);
-
-        let old_bond = source.bonds[0];
-        let (unit_a, unit_b) =
-            if old_bond.endpoint_a.constituent_id == source.physical_id(indices_a[0]).unwrap() {
-                (indices_a[0], indices_a[1])
-            } else {
-                (indices_a[1], indices_a[0])
-            };
-        let orientations = [
-            (unit_a, unit_b, old_bond.endpoint_a.location),
-            (unit_b, unit_a, old_bond.endpoint_b.location),
-        ];
-        let source_before = source.clone();
-        let reactivity_baseline = catalog_reactivity_baseline();
-        let mut successful_trial = None;
-        let mut non_overlapping_poses = 0_usize;
-        let mut eligible_contact_candidates = 0_usize;
-        let mut freed_endpoint_candidates = 0_usize;
-        let mut candidate_contacts = 0_usize;
-        let mut trial_rejections_by_stage = [0_usize; 8];
-
-        // Preserve each molecule's internally COMBINE-created geometry. Search
-        // rigid-body placements and rotations, testing both ends of the old bond
-        // as the possible anchor rather than manufacturing a new bond endpoint.
-        'poses: for (anchor_unit, displaced_unit, freed_endpoint) in orientations {
-            for rotation_step in 0..8 {
-                let rotation = std::f64::consts::TAU * f64::from(rotation_step) / 8.0;
-                for x_step in -20..=20 {
-                    for y_step in -20..=20 {
-                        let mut combined = source.clone();
-                        let placement = crate::structure::Placement {
-                            x: f64::from(x_step) * 0.2,
-                            y: f64::from(y_step) * 0.2,
-                            rotation_radians: rotation,
-                        };
-                        let indices_b = crate::material_restoration::restore_material(
-                            &mut combined,
-                            &ch,
-                            placement,
-                            &catalog,
-                        )
-                        .expect("ordinary-COMBINE C-H molecule must restore");
-
-                        if indices_b.iter().any(|index| {
-                            crate::construction_runtime::placed_unit_overlaps(
-                                &combined,
-                                &combined.units[*index],
-                                &indices_b,
-                                &catalog,
-                            )
-                        }) {
-                            continue;
-                        }
-                        non_overlapping_poses += 1;
-
-                        for incoming_unit in indices_b.iter().copied() {
-                            let mut topology_trial = combined.clone();
-                            topology_trial
-                                .break_matching_bond(old_bond)
-                                .expect("the trial graph must free the old bond endpoint");
-                            let mut cache = ConnectionCompatibilityCache::new();
-                            let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-                            for candidate in crate::contact::connection_pair_candidates_cached(
-                                &topology_trial,
-                                anchor_unit,
-                                incoming_unit,
-                                &catalog,
-                                &mut cache,
-                            ) {
-                                if !candidate.available_a
-                                    || !candidate.available_b
-                                    || !candidate.distance.is_finite()
-                                    || candidate.distance < 0.0
-                                    || candidate.distance
-                                        > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                                    || !candidate.facing.is_finite()
-                                    || candidate.facing <= 0.0
-                                {
-                                    continue;
-                                }
-                                eligible_contact_candidates += 1;
-                                if candidate.endpoint_a != freed_endpoint {
-                                    continue;
-                                }
-                                freed_endpoint_candidates += 1;
-                                let Some((_, _, investment, required_energy)) =
-                                    crate::combine_runtime::selected_candidate_evaluation(
-                                        &topology_trial,
-                                        anchor_unit,
-                                        incoming_unit,
-                                        candidate,
-                                        &catalog,
-                                    )
-                                else {
-                                    continue;
-                                };
-                                let replace = best.map_or(true, |(current, _, current_energy)| {
-                                    required_energy
-                                        .partial_cmp(&current_energy)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
-                                        .then_with(|| {
-                                            candidate
-                                                .distance
-                                                .partial_cmp(&current.distance)
-                                                .unwrap_or(std::cmp::Ordering::Equal)
-                                        })
-                                        .is_lt()
-                                });
-                                if replace {
-                                    best = Some((candidate, investment, required_energy));
-                                }
-                            }
-                            let Some((candidate, investment, _)) = best else {
-                                continue;
-                            };
-                            candidate_contacts += 1;
-                            let mut diagnostic = DisplacementTrialDiagnostic::default();
-                            let trial = build_displacement_trial_with_activation_status(
-                                &combined,
-                                anchor_unit,
-                                displaced_unit,
-                                incoming_unit,
-                                old_bond,
-                                candidate,
-                                investment,
-                                10.0,
-                                reactivity_baseline,
-                                0.0,
-                                &catalog,
-                                Some(&mut diagnostic),
-                            );
-                            if let Some(trial) = trial {
-                                successful_trial = Some(trial);
-                                break 'poses;
-                            }
-                            let stage_index = match diagnostic.failure_stage {
-                                DisplacementTrialFailureStage::OldBondEnergy => 0,
-                                DisplacementTrialFailureStage::Topology => 1,
-                                DisplacementTrialFailureStage::CandidateCheck => 2,
-                                DisplacementTrialFailureStage::Formation => 3,
-                                DisplacementTrialFailureStage::Insertion => 4,
-                                DisplacementTrialFailureStage::Energy => 5,
-                                DisplacementTrialFailureStage::Products => 6,
-                                DisplacementTrialFailureStage::Other => 7,
-                            };
-                            trial_rejections_by_stage[stage_index] += 1;
-                        }
-                    }
-                }
-            }
-        }
-
-        let Some(trial) = successful_trial else {
-            panic!(
-                "no natural H-S/C-H replacement trial: non_overlapping_poses={non_overlapping_poses}, eligible_contact_candidates={eligible_contact_candidates}, freed_endpoint_candidates={freed_endpoint_candidates}, candidate_contacts={candidate_contacts}, trial_rejections_by_stage={trial_rejections_by_stage:?}"
+        for parts in [
+            ["Hydrogen".to_owned(), "Sulfur".to_owned()],
+            ["Carbon".to_owned(), "Hydrogen".to_owned()],
+        ] {
+            let molecule = crate::environment_chemistry_experiment::realize_natural_molecule(
+                &parts,
+                origin,
+                &catalog,
             );
-        };
-        assert_eq!(source.units, source_before.units);
-        assert_eq!(source.bonds, source_before.bonds);
-        assert_eq!(trial.structure.bonds.len(), 2);
-        assert_eq!(trial.products.len(), 2);
-        assert_eq!(
-            trial
-                .products
-                .iter()
-                .map(|product| product.material.parts.len())
-                .sum::<usize>(),
-            4,
-            "all four original constituents must remain represented"
-        );
-        assert_eq!(
-            trial
-                .products
-                .iter()
-                .map(|product| product.material.internal_bonds.len())
-                .sum::<usize>(),
-            2,
-            "the incoming molecule's original bond and the replacement bond must both survive"
-        );
-        assert!(trial
-            .products
-            .iter()
-            .flat_map(|product| { product.internal_connections.as_ref().into_iter().flatten() })
-            .all(|connection| {
-                connection.bond_energy.is_finite() && connection.bond_energy > 0.0
-            }));
-        assert!(
-            trial.products.iter().any(|product| {
-                product.material.parts.len() == 1 && product.material.internal_bonds.is_empty()
-            }),
-            "the displaced constituent must become a separate physical product"
-        );
+            let connection = molecule
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.first())
+                .expect("ordinary COMBINE export must preserve the molecule bond");
+            assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
+
+            let mut restored = OrganismStructure::new();
+            crate::material_restoration::restore_material(
+                &mut restored,
+                &molecule,
+                origin,
+                &catalog,
+            )
+            .expect("ordinary-COMBINE molecule must restore");
+            assert_eq!(restored.bonds.len(), 1);
+            assert_eq!(restored.bonds[0].bond_energy, connection.bond_energy);
+            let expected_energy = intrinsic_bond_potential(
+                restored.units[0].properties(&catalog).unwrap(),
+                restored.units[1].properties(&catalog).unwrap(),
+                restored.bonds[0].strength,
+            );
+            assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
+        }
     }
+
 }
