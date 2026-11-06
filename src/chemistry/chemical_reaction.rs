@@ -448,17 +448,27 @@ pub(crate) fn accumulate(
 /// materials reached by the scan. Counting all three levels makes the work bound
 /// testable even in sparse fields; material membership lets accumulation invalidate
 /// removed bonds without penalizing current bonds outside the candidate window.
+struct EnvironmentalBondDiscovery {
+    candidates: Vec<(usize, usize, usize)>,
+    inspected_entries: usize,
+    checked_materials: Vec<(u64, usize)>,
+}
+
 fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
-) -> (Vec<(usize, usize, usize)>, usize, Vec<(u64, usize)>) {
+) -> EnvironmentalBondDiscovery {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
     let mut checked_materials = Vec::new();
     if limit == 0 || cell_count == 0 {
-        return (candidates, 0, checked_materials);
+        return EnvironmentalBondDiscovery {
+            candidates,
+            inspected_entries: 0,
+            checked_materials,
+        };
     }
 
     let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
@@ -525,11 +535,11 @@ fn discover_environmental_bonds(
         }
     }
 
-    (
+    EnvironmentalBondDiscovery {
         candidates,
-        scan_steps_initial - scan_steps_remaining,
+        inspected_entries: scan_steps_initial - scan_steps_remaining,
         checked_materials,
-    )
+    }
 }
 
 pub(crate) fn accumulate_environmental(
@@ -545,8 +555,9 @@ pub(crate) fn accumulate_environmental(
     const ENVIRONMENT_PREFIX: &str = "environment|environment:";
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let (candidates, _scan_steps, checked_materials) =
-        discover_environmental_bonds(environment, tick, count);
+    let discovery = discover_environmental_bonds(environment, tick, count);
+    let candidates = discovery.candidates;
+    let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
@@ -1539,8 +1550,10 @@ mod material_identity_tests {
         // Empty cells are the worst case for candidate-only accounting: no
         // candidate is found, but traversal must still stop at the scan bound.
         for budget in [1_usize, 8, 64, MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK] {
-            let (candidates, inspected, _) =
+            let discovery =
                 discover_environmental_bonds(&simulation.environment, 0, budget);
+            let candidates = discovery.candidates;
+            let inspected = discovery.inspected_entries;
             assert!(candidates.len() <= budget);
             assert!(
                 inspected <= budget.saturating_mul(8).max(1),
@@ -1561,8 +1574,10 @@ mod material_identity_tests {
         let budget = 8;
         let mut reached = false;
         for tick in 0..simulation.environment.field.cells.len() as u64 + 8 {
-            let (candidates, inspected, _) =
+            let discovery =
                 discover_environmental_bonds(&simulation.environment, tick, budget);
+            let candidates = discovery.candidates;
+            let inspected = discovery.inspected_entries;
             assert!(candidates.len() <= budget);
             assert!(inspected <= budget * 8);
             if candidates.iter().any(|(cell, _, _)| *cell == last_cell) {
