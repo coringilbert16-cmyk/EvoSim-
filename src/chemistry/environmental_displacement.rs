@@ -250,10 +250,15 @@ fn build_displacement_trial_with_activation_status(
         0.0,
         dissipated_heat,
     )?;
+    let old_bond_energy_abs_error =
+        (old_bond.bond_energy - preflight.old_bond_energy).abs();
     if let Some(diagnostic) = diagnostic.as_deref_mut() {
         diagnostic.activation_sufficient = Some(preflight.is_activated());
+        diagnostic.old_bond_energy_stored = Some(old_bond.bond_energy);
+        diagnostic.old_bond_energy_expected = Some(preflight.old_bond_energy);
+        diagnostic.old_bond_energy_abs_error = Some(old_bond_energy_abs_error);
     }
-    if !preflight.is_activated() || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
+    if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9
     {
         if let Some(diagnostic) = diagnostic.as_deref_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
