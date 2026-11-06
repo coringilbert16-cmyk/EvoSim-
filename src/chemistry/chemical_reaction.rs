@@ -200,6 +200,24 @@ fn dissipate_unupdated_accumulations(
     });
 }
 
+fn dissipate_checked_unupdated_accumulations(
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    current_prefix: &str,
+    checked_keys: &std::collections::BTreeSet<String>,
+    updated_keys: &std::collections::BTreeSet<String>,
+) {
+    accumulation.retain(|key, value| {
+        if !key.starts_with(current_prefix)
+            || !checked_keys.contains(key)
+            || updated_keys.contains(key)
+        {
+            return true;
+        }
+        *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        value.is_finite() && *value > 0.0
+    });
+}
+
 pub(crate) fn accumulate(
     organism: &Organism,
     catalog: &[BaseResource],
