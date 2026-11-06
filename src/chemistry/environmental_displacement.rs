@@ -2096,4 +2096,136 @@ mod tests {
         assert_eq!(source.units, before.units);
         assert_eq!(source.bonds, before.bonds);
     }
+
+    #[test]
+    fn ordinary_combine_hs_and_ch_molecules_can_build_a_displacement_trial() {
+        let catalog = default_catalog();
+        let origin = crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let hs = crate::environment_chemistry_experiment::realize_natural_molecule(
+            &["Hydrogen".to_owned(), "Sulfur".to_owned()],
+            origin,
+            &catalog,
+        );
+        let ch = crate::environment_chemistry_experiment::realize_natural_molecule(
+            &["Carbon".to_owned(), "Hydrogen".to_owned()],
+            origin,
+            &catalog,
+        );
+
+        let hs_connection = hs.internal_connections.as_ref().unwrap()[0].clone();
+        let ch_connection = ch.internal_connections.as_ref().unwrap()[0].clone();
+        assert!(hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0);
+        assert!(ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0);
+
+        let mut source = OrganismStructure::new();
+        let indices_a = crate::material_restoration::restore_material(
+            &mut source,
+            &hs,
+            origin,
+            &catalog,
+        )
+        .expect("ordinary-COMBINE H-S molecule must restore");
+        assert_eq!(source.bonds.len(), 1);
+        assert_eq!(source.bonds[0].bond_energy, hs_connection.bond_energy);
+
+        let old_bond = source.bonds[0];
+        let (anchor_unit, displaced_unit, freed_endpoint) =
+            if old_bond.endpoint_a.constituent_id == source.physical_id(indices_a[0]).unwrap() {
+                (indices_a[0], indices_a[1], old_bond.endpoint_a.location)
+            } else {
+                (indices_a[1], indices_a[0], old_bond.endpoint_b.location)
+            };
+        let source_before = source.clone();
+        let mut successful_trial = None;
+
+        // Move only the incoming molecule's rigid placement. Its internal
+        // geometry and COMBINE-created bond remain unchanged.
+        'translations: for x_step in -30..=30 {
+            for y_step in -30..=30 {
+                let mut combined = source.clone();
+                let placement = crate::structure::Placement {
+                    x: f64::from(x_step) * 0.1,
+                    y: f64::from(y_step) * 0.1,
+                    rotation_radians: 0.0,
+                };
+                let indices_b = crate::material_restoration::restore_material(
+                    &mut combined,
+                    &ch,
+                    placement,
+                    &catalog,
+                )
+                .expect("ordinary-COMBINE C-H molecule must restore");
+
+                if indices_b.iter().any(|index| {
+                    crate::construction_runtime::placed_unit_overlaps(
+                        &combined,
+                        &combined.units[*index],
+                        &indices_b,
+                        &catalog,
+                    )
+                }) {
+                    continue;
+                }
+
+                for incoming_unit in indices_b.iter().copied() {
+                    let Some((candidate, investment)) = best_freed_endpoint_contact(
+                        &combined,
+                        anchor_unit,
+                        incoming_unit,
+                        old_bond,
+                        freed_endpoint,
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    let Some(trial) = build_displacement_trial(
+                        &combined,
+                        anchor_unit,
+                        displaced_unit,
+                        incoming_unit,
+                        old_bond,
+                        candidate,
+                        investment,
+                        10.0,
+                        catalog_reactivity_baseline(),
+                        0.0,
+                        &catalog,
+                    ) else {
+                        continue;
+                    };
+                    successful_trial = Some(trial);
+                    break 'translations;
+                }
+            }
+        }
+
+        let trial = successful_trial.expect(
+            "naturally COMBINE-created H-S and C-H molecules should admit a physical replacement trial",
+        );
+        assert_eq!(source.units, source_before.units);
+        assert_eq!(source.bonds, source_before.bonds);
+        assert_eq!(trial.structure.bonds.len(), 2);
+        assert_eq!(trial.products.len(), 2);
+        assert_eq!(
+            trial.products.iter().map(|product| product.material.parts.len()).sum::<usize>(),
+            4,
+            "all four original constituents must remain represented"
+        );
+        assert_eq!(
+            trial.products.iter().map(|product| product.material.internal_bonds.len()).sum::<usize>(),
+            2,
+            "the incoming molecule's original bond and the replacement bond must both survive"
+        );
+        assert!(trial.products.iter().flat_map(|product| {
+            product.internal_connections.as_ref().into_iter().flatten()
+        }).all(|connection| connection.bond_energy.is_finite() && connection.bond_energy > 0.0));
+        assert!(trial.products.iter().any(|product| {
+            product.material.parts.len() == 1 && product.material.internal_bonds.is_empty()
+        }), "the displaced constituent must become a separate physical product");
+    }
+
 }
