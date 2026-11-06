@@ -2118,17 +2118,17 @@ mod tests {
 
         let hs_connection = hs.internal_connections.as_ref().unwrap()[0].clone();
         let ch_connection = ch.internal_connections.as_ref().unwrap()[0].clone();
-        assert!(hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0);
-        assert!(ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0);
+        assert!(
+            hs_connection.bond_energy.is_finite() && hs_connection.bond_energy > 0.0
+        );
+        assert!(
+            ch_connection.bond_energy.is_finite() && ch_connection.bond_energy > 0.0
+        );
 
         let mut source = OrganismStructure::new();
-        let indices_a = crate::material_restoration::restore_material(
-            &mut source,
-            &hs,
-            origin,
-            &catalog,
-        )
-        .expect("ordinary-COMBINE H-S molecule must restore");
+        let indices_a =
+            crate::material_restoration::restore_material(&mut source, &hs, origin, &catalog)
+                .expect("ordinary-COMBINE H-S molecule must restore");
         assert_eq!(source.bonds.len(), 1);
         assert_eq!(source.bonds[0].bond_energy, hs_connection.bond_energy);
 
@@ -2211,21 +2211,44 @@ mod tests {
         assert_eq!(trial.structure.bonds.len(), 2);
         assert_eq!(trial.products.len(), 2);
         assert_eq!(
-            trial.products.iter().map(|product| product.material.parts.len()).sum::<usize>(),
+            trial
+                .products
+                .iter()
+                .map(|product| product.material.parts.len())
+                .sum::<usize>(),
             4,
             "all four original constituents must remain represented"
         );
         assert_eq!(
-            trial.products.iter().map(|product| product.material.internal_bonds.len()).sum::<usize>(),
+            trial
+                .products
+                .iter()
+                .map(|product| product.material.internal_bonds.len())
+                .sum::<usize>(),
             2,
             "the incoming molecule's original bond and the replacement bond must both survive"
         );
-        assert!(trial.products.iter().flat_map(|product| {
-            product.internal_connections.as_ref().into_iter().flatten()
-        }).all(|connection| connection.bond_energy.is_finite() && connection.bond_energy > 0.0));
-        assert!(trial.products.iter().any(|product| {
-            product.material.parts.len() == 1 && product.material.internal_bonds.is_empty()
-        }), "the displaced constituent must become a separate physical product");
+        assert!(
+            trial
+                .products
+                .iter()
+                .flat_map(|product| {
+                    product
+                        .internal_connections
+                        .as_ref()
+                        .into_iter()
+                        .flatten()
+                })
+                .all(|connection| {
+                    connection.bond_energy.is_finite() && connection.bond_energy > 0.0
+                })
+        );
+        assert!(
+            trial.products.iter().any(|product| {
+                product.material.parts.len() == 1 && product.material.internal_bonds.is_empty()
+            }),
+            "the displaced constituent must become a separate physical product"
+        );
     }
 
 }
