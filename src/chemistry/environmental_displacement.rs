@@ -1630,8 +1630,9 @@ mod tests {
                 }
             }
         }
-        let (incoming_placement, replacement_candidate) = replacement
-            .expect("valid alternate Carbon endpoint must be physically engaged");
+        let (incoming_placement, replacement_candidate) = replacement.expect(
+            "valid alternate Carbon endpoint must be physically engaged",
+        );
         source.units[2].placement = incoming_placement;
         replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
@@ -1830,14 +1831,9 @@ mod tests {
             .first()
             .copied()
             .expect("restored source should contain its old bond");
-        let (candidate, _investment) = best_replacement_contact(
-            &combined,
-            anchor_unit,
-            incoming_unit,
-            old_bond,
-            &catalog,
-        )
-        .expect("incoming source should contact a compatible available anchor endpoint");
+        let (candidate, _investment) =
+            best_replacement_contact(&combined, anchor_unit, incoming_unit, old_bond, &catalog)
+                .expect("incoming source should contact a compatible available anchor endpoint");
         let first_activation = accumulate_incoming_activation(
             &combined.units[anchor_unit],
             &combined.units[incoming_unit],
