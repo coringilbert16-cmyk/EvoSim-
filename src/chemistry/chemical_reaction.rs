@@ -439,6 +439,12 @@ pub(crate) fn accumulate(
     operations
 }
 
+struct EnvironmentalBondDiscovery {
+    candidates: Vec<(usize, usize, usize)>,
+    inspected_entries: usize,
+    checked_materials: Vec<(u64, usize)>,
+}
+
 /// Discover chemical reactions at realized environmental material bonds in the
 /// field. Environmental bonds are restored only into a trial graph to recover
 /// their authoritative geometry and activation strength; allocated bond energy
@@ -448,12 +454,6 @@ pub(crate) fn accumulate(
 /// materials reached by the scan. Counting all three levels makes the work bound
 /// testable even in sparse fields; material membership lets accumulation invalidate
 /// removed bonds without penalizing current bonds outside the candidate window.
-struct EnvironmentalBondDiscovery {
-    candidates: Vec<(usize, usize, usize)>,
-    inspected_entries: usize,
-    checked_materials: Vec<(u64, usize)>,
-}
-
 fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
