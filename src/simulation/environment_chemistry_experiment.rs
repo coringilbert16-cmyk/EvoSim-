@@ -103,7 +103,7 @@ pub(crate) fn seed_randomized_resources(
 /// endpoint identity, and product export all come from the same runtime path used
 /// by environmental COMBINE. Any required input is the exact amount calculated
 /// by COMBINE, not a molecule-specific energy grant.
-fn realize_natural_molecule(
+pub(crate) fn realize_natural_molecule(
     parts: &[String],
     placement: Placement,
     catalog: &[crate::resources::BaseResource],
