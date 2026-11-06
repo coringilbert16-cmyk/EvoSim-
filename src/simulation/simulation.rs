@@ -899,13 +899,16 @@ impl Simulation {
         // coupled displacement path; BREAK retains its independent quarter.
         let mut environmental_combine_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
+        self.environmental_chemistry_diagnostics.combine_search =
+            crate::state::EnvironmentalCombineSearchDiagnostics::default();
         let environmental_combine_operations =
-            crate::environmental_combine::accumulate_environmental(
+            crate::environmental_combine::accumulate_environmental_with_diagnostics(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
+                &mut self.environmental_chemistry_diagnostics.combine_search,
             );
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
