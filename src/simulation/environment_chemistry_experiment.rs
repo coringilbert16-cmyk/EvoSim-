@@ -116,20 +116,18 @@ fn realize_natural_molecule(
     let mut structure = OrganismStructure::new();
     let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
     let unit_b = structure.add_unit(StructuralUnit::new(parts[1].clone(), placement));
-    assert!(
-        structure
-            .units
-            .iter_mut()
-            .all(|unit| unit.realize_default_geometry(catalog))
-    );
+    assert!(structure
+        .units
+        .iter_mut()
+        .all(|unit| unit.realize_default_geometry(catalog)));
 
     // Find a genuine non-overlapping contact in the actual realized geometry.
     // The pose search changes only the initial arrangement; ordinary COMBINE
     // still decides whether the contact is chemically and physically eligible.
     let mut selected_contact = None;
     'poses: for direction_step in 0..16 {
-        let direction = placement.rotation_radians
-            + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
+        let direction =
+            placement.rotation_radians + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
         let (sin, cos) = direction.sin_cos();
         for distance_step in 20..=100 {
             let separation = f64::from(distance_step) * 0.025;
@@ -175,8 +173,8 @@ fn realize_natural_molecule(
             }
         }
     }
-    let (candidate, investment, required_energy) = selected_contact
-        .expect("seeded molecule pair must admit an ordinary COMBINE contact");
+    let (candidate, investment, required_energy) =
+        selected_contact.expect("seeded molecule pair must admit an ordinary COMBINE contact");
 
     let mut usable_energy = required_energy;
     let mut ledger = EnergyLedger {
@@ -211,7 +209,9 @@ fn realize_natural_molecule(
     )
     .expect("ordinary COMBINE product must export as a physical molecule");
     assert_eq!(products.len(), 1);
-    let molecule = products.pop().expect("one bonded component must be exported");
+    let molecule = products
+        .pop()
+        .expect("one bonded component must be exported");
     let connection = molecule
         .internal_connections
         .as_ref()
