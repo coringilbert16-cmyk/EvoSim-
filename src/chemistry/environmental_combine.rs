@@ -206,8 +206,7 @@ fn select_best_contact_from_offset(
                     evaluation.candidate.distance,
                     crate::chemistry::CHEMICAL_CONTACT_RADIUS,
                 )?;
-                let engagement =
-                    crate::chemistry::interface_engagement(evaluation.candidate.facing)?;
+                let engagement = crate::chemistry::interface_engagement(evaluation.candidate.facing)?;
                 Some(potential * contact * engagement)
             });
             if let Some(input) = chemical_input {
