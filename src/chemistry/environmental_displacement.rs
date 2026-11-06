@@ -2133,4 +2133,5 @@ mod tests {
             );
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
-    }}
+    }
+}
