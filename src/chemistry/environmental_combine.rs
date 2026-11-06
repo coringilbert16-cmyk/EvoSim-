@@ -1084,12 +1084,10 @@ mod tests {
 
     #[test]
     fn rechecked_ineligible_interfaces_are_invalidated_without_touching_unsearched_keys() {
-        let checked_prefix =
-            format!("{ENVIRONMENT_PREFIX}checked-source-pair|unit-a|unit-b|");
+        let checked_prefix = format!("{ENVIRONMENT_PREFIX}checked-source-pair|unit-b|");
         let stale_key = format!("{checked_prefix}stale-interface");
         let active_key = format!("{checked_prefix}active-interface");
-        let unsearched_key =
-            format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|unit-a|unit-b|interface");
+        let unsearched_key = format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|unit-b|interface");
         let mut accumulation = BTreeMap::new();
         accumulation.insert(stale_key.clone(), 0.5);
         accumulation.insert(active_key.clone(), 0.25);
