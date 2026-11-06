@@ -1630,8 +1630,9 @@ mod tests {
                 }
             }
         }
-        let (incoming_placement, replacement_candidate) = replacement
-            .expect("a different Carbon endpoint should expose an engaged, non-overlapping Oxygen contact");
+        let (incoming_placement, replacement_candidate) = replacement.expect(
+            "a different Carbon endpoint should expose an engaged, non-overlapping Oxygen contact",
+        );
         source.units[2].placement = incoming_placement;
         replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
