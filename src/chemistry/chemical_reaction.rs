@@ -453,7 +453,7 @@ fn discover_environmental_bonds(
 ) -> (
     Vec<(usize, usize, usize)>,
     usize,
-    Vec<(u64, std::collections::BTreeSet<String>)>,
+    Vec<(u64, usize)>,
 ) {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
@@ -500,20 +500,11 @@ fn discover_environmental_bonds(
             let Some(material) = cell.physical_materials.get(material_index) else {
                 continue;
             };
-            let current_keys = material
+            let bond_count = material
                 .internal_connections
                 .as_ref()
-                .map(|connections| {
-                    connections
-                        .iter()
-                        .enumerate()
-                        .map(|(bond_index, connection)| {
-                            environmental_break_accumulation_key(material, bond_index, connection)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            checked_materials.push((material.environmental_identity, current_keys));
+                .map_or(0, |connections| connections.len());
+            checked_materials.push((material.environmental_identity, bond_count));
             let Some(connections) = material.internal_connections.as_ref() else {
                 continue;
             };
@@ -562,13 +553,20 @@ pub(crate) fn accumulate_environmental(
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
-    for (identity, current_keys) in checked_materials {
+    for (identity, bond_count) in checked_materials {
         if identity == 0 {
             continue;
         }
         let material_prefix = format!("environment|environment:{identity}:");
         for key in accumulation.keys() {
-            if key.starts_with(&material_prefix) && !current_keys.contains(key) {
+            let Some(existing_index) = key
+                .strip_prefix(&material_prefix)
+                .and_then(|suffix| suffix.split(':').next())
+                .and_then(|index| index.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            if existing_index >= bond_count {
                 checked_keys.insert(key.clone());
             }
         }
@@ -598,6 +596,17 @@ pub(crate) fn accumulate_environmental(
             continue;
         };
         let key = environmental_break_accumulation_key(instance, bond_index, connection);
+        if instance.environmental_identity != 0 {
+            let bond_prefix = format!(
+                "environment|environment:{}:{bond_index}:",
+                instance.environmental_identity
+            );
+            for previous_key in accumulation.keys() {
+                if previous_key.starts_with(&bond_prefix) && previous_key != &key {
+                    checked_keys.insert(previous_key.clone());
+                }
+            }
+        }
         checked_keys.insert(key.clone());
         // Environmental chemistry must derive its candidate geometry from the
         // realized environmental material itself. An organism graph is not a
