@@ -1075,6 +1075,34 @@ mod tests {
     }
 
     #[test]
+    fn rechecked_ineligible_interfaces_are_invalidated_without_touching_unsearched_keys() {
+        let checked_prefix = format!("{ENVIRONMENT_PREFIX}checked-source-pair|");
+        let stale_key = format!("{checked_prefix}stale-interface");
+        let active_key = format!("{checked_prefix}active-interface");
+        let unsearched_key = format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|interface");
+        let mut accumulation = BTreeMap::new();
+        accumulation.insert(stale_key.clone(), 0.5);
+        accumulation.insert(active_key.clone(), 0.25);
+        accumulation.insert(unsearched_key.clone(), 0.75);
+        let checked_prefixes = BTreeSet::from([checked_prefix]);
+        let updated_keys = BTreeSet::from([active_key.clone()]);
+        let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+
+        invalidate_unupdated_constituent_accumulations(
+            &mut accumulation,
+            &checked_prefixes,
+            &updated_keys,
+            &mut diagnostics,
+        );
+
+        assert!(!accumulation.contains_key(&stale_key));
+        assert_eq!(accumulation.get(&active_key), Some(&0.25));
+        assert_eq!(accumulation.get(&unsearched_key), Some(&0.75));
+        assert_eq!(diagnostics.accumulation_keys_invalidated, 1);
+        assert_eq!(diagnostics.accumulation_value_invalidated, 0.5);
+    }
+
+    #[test]
     fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
