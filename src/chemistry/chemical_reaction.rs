@@ -556,6 +556,7 @@ pub(crate) fn accumulate_environmental(
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let discovery = discover_environmental_bonds(environment, tick, count);
+    let _inspected_entries = discovery.inspected_entries;
     let candidates = discovery.candidates;
     let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
