@@ -745,9 +745,11 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) constituent_pairs_with_valid_interfaces: usize,
     pub(crate) constituent_pairs_suppressed_by_global_selection: usize,
     pub(crate) physically_evaluable_interfaces: usize,
-    /// Extra interfaces discarded within each constituent-pair evaluation.
+    /// Every physically valid interface passed to its independent chemistry step.
+    pub(crate) interfaces_sent_to_chemistry: usize,
+    /// Legacy counter retained for old diagnostic readers; all interfaces are now preserved.
     pub(crate) discarded_interfaces_after_single_selection: usize,
-    /// Valid interfaces suppressed because only one contact is selected for the entire source-material pair.
+    /// Legacy counter retained for old diagnostic readers; all interfaces are now preserved.
     pub(crate) interfaces_suppressed_by_global_selection: usize,
     pub(crate) chemically_favorable_pairs_with_multiple_interfaces: usize,
     /// Counts source-material-pair evaluations where the selected contact is chemically inferior to another valid contact in the complete scanned window.
@@ -760,7 +762,10 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) accumulation_value_before_search: f64,
     /// Distinct keys whose chemistry step was evaluated this tick, including newly created or zeroed keys.
     pub(crate) accumulation_keys_updated: usize,
-    /// Existing keys not reached this tick and therefore subject to normal dissipation.
+    /// Accumulation keys not reached by this tick's bounded search and preserved intact.
+    pub(crate) accumulation_keys_preserved_unsearched: usize,
+    pub(crate) accumulation_value_preserved_unsearched: f64,
+    /// Reserved for explicitly invalidated interactions; unsearched keys are preserved.
     pub(crate) accumulation_keys_dissipated: usize,
     pub(crate) accumulation_value_dissipated: f64,
     pub(crate) accumulation_entries_after_search: usize,
