@@ -3072,6 +3072,8 @@ mod tests {
         assert_eq!(first_window_work, 0);
 
         let mut second_window_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let mut search_diagnostics =
+            crate::state::EnvironmentalCombineSearchDiagnostics::default();
         let late_window = select_best_contact_from_offset(
             &structure,
             &indices_a,
@@ -3080,12 +3082,27 @@ mod tests {
             &mut cache,
             component_pair_start(41, pair_count),
             &mut second_window_work,
-            None,
+            Some(&mut search_diagnostics),
         )
         .expect("the rotated window must reach the late physical contact within the cycle");
         assert_eq!(late_window.unit_a, indices_a[12]);
         assert_eq!(late_window.unit_b, indices_b[12]);
         assert_eq!(second_window_work, 0);
+        assert_eq!(search_diagnostics.constituent_pairs_inspected, FIELD_COMPONENT_PAIR_LIMIT);
+        assert!(
+            search_diagnostics.constituent_pairs_with_valid_interfaces > 0,
+            "the rotated window must report its physically valid constituent pair"
+        );
+        assert_eq!(
+            search_diagnostics.constituent_pairs_suppressed_by_global_selection + 1,
+            search_diagnostics.constituent_pairs_with_valid_interfaces,
+            "the global selector must report every other valid constituent pair it suppresses"
+        );
+        assert_eq!(
+            search_diagnostics.interfaces_suppressed_by_global_selection + 1,
+            search_diagnostics.physically_evaluable_interfaces,
+            "the global selector must report every valid interface other than its one selected contact"
+        );
 
         let varied_budget_pair_count = 1_000;
         let visited_starts: HashSet<_> = (0..varied_budget_pair_count)
