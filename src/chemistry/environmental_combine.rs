@@ -126,6 +126,13 @@ fn record_unupdated_accumulations(
     diagnostics.accumulation_value_after_search = total;
 }
 
+fn constituent_prefix_from_accumulation_key(key: &str) -> Option<&str> {
+    let mut separators = key.match_indices('|');
+    separators.next()?;
+    let (second_separator, _) = separators.next()?;
+    Some(&key[..=second_separator])
+}
+
 fn invalidate_unupdated_constituent_accumulations(
     accumulation: &mut BTreeMap<String, f64>,
     checked_prefixes: &BTreeSet<String>,
@@ -136,9 +143,8 @@ fn invalidate_unupdated_constituent_accumulations(
         return;
     }
     accumulation.retain(|key, value| {
-        let was_checked = checked_prefixes
-            .iter()
-            .any(|prefix| key.starts_with(prefix));
+        let was_checked = constituent_prefix_from_accumulation_key(key)
+            .is_some_and(|prefix| checked_prefixes.contains(prefix));
         if key.starts_with(ENVIRONMENT_PREFIX) && was_checked && !updated_keys.contains(key) {
             diagnostics.accumulation_keys_invalidated += 1;
             if value.is_finite() {
@@ -540,6 +546,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     let cell_scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
+    let mut checked_prefixes = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
     let cell_start = tick as usize % field_cell_count;
 
@@ -687,7 +694,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
-                    let mut checked_prefixes = BTreeSet::new();
                     if pair_count > 0 {
                         for offset in 0..component_work_used {
                             let pair_index = pair_start.wrapping_add(offset) % pair_count;
@@ -718,17 +724,18 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             &mut operations,
                         );
                     }
-                    invalidate_unupdated_constituent_accumulations(
-                        accumulation,
-                        &checked_prefixes,
-                        &updated_keys,
-                        diagnostics,
-                    );
+
                 }
             }
         }
     }
 
+    invalidate_unupdated_constituent_accumulations(
+        accumulation,
+        &checked_prefixes,
+        &updated_keys,
+        diagnostics,
+    );
     diagnostics.budget_exhausted = *remaining_discovery_work == 0;
     diagnostics.accumulation_keys_updated = updated_keys.len();
     record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
@@ -1076,10 +1083,12 @@ mod tests {
 
     #[test]
     fn rechecked_ineligible_interfaces_are_invalidated_without_touching_unsearched_keys() {
-        let checked_prefix = format!("{ENVIRONMENT_PREFIX}checked-source-pair|");
+        let checked_prefix =
+            format!("{ENVIRONMENT_PREFIX}checked-source-pair|unit-a|unit-b|");
         let stale_key = format!("{checked_prefix}stale-interface");
         let active_key = format!("{checked_prefix}active-interface");
-        let unsearched_key = format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|interface");
+        let unsearched_key =
+            format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|unit-a|unit-b|interface");
         let mut accumulation = BTreeMap::new();
         accumulation.insert(stale_key.clone(), 0.5);
         accumulation.insert(active_key.clone(), 0.25);
