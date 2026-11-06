@@ -266,7 +266,7 @@ fn select_best_contact_from_offset(
             }
         }
     }
-    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+    if let Some(diagnostics) = diagnostics {
         diagnostics.constituent_pairs_with_valid_interfaces +=
             constituent_pairs_with_valid_interfaces;
         diagnostics.constituent_pairs_suppressed_by_global_selection +=
