@@ -1551,8 +1551,7 @@ mod material_identity_tests {
         // Empty cells are the worst case for candidate-only accounting: no
         // candidate is found, but traversal must still stop at the scan bound.
         for budget in [1_usize, 8, 64, MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK] {
-            let discovery =
-                discover_environmental_bonds(&simulation.environment, 0, budget);
+            let discovery = discover_environmental_bonds(&simulation.environment, 0, budget);
             let candidates = discovery.candidates;
             let inspected = discovery.inspected_entries;
             assert!(candidates.len() <= budget);
@@ -1575,8 +1574,7 @@ mod material_identity_tests {
         let budget = 8;
         let mut reached = false;
         for tick in 0..simulation.environment.field.cells.len() as u64 + 8 {
-            let discovery =
-                discover_environmental_bonds(&simulation.environment, tick, budget);
+            let discovery = discover_environmental_bonds(&simulation.environment, tick, budget);
             let candidates = discovery.candidates;
             let inspected = discovery.inspected_entries;
             assert!(candidates.len() <= budget);
