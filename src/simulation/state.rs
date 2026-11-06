@@ -732,10 +732,11 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     /// Target material entries inspected but rejected by canonical pair ordering.
     pub(crate) backward_ordered_target_materials: usize,
     /// Unique forward-ordered source-material pairs reaching later validation.
-    pub(crate) ordered_target_material_pairs: usize,
+    pub(crate) forward_ordered_target_material_pair_inspections: usize,
     pub(crate) unrealized_target_material_pairs: usize,
-    pub(crate) overlapping_target_material_pairs: usize,
+    pub(crate) same_cell_source_pair_inspections: usize,
     pub(crate) target_material_pairs_restored: usize,
+    pub(crate) target_material_pairs_restore_failed: usize,
     pub(crate) target_material_pairs_rejected_for_overlap: usize,
     pub(crate) constituent_pairs_available: usize,
     pub(crate) constituent_pairs_inspected: usize,
