@@ -159,6 +159,10 @@ fn select_best_contact_from_offset(
     }
 
     let mut best: Option<SelectedContact> = None;
+    let mut best_chemical_input_any_interface = None::<f64>;
+    let mut selected_chemical_input = None::<f64>;
+    let mut constituent_pairs_with_valid_interfaces = 0usize;
+    let mut valid_interfaces_across_window = 0usize;
     let inspected_pairs = (*remaining_work).min(pair_count);
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
@@ -187,7 +191,6 @@ fn select_best_contact_from_offset(
                 )
             });
         let mut best_chemical_input = None::<f64>;
-        let mut selected_chemical_input = None::<f64>;
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
@@ -213,7 +216,12 @@ fn select_best_contact_from_offset(
             if let Some(input) = chemical_input {
                 best_chemical_input =
                     Some(best_chemical_input.map_or(input, |current| current.max(input)));
+                best_chemical_input_any_interface = Some(
+                    best_chemical_input_any_interface
+                        .map_or(input, |current| current.max(input)),
+                );
             }
+            valid_interfaces_across_window += 1;
             let proposed = SelectedContact {
                 unit_a,
                 unit_b,
@@ -250,6 +258,9 @@ fn select_best_contact_from_offset(
                 selected_chemical_input = chemical_input;
             }
         }
+        if pair_valid_interfaces > 0 {
+            constituent_pairs_with_valid_interfaces += 1;
+        }
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
             diagnostics.discarded_interfaces_after_single_selection +=
@@ -257,6 +268,9 @@ fn select_best_contact_from_offset(
             if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
                 diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
             }
+            // This pair-local comparison is retained as an additional diagnostic:
+            // it reveals inferior endpoint choice even before comparing different
+            // constituent identities in the complete source-pair window.
             if let (Some(best_input), Some(selected_input)) =
                 (best_chemical_input, selected_chemical_input)
             {
@@ -267,6 +281,29 @@ fn select_best_contact_from_offset(
                     diagnostics.max_chemical_input_loss =
                         diagnostics.max_chemical_input_loss.max(loss);
                 }
+            }
+        }
+    }
+    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+        diagnostics.constituent_pairs_with_valid_interfaces +=
+            constituent_pairs_with_valid_interfaces;
+        diagnostics.constituent_pairs_suppressed_by_global_selection +=
+            constituent_pairs_with_valid_interfaces.saturating_sub(usize::from(best.is_some()));
+        diagnostics.interfaces_suppressed_by_global_selection +=
+            valid_interfaces_across_window.saturating_sub(usize::from(best.is_some()));
+        // Compare the selected contact against the best chemical input from every
+        // physically evaluable interface in every inspected constituent pair.
+        // This is intentionally diagnostic-only; required-energy selection remains
+        // exactly as before.
+        if let (Some(best_input), Some(selected_input)) =
+            (best_chemical_input_any_interface, selected_chemical_input)
+        {
+            let loss = (best_input - selected_input).max(0.0);
+            if loss > 1e-12 {
+                diagnostics.selected_interface_not_best_chemical_input += 1;
+                diagnostics.chemical_input_loss_total += loss;
+                diagnostics.max_chemical_input_loss =
+                    diagnostics.max_chemical_input_loss.max(loss);
             }
         }
     }
@@ -575,11 +612,17 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     diagnostics.target_materials_inspected += 1;
                     let material_b = (target_material_start + target_offset) % target_count;
                     if (cell_b, material_b) <= (cell_a, material_a) {
+                        diagnostics.backward_ordered_target_materials += 1;
                         continue;
+                    }
+                    diagnostics.ordered_target_material_pairs += 1;
+                    if cell_a == cell_b {
+                        diagnostics.overlapping_target_material_pairs += 1;
                     }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
                     if !source_b.is_realized() || source_b.material.is_empty() {
+                        diagnostics.unrealized_target_material_pairs += 1;
                         continue;
                     }
                     let mut trial_structure = source_structure.clone();
@@ -591,6 +634,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     ) else {
                         continue;
                     };
+                    diagnostics.target_material_pairs_restored += 1;
                     if indices_b.iter().any(|index| {
                         crate::construction_runtime::placed_unit_overlaps(
                             &trial_structure,
@@ -599,12 +643,18 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             &environment.catalog,
                         )
                     }) {
+                        diagnostics.target_material_pairs_rejected_for_overlap += 1;
                         continue;
                     }
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
                     let pair_count = indices_a.len().saturating_mul(indices_b.len());
+                    diagnostics.constituent_pairs_available += pair_count;
+                    diagnostics.constituent_pairs_uninspected_by_window +=
+                        pair_count.saturating_sub(component_work_initial);
+                    diagnostics.constituent_pair_windows_truncated +=
+                        usize::from(component_work_initial < pair_count);
                     let pair_start = component_pair_start(tick, pair_count);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
