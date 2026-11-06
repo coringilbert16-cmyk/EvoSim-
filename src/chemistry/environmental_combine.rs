@@ -168,6 +168,26 @@ fn select_best_contact_from_offset(
         }
         let unit_a = indices_a[pair_index / indices_b.len()];
         let unit_b = indices_b[pair_index % indices_b.len()];
+        let chemical_potential = structure
+            .units
+            .get(unit_a)
+            .and_then(|unit| constituent_chemical_position(unit, catalog))
+            .zip(
+                structure
+                    .units
+                    .get(unit_b)
+                    .and_then(|unit| constituent_chemical_position(unit, catalog)),
+            )
+            .and_then(|(position_a, position_b)| {
+                crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+            });
+        let mut best_chemical_input = None::<f64>;
+        let mut selected_chemical_input = None::<f64>;
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
@@ -181,6 +201,19 @@ fn select_best_contact_from_offset(
                 continue;
             };
             pair_valid_interfaces += 1;
+            let chemical_input = chemical_potential.and_then(|potential| {
+                let contact = crate::chemistry::contact_factor(
+                    evaluation.candidate.distance,
+                    crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                )?;
+                let engagement =
+                    crate::chemistry::interface_engagement(evaluation.candidate.facing)?;
+                Some(potential * contact * engagement)
+            });
+            if let Some(input) = chemical_input {
+                best_chemical_input =
+                    Some(best_chemical_input.map_or(input, |current| current.max(input)));
+            }
             let proposed = SelectedContact {
                 unit_a,
                 unit_b,
@@ -214,12 +247,27 @@ fn select_best_contact_from_offset(
             });
             if replace {
                 best = Some(proposed);
+                selected_chemical_input = chemical_input;
             }
         }
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
             diagnostics.discarded_interfaces_after_single_selection +=
                 pair_valid_interfaces.saturating_sub(1);
+            if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
+                diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
+            }
+            if let (Some(best_input), Some(selected_input)) =
+                (best_chemical_input, selected_chemical_input)
+            {
+                let loss = (best_input - selected_input).max(0.0);
+                if loss > 1e-12 {
+                    diagnostics.selected_interface_not_best_chemical_input += 1;
+                    diagnostics.chemical_input_loss_total += loss;
+                    diagnostics.max_chemical_input_loss =
+                        diagnostics.max_chemical_input_loss.max(loss);
+                }
+            }
         }
     }
     best
