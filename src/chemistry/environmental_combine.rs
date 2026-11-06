@@ -127,6 +127,7 @@ fn select_best_contact(
         cache,
         0,
         remaining_work,
+        None,
     )
 }
 
@@ -149,7 +150,9 @@ fn select_best_contact_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
+    diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
 ) -> Option<SelectedContact> {
+    let mut diagnostics = diagnostics;
     let pair_count = indices_a.len().checked_mul(indices_b.len())?;
     if pair_count == 0 {
         return None;
@@ -160,11 +163,15 @@ fn select_best_contact_from_offset(
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
+        if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.constituent_pairs_inspected += 1;
+        }
         let unit_a = indices_a[pair_index / indices_b.len()];
         let unit_b = indices_b[pair_index % indices_b.len()];
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
+        let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
@@ -173,6 +180,7 @@ fn select_best_contact_from_offset(
             else {
                 continue;
             };
+            pair_valid_interfaces += 1;
             let proposed = SelectedContact {
                 unit_a,
                 unit_b,
@@ -207,6 +215,11 @@ fn select_best_contact_from_offset(
             if replace {
                 best = Some(proposed);
             }
+        }
+        if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
+            diagnostics.discarded_interfaces_after_single_selection +=
+                pair_valid_interfaces.saturating_sub(1);
         }
     }
     best
@@ -394,6 +407,20 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalCombineOperation> {
+    let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+    accumulate_environmental_with_diagnostics(
+        environment, accumulation, chemistry_library, tick, remaining_discovery_work, &mut diagnostics,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_diagnostics(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+) -> Vec<EnvironmentalCombineOperation> {
     if *remaining_discovery_work == 0 {
         dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
@@ -418,6 +445,7 @@ pub(crate) fn accumulate_environmental(
             break;
         }
         let cell_a = (cell_start + cell_offset) % field_cell_count;
+        diagnostics.anchor_cells_inspected += 1;
         // Charge every anchor-cell inspection, including empty cells. Otherwise
         // a sparse field could traverse the scan window without consuming budget.
         *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
@@ -435,6 +463,7 @@ pub(crate) fn accumulate_environmental(
             // shared per-tick budget. The local anchor cap alone is not enough:
             // a small supplied budget must also bound work on empty/sparse fields.
             *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
+            diagnostics.anchor_materials_inspected += 1;
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
             let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
@@ -456,15 +485,19 @@ pub(crate) fn accumulate_environmental(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
+            let target_cell_limit = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
             let target_cells = environment.field.cells_intersecting_bounds_limited(
                 body.min_x - BOUNDS_PADDING,
                 body.max_x + BOUNDS_PADDING,
                 body.min_y - BOUNDS_PADDING,
                 body.max_y + BOUNDS_PADDING,
-                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
+                target_cell_limit,
                 (tick as usize)
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
+            );
+            diagnostics.target_cell_windows_capped += usize::from(
+                target_cell_limit > 0 && target_cells.len() == target_cell_limit,
             );
             for &cell_b in &target_cells {
                 if *remaining_discovery_work == 0 {
@@ -473,6 +506,7 @@ pub(crate) fn accumulate_environmental(
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
+                diagnostics.target_cells_inspected += 1;
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
@@ -483,6 +517,7 @@ pub(crate) fn accumulate_environmental(
                         break 'anchors;
                     }
                     *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
+                    diagnostics.target_materials_inspected += 1;
                     let material_b = (target_material_start + target_offset) % target_count;
                     if (cell_b, material_b) <= (cell_a, material_a) {
                         continue;
@@ -524,6 +559,7 @@ pub(crate) fn accumulate_environmental(
                         &mut cache,
                         pair_start,
                         &mut component_work,
+                        Some(diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
@@ -553,6 +589,7 @@ pub(crate) fn accumulate_environmental(
         }
     }
 
+    diagnostics.budget_exhausted = *remaining_discovery_work == 0;
     dissipate_unupdated_accumulations(accumulation, &updated_keys);
     operations
 }
