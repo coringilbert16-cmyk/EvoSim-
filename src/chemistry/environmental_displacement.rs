@@ -2110,9 +2110,7 @@ mod tests {
             ["Carbon".to_owned(), "Hydrogen".to_owned()],
         ] {
             let molecule = crate::environment_chemistry_experiment::realize_natural_molecule(
-                &parts,
-                origin,
-                &catalog,
+                &parts, origin, &catalog,
             );
             let connection = molecule
                 .internal_connections
