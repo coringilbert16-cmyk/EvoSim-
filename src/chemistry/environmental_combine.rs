@@ -255,9 +255,7 @@ fn select_best_contact_from_offset(
             diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
             diagnostics.discarded_interfaces_after_single_selection +=
                 pair_valid_interfaces.saturating_sub(1);
-            if pair_valid_interfaces > 1
-                && chemical_potential.is_some_and(|value| value > 0.0)
-            {
+            if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
                 diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
             }
             if let (Some(best_input), Some(selected_input)) =
