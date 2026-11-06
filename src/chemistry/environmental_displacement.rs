@@ -154,8 +154,8 @@ struct DisplacementTrialDiagnostic {
 }
 
 /// Build the proposed topology on a clone. The caller must discover the supplied
-/// replacement candidate after the old A-B bond has been removed from an
-/// equivalent trial graph, so the freed endpoint is available to contact search.
+/// replacement candidate from an equivalent trial graph after removing the old
+/// A-B bond, allowing contact search to consider every newly available endpoint.
 pub(crate) fn build_displacement_trial(
     source: &OrganismStructure,
     anchor_unit: usize,
@@ -1631,7 +1631,7 @@ mod tests {
             }
         }
         let (incoming_placement, replacement_candidate) = replacement
-            .expect("freed Carbon endpoint should expose a non-overlapping engaged Oxygen contact");
+            .expect("a different Carbon endpoint should expose an engaged, non-overlapping Oxygen contact");
         source.units[2].placement = incoming_placement;
         replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
@@ -1973,7 +1973,10 @@ mod tests {
         )
         .expect("a valid stronger bond may replace through another available endpoint");
         assert_eq!(trial.structure.bonds.len(), 1);
-        assert_ne!(trial.replacement_bond.endpoint_a.location, old_bond.endpoint_a.location);
+        assert_ne!(
+            trial.replacement_bond.endpoint_a.location,
+            old_bond.endpoint_a.location
+        );
     }
 
     #[test]
