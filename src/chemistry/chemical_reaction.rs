@@ -532,19 +532,24 @@ pub(crate) fn accumulate_environmental(
     // bounded candidate budget below keeps this world-owned scan finite.
     const ENVIRONMENT_PREFIX: &str = "environment|environment:";
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
-    if *remaining_discovery_work == 0 {
-        dissipate_unupdated_accumulations(
-            accumulation,
-            &current_prefix,
-            &std::collections::BTreeSet::new(),
-        );
-        return Vec::new();
-    }
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let (candidates, _scan_steps) = discover_environmental_bonds(environment, tick, count);
+    let (candidates, _scan_steps, checked_materials) =
+        discover_environmental_bonds(environment, tick, count);
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
+    for (identity, current_keys) in checked_materials {
+        if identity == 0 {
+            continue;
+        }
+        let material_prefix = format!("environment|environment:{identity}:");
+        for key in accumulation.keys() {
+            if key.starts_with(&material_prefix) && !current_keys.contains(key) {
+                checked_keys.insert(key.clone());
+            }
+        }
+    }
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut restored_materials = std::collections::BTreeMap::new();
