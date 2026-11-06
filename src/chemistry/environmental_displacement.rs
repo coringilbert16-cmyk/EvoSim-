@@ -982,9 +982,10 @@ pub(crate) fn accumulate_environmental(
                                                     &mut diagnostics.trial_rejections_replacement;
                                                 *replacement_counter =
                                                     replacement_counter.saturating_add(1);
-                                                let candidate_counter =
-                                                    &mut diagnostics.trial_rejections_candidate_revalidation;
-                                                *candidate_counter = candidate_counter.saturating_add(1);
+                                                let candidate_counter = &mut diagnostics
+                                                    .trial_rejections_candidate_revalidation;
+                                                *candidate_counter =
+                                                    (*candidate_counter).saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Formation => {
                                                 diagnostics.trial_rejections_replacement =
@@ -1001,9 +1002,10 @@ pub(crate) fn accumulate_environmental(
                                                     &mut diagnostics.trial_rejections_replacement;
                                                 *replacement_counter =
                                                     replacement_counter.saturating_add(1);
-                                                let insertion_counter =
-                                                    &mut diagnostics.trial_rejections_physical_insertion;
-                                                *insertion_counter = insertion_counter.saturating_add(1);
+                                                let insertion_counter = &mut diagnostics
+                                                    .trial_rejections_physical_insertion;
+                                                *insertion_counter =
+                                                    (*insertion_counter).saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Energy => {
                                                 diagnostics.trial_rejections_energy = diagnostics
