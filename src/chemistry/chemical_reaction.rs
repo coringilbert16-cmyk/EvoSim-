@@ -574,6 +574,8 @@ pub(crate) fn accumulate_environmental(
         else {
             continue;
         };
+        let key = environmental_break_accumulation_key(instance, bond_index, connection);
+        checked_keys.insert(key.clone());
         // Environmental chemistry must derive its candidate geometry from the
         // realized environmental material itself. An organism graph is not a
         // valid geometry owner for a world-owned bond: it can carry unrelated
@@ -653,7 +655,6 @@ pub(crate) fn accumulate_environmental(
             .unwrap_or("unknown");
         let material_a = material_identity(&hypothetical.units[unit_a].material);
         let material_b = material_identity(&hypothetical.units[unit_b].material);
-        let key = environmental_break_accumulation_key(instance, bond_index, connection);
         let key_record = chemistry_library.key_from_chemical_pair(
             &material_a,
             &material_b,
