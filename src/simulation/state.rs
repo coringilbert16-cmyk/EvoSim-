@@ -755,6 +755,16 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) chemical_input_loss_total: f64,
     pub(crate) max_chemical_input_loss: f64,
     pub(crate) target_cell_windows_capped: usize,
+    /// Existing environmental COMBINE accumulation keys and their value before discovery.
+    pub(crate) accumulation_entries_before_search: usize,
+    pub(crate) accumulation_value_before_search: f64,
+    /// Distinct keys whose chemistry step was evaluated this tick, including newly created or zeroed keys.
+    pub(crate) accumulation_keys_updated: usize,
+    /// Existing keys not reached this tick and therefore subject to normal dissipation.
+    pub(crate) accumulation_keys_dissipated: usize,
+    pub(crate) accumulation_value_dissipated: f64,
+    pub(crate) accumulation_entries_after_search: usize,
+    pub(crate) accumulation_value_after_search: f64,
     pub(crate) budget_exhausted: bool,
 }
 
