@@ -789,7 +789,12 @@ pub(crate) fn accumulate_environmental(
         }
     }
 
-    dissipate_unupdated_accumulations(accumulation, &current_prefix, &updated_keys);
+    dissipate_checked_unupdated_accumulations(
+        accumulation,
+        &current_prefix,
+        &checked_keys,
+        &updated_keys,
+    );
     operations
 }
 
