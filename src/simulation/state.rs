@@ -593,6 +593,80 @@ pub(crate) struct Environment {
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
+    /// Environmental source materials visited by the displacement anchor scan.
+    pub(crate) anchor_materials_inspected: u64,
+    /// Anchors that contain at least one internal bond and can be displaced.
+    pub(crate) bonded_anchor_materials: u64,
+    /// Neighboring field cells visited for bonded anchors.
+    pub(crate) target_cells_inspected: u64,
+    /// Candidate source materials inspected in those neighboring cells.
+    pub(crate) target_materials_inspected: u64,
+    /// Internal connection records checked for an existing replaceable bond.
+    pub(crate) bonds_inspected: u64,
+    /// Incoming constituent / freed-endpoint contact searches performed.
+    pub(crate) replacement_contact_searches: u64,
+    /// Searches that found a geometrically and chemically valid replacement contact.
+    pub(crate) replacement_contacts_found: u64,
+    /// Valid incoming-contact activation accumulations updated.
+    pub(crate) activation_updates: u64,
+    /// Activation checks that reached the existing bond's displacement barrier.
+    pub(crate) activation_threshold_met: u64,
+    /// Activation checks still below the existing bond's displacement barrier.
+    pub(crate) activation_below_threshold: u64,
+    /// Trial validation ended before the activation barrier status was available.
+    pub(crate) activation_status_unavailable: u64,
+    /// Trial graph builds attempted and rejected after contact activation was sufficient.
+    pub(crate) trial_build_rejections_after_activation: u64,
+    /// Highest updated incoming-contact activation accumulation observed this tick.
+    pub(crate) max_accumulated_reaction: f64,
+}
+
+impl EnvironmentalDisplacementDiscoveryDiagnostics {
+    pub(crate) fn accumulate(&mut self, tick: Self) {
+        self.anchor_materials_inspected = self
+            .anchor_materials_inspected
+            .saturating_add(tick.anchor_materials_inspected);
+        self.bonded_anchor_materials = self
+            .bonded_anchor_materials
+            .saturating_add(tick.bonded_anchor_materials);
+        self.target_cells_inspected = self
+            .target_cells_inspected
+            .saturating_add(tick.target_cells_inspected);
+        self.target_materials_inspected = self
+            .target_materials_inspected
+            .saturating_add(tick.target_materials_inspected);
+        self.bonds_inspected = self.bonds_inspected.saturating_add(tick.bonds_inspected);
+        self.replacement_contact_searches = self
+            .replacement_contact_searches
+            .saturating_add(tick.replacement_contact_searches);
+        self.replacement_contacts_found = self
+            .replacement_contacts_found
+            .saturating_add(tick.replacement_contacts_found);
+        self.activation_updates = self
+            .activation_updates
+            .saturating_add(tick.activation_updates);
+        self.activation_threshold_met = self
+            .activation_threshold_met
+            .saturating_add(tick.activation_threshold_met);
+        self.activation_below_threshold = self
+            .activation_below_threshold
+            .saturating_add(tick.activation_below_threshold);
+        self.activation_status_unavailable = self
+            .activation_status_unavailable
+            .saturating_add(tick.activation_status_unavailable);
+        self.trial_build_rejections_after_activation = self
+            .trial_build_rejections_after_activation
+            .saturating_add(tick.trial_build_rejections_after_activation);
+        if tick.max_accumulated_reaction.is_finite() {
+            self.max_accumulated_reaction = self
+                .max_accumulated_reaction
+                .max(tick.max_accumulated_reaction);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
@@ -619,6 +693,8 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) displacement_discovery_work_remaining: usize,
     #[serde(default)]
     pub(crate) displacement_realization_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) displacement_discovery: EnvironmentalDisplacementDiscoveryDiagnostics,
     pub(crate) accumulation_entries: usize,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }

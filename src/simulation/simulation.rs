@@ -1072,13 +1072,18 @@ impl Simulation {
 
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
+        let mut displacement_discovery =
+            crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
             crate::environmental_displacement::accumulate_environmental(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
+                &mut displacement_discovery,
             );
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery = displacement_discovery;
         self.environmental_chemistry_diagnostics
             .displacement_ready_candidates = environmental_displacement_operations.len();
         self.environmental_chemistry_diagnostics

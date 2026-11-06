@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
-use crate::state::{EnergyLedger, Environment};
+use crate::state::{EnergyLedger, Environment, EnvironmentalDisplacementDiscoveryDiagnostics};
 
 use crate::combine::{bond_strength, intrinsic_bond_potential};
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
@@ -147,6 +147,36 @@ pub(crate) fn build_displacement_trial(
     dissipated_heat: f64,
     catalog: &[BaseResource],
 ) -> Option<DisplacementTrial> {
+    build_displacement_trial_with_activation_status(
+        source,
+        anchor_unit,
+        displaced_unit,
+        incoming_unit,
+        old_bond,
+        replacement_candidate,
+        investment,
+        incoming_activation,
+        reactivity_baseline,
+        dissipated_heat,
+        catalog,
+        None,
+    )
+}
+
+fn build_displacement_trial_with_activation_status(
+    source: &OrganismStructure,
+    anchor_unit: usize,
+    displaced_unit: usize,
+    incoming_unit: usize,
+    old_bond: Bond,
+    replacement_candidate: ConnectionPairCandidate,
+    investment: f64,
+    incoming_activation: f64,
+    reactivity_baseline: f64,
+    dissipated_heat: f64,
+    catalog: &[BaseResource],
+    mut activation_status: Option<&mut Option<bool>>,
+) -> Option<DisplacementTrial> {
     if anchor_unit >= source.units.len()
         || displaced_unit >= source.units.len()
         || incoming_unit >= source.units.len()
@@ -198,6 +228,9 @@ pub(crate) fn build_displacement_trial(
         0.0,
         dissipated_heat,
     )?;
+    if let Some(status) = activation_status.as_deref_mut() {
+        *status = Some(preflight.is_activated());
+    }
     if !preflight.is_activated() || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
     {
         return None;
@@ -571,6 +604,7 @@ pub(crate) fn accumulate_environmental(
     accumulation: &mut BTreeMap<String, f64>,
     tick: u64,
     remaining_discovery_work: &mut usize,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
@@ -605,6 +639,8 @@ pub(crate) fn accumulate_environmental(
             anchor_work -= 1;
             *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
             let material_a = (material_start + material_offset) % material_count;
+            diagnostics.anchor_materials_inspected =
+                diagnostics.anchor_materials_inspected.saturating_add(1);
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
             let Some(connections) = source_a.internal_connections.as_ref() else {
                 continue;
@@ -612,6 +648,8 @@ pub(crate) fn accumulate_environmental(
             if connections.is_empty() {
                 continue;
             }
+            diagnostics.bonded_anchor_materials =
+                diagnostics.bonded_anchor_materials.saturating_add(1);
             let Some((source_structure, indices_a)) =
                 restore_displacement_source(&source_a, environment)
             else {
@@ -639,6 +677,8 @@ pub(crate) fn accumulate_environmental(
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
+                diagnostics.target_cells_inspected =
+                    diagnostics.target_cells_inspected.saturating_add(1);
                 *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
@@ -649,6 +689,8 @@ pub(crate) fn accumulate_environmental(
                     if *remaining_discovery_work == 0 {
                         break 'anchors;
                     }
+                    diagnostics.target_materials_inspected =
+                        diagnostics.target_materials_inspected.saturating_add(1);
                     *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                     let material_b = (target_start + target_offset) % target_count;
                     if cell_a == cell_b && material_a == material_b {
@@ -684,6 +726,7 @@ pub(crate) fn accumulate_environmental(
                         if *remaining_discovery_work == 0 {
                             break 'anchors;
                         }
+                        diagnostics.bonds_inspected = diagnostics.bonds_inspected.saturating_add(1);
                         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                         let (Some(&part_a), Some(&part_b)) = (
                             indices_a.get(connection.part_a),
@@ -741,6 +784,8 @@ pub(crate) fn accumulate_environmental(
                                 if *remaining_discovery_work == 0 {
                                     break 'anchors;
                                 }
+                                diagnostics.replacement_contact_searches =
+                                    diagnostics.replacement_contact_searches.saturating_add(1);
                                 *remaining_discovery_work =
                                     remaining_discovery_work.saturating_sub(1);
                                 let Some((candidate, investment)) = best_freed_endpoint_contact(
@@ -753,6 +798,8 @@ pub(crate) fn accumulate_environmental(
                                 ) else {
                                     continue;
                                 };
+                                diagnostics.replacement_contacts_found =
+                                    diagnostics.replacement_contacts_found.saturating_add(1);
                                 let key = displacement_accumulation_key(
                                     &source_a,
                                     &source_b,
@@ -771,6 +818,12 @@ pub(crate) fn accumulate_environmental(
                                 ) else {
                                     continue;
                                 };
+                                diagnostics.activation_updates =
+                                    diagnostics.activation_updates.saturating_add(1);
+                                if next.is_finite() {
+                                    diagnostics.max_accumulated_reaction =
+                                        diagnostics.max_accumulated_reaction.max(next);
+                                }
                                 updated_keys.insert(key.clone());
                                 if next <= 0.0 {
                                     accumulation.remove(&key);
@@ -783,7 +836,8 @@ pub(crate) fn accumulate_environmental(
                                 else {
                                     continue;
                                 };
-                                let Some(trial) = build_displacement_trial(
+                                let mut activation_sufficient = None;
+                                let trial = build_displacement_trial_with_activation_status(
                                     &combined,
                                     anchor_unit,
                                     displaced_unit,
@@ -795,7 +849,31 @@ pub(crate) fn accumulate_environmental(
                                     baselines.reactivity,
                                     0.0,
                                     &environment.catalog,
-                                ) else {
+                                    Some(&mut activation_sufficient),
+                                );
+                                match activation_sufficient {
+                                    Some(true) => {
+                                        diagnostics.activation_threshold_met =
+                                            diagnostics.activation_threshold_met.saturating_add(1);
+                                    }
+                                    Some(false) => {
+                                        diagnostics.activation_below_threshold = diagnostics
+                                            .activation_below_threshold
+                                            .saturating_add(1);
+                                    }
+                                    None => {
+                                        diagnostics.activation_status_unavailable = diagnostics
+                                            .activation_status_unavailable
+                                            .saturating_add(1);
+                                    }
+                                }
+                                let Some(trial) = trial else {
+                                    if activation_sufficient == Some(true) {
+                                        diagnostics.trial_build_rejections_after_activation =
+                                            diagnostics
+                                                .trial_build_rejections_after_activation
+                                                .saturating_add(1);
+                                    }
                                     accumulation.insert(key, next);
                                     continue;
                                 };
@@ -1593,6 +1671,7 @@ mod tests {
             candidate,
         );
         let mut accumulation = BTreeMap::new();
+        let mut discovery_diagnostics = EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let mut discovery_work =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         let mut operations = accumulate_environmental(
@@ -1600,6 +1679,7 @@ mod tests {
             &mut accumulation,
             field_cell as u64,
             &mut discovery_work,
+            &mut discovery_diagnostics,
         );
         assert!(
             accumulation.contains_key(&key) || !operations.is_empty(),
@@ -1618,6 +1698,7 @@ mod tests {
                 &mut accumulation,
                 field_cell as u64,
                 &mut discovery_work,
+                &mut discovery_diagnostics,
             )
             .into_iter()
             .next()

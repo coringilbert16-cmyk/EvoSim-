@@ -229,14 +229,28 @@ fn run_environment_chemistry_experiment(
             .expect("failed to write environmental chemistry diagnostics");
         if simulation.tick % 100 == 0 || simulation.tick == max_ticks {
             let counters = simulation.environmental_chemistry_diagnostics;
+            let discovery = counters.displacement_discovery;
             let energy = simulation.energy_inventory_snapshot();
             println!(
-                "[chemistry] tick={} displacement ready/scheduled/committed/rejected={}/{}/{}/{} COMBINE={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[chemistry] tick={} displacement ready/scheduled/committed/rejected={}/{}/{}/{} scan anchors/bonded={}/{} targets cells/materials={}/{} contacts searches/found={}/{} activation updates/met/below/status_unavailable={}/{}/{}/{} trial_rejected={} max_accumulated_reaction={:.4} work_remaining={} COMBINE={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
                 counters.displacement_ready_candidates,
                 counters.displacement_scheduled,
                 counters.displacement_committed,
                 counters.displacement_rejected,
+                discovery.anchor_materials_inspected,
+                discovery.bonded_anchor_materials,
+                discovery.target_cells_inspected,
+                discovery.target_materials_inspected,
+                discovery.replacement_contact_searches,
+                discovery.replacement_contacts_found,
+                discovery.activation_updates,
+                discovery.activation_threshold_met,
+                discovery.activation_below_threshold,
+                discovery.activation_status_unavailable,
+                discovery.trial_build_rejections_after_activation,
+                discovery.max_accumulated_reaction,
+                counters.displacement_discovery_work_remaining,
                 counters.combine_ready_candidates,
                 counters.combine_scheduled,
                 counters.combine_committed,

@@ -601,6 +601,9 @@ struct EnvironmentalChemistryDiagnosticTotals {
     displacement_rejected: u64,
     displacement_participant_sets: BTreeMap<String, u64>,
     displacement_failure_reasons: BTreeMap<String, u64>,
+    displacement_discovery: crate::state::EnvironmentalDisplacementDiscoveryDiagnostics,
+    displacement_discovery_work_remaining_total: u64,
+    displacement_discovery_budget_exhausted_ticks: u64,
 }
 
 impl EnvironmentalChemistryDiagnosticsRecorder {
@@ -621,7 +624,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         };
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
-            "version": 1,
+            "version": 2,
             "seed": seed,
             "tick_zero": 0,
             "requested_duration_seconds": duration_seconds,
@@ -716,6 +719,19 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             .totals
             .displacement_rejected
             .saturating_add(diagnostics.displacement_rejected as u64);
+        self.totals
+            .displacement_discovery
+            .accumulate(diagnostics.displacement_discovery);
+        self.totals.displacement_discovery_work_remaining_total = self
+            .totals
+            .displacement_discovery_work_remaining_total
+            .saturating_add(diagnostics.displacement_discovery_work_remaining as u64);
+        if diagnostics.displacement_discovery_work_remaining == 0 {
+            self.totals.displacement_discovery_budget_exhausted_ticks = self
+                .totals
+                .displacement_discovery_budget_exhausted_ticks
+                .saturating_add(1);
+        }
 
         if diagnostics.break_ready_candidates > 0
             || diagnostics.break_scheduled > 0
@@ -765,6 +781,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "displacement_rejected": self.totals.displacement_rejected,
             "displacement_participant_sets": self.totals.displacement_participant_sets,
             "displacement_failure_reasons": self.totals.displacement_failure_reasons,
+            "displacement_discovery": self.totals.displacement_discovery,
+            "displacement_discovery_work_remaining_total": self.totals.displacement_discovery_work_remaining_total,
+            "displacement_discovery_budget_exhausted_ticks": self.totals.displacement_discovery_budget_exhausted_ticks,
             "final_material_inventory": environmental_material_inventory(simulation),
             "final_physical_material_count": physical_material_count(simulation),
             "energy_balance_residual": simulation.energy_inventory_snapshot().residual()
