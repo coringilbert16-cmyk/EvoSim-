@@ -135,7 +135,9 @@ pub(crate) struct DisplacementTrial {
 enum DisplacementTrialFailureStage {
     OldBondEnergy,
     Topology,
-    Replacement,
+    CandidateRevalidation,
+    FormationInvestment,
+    PhysicalInsertion,
     Energy,
     Products,
     #[default]
@@ -146,6 +148,9 @@ enum DisplacementTrialFailureStage {
 struct DisplacementTrialDiagnostic {
     activation_sufficient: Option<bool>,
     failure_stage: DisplacementTrialFailureStage,
+    old_bond_energy_stored: Option<f64>,
+    old_bond_energy_expected: Option<f64>,
+    old_bond_energy_abs_error: Option<f64>,
 }
 
 /// Build the proposed topology on a clone. The caller must discover the supplied
