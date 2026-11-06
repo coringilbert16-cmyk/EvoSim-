@@ -252,7 +252,7 @@ fn build_displacement_trial_with_activation_status(
     )?;
     let old_bond_energy_abs_error =
         (old_bond.bond_energy - preflight.old_bond_energy).abs();
-    if let Some(diagnostic) = diagnostic.as_deref_mut() {
+    if let Some(diagnostic) = diagnostic.as_mut() {
         diagnostic.activation_sufficient = Some(preflight.is_activated());
         diagnostic.old_bond_energy_stored = Some(old_bond.bond_energy);
         diagnostic.old_bond_energy_expected = Some(preflight.old_bond_energy);
@@ -260,7 +260,7 @@ fn build_displacement_trial_with_activation_status(
     }
     if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9
     {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
         }
         return None;
@@ -268,7 +268,7 @@ fn build_displacement_trial_with_activation_status(
 
     let mut trial = source.clone();
     if trial.break_matching_bond(old_bond).is_none() {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Topology;
         }
         return None;
@@ -285,7 +285,7 @@ fn build_displacement_trial_with_activation_status(
             catalog,
         )
     else {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::CandidateRevalidation;
         }
         return None;
@@ -293,7 +293,7 @@ fn build_displacement_trial_with_activation_status(
     if !crate::combine::formation_succeeds(formation, investment)
         || (required_investment - investment).abs() > 1e-9
     {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::FormationInvestment;
         }
         return None;
@@ -315,7 +315,7 @@ fn build_displacement_trial_with_activation_status(
             catalog,
         )
     else {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::PhysicalInsertion;
         }
         return None;
@@ -327,7 +327,7 @@ fn build_displacement_trial_with_activation_status(
         crate::energy_ledger::structural_potential(source),
         crate::energy_ledger::structural_potential(&trial),
     ) else {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Energy;
         }
         return None;
@@ -340,7 +340,7 @@ fn build_displacement_trial_with_activation_status(
         total_work,
         dissipated_heat,
     ) else {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Energy;
         }
         return None;
@@ -348,13 +348,13 @@ fn build_displacement_trial_with_activation_status(
     let Some(products) =
         crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)
     else {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
         }
         return None;
     };
     if products.len() < 2 {
-        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
         }
         return None;
