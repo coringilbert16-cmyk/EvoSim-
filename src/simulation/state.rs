@@ -624,6 +624,18 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) trial_rejections_topology: u64,
     /// Activated trials rejected while validating or admitting replacement A-C.
     pub(crate) trial_rejections_replacement: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_candidate_revalidation: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_formation_investment: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_physical_insertion: u64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_max_abs_error: f64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_stored_at_max_error: f64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_expected_at_max_error: f64,
     /// Activated trials rejected during structural-energy accounting.
     pub(crate) trial_rejections_energy: u64,
     /// Activated trials rejected while exporting disconnected physical products.
@@ -679,6 +691,20 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.trial_rejections_replacement = self
             .trial_rejections_replacement
             .saturating_add(tick.trial_rejections_replacement);
+        self.trial_rejections_candidate_revalidation = self
+            .trial_rejections_candidate_revalidation
+            .saturating_add(tick.trial_rejections_candidate_revalidation);
+        self.trial_rejections_formation_investment = self
+            .trial_rejections_formation_investment
+            .saturating_add(tick.trial_rejections_formation_investment);
+        self.trial_rejections_physical_insertion = self
+            .trial_rejections_physical_insertion
+            .saturating_add(tick.trial_rejections_physical_insertion);
+        if tick.old_bond_energy_max_abs_error > self.old_bond_energy_max_abs_error {
+            self.old_bond_energy_max_abs_error = tick.old_bond_energy_max_abs_error;
+            self.old_bond_energy_stored_at_max_error = tick.old_bond_energy_stored_at_max_error;
+            self.old_bond_energy_expected_at_max_error = tick.old_bond_energy_expected_at_max_error;
+        }
         self.trial_rejections_energy = self
             .trial_rejections_energy
             .saturating_add(tick.trial_rejections_energy);
