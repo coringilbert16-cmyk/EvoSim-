@@ -451,7 +451,7 @@ fn chemical_step(
     }
 }
 
-#[cfg_attr(not(test), expect(dead_code, reason = "Compatibility wrapper for existing callers and tests"))]
+#[cfg_attr(not(test), expect(dead_code, reason = "Test compatibility wrapper"))]
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
