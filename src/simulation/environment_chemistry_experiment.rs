@@ -119,7 +119,12 @@ fn realize_natural_molecule(
             rotation_radians: placement.rotation_radians,
         },
     ));
-    assert!(structure.units.iter_mut().all(|unit| unit.realize_default_geometry(catalog)));
+    assert!(
+        structure
+            .units
+            .iter_mut()
+            .all(|unit| unit.realize_default_geometry(catalog))
+    );
 
     let mut cache = crate::contact::ConnectionCompatibilityCache::new();
     let (candidate, investment, required_energy) =
