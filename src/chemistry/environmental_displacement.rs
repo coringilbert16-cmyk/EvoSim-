@@ -250,8 +250,7 @@ fn build_displacement_trial_with_activation_status(
         0.0,
         dissipated_heat,
     )?;
-    let old_bond_energy_abs_error =
-        (old_bond.bond_energy - preflight.old_bond_energy).abs();
+    let old_bond_energy_abs_error = (old_bond.bond_energy - preflight.old_bond_energy).abs();
     if let Some(diagnostic) = diagnostic.as_mut() {
         diagnostic.activation_sufficient = Some(preflight.is_activated());
         diagnostic.old_bond_energy_stored = Some(old_bond.bond_energy);
@@ -1650,29 +1649,26 @@ mod tests {
     #[test]
     fn old_bond_energy_mismatch_reports_stored_and_expected_values() {
         let catalog = default_catalog();
-        let (mut source, _old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, _old_bond, candidate, investment) = three_participant_fixture(&catalog);
         source.bonds[0].bond_energy = 0.0;
         let old_bond = source.bonds[0];
         let mut diagnostic = DisplacementTrialDiagnostic::default();
 
-        assert!(
-            build_displacement_trial_with_activation_status(
-                &source,
-                0,
-                1,
-                2,
-                old_bond,
-                candidate,
-                investment,
-                10.0,
-                catalog_reactivity_baseline(),
-                0.0,
-                &catalog,
-                Some(&mut diagnostic),
-            )
-            .is_none()
-        );
+        assert!(build_displacement_trial_with_activation_status(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+            Some(&mut diagnostic),
+        )
+        .is_none());
         let expected = intrinsic_bond_potential(
             source.units[0].properties(&catalog).unwrap(),
             source.units[1].properties(&catalog).unwrap(),
@@ -1685,10 +1681,7 @@ mod tests {
         );
         assert_eq!(diagnostic.old_bond_energy_stored, Some(0.0));
         assert_eq!(diagnostic.old_bond_energy_expected, Some(expected));
-        assert_eq!(
-            diagnostic.old_bond_energy_abs_error,
-            Some(expected.abs())
-        );
+        assert_eq!(diagnostic.old_bond_energy_abs_error, Some(expected.abs()));
         assert!(expected > 0.0);
     }
 
