@@ -2263,4 +2263,5 @@ mod tests {
             }),
             "the displaced constituent must become a separate physical product"
         );
-    }}
+     }
+}
