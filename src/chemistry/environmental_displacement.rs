@@ -131,6 +131,23 @@ pub(crate) struct DisplacementTrial {
     pub(crate) disruption_work: f64,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum DisplacementTrialFailureStage {
+    OldBondEnergy,
+    Topology,
+    Replacement,
+    Energy,
+    Products,
+    #[default]
+    Other,
+}
+
+#[derive(Default)]
+struct DisplacementTrialDiagnostic {
+    activation_sufficient: Option<bool>,
+    failure_stage: DisplacementTrialFailureStage,
+}
+
 /// Build the proposed topology on a clone. The caller must discover the supplied
 /// replacement candidate after the old A-B bond has been removed from an
 /// equivalent trial graph, so the freed endpoint is available to contact search.
@@ -175,7 +192,7 @@ fn build_displacement_trial_with_activation_status(
     reactivity_baseline: f64,
     dissipated_heat: f64,
     catalog: &[BaseResource],
-    activation_status: Option<&mut Option<bool>>,
+    mut diagnostic: Option<&mut DisplacementTrialDiagnostic>,
 ) -> Option<DisplacementTrial> {
     if anchor_unit >= source.units.len()
         || displaced_unit >= source.units.len()
@@ -228,30 +245,47 @@ fn build_displacement_trial_with_activation_status(
         0.0,
         dissipated_heat,
     )?;
-    if let Some(status) = activation_status {
-        *status = Some(preflight.is_activated());
+    if let Some(diagnostic) = diagnostic.as_deref_mut() {
+        diagnostic.activation_sufficient = Some(preflight.is_activated());
     }
     if !preflight.is_activated() || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
     {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
+        }
         return None;
     }
 
     let mut trial = source.clone();
-    trial.break_matching_bond(old_bond)?;
+    if trial.break_matching_bond(old_bond).is_none() {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Topology;
+        }
+        return None;
+    }
 
     // Revalidate the replacement contact and chemistry against the trial graph,
     // where the old endpoint is now genuinely available.
-    let (formation, formation_work, required_investment, _) =
+    let Some((formation, formation_work, required_investment, _)) =
         crate::combine_runtime::selected_candidate_evaluation(
             &trial,
             anchor_unit,
             incoming_unit,
             replacement_candidate,
             catalog,
-        )?;
+        )
+    else {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+        }
+        return None;
+    };
     if !crate::combine::formation_succeeds(formation, investment)
         || (required_investment - investment).abs() > 1e-9
     {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+        }
         return None;
     }
 
@@ -262,30 +296,57 @@ fn build_displacement_trial_with_activation_status(
     {
         return None;
     }
-    let replacement_bond = crate::combine_runtime::admit_selected_candidate_to_trial_structure(
-        &mut trial,
-        anchor_unit,
-        incoming_unit,
-        replacement_candidate,
-        catalog,
-    )?;
+    let Some(replacement_bond) =
+        crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+            &mut trial,
+            anchor_unit,
+            incoming_unit,
+            replacement_candidate,
+            catalog,
+        )
+    else {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Replacement;
+        }
+        return None;
+    };
     #[cfg(not(test))]
     let _ = replacement_bond;
 
-    let reactant_structural = crate::energy_ledger::structural_potential(source)?;
-    let product_structural = crate::energy_ledger::structural_potential(&trial)?;
+    let (Some(reactant_structural), Some(product_structural)) = (
+        crate::energy_ledger::structural_potential(source),
+        crate::energy_ledger::structural_potential(&trial),
+    ) else {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Energy;
+        }
+        return None;
+    };
     let disruption_work = preflight.disruption_work;
     let total_work = formation_work + disruption_work;
-    let energy = ReactionEnergyBalance::calculate(
+    let Some(energy) = ReactionEnergyBalance::calculate(
         reactant_structural,
         product_structural,
         total_work,
         dissipated_heat,
-    )?;
-    let products = crate::environmental_combine::physical_materials_from_structure_components(
-        &trial, catalog,
-    )?;
+    ) else {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Energy;
+        }
+        return None;
+    };
+    let Some(products) =
+        crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)
+    else {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
+        }
+        return None;
+    };
     if products.len() < 2 {
+        if let Some(diagnostic) = diagnostic.as_deref_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
+        }
         return None;
     }
 
@@ -836,7 +897,7 @@ pub(crate) fn accumulate_environmental(
                                 else {
                                     continue;
                                 };
-                                let mut activation_sufficient = None;
+                                let mut trial_diagnostic = DisplacementTrialDiagnostic::default();
                                 let trial = build_displacement_trial_with_activation_status(
                                     &combined,
                                     anchor_unit,
@@ -849,9 +910,9 @@ pub(crate) fn accumulate_environmental(
                                     baselines.reactivity,
                                     0.0,
                                     &environment.catalog,
-                                    Some(&mut activation_sufficient),
+                                    Some(&mut trial_diagnostic),
                                 );
-                                match activation_sufficient {
+                                match trial_diagnostic.activation_sufficient {
                                     Some(true) => {
                                         diagnostics.activation_threshold_met =
                                             diagnostics.activation_threshold_met.saturating_add(1);
@@ -868,11 +929,45 @@ pub(crate) fn accumulate_environmental(
                                     }
                                 }
                                 let Some(trial) = trial else {
-                                    if activation_sufficient == Some(true) {
+                                    if trial_diagnostic.activation_sufficient == Some(true) {
                                         diagnostics.trial_build_rejections_after_activation =
                                             diagnostics
                                                 .trial_build_rejections_after_activation
                                                 .saturating_add(1);
+                                        match trial_diagnostic.failure_stage {
+                                            DisplacementTrialFailureStage::OldBondEnergy => {
+                                                diagnostics.trial_rejections_old_bond_energy =
+                                                    diagnostics
+                                                        .trial_rejections_old_bond_energy
+                                                        .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::Topology => {
+                                                diagnostics.trial_rejections_topology = diagnostics
+                                                    .trial_rejections_topology
+                                                    .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::Replacement => {
+                                                diagnostics.trial_rejections_replacement =
+                                                    diagnostics
+                                                        .trial_rejections_replacement
+                                                        .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::Energy => {
+                                                diagnostics.trial_rejections_energy = diagnostics
+                                                    .trial_rejections_energy
+                                                    .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::Products => {
+                                                diagnostics.trial_rejections_products = diagnostics
+                                                    .trial_rejections_products
+                                                    .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::Other => {
+                                                diagnostics.trial_rejections_other = diagnostics
+                                                    .trial_rejections_other
+                                                    .saturating_add(1);
+                                            }
+                                        }
                                     }
                                     accumulation.insert(key, next);
                                     continue;

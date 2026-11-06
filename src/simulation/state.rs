@@ -618,6 +618,18 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) activation_status_unavailable: u64,
     /// Trial graph builds attempted and rejected after contact activation was sufficient.
     pub(crate) trial_build_rejections_after_activation: u64,
+    /// Activated trials rejected because the stored A-B bond energy no longer matched its graph.
+    pub(crate) trial_rejections_old_bond_energy: u64,
+    /// Activated trials rejected while removing the old bond from trial topology.
+    pub(crate) trial_rejections_topology: u64,
+    /// Activated trials rejected while validating or admitting replacement A-C.
+    pub(crate) trial_rejections_replacement: u64,
+    /// Activated trials rejected during structural-energy accounting.
+    pub(crate) trial_rejections_energy: u64,
+    /// Activated trials rejected while exporting disconnected physical products.
+    pub(crate) trial_rejections_products: u64,
+    /// Activated trials rejected at another validation stage.
+    pub(crate) trial_rejections_other: u64,
     /// Highest updated incoming-contact activation accumulation observed this tick.
     pub(crate) max_accumulated_reaction: f64,
 }
@@ -658,6 +670,24 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.trial_build_rejections_after_activation = self
             .trial_build_rejections_after_activation
             .saturating_add(tick.trial_build_rejections_after_activation);
+        self.trial_rejections_old_bond_energy = self
+            .trial_rejections_old_bond_energy
+            .saturating_add(tick.trial_rejections_old_bond_energy);
+        self.trial_rejections_topology = self
+            .trial_rejections_topology
+            .saturating_add(tick.trial_rejections_topology);
+        self.trial_rejections_replacement = self
+            .trial_rejections_replacement
+            .saturating_add(tick.trial_rejections_replacement);
+        self.trial_rejections_energy = self
+            .trial_rejections_energy
+            .saturating_add(tick.trial_rejections_energy);
+        self.trial_rejections_products = self
+            .trial_rejections_products
+            .saturating_add(tick.trial_rejections_products);
+        self.trial_rejections_other = self
+            .trial_rejections_other
+            .saturating_add(tick.trial_rejections_other);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
