@@ -993,6 +993,30 @@ mod tests {
     /// It searches bounded poses for a valid contact, then lets the existing
     /// environmental chemical step report whether reaction progress is made.
     #[test]
+    fn unsearched_environmental_accumulations_are_preserved_without_decay() {
+        let key = format!("{ENVIRONMENT_PREFIX}unvisited-interface");
+        let mut accumulation = BTreeMap::new();
+        accumulation.insert(key.clone(), 0.75);
+        let updated_keys = BTreeSet::new();
+        let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+
+        record_unupdated_accumulations(&accumulation, &updated_keys, &mut diagnostics);
+
+        assert_eq!(
+            accumulation.get(&key),
+            Some(&0.75),
+            "a bounded search that does not revisit an interface must not dissipate its progress"
+        );
+        assert_eq!(diagnostics.accumulation_keys_preserved_unsearched, 1);
+        assert_eq!(
+            diagnostics.accumulation_value_preserved_unsearched,
+            0.75
+        );
+        assert_eq!(diagnostics.accumulation_keys_dissipated, 0);
+        assert_eq!(diagnostics.accumulation_value_dissipated, 0.0);
+    }
+
+    #[test]
     fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
@@ -3059,7 +3083,7 @@ mod tests {
             None,
         );
         assert!(
-            first_window.is_none(),
+            first_window.is_empty(),
             "the first bounded row-major window must not accidentally inspect the final constituent pair"
         );
         assert_eq!(first_window_work, 0);
@@ -3075,10 +3099,13 @@ mod tests {
             component_pair_start(41, pair_count),
             &mut second_window_work,
             Some(&mut search_diagnostics),
-        )
-        .expect("the rotated window must reach the late physical contact within the cycle");
-        assert_eq!(late_window.unit_a, indices_a[12]);
-        assert_eq!(late_window.unit_b, indices_b[12]);
+        );
+        assert!(
+            late_window.iter().any(|selected| {
+                selected.unit_a == indices_a[12] && selected.unit_b == indices_b[12]
+            }),
+            "the rotated window must retain the late physical contact within the cycle"
+        );
         assert_eq!(second_window_work, 0);
         assert_eq!(
             search_diagnostics.constituent_pairs_inspected,
@@ -3089,14 +3116,19 @@ mod tests {
             "the rotated window must report its physically valid constituent pair"
         );
         assert_eq!(
-            search_diagnostics.constituent_pairs_suppressed_by_global_selection + 1,
-            search_diagnostics.constituent_pairs_with_valid_interfaces,
-            "the global selector must report every other valid constituent pair it suppresses"
+            search_diagnostics.constituent_pairs_suppressed_by_global_selection,
+            0,
+            "every inspected constituent pair with a valid interface must reach chemistry"
         );
         assert_eq!(
-            search_diagnostics.interfaces_suppressed_by_global_selection + 1,
+            search_diagnostics.interfaces_suppressed_by_global_selection,
+            0,
+            "no physically valid interface may be suppressed by a single-contact selector"
+        );
+        assert_eq!(
+            search_diagnostics.interfaces_sent_to_chemistry,
             search_diagnostics.physically_evaluable_interfaces,
-            "the global selector must report every valid interface other than its one selected contact"
+            "every physically evaluable interface must receive an independent chemistry step"
         );
 
         let varied_budget_pair_count = 1_000;
