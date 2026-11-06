@@ -97,8 +97,8 @@ fn dissipate_unupdated_accumulations(
         }
         let before = *value;
         *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
+        diagnostics.accumulation_keys_dissipated += 1;
         if before.is_finite() && value.is_finite() {
-            diagnostics.accumulation_keys_dissipated += 1;
             diagnostics.accumulation_value_dissipated += (before - *value).max(0.0);
         }
         value.is_finite() && *value > 0.0
