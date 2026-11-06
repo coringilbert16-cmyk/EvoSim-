@@ -175,7 +175,7 @@ fn build_displacement_trial_with_activation_status(
     reactivity_baseline: f64,
     dissipated_heat: f64,
     catalog: &[BaseResource],
-    mut activation_status: Option<&mut Option<bool>>,
+    activation_status: Option<&mut Option<bool>>,
 ) -> Option<DisplacementTrial> {
     if anchor_unit >= source.units.len()
         || displaced_unit >= source.units.len()
@@ -228,7 +228,7 @@ fn build_displacement_trial_with_activation_status(
         0.0,
         dissipated_heat,
     )?;
-    if let Some(status) = activation_status.as_deref_mut() {
+    if let Some(status) = activation_status {
         *status = Some(preflight.is_activated());
     }
     if !preflight.is_activated() || (old_bond.bond_energy - preflight.old_bond_energy).abs() > 1e-9
