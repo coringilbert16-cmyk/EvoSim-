@@ -129,8 +129,9 @@ fn record_unupdated_accumulations(
 fn constituent_prefix_from_accumulation_key(key: &str) -> Option<&str> {
     let mut separators = key.match_indices('|');
     separators.next()?;
-    let (second_separator, _) = separators.next()?;
-    Some(&key[..=second_separator])
+    separators.next()?;
+    let (third_separator, _) = separators.next()?;
+    Some(&key[..=third_separator])
 }
 
 fn invalidate_unupdated_constituent_accumulations(
