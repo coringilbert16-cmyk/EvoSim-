@@ -2252,13 +2252,7 @@ mod tests {
             trial
                 .products
                 .iter()
-                .flat_map(|product| {
-                    product
-                        .internal_connections
-                        .as_ref()
-                        .into_iter()
-                        .flatten()
-                })
+                .flat_map(|product| { product.internal_connections.as_ref().into_iter().flatten() })
                 .all(|connection| {
                     connection.bond_energy.is_finite() && connection.bond_energy > 0.0
                 })
@@ -2269,6 +2263,4 @@ mod tests {
             }),
             "the displaced constituent must become a separate physical product"
         );
-    }
-
-}
+    }}
