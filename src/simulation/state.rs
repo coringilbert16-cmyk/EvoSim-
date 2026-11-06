@@ -731,6 +731,10 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) constituent_pairs_inspected: usize,
     pub(crate) physically_evaluable_interfaces: usize,
     pub(crate) discarded_interfaces_after_single_selection: usize,
+    pub(crate) chemically_favorable_pairs_with_multiple_interfaces: usize,
+    pub(crate) selected_interface_not_best_chemical_input: usize,
+    pub(crate) chemical_input_loss_total: f64,
+    pub(crate) max_chemical_input_loss: f64,
     pub(crate) target_cell_windows_capped: usize,
     pub(crate) budget_exhausted: bool,
 }
