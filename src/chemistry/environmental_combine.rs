@@ -725,7 +725,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             &mut operations,
                         );
                     }
-
                 }
             }
         }
