@@ -450,12 +450,17 @@ fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
-) -> (Vec<(usize, usize, usize)>, usize) {
+) -> (
+    Vec<(usize, usize, usize)>,
+    usize,
+    Vec<(u64, std::collections::BTreeSet<String>)>,
+) {
     let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
+    let mut checked_materials = Vec::new();
     if limit == 0 || cell_count == 0 {
-        return (candidates, 0);
+        return (candidates, 0, checked_materials);
     }
 
     let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
@@ -495,6 +500,20 @@ fn discover_environmental_bonds(
             let Some(material) = cell.physical_materials.get(material_index) else {
                 continue;
             };
+            let current_keys = material
+                .internal_connections
+                .as_ref()
+                .map(|connections| {
+                    connections
+                        .iter()
+                        .enumerate()
+                        .map(|(bond_index, connection)| {
+                            environmental_break_accumulation_key(material, bond_index, connection)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            checked_materials.push((material.environmental_identity, current_keys));
             let Some(connections) = material.internal_connections.as_ref() else {
                 continue;
             };
@@ -517,7 +536,11 @@ fn discover_environmental_bonds(
         }
     }
 
-    (candidates, scan_steps_initial - scan_steps_remaining)
+    (
+        candidates,
+        scan_steps_initial - scan_steps_remaining,
+        checked_materials,
+    )
 }
 
 pub(crate) fn accumulate_environmental(
