@@ -974,25 +974,29 @@ pub(crate) fn accumulate_environmental(
                                                     .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::CandidateRevalidation => {
-                                                diagnostics.trial_rejections_replacement =
-                                                    diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_candidate_revalidation = diagnostics
-                                                    .trial_rejections_candidate_revalidation
+                                                diagnostics.trial_rejections_replacement = diagnostics
+                                                    .trial_rejections_replacement
                                                     .saturating_add(1);
+                                                diagnostics.trial_rejections_candidate_revalidation =
+                                                    diagnostics
+                                                        .trial_rejections_candidate_revalidation
+                                                        .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::FormationInvestment => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_formation_investment = diagnostics
-                                                    .trial_rejections_formation_investment
-                                                    .saturating_add(1);
+                                                diagnostics.trial_rejections_formation_investment =
+                                                    diagnostics
+                                                        .trial_rejections_formation_investment
+                                                        .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::PhysicalInsertion => {
                                                 diagnostics.trial_rejections_replacement =
                                                     diagnostics.trial_rejections_replacement.saturating_add(1);
-                                                diagnostics.trial_rejections_physical_insertion = diagnostics
-                                                    .trial_rejections_physical_insertion
-                                                    .saturating_add(1);
+                                                diagnostics.trial_rejections_physical_insertion =
+                                                    diagnostics
+                                                        .trial_rejections_physical_insertion
+                                                        .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Energy => {
                                                 diagnostics.trial_rejections_energy = diagnostics
