@@ -765,6 +765,9 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     /// Accumulation keys not reached by this tick's bounded search and preserved intact.
     pub(crate) accumulation_keys_preserved_unsearched: usize,
     pub(crate) accumulation_value_preserved_unsearched: f64,
+    /// Accumulation entries removed after their exact constituent interface was rechecked and found ineligible.
+    pub(crate) accumulation_keys_invalidated: usize,
+    pub(crate) accumulation_value_invalidated: f64,
     /// Reserved for explicitly invalidated interactions; unsearched keys are preserved.
     pub(crate) accumulation_keys_dissipated: usize,
     pub(crate) accumulation_value_dissipated: f64,
