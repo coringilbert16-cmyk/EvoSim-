@@ -588,7 +588,6 @@ fn dissipate_unupdated_displacement_accumulations(
 /// diagnostic all-alternatives census. This value is observational only: it
 /// never changes the production-selected contact or its activation history.
 #[derive(Clone, Copy, Debug)]
-#[cfg(test)]
 struct DisplacementContactAlternative {
     candidate: ConnectionPairCandidate,
     investment: f64,
@@ -600,7 +599,6 @@ struct DisplacementContactAlternative {
 /// post-removal trial graph. The budget is charged for each raw generated
 /// candidate, including duplicates and candidates rejected by later stages.
 #[derive(Clone, Debug, Default)]
-#[cfg(test)]
 struct DisplacementContactCensus {
     raw_candidates_inspected: usize,
     duplicate_endpoint_pairs: usize,
@@ -610,7 +608,6 @@ struct DisplacementContactCensus {
     work_limit_reached: bool,
 }
 
-#[cfg(test)]
 fn census_replacement_contacts(
     combined: &OrganismStructure,
     anchor_unit: usize,
