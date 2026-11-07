@@ -942,12 +942,15 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let committed = crate::chemical_reaction::resolve_environmental_preserving_accumulation(
-                operation,
-                &mut self.environment,
-                &mut self.energy_ledger,
-                &mut self.chemical_reaction_accumulation,
-            );
+            let resolution =
+                crate::chemical_reaction::resolve_environmental_preserving_accumulation(
+                    operation,
+                    &mut self.environment,
+                    &mut self.energy_ledger,
+                    &mut self.chemical_reaction_accumulation,
+                );
+            let committed = resolution.is_ok();
+            let failure_reason = resolution.err().map(str::to_string);
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
             } else {
@@ -968,8 +971,8 @@ impl Simulation {
             } else {
                 Vec::new()
             };
-            self.environmental_chemistry_events.push(
-                crate::state::EnvironmentalChemistryEvent {
+            self.environmental_chemistry_events
+                .push(crate::state::EnvironmentalChemistryEvent {
                     tick: self.tick,
                     reaction: "BREAK".to_string(),
                     source_cells: vec![source_cell],
@@ -981,14 +984,11 @@ impl Simulation {
                     accumulated_reaction,
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
-                    failure_reason: (!committed).then(|| {
-                        "resolver rejected stale, invalid, or unfunded settlement; detailed reason is not yet exposed".to_string()
-                    }),
+                    failure_reason,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
-                },
-            );
+                });
         }
 
         // Environmental COMBINE receives its own bounded share of the field's
@@ -1122,13 +1122,15 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
-            let committed =
+            let resolution =
                 crate::environmental_displacement::resolve_environmental_preserving_accumulation(
                     operation,
                     &mut self.environment,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            let committed = resolution.is_ok();
+            let failure_reason = resolution.err().map(str::to_string);
             if committed {
                 self.environmental_chemistry_diagnostics
                     .displacement_committed += 1;
@@ -1148,8 +1150,8 @@ impl Simulation {
                     }
                 }
             }
-            self.environmental_chemistry_events.push(
-                crate::state::EnvironmentalChemistryEvent {
+            self.environmental_chemistry_events
+                .push(crate::state::EnvironmentalChemistryEvent {
                     tick: self.tick,
                     reaction: "DISPLACEMENT".to_string(),
                     source_cells,
@@ -1161,14 +1163,11 @@ impl Simulation {
                     accumulated_reaction,
                     broken_bond_index,
                     outcome: if committed { "committed" } else { "rejected" }.to_string(),
-                    failure_reason: (!committed).then(|| {
-                        "resolver rejected stale, invalid, or unfunded coupled settlement; detailed reason is not yet exposed".to_string()
-                    }),
+                    failure_reason,
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
-                },
-            );
+                });
         }
 
         let mut carried_chemistry_work = 0;

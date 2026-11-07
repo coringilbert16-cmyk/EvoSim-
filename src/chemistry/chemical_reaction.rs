@@ -1022,11 +1022,20 @@ fn environmental_material_location(
         })
 }
 
+#[cfg(test)]
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalChemicalBreakOperation,
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
 ) -> bool {
+    resolve_environmental_diagnosed(operation, environment, ledger).is_ok()
+}
+
+pub(crate) fn resolve_environmental_diagnosed(
+    operation: EnvironmentalChemicalBreakOperation,
+    environment: &mut crate::state::Environment,
+    ledger: &mut crate::state::EnergyLedger,
+) -> Result<(), &'static str> {
     if !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
@@ -1035,7 +1044,7 @@ pub(crate) fn resolve_environmental(
         || !operation.reaction_frequency_cycles_per_day.is_finite()
         || operation.reaction_frequency_cycles_per_day <= 0.0
     {
-        return false;
+        return Err("invalid_operation_or_activation");
     }
     let Some((source_cell_index, source_material_index)) = environmental_material_location(
         environment,
@@ -1043,7 +1052,7 @@ pub(crate) fn resolve_environmental(
         operation.cell_index,
         operation.material_index,
     ) else {
-        return false;
+        return Err("stale_source_missing");
     };
     let Some(source) = environment
         .field
@@ -1051,7 +1060,7 @@ pub(crate) fn resolve_environmental(
         .get(source_cell_index)
         .and_then(|cell| cell.physical_materials.get(source_material_index))
     else {
-        return false;
+        return Err("stale_source_mismatch");
     };
     if source != &operation.source_material
         || source
@@ -1060,10 +1069,10 @@ pub(crate) fn resolve_environmental(
             .and_then(|connections| connections.get(operation.bond_index))
             != Some(&operation.bond)
     {
-        return false;
+        return Err("stale_source_or_bond_mismatch");
     }
     let Some(pieces) = source.break_internal_bond(&operation.bond) else {
-        return false;
+        return Err("bond_cannot_be_split");
     };
     // Environmental chemistry may spend only energy that actually reached
     // the field through the world-tone path. Stage compatible resonance
@@ -1075,7 +1084,15 @@ pub(crate) fn resolve_environmental(
         operation.disruption_cost,
     );
     if !resonant_work.is_finite() || resonant_work < 0.0 {
-        return false;
+        return Err("invalid_resonance_withdrawal");
+    }
+    let required_usable_energy = operation.bond.bond_energy
+        + (operation.disruption_cost - resonant_work.min(operation.disruption_cost));
+    if !required_usable_energy.is_finite() || required_usable_energy < 0.0 {
+        return Err("invalid_break_energy_requirement");
+    }
+    if required_usable_energy > environment.chemistry_usable_energy + 1e-9 {
+        return Err("insufficient_usable_energy");
     }
     let Some(prepared) = crate::transformation::prepare_chemical_break_energy_with_resonance(
         environment.chemistry_usable_energy,
@@ -1085,7 +1102,7 @@ pub(crate) fn resolve_environmental(
         operation.disruption_cost,
         resonant_work,
     ) else {
-        return false;
+        return Err("break_energy_settlement_rejected");
     };
     let usable_delta = prepared.usable_energy - environment.chemistry_usable_energy;
     let next_total_usable = ledger.total_usable_energy_held + usable_delta;
@@ -1104,7 +1121,7 @@ pub(crate) fn resolve_environmental(
         || !next_total_resonant.is_finite()
         || next_total_resonant < 0.0
     {
-        return false;
+        return Err("invalid_energy_accounting_state");
     }
     if !environment.field.split_physical_at_index(
         source_cell_index,
@@ -1113,7 +1130,7 @@ pub(crate) fn resolve_environmental(
         pieces,
         &environment.catalog,
     ) {
-        return false;
+        return Err("physical_split_rejected");
     }
     environment.chemistry_usable_energy = prepared.usable_energy;
     environment.resonant_energy = staged_resonance;
@@ -1121,7 +1138,7 @@ pub(crate) fn resolve_environmental(
     ledger.total_usable_energy_held = next_total_usable;
     ledger.total_structural_energy_held = next_total_structural;
     ledger.total_resonant_energy_held = next_total_resonant;
-    true
+    Ok(())
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
@@ -1129,14 +1146,14 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     environment: &mut crate::state::Environment,
     ledger: &mut crate::state::EnergyLedger,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
-) -> bool {
+) -> Result<(), &'static str> {
     let key = operation.accumulation_key.clone();
     let accumulated_reaction = operation.accumulated_reaction;
-    let success = resolve_environmental(operation, environment, ledger);
-    if !success {
+    let result = resolve_environmental_diagnosed(operation, environment, ledger);
+    if result.is_err() {
         accumulation.insert(key, accumulated_reaction);
     }
-    success
+    result
 }
 
 pub(crate) fn resolve(
@@ -2052,11 +2069,14 @@ mod material_identity_tests {
             accumulated_reaction: 1.0,
         };
 
-        assert!(!resolve_environmental(
-            operation,
-            &mut simulation.environment,
-            &mut simulation.energy_ledger,
-        ));
+        assert_eq!(
+            resolve_environmental_diagnosed(
+                operation,
+                &mut simulation.environment,
+                &mut simulation.energy_ledger,
+            ),
+            Err("insufficient_usable_energy")
+        );
         assert_eq!(simulation.environment.field.cells, field_before);
         assert_eq!(
             simulation.environment.chemistry_usable_energy,

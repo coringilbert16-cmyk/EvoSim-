@@ -591,6 +591,7 @@ struct EnvironmentalChemistryDiagnosticTotals {
     break_scheduled: u64,
     break_committed: u64,
     break_rejected: u64,
+    break_failure_reasons: BTreeMap<String, u64>,
     combine_ready_candidates: u64,
     combine_scheduled: u64,
     combine_committed: u64,
@@ -647,6 +648,15 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for event in &simulation.environmental_chemistry_events {
+            if event.reaction == "BREAK" {
+                if let Some(reason) = &event.failure_reason {
+                    *self
+                        .totals
+                        .break_failure_reasons
+                        .entry(reason.clone())
+                        .or_default() += 1;
+                }
+            }
             if event.reaction == "DISPLACEMENT" {
                 let participant_key = serde_json::to_string(&event.source_materials)
                     .unwrap_or_else(|_| "unserializable_participants".to_string());
@@ -782,6 +792,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "break_scheduled": self.totals.break_scheduled,
             "break_committed": self.totals.break_committed,
             "break_rejected": self.totals.break_rejected,
+            "break_failure_reasons": self.totals.break_failure_reasons,
             "break_discovery": self.totals.break_discovery,
             "combine_ready_candidates": self.totals.combine_ready_candidates,
             "combine_scheduled": self.totals.combine_scheduled,
