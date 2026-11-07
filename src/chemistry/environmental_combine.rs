@@ -51,32 +51,44 @@ fn origin() -> Placement {
     }
 }
 
+fn source_constituent_identity(
+    cell: usize,
+    material: usize,
+    source: &PhysicalMaterial,
+    unit: usize,
+) -> String {
+    if source.environmental_identity == 0 {
+        // Direct subsystem tests and legacy callers can inspect a field before
+        // its first transport/identity-assignment pass. Keep those unassigned
+        // instances distinct without pretending their fallback key is
+        // movement-stable.
+        format!("unassigned:{cell}:{material}:{unit}")
+    } else {
+        format!("{}:{unit}", source.environmental_identity)
+    }
+}
+
 fn source_pair_accumulation_prefix(
-    _cell_a: usize,
-    _material_a: usize,
+    cell_a: usize,
+    material_a: usize,
     source_a: &PhysicalMaterial,
-    _cell_b: usize,
-    _material_b: usize,
+    cell_b: usize,
+    material_b: usize,
     source_b: &PhysicalMaterial,
     unit_a: usize,
     unit_b: usize,
 ) -> String {
-    // A physical contact belongs to the two environmental material instances,
-    // not to their transient cell/vector positions or world-space placement.
-    // Canonicalize the pair so crossing cell/slot order does not create a new
-    // activation history. Constituent indices remain stable within each
-    // unchanged PhysicalMaterial topology.
-    let left = (source_a.environmental_identity, unit_a);
-    let right = (source_b.environmental_identity, unit_b);
+    // Assigned physical contacts follow material identity, not transient
+    // cell/vector positions or world-space placement. Canonicalize the pair
+    // so crossing cell/slot order does not create a new activation history.
+    let left = source_constituent_identity(cell_a, material_a, source_a, unit_a);
+    let right = source_constituent_identity(cell_b, material_b, source_b, unit_b);
     let (first, second) = if left <= right {
         (left, right)
     } else {
         (right, left)
     };
-    format!(
-        "{ENVIRONMENT_PREFIX}{}:{}|{}:{}|",
-        first.0, first.1, second.0, second.1
-    )
+    format!("{ENVIRONMENT_PREFIX}{first}|{second}|")
 }
 
 fn source_pair_key(
@@ -90,8 +102,8 @@ fn source_pair_key(
     unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
-    let first = (source_a.environmental_identity, unit_a);
-    let second = (source_b.environmental_identity, unit_b);
+    let first = source_constituent_identity(cell_a, material_a, source_a, unit_a);
+    let second = source_constituent_identity(cell_b, material_b, source_b, unit_b);
     let (endpoint_a, endpoint_b) = if first <= second {
         (candidate.endpoint_a, candidate.endpoint_b)
     } else {
@@ -171,10 +183,24 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
         return false;
     }
     let is_pair = |value: &str| {
-        let mut parts = value.split(':');
-        parts.next().is_some_and(|id| id.parse::<u64>().is_ok())
-            && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
-            && parts.next().is_none()
+        let (identity, expected_parts) = if let Some(unassigned) = value.strip_prefix("unassigned:")
+        {
+            (unassigned, 3)
+        } else {
+            (value, 2)
+        };
+        let mut parts = identity.split(':');
+        let parsed = if expected_parts == 3 {
+            parts.next().is_some_and(|cell| cell.parse::<usize>().is_ok())
+                && parts.next().is_some_and(|slot| slot.parse::<usize>().is_ok())
+                && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts.next().is_none()
+        } else {
+            parts.next().is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
+                && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts.next().is_none()
+        };
+        parsed
     };
     is_pair(first) && is_pair(second)
 }
@@ -574,8 +600,16 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     // Retire placement/index-based COMBINE histories once. They cannot be
     // mapped safely onto stable physical identities, so carrying them forward
     // would leak unreachable progress and diagnostics indefinitely.
+    let unassigned_materials_exist = environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .any(|material| material.environmental_identity == 0);
     accumulation.retain(|key, _| {
-        !key.starts_with(ENVIRONMENT_PREFIX) || is_current_combine_accumulation_key(key)
+        !key.starts_with(ENVIRONMENT_PREFIX)
+            || (is_current_combine_accumulation_key(key)
+                && (unassigned_materials_exist || !key.contains("unassigned:")))
     });
     let (initial_accumulation_entries, initial_accumulation_value) =
         environmental_accumulation_totals(accumulation);
@@ -1575,6 +1609,18 @@ mod tests {
         assert_ne!(
             original,
             source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, other_endpoint)
+        );
+
+        // Unassigned materials are possible in direct subsystem callers before
+        // transport. Their fallback identity must still distinguish instances.
+        let mut unassigned_a = a.clone();
+        unassigned_a.environmental_identity = 0;
+        let mut unassigned_b = b.clone();
+        unassigned_b.environmental_identity = 0;
+        let fallback = source_pair_key(0, 0, &unassigned_a, 0, 1, &unassigned_b, 0, 0, candidate);
+        assert_ne!(
+            fallback,
+            source_pair_key(0, 0, &unassigned_a, 1, 1, &unassigned_b, 0, 0, candidate)
         );
     }
 
