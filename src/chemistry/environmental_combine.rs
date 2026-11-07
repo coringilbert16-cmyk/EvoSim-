@@ -1613,6 +1613,7 @@ mod tests {
         let mut unassigned_b = b.clone();
         unassigned_b.environmental_identity = 0;
         let fallback = source_pair_key(0, 0, &unassigned_a, 0, 1, &unassigned_b, 0, 0, candidate);
+        assert!(is_current_combine_accumulation_key(&fallback));
         assert_ne!(
             fallback,
             source_pair_key(0, 0, &unassigned_a, 1, 1, &unassigned_b, 0, 0, candidate)
