@@ -12,9 +12,12 @@
 //! remain in their existing subsystems.
 
 use crate::environment::ActiveMaterialField;
-use crate::environmental_interaction::{
-    BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
-};
+use crate::environmental_interaction::BondRef;
+use crate::environmental_interaction::ConstituentRef;
+use crate::environmental_interaction::ExistingBondRecord;
+use crate::environmental_interaction::MaterialIdentity;
+use crate::environmental_interaction::MaterialLocator;
+use crate::environmental_interaction::MaterialRecord;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MaterialPairRecord {
