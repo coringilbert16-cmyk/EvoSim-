@@ -577,3 +577,136 @@ fn bounded_bounds_query_matches_full_query_for_a_complete_window() {
 
     assert_eq!(bounded, full);
 }
+
+#[test]
+fn environmental_transport_repairs_duplicate_nonzero_material_ids() {
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let catalog = crate::resources::default_catalog();
+    for (cell, x) in [(0, 12.5), (1, 37.5)] {
+        let mut material = PhysicalMaterial::realized(
+            make_raw("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x,
+                y: 12.5,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        material.environmental_identity = 41;
+        assert!(field.deposit_physical_at_index(cell, material, &catalog));
+    }
+
+    crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<false>(
+        &mut field, &catalog, 100.0, 100.0,
+    );
+    let ids: Vec<u64> = field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.environmental_identity)
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().all(|id| *id != 0));
+    assert_ne!(ids[0], ids[1]);
+}
+
+#[test]
+fn environmental_identity_allocator_repairs_duplicate_nonzero_ids() {
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let catalog = crate::resources::default_catalog();
+    let mut material = PhysicalMaterial::realized(
+        make_raw("Carbon", 1.0),
+        vec![crate::structure::Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .unwrap();
+    material.environmental_identity = 41;
+    assert!(field.deposit_physical_at_index(0, material.clone(), &catalog));
+    assert!(field.deposit_physical_at_index(0, material, &catalog));
+
+    field.assign_missing_material_identities();
+    let ids: Vec<u64> = field.cells[0]
+        .physical_materials
+        .iter()
+        .map(|item| item.environmental_identity)
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert_ne!(ids[0], 0);
+    assert_ne!(ids[1], 0);
+    assert_ne!(ids[0], ids[1]);
+}
+
+#[test]
+fn environmental_material_identity_survives_serialization_round_trip() {
+    let catalog = crate::resources::default_catalog();
+    let mut material = PhysicalMaterial::realized(
+        make_raw("Carbon", 1.0),
+        vec![crate::structure::Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .unwrap();
+    material.environmental_identity = 987_654;
+    let encoded = serde_json::to_string(&material).unwrap();
+    let decoded: PhysicalMaterial = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(decoded.environmental_identity, 987_654);
+    assert_eq!(decoded, material);
+}
+
+#[test]
+fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let catalog = crate::resources::default_catalog();
+    let source = PhysicalMaterial::realized(
+        make_structured(2.0),
+        vec![
+            crate::structure::Placement {
+                x: 12.5,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+            crate::structure::Placement {
+                x: 14.3,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+        ],
+        &catalog,
+    )
+    .expect("fixture should be a realized bonded material");
+    assert!(field.deposit_physical_at_index(0, source, &catalog));
+    field.assign_missing_material_identities();
+    let parent_id = field.cells[0].physical_materials[0].environmental_identity;
+    let parent = field.cells[0].physical_materials[0].clone();
+    let bond = parent.internal_connections.as_ref().unwrap()[0].clone();
+    let pieces = parent
+        .break_internal_bond(&bond)
+        .expect("the single internal bond should split into two products");
+
+    assert!(field.split_physical_at_index(0, 0, &parent, pieces, &catalog));
+    assert!(
+        field.cells[0].physical_materials.is_empty()
+            || field.cells[0]
+                .physical_materials
+                .iter()
+                .all(|material| material.environmental_identity != parent_id)
+    );
+    field.assign_missing_material_identities();
+    let child_ids: Vec<u64> = field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.environmental_identity)
+        .collect();
+    assert_eq!(child_ids.len(), 2);
+    assert!(child_ids.iter().all(|id| *id != 0 && *id != parent_id));
+    assert_ne!(child_ids[0], child_ids[1]);
+}

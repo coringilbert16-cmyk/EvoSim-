@@ -51,10 +51,21 @@ fn origin() -> Placement {
     }
 }
 
-fn material_signature(material: &PhysicalMaterial) -> String {
-    // The realized payload, rather than composition alone, distinguishes moved,
-    // reshaped, or differently bonded instances that happen to share a recipe.
-    format!("{material:?}")
+fn source_constituent_identity(
+    cell: usize,
+    material: usize,
+    source: &PhysicalMaterial,
+    unit: usize,
+) -> String {
+    if source.environmental_identity == 0 {
+        // Direct subsystem tests and legacy callers can inspect a field before
+        // its first transport/identity-assignment pass. Keep those unassigned
+        // instances distinct without pretending their fallback key is
+        // movement-stable.
+        format!("unassigned:{cell}:{material}:{unit}")
+    } else {
+        format!("{}:{unit}", source.environmental_identity)
+    }
 }
 
 fn source_pair_accumulation_prefix(
@@ -67,11 +78,17 @@ fn source_pair_accumulation_prefix(
     unit_a: usize,
     unit_b: usize,
 ) -> String {
-    format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|",
-        material_signature(source_a),
-        material_signature(source_b),
-    )
+    // Assigned physical contacts follow material identity, not transient
+    // cell/vector positions or world-space placement. Canonicalize the pair
+    // so crossing cell/slot order does not create a new activation history.
+    let left = source_constituent_identity(cell_a, material_a, source_a, unit_a);
+    let right = source_constituent_identity(cell_b, material_b, source_b, unit_b);
+    let (first, second) = if left <= right {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    format!("{ENVIRONMENT_PREFIX}{first}|{second}|")
 }
 
 fn source_pair_key(
@@ -85,14 +102,14 @@ fn source_pair_key(
     unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
-    format!(
-        "{}{:?}|{:?}",
-        source_pair_accumulation_prefix(
-            cell_a, material_a, source_a, cell_b, material_b, source_b, unit_a, unit_b,
-        ),
-        candidate.endpoint_a,
-        candidate.endpoint_b,
-    )
+    let first = source_constituent_identity(cell_a, material_a, source_a, unit_a);
+    let second = source_constituent_identity(cell_b, material_b, source_b, unit_b);
+    let (first, second, endpoint_a, endpoint_b) = if first <= second {
+        (&first, &second, candidate.endpoint_a, candidate.endpoint_b)
+    } else {
+        (&second, &first, candidate.endpoint_b, candidate.endpoint_a)
+    };
+    format!("{ENVIRONMENT_PREFIX}{first}|{second}|{endpoint_a:?}|{endpoint_b:?}")
 }
 
 fn environmental_accumulation_totals(accumulation: &BTreeMap<String, f64>) -> (usize, f64) {
@@ -132,6 +149,61 @@ fn constituent_prefix_from_accumulation_key(key: &str) -> Option<&str> {
     separators.next()?;
     let (third_separator, _) = separators.next()?;
     Some(&key[..=third_separator])
+}
+
+fn is_current_combine_accumulation_key(key: &str) -> bool {
+    let mut fields = key.split('|');
+    if fields.next() != Some("environment") {
+        return false;
+    }
+    let Some(first) = fields
+        .next()
+        .and_then(|field| field.strip_prefix("combine:"))
+    else {
+        return false;
+    };
+    let Some(second) = fields.next() else {
+        return false;
+    };
+    // The remaining fields are the two endpoint identities. Older keys
+    // included cell/slot and a placement-sensitive debug signature in the
+    // first section; discard those histories rather than retaining unreachable
+    // entries forever after the key contract changes.
+    let Some(_endpoint_a) = fields.next() else {
+        return false;
+    };
+    let Some(_endpoint_b) = fields.next() else {
+        return false;
+    };
+    if fields.next().is_some() {
+        return false;
+    }
+    let is_pair = |value: &str| {
+        let unassigned = value.starts_with("unassigned:");
+        let identity = value.strip_prefix("unassigned:").unwrap_or(value);
+        let mut parts = identity.split(':');
+        if unassigned {
+            parts
+                .next()
+                .is_some_and(|cell| cell.parse::<usize>().is_ok())
+                && parts
+                    .next()
+                    .is_some_and(|slot| slot.parse::<usize>().is_ok())
+                && parts
+                    .next()
+                    .is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts.next().is_none()
+        } else {
+            parts
+                .next()
+                .is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
+                && parts
+                    .next()
+                    .is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts.next().is_none()
+        }
+    };
+    is_pair(first) && is_pair(second)
 }
 
 fn invalidate_unupdated_constituent_accumulations(
@@ -526,6 +598,20 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) -> Vec<EnvironmentalCombineOperation> {
+    // Retire placement/index-based COMBINE histories once. They cannot be
+    // mapped safely onto stable physical identities, so carrying them forward
+    // would leak unreachable progress and diagnostics indefinitely.
+    let unassigned_materials_exist = environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .any(|material| material.environmental_identity == 0);
+    accumulation.retain(|key, _| {
+        !key.starts_with(ENVIRONMENT_PREFIX)
+            || (is_current_combine_accumulation_key(key)
+                && (unassigned_materials_exist || !key.contains("unassigned:")))
+    });
     let (initial_accumulation_entries, initial_accumulation_value) =
         environmental_accumulation_totals(accumulation);
     diagnostics.accumulation_entries_before_search = initial_accumulation_entries;
@@ -1436,9 +1522,19 @@ mod tests {
     }
 
     #[test]
-    fn environmental_pair_keys_include_instance_realization_and_endpoints() {
+    fn legacy_location_based_combine_keys_are_not_treated_as_current_progress() {
+        let current =
+            "environment|combine:101:0|202:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        let legacy =
+            "environment|combine:4:2:PhysicalMaterial { placement: (1, 2) }:0|8:3:PhysicalMaterial { placement: (3, 4) }:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        assert!(is_current_combine_accumulation_key(current));
+        assert!(!is_current_combine_accumulation_key(legacy));
+    }
+
+    #[test]
+    fn environmental_pair_keys_follow_material_identity_across_movement() {
         let catalog = crate::resources::default_catalog();
-        let a = PhysicalMaterial::realized(
+        let mut a = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
                 x: 1.0,
@@ -1448,7 +1544,8 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        let b = PhysicalMaterial::realized(
+        a.environmental_identity = 101;
+        let mut b = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
             vec![Placement {
                 x: 2.0,
@@ -1458,6 +1555,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
+        b.environmental_identity = 202;
         let candidate = ConnectionPairCandidate {
             endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
             endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
@@ -1468,24 +1566,66 @@ mod tests {
             available_a: true,
             available_b: true,
         };
+
         let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
+
+        // Same physical objects and interface after transport: only transient
+        // locations, vector slots, placements, and traversal order have changed.
+        let mut moved_a = a.clone();
+        moved_a.placements.as_mut().unwrap()[0].x = 31.0;
+        moved_a.placements.as_mut().unwrap()[0].rotation_radians = 0.4;
+        let mut moved_b = b.clone();
+        moved_b.placements.as_mut().unwrap()[0].x = 29.0;
+        let moved = source_pair_key(9, 7, &moved_a, 3, 2, &moved_b, 0, 0, candidate);
+        assert_eq!(original, moved);
+        let mut accumulated_progress = BTreeMap::new();
+        accumulated_progress.insert(original.clone(), 0.75);
+        assert_eq!(accumulated_progress.get(&moved), Some(&0.75));
+
+        // If traversal order reverses, endpoint ownership reverses with it but
+        // the canonical physical interface remains identical.
+        let reversed_candidate = ConnectionPairCandidate {
+            endpoint_a: candidate.endpoint_b,
+            endpoint_b: candidate.endpoint_a,
+            ..candidate
+        };
+        assert_eq!(
+            original,
+            source_pair_key(3, 2, &b, 9, 7, &a, 0, 0, reversed_candidate)
+        );
+
+        // Distinct physical instances, constituents, and endpoints must never
+        // inherit the same activation history.
+        let mut other_a = a.clone();
+        other_a.environmental_identity = 303;
+        assert_ne!(
+            original,
+            source_pair_key(0, 0, &other_a, 0, 1, &b, 0, 0, candidate)
+        );
         assert_ne!(
             original,
             source_pair_key(0, 0, &a, 0, 1, &b, 1, 0, candidate)
         );
-        let moved = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.0),
-            vec![Placement {
-                x: 3.0,
-                y: 2.0,
-                rotation_radians: 0.0,
-            }],
-            &catalog,
-        )
-        .unwrap();
+        let other_endpoint = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 1 },
+            ..candidate
+        };
         assert_ne!(
             original,
-            source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate)
+            source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, other_endpoint)
+        );
+
+        // Unassigned materials are possible in direct subsystem callers before
+        // transport. Their fallback identity must still distinguish instances.
+        let mut unassigned_a = a.clone();
+        unassigned_a.environmental_identity = 0;
+        let mut unassigned_b = b.clone();
+        unassigned_b.environmental_identity = 0;
+        let fallback = source_pair_key(0, 0, &unassigned_a, 0, 1, &unassigned_b, 0, 0, candidate);
+        assert!(is_current_combine_accumulation_key(&fallback));
+        assert_ne!(
+            fallback,
+            source_pair_key(0, 0, &unassigned_a, 1, 1, &unassigned_b, 0, 0, candidate)
         );
     }
 
