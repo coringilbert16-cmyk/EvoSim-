@@ -60,7 +60,11 @@ pub(crate) fn stable_material_pair_id(identity_a: u64, identity_b: u64) -> Optio
     if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
         return None;
     }
-    Some(format!("{}:{}", identity_a.min(identity_b), identity_a.max(identity_b)))
+    Some(format!(
+        "{}:{}",
+        identity_a.min(identity_b),
+        identity_a.max(identity_b)
+    ))
 }
 
 pub(crate) fn stable_interface_id(
@@ -157,7 +161,8 @@ pub(crate) fn compare_census_to_live(
             live_only_sources_missing.push(interface_id.clone());
             continue;
         };
-        if snapshot_material_ids.contains(&identity_a) && snapshot_material_ids.contains(&identity_b)
+        if snapshot_material_ids.contains(&identity_a)
+            && snapshot_material_ids.contains(&identity_b)
         {
             live_only_sources_present_but_interface_absent.push(interface_id.clone());
         } else {
@@ -647,9 +652,7 @@ mod tests {
             ..EnvironmentalCombineCensus::default()
         };
         let inspected = std::collections::BTreeSet::from(["1:2".to_owned()]);
-        let physical = std::collections::BTreeSet::from([
-            "1:2:0:0:corner-a:corner-b".to_owned(),
-        ]);
+        let physical = std::collections::BTreeSet::from(["1:2:0:0:corner-a:corner-b".to_owned()]);
         let discovered = std::collections::BTreeSet::from([
             "1:2:9:9:old-a:old-b".to_owned(),
             "3:4:0:0:missing-a:missing-b".to_owned(),
@@ -665,7 +668,10 @@ mod tests {
             comparison.census_only_interfaces_rejected_by_chemistry_count,
             1
         );
-        assert_eq!(comparison.census_only_material_pairs_never_inspected_count, 0);
+        assert_eq!(
+            comparison.census_only_material_pairs_never_inspected_count,
+            0
+        );
         assert_eq!(comparison.live_only_count, 2);
         assert_eq!(comparison.live_only_sources_missing_count, 1);
         assert_eq!(
