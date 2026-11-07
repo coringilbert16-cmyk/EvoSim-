@@ -665,6 +665,8 @@ fn census_replacement_contacts(
             || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
             || !candidate.facing.is_finite()
             || candidate.facing <= 0.0
+            || !candidate.load_a.is_finite()
+            || !candidate.load_b.is_finite()
         {
             census.geometry_rejections += 1;
             continue;
