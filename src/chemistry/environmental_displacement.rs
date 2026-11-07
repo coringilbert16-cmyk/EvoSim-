@@ -1884,9 +1884,16 @@ mod tests {
             })
             .count();
         assert!(
-            fastest_activation.activation_increment >= selected_alternative.activation_increment
+            fastest_activation.activation_increment > selected_alternative.activation_increment,
+            "fixture must demonstrate a genuine ranking divergence: production's energy/distance winner={selected_alternative:?}, fastest-activating alternative={fastest_activation:?}, alternatives={:?}",
+            complete.alternatives,
         );
-        assert!(alternatives_faster_than_selected < complete.alternatives.len());
+        assert_eq!(
+            alternatives_faster_than_selected,
+            1,
+            "fixture should expose one distinct faster-activating alternative than the production-selected interface; selected={selected_alternative:?}, fastest={fastest_activation:?}, alternatives={:?}",
+            complete.alternatives,
+        );
         assert!(
             selected_alternative.required_energy.is_finite()
                 && selected_alternative.investment.is_finite()
