@@ -51,26 +51,31 @@ fn origin() -> Placement {
     }
 }
 
-fn material_signature(material: &PhysicalMaterial) -> String {
-    // The realized payload, rather than composition alone, distinguishes moved,
-    // reshaped, or differently bonded instances that happen to share a recipe.
-    format!("{material:?}")
-}
-
 fn source_pair_accumulation_prefix(
-    cell_a: usize,
-    material_a: usize,
+    _cell_a: usize,
+    _material_a: usize,
     source_a: &PhysicalMaterial,
-    cell_b: usize,
-    material_b: usize,
+    _cell_b: usize,
+    _material_b: usize,
     source_b: &PhysicalMaterial,
     unit_a: usize,
     unit_b: usize,
 ) -> String {
+    // A physical contact belongs to the two environmental material instances,
+    // not to their transient cell/vector positions or world-space placement.
+    // Canonicalize the pair so crossing cell/slot order does not create a new
+    // activation history. Constituent indices remain stable within each
+    // unchanged PhysicalMaterial topology.
+    let left = (source_a.environmental_identity, unit_a);
+    let right = (source_b.environmental_identity, unit_b);
+    let (first, second) = if left <= right {
+        (left, right)
+    } else {
+        (right, left)
+    };
     format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|",
-        material_signature(source_a),
-        material_signature(source_b),
+        "{ENVIRONMENT_PREFIX}{}:{}|{}:{}|",
+        first.0, first.1, second.0, second.1
     )
 }
 
@@ -85,13 +90,20 @@ fn source_pair_key(
     unit_b: usize,
     candidate: ConnectionPairCandidate,
 ) -> String {
+    let first = (source_a.environmental_identity, unit_a);
+    let second = (source_b.environmental_identity, unit_b);
+    let (endpoint_a, endpoint_b) = if first <= second {
+        (candidate.endpoint_a, candidate.endpoint_b)
+    } else {
+        (candidate.endpoint_b, candidate.endpoint_a)
+    };
     format!(
         "{}{:?}|{:?}",
         source_pair_accumulation_prefix(
             cell_a, material_a, source_a, cell_b, material_b, source_b, unit_a, unit_b,
         ),
-        candidate.endpoint_a,
-        candidate.endpoint_b,
+        endpoint_a,
+        endpoint_b,
     )
 }
 
@@ -1436,9 +1448,9 @@ mod tests {
     }
 
     #[test]
-    fn environmental_pair_keys_include_instance_realization_and_endpoints() {
+    fn environmental_pair_keys_follow_material_identity_across_movement() {
         let catalog = crate::resources::default_catalog();
-        let a = PhysicalMaterial::realized(
+        let mut a = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
                 x: 1.0,
@@ -1448,7 +1460,8 @@ mod tests {
             &catalog,
         )
         .unwrap();
-        let b = PhysicalMaterial::realized(
+        a.environmental_identity = 101;
+        let mut b = PhysicalMaterial::realized(
             Material::free_base("Hydrogen", 1.0),
             vec![Placement {
                 x: 2.0,
@@ -1458,6 +1471,7 @@ mod tests {
             &catalog,
         )
         .unwrap();
+        b.environmental_identity = 202;
         let candidate = ConnectionPairCandidate {
             endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
             endpoint_b: crate::structure::ConnectionEndpoint::Corner { point_index: 0 },
@@ -1468,24 +1482,50 @@ mod tests {
             available_a: true,
             available_b: true,
         };
+
         let original = source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, candidate);
+
+        // Same physical objects and interface after transport: only transient
+        // locations, vector slots, placements, and traversal order have changed.
+        let mut moved_a = a.clone();
+        moved_a.placements.as_mut().unwrap()[0].x = 31.0;
+        moved_a.placements.as_mut().unwrap()[0].rotation_radians = 0.4;
+        let mut moved_b = b.clone();
+        moved_b.placements.as_mut().unwrap()[0].x = 29.0;
+        let moved = source_pair_key(9, 7, &moved_a, 3, 2, &moved_b, 0, 0, candidate);
+        assert_eq!(original, moved);
+
+        // If traversal order reverses, endpoint ownership reverses with it but
+        // the canonical physical interface remains identical.
+        let reversed_candidate = ConnectionPairCandidate {
+            endpoint_a: candidate.endpoint_b,
+            endpoint_b: candidate.endpoint_a,
+            ..candidate
+        };
+        assert_eq!(
+            original,
+            source_pair_key(3, 2, &b, 9, 7, &a, 0, 0, reversed_candidate)
+        );
+
+        // Distinct physical instances, constituents, and endpoints must never
+        // inherit the same activation history.
+        let mut other_a = a.clone();
+        other_a.environmental_identity = 303;
+        assert_ne!(
+            original,
+            source_pair_key(0, 0, &other_a, 0, 1, &b, 0, 0, candidate)
+        );
         assert_ne!(
             original,
             source_pair_key(0, 0, &a, 0, 1, &b, 1, 0, candidate)
         );
-        let moved = PhysicalMaterial::realized(
-            Material::free_base("Carbon", 1.0),
-            vec![Placement {
-                x: 3.0,
-                y: 2.0,
-                rotation_radians: 0.0,
-            }],
-            &catalog,
-        )
-        .unwrap();
+        let other_endpoint = ConnectionPairCandidate {
+            endpoint_a: crate::structure::ConnectionEndpoint::Corner { point_index: 1 },
+            ..candidate
+        };
         assert_ne!(
             original,
-            source_pair_key(0, 0, &moved, 0, 1, &b, 0, 0, candidate)
+            source_pair_key(0, 0, &a, 0, 1, &b, 0, 0, other_endpoint)
         );
     }
 
