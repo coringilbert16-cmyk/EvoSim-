@@ -1802,10 +1802,8 @@ mod tests {
                                                 .total_cmp(&right.candidate.distance)
                                         })
                                 });
-                            let fastest_activation = census
-                                .alternatives
-                                .iter()
-                                .max_by(|left, right| {
+                            let fastest_activation =
+                                census.alternatives.iter().max_by(|left, right| {
                                     left.activation_increment
                                         .total_cmp(&right.activation_increment)
                                 });
