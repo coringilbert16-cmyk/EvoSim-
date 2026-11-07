@@ -2406,3 +2406,151 @@ mod tests {
         }
     }
 }
+
+
+/// Project every unique post-removal replacement interface into the shared
+/// inventory. Unlike the live selector, this adapter deliberately uses the
+/// all-alternatives census. It performs no activation accumulation or commit.
+#[allow(dead_code)] // Stage 2 adapter; production selection remains unchanged.
+pub(crate) fn append_displacement_census_to_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    combined: &OrganismStructure,
+    anchor_unit: usize,
+    displaced_unit: usize,
+    incoming_unit: usize,
+    old_bond: Bond,
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    bond_index: usize,
+    locator_a: crate::environmental_interaction::MaterialLocator,
+    locator_b: crate::environmental_interaction::MaterialLocator,
+    work_limit: usize,
+    catalog: &[BaseResource],
+) -> Result<(usize, usize, bool), crate::environmental_interaction::InventoryBuildError> {
+    use crate::environmental_interaction::{
+        BondRef, ConstituentRef, ContactContext, ContactInterfaceRecord, ExistingBondRecord,
+        MaterialIdentity, MaterialRecord,
+    };
+
+    const TOPOLOGY_GENERATION: u64 = 0;
+    let identity_a = MaterialIdentity(source_a.environmental_identity);
+    let identity_b = MaterialIdentity(source_b.environmental_identity);
+    let connection = source_a
+        .internal_connections
+        .as_ref()
+        .and_then(|connections| connections.get(bond_index))
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext)?;
+    let anchor_local = indices_a
+        .iter()
+        .position(|index| *index == anchor_unit)
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+    let displaced_local = indices_a
+        .iter()
+        .position(|index| *index == displaced_unit)
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+    let incoming_local = indices_b
+        .iter()
+        .position(|index| *index == incoming_unit)
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+    let expected_orientation = (anchor_local == connection.part_a
+        && displaced_local == connection.part_b)
+        || (anchor_local == connection.part_b && displaced_local == connection.part_a);
+    if !expected_orientation {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+    }
+
+    let census = census_replacement_contacts(
+        combined,
+        anchor_unit,
+        incoming_unit,
+        old_bond,
+        catalog,
+        work_limit,
+    );
+    {
+        let work = builder.work_mut();
+        work.bond_visits = work.bond_visits.saturating_add(1);
+        work.material_pair_visits = work.material_pair_visits.saturating_add(1);
+        work.constituent_pair_visits = work.constituent_pair_visits.saturating_add(1);
+        work.raw_endpoint_candidates = work
+            .raw_endpoint_candidates
+            .saturating_add(census.raw_candidates_inspected as u64);
+        work.geometry_evaluation_operations = work
+            .geometry_evaluation_operations
+            .saturating_add(census.raw_candidates_inspected as u64);
+    }
+
+    builder.upsert_material(MaterialRecord {
+        identity: identity_a,
+        locator: locator_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        state_version: 0,
+        constituent_count: indices_a.len(),
+    })?;
+    builder.upsert_material(MaterialRecord {
+        identity: identity_b,
+        locator: locator_b,
+        topology_generation: TOPOLOGY_GENERATION,
+        state_version: 0,
+        constituent_count: indices_b.len(),
+    })?;
+
+    builder.add_bond(ExistingBondRecord {
+        material: identity_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        bond_index,
+        constituent_a: ConstituentRef {
+            material: identity_a,
+            topology_generation: TOPOLOGY_GENERATION,
+            local_index: connection.part_a,
+        },
+        endpoint_a: connection.endpoint_a,
+        constituent_b: ConstituentRef {
+            material: identity_a,
+            topology_generation: TOPOLOGY_GENERATION,
+            local_index: connection.part_b,
+        },
+        endpoint_b: connection.endpoint_b,
+        bond_energy: connection.bond_energy,
+    })?;
+
+    let anchor = ConstituentRef {
+        material: identity_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        local_index: anchor_local,
+    };
+    let displaced = ConstituentRef {
+        material: identity_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        local_index: displaced_local,
+    };
+    let incoming = ConstituentRef {
+        material: identity_b,
+        topology_generation: TOPOLOGY_GENERATION,
+        local_index: incoming_local,
+    };
+    let context = ContactContext::Replacement {
+        removed_bond: BondRef {
+            material: identity_a,
+            topology_generation: TOPOLOGY_GENERATION,
+            bond_index,
+        },
+        anchor,
+        displaced,
+    };
+    let mut inserted = 0usize;
+    for alternative in census.alternatives {
+        let record = ContactInterfaceRecord {
+            constituent_a: anchor,
+            endpoint_a: alternative.candidate.endpoint_a,
+            constituent_b: incoming,
+            endpoint_b: alternative.candidate.endpoint_b,
+            context,
+            candidate: alternative.candidate,
+        };
+        inserted += usize::from(builder.add_contact(record)?);
+    }
+    Ok((inserted, census.raw_candidates_inspected, census.work_limit_reached))
+}
