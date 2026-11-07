@@ -1809,17 +1809,15 @@ mod tests {
         let (source, old_bond, _fixture_candidate, _investment) =
             three_participant_fixture(&catalog);
 
-        let complete =
-            census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
+        let complete = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
         assert!(!complete.alternatives.is_empty());
         assert!(
             complete.raw_candidates_inspected
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
         );
 
-        let (production_selected, _) =
-            best_replacement_contact(&source, 0, 2, old_bond, &catalog)
-                .expect("the production selector must find a valid replacement");
+        let (production_selected, _) = best_replacement_contact(&source, 0, 2, old_bond, &catalog)
+            .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
             .iter()
@@ -1851,8 +1849,14 @@ mod tests {
             })
             .expect("census has at least one valid alternative");
         assert_eq!(
-            (energy_ranked.candidate.endpoint_a, energy_ranked.candidate.endpoint_b),
-            (production_selected.endpoint_a, production_selected.endpoint_b),
+            (
+                energy_ranked.candidate.endpoint_a,
+                energy_ranked.candidate.endpoint_b
+            ),
+            (
+                production_selected.endpoint_a,
+                production_selected.endpoint_b
+            ),
             "the census and production selector must agree on the energy/distance winner"
         );
 
@@ -1860,7 +1864,8 @@ mod tests {
             .alternatives
             .iter()
             .max_by(|left, right| {
-                left.activation_increment.total_cmp(&right.activation_increment)
+                left.activation_increment
+                    .total_cmp(&right.activation_increment)
             })
             .expect("census has at least one valid alternative");
         let alternatives_faster_than_selected = complete
@@ -1871,8 +1876,7 @@ mod tests {
             })
             .count();
         assert!(
-            fastest_activation.activation_increment
-                >= selected_alternative.activation_increment
+            fastest_activation.activation_increment >= selected_alternative.activation_increment
         );
         assert!(alternatives_faster_than_selected < complete.alternatives.len());
         assert!(
