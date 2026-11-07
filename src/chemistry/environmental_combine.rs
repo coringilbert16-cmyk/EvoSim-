@@ -3805,8 +3805,6 @@ mod tests {
     }
 }
 
-
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DiscoveredContact {
     unit_a: usize,
@@ -3911,7 +3909,9 @@ pub(crate) fn append_discovered_contacts_to_inventory(
         let local_a = indices_a
             .iter()
             .position(|index| *index == contact.unit_a)
-            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+            .ok_or(
+                crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
+            )?;
         let local_b = indices_b
             .iter()
             .position(|index| *index == contact.unit_b)
