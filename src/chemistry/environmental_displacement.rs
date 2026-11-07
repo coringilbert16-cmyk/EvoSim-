@@ -1802,36 +1802,41 @@ mod tests {
         let (source, old_bond, selected, _investment) =
             three_participant_fixture(&catalog);
 
-        let complete = census_replacement_contacts(
-            &source, 0, 2, old_bond, &catalog, usize::MAX,
-        );
+        let complete =
+            census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
         assert!(!complete.alternatives.is_empty());
         assert!(
             complete.raw_candidates_inspected
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
         );
         assert_eq!(
-            complete.alternatives.iter().filter(|alternative| {
-                alternative.candidate.endpoint_a == selected.endpoint_a
-                    && alternative.candidate.endpoint_b == selected.endpoint_b
-            }).count(),
+            complete
+                .alternatives
+                .iter()
+                .filter(|alternative| {
+                    alternative.candidate.endpoint_a == selected.endpoint_a
+                        && alternative.candidate.endpoint_b == selected.endpoint_b
+                })
+                .count(),
             1,
             "the production-selected pair must occur exactly once in the deduplicated census"
         );
 
-        let bounded = census_replacement_contacts(
-            &source, 0, 2, old_bond, &catalog, 1,
-        );
+        let bounded = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, 1);
         assert!(bounded.raw_candidates_inspected <= 1);
         if complete.raw_candidates_inspected > 1 {
             assert!(bounded.work_limit_reached);
         }
 
-        let best = complete.alternatives.iter().min_by(|left, right| {
-            left.required_energy
-                .total_cmp(&right.required_energy)
-                .then_with(|| left.candidate.distance.total_cmp(&right.candidate.distance))
-        }).expect("census has at least one valid alternative");
+        let best = complete
+            .alternatives
+            .iter()
+            .min_by(|left, right| {
+                left.required_energy
+                    .total_cmp(&right.required_energy)
+                    .then_with(|| left.candidate.distance.total_cmp(&right.candidate.distance))
+            })
+            .expect("census has at least one valid alternative");
         assert!(
             best.required_energy.is_finite()
                 && best.investment.is_finite()
