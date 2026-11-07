@@ -5,7 +5,7 @@
 //! energy, or field state. Exact endpoint and chemistry eligibility still come
 //! from the same authorities used by live COMBINE.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::time::Instant;
 
 use crate::environment::ActiveMaterialField;
@@ -27,9 +27,18 @@ pub(crate) struct EnvironmentalCombineCensus {
     pub(crate) constituent_pairs_evaluated: u64,
     pub(crate) physical_interfaces: u64,
     pub(crate) chemically_eligible_interfaces: u64,
-    /// Interfaces whose instantaneous usable-energy requirement is met.
-    /// This does not include compatible resonance or accumulated activation.
+    pub(crate) live_geometry_resolvable_interfaces: u64,
+    pub(crate) interfaces_with_chemical_activation_signal: u64,
+    pub(crate) activation_already_reached_interfaces: u64,
+    pub(crate) activation_reached_after_one_more_evaluation: u64,
+    pub(crate) activation_below_threshold_after_one_more_evaluation: u64,
+    pub(crate) max_accumulated_reaction: f64,
+    /// Instantaneous COMBINE funding uses the usable-energy pool.
+    pub(crate) usable_energy_available: f64,
     pub(crate) usable_energy_sufficient_interfaces: u64,
+    /// Resonance is recorded for context but is not a COMBINE funding source.
+    pub(crate) resonant_energy_available: f64,
+    pub(crate) resonance_funding_supported: bool,
     pub(crate) census_pair_ids: Vec<String>,
     pub(crate) elapsed_micros: u128,
 }
@@ -153,6 +162,8 @@ pub(crate) fn census_environmental_combine(
     field: &ActiveMaterialField,
     catalog: &[BaseResource],
     usable_energy: f64,
+    resonant_energy: f64,
+    accumulation: &BTreeMap<String, f64>,
 ) -> EnvironmentalCombineCensus {
     let started = Instant::now();
     // Mirror the live identity initialization on a private snapshot. This
@@ -160,6 +171,15 @@ pub(crate) fn census_environmental_combine(
     // mutating the simulation's field.
     let mut snapshot_field = field.clone();
     snapshot_field.assign_missing_material_identities();
+    let locations: Vec<(usize, usize)> = snapshot_field
+        .cells
+        .iter()
+        .enumerate()
+        .flat_map(|(cell_index, cell)| {
+            (0..cell.physical_materials.len())
+                .map(move |material_index| (cell_index, material_index))
+        })
+        .collect();
     let sources: Vec<&PhysicalMaterial> = snapshot_field
         .cells
         .iter()
@@ -168,6 +188,9 @@ pub(crate) fn census_environmental_combine(
 
     let mut census = EnvironmentalCombineCensus {
         physical_materials: sources.len(),
+        usable_energy_available: usable_energy,
+        resonant_energy_available: resonant_energy,
+        resonance_funding_supported: false,
         unordered_pairs_total: (sources.len() as u64)
             .saturating_mul(sources.len().saturating_sub(1) as u64)
             / 2,
@@ -227,10 +250,14 @@ pub(crate) fn census_environmental_combine(
         let Some(material_a) = restored_a.as_ref() else {
             continue;
         };
-        for restored_b in restored.iter().skip(index_a + 1) {
+        let (cell_a, material_index_a) = locations[index_a];
+        let source_a = sources[index_a];
+        for (index_b, restored_b) in restored.iter().enumerate().skip(index_a + 1) {
             let Some(material_b) = restored_b.as_ref() else {
                 continue;
             };
+            let (cell_b, material_index_b) = locations[index_b];
+            let source_b = sources[index_b];
             census.pairs_with_both_materials_restored += 1;
 
             if bounds_are_separated(
@@ -295,6 +322,122 @@ pub(crate) fn census_environmental_combine(
                             continue;
                         };
                         census.chemically_eligible_interfaces += 1;
+
+                        let [(material_name_a, _)] =
+                            combined.units[unit_a].material.parts.as_slice()
+                        else {
+                            continue;
+                        };
+                        let [(material_name_b, _)] =
+                            combined.units[unit_b].material.parts.as_slice()
+                        else {
+                            continue;
+                        };
+                        if crate::geometry_reference_library::resolve_live_contact_candidate(
+                            material_name_a,
+                            &combined.units[unit_a],
+                            material_name_b,
+                            &combined.units[unit_b],
+                            candidate,
+                            catalog,
+                        )
+                        .is_none()
+                        {
+                            continue;
+                        }
+                        census.live_geometry_resolvable_interfaces += 1;
+
+                        let Some(properties_a) = combined.units[unit_a].properties(catalog) else {
+                            continue;
+                        };
+                        let Some(properties_b) = combined.units[unit_b].properties(catalog) else {
+                            continue;
+                        };
+                        let Some(position_a) =
+                            crate::environmental_combine::constituent_chemical_position(
+                                &combined.units[unit_a],
+                                catalog,
+                            )
+                        else {
+                            continue;
+                        };
+                        let Some(position_b) =
+                            crate::environmental_combine::constituent_chemical_position(
+                                &combined.units[unit_b],
+                                catalog,
+                            )
+                        else {
+                            continue;
+                        };
+                        let Some(contact) = crate::chemistry::contact_factor(
+                            candidate.distance,
+                            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                        ) else {
+                            continue;
+                        };
+                        let Some(engagement) =
+                            crate::chemistry::interface_engagement(candidate.facing)
+                        else {
+                            continue;
+                        };
+                        let Some(static_potential) = crate::chemistry::interaction_potential(
+                            position_a,
+                            position_b,
+                            crate::chemistry::CHEMICAL_K,
+                            crate::chemistry::CHEMICAL_D_MAX,
+                        ) else {
+                            continue;
+                        };
+                        census.interfaces_with_chemical_activation_signal += 1;
+
+                        let accumulation_key = crate::environmental_combine::source_pair_key(
+                            cell_a,
+                            material_index_a,
+                            source_a,
+                            cell_b,
+                            material_index_b,
+                            source_b,
+                            unit_a,
+                            unit_b,
+                            candidate,
+                        );
+                        let previous = accumulation.get(&accumulation_key).copied().unwrap_or(0.0);
+                        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(
+                            crate::combine::bond_strength(properties_a, properties_b),
+                        ) else {
+                            continue;
+                        };
+                        if crate::chemistry::normalized_chemistry_to_activation_signal(previous)
+                            .is_some_and(|signal| crate::chemistry::activated(signal, barrier))
+                        {
+                            census.activation_already_reached_interfaces += 1;
+                        }
+                        census.max_accumulated_reaction =
+                            census.max_accumulated_reaction.max(previous);
+
+                        if let Some(next) = crate::chemistry::accumulate_reaction(
+                            previous,
+                            static_potential,
+                            contact,
+                            engagement,
+                            crate::chemistry::CHEMICAL_DISSIPATION,
+                        ) {
+                            if next > 0.0 {
+                                census.max_accumulated_reaction =
+                                    census.max_accumulated_reaction.max(next);
+                                if crate::chemistry::normalized_chemistry_to_activation_signal(next)
+                                    .is_some_and(|signal| {
+                                        crate::chemistry::activated(signal, barrier)
+                                    })
+                                {
+                                    census.activation_reached_after_one_more_evaluation += 1;
+                                } else {
+                                    census.activation_below_threshold_after_one_more_evaluation +=
+                                        1;
+                                }
+                            }
+                        }
+
                         if usable_energy.is_finite()
                             && usable_energy >= 0.0
                             && required_energy.is_finite()
