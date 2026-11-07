@@ -4152,15 +4152,17 @@ mod shared_inventory_adapter_tests {
             {
                 continue;
             }
-            let duplicate = inventory_evaluable.iter().any(|(existing_a, existing_b, existing)| {
-                *existing_a == unit_a
-                    && *existing_b == unit_b
-                    && crate::contact::connection_pair_candidate_matches_endpoints(
-                        existing,
-                        contact.endpoint_a,
-                        contact.endpoint_b,
-                    )
-            });
+            let duplicate = inventory_evaluable
+                .iter()
+                .any(|(existing_a, existing_b, existing)| {
+                    *existing_a == unit_a
+                        && *existing_b == unit_b
+                        && crate::contact::connection_pair_candidate_matches_endpoints(
+                            existing,
+                            contact.endpoint_a,
+                            contact.endpoint_b,
+                        )
+                });
             if !duplicate {
                 inventory_evaluable.push((unit_a, unit_b, contact.candidate));
             }
@@ -4168,31 +4170,39 @@ mod shared_inventory_adapter_tests {
 
         let mut production_evaluable: Vec<(usize, usize, ConnectionPairCandidate)> = Vec::new();
         for contact in &live_contacts {
-            let duplicate = production_evaluable.iter().any(|(existing_a, existing_b, existing)| {
-                *existing_a == contact.unit_a
-                    && *existing_b == contact.unit_b
-                    && crate::contact::connection_pair_candidate_matches_endpoints(
-                        existing,
-                        contact.candidate.endpoint_a,
-                        contact.candidate.endpoint_b,
-                    )
-            });
+            let duplicate = production_evaluable
+                .iter()
+                .any(|(existing_a, existing_b, existing)| {
+                    *existing_a == contact.unit_a
+                        && *existing_b == contact.unit_b
+                        && crate::contact::connection_pair_candidate_matches_endpoints(
+                            existing,
+                            contact.candidate.endpoint_a,
+                            contact.candidate.endpoint_b,
+                        )
+                });
             if !duplicate {
                 production_evaluable.push((contact.unit_a, contact.unit_b, contact.candidate));
             }
         }
         assert_eq!(inventory_evaluable.len(), production_evaluable.len());
-        assert!(inventory_evaluable.iter().all(|(unit_a, unit_b, candidate)| {
-            production_evaluable.iter().any(|(production_a, production_b, production)| {
-                *production_a == *unit_a
-                    && *production_b == *unit_b
-                    && crate::contact::connection_pair_candidate_matches_endpoints(
-                        production,
-                        candidate.endpoint_a,
-                        candidate.endpoint_b,
-                    )
-            })
-        }));
+        assert!(
+            inventory_evaluable
+                .iter()
+                .all(|(unit_a, unit_b, candidate)| {
+                    production_evaluable
+                        .iter()
+                        .any(|(production_a, production_b, production)| {
+                            *production_a == *unit_a
+                                && *production_b == *unit_b
+                                && crate::contact::connection_pair_candidate_matches_endpoints(
+                                    production,
+                                    candidate.endpoint_a,
+                                    candidate.endpoint_b,
+                                )
+                        })
+                })
+        );
         assert_eq!(inspected_pairs, FIELD_COMPONENT_PAIR_LIMIT);
         assert_eq!(remaining_work, 0);
         assert!(inserted > 0);
