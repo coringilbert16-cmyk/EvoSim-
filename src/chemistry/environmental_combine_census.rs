@@ -80,10 +80,8 @@ pub(crate) fn compare_census_to_live(
     let census_ids: std::collections::BTreeSet<_> =
         census.census_pair_ids.iter().cloned().collect();
     let live_ids: std::collections::BTreeSet<_> = live_interface_ids.iter().cloned().collect();
-    let census_only_interface_ids: Vec<_> =
-        census_ids.difference(&live_ids).cloned().collect();
-    let live_only_interface_ids: Vec<_> =
-        live_ids.difference(&census_ids).cloned().collect();
+    let census_only_interface_ids: Vec<_> = census_ids.difference(&live_ids).cloned().collect();
+    let live_only_interface_ids: Vec<_> = live_ids.difference(&census_ids).cloned().collect();
     EnvironmentalCombineCensusComparison {
         census_only_count: census_only_interface_ids.len(),
         live_only_count: live_only_interface_ids.len(),
