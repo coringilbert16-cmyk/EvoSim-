@@ -626,14 +626,13 @@ fn census_replacement_contacts(
         return census;
     }
 
-    let (candidates, raw_count, limit_reached) =
-        crate::contact::connection_pair_candidates_bounded(
-            &topology_trial,
-            anchor_unit,
-            incoming_unit,
-            catalog,
-            work_limit,
-        );
+    let (candidates, raw_count, limit_reached) = crate::contact::connection_pair_candidates_bounded(
+        &topology_trial,
+        anchor_unit,
+        incoming_unit,
+        catalog,
+        work_limit,
+    );
     census.raw_candidates_inspected = raw_count;
     census.work_limit_reached = limit_reached;
     let mut seen = Vec::new();
@@ -1797,11 +1796,9 @@ mod tests {
     #[test]
     fn all_alternatives_census_is_bounded_and_preserves_every_unique_valid_pair() {
         let catalog = default_catalog();
-        let (source, old_bond, selected, _investment) =
-            three_participant_fixture(&catalog);
+        let (source, old_bond, selected, _investment) = three_participant_fixture(&catalog);
 
-        let complete =
-            census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
+        let complete = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
         assert!(!complete.alternatives.is_empty());
         assert!(
             complete.raw_candidates_inspected
