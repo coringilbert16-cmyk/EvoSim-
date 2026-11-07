@@ -670,7 +670,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
                 "reaction": event
             }))?;
         }
-        let diagnostics = simulation.environmental_chemistry_diagnostics;
+        let diagnostics = &simulation.environmental_chemistry_diagnostics;
         self.totals.ticks_observed = self.totals.ticks_observed.saturating_add(1);
         self.totals.break_ready_candidates = self
             .totals
