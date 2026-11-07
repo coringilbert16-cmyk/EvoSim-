@@ -59,6 +59,7 @@ fn restore(
     {
         return None;
     }
+
     let mut structure = OrganismStructure::new();
     crate::material_restoration::restore_material(
         &mut structure,
@@ -66,7 +67,15 @@ fn restore(
         origin(),
         catalog,
     )?;
-    let mut bounds = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+
+    // A radius-based AABB is deliberately conservative for every supported
+    // shape, including rotated and deformable fluid forms.
+    let mut bounds = (
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    );
     for unit in &structure.units {
         let radius = unit.shape(catalog)?.form.bounding_radius();
         if !radius.is_finite() || radius < 0.0 {
@@ -77,9 +86,13 @@ fn restore(
         bounds.2 = bounds.2.min(unit.placement.y - radius);
         bounds.3 = bounds.3.max(unit.placement.y + radius);
     }
-    if ![bounds.0, bounds.1, bounds.2, bounds.3].iter().all(|v| v.is_finite()) {
+    if ![bounds.0, bounds.1, bounds.2, bounds.3]
+        .iter()
+        .all(|value| value.is_finite())
+    {
         return None;
     }
+
     Some((structure, bounds))
 }
 
@@ -177,6 +190,7 @@ pub(crate) fn census_environmental_combine(
                 continue;
             };
             census.pairs_with_both_materials_restored += 1;
+
             if bounds_are_separated(
                 material_a.bounds,
                 material_b.bounds,
@@ -212,8 +226,7 @@ pub(crate) fn census_environmental_combine(
                 continue;
             }
 
-            let mut compatibility_cache =
-                crate::contact::ConnectionCompatibilityCache::new();
+            let mut compatibility_cache = crate::contact::ConnectionCompatibilityCache::new();
             for &unit_a in &indices_a {
                 for &unit_b in &indices_b {
                     census.constituent_pairs_evaluated += 1;
@@ -251,20 +264,29 @@ pub(crate) fn census_environmental_combine(
                         {
                             census.usable_energy_sufficient_interfaces += 1;
                         }
+
                         if material_a.stable_id && material_b.stable_id {
                             let part_a = unit_a;
                             let part_b = unit_b - first_b_unit;
                             if material_a.census_id < material_b.census_id {
                                 census.census_pair_ids.push(format!(
                                     "{}:{}:{}:{}:{:?}:{:?}",
-                                    material_a.census_id, material_b.census_id,
-                                    part_a, part_b, candidate.endpoint_a, candidate.endpoint_b,
+                                    material_a.census_id,
+                                    material_b.census_id,
+                                    part_a,
+                                    part_b,
+                                    candidate.endpoint_a,
+                                    candidate.endpoint_b,
                                 ));
                             } else {
                                 census.census_pair_ids.push(format!(
                                     "{}:{}:{}:{}:{:?}:{:?}",
-                                    material_b.census_id, material_a.census_id,
-                                    part_b, part_a, candidate.endpoint_b, candidate.endpoint_a,
+                                    material_b.census_id,
+                                    material_a.census_id,
+                                    part_b,
+                                    part_a,
+                                    candidate.endpoint_b,
+                                    candidate.endpoint_a,
                                 ));
                             }
                         }
@@ -338,7 +360,13 @@ mod tests {
 
         let census = census_environmental_combine(&field, &catalog, 0.0);
         assert_eq!(census.invalid_or_duplicate_identity_materials, 2);
-        assert_eq!(field.cells[0].physical_materials[0].environmental_identity, 0);
-        assert_eq!(field.cells[0].physical_materials[1].environmental_identity, 0);
+        assert_eq!(
+            field.cells[0].physical_materials[0].environmental_identity,
+            0
+        );
+        assert_eq!(
+            field.cells[0].physical_materials[1].environmental_identity,
+            0
+        );
     }
 }
