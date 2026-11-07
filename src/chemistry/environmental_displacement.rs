@@ -2580,6 +2580,40 @@ pub(crate) fn append_displacement_census_to_inventory(
     if !expected_orientation {
         return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     }
+    let (Some(&part_a_unit), Some(&part_b_unit)) = (
+        indices_a.get(connection.part_a),
+        indices_a.get(connection.part_b),
+    ) else {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex);
+    };
+    let (Some(part_a_id), Some(part_b_id)) = (
+        combined.physical_id(part_a_unit),
+        combined.physical_id(part_b_unit),
+    ) else {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+    };
+    let (Some(part_a_properties), Some(part_b_properties)) = (
+        combined.units[part_a_unit].properties(catalog),
+        combined.units[part_b_unit].properties(catalog),
+    ) else {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+    };
+    let expected_old_bond = Bond {
+        endpoint_a: crate::structure::BondEndpoint::new(part_a_id, connection.endpoint_a),
+        endpoint_b: crate::structure::BondEndpoint::new(part_b_id, connection.endpoint_b),
+        strength: bond_strength(part_a_properties, part_b_properties),
+        bond_energy: connection.bond_energy,
+    };
+    let Some(restored_old_bond) = combined
+        .bonds
+        .iter()
+        .find(|bond| bond.has_same_identity(&expected_old_bond))
+    else {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+    };
+    if !restored_old_bond.has_same_identity(&old_bond) {
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+    }
 
     let census = census_replacement_contacts(
         combined,
