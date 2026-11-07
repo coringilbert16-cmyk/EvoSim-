@@ -592,6 +592,8 @@ fn dissipate_unupdated_displacement_accumulations(
 struct DisplacementContactAlternative {
     candidate: ConnectionPairCandidate,
     investment: f64,
+    /// Ordinary COMBINE evaluator requirement used by the current selector;
+    /// this is not the net energy delta of the atomic DISPLACEMENT transaction.
     required_energy: f64,
     activation_increment: f64,
 }
@@ -638,14 +640,19 @@ fn census_replacement_contacts(
     );
     census.raw_candidates_inspected = raw_count;
     census.work_limit_reached = limit_reached;
-    let mut seen = Vec::new();
+    let mut seen: Vec<ConnectionPairCandidate> = Vec::new();
     for candidate in candidates {
-        let pair = (candidate.endpoint_a, candidate.endpoint_b);
-        if seen.contains(&pair) {
+        if seen.iter().any(|existing| {
+            crate::contact::connection_pair_candidate_matches_endpoints(
+                existing,
+                candidate.endpoint_a,
+                candidate.endpoint_b,
+            )
+        }) {
             census.duplicate_endpoint_pairs += 1;
             continue;
         }
-        seen.push(pair);
+        seen.push(candidate);
 
         if !candidate.available_a
             || !candidate.available_b
@@ -1797,36 +1804,44 @@ mod tests {
     }
 
     #[test]
-    fn all_alternatives_census_is_bounded_and_preserves_every_unique_valid_pair() {
+    fn all_alternatives_census_preserves_production_selection_and_compares_activation() {
         let catalog = default_catalog();
-        let (source, old_bond, selected, _investment) = three_participant_fixture(&catalog);
+        let (source, old_bond, _fixture_candidate, _investment) =
+            three_participant_fixture(&catalog);
 
-        let complete = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
+        let complete =
+            census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
         assert!(!complete.alternatives.is_empty());
         assert!(
             complete.raw_candidates_inspected
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
         );
+
+        let (production_selected, _) =
+            best_replacement_contact(&source, 0, 2, old_bond, &catalog)
+                .expect("the production selector must find a valid replacement");
+        let selected_alternative = complete
+            .alternatives
+            .iter()
+            .find(|alternative| {
+                alternative.candidate.endpoint_a == production_selected.endpoint_a
+                    && alternative.candidate.endpoint_b == production_selected.endpoint_b
+            })
+            .expect("the production-selected endpoint pair must occur in the complete census");
         assert_eq!(
             complete
                 .alternatives
                 .iter()
                 .filter(|alternative| {
-                    alternative.candidate.endpoint_a == selected.endpoint_a
-                        && alternative.candidate.endpoint_b == selected.endpoint_b
+                    alternative.candidate.endpoint_a == production_selected.endpoint_a
+                        && alternative.candidate.endpoint_b == production_selected.endpoint_b
                 })
                 .count(),
             1,
             "the production-selected pair must occur exactly once in the deduplicated census"
         );
 
-        let bounded = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, 1);
-        assert!(bounded.raw_candidates_inspected <= 1);
-        if complete.raw_candidates_inspected > 1 {
-            assert!(bounded.work_limit_reached);
-        }
-
-        let best = complete
+        let energy_ranked = complete
             .alternatives
             .iter()
             .min_by(|left, right| {
@@ -1835,11 +1850,42 @@ mod tests {
                     .then_with(|| left.candidate.distance.total_cmp(&right.candidate.distance))
             })
             .expect("census has at least one valid alternative");
-        assert!(
-            best.required_energy.is_finite()
-                && best.investment.is_finite()
-                && best.activation_increment.is_finite()
+        assert_eq!(
+            (energy_ranked.candidate.endpoint_a, energy_ranked.candidate.endpoint_b),
+            (production_selected.endpoint_a, production_selected.endpoint_b),
+            "the census and production selector must agree on the energy/distance winner"
         );
+
+        let fastest_activation = complete
+            .alternatives
+            .iter()
+            .max_by(|left, right| {
+                left.activation_increment.total_cmp(&right.activation_increment)
+            })
+            .expect("census has at least one valid alternative");
+        let alternatives_faster_than_selected = complete
+            .alternatives
+            .iter()
+            .filter(|alternative| {
+                alternative.activation_increment > selected_alternative.activation_increment
+            })
+            .count();
+        assert!(
+            fastest_activation.activation_increment
+                >= selected_alternative.activation_increment
+        );
+        assert!(alternatives_faster_than_selected < complete.alternatives.len());
+        assert!(
+            selected_alternative.required_energy.is_finite()
+                && selected_alternative.investment.is_finite()
+                && selected_alternative.activation_increment.is_finite()
+        );
+
+        let bounded = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, 1);
+        assert!(bounded.raw_candidates_inspected <= 1);
+        if complete.raw_candidates_inspected > 1 {
+            assert!(bounded.work_limit_reached);
+        }
     }
 
     #[test]
