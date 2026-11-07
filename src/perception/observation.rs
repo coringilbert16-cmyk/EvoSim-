@@ -56,7 +56,7 @@ impl ObservationProjection {
     pub(crate) fn world(payload: WorldObservation) -> Self {
         Self {
             context: ObservationContext::world(),
-            payload: ObservationPayload::World(payload),
+            payload: ObservationPayload::World(Box::new(payload)),
         }
     }
     pub(crate) fn organism(
@@ -535,7 +535,7 @@ impl StructureObservation {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) enum ObservationPayload {
-    World(WorldObservation),
+    World(Box<WorldObservation>),
     Organism(OrganismObservation),
     Structure(StructureObservation),
 }

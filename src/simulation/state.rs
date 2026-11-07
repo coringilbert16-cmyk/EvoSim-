@@ -593,6 +593,190 @@ pub(crate) struct Environment {
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
+    /// Environmental source materials visited by the displacement anchor scan.
+    pub(crate) anchor_materials_inspected: u64,
+    /// Anchors that contain at least one internal bond and can be displaced.
+    pub(crate) bonded_anchor_materials: u64,
+    /// Neighboring field cells visited for bonded anchors.
+    pub(crate) target_cells_inspected: u64,
+    /// Candidate source materials inspected in those neighboring cells.
+    pub(crate) target_materials_inspected: u64,
+    /// Internal connection records checked for an existing replaceable bond.
+    pub(crate) bonds_inspected: u64,
+    /// Incoming constituent / freed-endpoint contact searches performed.
+    pub(crate) replacement_contact_searches: u64,
+    /// Searches that found a geometrically and chemically valid replacement contact.
+    pub(crate) replacement_contacts_found: u64,
+    /// Valid incoming-contact activation accumulations updated.
+    pub(crate) activation_updates: u64,
+    /// Activation checks that reached the existing bond's displacement barrier.
+    pub(crate) activation_threshold_met: u64,
+    /// Activation checks still below the existing bond's displacement barrier.
+    pub(crate) activation_below_threshold: u64,
+    /// Trial validation ended before the activation barrier status was available.
+    pub(crate) activation_status_unavailable: u64,
+    /// Trial graph builds attempted and rejected after contact activation was sufficient.
+    pub(crate) trial_build_rejections_after_activation: u64,
+    /// Activated trials rejected because the stored A-B bond energy no longer matched its graph.
+    pub(crate) trial_rejections_old_bond_energy: u64,
+    /// Activated trials rejected while removing the old bond from trial topology.
+    pub(crate) trial_rejections_topology: u64,
+    /// Activated trials rejected while validating or admitting replacement A-C.
+    pub(crate) trial_rejections_replacement: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_candidate_revalidation: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_formation_investment: u64,
+    #[serde(default)]
+    pub(crate) trial_rejections_physical_insertion: u64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_max_abs_error: f64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_stored_at_max_error: f64,
+    #[serde(default)]
+    pub(crate) old_bond_energy_expected_at_max_error: f64,
+    /// Activated trials rejected during structural-energy accounting.
+    pub(crate) trial_rejections_energy: u64,
+    /// Activated trials rejected while exporting disconnected physical products.
+    pub(crate) trial_rejections_products: u64,
+    /// Activated trials rejected at another validation stage.
+    pub(crate) trial_rejections_other: u64,
+    /// Highest updated incoming-contact activation accumulation observed this tick.
+    pub(crate) max_accumulated_reaction: f64,
+}
+
+impl EnvironmentalDisplacementDiscoveryDiagnostics {
+    pub(crate) fn accumulate(&mut self, tick: Self) {
+        self.anchor_materials_inspected = self
+            .anchor_materials_inspected
+            .saturating_add(tick.anchor_materials_inspected);
+        self.bonded_anchor_materials = self
+            .bonded_anchor_materials
+            .saturating_add(tick.bonded_anchor_materials);
+        self.target_cells_inspected = self
+            .target_cells_inspected
+            .saturating_add(tick.target_cells_inspected);
+        self.target_materials_inspected = self
+            .target_materials_inspected
+            .saturating_add(tick.target_materials_inspected);
+        self.bonds_inspected = self.bonds_inspected.saturating_add(tick.bonds_inspected);
+        self.replacement_contact_searches = self
+            .replacement_contact_searches
+            .saturating_add(tick.replacement_contact_searches);
+        self.replacement_contacts_found = self
+            .replacement_contacts_found
+            .saturating_add(tick.replacement_contacts_found);
+        self.activation_updates = self
+            .activation_updates
+            .saturating_add(tick.activation_updates);
+        self.activation_threshold_met = self
+            .activation_threshold_met
+            .saturating_add(tick.activation_threshold_met);
+        self.activation_below_threshold = self
+            .activation_below_threshold
+            .saturating_add(tick.activation_below_threshold);
+        self.activation_status_unavailable = self
+            .activation_status_unavailable
+            .saturating_add(tick.activation_status_unavailable);
+        self.trial_build_rejections_after_activation = self
+            .trial_build_rejections_after_activation
+            .saturating_add(tick.trial_build_rejections_after_activation);
+        self.trial_rejections_old_bond_energy = self
+            .trial_rejections_old_bond_energy
+            .saturating_add(tick.trial_rejections_old_bond_energy);
+        self.trial_rejections_topology = self
+            .trial_rejections_topology
+            .saturating_add(tick.trial_rejections_topology);
+        self.trial_rejections_replacement = self
+            .trial_rejections_replacement
+            .saturating_add(tick.trial_rejections_replacement);
+        self.trial_rejections_candidate_revalidation = self
+            .trial_rejections_candidate_revalidation
+            .saturating_add(tick.trial_rejections_candidate_revalidation);
+        self.trial_rejections_formation_investment = self
+            .trial_rejections_formation_investment
+            .saturating_add(tick.trial_rejections_formation_investment);
+        self.trial_rejections_physical_insertion = self
+            .trial_rejections_physical_insertion
+            .saturating_add(tick.trial_rejections_physical_insertion);
+        if tick.old_bond_energy_max_abs_error > self.old_bond_energy_max_abs_error {
+            self.old_bond_energy_max_abs_error = tick.old_bond_energy_max_abs_error;
+            self.old_bond_energy_stored_at_max_error = tick.old_bond_energy_stored_at_max_error;
+            self.old_bond_energy_expected_at_max_error = tick.old_bond_energy_expected_at_max_error;
+        }
+        self.trial_rejections_energy = self
+            .trial_rejections_energy
+            .saturating_add(tick.trial_rejections_energy);
+        self.trial_rejections_products = self
+            .trial_rejections_products
+            .saturating_add(tick.trial_rejections_products);
+        self.trial_rejections_other = self
+            .trial_rejections_other
+            .saturating_add(tick.trial_rejections_other);
+        if tick.max_accumulated_reaction.is_finite() {
+            self.max_accumulated_reaction = self
+                .max_accumulated_reaction
+                .max(tick.max_accumulated_reaction);
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub(crate) struct EnvironmentalCombineSearchDiagnostics {
+    pub(crate) anchor_cells_inspected: usize,
+    pub(crate) anchor_materials_inspected: usize,
+    pub(crate) target_cells_inspected: usize,
+    pub(crate) target_materials_inspected: usize,
+    /// Target material entries inspected but rejected by canonical pair ordering.
+    pub(crate) backward_ordered_target_materials: usize,
+    /// Unique forward-ordered source-material pairs reaching later validation.
+    pub(crate) forward_ordered_target_material_pair_inspections: usize,
+    pub(crate) unrealized_target_material_pairs: usize,
+    pub(crate) same_cell_source_pair_inspections: usize,
+    pub(crate) target_material_pairs_restored: usize,
+    pub(crate) target_material_pairs_restore_failed: usize,
+    pub(crate) target_material_pairs_rejected_for_overlap: usize,
+    pub(crate) constituent_pairs_available: usize,
+    pub(crate) constituent_pairs_inspected: usize,
+    pub(crate) constituent_pairs_uninspected_by_window: usize,
+    pub(crate) constituent_pair_windows_truncated: usize,
+    pub(crate) constituent_pairs_with_valid_interfaces: usize,
+    pub(crate) constituent_pairs_suppressed_by_global_selection: usize,
+    pub(crate) physically_evaluable_interfaces: usize,
+    /// Every physically valid interface passed to its independent chemistry step.
+    pub(crate) interfaces_sent_to_chemistry: usize,
+    /// Legacy counter retained for old diagnostic readers; all interfaces are now preserved.
+    pub(crate) discarded_interfaces_after_single_selection: usize,
+    /// Legacy counter retained for old diagnostic readers; all interfaces are now preserved.
+    pub(crate) interfaces_suppressed_by_global_selection: usize,
+    pub(crate) chemically_favorable_pairs_with_multiple_interfaces: usize,
+    /// Counts source-material-pair evaluations where the selected contact is chemically inferior to another valid contact in the complete scanned window.
+    pub(crate) selected_interface_not_best_chemical_input: usize,
+    pub(crate) chemical_input_loss_total: f64,
+    pub(crate) max_chemical_input_loss: f64,
+    pub(crate) target_cell_windows_capped: usize,
+    /// Existing environmental COMBINE accumulation keys and their value before discovery.
+    pub(crate) accumulation_entries_before_search: usize,
+    pub(crate) accumulation_value_before_search: f64,
+    /// Distinct keys whose chemistry step was evaluated this tick, including newly created or zeroed keys.
+    pub(crate) accumulation_keys_updated: usize,
+    /// Accumulation keys not reached by this tick's bounded search and preserved intact.
+    pub(crate) accumulation_keys_preserved_unsearched: usize,
+    pub(crate) accumulation_value_preserved_unsearched: f64,
+    /// Accumulation entries removed after their exact constituent interface was rechecked and found ineligible.
+    pub(crate) accumulation_keys_invalidated: usize,
+    pub(crate) accumulation_value_invalidated: f64,
+    /// Reserved for explicitly invalidated interactions; unsearched keys are preserved.
+    pub(crate) accumulation_keys_dissipated: usize,
+    pub(crate) accumulation_value_dissipated: f64,
+    pub(crate) accumulation_entries_after_search: usize,
+    pub(crate) accumulation_value_after_search: f64,
+    pub(crate) budget_exhausted: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
@@ -607,6 +791,22 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) combine_rejected: usize,
     pub(crate) combine_discovery_work_remaining: usize,
     pub(crate) combine_realization_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) combine_search: EnvironmentalCombineSearchDiagnostics,
+    #[serde(default)]
+    pub(crate) displacement_ready_candidates: usize,
+    #[serde(default)]
+    pub(crate) displacement_scheduled: usize,
+    #[serde(default)]
+    pub(crate) displacement_committed: usize,
+    #[serde(default)]
+    pub(crate) displacement_rejected: usize,
+    #[serde(default)]
+    pub(crate) displacement_discovery_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) displacement_realization_work_remaining: usize,
+    #[serde(default)]
+    pub(crate) displacement_discovery: EnvironmentalDisplacementDiscoveryDiagnostics,
     pub(crate) accumulation_entries: usize,
     pub(crate) hotspot_settlement_succeeded: Option<bool>,
 }

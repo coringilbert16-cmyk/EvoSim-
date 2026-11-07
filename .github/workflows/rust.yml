@@ -30,6 +30,26 @@ jobs:
         run: |
           bash scripts/check_large_files.sh
           bash scripts/check_combine_architecture.sh
+      - name: Run default environmental chemistry baseline
+        if: always()
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics environmental-chemistry-default-baseline.jsonl \
+            --diagnostic-interval 100
+      - name: Upload default environmental chemistry baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-chemistry-default-baseline
+          path: environmental-chemistry-default-baseline.jsonl
+          if-no-files-found: error
+          retention-days: 14
       - name: Energy accounting (focused tests)
         if: always()
         timeout-minutes: 30

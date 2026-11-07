@@ -8,7 +8,7 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::Material;
 use crate::state::{EnergyLedger, Simulation};
-use crate::structure::Placement;
+use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
@@ -94,6 +94,134 @@ pub(crate) fn seed_randomized_resources(
     }
     assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
+}
+
+/// Create a seeded molecule by executing the ordinary COMBINE authority.
+///
+/// The seed supplies only the two physical constituents and their starting pose.
+/// Contact selection, formation investment, bond strength, intrinsic bond energy,
+/// endpoint identity, and product export all come from the same runtime path used
+/// by environmental COMBINE. Any required input is the exact amount calculated
+/// by COMBINE, not a molecule-specific energy grant.
+pub(crate) fn realize_natural_molecule(
+    parts: &[String],
+    placement: Placement,
+    catalog: &[crate::resources::BaseResource],
+) -> PhysicalMaterial {
+    assert_eq!(
+        parts.len(),
+        2,
+        "seed molecules must contain two constituents"
+    );
+    let mut structure = OrganismStructure::new();
+    let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
+    let unit_b = structure.add_unit(StructuralUnit::new(parts[1].clone(), placement));
+    assert!(structure
+        .units
+        .iter_mut()
+        .all(|unit| unit.realize_default_geometry(catalog)));
+
+    // Find a genuine non-overlapping contact in the actual realized geometry.
+    // The pose search changes only the initial arrangement; ordinary COMBINE
+    // still decides whether the contact is chemically and physically eligible.
+    let mut selected_contact = None;
+    'poses: for direction_step in 0..16 {
+        let direction =
+            placement.rotation_radians + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
+        let (sin, cos) = direction.sin_cos();
+        for distance_step in 20..=100 {
+            let separation = f64::from(distance_step) * 0.025;
+            for rotation_step in 0..16 {
+                structure.units[unit_b].placement = Placement {
+                    x: placement.x + separation * cos,
+                    y: placement.y + separation * sin,
+                    rotation_radians: placement.rotation_radians
+                        + std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                };
+                let incoming = structure.units[unit_b].clone();
+                if crate::construction_runtime::placed_unit_overlaps(
+                    &structure,
+                    &incoming,
+                    &[unit_b],
+                    catalog,
+                ) {
+                    continue;
+                }
+
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    &structure, unit_a, unit_b, catalog, &mut cache,
+                ) {
+                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        || !candidate.available_a
+                        || !candidate.available_b
+                        || !candidate.facing.is_finite()
+                        || candidate.facing <= 0.0
+                    {
+                        continue;
+                    }
+                    let Some((_, _, investment, required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &structure, unit_a, unit_b, candidate, catalog,
+                        )
+                    else {
+                        continue;
+                    };
+                    selected_contact = Some((candidate, investment, required_energy));
+                    break 'poses;
+                }
+            }
+        }
+    }
+    let (candidate, investment, required_energy) =
+        selected_contact.expect("seeded molecule pair must admit an ordinary COMBINE contact");
+
+    let mut usable_energy = required_energy;
+    let mut ledger = EnergyLedger {
+        total_usable_energy_held: usable_energy,
+        initial_usable_energy_held: usable_energy,
+        total_structural_energy_held: crate::energy_ledger::structural_potential(&structure)
+            .expect("unbonded seed structure must have valid structural energy"),
+        initial_structural_energy_held: 0.0,
+        ..EnergyLedger::default()
+    };
+    ledger.initial_structural_energy_held = ledger.total_structural_energy_held;
+    crate::combine_runtime::form_selected_bond(
+        &mut structure,
+        unit_a,
+        unit_b,
+        candidate,
+        investment,
+        catalog,
+        &mut crate::contact::ConnectionCompatibilityCache::new(),
+        &mut ledger,
+        &mut usable_energy,
+    )
+    .expect("seeded molecule must form through ordinary COMBINE");
+
+    assert_eq!(structure.bonds.len(), 1);
+    assert!(
+        structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0,
+        "ordinary COMBINE must assign the molecule its calculated intrinsic bond energy"
+    );
+    let mut products = crate::environmental_combine::physical_materials_from_structure_components(
+        &structure, catalog,
+    )
+    .expect("ordinary COMBINE product must export as a physical molecule");
+    assert_eq!(products.len(), 1);
+    let molecule = products
+        .pop()
+        .expect("one bonded component must be exported");
+    let connection = molecule
+        .internal_connections
+        .as_ref()
+        .and_then(|connections| connections.first())
+        .expect("exported molecule must retain its physical bond");
+    assert!(
+        connection.bond_energy.is_finite() && connection.bond_energy > 0.0,
+        "exported molecule must preserve its ordinary COMBINE bond energy"
+    );
+    molecule
 }
 
 /// Seed 1,280 physical objects for transport benchmarking: 1,200 free resources
@@ -186,31 +314,16 @@ fn seed_randomized_molecular_resources(
                 rotation_radians: rotation,
             };
             let (parts, is_molecule) = &objects[object_index];
-            let material = if *is_molecule {
-                Material {
-                    parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
-                    internal_bonds: vec![crate::resources::InternalBond {
-                        part_a: 0,
-                        part_b: 1,
-                    }],
-                }
+            let physical = if *is_molecule {
+                realize_natural_molecule(parts, placement, catalog)
             } else {
-                Material::free_base(&parts[0], 1.0)
+                PhysicalMaterial::realized(
+                    Material::free_base(&parts[0], 1.0),
+                    vec![placement],
+                    catalog,
+                )
+                .expect("canonical base resource must have valid physical geometry")
             };
-            let placements = if *is_molecule {
-                vec![
-                    placement,
-                    Placement {
-                        x: x + 0.838,
-                        y,
-                        rotation_radians: rotation,
-                    },
-                ]
-            } else {
-                vec![placement]
-            };
-            let physical = PhysicalMaterial::realized(material, placements, catalog)
-                .expect("seeded resource or molecule must have valid physical geometry");
             object_index += 1;
             assert!(
                 field.deposit_physical(x, y, physical, catalog),
@@ -370,6 +483,47 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
+        let catalog = &first.simulation.environment.catalog;
+        for molecule in materials
+            .iter()
+            .filter(|material| material.material.parts.len() == 2)
+        {
+            let connection = molecule
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.first())
+                .expect("seeded molecules must retain their COMBINE connection");
+            assert!(
+                connection.bond_energy.is_finite() && connection.bond_energy > 0.0,
+                "seeded molecules must not contain zero-energy bonds"
+            );
+
+            let mut restored = OrganismStructure::new();
+            let indices = crate::material_restoration::restore_material(
+                &mut restored,
+                molecule,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            )
+            .expect("naturally seeded molecule must restore with its physical endpoints");
+            assert_eq!(restored.bonds.len(), 1);
+            let unit_a = &restored.units[indices[connection.part_a]];
+            let unit_b = &restored.units[indices[connection.part_b]];
+            let properties_a = unit_a.properties(catalog).unwrap();
+            let properties_b = unit_b.properties(catalog).unwrap();
+            let strength = crate::combine::bond_strength(properties_a, properties_b);
+            let expected_energy =
+                crate::combine::intrinsic_bond_potential(properties_a, properties_b, strength);
+            assert!(
+                (connection.bond_energy - expected_energy).abs() <= 1e-9,
+                "stored seed bond energy must equal the ordinary COMBINE intrinsic potential"
+            );
+            assert_eq!(restored.bonds[0].bond_energy, connection.bond_energy);
+        }
         assert_eq!(
             materials
                 .iter()

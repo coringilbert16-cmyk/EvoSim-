@@ -184,6 +184,75 @@ pub(crate) fn selected_candidate_evaluation(
     evaluate_candidate(structure, unit_a, unit_b, candidate, catalog)
 }
 
+/// Admit a validated COMBINE contact onto a trial graph without settling energy.
+///
+/// Coupled reactions such as displacement must add the replacement bond through
+/// the COMBINE authority, then settle the complete old-bond/new-bond energy
+/// change once at their own transaction boundary.
+pub(crate) fn admit_selected_candidate_to_trial_structure(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<crate::structure::Bond> {
+    if unit_a >= structure.units.len()
+        || unit_b >= structure.units.len()
+        || unit_a == unit_b
+        || !candidate.distance.is_finite()
+        || candidate.distance < 0.0
+        || candidate.distance > COMBINE_CONTACT_TOLERANCE
+        || !candidate.facing.is_finite()
+        || !candidate.load_a.is_finite()
+        || !candidate.load_b.is_finite()
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+
+    let mut cache = ConnectionCompatibilityCache::new();
+    let live_candidate = crate::contact::connection_pair_candidates_cached(
+        structure, unit_a, unit_b, catalog, &mut cache,
+    )
+    .into_iter()
+    .find(|live| {
+        live.endpoint_a == candidate.endpoint_a
+            && live.endpoint_b == candidate.endpoint_b
+            && live.distance <= COMBINE_CONTACT_TOLERANCE
+            && live.available_a
+            && live.available_b
+    })?;
+    if (live_candidate.distance - candidate.distance).abs() > EPSILON
+        || (live_candidate.facing - candidate.facing).abs() > EPSILON
+        || (live_candidate.load_a - candidate.load_a).abs() > EPSILON
+        || (live_candidate.load_b - candidate.load_b).abs() > EPSILON
+    {
+        return None;
+    }
+
+    let a = structure.units[unit_a].properties(catalog)?;
+    let b = structure.units[unit_b].properties(catalog)?;
+    let strength = bond_strength(a, b);
+    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    if !strength.is_finite()
+        || !(0.0..=1.0).contains(&strength)
+        || !bond_energy.is_finite()
+        || bond_energy < 0.0
+    {
+        return None;
+    }
+
+    let bond = crate::structure::Bond {
+        endpoint_a: BondEndpoint::new(structure.physical_id(unit_a)?, candidate.endpoint_a),
+        endpoint_b: BondEndpoint::new(structure.physical_id(unit_b)?, candidate.endpoint_b),
+        strength,
+        bond_energy,
+    };
+    crate::contact::try_add_bond(structure, bond, catalog).ok()?;
+    Some(bond)
+}
+
 pub(crate) fn form_specific_bond(
     structure: &mut crate::structure::OrganismStructure,
     unit_a: usize,
