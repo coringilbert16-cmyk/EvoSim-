@@ -104,19 +104,12 @@ fn source_pair_key(
 ) -> String {
     let first = source_constituent_identity(cell_a, material_a, source_a, unit_a);
     let second = source_constituent_identity(cell_b, material_b, source_b, unit_b);
-    let (endpoint_a, endpoint_b) = if first <= second {
-        (candidate.endpoint_a, candidate.endpoint_b)
+    let (first, second, endpoint_a, endpoint_b) = if first <= second {
+        (&first, &second, candidate.endpoint_a, candidate.endpoint_b)
     } else {
-        (candidate.endpoint_b, candidate.endpoint_a)
+        (&second, &first, candidate.endpoint_b, candidate.endpoint_a)
     };
-    format!(
-        "{}{:?}|{:?}",
-        source_pair_accumulation_prefix(
-            cell_a, material_a, source_a, cell_b, material_b, source_b, unit_a, unit_b,
-        ),
-        endpoint_a,
-        endpoint_b,
-    )
+    format!("{ENVIRONMENT_PREFIX}{first}|{second}|{endpoint_a:?}|{endpoint_b:?}")
 }
 
 fn environmental_accumulation_totals(accumulation: &BTreeMap<String, f64>) -> (usize, f64) {
