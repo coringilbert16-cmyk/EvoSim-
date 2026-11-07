@@ -289,6 +289,7 @@ fn select_best_contact_from_offset(
     indices_a: &[usize],
     indices_b: &[usize],
     catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
@@ -1152,7 +1153,6 @@ fn discover_contact_interfaces_from_offset(
     indices_a: &[usize],
     indices_b: &[usize],
     catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
 ) -> (Vec<DiscoveredContact>, usize) {
@@ -1179,8 +1179,7 @@ fn discover_contact_interfaces_from_offset(
                 catalog,
                 usize::MAX,
             );
-        raw_candidates_inspected =
-            raw_candidates_inspected.saturating_add(raw_endpoint_count);
+        raw_candidates_inspected = raw_candidates_inspected.saturating_add(raw_endpoint_count);
         for candidate in candidates {
             if !candidate.available_a
                 || !candidate.available_b
