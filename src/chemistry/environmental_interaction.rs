@@ -718,4 +718,82 @@ mod tests {
             Err(InventoryBuildError::StaleTopology)
         );
     }
+
+    #[test]
+    fn identical_bond_records_are_deduplicated_by_stable_bond_reference() {
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(4);
+        builder.upsert_material(material(1, 2, 2)).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 2,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 2,
+            local_index: 1,
+        };
+        let record = ExistingBondRecord {
+            material: MaterialIdentity(1),
+            topology_generation: 2,
+            bond_index: 7,
+            constituent_a: a,
+            endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+            constituent_b: b,
+            endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+            bond_energy: 1.25,
+        };
+        builder.add_bond(record).unwrap();
+        builder.add_bond(record).unwrap();
+        assert_eq!(builder.existing_bonds.len(), 1);
+        assert_eq!(builder.work.bond_visits, 1);
+
+        let conflicting = ExistingBondRecord {
+            bond_energy: 1.5,
+            ..record
+        };
+        assert_eq!(
+            builder.add_bond(conflicting),
+            Err(InventoryBuildError::ConflictingBondRecord)
+        );
+        assert_eq!(builder.existing_bonds.len(), 1);
+    }
+
+    #[test]
+    fn replacement_context_rejects_a_stale_removed_bond_generation() {
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(5);
+        builder.upsert_material(material(1, 2, 2)).unwrap();
+        builder.upsert_material(material(2, 4, 1)).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 2,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 2,
+            local_index: 1,
+        };
+        let incoming = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 4,
+            local_index: 0,
+        };
+        let endpoint = ConnectionEndpoint::Corner { point_index: 0 };
+        let mut replacement = contact(a, endpoint, incoming, endpoint);
+        replacement.context = ContactContext::Replacement {
+            removed_bond: BondRef {
+                material: MaterialIdentity(1),
+                topology_generation: 1,
+                bond_index: 0,
+            },
+            anchor: a,
+            displaced: b,
+        };
+        assert_eq!(
+            builder.add_contact(replacement),
+            Err(InventoryBuildError::InvalidDisplacementContext)
+        );
+    }
+
 }
