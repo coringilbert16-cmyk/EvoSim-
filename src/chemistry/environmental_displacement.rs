@@ -1790,18 +1790,13 @@ mod tests {
                                 catalog,
                                 usize::MAX,
                             );
-                            let energy_ranked = census
-                                .alternatives
-                                .iter()
-                                .min_by(|left, right| {
-                                    left.required_energy
-                                        .total_cmp(&right.required_energy)
-                                        .then_with(|| {
-                                            left.candidate
-                                                .distance
-                                                .total_cmp(&right.candidate.distance)
-                                        })
-                                });
+                            let energy_ranked = census.alternatives.iter().min_by(|left, right| {
+                                left.required_energy
+                                    .total_cmp(&right.required_energy)
+                                    .then_with(|| {
+                                        left.candidate.distance.total_cmp(&right.candidate.distance)
+                                    })
+                            });
                             let fastest_activation =
                                 census.alternatives.iter().max_by(|left, right| {
                                     left.activation_increment
