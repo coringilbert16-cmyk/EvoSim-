@@ -880,7 +880,13 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) accumulation_entries_after_search: usize,
     pub(crate) accumulation_value_after_search: f64,
     pub(crate) budget_exhausted: bool,
-    /// Stable interface identities actually reached by the live bounded search this tick.
+    /// Stable material pairs that passed live restore/overlap checks this tick.
+    #[serde(default)]
+    pub(crate) live_inspected_material_pair_ids: Vec<String>,
+    /// Stable endpoint interfaces reached by live geometry candidate generation this tick.
+    #[serde(default)]
+    pub(crate) live_physical_interface_ids: Vec<String>,
+    /// Stable interfaces accepted by live COMBINE chemistry evaluation this tick.
     #[serde(default)]
     pub(crate) live_discovered_interface_ids: Vec<String>,
 }
@@ -972,6 +978,13 @@ pub(crate) struct Simulation {
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
     /// Last-tick environmental reaction counters for UI and headless diagnostics.
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
+    /// Run-wide stable identities observed by the bounded live COMBINE discovery path.
+    pub(crate) environmental_combine_live_inspected_material_pair_ids:
+        std::collections::BTreeSet<String>,
+    pub(crate) environmental_combine_live_physical_interface_ids:
+        std::collections::BTreeSet<String>,
+    pub(crate) environmental_combine_live_discovered_interface_ids:
+        std::collections::BTreeSet<String>,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
 }
