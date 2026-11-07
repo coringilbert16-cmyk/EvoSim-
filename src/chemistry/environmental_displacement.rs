@@ -626,20 +626,18 @@ fn census_replacement_contacts(
         return census;
     }
 
-    let mut cache = ConnectionCompatibilityCache::new();
+    let (candidates, raw_count, limit_reached) =
+        crate::contact::connection_pair_candidates_bounded(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            work_limit,
+        );
+    census.raw_candidates_inspected = raw_count;
+    census.work_limit_reached = limit_reached;
     let mut seen = Vec::new();
-    for candidate in crate::contact::connection_pair_candidates_cached(
-        &topology_trial,
-        anchor_unit,
-        incoming_unit,
-        catalog,
-        &mut cache,
-    ) {
-        if census.raw_candidates_inspected >= work_limit {
-            census.work_limit_reached = true;
-            break;
-        }
-        census.raw_candidates_inspected += 1;
+    for candidate in candidates {
         let pair = (candidate.endpoint_a, candidate.endpoint_b);
         if seen.contains(&pair) {
             census.duplicate_endpoint_pairs += 1;
