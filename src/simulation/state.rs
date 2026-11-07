@@ -592,7 +592,7 @@ pub(crate) struct Environment {
     #[serde(default)]
     pub(crate) resonant_energy: crate::harmonics::ResonantEnergyReservoir,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     /// Cell, material, and bond entries traversed by bounded discovery.
     pub(crate) scan_entries_inspected: u64,
@@ -698,7 +698,7 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     /// Environmental source materials visited by the displacement anchor scan.
     pub(crate) anchor_materials_inspected: u64,
@@ -828,7 +828,7 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) anchor_cells_inspected: usize,
@@ -885,7 +885,7 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) live_discovered_interface_ids: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
