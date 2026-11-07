@@ -138,14 +138,24 @@ impl ActiveMaterialField {
         if self.next_material_identity != 0 && self.next_material_identity <= max_existing {
             self.next_material_identity = max_existing.checked_add(1).unwrap_or(0);
         }
+        let mut seen_identities = std::collections::HashSet::new();
         for cell in &mut self.cells {
             for material in &mut cell.physical_materials {
-                if material.environmental_identity != 0 || self.next_material_identity == 0 {
-                    continue;
+                // A duplicate nonzero ID would merge two independent physical
+                // interaction histories. Preserve the first occurrence in
+                // deterministic field order and treat later duplicates as new
+                // instances, using the same monotonic allocator as zero IDs.
+                if material.environmental_identity != 0
+                    && !seen_identities.insert(material.environmental_identity)
+                {
+                    material.environmental_identity = 0;
                 }
-                let identity = self.next_material_identity;
-                self.next_material_identity = identity.checked_add(1).unwrap_or(0);
-                material.environmental_identity = identity;
+                if material.environmental_identity == 0 && self.next_material_identity != 0 {
+                    let identity = self.next_material_identity;
+                    self.next_material_identity = identity.checked_add(1).unwrap_or(0);
+                    material.environmental_identity = identity;
+                    seen_identities.insert(identity);
+                }
             }
         }
     }
