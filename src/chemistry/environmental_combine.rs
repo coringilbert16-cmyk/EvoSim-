@@ -1576,6 +1576,9 @@ mod tests {
         moved_b.placements.as_mut().unwrap()[0].x = 29.0;
         let moved = source_pair_key(9, 7, &moved_a, 3, 2, &moved_b, 0, 0, candidate);
         assert_eq!(original, moved);
+        let mut accumulated_progress = BTreeMap::new();
+        accumulated_progress.insert(original.clone(), 0.75);
+        assert_eq!(accumulated_progress.get(&moved), Some(&0.75));
 
         // If traversal order reverses, endpoint ownership reverses with it but
         // the canonical physical interface remains identical.
