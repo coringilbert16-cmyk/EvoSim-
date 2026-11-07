@@ -183,14 +183,10 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
         return false;
     }
     let is_pair = |value: &str| {
-        let (identity, expected_parts) = if let Some(unassigned) = value.strip_prefix("unassigned:")
-        {
-            (unassigned, 3)
-        } else {
-            (value, 2)
-        };
+        let unassigned = value.starts_with("unassigned:");
+        let identity = value.strip_prefix("unassigned:").unwrap_or(value);
         let mut parts = identity.split(':');
-        let parsed = if expected_parts == 3 {
+        if unassigned {
             parts.next().is_some_and(|cell| cell.parse::<usize>().is_ok())
                 && parts.next().is_some_and(|slot| slot.parse::<usize>().is_ok())
                 && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
@@ -199,8 +195,7 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
             parts.next().is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
                 && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
                 && parts.next().is_none()
-        };
-        parsed
+        }
     };
     is_pair(first) && is_pair(second)
 }
