@@ -236,6 +236,7 @@ fn rigid_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
+    limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     let Some(shape_a) = a.shape(catalog) else {
         return Vec::new();
@@ -243,28 +244,23 @@ fn rigid_surface_candidates(
     let Some(shape_b) = b.shape(catalog) else {
         return Vec::new();
     };
-
-    if matches!(
-        shape_a.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) || matches!(
-        shape_b.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) {
+    if limit == 0
+        || matches!(
+            shape_a.form,
+            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+        )
+        || matches!(
+            shape_b.form,
+            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+        )
+    {
         return Vec::new();
     }
-
     let vertices_a = shape_a.form.polygon_vertices().unwrap_or_default();
     let vertices_b = shape_b.form.polygon_vertices().unwrap_or_default();
     if vertices_a.len() < 3 || vertices_b.len() < 3 {
         return Vec::new();
     }
-
-    // Physical bonds may land anywhere two rigid boundaries touch. Generate
-    // those locations from exact segment/segment feature relationships:
-    // edge intersections plus endpoint-to-edge projections. This covers
-    // vertex/edge, edge/vertex, crossing, and collinear-overlap contacts
-    // without angular sampling.
     let world_vertex = |unit: &StructuralUnit, point: (f64, f64)| {
         let (s, c) = unit.placement.rotation_radians.sin_cos();
         (
@@ -272,9 +268,8 @@ fn rigid_surface_candidates(
             unit.placement.y + point.0 * s + point.1 * c,
         )
     };
-
     let mut out = Vec::new();
-    for ai in 0..vertices_a.len() {
+    'edges: for ai in 0..vertices_a.len() {
         let a0 = world_vertex(a, vertices_a[ai]);
         let a1 = world_vertex(a, vertices_a[(ai + 1) % vertices_a.len()]);
         for bi in 0..vertices_b.len() {
@@ -294,6 +289,9 @@ fn rigid_surface_candidates(
                     ),
                 ) {
                     out.push((ea, eb));
+                    if out.len() >= limit {
+                        break 'edges;
+                    }
                 }
             }
         }
@@ -305,6 +303,7 @@ fn multi_contact_fluid_endpoint_pairs(
     fluid: &StructuralUnit,
     rigid: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
+    limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     let Some(fluid_shape) = fluid.shape(catalog) else {
         return Vec::new();
@@ -316,6 +315,9 @@ fn multi_contact_fluid_endpoint_pairs(
     else {
         return Vec::new();
     };
+    if limit == 0 {
+        return Vec::new();
+    }
     let tolerance = crate::combine_runtime::COMBINE_CONTACT_TOLERANCE;
     let (sin, cos) = fluid.placement.rotation_radians.sin_cos();
     let local_to_world = |x: f64, y: f64| {
@@ -374,6 +376,9 @@ fn multi_contact_fluid_endpoint_pairs(
                 },
                 rigid_endpoint,
             ));
+            if pairs.len() >= limit {
+                return pairs;
+            }
         }
     }
 
@@ -420,48 +425,74 @@ fn multi_contact_fluid_endpoint_pairs(
                     },
                     rigid_endpoint,
                 ));
+                if pairs.len() >= limit {
+                    return pairs;
+                }
             }
         }
     }
     pairs
 }
 
-fn candidate_endpoints(
+fn candidate_endpoints_bounded(
     a: &StructuralUnit,
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
-) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    limit: usize,
+) -> (Vec<(ConnectionEndpoint, ConnectionEndpoint)>, bool) {
+    let mut candidates = Vec::new();
+    if limit == 0 {
+        return (candidates, true);
+    }
     let ea = endpoint_indices(a, catalog);
     let eb = endpoint_indices(b, catalog);
-    let mut candidates = if !ea.is_empty() && !eb.is_empty() {
-        ea.into_iter()
-            .flat_map(|x| eb.iter().copied().map(move |y| (x, y)))
-            .collect()
-    } else if !ea.is_empty() {
-        ea.into_iter()
-            .filter_map(|x| {
-                let wp = endpoint_world_point(x, a, catalog)?;
-                continuous_endpoint(b, wp, catalog).map(|y| (x, y))
-            })
-            .collect()
-    } else if !eb.is_empty() {
-        eb.into_iter()
-            .filter_map(|y| {
-                let wp = endpoint_world_point(y, b, catalog)?;
-                continuous_endpoint(a, wp, catalog).map(|x| (x, y))
-            })
-            .collect()
-    } else {
-        match (
-            continuous_endpoint(a, world_center(b), catalog),
-            continuous_endpoint(b, world_center(a), catalog),
-        ) {
-            (Some(a), Some(b)) => vec![(a, b)],
-            _ => Vec::new(),
+    if !ea.is_empty() && !eb.is_empty() {
+        for x in ea {
+            for y in eb.iter().copied() {
+                candidates.push((x, y));
+                if candidates.len() >= limit {
+                    return (candidates, true);
+                }
+            }
         }
-    };
+    } else if !ea.is_empty() {
+        for x in ea {
+            if let Some(wp) = endpoint_world_point(x, a, catalog) {
+                if let Some(y) = continuous_endpoint(b, wp, catalog) {
+                    candidates.push((x, y));
+                    if candidates.len() >= limit {
+                        return (candidates, true);
+                    }
+                }
+            }
+        }
+    } else if !eb.is_empty() {
+        for y in eb {
+            if let Some(wp) = endpoint_world_point(y, b, catalog) {
+                if let Some(x) = continuous_endpoint(a, wp, catalog) {
+                    candidates.push((x, y));
+                    if candidates.len() >= limit {
+                        return (candidates, true);
+                    }
+                }
+            }
+        }
+    } else if let (Some(x), Some(y)) = (
+        continuous_endpoint(a, world_center(b), catalog),
+        continuous_endpoint(b, world_center(a), catalog),
+    ) {
+        candidates.push((x, y));
+        if candidates.len() >= limit {
+            return (candidates, true);
+        }
+    }
 
-    candidates.extend(rigid_surface_candidates(a, b, catalog));
+    let remaining = limit - candidates.len();
+    candidates.extend(rigid_surface_candidates(a, b, catalog, remaining));
+    if candidates.len() >= limit {
+        return (candidates, true);
+    }
+    let remaining = limit - candidates.len();
     if matches!(
         a.shape(catalog).map(|shape| &shape.form),
         Some(Form::Fluid {
@@ -469,8 +500,12 @@ fn candidate_endpoints(
             ..
         })
     ) {
-        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog));
+        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog, remaining));
+        if candidates.len() >= limit {
+            return (candidates, true);
+        }
     }
+    let remaining = limit - candidates.len();
     if matches!(
         b.shape(catalog).map(|shape| &shape.form),
         Some(Form::Fluid {
@@ -479,12 +514,23 @@ fn candidate_endpoints(
         })
     ) {
         candidates.extend(
-            multi_contact_fluid_endpoint_pairs(b, a, catalog)
+            multi_contact_fluid_endpoint_pairs(b, a, catalog, remaining)
                 .into_iter()
                 .map(|(fluid_endpoint, rigid_endpoint)| (rigid_endpoint, fluid_endpoint)),
         );
+        if candidates.len() >= limit {
+            return (candidates, true);
+        }
     }
-    candidates
+    (candidates, false)
+}
+
+fn candidate_endpoints(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+    candidate_endpoints_bounded(a, b, catalog, usize::MAX).0
 }
 
 pub(crate) fn endpoint_world_point(
@@ -600,6 +646,28 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
 
+#[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
+/// Generate at most `limit` raw endpoint pairs before geometry conversion.
+/// The boolean is true when the limit stopped or exhausted candidate generation.
+pub(crate) fn connection_pair_candidates_bounded(
+    s: &OrganismStructure,
+    ua: usize,
+    ub: usize,
+    c: &[crate::resources::BaseResource],
+    limit: usize,
+) -> (Vec<ConnectionPairCandidate>, usize, bool) {
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return (Vec::new(), 0, false);
+    };
+    let (endpoints, limit_reached) = candidate_endpoints_bounded(a, b, c, limit);
+    let raw_count = endpoints.len();
+    let candidates = endpoints
+        .into_iter()
+        .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
+        .collect();
+    (candidates, raw_count, limit_reached)
+}
+
 pub fn connection_pair_candidates(
     s: &OrganismStructure,
     ua: usize,
@@ -694,6 +762,51 @@ mod tests {
             structure.units[b].physical_id,
         ];
         (structure, physical_ids)
+    }
+
+    #[test]
+    fn endpoint_pair_matching_tolerates_wrapped_angles_and_fluid_rounding() {
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            endpoint_b: ConnectionEndpoint::Fluid { x: 1.0, y: 2.0 },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+
+        assert!(connection_pair_candidate_matches_endpoints(
+            &candidate,
+            ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::TAU,
+            },
+            ConnectionEndpoint::Fluid {
+                x: 1.0 + CONNECTION_ENDPOINT_TOLERANCE * 0.5,
+                y: 2.0,
+            },
+        ));
+    }
+
+    #[test]
+    fn bounded_candidate_generation_returns_the_exact_complete_prefix() {
+        let catalog = crate::resources::default_catalog();
+        let (structure, _) = test_structure();
+        let complete = connection_pair_candidates(&structure, 0, 1, &catalog);
+        let (bounded, raw_count, limit_reached) =
+            connection_pair_candidates_bounded(&structure, 0, 1, &catalog, 2);
+
+        assert!(complete.len() > 2);
+        assert_eq!(raw_count, 2);
+        assert!(limit_reached);
+        assert_eq!(bounded, complete[..2]);
+
+        let (empty, raw_count, limit_reached) =
+            connection_pair_candidates_bounded(&structure, 0, 1, &catalog, 0);
+        assert!(empty.is_empty());
+        assert_eq!(raw_count, 0);
+        assert!(limit_reached);
     }
 
     #[test]
