@@ -2414,12 +2414,10 @@ mod tests {
     #[test]
     fn displacement_adapter_projects_every_post_removal_interface_with_exact_context() {
         let catalog = default_catalog();
-        let (source, _fixture_bond, _candidate, _investment) =
-            three_participant_fixture(&catalog);
+        let (source, _fixture_bond, _candidate, _investment) = three_participant_fixture(&catalog);
         let mut components =
             crate::environmental_combine::physical_materials_from_structure_components(
-                &source,
-                &catalog,
+                &source, &catalog,
             )
             .expect("fixture should split into physical material components");
         let bonded_index = components
@@ -2480,8 +2478,7 @@ mod tests {
 
         let mut builder =
             crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder::new(12);
-        let (inserted, raw_candidates, limit_reached) =
-            append_displacement_census_to_inventory(
+        let (inserted, raw_candidates, limit_reached) = append_displacement_census_to_inventory(
                 &mut builder,
                 &combined,
                 anchor_unit,
@@ -2524,9 +2521,7 @@ mod tests {
             )
         }));
     }
-
 }
-
 
 /// Project every unique post-removal replacement interface into the shared
 /// inventory. Unlike the live selector, this adapter deliberately uses the
@@ -2561,11 +2556,15 @@ pub(crate) fn append_displacement_census_to_inventory(
         .internal_connections
         .as_ref()
         .and_then(|connections| connections.get(bond_index))
-        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext)?;
+        .ok_or(
+            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
+        )?;
     let anchor_local = indices_a
         .iter()
         .position(|index| *index == anchor_unit)
-        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+        .ok_or(
+            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
+        )?;
     let displaced_local = indices_a
         .iter()
         .position(|index| *index == displaced_unit)
@@ -2578,13 +2577,17 @@ pub(crate) fn append_displacement_census_to_inventory(
         && displaced_local == connection.part_b)
         || (anchor_local == connection.part_b && displaced_local == connection.part_a);
     if !expected_orientation {
-        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
+        return Err(
+            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
+        );
     }
     let (Some(&part_a_unit), Some(&part_b_unit)) = (
         indices_a.get(connection.part_a),
         indices_a.get(connection.part_b),
     ) else {
-        return Err(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex);
+        return Err(
+            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
+        );
     };
     let (Some(part_a_id), Some(part_b_id)) = (
         combined.physical_id(part_a_unit),
@@ -2706,5 +2709,9 @@ pub(crate) fn append_displacement_census_to_inventory(
         };
         inserted += usize::from(builder.add_contact(record)?);
     }
-    Ok((inserted, census.raw_candidates_inspected, census.work_limit_reached))
+    Ok((
+        inserted,
+        census.raw_candidates_inspected,
+        census.work_limit_reached,
+    ))
 }
