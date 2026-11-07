@@ -1573,15 +1573,11 @@ pub(crate) fn append_displacement_census_to_inventory(
         .internal_connections
         .as_ref()
         .and_then(|connections| connections.get(bond_index))
-        .ok_or(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        )?;
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext)?;
     let anchor_local = indices_a
         .iter()
         .position(|index| *index == anchor_unit)
-        .ok_or(
-            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
-        )?;
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
     let displaced_local = indices_a
         .iter()
         .position(|index| *index == displaced_unit)
@@ -1606,9 +1602,7 @@ pub(crate) fn append_displacement_census_to_inventory(
         indices_a.get(connection.part_a),
         indices_a.get(connection.part_b),
     ) else {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex);
     };
     let (Some(part_a_id), Some(part_b_id)) = (
         combined.physical_id(part_a_unit),
@@ -2686,35 +2680,41 @@ mod tests {
         let mut builder =
             crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder::new(12);
         let (inserted, raw_candidates, limit_reached) = append_displacement_census_to_inventory(
-                &mut builder,
-                &combined,
-                anchor_unit,
-                displaced_unit,
-                incoming_unit,
-                old_bond,
-                &source_a,
-                &source_b,
-                &indices_a,
-                &indices_b,
-                0,
-                crate::environmental_interaction::MaterialLocator {
-                    cell_index: 8,
-                    material_index: 0,
-                },
-                crate::environmental_interaction::MaterialLocator {
-                    cell_index: 9,
-                    material_index: 0,
-                },
-                usize::MAX,
-                &catalog,
-            )
-            .expect("all-alternatives census should project into the inventory");
+            &mut builder,
+            &combined,
+            anchor_unit,
+            displaced_unit,
+            incoming_unit,
+            old_bond,
+            &source_a,
+            &source_b,
+            &indices_a,
+            &indices_b,
+            0,
+            crate::environmental_interaction::MaterialLocator {
+                cell_index: 8,
+                material_index: 0,
+            },
+            crate::environmental_interaction::MaterialLocator {
+                cell_index: 9,
+                material_index: 0,
+            },
+            usize::MAX,
+            &catalog,
+        )
+        .expect("all-alternatives census should project into the inventory");
         let inventory = builder.finish();
         assert_eq!(inserted, expected.interfaces.len());
         assert_eq!(raw_candidates, expected.raw_candidates_inspected);
         assert!(!limit_reached);
-        assert_eq!(inventory.contact_interfaces.len(), expected.interfaces.len());
-        assert_eq!(inventory.displacement_joins().len(), expected.interfaces.len());
+        assert_eq!(
+            inventory.contact_interfaces.len(),
+            expected.interfaces.len()
+        );
+        assert_eq!(
+            inventory.displacement_joins().len(),
+            expected.interfaces.len()
+        );
         assert!(inventory.contact_interfaces.iter().all(|contact| {
             matches!(
                 contact.context,
