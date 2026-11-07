@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Stage 3 broad phase is being parity-tested before production cutover")]
 //! Conservative shared environmental material snapshot and pair traversal.
 //!
 //! This is the Stage 3 reference broad phase: it scans field ownership once,
@@ -95,7 +96,7 @@ impl EnvironmentalMaterialSnapshot {
             }
         }
         snapshot.materials.sort_by_key(|material| material.identity);
-        snapshot.existing_bonds.sort_by_key(ExistingBondRecord::reference);
+        snapshot.existing_bonds.sort_by_key(|bond| bond.reference());
         snapshot
     }
 
