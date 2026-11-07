@@ -3827,16 +3827,17 @@ fn discover_contact_interfaces_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
-) -> Vec<DiscoveredContact> {
+) -> (Vec<DiscoveredContact>, usize) {
     let Some(pair_count) = indices_a.len().checked_mul(indices_b.len()) else {
-        return Vec::new();
+        return (Vec::new(), 0);
     };
     if pair_count == 0 {
-        return Vec::new();
+        return (Vec::new(), 0);
     }
 
     let inspected_pairs = (*remaining_work).min(pair_count);
     let mut discovered = Vec::new();
+    let mut raw_candidates_inspected = 0usize;
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
@@ -3845,6 +3846,7 @@ fn discover_contact_interfaces_from_offset(
         for candidate in crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         ) {
+            raw_candidates_inspected = raw_candidates_inspected.saturating_add(1);
             if !candidate.available_a
                 || !candidate.available_b
                 || !candidate.distance.is_finite()
@@ -3864,7 +3866,7 @@ fn discover_contact_interfaces_from_offset(
             });
         }
     }
-    discovered
+    (discovered, raw_candidates_inspected)
 }
 
 /// Project the complete geometry-eligible COMBINE contact set into the shared
@@ -3957,7 +3959,7 @@ pub(crate) fn discover_and_append_contacts_to_inventory(
 ) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
     let initial_work = *remaining_work;
     let mut cache = ConnectionCompatibilityCache::new();
-    let discovered = discover_contact_interfaces_from_offset(
+    let (discovered, raw_candidates_inspected) = discover_contact_interfaces_from_offset(
         structure,
         indices_a,
         indices_b,
@@ -3967,6 +3969,19 @@ pub(crate) fn discover_and_append_contacts_to_inventory(
         remaining_work,
     );
     let inspected_pairs = initial_work.saturating_sub(*remaining_work);
+    {
+        let work = builder.work_mut();
+        work.material_pair_visits = work.material_pair_visits.saturating_add(1);
+        work.constituent_pair_visits = work
+            .constituent_pair_visits
+            .saturating_add(inspected_pairs as u64);
+        work.raw_endpoint_candidates = work
+            .raw_endpoint_candidates
+            .saturating_add(raw_candidates_inspected as u64);
+        work.geometry_evaluation_operations = work
+            .geometry_evaluation_operations
+            .saturating_add(raw_candidates_inspected as u64);
+    }
     let inserted = append_discovered_contacts_to_inventory(
         builder,
         &discovered,
