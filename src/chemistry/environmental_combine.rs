@@ -163,7 +163,10 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
     if fields.next() != Some("environment") {
         return false;
     }
-    let Some(first) = fields.next().and_then(|field| field.strip_prefix("combine:")) else {
+    let Some(first) = fields
+        .next()
+        .and_then(|field| field.strip_prefix("combine:"))
+    else {
         return false;
     };
     let Some(second) = fields.next() else {
@@ -188,12 +191,18 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
         let mut parts = identity.split(':');
         if unassigned {
             parts.next().is_some_and(|cell| cell.parse::<usize>().is_ok())
-                && parts.next().is_some_and(|slot| slot.parse::<usize>().is_ok())
-                && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts
+                    .next()
+                    .is_some_and(|slot| slot.parse::<usize>().is_ok())
+                && parts
+                    .next()
+                    .is_some_and(|unit| unit.parse::<usize>().is_ok())
                 && parts.next().is_none()
         } else {
             parts.next().is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
-                && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
+                && parts
+                    .next()
+                    .is_some_and(|unit| unit.parse::<usize>().is_ok())
                 && parts.next().is_none()
         }
     };
