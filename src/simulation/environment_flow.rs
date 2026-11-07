@@ -590,19 +590,40 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         return 0;
     }
 
-    // Assign identities while building the existing transport snapshot, so
-    // this does not add another full-field traversal to every simulation tick.
+    // Build the existing transport snapshot while tracking the maximum
+    // pre-existing identity. Assign/repair IDs on the snapshot and mirror them
+    // back to the live field, avoiding an additional full-field traversal.
     let mut next_identity = field.next_material_identity;
+    let mut max_existing_identity = 0;
     let mut snapshot = Vec::new();
     for (cell_index, cell) in field.cells.iter_mut().enumerate() {
         for (material_index, material) in cell.physical_materials.iter_mut().enumerate() {
-            if material.environmental_identity == 0 && next_identity != 0 {
-                let identity = next_identity;
-                next_identity = identity.checked_add(1).unwrap_or(0);
-                material.environmental_identity = identity;
-            }
+            max_existing_identity =
+                max_existing_identity.max(material.environmental_identity);
             snapshot.push((cell_index, material_index, material.clone()));
         }
+    }
+    if next_identity != 0 && next_identity <= max_existing_identity {
+        next_identity = max_existing_identity.checked_add(1).unwrap_or(0);
+    }
+    let mut seen_identities = std::collections::HashSet::new();
+    for (cell_index, material_index, snapshot_material) in &mut snapshot {
+        let live_material =
+            &mut field.cells[*cell_index].physical_materials[*material_index];
+        let mut identity = live_material.environmental_identity;
+        if identity != 0 && !seen_identities.insert(identity) {
+            // Keep the first occurrence in deterministic field order. Later
+            // duplicate instances receive fresh IDs so their chemistry
+            // activation histories cannot alias.
+            identity = 0;
+        }
+        if identity == 0 && next_identity != 0 {
+            identity = next_identity;
+            next_identity = identity.checked_add(1).unwrap_or(0);
+            seen_identities.insert(identity);
+        }
+        live_material.environmental_identity = identity;
+        snapshot_material.environmental_identity = identity;
     }
     field.next_material_identity = next_identity;
     // Use finer bins than the material field. Spatial indexing narrows each
