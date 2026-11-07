@@ -765,6 +765,33 @@ mod tests {
     }
 
     #[test]
+    fn endpoint_pair_matching_tolerates_wrapped_angles_and_fluid_rounding() {
+        let candidate = ConnectionPairCandidate {
+            endpoint_a: ConnectionEndpoint::Boundary {
+                angle_radians: 0.0,
+            },
+            endpoint_b: ConnectionEndpoint::Fluid { x: 1.0, y: 2.0 },
+            distance: 0.0,
+            facing: 1.0,
+            load_a: 0.0,
+            load_b: 0.0,
+            available_a: true,
+            available_b: true,
+        };
+
+        assert!(connection_pair_candidate_matches_endpoints(
+            &candidate,
+            ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::TAU,
+            },
+            ConnectionEndpoint::Fluid {
+                x: 1.0 + CONNECTION_ENDPOINT_TOLERANCE * 0.5,
+                y: 2.0,
+            },
+        ));
+    }
+
+    #[test]
     fn bounded_candidate_generation_returns_the_exact_complete_prefix() {
         let catalog = crate::resources::default_catalog();
         let (structure, _) = test_structure();
