@@ -95,6 +95,8 @@ mod decomposition;
 mod diagnostics;
 #[path = "chemistry/energy_ledger.rs"]
 mod energy_ledger;
+#[path = "chemistry/environmental_broad_phase.rs"]
+mod environmental_broad_phase;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
 #[path = "chemistry/environmental_displacement.rs"]
