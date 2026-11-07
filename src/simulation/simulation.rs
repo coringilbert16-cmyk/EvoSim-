@@ -1,7 +1,6 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use std::collections::HashSet;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
