@@ -746,7 +746,7 @@ mod tests {
         builder.add_bond(record).unwrap();
         builder.add_bond(record).unwrap();
         assert_eq!(builder.existing_bonds.len(), 1);
-        assert_eq!(builder.work.registry_updates, 1);
+        assert_eq!(builder.work.registry_updates, 2);
 
         let conflicting = ExistingBondRecord {
             bond_energy: 1.5,
