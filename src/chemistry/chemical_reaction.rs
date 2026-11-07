@@ -3046,3 +3046,77 @@ pub(crate) fn append_environmental_bond_inventory(
     }
     Ok((inserted_bonds, discovery.inspected_entries))
 }
+
+
+#[cfg(test)]
+mod shared_break_inventory_adapter_tests {
+    use super::*;
+    use crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder;
+    use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
+    use crate::resources::{default_catalog, Material};
+    use crate::state::{ActiveMaterialField, Environment, FieldCell};
+    use crate::structure::ConnectionEndpoint;
+
+    fn environment_with_one_bonded_material() -> Environment {
+        let mut material = Material::free_base("Carbon".to_owned(), 1.0);
+        material.parts.push(("Oxygen".to_owned(), 1.0));
+        let physical = PhysicalMaterial {
+            material,
+            environmental_identity: 44,
+            placements: None,
+            internal_connections: Some(vec![PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                part_b: 1,
+                endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+                bond_energy: 1.5,
+            }]),
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
+        let mut field = ActiveMaterialField::new(25.0, 25.0, 25.0);
+        field.cells[0] = FieldCell {
+            materials: Vec::new(),
+            physical_materials: vec![physical],
+        };
+        Environment {
+            width: 25.0,
+            height: 25.0,
+            catalog: default_catalog(),
+            field,
+            chemistry_usable_energy: 0.0,
+            resonant_energy: Default::default(),
+        }
+    }
+
+    #[test]
+    fn break_adapter_preserves_bond_records_and_reports_all_nested_scan_work() {
+        let environment = environment_with_one_bonded_material();
+        let discovery = discover_environmental_bonds(&environment, 0, 8);
+        assert_eq!(discovery.candidates.len(), 1);
+        assert_eq!(
+            discovery.inspected_entries as u64,
+            discovery.inspected_cells
+                + discovery.inspected_materials
+                + discovery.inspected_bonds
+        );
+        assert_eq!(discovery.inspected_cells, 1);
+        assert_eq!(discovery.inspected_materials, 1);
+        assert_eq!(discovery.inspected_bonds, 1);
+
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(13);
+        let (inserted, inspected_entries) =
+            append_environmental_bond_inventory(&mut builder, &environment, 0, 8).unwrap();
+        let inventory = builder.finish();
+        assert_eq!(inserted, 1);
+        assert_eq!(inspected_entries, 3);
+        assert_eq!(inventory.materials.len(), 1);
+        assert_eq!(inventory.existing_bonds.len(), 1);
+        assert_eq!(inventory.existing_bonds[0].bond_energy, 1.5);
+        assert_eq!(inventory.existing_bonds[0].constituent_a.local_index, 0);
+        assert_eq!(inventory.existing_bonds[0].constituent_b.local_index, 1);
+        assert_eq!(inventory.work.broad_phase_cell_visits, 1);
+        assert_eq!(inventory.work.material_visits, 1);
+        assert_eq!(inventory.work.bond_visits, 1);
+    }
+}
