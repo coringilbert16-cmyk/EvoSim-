@@ -255,7 +255,7 @@ fn run_environment_chemistry_experiment(
             .observe(&simulation)
             .expect("failed to write environmental chemistry diagnostics");
         if simulation.tick % 100 == 0 || simulation.tick == max_ticks {
-            let counters = simulation.environmental_chemistry_diagnostics;
+            let counters = &simulation.environmental_chemistry_diagnostics;
             let discovery = counters.displacement_discovery;
             let energy = simulation.energy_inventory_snapshot();
             println!(
