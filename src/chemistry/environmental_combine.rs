@@ -183,7 +183,9 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
         let identity = value.strip_prefix("unassigned:").unwrap_or(value);
         let mut parts = identity.split(':');
         if unassigned {
-            parts.next().is_some_and(|cell| cell.parse::<usize>().is_ok())
+            parts
+                .next()
+                .is_some_and(|cell| cell.parse::<usize>().is_ok())
                 && parts
                     .next()
                     .is_some_and(|slot| slot.parse::<usize>().is_ok())
