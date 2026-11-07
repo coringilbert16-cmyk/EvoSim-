@@ -196,6 +196,7 @@ fn select_best_contact(
         0,
         remaining_work,
         None,
+        None,
     )
     .into_iter()
     .next()
@@ -220,6 +221,7 @@ fn select_best_contact_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
+    source_identities: Option<(u64, u64)>,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
 ) -> Vec<SelectedContact> {
     let mut diagnostics = diagnostics;
@@ -279,7 +281,25 @@ fn select_best_contact_from_offset(
                 investment,
                 required_energy,
             });
-            if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            if let (Some((identity_a, identity_b)), Some(diagnostics)) =
+                (source_identities, diagnostics.as_deref_mut())
+            {
+                let part_a = pair_index / indices_b.len();
+                let part_b = pair_index % indices_b.len();
+                if let Some(interface_id) =
+                    crate::environmental_combine_census::stable_interface_id(
+                        identity_a,
+                        identity_b,
+                        part_a,
+                        part_b,
+                        evaluation.candidate.endpoint_a,
+                        evaluation.candidate.endpoint_b,
+                    )
+                {
+                    diagnostics.live_discovered_interface_ids.push(interface_id);
+                }
+                diagnostics.interfaces_sent_to_chemistry += 1;
+            } else if let Some(diagnostics) = diagnostics.as_deref_mut() {
                 diagnostics.interfaces_sent_to_chemistry += 1;
             }
         }
@@ -690,6 +710,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut cache,
                         pair_start,
                         &mut component_work,
+                        Some((source_a.environmental_identity, source_b.environmental_identity)),
                         Some(&mut *diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
