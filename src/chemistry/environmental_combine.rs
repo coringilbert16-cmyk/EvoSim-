@@ -286,16 +286,14 @@ fn select_best_contact_from_offset(
             {
                 let part_a = pair_index / indices_b.len();
                 let part_b = pair_index % indices_b.len();
-                if let Some(interface_id) =
-                    crate::environmental_combine_census::stable_interface_id(
-                        identity_a,
-                        identity_b,
-                        part_a,
-                        part_b,
-                        evaluation.candidate.endpoint_a,
-                        evaluation.candidate.endpoint_b,
-                    )
-                {
+                if let Some(interface_id) = crate::environmental_combine_census::stable_interface_id(
+                    identity_a,
+                    identity_b,
+                    part_a,
+                    part_b,
+                    evaluation.candidate.endpoint_a,
+                    evaluation.candidate.endpoint_b,
+                ) {
                     diagnostics.live_discovered_interface_ids.push(interface_id);
                 }
                 diagnostics.interfaces_sent_to_chemistry += 1;
@@ -710,7 +708,10 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut cache,
                         pair_start,
                         &mut component_work,
-                        Some((source_a.environmental_identity, source_b.environmental_identity)),
+                        Some((
+                            source_a.environmental_identity,
+                            source_b.environmental_identity,
+                        )),
                         Some(&mut *diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
@@ -3194,6 +3195,7 @@ mod tests {
             component_pair_start(0, pair_count),
             &mut first_window_work,
             None,
+            None,
         );
         assert!(
             first_window.is_empty(),
@@ -3211,6 +3213,7 @@ mod tests {
             &mut cache,
             component_pair_start(41, pair_count),
             &mut second_window_work,
+            None,
             Some(&mut search_diagnostics),
         );
         assert!(
