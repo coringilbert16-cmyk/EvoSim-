@@ -602,6 +602,56 @@ mod tests {
     }
 
     #[test]
+    fn stable_interface_identity_is_independent_of_material_pair_order() {
+        let endpoint_a = ConnectionEndpoint::Corner { point_index: 0 };
+        let endpoint_b = ConnectionEndpoint::Boundary {
+            angle_radians: 0.25,
+        };
+        assert_eq!(
+            stable_interface_id(10, 20, 2, 3, endpoint_a, endpoint_b),
+            stable_interface_id(20, 10, 3, 2, endpoint_b, endpoint_a)
+        );
+    }
+
+    #[test]
+    fn comparison_separates_uninspected_geometry_and_chemistry_gaps() {
+        let census = EnvironmentalCombineCensus {
+            snapshot_material_ids: vec![1, 2],
+            census_pair_ids: vec![
+                "1:2:0:0:corner-a:corner-b".to_owned(),
+                "1:2:0:1:corner-c:corner-d".to_owned(),
+            ],
+            ..EnvironmentalCombineCensus::default()
+        };
+        let inspected = std::collections::BTreeSet::from(["1:2".to_owned()]);
+        let physical = std::collections::BTreeSet::from([
+            "1:2:0:0:corner-a:corner-b".to_owned(),
+        ]);
+        let discovered = std::collections::BTreeSet::from([
+            "1:2:9:9:old-a:old-b".to_owned(),
+            "3:4:0:0:missing-a:missing-b".to_owned(),
+        ]);
+
+        let comparison = compare_census_to_live(&census, &inspected, &physical, &discovered);
+        assert_eq!(comparison.census_only_count, 2);
+        assert_eq!(
+            comparison.census_only_interfaces_not_geometrically_reached_count,
+            1
+        );
+        assert_eq!(
+            comparison.census_only_interfaces_rejected_by_chemistry_count,
+            1
+        );
+        assert_eq!(comparison.census_only_material_pairs_never_inspected_count, 0);
+        assert_eq!(comparison.live_only_count, 2);
+        assert_eq!(comparison.live_only_sources_missing_count, 1);
+        assert_eq!(
+            comparison.live_only_sources_present_but_interface_absent_count,
+            1
+        );
+    }
+
+    #[test]
     fn census_uses_live_ordered_snapshot_ids_without_mutating_legacy_instances() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(25.0, 25.0, 25.0);
