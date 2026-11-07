@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Stage 1 contract is intentionally not wired into production yet")]
+#![expect(
+    dead_code,
+    reason = "Stage 1 contract is intentionally not wired into production yet"
+)]
 //! Shared, read-only environmental interaction inventory contract.
 //!
 //! This module defines the common record shape for environmental chemistry.
@@ -8,9 +11,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::contact::{
-    connection_pair_candidate_matches_endpoints, ConnectionPairCandidate,
-};
+use crate::contact::{connection_pair_candidate_matches_endpoints, ConnectionPairCandidate};
 use crate::structure::ConnectionEndpoint;
 
 /// Stable identity of one physical material object in the active environment.
@@ -189,7 +190,8 @@ impl EnvironmentalInteractionInventoryBuilder {
         }
         if let Some(previous) = self.materials.get(&record.identity) {
             if previous.topology_generation != record.topology_generation {
-                self.existing_bonds.retain(|bond| bond.material != record.identity);
+                self.existing_bonds
+                    .retain(|bond| bond.material != record.identity);
                 self.contact_interfaces.retain(|contact| {
                     contact.constituent_a.material != record.identity
                         && contact.constituent_b.material != record.identity
@@ -334,7 +336,10 @@ mod tests {
         }
     }
 
-    fn candidate(endpoint_a: ConnectionEndpoint, endpoint_b: ConnectionEndpoint) -> ConnectionPairCandidate {
+    fn candidate(
+        endpoint_a: ConnectionEndpoint,
+        endpoint_b: ConnectionEndpoint,
+    ) -> ConnectionPairCandidate {
         ConnectionPairCandidate {
             endpoint_a,
             endpoint_b,
@@ -367,9 +372,21 @@ mod tests {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(7);
         builder.upsert_material(material(11, 2, 2)).unwrap();
         builder.upsert_material(material(22, 4, 1)).unwrap();
-        let a = ConstituentRef { material: MaterialIdentity(11), topology_generation: 2, local_index: 0 };
-        let b = ConstituentRef { material: MaterialIdentity(11), topology_generation: 2, local_index: 1 };
-        let c = ConstituentRef { material: MaterialIdentity(22), topology_generation: 4, local_index: 0 };
+        let a = ConstituentRef {
+            material: MaterialIdentity(11),
+            topology_generation: 2,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(11),
+            topology_generation: 2,
+            local_index: 1,
+        };
+        let c = ConstituentRef {
+            material: MaterialIdentity(22),
+            topology_generation: 4,
+            local_index: 0,
+        };
         builder.add_bond(ExistingBondRecord {
             material: MaterialIdentity(11),
             topology_generation: 2,
@@ -379,8 +396,16 @@ mod tests {
             constituent_b: b,
             endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
             bond_energy: 1.5,
-        }).unwrap();
-        builder.add_contact(contact(a, ConnectionEndpoint::Corner { point_index: 0 }, c, ConnectionEndpoint::Corner { point_index: 0 })).unwrap();
+        })
+        .unwrap();
+        builder
+            .add_contact(contact(
+                a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                c,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ))
+            .unwrap();
         let inventory = builder.finish();
         assert_eq!(inventory.pass_id, 7);
         assert_eq!(inventory.materials.len(), 2);
@@ -394,8 +419,16 @@ mod tests {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(1);
         builder.upsert_material(material(1, 0, 1)).unwrap();
         builder.upsert_material(material(2, 0, 1)).unwrap();
-        let a = ConstituentRef { material: MaterialIdentity(1), topology_generation: 0, local_index: 0 };
-        let b = ConstituentRef { material: MaterialIdentity(2), topology_generation: 0, local_index: 0 };
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 0,
+            local_index: 0,
+        };
         let first = contact(
             a,
             ConnectionEndpoint::Boundary { angle_radians: 0.0 },
@@ -405,7 +438,10 @@ mod tests {
         assert!(builder.add_contact(first).unwrap());
         let reversed = contact(
             b,
-            ConnectionEndpoint::Fluid { x: 3.0 + 5e-9, y: 4.0 },
+            ConnectionEndpoint::Fluid {
+                x: 3.0 + 5e-9,
+                y: 4.0,
+            },
             a,
             ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::TAU },
         );
@@ -418,10 +454,32 @@ mod tests {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(1);
         builder.upsert_material(material(1, 0, 1)).unwrap();
         builder.upsert_material(material(2, 0, 1)).unwrap();
-        let a = ConstituentRef { material: MaterialIdentity(1), topology_generation: 0, local_index: 0 };
-        let b = ConstituentRef { material: MaterialIdentity(2), topology_generation: 0, local_index: 0 };
-        builder.add_contact(contact(a, ConnectionEndpoint::Corner { point_index: 0 }, b, ConnectionEndpoint::Corner { point_index: 0 })).unwrap();
-        builder.add_contact(contact(a, ConnectionEndpoint::Corner { point_index: 1 }, b, ConnectionEndpoint::Corner { point_index: 0 })).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        builder
+            .add_contact(contact(
+                a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                b,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ))
+            .unwrap();
+        builder
+            .add_contact(contact(
+                a,
+                ConnectionEndpoint::Corner { point_index: 1 },
+                b,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ))
+            .unwrap();
         assert_eq!(builder.contact_interfaces.len(), 2);
     }
 
@@ -430,9 +488,24 @@ mod tests {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(1);
         builder.upsert_material(material(1, 5, 1)).unwrap();
         builder.upsert_material(material(2, 3, 1)).unwrap();
-        let a = ConstituentRef { material: MaterialIdentity(1), topology_generation: 5, local_index: 0 };
-        let b = ConstituentRef { material: MaterialIdentity(2), topology_generation: 3, local_index: 0 };
-        builder.add_contact(contact(a, ConnectionEndpoint::Corner { point_index: 0 }, b, ConnectionEndpoint::Corner { point_index: 0 })).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 5,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 3,
+            local_index: 0,
+        };
+        builder
+            .add_contact(contact(
+                a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                b,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ))
+            .unwrap();
         let mut moved = material(1, 5, 1);
         moved.locator.cell_index = 99;
         moved.state_version = 2;
@@ -447,9 +520,20 @@ mod tests {
     fn stale_or_unknown_constituent_references_are_rejected() {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(1);
         builder.upsert_material(material(1, 2, 1)).unwrap();
-        let stale = ConstituentRef { material: MaterialIdentity(1), topology_generation: 1, local_index: 0 };
-        let unknown = ConstituentRef { material: MaterialIdentity(9), topology_generation: 1, local_index: 0 };
+        let stale = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 1,
+            local_index: 0,
+        };
+        let unknown = ConstituentRef {
+            material: MaterialIdentity(9),
+            topology_generation: 1,
+            local_index: 0,
+        };
         let endpoint = ConnectionEndpoint::Corner { point_index: 0 };
-        assert_eq!(builder.add_contact(contact(stale, endpoint, unknown, endpoint)), Err(InventoryBuildError::StaleTopology));
+        assert_eq!(
+            builder.add_contact(contact(stale, endpoint, unknown, endpoint)),
+            Err(InventoryBuildError::StaleTopology)
+        );
     }
 }
