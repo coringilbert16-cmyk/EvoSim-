@@ -1488,8 +1488,10 @@ mod tests {
 
     #[test]
     fn legacy_location_based_combine_keys_are_not_treated_as_current_progress() {
-        let current = "environment|combine:101:0|202:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
-        let legacy = "environment|combine:4:2:PhysicalMaterial { placement: (1, 2) }:0|8:3:PhysicalMaterial { placement: (3, 4) }:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        let current =
+            "environment|combine:101:0|202:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        let legacy =
+            "environment|combine:4:2:PhysicalMaterial { placement: (1, 2) }:0|8:3:PhysicalMaterial { placement: (3, 4) }:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
         assert!(is_current_combine_accumulation_key(current));
         assert!(!is_current_combine_accumulation_key(legacy));
     }
