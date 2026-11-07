@@ -587,6 +587,7 @@ fn dissipate_unupdated_displacement_accumulations(
 /// One unique, fully evaluated replacement endpoint pair found by the
 /// diagnostic all-alternatives census. This value is observational only: it
 /// never changes the production-selected contact or its activation history.
+#[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Copy, Debug)]
 struct DisplacementContactAlternative {
     candidate: ConnectionPairCandidate,
@@ -598,6 +599,7 @@ struct DisplacementContactAlternative {
 /// Bounded diagnostic census of every unique endpoint-pair alternative on the
 /// post-removal trial graph. The budget is charged for each raw generated
 /// candidate, including duplicates and candidates rejected by later stages.
+#[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Debug, Default)]
 struct DisplacementContactCensus {
     raw_candidates_inspected: usize,
@@ -608,6 +610,7 @@ struct DisplacementContactCensus {
     work_limit_reached: bool,
 }
 
+#[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 fn census_replacement_contacts(
     combined: &OrganismStructure,
     anchor_unit: usize,
