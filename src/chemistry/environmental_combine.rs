@@ -3831,9 +3831,9 @@ pub(crate) fn append_selected_contacts_to_inventory(
         identity: identity_a,
         locator: locator_a,
         topology_generation: TOPOLOGY_GENERATION,
-        // The active field has no per-material mutation counter. Zero denotes
-        // the immutable snapshot captured by this discovery pass, not a field
-        // or cell revision masquerading as a material version.
+        // The active field has no per-material mutation counter. Zero means
+        // unavailable; the inventory's pass_id identifies this immutable pass
+        // snapshot. Do not substitute a field or cell revision here.
         state_version: 0,
         constituent_count: indices_a.len(),
     })?;
