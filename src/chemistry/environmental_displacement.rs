@@ -1810,7 +1810,15 @@ mod tests {
             three_participant_fixture(&catalog);
 
         let complete = census_replacement_contacts(&source, 0, 2, old_bond, &catalog, usize::MAX);
-        assert!(!complete.alternatives.is_empty());
+        assert!(
+            complete.alternatives.len() >= 2,
+            "fixture must expose at least two distinct valid replacement alternatives; found {}, raw={}, duplicates={}, geometry_rejections={}, evaluation_rejections={}",
+            complete.alternatives.len(),
+            complete.raw_candidates_inspected,
+            complete.duplicate_endpoint_pairs,
+            complete.geometry_rejections,
+            complete.evaluation_rejections,
+        );
         assert!(
             complete.raw_candidates_inspected
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
