@@ -61,12 +61,7 @@ fn restore(
     }
 
     let mut structure = OrganismStructure::new();
-    crate::material_restoration::restore_material(
-        &mut structure,
-        source,
-        origin(),
-        catalog,
-    )?;
+    crate::material_restoration::restore_material(&mut structure, source, origin(), catalog)?;
 
     // A radius-based AABB is deliberately conservative for every supported
     // shape, including rotated and deformable fluid forms.
@@ -96,15 +91,8 @@ fn restore(
     Some((structure, bounds))
 }
 
-fn bounds_are_separated(
-    a: (f64, f64, f64, f64),
-    b: (f64, f64, f64, f64),
-    tolerance: f64,
-) -> bool {
-    a.1 + tolerance < b.0
-        || b.1 + tolerance < a.0
-        || a.3 + tolerance < b.2
-        || b.3 + tolerance < a.2
+fn bounds_are_separated(a: (f64, f64, f64, f64), b: (f64, f64, f64, f64), tolerance: f64) -> bool {
+    a.1 + tolerance < b.0 || b.1 + tolerance < a.0 || a.3 + tolerance < b.2 || b.3 + tolerance < a.2
 }
 
 /// Enumerate all unique unordered material-instance pairs in the frozen field.
@@ -181,12 +169,12 @@ pub(crate) fn census_environmental_combine(
         }
     }
 
-    for index_a in 0..sources.len() {
-        let Some(material_a) = restored[index_a].as_ref() else {
+    for (index_a, restored_a) in restored.iter().enumerate() {
+        let Some(material_a) = restored_a.as_ref() else {
             continue;
         };
-        for index_b in (index_a + 1)..sources.len() {
-            let Some(material_b) = restored[index_b].as_ref() else {
+        for restored_b in restored.iter().skip(index_a + 1) {
+            let Some(material_b) = restored_b.as_ref() else {
                 continue;
             };
             census.pairs_with_both_materials_restored += 1;
@@ -247,11 +235,7 @@ pub(crate) fn census_environmental_combine(
                         census.physical_interfaces += 1;
                         let Some((_formation, _work, _investment, required_energy)) =
                             crate::combine_runtime::selected_candidate_evaluation(
-                                &combined,
-                                unit_a,
-                                unit_b,
-                                candidate,
-                                catalog,
+                                &combined, unit_a, unit_b, candidate, catalog,
                             )
                         else {
                             continue;
