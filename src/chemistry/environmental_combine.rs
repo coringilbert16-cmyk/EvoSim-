@@ -4131,56 +4131,68 @@ mod shared_inventory_adapter_tests {
         .unwrap();
         let inventory = builder.finish();
 
-        // Every COMBINE-evaluable contact exposed by the neutral inventory
-        // must match the existing production evaluator's accepted endpoint set.
-        let mut live_remaining_work = FIELD_COMPONENT_PAIR_LIMIT;
-        let mut live_cache = ConnectionCompatibilityCache::new();
-        let live_contacts = select_best_contact_from_offset(
-            &structure,
-            &indices_a,
-            &indices_b,
-            &catalog,
-            &mut live_cache,
-            component_pair_start(41, indices_a.len() * indices_b.len()),
-            &mut live_remaining_work,
-            None,
-        );
-        let mut inventory_evaluable: Vec<String> = inventory
-            .contact_interfaces
-            .iter()
-            .filter_map(|contact| {
-                let unit_a = *indices_a.get(contact.constituent_a.local_index)?;
-                let unit_b = *indices_b.get(contact.constituent_b.local_index)?;
-                crate::combine_runtime::selected_candidate_evaluation(
-                    &structure,
-                    unit_a,
-                    unit_b,
-                    contact.candidate,
-                    &catalog,
-                )
-                .map(|_| {
-                    format!(
-                        "{unit_a}|{unit_b}|{:?}|{:?}",
-                        contact.endpoint_a, contact.endpoint_b
+        // Compare unique physical interfaces, not duplicate endpoint proposals.
+        // The inventory intentionally deduplicates tolerance-equivalent endpoints.
+        let mut inventory_evaluable: Vec<(usize, usize, ConnectionPairCandidate)> = Vec::new();
+        for contact in &inventory.contact_interfaces {
+            let Some(&unit_a) = indices_a.get(contact.constituent_a.local_index) else {
+                continue;
+            };
+            let Some(&unit_b) = indices_b.get(contact.constituent_b.local_index) else {
+                continue;
+            };
+            if crate::combine_runtime::selected_candidate_evaluation(
+                &structure,
+                unit_a,
+                unit_b,
+                contact.candidate,
+                &catalog,
+            )
+            .is_none()
+            {
+                continue;
+            }
+            let duplicate = inventory_evaluable.iter().any(|(existing_a, existing_b, existing)| {
+                *existing_a == unit_a
+                    && *existing_b == unit_b
+                    && crate::contact::connection_pair_candidate_matches_endpoints(
+                        existing,
+                        contact.endpoint_a,
+                        contact.endpoint_b,
                     )
-                })
+            });
+            if !duplicate {
+                inventory_evaluable.push((unit_a, unit_b, contact.candidate));
+            }
+        }
+
+        let mut production_evaluable: Vec<(usize, usize, ConnectionPairCandidate)> = Vec::new();
+        for contact in &live_contacts {
+            let duplicate = production_evaluable.iter().any(|(existing_a, existing_b, existing)| {
+                *existing_a == contact.unit_a
+                    && *existing_b == contact.unit_b
+                    && crate::contact::connection_pair_candidate_matches_endpoints(
+                        existing,
+                        contact.candidate.endpoint_a,
+                        contact.candidate.endpoint_b,
+                    )
+            });
+            if !duplicate {
+                production_evaluable.push((contact.unit_a, contact.unit_b, contact.candidate));
+            }
+        }
+        assert_eq!(inventory_evaluable.len(), production_evaluable.len());
+        assert!(inventory_evaluable.iter().all(|(unit_a, unit_b, candidate)| {
+            production_evaluable.iter().any(|(production_a, production_b, production)| {
+                *production_a == *unit_a
+                    && *production_b == *unit_b
+                    && crate::contact::connection_pair_candidate_matches_endpoints(
+                        production,
+                        candidate.endpoint_a,
+                        candidate.endpoint_b,
+                    )
             })
-            .collect();
-        let mut production_evaluable: Vec<String> = live_contacts
-            .iter()
-            .map(|contact| {
-                format!(
-                    "{}|{}|{:?}|{:?}",
-                    contact.unit_a,
-                    contact.unit_b,
-                    contact.candidate.endpoint_a,
-                    contact.candidate.endpoint_b
-                )
-            })
-            .collect();
-        inventory_evaluable.sort();
-        production_evaluable.sort();
-        assert_eq!(inventory_evaluable, production_evaluable);
+        }));
         assert_eq!(inspected_pairs, FIELD_COMPONENT_PAIR_LIMIT);
         assert_eq!(remaining_work, 0);
         assert!(inserted > 0);
