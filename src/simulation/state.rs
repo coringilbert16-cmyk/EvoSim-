@@ -828,9 +828,11 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub(crate) struct EnvironmentalCombineSearchDiagnostics {
+    /// Enable stable ID capture only for the explicit census diagnostic run.
+    pub(crate) capture_stable_ids: bool,
     pub(crate) anchor_cells_inspected: usize,
     pub(crate) anchor_materials_inspected: usize,
     pub(crate) target_cells_inspected: usize,
@@ -880,9 +882,18 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) accumulation_entries_after_search: usize,
     pub(crate) accumulation_value_after_search: f64,
     pub(crate) budget_exhausted: bool,
+    /// Stable material pairs that passed live restore/overlap checks this tick.
+    #[serde(default)]
+    pub(crate) live_inspected_material_pair_ids: Vec<String>,
+    /// Stable endpoint interfaces reached by live geometry candidate generation this tick.
+    #[serde(default)]
+    pub(crate) live_physical_interface_ids: Vec<String>,
+    /// Stable interfaces accepted by live COMBINE chemistry evaluation this tick.
+    #[serde(default)]
+    pub(crate) live_discovered_interface_ids: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
     pub(crate) break_ready_candidates: usize,
@@ -969,6 +980,15 @@ pub(crate) struct Simulation {
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
     /// Last-tick environmental reaction counters for UI and headless diagnostics.
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
+    /// Opt-in capture avoids adding stable-ID allocation overhead to ordinary runs.
+    pub(crate) capture_environmental_combine_discovery_ids: bool,
+    /// Run-wide stable identities observed by the bounded live COMBINE discovery path.
+    pub(crate) environmental_combine_live_inspected_material_pair_ids:
+        std::collections::BTreeSet<String>,
+    pub(crate) environmental_combine_live_physical_interface_ids:
+        std::collections::BTreeSet<String>,
+    pub(crate) environmental_combine_live_discovered_interface_ids:
+        std::collections::BTreeSet<String>,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
 }

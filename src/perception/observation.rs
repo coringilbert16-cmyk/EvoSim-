@@ -318,7 +318,7 @@ impl WorldObservation {
             field,
             decomposing_bodies,
             hotspot: simulation.hotspot,
-            chemistry_diagnostics: simulation.environmental_chemistry_diagnostics,
+            chemistry_diagnostics: simulation.environmental_chemistry_diagnostics.clone(),
             chemistry_events: simulation.environmental_chemistry_events.clone(),
         }
     }

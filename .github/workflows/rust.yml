@@ -38,6 +38,7 @@ jobs:
           cargo run --locked -- \
             --headless \
             --environment-chemistry-experiment \
+            --environment-combine-census \
             --seconds 60 \
             --seed 42 \
             --diagnostics environmental-chemistry-default-baseline.jsonl \

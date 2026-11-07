@@ -74,7 +74,7 @@ fn source_pair_accumulation_prefix(
     )
 }
 
-fn source_pair_key(
+pub(crate) fn source_pair_key(
     cell_a: usize,
     material_a: usize,
     source_a: &PhysicalMaterial,
@@ -196,6 +196,7 @@ fn select_best_contact(
         0,
         remaining_work,
         None,
+        None,
     )
     .into_iter()
     .next()
@@ -220,6 +221,7 @@ fn select_best_contact_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
+    source_identities: Option<(u64, u64)>,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
 ) -> Vec<SelectedContact> {
     let mut diagnostics = diagnostics;
@@ -264,6 +266,31 @@ fn select_best_contact_from_offset(
         );
         let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
+            if candidate.available_a
+                && candidate.available_b
+                && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            {
+                if let (Some((identity_a, identity_b)), Some(diagnostics)) =
+                    (source_identities, diagnostics.as_deref_mut())
+                {
+                    if diagnostics.capture_stable_ids {
+                        let part_a = pair_index / indices_b.len();
+                        let part_b = pair_index % indices_b.len();
+                        if let Some(interface_id) =
+                            crate::environmental_combine_census::stable_interface_id(
+                                identity_a,
+                                identity_b,
+                                part_a,
+                                part_b,
+                                candidate.endpoint_a,
+                                candidate.endpoint_b,
+                            )
+                        {
+                            diagnostics.live_physical_interface_ids.push(interface_id);
+                        }
+                    }
+                }
+            }
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     structure, unit_a, unit_b, candidate, catalog,
@@ -280,6 +307,24 @@ fn select_best_contact_from_offset(
                 required_energy,
             });
             if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                if diagnostics.capture_stable_ids {
+                    if let Some((identity_a, identity_b)) = source_identities {
+                        let part_a = pair_index / indices_b.len();
+                        let part_b = pair_index % indices_b.len();
+                        if let Some(interface_id) =
+                            crate::environmental_combine_census::stable_interface_id(
+                                identity_a,
+                                identity_b,
+                                part_a,
+                                part_b,
+                                evaluation.candidate.endpoint_a,
+                                evaluation.candidate.endpoint_b,
+                            )
+                        {
+                            diagnostics.live_discovered_interface_ids.push(interface_id);
+                        }
+                    }
+                }
                 diagnostics.interfaces_sent_to_chemistry += 1;
             }
         }
@@ -326,7 +371,7 @@ fn select_best_contact_from_offset(
 
 /// Resolve chemical identity from one realized physical constituent.
 /// Aggregate material properties intentionally have no single chemical position.
-fn constituent_chemical_position(
+pub(crate) fn constituent_chemical_position(
     unit: &crate::structure::StructuralUnit,
     catalog: &[BaseResource],
 ) -> Option<f64> {
@@ -672,6 +717,16 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         diagnostics.target_material_pairs_rejected_for_overlap += 1;
                         continue;
                     }
+                    if diagnostics.capture_stable_ids {
+                        if let Some(pair_id) =
+                            crate::environmental_combine_census::stable_material_pair_id(
+                                source_a.environmental_identity,
+                                source_b.environmental_identity,
+                            )
+                        {
+                            diagnostics.live_inspected_material_pair_ids.push(pair_id);
+                        }
+                    }
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
@@ -690,6 +745,10 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut cache,
                         pair_start,
                         &mut component_work,
+                        Some((
+                            source_a.environmental_identity,
+                            source_b.environmental_identity,
+                        )),
                         Some(&mut *diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
@@ -3173,6 +3232,7 @@ mod tests {
             component_pair_start(0, pair_count),
             &mut first_window_work,
             None,
+            None,
         );
         assert!(
             first_window.is_empty(),
@@ -3190,6 +3250,7 @@ mod tests {
             &mut cache,
             component_pair_start(41, pair_count),
             &mut second_window_work,
+            None,
             Some(&mut search_diagnostics),
         );
         assert!(
