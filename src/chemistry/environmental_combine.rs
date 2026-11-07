@@ -4056,4 +4056,69 @@ mod shared_inventory_adapter_tests {
             contact.context == crate::environmental_interaction::ContactContext::Ordinary
         }));
     }
+
+    #[test]
+    fn neutral_discovery_adapter_captures_contacts_before_combine_evaluation() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let mut indices_a = Vec::new();
+        let mut indices_b = Vec::new();
+        for index in 0..13 {
+            indices_a.push(structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: index as f64 * 1.5,
+                    y: index as f64 * 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                },
+            )));
+        }
+        for index in 0..13 {
+            indices_b.push(structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                Placement {
+                    x: 37.5 - index as f64 * 1.5,
+                    y: (index as f64 + 1.0) * 3.0_f64.sqrt() / 2.0,
+                    rotation_radians: 0.0,
+                },
+            )));
+        }
+        let mut source_a = source(301, "Carbon");
+        let mut source_b = source(302, "Carbon");
+        source_a.material.parts = vec![("Carbon".to_owned(), 13.0)];
+        source_b.material.parts = vec![("Carbon".to_owned(), 13.0)];
+
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(12);
+        let mut remaining_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let (inserted, inspected_pairs) = discover_and_append_contacts_to_inventory(
+            &mut builder,
+            &structure,
+            &indices_a,
+            &indices_b,
+            &catalog,
+            component_pair_start(41, indices_a.len() * indices_b.len()),
+            &mut remaining_work,
+            &source_a,
+            &source_b,
+            MaterialLocator {
+                cell_index: 1,
+                material_index: 0,
+            },
+            MaterialLocator {
+                cell_index: 2,
+                material_index: 0,
+            },
+        )
+        .unwrap();
+        let inventory = builder.finish();
+        assert_eq!(inspected_pairs, FIELD_COMPONENT_PAIR_LIMIT);
+        assert_eq!(remaining_work, 0);
+        assert!(inserted > 0);
+        assert_eq!(inventory.contact_interfaces.len(), inserted);
+        assert!(inventory.contact_interfaces.iter().all(|contact| {
+            contact.constituent_a.local_index < indices_a.len()
+                && contact.constituent_b.local_index < indices_b.len()
+        }));
+    }
+
 }
