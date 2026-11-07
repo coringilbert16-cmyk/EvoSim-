@@ -236,45 +236,24 @@ fn rigid_surface_candidates(
     a: &StructuralUnit,
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
+    limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(shape_a) = a.shape(catalog) else {
-        return Vec::new();
-    };
-    let Some(shape_b) = b.shape(catalog) else {
-        return Vec::new();
-    };
-
-    if matches!(
-        shape_a.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) || matches!(
-        shape_b.form,
-        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
-    ) {
+    let Some(shape_a) = a.shape(catalog) else { return Vec::new(); };
+    let Some(shape_b) = b.shape(catalog) else { return Vec::new(); };
+    if limit == 0 || matches!(shape_a.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
+        || matches!(shape_b.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }) {
         return Vec::new();
     }
-
     let vertices_a = shape_a.form.polygon_vertices().unwrap_or_default();
     let vertices_b = shape_b.form.polygon_vertices().unwrap_or_default();
-    if vertices_a.len() < 3 || vertices_b.len() < 3 {
-        return Vec::new();
-    }
-
-    // Physical bonds may land anywhere two rigid boundaries touch. Generate
-    // those locations from exact segment/segment feature relationships:
-    // edge intersections plus endpoint-to-edge projections. This covers
-    // vertex/edge, edge/vertex, crossing, and collinear-overlap contacts
-    // without angular sampling.
+    if vertices_a.len() < 3 || vertices_b.len() < 3 { return Vec::new(); }
     let world_vertex = |unit: &StructuralUnit, point: (f64, f64)| {
         let (s, c) = unit.placement.rotation_radians.sin_cos();
-        (
-            unit.placement.x + point.0 * c - point.1 * s,
-            unit.placement.y + point.0 * s + point.1 * c,
-        )
+        (unit.placement.x + point.0 * c - point.1 * s,
+         unit.placement.y + point.0 * s + point.1 * c)
     };
-
     let mut out = Vec::new();
-    for ai in 0..vertices_a.len() {
+    'edges: for ai in 0..vertices_a.len() {
         let a0 = world_vertex(a, vertices_a[ai]);
         let a1 = world_vertex(a, vertices_a[(ai + 1) % vertices_a.len()]);
         for bi in 0..vertices_b.len() {
@@ -282,18 +261,11 @@ fn rigid_surface_candidates(
             let b1 = world_vertex(b, vertices_b[(bi + 1) % vertices_b.len()]);
             for (point_a, point_b) in segment_feature_contacts(a0, a1, b0, b1) {
                 if let (Some(ea), Some(eb)) = (
-                    rigid_boundary_endpoint(
-                        a,
-                        point_a.0 - a.placement.x,
-                        point_a.1 - a.placement.y,
-                    ),
-                    rigid_boundary_endpoint(
-                        b,
-                        point_b.0 - b.placement.x,
-                        point_b.1 - b.placement.y,
-                    ),
+                    rigid_boundary_endpoint(a, point_a.0 - a.placement.x, point_a.1 - a.placement.y),
+                    rigid_boundary_endpoint(b, point_b.0 - b.placement.x, point_b.1 - b.placement.y),
                 ) {
                     out.push((ea, eb));
+                    if out.len() >= limit { break 'edges; }
                 }
             }
         }
@@ -305,25 +277,19 @@ fn multi_contact_fluid_endpoint_pairs(
     fluid: &StructuralUnit,
     rigid: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
+    limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let Some(fluid_shape) = fluid.shape(catalog) else {
+    let Some(fluid_shape) = fluid.shape(catalog) else { return Vec::new(); };
+    let Form::Fluid { multi_contact_boundary: Some(boundary), .. } = &fluid_shape.form else {
         return Vec::new();
     };
-    let Form::Fluid {
-        multi_contact_boundary: Some(boundary),
-        ..
-    } = &fluid_shape.form
-    else {
-        return Vec::new();
-    };
+    if limit == 0 { return Vec::new(); }
     let tolerance = crate::combine_runtime::COMBINE_CONTACT_TOLERANCE;
     let (sin, cos) = fluid.placement.rotation_radians.sin_cos();
-    let local_to_world = |x: f64, y: f64| {
-        (
-            fluid.placement.x + x * cos - y * sin,
-            fluid.placement.y + x * sin + y * cos,
-        )
-    };
+    let local_to_world = |x: f64, y: f64| (
+        fluid.placement.x + x * cos - y * sin,
+        fluid.placement.y + x * sin + y * cos,
+    );
     let world_to_local = |x: f64, y: f64| {
         let dx = x - fluid.placement.x;
         let dy = y - fluid.placement.y;
@@ -331,99 +297,105 @@ fn multi_contact_fluid_endpoint_pairs(
     };
     let on_solid_contact = |x: f64, y: f64| {
         boundary.pieces.iter().any(|piece| {
-            let crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-                start_x,
-                start_y,
-                end_x,
-                end_y,
-                ..
-            } = piece
-            else {
-                return false;
-            };
+            let crate::capillary_geometry::FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. } = piece else { return false; };
             let dx = end_x - start_x;
             let dy = end_y - start_y;
             let length_squared = dx * dx + dy * dy;
-            if length_squared <= f64::EPSILON {
-                return false;
-            }
+            if length_squared <= f64::EPSILON { return false; }
             let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
             let px = start_x + t * dx;
             let py = start_y + t * dy;
             (x - px).hypot(y - py) <= tolerance
         })
     };
-
     let mut pairs = Vec::new();
-    // Discrete rigid endpoints that lie on an intended fluid contact segment.
     for rigid_endpoint in endpoint_indices(rigid, catalog) {
-        let Some(world_point) = endpoint_world_point(rigid_endpoint, rigid, catalog) else {
-            continue;
-        };
+        let Some(world_point) = endpoint_world_point(rigid_endpoint, rigid, catalog) else { continue; };
         let local = world_to_local(world_point.x, world_point.y);
         if on_solid_contact(local.0, local.1) {
-            let Some(contact_point) = crate::surface_geometry::boundary_point_at_multi_contact(
-                boundary, local.0, local.1,
-            ) else {
-                continue;
-            };
-            pairs.push((
-                ConnectionEndpoint::Fluid {
-                    x: contact_point.x,
-                    y: contact_point.y,
-                },
-                rigid_endpoint,
-            ));
+            let Some(contact_point) = crate::surface_geometry::boundary_point_at_multi_contact(boundary, local.0, local.1) else { continue; };
+            pairs.push((ConnectionEndpoint::Fluid { x: contact_point.x, y: contact_point.y }, rigid_endpoint));
+            if pairs.len() >= limit { return pairs; }
         }
     }
-
-    // For circles and polygon edges, the midpoint of a solid-contact piece
-    // provides an exact surface target. The candidate is kept only if the
-    // rigid boundary maps back to that same world point.
     for piece in &boundary.pieces {
-        let crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
-            start_x,
-            start_y,
-            end_x,
-            end_y,
-            ..
-        } = piece
-        else {
-            continue;
-        };
+        let crate::capillary_geometry::FluidBoundaryPiece::SolidContact { start_x, start_y, end_x, end_y, .. } = piece else { continue; };
         for (local_x, local_y) in [
             (*start_x, *start_y),
             ((*start_x + *end_x) * 0.5, (*start_y + *end_y) * 0.5),
             (*end_x, *end_y),
         ] {
             let world = local_to_world(local_x, local_y);
-            let Some(rigid_endpoint) = continuous_endpoint(
-                rigid,
-                crate::connection_geometry::WorldConnectionPoint {
-                    x: world.0,
-                    y: world.1,
-                    normal_x: 0.0,
-                    normal_y: 0.0,
-                },
-                catalog,
-            ) else {
-                continue;
-            };
-            let Some(rigid_world) = endpoint_world_point(rigid_endpoint, rigid, catalog) else {
-                continue;
-            };
+            let Some(rigid_endpoint) = continuous_endpoint(rigid, crate::connection_geometry::WorldConnectionPoint {
+                x: world.0, y: world.1, normal_x: 0.0, normal_y: 0.0,
+            }, catalog) else { continue; };
+            let Some(rigid_world) = endpoint_world_point(rigid_endpoint, rigid, catalog) else { continue; };
             if (rigid_world.x - world.0).hypot(rigid_world.y - world.1) <= tolerance {
-                pairs.push((
-                    ConnectionEndpoint::Fluid {
-                        x: local_x,
-                        y: local_y,
-                    },
-                    rigid_endpoint,
-                ));
+                pairs.push((ConnectionEndpoint::Fluid { x: local_x, y: local_y }, rigid_endpoint));
+                if pairs.len() >= limit { return pairs; }
             }
         }
     }
     pairs
+}
+
+fn candidate_endpoints_bounded(
+    a: &StructuralUnit,
+    b: &StructuralUnit,
+    catalog: &[crate::resources::BaseResource],
+    limit: usize,
+) -> (Vec<(ConnectionEndpoint, ConnectionEndpoint)>, bool) {
+    let mut candidates = Vec::new();
+    if limit == 0 { return (candidates, true); }
+    let ea = endpoint_indices(a, catalog);
+    let eb = endpoint_indices(b, catalog);
+    if !ea.is_empty() && !eb.is_empty() {
+        'cartesian: for x in ea {
+            for y in eb.iter().copied() {
+                candidates.push((x, y));
+                if candidates.len() >= limit { return (candidates, true); }
+            }
+        }
+    } else if !ea.is_empty() {
+        for x in ea {
+            if let Some(wp) = endpoint_world_point(x, a, catalog) {
+                if let Some(y) = continuous_endpoint(b, wp, catalog) {
+                    candidates.push((x, y));
+                    if candidates.len() >= limit { return (candidates, true); }
+                }
+            }
+        }
+    } else if !eb.is_empty() {
+        for y in eb {
+            if let Some(wp) = endpoint_world_point(y, b, catalog) {
+                if let Some(x) = continuous_endpoint(a, wp, catalog) {
+                    candidates.push((x, y));
+                    if candidates.len() >= limit { return (candidates, true); }
+                }
+            }
+        }
+    } else if let (Some(x), Some(y)) = (
+        continuous_endpoint(a, world_center(b), catalog),
+        continuous_endpoint(b, world_center(a), catalog),
+    ) {
+        candidates.push((x, y));
+        if candidates.len() >= limit { return (candidates, true); }
+    }
+    let remaining = limit - candidates.len();
+    candidates.extend(rigid_surface_candidates(a, b, catalog, remaining));
+    if candidates.len() >= limit { return (candidates, true); }
+    let remaining = limit - candidates.len();
+    if matches!(a.shape(catalog).map(|shape| &shape.form), Some(Form::Fluid { multi_contact_boundary: Some(_), .. })) {
+        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog, remaining));
+        if candidates.len() >= limit { return (candidates, true); }
+    }
+    let remaining = limit - candidates.len();
+    if matches!(b.shape(catalog).map(|shape| &shape.form), Some(Form::Fluid { multi_contact_boundary: Some(_), .. })) {
+        candidates.extend(multi_contact_fluid_endpoint_pairs(b, a, catalog, remaining)
+            .into_iter().map(|(fluid_endpoint, rigid_endpoint)| (rigid_endpoint, fluid_endpoint)));
+        if candidates.len() >= limit { return (candidates, true); }
+    }
+    (candidates, false)
 }
 
 fn candidate_endpoints(
@@ -431,60 +403,7 @@ fn candidate_endpoints(
     b: &StructuralUnit,
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
-    let ea = endpoint_indices(a, catalog);
-    let eb = endpoint_indices(b, catalog);
-    let mut candidates = if !ea.is_empty() && !eb.is_empty() {
-        ea.into_iter()
-            .flat_map(|x| eb.iter().copied().map(move |y| (x, y)))
-            .collect()
-    } else if !ea.is_empty() {
-        ea.into_iter()
-            .filter_map(|x| {
-                let wp = endpoint_world_point(x, a, catalog)?;
-                continuous_endpoint(b, wp, catalog).map(|y| (x, y))
-            })
-            .collect()
-    } else if !eb.is_empty() {
-        eb.into_iter()
-            .filter_map(|y| {
-                let wp = endpoint_world_point(y, b, catalog)?;
-                continuous_endpoint(a, wp, catalog).map(|x| (x, y))
-            })
-            .collect()
-    } else {
-        match (
-            continuous_endpoint(a, world_center(b), catalog),
-            continuous_endpoint(b, world_center(a), catalog),
-        ) {
-            (Some(a), Some(b)) => vec![(a, b)],
-            _ => Vec::new(),
-        }
-    };
-
-    candidates.extend(rigid_surface_candidates(a, b, catalog));
-    if matches!(
-        a.shape(catalog).map(|shape| &shape.form),
-        Some(Form::Fluid {
-            multi_contact_boundary: Some(_),
-            ..
-        })
-    ) {
-        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog));
-    }
-    if matches!(
-        b.shape(catalog).map(|shape| &shape.form),
-        Some(Form::Fluid {
-            multi_contact_boundary: Some(_),
-            ..
-        })
-    ) {
-        candidates.extend(
-            multi_contact_fluid_endpoint_pairs(b, a, catalog)
-                .into_iter()
-                .map(|(fluid_endpoint, rigid_endpoint)| (rigid_endpoint, fluid_endpoint)),
-        );
-    }
-    candidates
+    candidate_endpoints_bounded(a, b, catalog, usize::MAX).0
 }
 
 pub(crate) fn endpoint_world_point(
@@ -598,6 +517,26 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
                     && connection_endpoint_matches(*candidate_b, endpoint_b)
             })?;
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
+}
+
+/// Generate at most `limit` raw endpoint pairs before geometry conversion.
+/// The boolean is true when the limit stopped or exhausted candidate generation.
+pub(crate) fn connection_pair_candidates_bounded(
+    s: &OrganismStructure,
+    ua: usize,
+    ub: usize,
+    c: &[crate::resources::BaseResource],
+    limit: usize,
+) -> (Vec<ConnectionPairCandidate>, usize, bool) {
+    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
+        return (Vec::new(), 0, false);
+    };
+    let (endpoints, limit_reached) = candidate_endpoints_bounded(a, b, c, limit);
+    let raw_count = endpoints.len();
+    let candidates = endpoints.into_iter()
+        .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
+        .collect();
+    (candidates, raw_count, limit_reached)
 }
 
 pub fn connection_pair_candidates(
