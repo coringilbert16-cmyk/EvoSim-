@@ -4128,6 +4128,49 @@ mod shared_inventory_adapter_tests {
         )
         .unwrap();
         let inventory = builder.finish();
+
+        // Every COMBINE-evaluable contact exposed by the neutral inventory
+        // must match the existing production evaluator's accepted endpoint set.
+        let mut live_remaining_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let mut live_cache = ConnectionCompatibilityCache::new();
+        let live_contacts = select_best_contact_from_offset(
+            &structure,
+            &indices_a,
+            &indices_b,
+            &catalog,
+            &mut live_cache,
+            component_pair_start(41, indices_a.len() * indices_b.len()),
+            &mut live_remaining_work,
+            None,
+        );
+        let mut inventory_evaluable: Vec<String> = inventory
+            .contact_interfaces
+            .iter()
+            .filter_map(|contact| {
+                let unit_a = *indices_a.get(contact.constituent_a.local_index)?;
+                let unit_b = *indices_b.get(contact.constituent_b.local_index)?;
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &structure,
+                    unit_a,
+                    unit_b,
+                    contact.candidate,
+                    &catalog,
+                )
+                .map(|_| format!("{:?}|{:?}", contact.endpoint_a, contact.endpoint_b))
+            })
+            .collect();
+        let mut production_evaluable: Vec<String> = live_contacts
+            .iter()
+            .map(|contact| {
+                format!(
+                    "{:?}|{:?}",
+                    contact.candidate.endpoint_a, contact.candidate.endpoint_b
+                )
+            })
+            .collect();
+        inventory_evaluable.sort();
+        production_evaluable.sort();
+        assert_eq!(inventory_evaluable, production_evaluable);
         assert_eq!(inspected_pairs, FIELD_COMPONENT_PAIR_LIMIT);
         assert_eq!(remaining_work, 0);
         assert!(inserted > 0);
