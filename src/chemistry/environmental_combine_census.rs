@@ -505,7 +505,7 @@ mod tests {
             .push(physical_carbon(8.0, 13, &catalog));
 
         let before = serde_json::to_vec(&field).expect("serialize field");
-        let census = census_environmental_combine(&field, &catalog, 0.0);
+        let census = census_environmental_combine(&field, &catalog, 0.0, 0.0, &BTreeMap::new());
         let after = serde_json::to_vec(&field).expect("serialize field");
 
         assert_eq!(before, after, "census must not mutate the field");
@@ -526,7 +526,7 @@ mod tests {
             .physical_materials
             .push(physical_carbon(4.0, 0, &catalog));
 
-        let census = census_environmental_combine(&field, &catalog, 0.0);
+        let census = census_environmental_combine(&field, &catalog, 0.0, 0.0, &BTreeMap::new());
         assert_eq!(census.invalid_or_duplicate_identity_materials, 0);
         assert_eq!(
             field.cells[0].physical_materials[0].environmental_identity,
