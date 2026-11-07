@@ -11,6 +11,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut environment_combine_census = false;
     let mut transport_endpoint_audit = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
@@ -21,6 +22,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--environment-combine-census" => {
+                environment_combine_census = true;
             }
             "--audit-chemistry-transport-endpoints" => {
                 transport_endpoint_audit = true;
@@ -74,6 +78,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 .as_deref()
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
             diagnostic_interval,
+            environment_combine_census,
         );
         return;
     }
@@ -202,6 +207,7 @@ fn run_environment_chemistry_experiment(
     duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
+    run_combine_census: bool,
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
@@ -218,6 +224,18 @@ fn run_environment_chemistry_experiment(
     .unwrap_or_else(|error| {
         panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
     });
+
+    if run_combine_census {
+        let census = crate::environmental_combine_census::census_environmental_combine(
+            &simulation.environment.field,
+            &simulation.environment.catalog,
+            simulation.environment.chemistry_usable_energy,
+        );
+        println!(
+            "ENVIRONMENTAL_COMBINE_CENSUS snapshot=initial {}",
+            serde_json::to_string(&census).expect("serialize initial COMBINE census")
+        );
+    }
 
     println!(
         "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
@@ -302,6 +320,17 @@ fn run_environment_chemistry_experiment(
     diagnostics
         .finish(&simulation)
         .expect("failed to finalize environmental chemistry diagnostics");
+    if run_combine_census {
+        let census = crate::environmental_combine_census::census_environmental_combine(
+            &simulation.environment.field,
+            &simulation.environment.catalog,
+            simulation.environment.chemistry_usable_energy,
+        );
+        println!(
+            "ENVIRONMENTAL_COMBINE_CENSUS snapshot=final {}",
+            serde_json::to_string(&census).expect("serialize final COMBINE census")
+        );
+    }
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
         "ENVIRONMENTAL CHEMISTRY END: tick={} elapsed_wall_seconds={:.3} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
