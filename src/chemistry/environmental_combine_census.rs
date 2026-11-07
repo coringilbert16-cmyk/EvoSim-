@@ -11,7 +11,7 @@ use std::time::Instant;
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::BaseResource;
-use crate::structure::{OrganismStructure, Placement};
+use crate::structure::{ConnectionEndpoint, OrganismStructure, Placement};
 
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
 pub(crate) struct EnvironmentalCombineCensus {
@@ -39,6 +39,57 @@ struct RestoredMaterial {
     stable_id: bool,
     structure: OrganismStructure,
     bounds: (f64, f64, f64, f64),
+}
+
+pub(crate) fn stable_interface_id(
+    identity_a: u64,
+    identity_b: u64,
+    part_a: usize,
+    part_b: usize,
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+) -> Option<String> {
+    if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
+        return None;
+    }
+    if identity_a < identity_b {
+        Some(format!(
+            "{}:{}:{}:{}:{:?}:{:?}",
+            identity_a, identity_b, part_a, part_b, endpoint_a, endpoint_b,
+        ))
+    } else {
+        Some(format!(
+            "{}:{}:{}:{}:{:?}:{:?}",
+            identity_b, identity_a, part_b, part_a, endpoint_b, endpoint_a,
+        ))
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize)]
+pub(crate) struct EnvironmentalCombineCensusComparison {
+    pub(crate) census_only_count: usize,
+    pub(crate) live_only_count: usize,
+    pub(crate) census_only_interface_ids: Vec<String>,
+    pub(crate) live_only_interface_ids: Vec<String>,
+}
+
+pub(crate) fn compare_census_to_live(
+    census: &EnvironmentalCombineCensus,
+    live_interface_ids: &[String],
+) -> EnvironmentalCombineCensusComparison {
+    let census_ids: std::collections::BTreeSet<_> =
+        census.census_pair_ids.iter().cloned().collect();
+    let live_ids: std::collections::BTreeSet<_> = live_interface_ids.iter().cloned().collect();
+    let census_only_interface_ids: Vec<_> =
+        census_ids.difference(&live_ids).cloned().collect();
+    let live_only_interface_ids: Vec<_> =
+        live_ids.difference(&census_ids).cloned().collect();
+    EnvironmentalCombineCensusComparison {
+        census_only_count: census_only_interface_ids.len(),
+        live_only_count: live_only_interface_ids.len(),
+        census_only_interface_ids,
+        live_only_interface_ids,
+    }
 }
 
 fn origin() -> Placement {
@@ -250,28 +301,15 @@ pub(crate) fn census_environmental_combine(
                         }
 
                         if material_a.stable_id && material_b.stable_id {
-                            let part_a = unit_a;
-                            let part_b = unit_b - first_b_unit;
-                            if material_a.census_id < material_b.census_id {
-                                census.census_pair_ids.push(format!(
-                                    "{}:{}:{}:{}:{:?}:{:?}",
-                                    material_a.census_id,
-                                    material_b.census_id,
-                                    part_a,
-                                    part_b,
-                                    candidate.endpoint_a,
-                                    candidate.endpoint_b,
-                                ));
-                            } else {
-                                census.census_pair_ids.push(format!(
-                                    "{}:{}:{}:{}:{:?}:{:?}",
-                                    material_b.census_id,
-                                    material_a.census_id,
-                                    part_b,
-                                    part_a,
-                                    candidate.endpoint_b,
-                                    candidate.endpoint_a,
-                                ));
+                            if let Some(interface_id) = stable_interface_id(
+                                material_a.census_id,
+                                material_b.census_id,
+                                unit_a,
+                                unit_b - first_b_unit,
+                                candidate.endpoint_a,
+                                candidate.endpoint_b,
+                            ) {
+                                census.census_pair_ids.push(interface_id);
                             }
                         }
                     }
