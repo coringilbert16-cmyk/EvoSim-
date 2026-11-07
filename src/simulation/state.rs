@@ -880,6 +880,9 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) accumulation_entries_after_search: usize,
     pub(crate) accumulation_value_after_search: f64,
     pub(crate) budget_exhausted: bool,
+    /// Stable interface identities actually reached by the live bounded search this tick.
+    #[serde(default)]
+    pub(crate) live_discovered_interface_ids: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
