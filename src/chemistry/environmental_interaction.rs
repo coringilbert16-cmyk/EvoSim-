@@ -1,3 +1,4 @@
+#![expect(dead_code, reason = "Stage 1 contract is intentionally not wired into production yet")]
 //! Shared, read-only environmental interaction inventory contract.
 //!
 //! This module defines the common record shape for environmental chemistry.
