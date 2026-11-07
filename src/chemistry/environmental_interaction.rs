@@ -296,10 +296,10 @@ impl EnvironmentalInteractionInventoryBuilder {
             let bond_constituents_match = removed_bond.material == anchor.material
                 && anchor.material == displaced.material
                 && anchor != displaced;
-            let contact_has_anchor_and_incoming =
-                (record.constituent_a == anchor && record.constituent_b.material != anchor.material)
-                    || (record.constituent_b == anchor
-                        && record.constituent_a.material != anchor.material);
+            let contact_has_anchor_and_incoming = (record.constituent_a == anchor
+                && record.constituent_b.material != anchor.material)
+                || (record.constituent_b == anchor
+                    && record.constituent_a.material != anchor.material);
             if !bond_constituents_match || !contact_has_anchor_and_incoming {
                 return Err(InventoryBuildError::InvalidDisplacementContext);
             }
@@ -548,22 +548,26 @@ mod tests {
             topology_generation: 0,
             local_index: 0,
         };
-        builder.add_bond(ExistingBondRecord {
-            material: MaterialIdentity(1),
-            topology_generation: 0,
-            bond_index: 0,
-            constituent_a: a,
-            endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
-            constituent_b: b,
-            endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
-            bond_energy: 1.0,
-        }).unwrap();
-        builder.add_contact(contact(
-            a,
-            ConnectionEndpoint::Corner { point_index: 0 },
-            incoming,
-            ConnectionEndpoint::Corner { point_index: 0 },
-        )).unwrap();
+        builder
+            .add_bond(ExistingBondRecord {
+                material: MaterialIdentity(1),
+                topology_generation: 0,
+                bond_index: 0,
+                constituent_a: a,
+                endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                constituent_b: b,
+                endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+                bond_energy: 1.0,
+            })
+            .unwrap();
+        builder
+            .add_contact(contact(
+                a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                incoming,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ))
+            .unwrap();
         assert!(builder.finish().displacement_joins().is_empty());
     }
 
@@ -633,16 +637,18 @@ mod tests {
             displaced: b,
         };
         builder.add_contact(wrong_bond).unwrap();
-        builder.add_bond(ExistingBondRecord {
-            material: MaterialIdentity(1),
-            topology_generation: 0,
-            bond_index: 0,
-            constituent_a: a,
-            endpoint_a: endpoint,
-            constituent_b: b,
-            endpoint_b: endpoint,
-            bond_energy: 1.0,
-        }).unwrap();
+        builder
+            .add_bond(ExistingBondRecord {
+                material: MaterialIdentity(1),
+                topology_generation: 0,
+                bond_index: 0,
+                constituent_a: a,
+                endpoint_a: endpoint,
+                constituent_b: b,
+                endpoint_b: endpoint,
+                bond_energy: 1.0,
+            })
+            .unwrap();
         assert!(builder.finish().displacement_joins().is_empty());
     }
 
