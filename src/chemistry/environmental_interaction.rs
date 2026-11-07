@@ -387,17 +387,18 @@ mod tests {
             topology_generation: 4,
             local_index: 0,
         };
-        builder.add_bond(ExistingBondRecord {
-            material: MaterialIdentity(11),
-            topology_generation: 2,
-            bond_index: 0,
-            constituent_a: a,
-            endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
-            constituent_b: b,
-            endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
-            bond_energy: 1.5,
-        })
-        .unwrap();
+        builder
+            .add_bond(ExistingBondRecord {
+                material: MaterialIdentity(11),
+                topology_generation: 2,
+                bond_index: 0,
+                constituent_a: a,
+                endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                constituent_b: b,
+                endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+                bond_energy: 1.5,
+            })
+            .unwrap();
         builder
             .add_contact(contact(
                 a,
@@ -443,7 +444,9 @@ mod tests {
                 y: 4.0,
             },
             a,
-            ConnectionEndpoint::Boundary { angle_radians: std::f64::consts::TAU },
+            ConnectionEndpoint::Boundary {
+                angle_radians: std::f64::consts::TAU,
+            },
         );
         assert!(!builder.add_contact(reversed).unwrap());
         assert_eq!(builder.contact_interfaces.len(), 1);
