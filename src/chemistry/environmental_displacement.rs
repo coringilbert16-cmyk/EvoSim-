@@ -1781,8 +1781,36 @@ mod tests {
                         )
                         .is_some()
                         {
-                            replacement = Some((placement, candidate));
-                            break 'poses;
+                            source.units[2].placement = placement;
+                            let census = census_replacement_contacts(
+                                &source,
+                                0,
+                                2,
+                                old_bond,
+                                catalog,
+                                usize::MAX,
+                            );
+                            let energy_ranked = census.alternatives.iter().min_by(|left, right| {
+                                left.required_energy
+                                    .total_cmp(&right.required_energy)
+                                    .then_with(|| {
+                                        left.candidate.distance.total_cmp(&right.candidate.distance)
+                                    })
+                            });
+                            let fastest_activation = census.alternatives.iter().max_by(|left, right| {
+                                left.activation_increment.total_cmp(&right.activation_increment)
+                            });
+                            if let (Some(energy_ranked), Some(fastest_activation)) =
+                                (energy_ranked, fastest_activation)
+                            {
+                                if census.alternatives.len() >= 2
+                                    && fastest_activation.activation_increment
+                                        > energy_ranked.activation_increment
+                                {
+                                    replacement = Some((placement, energy_ranked.candidate));
+                                    break 'poses;
+                                }
+                            }
                         }
                     }
                 }
