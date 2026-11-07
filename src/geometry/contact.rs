@@ -787,6 +787,26 @@ mod tests {
     }
 
     #[test]
+    fn bounded_candidate_generation_returns_the_exact_complete_prefix() {
+        let catalog = crate::resources::default_catalog();
+        let (structure, _) = test_structure();
+        let complete = connection_pair_candidates(&structure, 0, 1, &catalog);
+        let (bounded, raw_count, limit_reached) =
+            connection_pair_candidates_bounded(&structure, 0, 1, &catalog, 2);
+
+        assert!(complete.len() > 2);
+        assert_eq!(raw_count, 2);
+        assert!(limit_reached);
+        assert_eq!(bounded, complete[..2]);
+
+        let (empty, raw_count, limit_reached) =
+            connection_pair_candidates_bounded(&structure, 0, 1, &catalog, 0);
+        assert!(empty.is_empty());
+        assert_eq!(raw_count, 0);
+        assert!(limit_reached);
+    }
+
+    #[test]
     fn hydrogen_exposes_exactly_two_primary_endpoints() {
         let catalog = crate::resources::default_catalog();
         let unit = StructuralUnit::new(
