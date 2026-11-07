@@ -3054,7 +3054,8 @@ mod shared_break_inventory_adapter_tests {
     use crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder;
     use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
     use crate::resources::{default_catalog, Material};
-    use crate::state::{ActiveMaterialField, Environment, FieldCell};
+    use crate::environment::{ActiveMaterialField, FieldCell};
+    use crate::state::Environment;
     use crate::structure::ConnectionEndpoint;
 
     fn environment_with_one_bonded_material() -> Environment {
