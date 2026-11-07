@@ -578,7 +578,6 @@ fn bounded_bounds_query_matches_full_query_for_a_complete_window() {
     assert_eq!(bounded, full);
 }
 
-
 #[test]
 fn environmental_identity_allocator_repairs_duplicate_nonzero_ids() {
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
