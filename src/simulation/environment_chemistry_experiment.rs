@@ -406,6 +406,114 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     }
 }
 
+/// Compare recorded environmental bond endpoints before and after one ambient
+/// transport step without advancing chemistry or mutating the live fixture.
+pub(crate) fn audit_transport_endpoints(seed: u64) {
+    let fixture = build(seed);
+    let catalog = fixture.simulation.environment.catalog.clone();
+    audit_endpoint_resolution("before", &fixture.simulation.environment.field, &catalog);
+
+    let mut transported = fixture.simulation.environment.field.clone();
+    let moved = crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
+        &mut transported,
+        &catalog,
+        fixture.simulation.environment.width,
+        fixture.simulation.environment.height,
+    );
+    println!("TRANSPORT ENDPOINT AUDIT: moved_materials={moved}");
+    audit_endpoint_resolution("after", &transported, &catalog);
+}
+
+fn audit_endpoint_resolution(
+    label: &str,
+    field: &ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+) {
+    let mut bonds = 0_u64;
+    let mut restored = 0_u64;
+    let mut endpoint_pairs_resolved = 0_u64;
+    let mut failures = 0_u64;
+    for (cell_index, cell) in field.cells.iter().enumerate() {
+        for (material_index, material) in cell.physical_materials.iter().enumerate() {
+            let Some(connections) = material.internal_connections.as_ref() else {
+                continue;
+            };
+            if connections.is_empty() {
+                continue;
+            }
+            let mut structure = OrganismStructure::new();
+            let Some(indices) = crate::material_restoration::restore_material(
+                &mut structure,
+                material,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            ) else {
+                continue;
+            };
+            restored += connections.len() as u64;
+            for (bond_index, connection) in connections.iter().enumerate() {
+                bonds += 1;
+                let (Some(&unit_a), Some(&unit_b)) = (
+                    indices.get(connection.part_a),
+                    indices.get(connection.part_b),
+                ) else {
+                    failures += 1;
+                    continue;
+                };
+                if crate::contact::connection_pair_candidate_for_endpoints(
+                    &structure,
+                    unit_a,
+                    unit_b,
+                    catalog,
+                    connection.endpoint_a,
+                    connection.endpoint_b,
+                )
+                .is_some()
+                {
+                    endpoint_pairs_resolved += 1;
+                    continue;
+                }
+
+                failures += 1;
+                if failures <= 6 {
+                    let endpoints = [
+                        crate::contact::endpoint_world_point(
+                            connection.endpoint_a,
+                            &structure.units[unit_a],
+                            catalog,
+                        ),
+                        crate::contact::endpoint_world_point(
+                            connection.endpoint_b,
+                            &structure.units[unit_b],
+                            catalog,
+                        ),
+                    ];
+                    let all_candidates = crate::contact::connection_pair_candidates(
+                        &structure, unit_a, unit_b, catalog,
+                    );
+                    println!(
+                        "TRANSPORT ENDPOINT FAILURE: stage={label} cell={cell_index} material={material_index} identity={} bond={bond_index} parts=({}, {}) recorded=({:?}, {:?}) endpoint_world={endpoints:?} candidate_count={} placements={:?}",
+                        material.environmental_identity,
+                        connection.part_a,
+                        connection.part_b,
+                        connection.endpoint_a,
+                        connection.endpoint_b,
+                        all_candidates.len(),
+                        material.placements
+                    );
+                }
+            }
+        }
+    }
+    println!(
+        "TRANSPORT ENDPOINT AUDIT: stage={label} bonds={bonds} restored={restored} resolved={endpoint_pairs_resolved} unresolved={failures}"
+    );
+}
+
 fn randomized_pile_centers(
     pile_sizes: &[usize],
     hotspot_x: f64,

@@ -316,10 +316,15 @@ pub(crate) fn accumulate(
         )
         .into_iter()
         .find(|candidate| {
-            (candidate.endpoint_a == bond.endpoint_a.location
-                && candidate.endpoint_b == bond.endpoint_b.location)
-                || (candidate.endpoint_a == bond.endpoint_b.location
-                    && candidate.endpoint_b == bond.endpoint_a.location)
+            crate::contact::connection_pair_candidate_matches_endpoints(
+                candidate,
+                bond.endpoint_a.location,
+                bond.endpoint_b.location,
+            ) || crate::contact::connection_pair_candidate_matches_endpoints(
+                candidate,
+                bond.endpoint_b.location,
+                bond.endpoint_a.location,
+            )
         });
         let Some(candidate) = candidate else {
             continue;

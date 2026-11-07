@@ -10,6 +10,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut transport_endpoint_audit = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
 
@@ -18,6 +19,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--audit-chemistry-transport-endpoints" => {
+                transport_endpoint_audit = true;
             }
             "--seed" => {
                 seed = args
@@ -65,6 +69,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
             diagnostic_interval,
         );
+        return;
+    }
+
+    if transport_endpoint_audit {
+        crate::environment_chemistry_experiment::audit_transport_endpoints(seed);
         return;
     }
 
