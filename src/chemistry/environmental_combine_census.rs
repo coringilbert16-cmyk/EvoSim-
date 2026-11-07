@@ -408,6 +408,18 @@ pub(crate) fn census_environmental_combine(
                             continue;
                         };
                         census.chemically_eligible_interfaces += 1;
+                        if material_a.stable_id && material_b.stable_id {
+                            if let Some(interface_id) = stable_interface_id(
+                                material_a.census_id,
+                                material_b.census_id,
+                                unit_a,
+                                unit_b - first_b_unit,
+                                candidate.endpoint_a,
+                                candidate.endpoint_b,
+                            ) {
+                                census.census_pair_ids.push(interface_id);
+                            }
+                        }
 
                         let [(material_name_a, _)] =
                             combined.units[unit_a].material.parts.as_slice()
@@ -532,18 +544,6 @@ pub(crate) fn census_environmental_combine(
                             census.usable_energy_sufficient_interfaces += 1;
                         }
 
-                        if material_a.stable_id && material_b.stable_id {
-                            if let Some(interface_id) = stable_interface_id(
-                                material_a.census_id,
-                                material_b.census_id,
-                                unit_a,
-                                unit_b - first_b_unit,
-                                candidate.endpoint_a,
-                                candidate.endpoint_b,
-                            ) {
-                                census.census_pair_ids.push(interface_id);
-                            }
-                        }
                     }
                 }
             }
