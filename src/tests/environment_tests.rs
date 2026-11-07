@@ -598,10 +598,7 @@ fn environmental_transport_repairs_duplicate_nonzero_material_ids() {
     }
 
     crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<false>(
-        &mut field,
-        &catalog,
-        100.0,
-        100.0,
+        &mut field, &catalog, 100.0, 100.0,
     );
     let ids: Vec<u64> = field
         .cells
