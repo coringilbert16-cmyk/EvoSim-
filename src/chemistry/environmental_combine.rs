@@ -4130,6 +4130,16 @@ mod shared_inventory_adapter_tests {
         assert_eq!(remaining_work, 0);
         assert!(inserted > 0);
         assert_eq!(inventory.contact_interfaces.len(), inserted);
+        assert_eq!(inventory.work.material_pair_visits, 1);
+        assert_eq!(
+            inventory.work.constituent_pair_visits,
+            FIELD_COMPONENT_PAIR_LIMIT as u64
+        );
+        assert_eq!(
+            inventory.work.geometry_evaluation_operations,
+            inventory.work.raw_endpoint_candidates
+        );
+        assert!(inventory.work.raw_endpoint_candidates >= inserted as u64);
         assert!(inventory.contact_interfaces.iter().all(|contact| {
             contact.constituent_a.local_index < indices_a.len()
                 && contact.constituent_b.local_index < indices_b.len()
