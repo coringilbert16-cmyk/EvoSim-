@@ -852,7 +852,6 @@ pub(crate) fn physical_materials_from_structure_components(
     if components.is_empty() {
         return None;
     }
-
     let mut products = Vec::with_capacity(components.len());
     for component in components {
         let ids = component

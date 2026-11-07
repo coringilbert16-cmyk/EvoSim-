@@ -11,6 +11,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut diagnostics_path: Option<String> = None;
     let mut diagnostic_interval = REPORT_INTERVAL;
     let mut environment_chemistry_experiment = false;
+    let mut transport_endpoint_audit = false;
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
@@ -20,6 +21,9 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         match arg.as_str() {
             "--environment-chemistry-experiment" => {
                 environment_chemistry_experiment = true;
+            }
+            "--audit-chemistry-transport-endpoints" => {
+                transport_endpoint_audit = true;
             }
             "--seed" => {
                 seed = args
@@ -71,6 +75,11 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                 .unwrap_or("environment-chemistry-diagnostics.jsonl"),
             diagnostic_interval,
         );
+        return;
+    }
+
+    if transport_endpoint_audit {
+        crate::environment_chemistry_experiment::audit_transport_endpoints(seed);
         return;
     }
 
@@ -232,7 +241,7 @@ fn run_environment_chemistry_experiment(
             let discovery = counters.displacement_discovery;
             let energy = simulation.energy_inventory_snapshot();
             println!(
-                "[chemistry] tick={} displacement ready/scheduled/committed/rejected={}/{}/{}/{} scan anchors/bonded={}/{} targets cells/materials={}/{} contacts searches/found={}/{} activation updates/met/below/status_unavailable={}/{}/{}/{} trial_rejected={} max_accumulated_reaction={:.4} work_remaining={} COMBINE={}/{}/{}/{} BREAK={}/{}/{}/{} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
+                "[chemistry] tick={} displacement ready/scheduled/committed/rejected={}/{}/{}/{} scan anchors/bonded={}/{} targets cells/materials={}/{} contacts searches/found={}/{} activation updates/met/below/status_unavailable={}/{}/{}/{} trial_rejected={} max_accumulated_reaction={:.4} work_remaining={} COMBINE={}/{}/{}/{} BREAK={}/{}/{}/{} scan/candidates/checked={}/{}/{} restore_ok/fail={}/{} map/property/position/endpoint/interface/chemistry_reject={}/{}/{}/{}/{}/{} activation/below/met={}/{}/{} preserved/dissipated={}/{} remaining={} materials={} constituents={} resonance={:.6} usable={:.6} energy_residual={:?}",
                 simulation.tick,
                 counters.displacement_ready_candidates,
                 counters.displacement_scheduled,
@@ -259,6 +268,23 @@ fn run_environment_chemistry_experiment(
                 counters.break_scheduled,
                 counters.break_committed,
                 counters.break_rejected,
+                counters.break_discovery.scan_entries_inspected,
+                counters.break_discovery.bond_candidates_inspected,
+                counters.break_discovery.bond_candidates_checked,
+                counters.break_discovery.material_restorations_succeeded,
+                counters.break_discovery.material_restoration_rejections,
+                counters.break_discovery.candidate_mapping_rejections,
+                counters.break_discovery.candidate_property_rejections,
+                counters.break_discovery.candidate_position_rejections,
+                counters.break_discovery.candidate_endpoint_rejections,
+                counters.break_discovery.candidate_interface_rejections,
+                counters.break_discovery.candidate_chemistry_rejections,
+                counters.break_discovery.activation_updates,
+                counters.break_discovery.activation_below_threshold,
+                counters.break_discovery.activation_threshold_met,
+                counters.break_discovery.progress_preserved_unsearched,
+                counters.break_discovery.progress_dissipated_checked,
+                counters.break_discovery_work_remaining,
                 simulation.environment.field.cells.iter()
                     .map(|cell| cell.physical_materials.len())
                     .sum::<usize>(),

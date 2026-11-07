@@ -35,6 +35,43 @@ pub struct ConnectionPairCandidate {
     pub available_b: bool,
 }
 
+const CONNECTION_ENDPOINT_TOLERANCE: f64 = 1e-8;
+
+fn connection_endpoint_matches(actual: ConnectionEndpoint, expected: ConnectionEndpoint) -> bool {
+    match (actual, expected) {
+        (
+            ConnectionEndpoint::Boundary {
+                angle_radians: actual,
+            },
+            ConnectionEndpoint::Boundary {
+                angle_radians: expected,
+            },
+        ) if actual.is_finite() && expected.is_finite() => {
+            let delta = (actual - expected + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI;
+            delta.abs() <= CONNECTION_ENDPOINT_TOLERANCE
+        }
+        (
+            ConnectionEndpoint::Fluid { x: ax, y: ay },
+            ConnectionEndpoint::Fluid { x: ex, y: ey },
+        ) if [ax, ay, ex, ey].iter().all(|value| value.is_finite()) => {
+            (ax - ex).abs() <= CONNECTION_ENDPOINT_TOLERANCE
+                && (ay - ey).abs() <= CONNECTION_ENDPOINT_TOLERANCE
+        }
+        _ => actual == expected,
+    }
+}
+
+pub(crate) fn connection_pair_candidate_matches_endpoints(
+    candidate: &ConnectionPairCandidate,
+    endpoint_a: ConnectionEndpoint,
+    endpoint_b: ConnectionEndpoint,
+) -> bool {
+    connection_endpoint_matches(candidate.endpoint_a, endpoint_a)
+        && connection_endpoint_matches(candidate.endpoint_b, endpoint_b)
+}
+
 pub(crate) fn world_center(
     unit: &StructuralUnit,
 ) -> crate::connection_geometry::WorldConnectionPoint {
@@ -557,7 +594,8 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
         candidate_endpoints(a, b, c)
             .into_iter()
             .find(|(candidate_a, candidate_b)| {
-                *candidate_a == endpoint_a && *candidate_b == endpoint_b
+                connection_endpoint_matches(*candidate_a, endpoint_a)
+                    && connection_endpoint_matches(*candidate_b, endpoint_b)
             })?;
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
@@ -782,6 +820,73 @@ mod tests {
                 },
             ),
             None,
+        );
+    }
+
+    #[test]
+    fn targeted_boundary_endpoint_lookup_tolerates_rotation_roundoff() {
+        let catalog = crate::resources::default_catalog();
+        let molecule = crate::environment_chemistry_experiment::realize_natural_molecule(
+            &["Hydrogen".into(), "Sulfur".into()],
+            Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        );
+        let connection = molecule
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.first())
+            .expect("seed molecule should retain its COMBINE endpoint record");
+        assert!(matches!(
+            connection.endpoint_a,
+            ConnectionEndpoint::Boundary { .. }
+        ));
+        assert!(matches!(
+            connection.endpoint_b,
+            ConnectionEndpoint::Boundary { .. }
+        ));
+        let mut structure = OrganismStructure::new();
+        let indices = crate::material_restoration::restore_material(
+            &mut structure,
+            &molecule,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+            &catalog,
+        )
+        .expect("seed molecule must restore");
+        let expected = connection_pair_candidate_for_endpoints(
+            &structure,
+            indices[connection.part_a],
+            indices[connection.part_b],
+            &catalog,
+            connection.endpoint_a,
+            connection.endpoint_b,
+        )
+        .expect("seed endpoint pair must resolve before rotation");
+        let jitter = |endpoint| match endpoint {
+            ConnectionEndpoint::Boundary { angle_radians } => ConnectionEndpoint::Boundary {
+                angle_radians: angle_radians + 1e-12,
+            },
+            endpoint => endpoint,
+        };
+
+        assert_eq!(
+            connection_pair_candidate_for_endpoints(
+                &structure,
+                indices[connection.part_a],
+                indices[connection.part_b],
+                &catalog,
+                jitter(connection.endpoint_a),
+                jitter(connection.endpoint_b),
+            ),
+            Some(expected),
+            "transport-induced trigonometric roundoff must not orphan an existing bond"
         );
     }
 

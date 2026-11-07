@@ -884,13 +884,17 @@ impl Simulation {
         // the organism iteration below.
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
-        let environmental_break_operations = crate::chemical_reaction::accumulate_environmental(
-            &self.environment,
-            &mut self.chemical_reaction_accumulation,
-            &mut self.chemistry_library,
-            self.tick,
-            &mut environmental_break_discovery_remaining,
-        );
+        let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+        let environmental_break_operations =
+            crate::chemical_reaction::accumulate_environmental_with_diagnostics(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_break_discovery_remaining,
+                &mut break_discovery,
+            );
+        self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics

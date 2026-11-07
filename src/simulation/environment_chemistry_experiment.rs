@@ -14,6 +14,140 @@ const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
 const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
 const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
 
+/// Build the seeded molecule using the same eligibility and bond-energy path as
+/// an ordinary COMBINE operation, so environmental BREAK sees realistic bonds.
+pub(crate) fn realize_natural_molecule(
+    parts: &[String],
+    placement: Placement,
+    catalog: &[crate::resources::BaseResource],
+) -> PhysicalMaterial {
+    assert_eq!(
+        parts.len(),
+        2,
+        "seed molecules must contain two constituents"
+    );
+    let mut structure = OrganismStructure::new();
+    let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
+    let unit_b = structure.add_unit(StructuralUnit::new(parts[1].clone(), placement));
+    assert!(structure
+        .units
+        .iter_mut()
+        .all(|unit| unit.realize_default_geometry(catalog)));
+
+    let mut selected_contact = None;
+    'poses: for direction_step in 0..16 {
+        let direction =
+            placement.rotation_radians + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
+        let (sin, cos) = direction.sin_cos();
+        for distance_step in 20..=100 {
+            let separation = f64::from(distance_step) * 0.025;
+            for rotation_step in 0..16 {
+                structure.units[unit_b].placement = Placement {
+                    x: placement.x + separation * cos,
+                    y: placement.y + separation * sin,
+                    rotation_radians: placement.rotation_radians
+                        + std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                };
+                let incoming = structure.units[unit_b].clone();
+                if crate::construction_runtime::placed_unit_overlaps(
+                    &structure,
+                    &incoming,
+                    &[unit_b],
+                    catalog,
+                ) {
+                    continue;
+                }
+                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
+                for candidate in crate::contact::connection_pair_candidates_cached(
+                    &structure, unit_a, unit_b, catalog, &mut cache,
+                ) {
+                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                        || !candidate.available_a
+                        || !candidate.available_b
+                        || !candidate.facing.is_finite()
+                        || candidate.facing <= 0.0
+                    {
+                        continue;
+                    }
+                    let Some((_, _, investment, required_energy)) =
+                        crate::combine_runtime::selected_candidate_evaluation(
+                            &structure, unit_a, unit_b, candidate, catalog,
+                        )
+                    else {
+                        continue;
+                    };
+                    selected_contact = Some((candidate, investment, required_energy));
+                    break 'poses;
+                }
+            }
+        }
+    }
+    let (candidate, investment, required_energy) =
+        selected_contact.expect("seeded molecule pair must admit an ordinary COMBINE contact");
+    let mut usable_energy = required_energy;
+    let mut ledger = EnergyLedger {
+        total_usable_energy_held: usable_energy,
+        initial_usable_energy_held: usable_energy,
+        total_structural_energy_held: crate::energy_ledger::structural_potential(&structure)
+            .expect("unbonded seed structure must have valid structural energy"),
+        ..EnergyLedger::default()
+    };
+    ledger.initial_structural_energy_held = ledger.total_structural_energy_held;
+    crate::combine_runtime::form_selected_bond(
+        &mut structure,
+        unit_a,
+        unit_b,
+        candidate,
+        investment,
+        catalog,
+        &mut crate::contact::ConnectionCompatibilityCache::new(),
+        &mut ledger,
+        &mut usable_energy,
+    )
+    .expect("seeded molecule must form through ordinary COMBINE");
+    assert_eq!(structure.bonds.len(), 1);
+    assert!(structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0);
+    let mut products = crate::environmental_combine::physical_materials_from_structure_components(
+        &structure, catalog,
+    )
+    .expect("ordinary COMBINE product must export as a physical molecule");
+    assert_eq!(products.len(), 1);
+    let molecule = products
+        .pop()
+        .expect("one bonded component must be exported");
+    let connection = molecule
+        .internal_connections
+        .as_ref()
+        .and_then(|bonds| bonds.first())
+        .expect("exported molecule must retain its physical bond");
+    assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
+    let mut restored = OrganismStructure::new();
+    let restored_indices = crate::material_restoration::restore_material(
+        &mut restored,
+        &molecule,
+        Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        },
+        catalog,
+    )
+    .expect("ordinary COMBINE molecule must restore for environmental BREAK");
+    assert!(
+        crate::contact::connection_pair_candidate_for_endpoints(
+            &restored,
+            restored_indices[connection.part_a],
+            restored_indices[connection.part_b],
+            catalog,
+            connection.endpoint_a,
+            connection.endpoint_b,
+        )
+        .is_some(),
+        "ordinary COMBINE molecule must resolve its recorded bond endpoints after restoration"
+    );
+    molecule
+}
+
 /// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
 /// are an unrestricted random partition, not a fixed 6–20 range.
 pub(crate) fn seed_randomized_resources(
@@ -94,134 +228,6 @@ pub(crate) fn seed_randomized_resources(
     }
     assert_eq!(identity_index, ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
-}
-
-/// Create a seeded molecule by executing the ordinary COMBINE authority.
-///
-/// The seed supplies only the two physical constituents and their starting pose.
-/// Contact selection, formation investment, bond strength, intrinsic bond energy,
-/// endpoint identity, and product export all come from the same runtime path used
-/// by environmental COMBINE. Any required input is the exact amount calculated
-/// by COMBINE, not a molecule-specific energy grant.
-pub(crate) fn realize_natural_molecule(
-    parts: &[String],
-    placement: Placement,
-    catalog: &[crate::resources::BaseResource],
-) -> PhysicalMaterial {
-    assert_eq!(
-        parts.len(),
-        2,
-        "seed molecules must contain two constituents"
-    );
-    let mut structure = OrganismStructure::new();
-    let unit_a = structure.add_unit(StructuralUnit::new(parts[0].clone(), placement));
-    let unit_b = structure.add_unit(StructuralUnit::new(parts[1].clone(), placement));
-    assert!(structure
-        .units
-        .iter_mut()
-        .all(|unit| unit.realize_default_geometry(catalog)));
-
-    // Find a genuine non-overlapping contact in the actual realized geometry.
-    // The pose search changes only the initial arrangement; ordinary COMBINE
-    // still decides whether the contact is chemically and physically eligible.
-    let mut selected_contact = None;
-    'poses: for direction_step in 0..16 {
-        let direction =
-            placement.rotation_radians + std::f64::consts::TAU * f64::from(direction_step) / 16.0;
-        let (sin, cos) = direction.sin_cos();
-        for distance_step in 20..=100 {
-            let separation = f64::from(distance_step) * 0.025;
-            for rotation_step in 0..16 {
-                structure.units[unit_b].placement = Placement {
-                    x: placement.x + separation * cos,
-                    y: placement.y + separation * sin,
-                    rotation_radians: placement.rotation_radians
-                        + std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
-                };
-                let incoming = structure.units[unit_b].clone();
-                if crate::construction_runtime::placed_unit_overlaps(
-                    &structure,
-                    &incoming,
-                    &[unit_b],
-                    catalog,
-                ) {
-                    continue;
-                }
-
-                let mut cache = crate::contact::ConnectionCompatibilityCache::new();
-                for candidate in crate::contact::connection_pair_candidates_cached(
-                    &structure, unit_a, unit_b, catalog, &mut cache,
-                ) {
-                    if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                        || !candidate.available_a
-                        || !candidate.available_b
-                        || !candidate.facing.is_finite()
-                        || candidate.facing <= 0.0
-                    {
-                        continue;
-                    }
-                    let Some((_, _, investment, required_energy)) =
-                        crate::combine_runtime::selected_candidate_evaluation(
-                            &structure, unit_a, unit_b, candidate, catalog,
-                        )
-                    else {
-                        continue;
-                    };
-                    selected_contact = Some((candidate, investment, required_energy));
-                    break 'poses;
-                }
-            }
-        }
-    }
-    let (candidate, investment, required_energy) =
-        selected_contact.expect("seeded molecule pair must admit an ordinary COMBINE contact");
-
-    let mut usable_energy = required_energy;
-    let mut ledger = EnergyLedger {
-        total_usable_energy_held: usable_energy,
-        initial_usable_energy_held: usable_energy,
-        total_structural_energy_held: crate::energy_ledger::structural_potential(&structure)
-            .expect("unbonded seed structure must have valid structural energy"),
-        initial_structural_energy_held: 0.0,
-        ..EnergyLedger::default()
-    };
-    ledger.initial_structural_energy_held = ledger.total_structural_energy_held;
-    crate::combine_runtime::form_selected_bond(
-        &mut structure,
-        unit_a,
-        unit_b,
-        candidate,
-        investment,
-        catalog,
-        &mut crate::contact::ConnectionCompatibilityCache::new(),
-        &mut ledger,
-        &mut usable_energy,
-    )
-    .expect("seeded molecule must form through ordinary COMBINE");
-
-    assert_eq!(structure.bonds.len(), 1);
-    assert!(
-        structure.bonds[0].bond_energy.is_finite() && structure.bonds[0].bond_energy > 0.0,
-        "ordinary COMBINE must assign the molecule its calculated intrinsic bond energy"
-    );
-    let mut products = crate::environmental_combine::physical_materials_from_structure_components(
-        &structure, catalog,
-    )
-    .expect("ordinary COMBINE product must export as a physical molecule");
-    assert_eq!(products.len(), 1);
-    let molecule = products
-        .pop()
-        .expect("one bonded component must be exported");
-    let connection = molecule
-        .internal_connections
-        .as_ref()
-        .and_then(|connections| connections.first())
-        .expect("exported molecule must retain its physical bond");
-    assert!(
-        connection.bond_energy.is_finite() && connection.bond_energy > 0.0,
-        "exported molecule must preserve its ordinary COMBINE bond energy"
-    );
-    molecule
 }
 
 /// Seed 1,280 physical objects for transport benchmarking: 1,200 free resources
@@ -379,6 +385,114 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation,
         pile_sizes,
     }
+}
+
+/// Compare recorded environmental bond endpoints before and after one ambient
+/// transport step without advancing chemistry or mutating the live fixture.
+pub(crate) fn audit_transport_endpoints(seed: u64) {
+    let fixture = build(seed);
+    let catalog = fixture.simulation.environment.catalog.clone();
+    audit_endpoint_resolution("before", &fixture.simulation.environment.field, &catalog);
+
+    let mut transported = fixture.simulation.environment.field.clone();
+    let moved = crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
+        &mut transported,
+        &catalog,
+        fixture.simulation.environment.width,
+        fixture.simulation.environment.height,
+    );
+    println!("TRANSPORT ENDPOINT AUDIT: moved_materials={moved}");
+    audit_endpoint_resolution("after", &transported, &catalog);
+}
+
+fn audit_endpoint_resolution(
+    label: &str,
+    field: &ActiveMaterialField,
+    catalog: &[crate::resources::BaseResource],
+) {
+    let mut bonds = 0_u64;
+    let mut restored = 0_u64;
+    let mut endpoint_pairs_resolved = 0_u64;
+    let mut failures = 0_u64;
+    for (cell_index, cell) in field.cells.iter().enumerate() {
+        for (material_index, material) in cell.physical_materials.iter().enumerate() {
+            let Some(connections) = material.internal_connections.as_ref() else {
+                continue;
+            };
+            if connections.is_empty() {
+                continue;
+            }
+            let mut structure = OrganismStructure::new();
+            let Some(indices) = crate::material_restoration::restore_material(
+                &mut structure,
+                material,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            ) else {
+                continue;
+            };
+            restored += connections.len() as u64;
+            for (bond_index, connection) in connections.iter().enumerate() {
+                bonds += 1;
+                let (Some(&unit_a), Some(&unit_b)) = (
+                    indices.get(connection.part_a),
+                    indices.get(connection.part_b),
+                ) else {
+                    failures += 1;
+                    continue;
+                };
+                if crate::contact::connection_pair_candidate_for_endpoints(
+                    &structure,
+                    unit_a,
+                    unit_b,
+                    catalog,
+                    connection.endpoint_a,
+                    connection.endpoint_b,
+                )
+                .is_some()
+                {
+                    endpoint_pairs_resolved += 1;
+                    continue;
+                }
+
+                failures += 1;
+                if failures <= 6 {
+                    let endpoints = [
+                        crate::contact::endpoint_world_point(
+                            connection.endpoint_a,
+                            &structure.units[unit_a],
+                            catalog,
+                        ),
+                        crate::contact::endpoint_world_point(
+                            connection.endpoint_b,
+                            &structure.units[unit_b],
+                            catalog,
+                        ),
+                    ];
+                    let all_candidates = crate::contact::connection_pair_candidates(
+                        &structure, unit_a, unit_b, catalog,
+                    );
+                    println!(
+                        "TRANSPORT ENDPOINT FAILURE: stage={label} cell={cell_index} material={material_index} identity={} bond={bond_index} parts=({}, {}) recorded=({:?}, {:?}) endpoint_world={endpoints:?} candidate_count={} placements={:?}",
+                        material.environmental_identity,
+                        connection.part_a,
+                        connection.part_b,
+                        connection.endpoint_a,
+                        connection.endpoint_b,
+                        all_candidates.len(),
+                        material.placements
+                    );
+                }
+            }
+        }
+    }
+    println!(
+        "TRANSPORT ENDPOINT AUDIT: stage={label} bonds={bonds} restored={restored} resolved={endpoint_pairs_resolved} unresolved={failures}"
+    );
 }
 
 fn randomized_pile_centers(
