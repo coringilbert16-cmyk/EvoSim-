@@ -280,7 +280,7 @@ impl EnvironmentalInteractionInventoryBuilder {
             return Err(InventoryBuildError::ConflictingBondRecord);
         }
         self.existing_bonds.push(record);
-        self.work.bond_visits = self.work.bond_visits.saturating_add(1);
+        self.work.registry_updates = self.work.registry_updates.saturating_add(1);
         Ok(())
     }
 
