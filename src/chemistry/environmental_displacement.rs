@@ -2405,6 +2405,121 @@ mod tests {
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
     }
+
+    #[test]
+    fn displacement_adapter_projects_every_post_removal_interface_with_exact_context() {
+        let catalog = default_catalog();
+        let (source, _fixture_bond, _candidate, _investment) =
+            three_participant_fixture(&catalog);
+        let mut components =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source,
+                &catalog,
+            )
+            .expect("fixture should split into physical material components");
+        let bonded_index = components
+            .iter()
+            .position(|component| {
+                component
+                    .internal_connections
+                    .as_ref()
+                    .is_some_and(|connections| !connections.is_empty())
+            })
+            .expect("one component must own the original bond");
+        let mut source_a = components.swap_remove(bonded_index);
+        let mut source_b = components
+            .pop()
+            .expect("one component must be the incoming material");
+        source_a.environmental_identity = 101;
+        source_b.environmental_identity = 202;
+
+        let origin = crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut combined = OrganismStructure::new();
+        let indices_a = crate::material_restoration::restore_material(
+            &mut combined,
+            &source_a,
+            origin,
+            &catalog,
+        )
+        .expect("bonded component should restore");
+        let indices_b = crate::material_restoration::restore_material(
+            &mut combined,
+            &source_b,
+            origin,
+            &catalog,
+        )
+        .expect("incoming component should restore");
+        let connection_count = source_a
+            .internal_connections
+            .as_ref()
+            .expect("bonded component has connections")
+            .len();
+        assert_eq!(connection_count, 1);
+        let old_bond = combined.bonds[0];
+        let anchor_unit = indices_a[0];
+        let displaced_unit = indices_a[1];
+        let incoming_unit = indices_b[0];
+        let expected = census_replacement_contacts(
+            &combined,
+            anchor_unit,
+            incoming_unit,
+            old_bond,
+            &catalog,
+            usize::MAX,
+        );
+        assert!(expected.alternatives.len() >= 2);
+
+        let mut builder =
+            crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder::new(12);
+        let (inserted, raw_candidates, limit_reached) =
+            append_displacement_census_to_inventory(
+                &mut builder,
+                &combined,
+                anchor_unit,
+                displaced_unit,
+                incoming_unit,
+                old_bond,
+                &source_a,
+                &source_b,
+                &indices_a,
+                &indices_b,
+                0,
+                crate::environmental_interaction::MaterialLocator {
+                    cell_index: 8,
+                    material_index: 0,
+                },
+                crate::environmental_interaction::MaterialLocator {
+                    cell_index: 9,
+                    material_index: 0,
+                },
+                usize::MAX,
+                &catalog,
+            )
+            .expect("all-alternatives census should project into the inventory");
+        let inventory = builder.finish();
+        assert_eq!(inserted, expected.alternatives.len());
+        assert_eq!(raw_candidates, expected.raw_candidates_inspected);
+        assert!(!limit_reached);
+        assert_eq!(inventory.contact_interfaces.len(), expected.alternatives.len());
+        assert_eq!(inventory.displacement_joins().len(), expected.alternatives.len());
+        assert!(inventory.contact_interfaces.iter().all(|contact| {
+            matches!(
+                contact.context,
+                crate::environmental_interaction::ContactContext::Replacement {
+                    removed_bond,
+                    anchor,
+                    displaced,
+                } if removed_bond.bond_index == 0
+                    && anchor.local_index == 0
+                    && displaced.local_index == 1
+            )
+        }));
+    }
+
 }
 
 
