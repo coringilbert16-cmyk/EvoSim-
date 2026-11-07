@@ -598,8 +598,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     let mut snapshot = Vec::new();
     for (cell_index, cell) in field.cells.iter_mut().enumerate() {
         for (material_index, material) in cell.physical_materials.iter_mut().enumerate() {
-            max_existing_identity =
-                max_existing_identity.max(material.environmental_identity);
+            max_existing_identity = max_existing_identity.max(material.environmental_identity);
             snapshot.push((cell_index, material_index, material.clone()));
         }
     }
@@ -608,8 +607,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     }
     let mut seen_identities = std::collections::HashSet::new();
     for (cell_index, material_index, snapshot_material) in &mut snapshot {
-        let live_material =
-            &mut field.cells[*cell_index].physical_materials[*material_index];
+        let live_material = &mut field.cells[*cell_index].physical_materials[*material_index];
         let mut identity = live_material.environmental_identity;
         if identity != 0 && !seen_identities.insert(identity) {
             // Keep the first occurrence in deterministic field order. Later
