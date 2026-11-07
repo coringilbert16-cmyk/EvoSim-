@@ -344,13 +344,12 @@ fn run_environment_chemistry_experiment(
         );
         let comparison = crate::environmental_combine_census::compare_census_to_live(
             &census,
-            &simulation
-                .environmental_chemistry_diagnostics
-                .combine_search
-                .live_discovered_interface_ids,
+            &simulation.environmental_combine_live_inspected_material_pair_ids,
+            &simulation.environmental_combine_live_physical_interface_ids,
+            &simulation.environmental_combine_live_discovered_interface_ids,
         );
         println!(
-            "ENVIRONMENTAL_COMBINE_CENSUS_COMPARISON snapshot=final-live-tick {}",
+            "ENVIRONMENTAL_COMBINE_CENSUS_COMPARISON snapshot=final-vs-run-live-union {}",
             serde_json::to_string(&comparison).expect("serialize census/live comparison")
         );
     }
