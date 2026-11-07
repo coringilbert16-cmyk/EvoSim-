@@ -1581,22 +1581,16 @@ pub(crate) fn append_displacement_census_to_inventory(
     let displaced_local = indices_a
         .iter()
         .position(|index| *index == displaced_unit)
-        .ok_or(
-            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
-        )?;
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
     let incoming_local = indices_b
         .iter()
         .position(|index| *index == incoming_unit)
-        .ok_or(
-            crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
-        )?;
+        .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
     let expected_orientation = (anchor_local == connection.part_a
         && displaced_local == connection.part_b)
         || (anchor_local == connection.part_b && displaced_local == connection.part_a);
     if !expected_orientation {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     }
     let (Some(&part_a_unit), Some(&part_b_unit)) = (
         indices_a.get(connection.part_a),
@@ -1608,17 +1602,13 @@ pub(crate) fn append_displacement_census_to_inventory(
         combined.physical_id(part_a_unit),
         combined.physical_id(part_b_unit),
     ) else {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     };
     let (Some(part_a_properties), Some(part_b_properties)) = (
         combined.units[part_a_unit].properties(catalog),
         combined.units[part_b_unit].properties(catalog),
     ) else {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     };
     let expected_old_bond = Bond {
         endpoint_a: crate::structure::BondEndpoint::new(part_a_id, connection.endpoint_a),
@@ -1631,14 +1621,10 @@ pub(crate) fn append_displacement_census_to_inventory(
         .iter()
         .find(|bond| bond.has_same_identity(&expected_old_bond))
     else {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     };
     if !restored_old_bond.has_same_identity(&old_bond) {
-        return Err(
-            crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext,
-        );
+        return Err(crate::environmental_interaction::InventoryBuildError::InvalidDisplacementContext);
     }
 
     let census = census_replacement_contacts(
