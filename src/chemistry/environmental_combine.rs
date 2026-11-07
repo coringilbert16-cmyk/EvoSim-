@@ -74,7 +74,7 @@ fn source_pair_accumulation_prefix(
     )
 }
 
-fn source_pair_key(
+pub(crate) fn source_pair_key(
     cell_a: usize,
     material_a: usize,
     source_a: &PhysicalMaterial,
@@ -344,7 +344,7 @@ fn select_best_contact_from_offset(
 
 /// Resolve chemical identity from one realized physical constituent.
 /// Aggregate material properties intentionally have no single chemical position.
-fn constituent_chemical_position(
+pub(crate) fn constituent_chemical_position(
     unit: &crate::structure::StructuralUnit,
     catalog: &[BaseResource],
 ) -> Option<f64> {
