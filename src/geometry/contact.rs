@@ -646,6 +646,7 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
 }
 
+#[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 /// Generate at most `limit` raw endpoint pairs before geometry conversion.
 /// The boolean is true when the limit stopped or exhausted candidate generation.
 pub(crate) fn connection_pair_candidates_bounded(
