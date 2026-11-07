@@ -2958,7 +2958,6 @@ mod material_identity_tests {
     }
 }
 
-
 /// Read-only BREAK discovery adapter. It projects the exact bond candidates
 /// produced by the existing bounded traversal and records the full nested
 /// traversal cost separately from the number of yielded bond records.
@@ -2983,9 +2982,7 @@ pub(crate) fn append_environmental_bond_inventory(
         work.material_visits = work
             .material_visits
             .saturating_add(discovery.inspected_materials);
-        work.bond_visits = work
-            .bond_visits
-            .saturating_add(discovery.inspected_bonds);
+        work.bond_visits = work.bond_visits.saturating_add(discovery.inspected_bonds);
     }
 
     let mut registered_materials = std::collections::BTreeSet::new();
@@ -3047,14 +3044,13 @@ pub(crate) fn append_environmental_bond_inventory(
     Ok((inserted_bonds, discovery.inspected_entries))
 }
 
-
 #[cfg(test)]
 mod shared_break_inventory_adapter_tests {
     use super::*;
+    use crate::environment::{ActiveMaterialField, FieldCell};
     use crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder;
     use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
     use crate::resources::{default_catalog, Material};
-    use crate::environment::{ActiveMaterialField, FieldCell};
     use crate::state::Environment;
     use crate::structure::ConnectionEndpoint;
 
@@ -3097,9 +3093,7 @@ mod shared_break_inventory_adapter_tests {
         assert_eq!(discovery.candidates.len(), 1);
         assert_eq!(
             discovery.inspected_entries as u64,
-            discovery.inspected_cells
-                + discovery.inspected_materials
-                + discovery.inspected_bonds
+            discovery.inspected_cells + discovery.inspected_materials + discovery.inspected_bonds
         );
         assert_eq!(discovery.inspected_cells, 1);
         assert_eq!(discovery.inspected_materials, 1);
