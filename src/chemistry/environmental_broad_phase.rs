@@ -161,7 +161,6 @@ impl EnvironmentalMaterialSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::environment::ActiveMaterialField;
     use crate::physical_material::PhysicalMaterial;
     use crate::resources::Material;
 
