@@ -266,6 +266,29 @@ fn select_best_contact_from_offset(
         );
         let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
+            if candidate.available_a
+                && candidate.available_b
+                && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            {
+                if let (Some((identity_a, identity_b)), Some(diagnostics)) =
+                    (source_identities, diagnostics.as_deref_mut())
+                {
+                    let part_a = pair_index / indices_b.len();
+                    let part_b = pair_index % indices_b.len();
+                    if let Some(interface_id) =
+                        crate::environmental_combine_census::stable_interface_id(
+                            identity_a,
+                            identity_b,
+                            part_a,
+                            part_b,
+                            candidate.endpoint_a,
+                            candidate.endpoint_b,
+                        )
+                    {
+                        diagnostics.live_physical_interface_ids.push(interface_id);
+                    }
+                }
+            }
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     structure, unit_a, unit_b, candidate, catalog,
@@ -689,6 +712,14 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     }) {
                         diagnostics.target_material_pairs_rejected_for_overlap += 1;
                         continue;
+                    }
+                    if let Some(pair_id) =
+                        crate::environmental_combine_census::stable_material_pair_id(
+                            source_a.environmental_identity,
+                            source_b.environmental_identity,
+                        )
+                    {
+                        diagnostics.live_inspected_material_pair_ids.push(pair_id);
                     }
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
