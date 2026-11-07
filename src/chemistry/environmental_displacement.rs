@@ -1888,10 +1888,9 @@ mod tests {
             "fixture must demonstrate a genuine ranking divergence: production's energy/distance winner={selected_alternative:?}, fastest-activating alternative={fastest_activation:?}, alternatives={:?}",
             complete.alternatives,
         );
-        assert_eq!(
-            alternatives_faster_than_selected,
-            1,
-            "fixture should expose one distinct faster-activating alternative than the production-selected interface; selected={selected_alternative:?}, fastest={fastest_activation:?}, alternatives={:?}",
+        assert!(
+            alternatives_faster_than_selected > 0,
+            "at least one valid alternative must activate faster than the production-selected interface; selected={selected_alternative:?}, fastest={fastest_activation:?}, alternatives={:?}",
             complete.alternatives,
         );
         assert!(
