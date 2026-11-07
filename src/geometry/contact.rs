@@ -767,9 +767,7 @@ mod tests {
     #[test]
     fn endpoint_pair_matching_tolerates_wrapped_angles_and_fluid_rounding() {
         let candidate = ConnectionPairCandidate {
-            endpoint_a: ConnectionEndpoint::Boundary {
-                angle_radians: 0.0,
-            },
+            endpoint_a: ConnectionEndpoint::Boundary { angle_radians: 0.0 },
             endpoint_b: ConnectionEndpoint::Fluid { x: 1.0, y: 2.0 },
             distance: 0.0,
             facing: 1.0,
