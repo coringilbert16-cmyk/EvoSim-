@@ -1100,18 +1100,27 @@ pub(crate) fn schedule_environmental_operations(
     ready
 }
 
+#[cfg(test)]
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalDisplacementOperation,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> bool {
+    resolve_environmental_diagnosed(operation, environment, ledger).is_ok()
+}
+
+pub(crate) fn resolve_environmental_diagnosed(
+    operation: EnvironmentalDisplacementOperation,
+    environment: &mut Environment,
+    ledger: &mut EnergyLedger,
+) -> Result<(), &'static str> {
     let Some(source_a) = environment
         .field
         .cells
         .get(operation.cell_a)
         .and_then(|cell| cell.physical_materials.get(operation.material_a))
     else {
-        return false;
+        return Err("stale_source_missing");
     };
     let Some(source_b) = environment
         .field
@@ -1119,16 +1128,16 @@ pub(crate) fn resolve_environmental(
         .get(operation.cell_b)
         .and_then(|cell| cell.physical_materials.get(operation.material_b))
     else {
-        return false;
+        return Err("stale_source_missing");
     };
     if source_a != &operation.source_a || source_b != &operation.source_b {
-        return false;
+        return Err("stale_source_mismatch");
     }
 
     let Some((mut combined, indices_a)) =
         restore_displacement_source(&operation.source_a, environment)
     else {
-        return false;
+        return Err("source_material_restoration_failed");
     };
     let Some(indices_b) = crate::material_restoration::restore_material(
         &mut combined,
@@ -1140,7 +1149,7 @@ pub(crate) fn resolve_environmental(
         },
         &environment.catalog,
     ) else {
-        return false;
+        return Err("incoming_material_restoration_failed");
     };
     if indices_b.iter().any(|index| {
         crate::construction_runtime::placed_unit_overlaps(
@@ -1150,14 +1159,14 @@ pub(crate) fn resolve_environmental(
             &environment.catalog,
         )
     }) {
-        return false;
+        return Err("incoming_geometry_overlap");
     }
     let (Some(&anchor_unit), Some(&displaced_unit), Some(&incoming_unit)) = (
         indices_a.get(operation.anchor_unit),
         indices_a.get(operation.displaced_unit),
         indices_b.get(operation.incoming_unit),
     ) else {
-        return false;
+        return Err("constituent_mapping_invalid");
     };
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let Some(old_connection) = operation
@@ -1166,28 +1175,28 @@ pub(crate) fn resolve_environmental(
         .as_ref()
         .and_then(|connections| connections.get(operation.bond_index))
     else {
-        return false;
+        return Err("old_bond_missing");
     };
     if old_connection != &operation.old_connection {
-        return false;
+        return Err("old_bond_stale");
     }
     let (Some(part_a_unit), Some(part_b_unit)) = (
         indices_a.get(old_connection.part_a).copied(),
         indices_a.get(old_connection.part_b).copied(),
     ) else {
-        return false;
+        return Err("old_bond_endpoint_mapping_invalid");
     };
     let (Some(part_a_id), Some(part_b_id)) = (
         combined.physical_id(part_a_unit),
         combined.physical_id(part_b_unit),
     ) else {
-        return false;
+        return Err("old_bond_endpoint_identity_invalid");
     };
     let (Some(part_a_properties), Some(part_b_properties)) = (
         combined.units[part_a_unit].properties(&environment.catalog),
         combined.units[part_b_unit].properties(&environment.catalog),
     ) else {
-        return false;
+        return Err("old_bond_properties_missing");
     };
     let expected_old_bond = Bond {
         endpoint_a: crate::structure::BondEndpoint::new(part_a_id, old_connection.endpoint_a),
@@ -1201,7 +1210,7 @@ pub(crate) fn resolve_environmental(
         .find(|bond| bond.has_same_identity(&expected_old_bond))
         .cloned()
     else {
-        return false;
+        return Err("old_bond_not_restored");
     };
     let Some(trial) = build_displacement_trial(
         &combined,
@@ -1216,32 +1225,32 @@ pub(crate) fn resolve_environmental(
         0.0,
         &environment.catalog,
     ) else {
-        return false;
+        return Err("replacement_trial_invalid");
     };
     let Some(derived_activation) =
         crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
     else {
-        return false;
+        return Err("activation_revalidation_failed");
     };
     if (derived_activation - operation.activation_signal).abs() > 1e-9 {
-        return false;
+        return Err("activation_revalidation_failed");
     }
     let Some(expected_frequency) = displacement_reaction_frequency(
         &combined.units[anchor_unit],
         &combined.units[displaced_unit],
         &environment.catalog,
     ) else {
-        return false;
+        return Err("frequency_revalidation_failed");
     };
     if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
-        return false;
+        return Err("frequency_revalidation_failed");
     }
     // Resonance directly funds physical work; it is not first credited to the
     // usable-energy holder. This keeps the usable debit equal to the unfunded
     // remainder while the ledger still records the complete physical work.
     let mut staged_resonance = environment.resonant_energy.clone();
     let Some(resonant_before) = staged_resonance.total_energy() else {
-        return false;
+        return Err("invalid_resonance_state");
     };
     let resonance_work_budget = trial
         .energy
@@ -1252,16 +1261,35 @@ pub(crate) fn resolve_environmental(
         resonance_work_budget,
     );
     let Some(resonant_after) = staged_resonance.total_energy() else {
-        return false;
+        return Err("invalid_resonance_state");
     };
-    if !resonant_work.is_finite()
-        || resonant_work < 0.0
-        || !resonant_before.is_finite()
-        || !resonant_after.is_finite()
-        || resonant_work > resonance_work_budget + 1e-9
-        || (resonant_before - resonant_after - resonant_work).abs() > 1e-9
+    if !resonant_work.is_finite() || resonant_work < 0.0 {
+        return Err("invalid_resonance_withdrawal");
+    }
+    if !resonant_before.is_finite() || !resonant_after.is_finite() {
+        return Err("invalid_resonance_state");
+    }
+    let withdrawal_budget_tolerance = 1e-9_f64.max(
+        f64::EPSILON
+            * resonance_work_budget.abs().max(1.0)
+            * environment.resonant_energy.components.len().max(1) as f64
+            * 4.0,
+    );
+    if resonant_work > resonance_work_budget + withdrawal_budget_tolerance {
+        return Err("resonance_withdrawal_exceeds_budget");
+    }
+    if (resonant_before - resonant_after - resonant_work).abs()
+        > resonance_withdrawal_rounding_tolerance(
+            resonant_before,
+            resonant_after,
+            environment
+                .resonant_energy
+                .components
+                .len()
+                .max(staged_resonance.components.len()),
+        )
     {
-        return false;
+        return Err("resonance_conservation_mismatch");
     }
 
     let remaining_physical_work = trial.energy.physical_work - resonant_work;
@@ -1271,19 +1299,19 @@ pub(crate) fn resolve_environmental(
         remaining_physical_work,
         trial.energy.dissipated_heat,
     ) else {
-        return false;
+        return Err("reaction_energy_balance_invalid");
     };
     if funded_energy.required_external_input > environment.chemistry_usable_energy {
-        return false;
+        return Err("insufficient_usable_energy");
     }
     let Some(transaction) = funded_energy.settlement_transaction(EnergyReason::Combine) else {
-        return false;
+        return Err("energy_settlement_transaction_invalid");
     };
 
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy;
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
-        return false;
+        return Err("energy_settlement_rejected");
     }
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let structural_delta = trial.energy.net_reaction_change;
@@ -1299,7 +1327,7 @@ pub(crate) fn resolve_environmental(
         || !next_total_structural.is_finite()
         || !next_total_work.is_finite()
     {
-        return false;
+        return Err("energy_ledger_invalid");
     }
     staged_ledger.total_usable_energy_held = next_total_usable;
     staged_ledger.total_resonant_energy_held = next_total_resonant;
@@ -1312,25 +1340,25 @@ pub(crate) fn resolve_environmental(
             || product.material.is_empty()
             || !product.material.is_valid_for_catalog(&environment.catalog)
         {
-            return false;
+            return Err("product_invalid");
         }
         let Some(placement) = product
             .placements
             .as_ref()
             .and_then(|placements| placements.first())
         else {
-            return false;
+            return Err("product_placement_missing");
         };
         let Some(destination) = environment
             .field
             .index_for_position(placement.x, placement.y)
         else {
-            return false;
+            return Err("product_destination_invalid");
         };
         staged_products.push((destination, product));
     }
     if staged_products.len() < 2 {
-        return false;
+        return Err("product_set_incomplete");
     }
 
     // All validation and energy work is staged. Remove both source objects
@@ -1341,7 +1369,7 @@ pub(crate) fn resolve_environmental(
         let high = operation.material_a.max(operation.material_b);
         let low = operation.material_a.min(operation.material_b);
         if high == low {
-            return false;
+            return Err("source_index_collision");
         }
         cell.physical_materials.remove(high);
         cell.physical_materials.remove(low);
@@ -1369,7 +1397,11 @@ pub(crate) fn resolve_environmental(
     environment.chemistry_usable_energy = staged_usable_energy;
     environment.resonant_energy = staged_resonance;
     *ledger = staged_ledger;
-    true
+    Ok(())
+}
+
+fn resonance_withdrawal_rounding_tolerance(before: f64, after: f64, components: usize) -> f64 {
+    f64::EPSILON * before.abs().max(after.abs()).max(1.0) * components.max(1) as f64 * 4.0
 }
 
 pub(crate) fn resolve_environmental_preserving_accumulation(
@@ -1377,14 +1409,14 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
     accumulation: &mut BTreeMap<String, f64>,
-) -> bool {
+) -> Result<(), &'static str> {
     let key = operation.accumulation_key.clone();
     let accumulated_reaction = operation.accumulated_reaction;
-    let success = resolve_environmental(operation, environment, ledger);
-    if !success {
+    let result = resolve_environmental_diagnosed(operation, environment, ledger);
+    if result.is_err() {
         accumulation.insert(key, accumulated_reaction);
     }
-    success
+    result
 }
 
 #[cfg(test)]
@@ -1392,6 +1424,18 @@ mod tests {
     use super::*;
     use crate::resources::default_catalog;
     use crate::structure::BondEndpoint;
+
+    #[test]
+    fn resonance_withdrawal_validation_allows_only_sum_rounding_error() {
+        let before: f64 = 76_000_000.0;
+        let withdrawn = 0.01;
+        let after = before - withdrawn;
+        let rounding_error = (before - after - withdrawn).abs();
+        let tolerance = resonance_withdrawal_rounding_tolerance(before, after, 4);
+
+        assert!(rounding_error <= tolerance);
+        assert!((before - after - (withdrawn + 0.001)).abs() > tolerance);
+    }
 
     fn properties(name: &str) -> ResourceProperties {
         default_catalog()
@@ -1890,13 +1934,14 @@ mod tests {
 
         let environment_before = simulation.environment.clone();
         let ledger_before = simulation.energy_ledger;
-        assert!(
-            !resolve_environmental(
+        assert_eq!(
+            resolve_environmental_diagnosed(
                 operation.clone(),
                 &mut simulation.environment,
                 &mut simulation.energy_ledger,
             ),
-            "an unfunded displacement must not mutate the field or energy holders"
+            Err("insufficient_usable_energy"),
+            "unfunded displacement must be identified and must not mutate the field or energy holders"
         );
         assert_eq!(
             simulation.environment.field.cells[field_cell]
