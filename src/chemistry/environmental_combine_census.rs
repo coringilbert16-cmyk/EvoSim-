@@ -39,6 +39,7 @@ pub(crate) struct EnvironmentalCombineCensus {
     /// Resonance is recorded for context but is not a COMBINE funding source.
     pub(crate) resonant_energy_available: f64,
     pub(crate) resonance_funding_supported: bool,
+    pub(crate) snapshot_material_ids: Vec<u64>,
     pub(crate) census_pair_ids: Vec<String>,
     pub(crate) elapsed_micros: u128,
 }
@@ -48,6 +49,13 @@ struct RestoredMaterial {
     stable_id: bool,
     structure: OrganismStructure,
     bounds: (f64, f64, f64, f64),
+}
+
+pub(crate) fn stable_material_pair_id(identity_a: u64, identity_b: u64) -> Option<String> {
+    if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
+        return None;
+    }
+    Some(format!("{}:{}", identity_a.min(identity_b), identity_a.max(identity_b)))
 }
 
 pub(crate) fn stable_interface_id(
@@ -78,24 +86,99 @@ pub(crate) fn stable_interface_id(
 pub(crate) struct EnvironmentalCombineCensusComparison {
     pub(crate) census_only_count: usize,
     pub(crate) live_only_count: usize,
+    pub(crate) census_only_material_pairs_never_inspected_count: usize,
+    pub(crate) census_only_interfaces_not_geometrically_reached_count: usize,
+    pub(crate) census_only_interfaces_rejected_by_chemistry_count: usize,
+    pub(crate) live_only_sources_missing_count: usize,
+    pub(crate) live_only_sources_present_but_interface_absent_count: usize,
     pub(crate) census_only_interface_ids: Vec<String>,
     pub(crate) live_only_interface_ids: Vec<String>,
+    pub(crate) census_only_material_pairs_never_inspected: Vec<String>,
+    pub(crate) census_only_interfaces_not_geometrically_reached: Vec<String>,
+    pub(crate) census_only_interfaces_rejected_by_chemistry: Vec<String>,
+    pub(crate) live_only_sources_missing: Vec<String>,
+    pub(crate) live_only_sources_present_but_interface_absent: Vec<String>,
 }
 
 pub(crate) fn compare_census_to_live(
     census: &EnvironmentalCombineCensus,
-    live_interface_ids: &[String],
+    live_inspected_material_pair_ids: &std::collections::BTreeSet<String>,
+    live_physical_interface_ids: &std::collections::BTreeSet<String>,
+    live_discovered_interface_ids: &std::collections::BTreeSet<String>,
 ) -> EnvironmentalCombineCensusComparison {
     let census_ids: std::collections::BTreeSet<_> =
         census.census_pair_ids.iter().cloned().collect();
-    let live_ids: std::collections::BTreeSet<_> = live_interface_ids.iter().cloned().collect();
-    let census_only_interface_ids: Vec<_> = census_ids.difference(&live_ids).cloned().collect();
-    let live_only_interface_ids: Vec<_> = live_ids.difference(&census_ids).cloned().collect();
+    let census_only_interface_ids: Vec<_> = census_ids
+        .difference(live_discovered_interface_ids)
+        .cloned()
+        .collect();
+    let live_only_interface_ids: Vec<_> = live_discovered_interface_ids
+        .difference(&census_ids)
+        .cloned()
+        .collect();
+
+    let mut census_only_material_pairs_never_inspected = Vec::new();
+    let mut census_only_interfaces_not_geometrically_reached = Vec::new();
+    let mut census_only_interfaces_rejected_by_chemistry = Vec::new();
+    for interface_id in &census_only_interface_ids {
+        let mut pieces = interface_id.splitn(3, ':');
+        let Some(identity_a) = pieces.next() else {
+            continue;
+        };
+        let Some(identity_b) = pieces.next() else {
+            continue;
+        };
+        let material_pair_id = format!("{identity_a}:{identity_b}");
+        if !live_inspected_material_pair_ids.contains(&material_pair_id) {
+            census_only_material_pairs_never_inspected.push(interface_id.clone());
+        } else if !live_physical_interface_ids.contains(interface_id) {
+            census_only_interfaces_not_geometrically_reached.push(interface_id.clone());
+        } else {
+            census_only_interfaces_rejected_by_chemistry.push(interface_id.clone());
+        }
+    }
+
+    let snapshot_material_ids: std::collections::BTreeSet<_> =
+        census.snapshot_material_ids.iter().copied().collect();
+    let mut live_only_sources_missing = Vec::new();
+    let mut live_only_sources_present_but_interface_absent = Vec::new();
+    for interface_id in &live_only_interface_ids {
+        let mut pieces = interface_id.splitn(3, ':');
+        let Some(identity_a) = pieces.next().and_then(|value| value.parse::<u64>().ok()) else {
+            live_only_sources_missing.push(interface_id.clone());
+            continue;
+        };
+        let Some(identity_b) = pieces.next().and_then(|value| value.parse::<u64>().ok()) else {
+            live_only_sources_missing.push(interface_id.clone());
+            continue;
+        };
+        if snapshot_material_ids.contains(&identity_a) && snapshot_material_ids.contains(&identity_b)
+        {
+            live_only_sources_present_but_interface_absent.push(interface_id.clone());
+        } else {
+            live_only_sources_missing.push(interface_id.clone());
+        }
+    }
+
     EnvironmentalCombineCensusComparison {
         census_only_count: census_only_interface_ids.len(),
         live_only_count: live_only_interface_ids.len(),
+        census_only_material_pairs_never_inspected_count:
+            census_only_material_pairs_never_inspected.len(),
+        census_only_interfaces_not_geometrically_reached_count:
+            census_only_interfaces_not_geometrically_reached.len(),
+        census_only_interfaces_rejected_by_chemistry_count:
+            census_only_interfaces_rejected_by_chemistry.len(),
+        live_only_sources_missing_count: live_only_sources_missing.len(),
+        live_only_sources_present_but_interface_absent_count:
+            live_only_sources_present_but_interface_absent.len(),
         census_only_interface_ids,
         live_only_interface_ids,
+        census_only_material_pairs_never_inspected,
+        census_only_interfaces_not_geometrically_reached,
+        census_only_interfaces_rejected_by_chemistry,
+        live_only_sources_missing,
+        live_only_sources_present_but_interface_absent,
     }
 }
 
@@ -232,6 +315,9 @@ pub(crate) fn census_environmental_combine(
         match restore(source, catalog) {
             Some((structure, bounds)) => {
                 census.material_restorations_succeeded += 1;
+                if stable_id {
+                    census.snapshot_material_ids.push(census_id);
+                }
                 restored.push(Some(RestoredMaterial {
                     census_id,
                     stable_id,
