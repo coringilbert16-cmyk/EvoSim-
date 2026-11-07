@@ -155,7 +155,12 @@ pub(crate) fn census_environmental_combine(
     usable_energy: f64,
 ) -> EnvironmentalCombineCensus {
     let started = Instant::now();
-    let sources: Vec<&PhysicalMaterial> = field
+    // Mirror the live identity initialization on a private snapshot. This
+    // preserves the same deterministic cell/material ordering without
+    // mutating the simulation's field.
+    let mut snapshot_field = field.clone();
+    snapshot_field.assign_missing_material_identities();
+    let sources: Vec<&PhysicalMaterial> = snapshot_field
         .cells
         .iter()
         .flat_map(|cell| cell.physical_materials.iter())
@@ -368,7 +373,7 @@ mod tests {
     }
 
     #[test]
-    fn census_assigns_snapshot_local_ids_without_mutating_legacy_instances() {
+    fn census_uses_live_ordered_snapshot_ids_without_mutating_legacy_instances() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(25.0, 25.0, 25.0);
         field.cells[0]
@@ -379,7 +384,7 @@ mod tests {
             .push(physical_carbon(4.0, 0, &catalog));
 
         let census = census_environmental_combine(&field, &catalog, 0.0);
-        assert_eq!(census.invalid_or_duplicate_identity_materials, 2);
+        assert_eq!(census.invalid_or_duplicate_identity_materials, 0);
         assert_eq!(
             field.cells[0].physical_materials[0].environmental_identity,
             0
