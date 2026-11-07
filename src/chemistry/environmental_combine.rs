@@ -273,19 +273,21 @@ fn select_best_contact_from_offset(
                 if let (Some((identity_a, identity_b)), Some(diagnostics)) =
                     (source_identities, diagnostics.as_deref_mut())
                 {
-                    let part_a = pair_index / indices_b.len();
-                    let part_b = pair_index % indices_b.len();
-                    if let Some(interface_id) =
-                        crate::environmental_combine_census::stable_interface_id(
-                            identity_a,
-                            identity_b,
-                            part_a,
-                            part_b,
-                            candidate.endpoint_a,
-                            candidate.endpoint_b,
-                        )
-                    {
-                        diagnostics.live_physical_interface_ids.push(interface_id);
+                    if diagnostics.capture_stable_ids {
+                        let part_a = pair_index / indices_b.len();
+                        let part_b = pair_index % indices_b.len();
+                        if let Some(interface_id) =
+                            crate::environmental_combine_census::stable_interface_id(
+                                identity_a,
+                                identity_b,
+                                part_a,
+                                part_b,
+                                candidate.endpoint_a,
+                                candidate.endpoint_b,
+                            )
+                        {
+                            diagnostics.live_physical_interface_ids.push(interface_id);
+                        }
                     }
                 }
             }
@@ -304,23 +306,25 @@ fn select_best_contact_from_offset(
                 investment,
                 required_energy,
             });
-            if let (Some((identity_a, identity_b)), Some(diagnostics)) =
-                (source_identities, diagnostics.as_deref_mut())
-            {
-                let part_a = pair_index / indices_b.len();
-                let part_b = pair_index % indices_b.len();
-                if let Some(interface_id) = crate::environmental_combine_census::stable_interface_id(
-                    identity_a,
-                    identity_b,
-                    part_a,
-                    part_b,
-                    evaluation.candidate.endpoint_a,
-                    evaluation.candidate.endpoint_b,
-                ) {
-                    diagnostics.live_discovered_interface_ids.push(interface_id);
+            if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                if diagnostics.capture_stable_ids {
+                    if let Some((identity_a, identity_b)) = source_identities {
+                        let part_a = pair_index / indices_b.len();
+                        let part_b = pair_index % indices_b.len();
+                        if let Some(interface_id) =
+                            crate::environmental_combine_census::stable_interface_id(
+                                identity_a,
+                                identity_b,
+                                part_a,
+                                part_b,
+                                evaluation.candidate.endpoint_a,
+                                evaluation.candidate.endpoint_b,
+                            )
+                        {
+                            diagnostics.live_discovered_interface_ids.push(interface_id);
+                        }
+                    }
                 }
-                diagnostics.interfaces_sent_to_chemistry += 1;
-            } else if let Some(diagnostics) = diagnostics.as_deref_mut() {
                 diagnostics.interfaces_sent_to_chemistry += 1;
             }
         }
@@ -713,13 +717,15 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         diagnostics.target_material_pairs_rejected_for_overlap += 1;
                         continue;
                     }
-                    if let Some(pair_id) =
-                        crate::environmental_combine_census::stable_material_pair_id(
-                            source_a.environmental_identity,
-                            source_b.environmental_identity,
-                        )
-                    {
-                        diagnostics.live_inspected_material_pair_ids.push(pair_id);
+                    if diagnostics.capture_stable_ids {
+                        if let Some(pair_id) =
+                            crate::environmental_combine_census::stable_material_pair_id(
+                                source_a.environmental_identity,
+                                source_b.environmental_identity,
+                            )
+                        {
+                            diagnostics.live_inspected_material_pair_ids.push(pair_id);
+                        }
                     }
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
