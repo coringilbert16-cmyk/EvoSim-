@@ -660,7 +660,13 @@ fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
         .expect("the single internal bond should split into two products");
 
     assert!(field.split_physical_at_index(0, 0, &parent, pieces, &catalog));
-    assert!(field.cells[0].physical_materials.is_empty() || field.cells[0].physical_materials.iter().all(|m| m.environmental_identity != parent_id));
+    assert!(
+        field.cells[0].physical_materials.is_empty()
+            || field.cells[0]
+                .physical_materials
+                .iter()
+                .all(|material| material.environmental_identity != parent_id)
+    );
     field.assign_missing_material_identities();
     let child_ids: Vec<u64> = field
         .cells
