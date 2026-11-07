@@ -289,7 +289,6 @@ fn select_best_contact_from_offset(
     indices_a: &[usize],
     indices_b: &[usize],
     catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
@@ -1172,10 +1171,17 @@ fn discover_contact_interfaces_from_offset(
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
         let unit_a = indices_a[pair_index / indices_b.len()];
         let unit_b = indices_b[pair_index % indices_b.len()];
-        for candidate in crate::contact::connection_pair_candidates_cached(
-            structure, unit_a, unit_b, catalog, cache,
-        ) {
-            raw_candidates_inspected = raw_candidates_inspected.saturating_add(1);
+        let (candidates, raw_endpoint_count, _limit_reached) =
+            crate::contact::connection_pair_candidates_bounded(
+                structure,
+                unit_a,
+                unit_b,
+                catalog,
+                usize::MAX,
+            );
+        raw_candidates_inspected =
+            raw_candidates_inspected.saturating_add(raw_endpoint_count);
+        for candidate in candidates {
             if !candidate.available_a
                 || !candidate.available_b
                 || !candidate.distance.is_finite()
@@ -1290,13 +1296,11 @@ pub(crate) fn discover_and_append_contacts_to_inventory(
     locator_b: crate::environmental_interaction::MaterialLocator,
 ) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
     let initial_work = *remaining_work;
-    let mut cache = ConnectionCompatibilityCache::new();
     let (discovered, raw_candidates_inspected) = discover_contact_interfaces_from_offset(
         structure,
         indices_a,
         indices_b,
         catalog,
-        &mut cache,
         pair_start,
         remaining_work,
     );
