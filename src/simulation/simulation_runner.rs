@@ -330,6 +330,17 @@ fn run_environment_chemistry_experiment(
             "ENVIRONMENTAL_COMBINE_CENSUS snapshot=final {}",
             serde_json::to_string(&census).expect("serialize final COMBINE census")
         );
+        let comparison = crate::environmental_combine_census::compare_census_to_live(
+            &census,
+            &simulation
+                .environmental_chemistry_diagnostics
+                .combine_search
+                .live_discovered_interface_ids,
+        );
+        println!(
+            "ENVIRONMENTAL_COMBINE_CENSUS_COMPARISON snapshot=final-live-tick {}",
+            serde_json::to_string(&comparison).expect("serialize census/live comparison")
+        );
     }
     let final_inventory = simulation.energy_inventory_snapshot();
     println!(
