@@ -191,6 +191,7 @@ pub(crate) enum InventoryBuildError {
     InvalidConstituentIndex,
     InvalidBondEnergy,
     InvalidDisplacementContext,
+    ConflictingBondRecord,
 }
 
 /// Mutable builder used by discovery adapters. The finished inventory is
@@ -268,6 +269,16 @@ impl EnvironmentalInteractionInventoryBuilder {
         }
         self.validate_constituent(record.constituent_a)?;
         self.validate_constituent(record.constituent_b)?;
+        if let Some(existing) = self
+            .existing_bonds
+            .iter()
+            .find(|existing| existing.reference() == record.reference())
+        {
+            if existing == &record {
+                return Ok(());
+            }
+            return Err(InventoryBuildError::ConflictingBondRecord);
+        }
         self.existing_bonds.push(record);
         self.work.bond_visits = self.work.bond_visits.saturating_add(1);
         Ok(())
@@ -294,7 +305,9 @@ impl EnvironmentalInteractionInventoryBuilder {
             self.validate_constituent(anchor)?;
             self.validate_constituent(displaced)?;
             let bond_constituents_match = removed_bond.material == anchor.material
+                && removed_bond.topology_generation == anchor.topology_generation
                 && anchor.material == displaced.material
+                && anchor.topology_generation == displaced.topology_generation
                 && anchor != displaced;
             let contact_has_anchor_and_incoming = (record.constituent_a == anchor
                 && record.constituent_b.material != anchor.material)
