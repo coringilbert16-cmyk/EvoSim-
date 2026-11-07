@@ -98,6 +98,7 @@ mod energy_ledger;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
 #[path = "chemistry/environmental_combine_census.rs"]
+#[allow(dead_code)] // Invoked by the opt-in census diagnostic integration.
 mod environmental_combine_census;
 #[path = "chemistry/environmental_displacement.rs"]
 mod environmental_displacement;
