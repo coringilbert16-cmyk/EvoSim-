@@ -3806,13 +3806,73 @@ mod tests {
 }
 
 
-/// Project the complete evaluated COMBINE interface set into the shared
-/// inventory. This adapter is read-only with respect to the environment and
-/// reaction state; callers still own activation, scheduling, and commit.
+
+#[derive(Clone, Copy, Debug)]
+struct DiscoveredContact {
+    unit_a: usize,
+    unit_b: usize,
+    candidate: ConnectionPairCandidate,
+}
+
+/// Neutral bounded contact discovery for the shared inventory adapter.
+/// This stops at physical endpoint eligibility and deliberately does not call
+/// selected_candidate_evaluation, which applies COMBINE-specific chemistry,
+/// formation cost, and energy policy.
+#[allow(dead_code)] // Stage 2 reference adapter; production discovery remains unchanged.
+fn discover_contact_interfaces_from_offset(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    pair_start: usize,
+    remaining_work: &mut usize,
+) -> Vec<DiscoveredContact> {
+    let Some(pair_count) = indices_a.len().checked_mul(indices_b.len()) else {
+        return Vec::new();
+    };
+    if pair_count == 0 {
+        return Vec::new();
+    }
+
+    let inspected_pairs = (*remaining_work).min(pair_count);
+    let mut discovered = Vec::new();
+    for offset in 0..inspected_pairs {
+        *remaining_work = (*remaining_work).saturating_sub(1);
+        let pair_index = pair_start.wrapping_add(offset) % pair_count;
+        let unit_a = indices_a[pair_index / indices_b.len()];
+        let unit_b = indices_b[pair_index % indices_b.len()];
+        for candidate in crate::contact::connection_pair_candidates_cached(
+            structure, unit_a, unit_b, catalog, cache,
+        ) {
+            if !candidate.available_a
+                || !candidate.available_b
+                || !candidate.distance.is_finite()
+                || candidate.distance < 0.0
+                || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                || !candidate.facing.is_finite()
+                || candidate.facing <= 0.0
+                || !candidate.load_a.is_finite()
+                || !candidate.load_b.is_finite()
+            {
+                continue;
+            }
+            discovered.push(DiscoveredContact {
+                unit_a,
+                unit_b,
+                candidate,
+            });
+        }
+    }
+    discovered
+}
+
+/// Project the complete geometry-eligible COMBINE contact set into the shared
+/// inventory before any COMBINE-specific evaluator is applied.
 #[allow(dead_code)] // Stage 2 adapter; production cutover waits for cross-path parity.
-pub(crate) fn append_selected_contacts_to_inventory(
+pub(crate) fn append_discovered_contacts_to_inventory(
     builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
-    selected: &[SelectedContact],
+    discovered: &[DiscoveredContact],
     indices_a: &[usize],
     indices_b: &[usize],
     source_a: &PhysicalMaterial,
@@ -3831,9 +3891,8 @@ pub(crate) fn append_selected_contacts_to_inventory(
         identity: identity_a,
         locator: locator_a,
         topology_generation: TOPOLOGY_GENERATION,
-        // The active field has no per-material mutation counter. Zero means
-        // unavailable; the inventory's pass_id identifies this immutable pass
-        // snapshot. Do not substitute a field or cell revision here.
+        // No per-material revision exists; pass_id versions the immutable
+        // inventory snapshot. Zero is explicitly "version unavailable".
         state_version: 0,
         constituent_count: indices_a.len(),
     })?;
@@ -3845,8 +3904,8 @@ pub(crate) fn append_selected_contacts_to_inventory(
         constituent_count: indices_b.len(),
     })?;
 
-    let mut records = Vec::with_capacity(selected.len());
-    for contact in selected {
+    let mut records = Vec::with_capacity(discovered.len());
+    for contact in discovered {
         let local_a = indices_a
             .iter()
             .position(|index| *index == contact.unit_a)
@@ -3900,8 +3959,8 @@ mod shared_inventory_adapter_tests {
         }
     }
 
-    fn selected(endpoint_a: usize, endpoint_b: usize) -> SelectedContact {
-        SelectedContact {
+    fn discovered(endpoint_a: usize, endpoint_b: usize) -> DiscoveredContact {
+        DiscoveredContact {
             unit_a: 0,
             unit_b: 1,
             candidate: ConnectionPairCandidate {
@@ -3918,21 +3977,19 @@ mod shared_inventory_adapter_tests {
                 available_a: true,
                 available_b: true,
             },
-            investment: 0.5,
-            required_energy: 0.75,
         }
     }
 
     #[test]
-    fn combine_adapter_preserves_every_eligible_endpoint_interface() {
+    fn combine_adapter_preserves_all_geometry_contacts_before_chemistry_evaluation() {
         let source_a = source(101, "Carbon");
         let source_b = source(202, "Oxygen");
         let indices_a = [0];
         let indices_b = [1];
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(11);
-        let inserted = append_selected_contacts_to_inventory(
+        let inserted = append_discovered_contacts_to_inventory(
             &mut builder,
-            &[selected(0, 0), selected(1, 0)],
+            &[discovered(0, 0), discovered(1, 0)],
             &indices_a,
             &indices_b,
             &source_a,
@@ -3954,7 +4011,8 @@ mod shared_inventory_adapter_tests {
             inventory.contact_interfaces[0].endpoint_a,
             inventory.contact_interfaces[1].endpoint_a
         );
-        assert_eq!(inventory.contact_interfaces[0].context, crate::environmental_interaction::ContactContext::Ordinary);
-        assert_eq!(inventory.contact_interfaces[1].context, crate::environmental_interaction::ContactContext::Ordinary);
+        assert!(inventory.contact_interfaces.iter().all(|contact| {
+            contact.context == crate::environmental_interaction::ContactContext::Ordinary
+        }));
     }
 }
