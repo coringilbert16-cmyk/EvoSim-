@@ -21,6 +21,8 @@ pub(crate) struct EnvironmentalCombineCensus {
     pub(crate) material_restorations_succeeded: usize,
     pub(crate) material_restorations_failed: usize,
     pub(crate) pairs_with_both_materials_restored: u64,
+    pub(crate) broad_phase_rejected_pairs: u64,
+    pub(crate) broad_phase_surviving_pairs: u64,
     pub(crate) pairs_rejected_for_cross_material_overlap: u64,
     pub(crate) constituent_pairs_evaluated: u64,
     pub(crate) physical_interfaces: u64,
@@ -36,6 +38,7 @@ struct RestoredMaterial {
     census_id: u64,
     stable_id: bool,
     structure: OrganismStructure,
+    bounds: (f64, f64, f64, f64),
 }
 
 fn origin() -> Placement {
@@ -49,7 +52,7 @@ fn origin() -> Placement {
 fn restore(
     source: &PhysicalMaterial,
     catalog: &[BaseResource],
-) -> Option<OrganismStructure> {
+) -> Option<(OrganismStructure, (f64, f64, f64, f64))> {
     if !source.is_realized()
         || source.material.is_empty()
         || !source.material.is_valid_for_catalog(catalog)
@@ -63,7 +66,32 @@ fn restore(
         origin(),
         catalog,
     )?;
-    Some(structure)
+    let mut bounds = (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY);
+    for unit in &structure.units {
+        let radius = unit.shape(catalog)?.form.bounding_radius();
+        if !radius.is_finite() || radius < 0.0 {
+            return None;
+        }
+        bounds.0 = bounds.0.min(unit.placement.x - radius);
+        bounds.1 = bounds.1.max(unit.placement.x + radius);
+        bounds.2 = bounds.2.min(unit.placement.y - radius);
+        bounds.3 = bounds.3.max(unit.placement.y + radius);
+    }
+    if ![bounds.0, bounds.1, bounds.2, bounds.3].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    Some((structure, bounds))
+}
+
+fn bounds_are_separated(
+    a: (f64, f64, f64, f64),
+    b: (f64, f64, f64, f64),
+    tolerance: f64,
+) -> bool {
+    a.1 + tolerance < b.0
+        || b.1 + tolerance < a.0
+        || a.3 + tolerance < b.2
+        || b.3 + tolerance < a.2
 }
 
 /// Enumerate all unique unordered material-instance pairs in the frozen field.
@@ -124,12 +152,13 @@ pub(crate) fn census_environmental_combine(
         };
 
         match restore(source, catalog) {
-            Some(structure) => {
+            Some((structure, bounds)) => {
                 census.material_restorations_succeeded += 1;
                 restored.push(Some(RestoredMaterial {
                     census_id,
                     stable_id,
                     structure,
+                    bounds,
                 }));
             }
             None => {
@@ -148,6 +177,15 @@ pub(crate) fn census_environmental_combine(
                 continue;
             };
             census.pairs_with_both_materials_restored += 1;
+            if bounds_are_separated(
+                material_a.bounds,
+                material_b.bounds,
+                crate::combine_runtime::COMBINE_CONTACT_TOLERANCE,
+            ) {
+                census.broad_phase_rejected_pairs += 1;
+                continue;
+            }
+            census.broad_phase_surviving_pairs += 1;
 
             let mut combined = material_a.structure.clone();
             let first_b_unit = combined.units.len();
@@ -206,21 +244,29 @@ pub(crate) fn census_environmental_combine(
                             continue;
                         };
                         census.chemically_eligible_interfaces += 1;
-                        if required_energy.is_finite()
-                            && required_energy <= usable_energy.max(0.0)
+                        if usable_energy.is_finite()
+                            && usable_energy >= 0.0
+                            && required_energy.is_finite()
+                            && required_energy <= usable_energy
                         {
                             census.usable_energy_sufficient_interfaces += 1;
                         }
                         if material_a.stable_id && material_b.stable_id {
-                            census.census_pair_ids.push(format!(
-                                "{}:{}:{}:{}:{:?}:{:?}",
-                                material_a.census_id,
-                                material_b.census_id,
-                                unit_a,
-                                unit_b - first_b_unit,
-                                candidate.endpoint_a,
-                                candidate.endpoint_b,
-                            ));
+                            let part_a = unit_a;
+                            let part_b = unit_b - first_b_unit;
+                            if material_a.census_id < material_b.census_id {
+                                census.census_pair_ids.push(format!(
+                                    "{}:{}:{}:{}:{:?}:{:?}",
+                                    material_a.census_id, material_b.census_id,
+                                    part_a, part_b, candidate.endpoint_a, candidate.endpoint_b,
+                                ));
+                            } else {
+                                census.census_pair_ids.push(format!(
+                                    "{}:{}:{}:{}:{:?}:{:?}",
+                                    material_b.census_id, material_a.census_id,
+                                    part_b, part_a, candidate.endpoint_b, candidate.endpoint_a,
+                                ));
+                            }
                         }
                     }
                 }
