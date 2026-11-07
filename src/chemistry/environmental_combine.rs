@@ -4168,41 +4168,52 @@ mod shared_inventory_adapter_tests {
             }
         }
 
+        let mut production_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let mut production_cache = ConnectionCompatibilityCache::new();
+        let production_contacts = select_best_contact_from_offset(
+            &structure,
+            &indices_a,
+            &indices_b,
+            &catalog,
+            &mut production_cache,
+            component_pair_start(41, indices_a.len() * indices_b.len()),
+            &mut production_work,
+            None,
+        );
         let mut production_evaluable: Vec<(usize, usize, ConnectionPairCandidate)> = Vec::new();
-        for contact in &live_contacts {
-            let duplicate = production_evaluable
-                .iter()
-                .any(|(existing_a, existing_b, existing)| {
-                    *existing_a == contact.unit_a
-                        && *existing_b == contact.unit_b
-                        && crate::contact::connection_pair_candidate_matches_endpoints(
-                            existing,
-                            contact.candidate.endpoint_a,
-                            contact.candidate.endpoint_b,
-                        )
-                });
+        for contact in &production_contacts {
+            let duplicate =
+                production_evaluable
+                    .iter()
+                    .any(|(existing_a, existing_b, existing)| {
+                        *existing_a == contact.unit_a
+                            && *existing_b == contact.unit_b
+                            && crate::contact::connection_pair_candidate_matches_endpoints(
+                                existing,
+                                contact.candidate.endpoint_a,
+                                contact.candidate.endpoint_b,
+                            )
+                    });
             if !duplicate {
                 production_evaluable.push((contact.unit_a, contact.unit_b, contact.candidate));
             }
         }
         assert_eq!(inventory_evaluable.len(), production_evaluable.len());
-        assert!(
-            inventory_evaluable
-                .iter()
-                .all(|(unit_a, unit_b, candidate)| {
-                    production_evaluable
-                        .iter()
-                        .any(|(production_a, production_b, production)| {
-                            *production_a == *unit_a
-                                && *production_b == *unit_b
-                                && crate::contact::connection_pair_candidate_matches_endpoints(
-                                    production,
-                                    candidate.endpoint_a,
-                                    candidate.endpoint_b,
-                                )
-                        })
-                })
-        );
+        assert!(inventory_evaluable
+            .iter()
+            .all(|(unit_a, unit_b, candidate)| {
+                production_evaluable
+                    .iter()
+                    .any(|(production_a, production_b, production)| {
+                        *production_a == *unit_a
+                            && *production_b == *unit_b
+                            && crate::contact::connection_pair_candidate_matches_endpoints(
+                                production,
+                                candidate.endpoint_a,
+                                candidate.endpoint_b,
+                            )
+                    })
+            }));
         assert_eq!(inspected_pairs, FIELD_COMPONENT_PAIR_LIMIT);
         assert_eq!(remaining_work, 0);
         assert!(inserted > 0);
