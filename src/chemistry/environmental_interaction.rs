@@ -54,6 +54,14 @@ impl MaterialRecord {
     }
 }
 
+/// Stable reference to one existing bond within a material topology lifetime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct BondRef {
+    pub(crate) material: MaterialIdentity,
+    pub(crate) topology_generation: u64,
+    pub(crate) bond_index: usize,
+}
+
 /// Existing bond inventory entry. BREAK consumes these records.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExistingBondRecord {
@@ -67,6 +75,28 @@ pub(crate) struct ExistingBondRecord {
     pub(crate) bond_energy: f64,
 }
 
+impl ExistingBondRecord {
+    pub(crate) fn reference(self) -> BondRef {
+        BondRef {
+            material: self.material,
+            topology_generation: self.topology_generation,
+            bond_index: self.bond_index,
+        }
+    }
+}
+
+/// Identifies the topology in which a contact was discovered. Replacement
+/// contacts exist only after one exact old bond has been removed on a trial graph.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) enum ContactContext {
+    Ordinary,
+    Replacement {
+        removed_bond: BondRef,
+        anchor: ConstituentRef,
+        displaced: ConstituentRef,
+    },
+}
+
 /// A plausible physical contact. COMBINE consumes every valid interface,
 /// rather than a preselected "best" contact.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,6 +105,8 @@ pub(crate) struct ContactInterfaceRecord {
     pub(crate) endpoint_a: ConnectionEndpoint,
     pub(crate) constituent_b: ConstituentRef,
     pub(crate) endpoint_b: ConnectionEndpoint,
+    /// Ordinary COMBINE or a specific post-removal DISPLACEMENT topology.
+    pub(crate) context: ContactContext,
     /// Mutable geometry/availability snapshot, not part of interface identity.
     pub(crate) candidate: ConnectionPairCandidate,
 }
@@ -96,6 +128,7 @@ impl ContactInterfaceRecord {
     fn same_interface(&self, other: &Self) -> bool {
         self.constituent_a == other.constituent_a
             && self.constituent_b == other.constituent_b
+            && self.context == other.context
             && connection_pair_candidate_matches_endpoints(
                 &self.candidate,
                 other.endpoint_a,
@@ -157,6 +190,7 @@ pub(crate) enum InventoryBuildError {
     StaleTopology,
     InvalidConstituentIndex,
     InvalidBondEnergy,
+    InvalidDisplacementContext,
 }
 
 /// Mutable builder used by discovery adapters. The finished inventory is
@@ -251,6 +285,25 @@ impl EnvironmentalInteractionInventoryBuilder {
         if record.constituent_a.material == record.constituent_b.material {
             return Err(InventoryBuildError::InvalidConstituentIndex);
         }
+        if let ContactContext::Replacement {
+            removed_bond,
+            anchor,
+            displaced,
+        } = record.context
+        {
+            self.validate_constituent(anchor)?;
+            self.validate_constituent(displaced)?;
+            let bond_constituents_match = removed_bond.material == anchor.material
+                && anchor.material == displaced.material
+                && anchor != displaced;
+            let contact_has_anchor_and_incoming =
+                (record.constituent_a == anchor && record.constituent_b.material != anchor.material)
+                    || (record.constituent_b == anchor
+                        && record.constituent_a.material != anchor.material);
+            if !bond_constituents_match || !contact_has_anchor_and_incoming {
+                return Err(InventoryBuildError::InvalidDisplacementContext);
+            }
+        }
         let record = record.canonicalized();
         if let Some(existing) = self
             .contact_interfaces
@@ -294,25 +347,36 @@ impl EnvironmentalInteractionInventory {
         let mut joins = Vec::new();
         for (bond_index, bond) in self.existing_bonds.iter().enumerate() {
             for (contact_index, contact) in self.contact_interfaces.iter().enumerate() {
-                let anchor = if contact.constituent_a == bond.constituent_a
-                    || contact.constituent_a == bond.constituent_b
-                {
-                    Some((contact.constituent_a, contact.constituent_b))
-                } else if contact.constituent_b == bond.constituent_a
-                    || contact.constituent_b == bond.constituent_b
-                {
-                    Some((contact.constituent_b, contact.constituent_a))
-                } else {
-                    None
+                let ContactContext::Replacement {
+                    removed_bond,
+                    anchor,
+                    displaced,
+                } = contact.context
+                else {
+                    continue;
                 };
-                if let Some((anchor, incoming)) = anchor {
-                    joins.push(DisplacementJoin {
-                        bond_record_index: bond_index,
-                        contact_record_index: contact_index,
-                        anchor,
-                        incoming,
-                    });
+                if removed_bond != bond.reference()
+                    || !((anchor == bond.constituent_a && displaced == bond.constituent_b)
+                        || (anchor == bond.constituent_b && displaced == bond.constituent_a))
+                {
+                    continue;
                 }
+                let incoming = if contact.constituent_a == anchor {
+                    contact.constituent_b
+                } else if contact.constituent_b == anchor {
+                    contact.constituent_a
+                } else {
+                    continue;
+                };
+                if incoming.material == bond.material {
+                    continue;
+                }
+                joins.push(DisplacementJoin {
+                    bond_record_index: bond_index,
+                    contact_record_index: contact_index,
+                    anchor,
+                    incoming,
+                });
             }
         }
         joins
@@ -363,6 +427,7 @@ mod tests {
             endpoint_a,
             constituent_b: b,
             endpoint_b,
+            context: ContactContext::Ordinary,
             candidate: candidate(endpoint_a, endpoint_b),
         }
     }
@@ -399,20 +464,31 @@ mod tests {
                 bond_energy: 1.5,
             })
             .unwrap();
-        builder
-            .add_contact(contact(
-                a,
-                ConnectionEndpoint::Corner { point_index: 0 },
-                c,
-                ConnectionEndpoint::Corner { point_index: 0 },
-            ))
-            .unwrap();
+        let mut replacement_contact = contact(
+            a,
+            ConnectionEndpoint::Corner { point_index: 0 },
+            c,
+            ConnectionEndpoint::Corner { point_index: 0 },
+        );
+        replacement_contact.context = ContactContext::Replacement {
+            removed_bond: BondRef {
+                material: MaterialIdentity(11),
+                topology_generation: 2,
+                bond_index: 0,
+            },
+            anchor: a,
+            displaced: b,
+        };
+        builder.add_contact(replacement_contact).unwrap();
         let inventory = builder.finish();
         assert_eq!(inventory.pass_id, 7);
         assert_eq!(inventory.materials.len(), 2);
         assert_eq!(inventory.existing_bonds.len(), 1);
         assert_eq!(inventory.contact_interfaces.len(), 1);
-        assert_eq!(inventory.displacement_joins().len(), 1);
+        let joins = inventory.displacement_joins();
+        assert_eq!(joins.len(), 1);
+        assert_eq!(joins[0].anchor, a);
+        assert_eq!(joins[0].incoming, c);
     }
 
     #[test]
@@ -453,6 +529,45 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_contact_cannot_be_joined_as_displacement() {
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(2);
+        builder.upsert_material(material(1, 0, 2)).unwrap();
+        builder.upsert_material(material(2, 0, 1)).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 1,
+        };
+        let incoming = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        builder.add_bond(ExistingBondRecord {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            bond_index: 0,
+            constituent_a: a,
+            endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+            constituent_b: b,
+            endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+            bond_energy: 1.0,
+        }).unwrap();
+        builder.add_contact(contact(
+            a,
+            ConnectionEndpoint::Corner { point_index: 0 },
+            incoming,
+            ConnectionEndpoint::Corner { point_index: 0 },
+        )).unwrap();
+        assert!(builder.finish().displacement_joins().is_empty());
+    }
+
+    #[test]
     fn distinct_interfaces_between_same_constituents_are_preserved() {
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(1);
         builder.upsert_material(material(1, 0, 1)).unwrap();
@@ -484,6 +599,51 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(builder.contact_interfaces.len(), 2);
+    }
+
+    #[test]
+    fn replacement_context_must_match_exact_bond_and_orientation() {
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(3);
+        builder.upsert_material(material(1, 0, 2)).unwrap();
+        builder.upsert_material(material(2, 0, 1)).unwrap();
+        let a = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        let b = ConstituentRef {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            local_index: 1,
+        };
+        let incoming = ConstituentRef {
+            material: MaterialIdentity(2),
+            topology_generation: 0,
+            local_index: 0,
+        };
+        let endpoint = ConnectionEndpoint::Corner { point_index: 0 };
+        let mut wrong_bond = contact(a, endpoint, incoming, endpoint);
+        wrong_bond.context = ContactContext::Replacement {
+            removed_bond: BondRef {
+                material: MaterialIdentity(1),
+                topology_generation: 0,
+                bond_index: 9,
+            },
+            anchor: a,
+            displaced: b,
+        };
+        builder.add_contact(wrong_bond).unwrap();
+        builder.add_bond(ExistingBondRecord {
+            material: MaterialIdentity(1),
+            topology_generation: 0,
+            bond_index: 0,
+            constituent_a: a,
+            endpoint_a: endpoint,
+            constituent_b: b,
+            endpoint_b: endpoint,
+            bond_energy: 1.0,
+        }).unwrap();
+        assert!(builder.finish().displacement_joins().is_empty());
     }
 
     #[test]
