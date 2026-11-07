@@ -1181,13 +1181,12 @@ fn discover_contact_interfaces_from_offset(
                 || !candidate.distance.is_finite()
                 || candidate.distance < 0.0
                 || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                || !candidate.facing.is_finite()
-                || candidate.facing <= 0.0
-                || !candidate.load_a.is_finite()
-                || !candidate.load_b.is_finite()
             {
                 continue;
             }
+            // Facing and load are retained as shared facts. Do not apply
+            // COMBINE-specific evaluator rejection here: the inventory must
+            // not discard a candidate another reaction evaluator may use.
             discovered.push(DiscoveredContact {
                 unit_a,
                 unit_b,
