@@ -608,6 +608,10 @@ struct DisplacementContactCensus {
     duplicate_endpoint_pairs: usize,
     geometry_rejections: usize,
     evaluation_rejections: usize,
+    /// Geometrically valid, unique post-removal contacts before COMBINE-specific
+    /// attraction, formation-cost, or energy evaluation.
+    interfaces: Vec<ConnectionPairCandidate>,
+    /// Subset accepted by the current COMBINE evaluator, retained for diagnostics.
     alternatives: Vec<DisplacementContactAlternative>,
     work_limit_reached: bool,
 }
@@ -666,6 +670,7 @@ fn census_replacement_contacts(
             continue;
         }
 
+        census.interfaces.push(candidate);
         let Some((_evaluation, _formation_work, investment, required_energy)) =
             crate::combine_runtime::selected_candidate_evaluation(
                 &topology_trial,
@@ -2501,11 +2506,11 @@ mod tests {
             )
             .expect("all-alternatives census should project into the inventory");
         let inventory = builder.finish();
-        assert_eq!(inserted, expected.alternatives.len());
+        assert_eq!(inserted, expected.interfaces.len());
         assert_eq!(raw_candidates, expected.raw_candidates_inspected);
         assert!(!limit_reached);
-        assert_eq!(inventory.contact_interfaces.len(), expected.alternatives.len());
-        assert_eq!(inventory.displacement_joins().len(), expected.alternatives.len());
+        assert_eq!(inventory.contact_interfaces.len(), expected.interfaces.len());
+        assert_eq!(inventory.displacement_joins().len(), expected.interfaces.len());
         assert!(inventory.contact_interfaces.iter().all(|contact| {
             matches!(
                 contact.context,
@@ -2656,14 +2661,14 @@ pub(crate) fn append_displacement_census_to_inventory(
         displaced,
     };
     let mut inserted = 0usize;
-    for alternative in census.alternatives {
+    for candidate in census.interfaces {
         let record = ContactInterfaceRecord {
             constituent_a: anchor,
-            endpoint_a: alternative.candidate.endpoint_a,
+            endpoint_a: candidate.endpoint_a,
             constituent_b: incoming,
-            endpoint_b: alternative.candidate.endpoint_b,
+            endpoint_b: candidate.endpoint_b,
             context,
-            candidate: alternative.candidate,
+            candidate,
         };
         inserted += usize::from(builder.add_contact(record)?);
     }
