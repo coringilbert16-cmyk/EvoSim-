@@ -3808,7 +3808,7 @@ mod tests {
 
 
 #[derive(Clone, Copy, Debug)]
-struct DiscoveredContact {
+pub(crate) struct DiscoveredContact {
     unit_a: usize,
     unit_b: usize,
     candidate: ConnectionPairCandidate,
@@ -3937,6 +3937,47 @@ pub(crate) fn append_discovered_contacts_to_inventory(
         inserted += usize::from(builder.add_contact(record)?);
     }
     Ok(inserted)
+}
+
+/// Run the neutral COMBINE contact-discovery window and project its complete
+/// geometry-eligible result. No COMBINE evaluator or activation state is read.
+#[allow(dead_code)] // Stage 2 reference adapter; not wired into production yet.
+pub(crate) fn discover_and_append_contacts_to_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    pair_start: usize,
+    remaining_work: &mut usize,
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    locator_a: crate::environmental_interaction::MaterialLocator,
+    locator_b: crate::environmental_interaction::MaterialLocator,
+) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
+    let initial_work = *remaining_work;
+    let mut cache = ConnectionCompatibilityCache::new();
+    let discovered = discover_contact_interfaces_from_offset(
+        structure,
+        indices_a,
+        indices_b,
+        catalog,
+        &mut cache,
+        pair_start,
+        remaining_work,
+    );
+    let inspected_pairs = initial_work.saturating_sub(*remaining_work);
+    let inserted = append_discovered_contacts_to_inventory(
+        builder,
+        &discovered,
+        indices_a,
+        indices_b,
+        source_a,
+        source_b,
+        locator_a,
+        locator_b,
+    )?;
+    Ok((inserted, inspected_pairs))
 }
 
 #[cfg(test)]
