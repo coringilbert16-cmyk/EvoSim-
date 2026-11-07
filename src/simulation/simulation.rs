@@ -203,6 +203,7 @@ impl Simulation {
             world_tone_cycle: Some(world_tone_cycle),
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
+            capture_environmental_combine_discovery_ids: false,
             environmental_combine_live_inspected_material_pair_ids:
                 std::collections::BTreeSet::new(),
             environmental_combine_live_physical_interface_ids:
@@ -911,6 +912,9 @@ impl Simulation {
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         self.environmental_chemistry_diagnostics.combine_search =
             crate::state::EnvironmentalCombineSearchDiagnostics::default();
+        self.environmental_chemistry_diagnostics
+            .combine_search
+            .capture_stable_ids = self.capture_environmental_combine_discovery_ids;
         let environmental_combine_operations =
             crate::environmental_combine::accumulate_environmental_with_diagnostics(
                 &self.environment,
