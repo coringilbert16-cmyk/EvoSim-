@@ -1136,6 +1136,196 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
     success
 }
 
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct DiscoveredContact {
+    unit_a: usize,
+    unit_b: usize,
+    candidate: ConnectionPairCandidate,
+}
+
+/// Neutral bounded contact discovery for the shared inventory adapter.
+/// This stops at physical endpoint eligibility and deliberately does not call
+/// selected_candidate_evaluation, which applies COMBINE-specific chemistry,
+/// formation cost, and energy policy.
+#[allow(dead_code)] // Stage 2 reference adapter; production discovery remains unchanged.
+fn discover_contact_interfaces_from_offset(
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    cache: &mut ConnectionCompatibilityCache,
+    pair_start: usize,
+    remaining_work: &mut usize,
+) -> (Vec<DiscoveredContact>, usize) {
+    let Some(pair_count) = indices_a.len().checked_mul(indices_b.len()) else {
+        return (Vec::new(), 0);
+    };
+    if pair_count == 0 {
+        return (Vec::new(), 0);
+    }
+
+    let inspected_pairs = (*remaining_work).min(pair_count);
+    let mut discovered = Vec::new();
+    let mut raw_candidates_inspected = 0usize;
+    for offset in 0..inspected_pairs {
+        *remaining_work = (*remaining_work).saturating_sub(1);
+        let pair_index = pair_start.wrapping_add(offset) % pair_count;
+        let unit_a = indices_a[pair_index / indices_b.len()];
+        let unit_b = indices_b[pair_index % indices_b.len()];
+        for candidate in crate::contact::connection_pair_candidates_cached(
+            structure, unit_a, unit_b, catalog, cache,
+        ) {
+            raw_candidates_inspected = raw_candidates_inspected.saturating_add(1);
+            if !candidate.available_a
+                || !candidate.available_b
+                || !candidate.distance.is_finite()
+                || candidate.distance < 0.0
+                || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                || !candidate.facing.is_finite()
+                || candidate.facing <= 0.0
+                || !candidate.load_a.is_finite()
+                || !candidate.load_b.is_finite()
+            {
+                continue;
+            }
+            discovered.push(DiscoveredContact {
+                unit_a,
+                unit_b,
+                candidate,
+            });
+        }
+    }
+    (discovered, raw_candidates_inspected)
+}
+
+/// Project the complete geometry-eligible COMBINE contact set into the shared
+/// inventory before any COMBINE-specific evaluator is applied.
+#[allow(dead_code)] // Stage 2 adapter; production cutover waits for cross-path parity.
+pub(crate) fn append_discovered_contacts_to_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    discovered: &[DiscoveredContact],
+    indices_a: &[usize],
+    indices_b: &[usize],
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    locator_a: crate::environmental_interaction::MaterialLocator,
+    locator_b: crate::environmental_interaction::MaterialLocator,
+) -> Result<usize, crate::environmental_interaction::InventoryBuildError> {
+    use crate::environmental_interaction::{
+        ConstituentRef, ContactContext, ContactInterfaceRecord, MaterialIdentity, MaterialRecord,
+    };
+
+    const TOPOLOGY_GENERATION: u64 = 0;
+    let identity_a = MaterialIdentity(source_a.environmental_identity);
+    let identity_b = MaterialIdentity(source_b.environmental_identity);
+    builder.upsert_material(MaterialRecord {
+        identity: identity_a,
+        locator: locator_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        // No per-material revision exists; pass_id versions the immutable
+        // inventory snapshot. Zero is explicitly "version unavailable".
+        state_version: 0,
+        constituent_count: indices_a.len(),
+    })?;
+    builder.upsert_material(MaterialRecord {
+        identity: identity_b,
+        locator: locator_b,
+        topology_generation: TOPOLOGY_GENERATION,
+        state_version: 0,
+        constituent_count: indices_b.len(),
+    })?;
+
+    let mut records = Vec::with_capacity(discovered.len());
+    for contact in discovered {
+        let local_a = indices_a
+            .iter()
+            .position(|index| *index == contact.unit_a)
+            .ok_or(
+                crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
+            )?;
+        let local_b = indices_b
+            .iter()
+            .position(|index| *index == contact.unit_b)
+            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+        records.push(ContactInterfaceRecord {
+            constituent_a: ConstituentRef {
+                material: identity_a,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: local_a,
+            },
+            endpoint_a: contact.candidate.endpoint_a,
+            constituent_b: ConstituentRef {
+                material: identity_b,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: local_b,
+            },
+            endpoint_b: contact.candidate.endpoint_b,
+            context: ContactContext::Ordinary,
+            candidate: contact.candidate,
+        });
+    }
+
+    let mut inserted = 0usize;
+    for record in records {
+        inserted += usize::from(builder.add_contact(record)?);
+    }
+    Ok(inserted)
+}
+
+/// Run the neutral COMBINE contact-discovery window and project its complete
+/// geometry-eligible result. No COMBINE evaluator or activation state is read.
+#[allow(dead_code)] // Stage 2 reference adapter; not wired into production yet.
+pub(crate) fn discover_and_append_contacts_to_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    structure: &OrganismStructure,
+    indices_a: &[usize],
+    indices_b: &[usize],
+    catalog: &[BaseResource],
+    pair_start: usize,
+    remaining_work: &mut usize,
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    locator_a: crate::environmental_interaction::MaterialLocator,
+    locator_b: crate::environmental_interaction::MaterialLocator,
+) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
+    let initial_work = *remaining_work;
+    let mut cache = ConnectionCompatibilityCache::new();
+    let (discovered, raw_candidates_inspected) = discover_contact_interfaces_from_offset(
+        structure,
+        indices_a,
+        indices_b,
+        catalog,
+        &mut cache,
+        pair_start,
+        remaining_work,
+    );
+    let inspected_pairs = initial_work.saturating_sub(*remaining_work);
+    {
+        let work = builder.work_mut();
+        work.material_pair_visits = work.material_pair_visits.saturating_add(1);
+        work.constituent_pair_visits = work
+            .constituent_pair_visits
+            .saturating_add(inspected_pairs as u64);
+        work.raw_endpoint_candidates = work
+            .raw_endpoint_candidates
+            .saturating_add(raw_candidates_inspected as u64);
+        work.geometry_evaluation_operations = work
+            .geometry_evaluation_operations
+            .saturating_add(raw_candidates_inspected as u64);
+    }
+    let inserted = append_discovered_contacts_to_inventory(
+        builder,
+        &discovered,
+        indices_a,
+        indices_b,
+        source_a,
+        source_b,
+        locator_a,
+        locator_b,
+    )?;
+    Ok((inserted, inspected_pairs))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3803,196 +3993,6 @@ mod tests {
             "restoration must preserve the same signed structural potential"
         );
     }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct DiscoveredContact {
-    unit_a: usize,
-    unit_b: usize,
-    candidate: ConnectionPairCandidate,
-}
-
-/// Neutral bounded contact discovery for the shared inventory adapter.
-/// This stops at physical endpoint eligibility and deliberately does not call
-/// selected_candidate_evaluation, which applies COMBINE-specific chemistry,
-/// formation cost, and energy policy.
-#[allow(dead_code)] // Stage 2 reference adapter; production discovery remains unchanged.
-fn discover_contact_interfaces_from_offset(
-    structure: &OrganismStructure,
-    indices_a: &[usize],
-    indices_b: &[usize],
-    catalog: &[BaseResource],
-    cache: &mut ConnectionCompatibilityCache,
-    pair_start: usize,
-    remaining_work: &mut usize,
-) -> (Vec<DiscoveredContact>, usize) {
-    let Some(pair_count) = indices_a.len().checked_mul(indices_b.len()) else {
-        return (Vec::new(), 0);
-    };
-    if pair_count == 0 {
-        return (Vec::new(), 0);
-    }
-
-    let inspected_pairs = (*remaining_work).min(pair_count);
-    let mut discovered = Vec::new();
-    let mut raw_candidates_inspected = 0usize;
-    for offset in 0..inspected_pairs {
-        *remaining_work = (*remaining_work).saturating_sub(1);
-        let pair_index = pair_start.wrapping_add(offset) % pair_count;
-        let unit_a = indices_a[pair_index / indices_b.len()];
-        let unit_b = indices_b[pair_index % indices_b.len()];
-        for candidate in crate::contact::connection_pair_candidates_cached(
-            structure, unit_a, unit_b, catalog, cache,
-        ) {
-            raw_candidates_inspected = raw_candidates_inspected.saturating_add(1);
-            if !candidate.available_a
-                || !candidate.available_b
-                || !candidate.distance.is_finite()
-                || candidate.distance < 0.0
-                || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-                || !candidate.facing.is_finite()
-                || candidate.facing <= 0.0
-                || !candidate.load_a.is_finite()
-                || !candidate.load_b.is_finite()
-            {
-                continue;
-            }
-            discovered.push(DiscoveredContact {
-                unit_a,
-                unit_b,
-                candidate,
-            });
-        }
-    }
-    (discovered, raw_candidates_inspected)
-}
-
-/// Project the complete geometry-eligible COMBINE contact set into the shared
-/// inventory before any COMBINE-specific evaluator is applied.
-#[allow(dead_code)] // Stage 2 adapter; production cutover waits for cross-path parity.
-pub(crate) fn append_discovered_contacts_to_inventory(
-    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
-    discovered: &[DiscoveredContact],
-    indices_a: &[usize],
-    indices_b: &[usize],
-    source_a: &PhysicalMaterial,
-    source_b: &PhysicalMaterial,
-    locator_a: crate::environmental_interaction::MaterialLocator,
-    locator_b: crate::environmental_interaction::MaterialLocator,
-) -> Result<usize, crate::environmental_interaction::InventoryBuildError> {
-    use crate::environmental_interaction::{
-        ConstituentRef, ContactContext, ContactInterfaceRecord, MaterialIdentity, MaterialRecord,
-    };
-
-    const TOPOLOGY_GENERATION: u64 = 0;
-    let identity_a = MaterialIdentity(source_a.environmental_identity);
-    let identity_b = MaterialIdentity(source_b.environmental_identity);
-    builder.upsert_material(MaterialRecord {
-        identity: identity_a,
-        locator: locator_a,
-        topology_generation: TOPOLOGY_GENERATION,
-        // No per-material revision exists; pass_id versions the immutable
-        // inventory snapshot. Zero is explicitly "version unavailable".
-        state_version: 0,
-        constituent_count: indices_a.len(),
-    })?;
-    builder.upsert_material(MaterialRecord {
-        identity: identity_b,
-        locator: locator_b,
-        topology_generation: TOPOLOGY_GENERATION,
-        state_version: 0,
-        constituent_count: indices_b.len(),
-    })?;
-
-    let mut records = Vec::with_capacity(discovered.len());
-    for contact in discovered {
-        let local_a = indices_a
-            .iter()
-            .position(|index| *index == contact.unit_a)
-            .ok_or(
-                crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
-            )?;
-        let local_b = indices_b
-            .iter()
-            .position(|index| *index == contact.unit_b)
-            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
-        records.push(ContactInterfaceRecord {
-            constituent_a: ConstituentRef {
-                material: identity_a,
-                topology_generation: TOPOLOGY_GENERATION,
-                local_index: local_a,
-            },
-            endpoint_a: contact.candidate.endpoint_a,
-            constituent_b: ConstituentRef {
-                material: identity_b,
-                topology_generation: TOPOLOGY_GENERATION,
-                local_index: local_b,
-            },
-            endpoint_b: contact.candidate.endpoint_b,
-            context: ContactContext::Ordinary,
-            candidate: contact.candidate,
-        });
-    }
-
-    let mut inserted = 0usize;
-    for record in records {
-        inserted += usize::from(builder.add_contact(record)?);
-    }
-    Ok(inserted)
-}
-
-/// Run the neutral COMBINE contact-discovery window and project its complete
-/// geometry-eligible result. No COMBINE evaluator or activation state is read.
-#[allow(dead_code)] // Stage 2 reference adapter; not wired into production yet.
-pub(crate) fn discover_and_append_contacts_to_inventory(
-    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
-    structure: &OrganismStructure,
-    indices_a: &[usize],
-    indices_b: &[usize],
-    catalog: &[BaseResource],
-    pair_start: usize,
-    remaining_work: &mut usize,
-    source_a: &PhysicalMaterial,
-    source_b: &PhysicalMaterial,
-    locator_a: crate::environmental_interaction::MaterialLocator,
-    locator_b: crate::environmental_interaction::MaterialLocator,
-) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
-    let initial_work = *remaining_work;
-    let mut cache = ConnectionCompatibilityCache::new();
-    let (discovered, raw_candidates_inspected) = discover_contact_interfaces_from_offset(
-        structure,
-        indices_a,
-        indices_b,
-        catalog,
-        &mut cache,
-        pair_start,
-        remaining_work,
-    );
-    let inspected_pairs = initial_work.saturating_sub(*remaining_work);
-    {
-        let work = builder.work_mut();
-        work.material_pair_visits = work.material_pair_visits.saturating_add(1);
-        work.constituent_pair_visits = work
-            .constituent_pair_visits
-            .saturating_add(inspected_pairs as u64);
-        work.raw_endpoint_candidates = work
-            .raw_endpoint_candidates
-            .saturating_add(raw_candidates_inspected as u64);
-        work.geometry_evaluation_operations = work
-            .geometry_evaluation_operations
-            .saturating_add(raw_candidates_inspected as u64);
-    }
-    let inserted = append_discovered_contacts_to_inventory(
-        builder,
-        &discovered,
-        indices_a,
-        indices_b,
-        source_a,
-        source_b,
-        locator_a,
-        locator_b,
-    )?;
-    Ok((inserted, inspected_pairs))
 }
 
 #[cfg(test)]
