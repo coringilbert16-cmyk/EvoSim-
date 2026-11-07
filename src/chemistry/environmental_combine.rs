@@ -3804,3 +3804,157 @@ mod tests {
         );
     }
 }
+
+
+/// Project the complete evaluated COMBINE interface set into the shared
+/// inventory. This adapter is read-only with respect to the environment and
+/// reaction state; callers still own activation, scheduling, and commit.
+#[allow(dead_code)] // Stage 2 adapter; production cutover waits for cross-path parity.
+pub(crate) fn append_selected_contacts_to_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    selected: &[SelectedContact],
+    indices_a: &[usize],
+    indices_b: &[usize],
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    locator_a: crate::environmental_interaction::MaterialLocator,
+    locator_b: crate::environmental_interaction::MaterialLocator,
+) -> Result<usize, crate::environmental_interaction::InventoryBuildError> {
+    use crate::environmental_interaction::{
+        ConstituentRef, ContactContext, ContactInterfaceRecord, MaterialIdentity, MaterialRecord,
+    };
+
+    const TOPOLOGY_GENERATION: u64 = 0;
+    let identity_a = MaterialIdentity(source_a.environmental_identity);
+    let identity_b = MaterialIdentity(source_b.environmental_identity);
+    builder.upsert_material(MaterialRecord {
+        identity: identity_a,
+        locator: locator_a,
+        topology_generation: TOPOLOGY_GENERATION,
+        // The active field has no per-material mutation counter. Zero denotes
+        // the immutable snapshot captured by this discovery pass, not a field
+        // or cell revision masquerading as a material version.
+        state_version: 0,
+        constituent_count: indices_a.len(),
+    })?;
+    builder.upsert_material(MaterialRecord {
+        identity: identity_b,
+        locator: locator_b,
+        topology_generation: TOPOLOGY_GENERATION,
+        state_version: 0,
+        constituent_count: indices_b.len(),
+    })?;
+
+    let mut records = Vec::with_capacity(selected.len());
+    for contact in selected {
+        let local_a = indices_a
+            .iter()
+            .position(|index| *index == contact.unit_a)
+            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+        let local_b = indices_b
+            .iter()
+            .position(|index| *index == contact.unit_b)
+            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+        records.push(ContactInterfaceRecord {
+            constituent_a: ConstituentRef {
+                material: identity_a,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: local_a,
+            },
+            endpoint_a: contact.candidate.endpoint_a,
+            constituent_b: ConstituentRef {
+                material: identity_b,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: local_b,
+            },
+            endpoint_b: contact.candidate.endpoint_b,
+            context: ContactContext::Ordinary,
+            candidate: contact.candidate,
+        });
+    }
+
+    let mut inserted = 0usize;
+    for record in records {
+        inserted += usize::from(builder.add_contact(record)?);
+    }
+    Ok(inserted)
+}
+
+#[cfg(test)]
+mod shared_inventory_adapter_tests {
+    use super::*;
+    use crate::environmental_interaction::{
+        EnvironmentalInteractionInventoryBuilder, MaterialLocator,
+    };
+    use crate::resources::Material;
+    use crate::structure::ConnectionEndpoint;
+
+    fn source(identity: u64, name: &str) -> PhysicalMaterial {
+        PhysicalMaterial {
+            material: Material::free_base(name.to_owned(), 1.0),
+            environmental_identity: identity,
+            placements: None,
+            internal_connections: None,
+            owner_relative_origin: None,
+            realized_shapes: None,
+        }
+    }
+
+    fn selected(endpoint_a: usize, endpoint_b: usize) -> SelectedContact {
+        SelectedContact {
+            unit_a: 0,
+            unit_b: 1,
+            candidate: ConnectionPairCandidate {
+                endpoint_a: ConnectionEndpoint::Corner {
+                    point_index: endpoint_a,
+                },
+                endpoint_b: ConnectionEndpoint::Corner {
+                    point_index: endpoint_b,
+                },
+                distance: 0.25,
+                facing: 0.8,
+                load_a: 0.0,
+                load_b: 0.0,
+                available_a: true,
+                available_b: true,
+            },
+            investment: 0.5,
+            required_energy: 0.75,
+        }
+    }
+
+    #[test]
+    fn combine_adapter_preserves_every_eligible_endpoint_interface() {
+        let source_a = source(101, "Carbon");
+        let source_b = source(202, "Oxygen");
+        let indices_a = [0];
+        let indices_b = [1];
+        let mut builder = EnvironmentalInteractionInventoryBuilder::new(11);
+        let inserted = append_selected_contacts_to_inventory(
+            &mut builder,
+            &[selected(0, 0), selected(1, 0)],
+            &indices_a,
+            &indices_b,
+            &source_a,
+            &source_b,
+            MaterialLocator {
+                cell_index: 3,
+                material_index: 1,
+            },
+            MaterialLocator {
+                cell_index: 4,
+                material_index: 2,
+            },
+        )
+        .unwrap();
+        let inventory = builder.finish();
+        assert_eq!(inserted, 2);
+        assert_eq!(inventory.contact_interfaces.len(), 2);
+        assert_ne!(
+            inventory.contact_interfaces[0].endpoint_a,
+            inventory.contact_interfaces[1].endpoint_a
+        );
+        assert_eq!(inventory.contact_interfaces[0].context, crate::environmental_interaction::ContactContext::Ordinary);
+        assert_eq!(inventory.contact_interfaces[1].context, crate::environmental_interaction::ContactContext::Ordinary);
+    }
+}
