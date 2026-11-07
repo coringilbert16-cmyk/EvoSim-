@@ -13,8 +13,7 @@
 
 use crate::environment::ActiveMaterialField;
 use crate::environmental_interaction::{
-    BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator,
-    MaterialRecord,
+    BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
