@@ -472,6 +472,9 @@ pub(crate) fn accumulate(
 struct EnvironmentalBondDiscovery {
     candidates: Vec<(usize, usize, usize)>,
     inspected_entries: usize,
+    inspected_cells: u64,
+    inspected_materials: u64,
+    inspected_bonds: u64,
     checked_materials: Vec<(u64, usize)>,
 }
 
@@ -497,6 +500,9 @@ fn discover_environmental_bonds(
         return EnvironmentalBondDiscovery {
             candidates,
             inspected_entries: 0,
+            inspected_cells: 0,
+            inspected_materials: 0,
+            inspected_bonds: 0,
             checked_materials,
         };
     }
@@ -515,11 +521,15 @@ fn discover_environmental_bonds(
     // perpetually skipped: the cell itself consumes the final inspection.
     let scan_stride = scan_window.saturating_sub(2).max(1);
     let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
+    let mut inspected_cells = 0u64;
+    let mut inspected_materials = 0u64;
+    let mut inspected_bonds = 0u64;
     'discovery: for cell_offset in 0..cell_count {
         if scan_steps_remaining == 0 {
             break;
         }
         scan_steps_remaining -= 1;
+        inspected_cells = inspected_cells.saturating_add(1);
         let cell_index = (cell_start + cell_offset) % cell_count;
         let Some(cell) = environment.field.cells.get(cell_index) else {
             continue;
@@ -534,6 +544,7 @@ fn discover_environmental_bonds(
                 break 'discovery;
             }
             scan_steps_remaining -= 1;
+            inspected_materials = inspected_materials.saturating_add(1);
             let material_index = (material_start + material_offset) % material_count;
             let Some(material) = cell.physical_materials.get(material_index) else {
                 continue;
@@ -556,6 +567,7 @@ fn discover_environmental_bonds(
                     break 'discovery;
                 }
                 scan_steps_remaining -= 1;
+                inspected_bonds = inspected_bonds.saturating_add(1);
                 let bond_index = (bond_start + bond_offset) % bond_count;
                 candidates.push((cell_index, material_index, bond_index));
                 if candidates.len() >= limit {
@@ -568,6 +580,9 @@ fn discover_environmental_bonds(
     EnvironmentalBondDiscovery {
         candidates,
         inspected_entries: scan_steps_initial - scan_steps_remaining,
+        inspected_cells,
+        inspected_materials,
+        inspected_bonds,
         checked_materials,
     }
 }
@@ -2941,4 +2956,93 @@ mod material_identity_tests {
             "live-v1|Carbon:corner:0|Hydrogen:line:0"
         );
     }
+}
+
+
+/// Read-only BREAK discovery adapter. It projects the exact bond candidates
+/// produced by the existing bounded traversal and records the full nested
+/// traversal cost separately from the number of yielded bond records.
+#[allow(dead_code)] // Stage 2 adapter; production accumulation remains authoritative.
+pub(crate) fn append_environmental_bond_inventory(
+    builder: &mut crate::environmental_interaction::EnvironmentalInteractionInventoryBuilder,
+    environment: &crate::state::Environment,
+    tick: u64,
+    candidate_limit: usize,
+) -> Result<(usize, usize), crate::environmental_interaction::InventoryBuildError> {
+    use crate::environmental_interaction::{
+        ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
+    };
+
+    const TOPOLOGY_GENERATION: u64 = 0;
+    let discovery = discover_environmental_bonds(environment, tick, candidate_limit);
+    {
+        let work = builder.work_mut();
+        work.broad_phase_cell_visits = work
+            .broad_phase_cell_visits
+            .saturating_add(discovery.inspected_cells);
+        work.material_visits = work
+            .material_visits
+            .saturating_add(discovery.inspected_materials);
+        work.bond_visits = work
+            .bond_visits
+            .saturating_add(discovery.inspected_bonds);
+    }
+
+    let mut registered_materials = std::collections::BTreeSet::new();
+    let mut inserted_bonds = 0usize;
+    for (cell_index, material_index, bond_index) in discovery.candidates {
+        let Some(instance) = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+        else {
+            continue;
+        };
+        let identity = MaterialIdentity(instance.environmental_identity);
+        if identity.0 == 0 {
+            // Unassigned legacy/test instances have no stable inventory key.
+            // They remain visible in traversal work, but cannot be registered.
+            continue;
+        }
+        if registered_materials.insert(identity) {
+            builder.upsert_material(MaterialRecord {
+                identity,
+                locator: MaterialLocator {
+                    cell_index,
+                    material_index,
+                },
+                topology_generation: TOPOLOGY_GENERATION,
+                state_version: 0,
+                constituent_count: instance.material.parts.len(),
+            })?;
+        }
+        let Some(connection) = instance
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.get(bond_index))
+        else {
+            continue;
+        };
+        builder.add_bond(ExistingBondRecord {
+            material: identity,
+            topology_generation: TOPOLOGY_GENERATION,
+            bond_index,
+            constituent_a: ConstituentRef {
+                material: identity,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: connection.part_a,
+            },
+            endpoint_a: connection.endpoint_a,
+            constituent_b: ConstituentRef {
+                material: identity,
+                topology_generation: TOPOLOGY_GENERATION,
+                local_index: connection.part_b,
+            },
+            endpoint_b: connection.endpoint_b,
+            bond_energy: connection.bond_energy,
+        })?;
+        inserted_bonds = inserted_bonds.saturating_add(1);
+    }
+    Ok((inserted_bonds, discovery.inspected_entries))
 }
