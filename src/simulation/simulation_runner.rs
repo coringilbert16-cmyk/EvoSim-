@@ -230,6 +230,12 @@ fn run_environment_chemistry_experiment(
             &simulation.environment.field,
             &simulation.environment.catalog,
             simulation.environment.chemistry_usable_energy,
+            simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap_or(f64::NAN),
+            &simulation.chemical_reaction_accumulation,
         );
         println!(
             "ENVIRONMENTAL_COMBINE_CENSUS snapshot=initial {}",
@@ -325,6 +331,12 @@ fn run_environment_chemistry_experiment(
             &simulation.environment.field,
             &simulation.environment.catalog,
             simulation.environment.chemistry_usable_energy,
+            simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap_or(f64::NAN),
+            &simulation.chemical_reaction_accumulation,
         );
         println!(
             "ENVIRONMENTAL_COMBINE_CENSUS snapshot=final {}",
