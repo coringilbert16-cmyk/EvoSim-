@@ -45,7 +45,8 @@ pub(crate) struct EnvironmentalCombineCensus {
     pub(crate) resonant_energy_available: f64,
     pub(crate) resonance_funding_supported: bool,
     pub(crate) snapshot_material_ids: Vec<u64>,
-    pub(crate) census_pair_ids: Vec<String>,
+    pub(crate) census_eligible_interface_ids: Vec<String>,
+    pub(crate) unique_chemically_eligible_interfaces: usize,
     pub(crate) elapsed_micros: u128,
 }
 
@@ -116,7 +117,7 @@ pub(crate) fn compare_census_to_live(
     live_discovered_interface_ids: &std::collections::BTreeSet<String>,
 ) -> EnvironmentalCombineCensusComparison {
     let census_ids: std::collections::BTreeSet<_> =
-        census.census_pair_ids.iter().cloned().collect();
+        census.census_eligible_interface_ids.iter().cloned().collect();
     let census_only_interface_ids: Vec<_> = census_ids
         .difference(live_discovered_interface_ids)
         .cloned()
@@ -427,7 +428,7 @@ pub(crate) fn census_environmental_combine(
                                 candidate.endpoint_a,
                                 candidate.endpoint_b,
                             ) {
-                                census.census_pair_ids.push(interface_id);
+                                census.census_eligible_interface_ids.push(interface_id);
                             }
                         }
                         if required_energy.is_finite() {
@@ -578,8 +579,9 @@ pub(crate) fn census_environmental_combine(
         }
     }
 
-    census.census_pair_ids.sort();
-    census.census_pair_ids.dedup();
+    census.census_eligible_interface_ids.sort();
+    census.census_eligible_interface_ids.dedup();
+    census.unique_chemically_eligible_interfaces = census.census_eligible_interface_ids.len();
     census.elapsed_micros = started.elapsed().as_micros();
     census
 }
@@ -645,7 +647,7 @@ mod tests {
     fn comparison_separates_uninspected_geometry_and_chemistry_gaps() {
         let census = EnvironmentalCombineCensus {
             snapshot_material_ids: vec![1, 2],
-            census_pair_ids: vec![
+            census_eligible_interface_ids: vec![
                 "1:2:0:0:corner-a:corner-b".to_owned(),
                 "1:2:0:1:corner-c:corner-d".to_owned(),
             ],
