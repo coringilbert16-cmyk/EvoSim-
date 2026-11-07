@@ -146,6 +146,39 @@ fn constituent_prefix_from_accumulation_key(key: &str) -> Option<&str> {
     Some(&key[..=third_separator])
 }
 
+fn is_current_combine_accumulation_key(key: &str) -> bool {
+    let mut fields = key.split('|');
+    if fields.next() != Some("environment") {
+        return false;
+    }
+    let Some(first) = fields.next().and_then(|field| field.strip_prefix("combine:")) else {
+        return false;
+    };
+    let Some(second) = fields.next() else {
+        return false;
+    };
+    // The remaining fields are the two endpoint identities. Older keys
+    // included cell/slot and a placement-sensitive debug signature in the
+    // first section; discard those histories rather than retaining unreachable
+    // entries forever after the key contract changes.
+    let Some(_endpoint_a) = fields.next() else {
+        return false;
+    };
+    let Some(_endpoint_b) = fields.next() else {
+        return false;
+    };
+    if fields.next().is_some() {
+        return false;
+    }
+    let is_pair = |value: &str| {
+        let mut parts = value.split(':');
+        parts.next().is_some_and(|id| id.parse::<u64>().is_ok())
+            && parts.next().is_some_and(|unit| unit.parse::<usize>().is_ok())
+            && parts.next().is_none()
+    };
+    is_pair(first) && is_pair(second)
+}
+
 fn invalidate_unupdated_constituent_accumulations(
     accumulation: &mut BTreeMap<String, f64>,
     checked_prefixes: &BTreeSet<String>,
@@ -538,6 +571,12 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) -> Vec<EnvironmentalCombineOperation> {
+    // Retire placement/index-based COMBINE histories once. They cannot be
+    // mapped safely onto stable physical identities, so carrying them forward
+    // would leak unreachable progress and diagnostics indefinitely.
+    accumulation.retain(|key, _| {
+        !key.starts_with(ENVIRONMENT_PREFIX) || is_current_combine_accumulation_key(key)
+    });
     let (initial_accumulation_entries, initial_accumulation_value) =
         environmental_accumulation_totals(accumulation);
     diagnostics.accumulation_entries_before_search = initial_accumulation_entries;
@@ -1445,6 +1484,14 @@ mod tests {
             chemical_progress > 0,
             "at least one eligible compound/base contact must advance existing chemistry"
         );
+    }
+
+    #[test]
+    fn legacy_location_based_combine_keys_are_not_treated_as_current_progress() {
+        let current = "environment|combine:101:0|202:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        let legacy = "environment|combine:4:2:PhysicalMaterial { placement: (1, 2) }:0|8:3:PhysicalMaterial { placement: (3, 4) }:0|Corner { point_index: 0 }|Corner { point_index: 0 }";
+        assert!(is_current_combine_accumulation_key(current));
+        assert!(!is_current_combine_accumulation_key(legacy));
     }
 
     #[test]
