@@ -579,6 +579,42 @@ fn bounded_bounds_query_matches_full_query_for_a_complete_window() {
 }
 
 #[test]
+fn environmental_transport_repairs_duplicate_nonzero_material_ids() {
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let catalog = crate::resources::default_catalog();
+    for (cell, x) in [(0, 12.5), (1, 37.5)] {
+        let mut material = PhysicalMaterial::realized(
+            make_raw("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x,
+                y: 12.5,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .unwrap();
+        material.environmental_identity = 41;
+        assert!(field.deposit_physical_at_index(cell, material, &catalog));
+    }
+
+    crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<false>(
+        &mut field,
+        &catalog,
+        100.0,
+        100.0,
+    );
+    let ids: Vec<u64> = field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.environmental_identity)
+        .collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().all(|id| *id != 0));
+    assert_ne!(ids[0], ids[1]);
+}
+
+#[test]
 fn environmental_identity_allocator_repairs_duplicate_nonzero_ids() {
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let catalog = crate::resources::default_catalog();
