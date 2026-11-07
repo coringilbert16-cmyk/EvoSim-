@@ -97,6 +97,8 @@ mod diagnostics;
 mod energy_ledger;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
+#[path = "chemistry/environmental_displacement.rs"]
+mod environmental_displacement;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]

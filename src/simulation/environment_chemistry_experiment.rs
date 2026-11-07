@@ -320,34 +320,15 @@ fn seed_randomized_molecular_resources(
                 rotation_radians: rotation,
             };
             let (parts, is_molecule) = &objects[object_index];
-            let material = if *is_molecule {
-                Material {
-                    parts: parts.iter().cloned().map(|name| (name, 1.0)).collect(),
-                    internal_bonds: vec![crate::resources::InternalBond {
-                        part_a: 0,
-                        part_b: 1,
-                    }],
-                }
-            } else {
-                Material::free_base(&parts[0], 1.0)
-            };
-            let placements = if *is_molecule {
-                vec![
-                    placement,
-                    Placement {
-                        x: x + 0.838,
-                        y,
-                        rotation_radians: rotation,
-                    },
-                ]
-            } else {
-                vec![placement]
-            };
             let physical = if *is_molecule {
                 realize_natural_molecule(parts, placement, catalog)
             } else {
-                PhysicalMaterial::realized(material, placements, catalog)
-                    .expect("seeded resource must have valid physical geometry")
+                PhysicalMaterial::realized(
+                    Material::free_base(&parts[0], 1.0),
+                    vec![placement],
+                    catalog,
+                )
+                .expect("canonical base resource must have valid physical geometry")
             };
             object_index += 1;
             assert!(
@@ -616,6 +597,47 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect::<Vec<_>>();
+        let catalog = &first.simulation.environment.catalog;
+        for molecule in materials
+            .iter()
+            .filter(|material| material.material.parts.len() == 2)
+        {
+            let connection = molecule
+                .internal_connections
+                .as_ref()
+                .and_then(|connections| connections.first())
+                .expect("seeded molecules must retain their COMBINE connection");
+            assert!(
+                connection.bond_energy.is_finite() && connection.bond_energy > 0.0,
+                "seeded molecules must not contain zero-energy bonds"
+            );
+
+            let mut restored = OrganismStructure::new();
+            let indices = crate::material_restoration::restore_material(
+                &mut restored,
+                molecule,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            )
+            .expect("naturally seeded molecule must restore with its physical endpoints");
+            assert_eq!(restored.bonds.len(), 1);
+            let unit_a = &restored.units[indices[connection.part_a]];
+            let unit_b = &restored.units[indices[connection.part_b]];
+            let properties_a = unit_a.properties(catalog).unwrap();
+            let properties_b = unit_b.properties(catalog).unwrap();
+            let strength = crate::combine::bond_strength(properties_a, properties_b);
+            let expected_energy =
+                crate::combine::intrinsic_bond_potential(properties_a, properties_b, strength);
+            assert!(
+                (connection.bond_energy - expected_energy).abs() <= 1e-9,
+                "stored seed bond energy must equal the ordinary COMBINE intrinsic potential"
+            );
+            assert_eq!(restored.bonds[0].bond_energy, connection.bond_energy);
+        }
         assert_eq!(
             materials
                 .iter()

@@ -57,6 +57,23 @@ fn material_signature(material: &PhysicalMaterial) -> String {
     format!("{material:?}")
 }
 
+fn source_pair_accumulation_prefix(
+    cell_a: usize,
+    material_a: usize,
+    source_a: &PhysicalMaterial,
+    cell_b: usize,
+    material_b: usize,
+    source_b: &PhysicalMaterial,
+    unit_a: usize,
+    unit_b: usize,
+) -> String {
+    format!(
+        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|",
+        material_signature(source_a),
+        material_signature(source_b),
+    )
+}
+
 fn source_pair_key(
     cell_a: usize,
     material_a: usize,
@@ -69,24 +86,75 @@ fn source_pair_key(
     candidate: ConnectionPairCandidate,
 ) -> String {
     format!(
-        "{ENVIRONMENT_PREFIX}{cell_a}:{material_a}:{}:{unit_a}|{cell_b}:{material_b}:{}:{unit_b}|{:?}|{:?}",
-        material_signature(source_a),
-        material_signature(source_b),
+        "{}{:?}|{:?}",
+        source_pair_accumulation_prefix(
+            cell_a, material_a, source_a, cell_b, material_b, source_b, unit_a, unit_b,
+        ),
         candidate.endpoint_a,
         candidate.endpoint_b,
     )
 }
 
-fn dissipate_unupdated_accumulations(
-    accumulation: &mut BTreeMap<String, f64>,
+fn environmental_accumulation_totals(accumulation: &BTreeMap<String, f64>) -> (usize, f64) {
+    accumulation
+        .iter()
+        .filter(|(key, _)| key.starts_with(ENVIRONMENT_PREFIX))
+        .fold((0, 0.0), |(count, total), (_, value)| {
+            (count + 1, total + *value)
+        })
+}
+
+fn record_unupdated_accumulations(
+    accumulation: &BTreeMap<String, f64>,
     updated_keys: &BTreeSet<String>,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) {
-    accumulation.retain(|key, value| {
-        if !key.starts_with(ENVIRONMENT_PREFIX) || updated_keys.contains(key) {
-            return true;
+    // A bounded search not reaching an interaction is not evidence that the
+    // interaction became invalid. Keep its accumulated progress until that
+    // exact interface is revisited; accumulate_reaction applies normal
+    // dissipation when the interface is actually evaluated.
+    for (key, value) in accumulation {
+        if key.starts_with(ENVIRONMENT_PREFIX) && !updated_keys.contains(key) {
+            diagnostics.accumulation_keys_preserved_unsearched += 1;
+            if value.is_finite() {
+                diagnostics.accumulation_value_preserved_unsearched += *value;
+            }
         }
-        *value *= 1.0 - crate::chemistry::CHEMICAL_DISSIPATION;
-        value.is_finite() && *value > 0.0
+    }
+    let (entries, total) = environmental_accumulation_totals(accumulation);
+    diagnostics.accumulation_entries_after_search = entries;
+    diagnostics.accumulation_value_after_search = total;
+}
+
+fn constituent_prefix_from_accumulation_key(key: &str) -> Option<&str> {
+    let mut separators = key.match_indices('|');
+    separators.next()?;
+    separators.next()?;
+    let (third_separator, _) = separators.next()?;
+    Some(&key[..=third_separator])
+}
+
+fn invalidate_unupdated_constituent_accumulations(
+    accumulation: &mut BTreeMap<String, f64>,
+    checked_prefixes: &BTreeSet<String>,
+    updated_keys: &BTreeSet<String>,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+) {
+    if checked_prefixes.is_empty() {
+        return;
+    }
+    accumulation.retain(|key, value| {
+        let was_checked = constituent_prefix_from_accumulation_key(key)
+            .is_some_and(|prefix| checked_prefixes.contains(prefix));
+        if key.starts_with(ENVIRONMENT_PREFIX) && was_checked && !updated_keys.contains(key) {
+            diagnostics.accumulation_keys_invalidated += 1;
+            if value.is_finite() {
+                diagnostics.accumulation_value_invalidated += *value;
+            }
+            false
+        } else {
+            true
+        }
     });
 }
 
@@ -127,7 +195,10 @@ fn select_best_contact(
         cache,
         0,
         remaining_work,
+        None,
     )
+    .into_iter()
+    .next()
 }
 
 /// Advance the bounded constituent-pair window by one pair per tick.
@@ -149,22 +220,49 @@ fn select_best_contact_from_offset(
     cache: &mut ConnectionCompatibilityCache,
     pair_start: usize,
     remaining_work: &mut usize,
-) -> Option<SelectedContact> {
-    let pair_count = indices_a.len().checked_mul(indices_b.len())?;
+    diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
+) -> Vec<SelectedContact> {
+    let mut diagnostics = diagnostics;
+    let Some(pair_count) = indices_a.len().checked_mul(indices_b.len()) else {
+        return Vec::new();
+    };
     if pair_count == 0 {
-        return None;
+        return Vec::new();
     }
 
-    let mut best: Option<SelectedContact> = None;
+    let mut selected_contacts = Vec::new();
+    let mut constituent_pairs_with_valid_interfaces = 0usize;
     let inspected_pairs = (*remaining_work).min(pair_count);
     for offset in 0..inspected_pairs {
         *remaining_work = (*remaining_work).saturating_sub(1);
         let pair_index = pair_start.wrapping_add(offset) % pair_count;
+        if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.constituent_pairs_inspected += 1;
+        }
         let unit_a = indices_a[pair_index / indices_b.len()];
         let unit_b = indices_b[pair_index % indices_b.len()];
+        let chemical_potential = structure
+            .units
+            .get(unit_a)
+            .and_then(|unit| constituent_chemical_position(unit, catalog))
+            .zip(
+                structure
+                    .units
+                    .get(unit_b)
+                    .and_then(|unit| constituent_chemical_position(unit, catalog)),
+            )
+            .and_then(|(position_a, position_b)| {
+                crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+            });
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
+        let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
@@ -173,43 +271,57 @@ fn select_best_contact_from_offset(
             else {
                 continue;
             };
-            let proposed = SelectedContact {
+            pair_valid_interfaces += 1;
+            selected_contacts.push(SelectedContact {
                 unit_a,
                 unit_b,
                 candidate: evaluation.candidate,
                 investment,
                 required_energy,
-            };
-            let replace = best.map_or(true, |current| {
-                proposed
-                    .required_energy
-                    .partial_cmp(&current.required_energy)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .then_with(|| {
-                        proposed
-                            .candidate
-                            .distance
-                            .partial_cmp(&current.candidate.distance)
-                            .unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .then_with(|| {
-                        format!(
-                            "{:?}|{:?}",
-                            proposed.candidate.endpoint_a, proposed.candidate.endpoint_b
-                        )
-                        .cmp(&format!(
-                            "{:?}|{:?}",
-                            current.candidate.endpoint_a, current.candidate.endpoint_b
-                        ))
-                    })
-                    .is_lt()
             });
-            if replace {
-                best = Some(proposed);
+            if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                diagnostics.interfaces_sent_to_chemistry += 1;
+            }
+        }
+        if pair_valid_interfaces > 0 {
+            constituent_pairs_with_valid_interfaces += 1;
+        }
+        if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
+            if pair_valid_interfaces > 1 && chemical_potential.is_some_and(|value| value > 0.0) {
+                diagnostics.chemically_favorable_pairs_with_multiple_interfaces += 1;
             }
         }
     }
-    best
+    if let Some(diagnostics) = diagnostics {
+        diagnostics.constituent_pairs_with_valid_interfaces +=
+            constituent_pairs_with_valid_interfaces;
+    }
+
+    // Keep deterministic best-first ordering for callers that only need one
+    // contact, while returning every valid interface to environmental chemistry.
+    selected_contacts.sort_by(|left, right| {
+        left.required_energy
+            .partial_cmp(&right.required_energy)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left.candidate
+                    .distance
+                    .partial_cmp(&right.candidate.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| {
+                format!(
+                    "{:?}|{:?}",
+                    left.candidate.endpoint_a, left.candidate.endpoint_b
+                )
+                .cmp(&format!(
+                    "{:?}|{:?}",
+                    right.candidate.endpoint_a, right.candidate.endpoint_b
+                ))
+            })
+    });
+    selected_contacts
 }
 
 /// Resolve chemical identity from one realized physical constituent.
@@ -387,6 +499,7 @@ fn chemical_step(
     }
 }
 
+#[cfg_attr(not(test), expect(dead_code, reason = "Test helper"))]
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
@@ -394,13 +507,37 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalCombineOperation> {
+    let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+    accumulate_environmental_with_diagnostics(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        &mut diagnostics,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_diagnostics(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+) -> Vec<EnvironmentalCombineOperation> {
+    let (initial_accumulation_entries, initial_accumulation_value) =
+        environmental_accumulation_totals(accumulation);
+    diagnostics.accumulation_entries_before_search = initial_accumulation_entries;
+    diagnostics.accumulation_value_before_search = initial_accumulation_value;
     if *remaining_discovery_work == 0 {
-        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+        diagnostics.budget_exhausted = true;
+        record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
         return Vec::new();
     }
     let field_cell_count = environment.field.cells.len();
     if field_cell_count == 0 {
-        dissipate_unupdated_accumulations(accumulation, &BTreeSet::new());
+        record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
         return Vec::new();
     }
 
@@ -410,6 +547,7 @@ pub(crate) fn accumulate_environmental(
     let cell_scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
+    let mut checked_prefixes = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
     let cell_start = tick as usize % field_cell_count;
 
@@ -418,6 +556,7 @@ pub(crate) fn accumulate_environmental(
             break;
         }
         let cell_a = (cell_start + cell_offset) % field_cell_count;
+        diagnostics.anchor_cells_inspected += 1;
         // Charge every anchor-cell inspection, including empty cells. Otherwise
         // a sparse field could traverse the scan window without consuming budget.
         *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
@@ -435,6 +574,7 @@ pub(crate) fn accumulate_environmental(
             // shared per-tick budget. The local anchor cap alone is not enough:
             // a small supplied budget must also bound work on empty/sparse fields.
             *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
+            diagnostics.anchor_materials_inspected += 1;
             let material_a = (material_start + material_offset) % material_count;
             let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
             let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
@@ -456,40 +596,58 @@ pub(crate) fn accumulate_environmental(
             // target-cell vector before the per-tick inspection budget applies.
             // Advance by one inspection window per tick so cells beyond the first
             // window remain eligible instead of being starved by large bounds.
+            let target_cell_limit =
+                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
             let target_cells = environment.field.cells_intersecting_bounds_limited(
                 body.min_x - BOUNDS_PADDING,
                 body.max_x + BOUNDS_PADDING,
                 body.min_y - BOUNDS_PADDING,
                 body.max_y + BOUNDS_PADDING,
-                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work),
+                target_cell_limit,
                 (tick as usize)
                     .wrapping_add(cell_a)
                     .wrapping_add(material_a),
             );
+            diagnostics.target_cell_windows_capped +=
+                usize::from(target_cell_limit > 0 && target_cells.len() == target_cell_limit);
             for &cell_b in &target_cells {
+                // Canonical ordering is a free prefilter: this cell pair is
+                // discovered from its lower-index anchor and must not consume
+                // this tick's shared work budget a second time.
+                if cell_b < cell_a {
+                    continue;
+                }
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
                 // Cell inspections count even when a cell contains no material;
                 // otherwise sparse fields could scan many cells for free.
                 *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
+                diagnostics.target_cells_inspected += 1;
                 let target_count = environment.field.cells[cell_b].physical_materials.len();
                 if target_count == 0 {
                     continue;
                 }
                 let target_material_start = (tick as usize + cell_b + material_a) % target_count;
                 for target_offset in 0..target_count {
+                    let material_b = (target_material_start + target_offset) % target_count;
+                    if (cell_b, material_b) <= (cell_a, material_a) {
+                        diagnostics.backward_ordered_target_materials += 1;
+                        continue;
+                    }
                     if *remaining_discovery_work == 0 {
                         break 'anchors;
                     }
                     *remaining_discovery_work = (*remaining_discovery_work).saturating_sub(1);
-                    let material_b = (target_material_start + target_offset) % target_count;
-                    if (cell_b, material_b) <= (cell_a, material_a) {
-                        continue;
+                    diagnostics.target_materials_inspected += 1;
+                    diagnostics.forward_ordered_target_material_pair_inspections += 1;
+                    if cell_a == cell_b {
+                        diagnostics.same_cell_source_pair_inspections += 1;
                     }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
                     if !source_b.is_realized() || source_b.material.is_empty() {
+                        diagnostics.unrealized_target_material_pairs += 1;
                         continue;
                     }
                     let mut trial_structure = source_structure.clone();
@@ -499,8 +657,10 @@ pub(crate) fn accumulate_environmental(
                         origin(),
                         &environment.catalog,
                     ) else {
+                        diagnostics.target_material_pairs_restore_failed += 1;
                         continue;
                     };
+                    diagnostics.target_material_pairs_restored += 1;
                     if indices_b.iter().any(|index| {
                         crate::construction_runtime::placed_unit_overlaps(
                             &trial_structure,
@@ -509,12 +669,18 @@ pub(crate) fn accumulate_environmental(
                             &environment.catalog,
                         )
                     }) {
+                        diagnostics.target_material_pairs_rejected_for_overlap += 1;
                         continue;
                     }
                     let mut component_work =
                         (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                     let component_work_initial = component_work;
                     let pair_count = indices_a.len().saturating_mul(indices_b.len());
+                    diagnostics.constituent_pairs_available += pair_count;
+                    diagnostics.constituent_pairs_uninspected_by_window +=
+                        pair_count.saturating_sub(component_work_initial);
+                    diagnostics.constituent_pair_windows_truncated +=
+                        usize::from(component_work_initial < pair_count);
                     let pair_start = component_pair_start(tick, pair_count);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
@@ -524,36 +690,55 @@ pub(crate) fn accumulate_environmental(
                         &mut cache,
                         pair_start,
                         &mut component_work,
+                        Some(&mut *diagnostics),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
                         (*remaining_discovery_work).saturating_sub(component_work_used);
-                    let Some(selected) = selected else {
-                        continue;
-                    };
-                    chemical_step(
-                        environment,
-                        chemistry_library,
-                        &trial_structure,
-                        selected,
-                        &indices_a,
-                        &indices_b,
-                        &source_a,
-                        &source_b,
-                        cell_a,
-                        material_a,
-                        cell_b,
-                        material_b,
-                        accumulation,
-                        &mut updated_keys,
-                        &mut operations,
-                    );
+                    if pair_count > 0 {
+                        for offset in 0..component_work_used {
+                            let pair_index = pair_start.wrapping_add(offset) % pair_count;
+                            let unit_a = indices_a[pair_index / indices_b.len()];
+                            let unit_b = indices_b[pair_index % indices_b.len()];
+                            checked_prefixes.insert(source_pair_accumulation_prefix(
+                                cell_a, material_a, &source_a, cell_b, material_b, &source_b,
+                                unit_a, unit_b,
+                            ));
+                        }
+                    }
+                    for selected in selected {
+                        chemical_step(
+                            environment,
+                            chemistry_library,
+                            &trial_structure,
+                            selected,
+                            &indices_a,
+                            &indices_b,
+                            &source_a,
+                            &source_b,
+                            cell_a,
+                            material_a,
+                            cell_b,
+                            material_b,
+                            accumulation,
+                            &mut updated_keys,
+                            &mut operations,
+                        );
+                    }
                 }
             }
         }
     }
 
-    dissipate_unupdated_accumulations(accumulation, &updated_keys);
+    invalidate_unupdated_constituent_accumulations(
+        accumulation,
+        &checked_prefixes,
+        &updated_keys,
+        diagnostics,
+    );
+    diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+    diagnostics.accumulation_keys_updated = updated_keys.len();
+    record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
     operations
 }
 
@@ -655,9 +840,10 @@ fn physical_material_from_structure(
     physical.is_realized().then_some(physical)
 }
 
-/// Export each connected structure component as a realized physical material.
-/// Used by the chemistry experiment fixture to seed bonds produced by the
-/// ordinary COMBINE path.
+/// Export every connected product from a trial reaction graph. This is
+/// intentionally separate from the single-product COMBINE conversion so a
+/// coupled replacement can release a displaced constituent without losing
+/// constituent identity, geometry, or retained bond-energy allocations.
 pub(crate) fn physical_materials_from_structure_components(
     structure: &OrganismStructure,
     catalog: &[BaseResource],
@@ -666,17 +852,16 @@ pub(crate) fn physical_materials_from_structure_components(
     if components.is_empty() {
         return None;
     }
-    components
-        .into_iter()
-        .map(|component| {
-            let ids = component
-                .iter()
-                .map(|index| structure.physical_id(*index))
-                .collect::<Option<Vec<_>>>()?;
-            let subgraph = structure.subgraph_for_physical_ids(&ids, &[])?;
-            physical_material_from_structure(&subgraph, catalog)
-        })
-        .collect()
+    let mut products = Vec::with_capacity(components.len());
+    for component in components {
+        let ids = component
+            .iter()
+            .map(|index| structure.physical_id(*index))
+            .collect::<Option<Vec<_>>>()?;
+        let subgraph = structure.subgraph_for_physical_ids(&ids, &[])?;
+        products.push(physical_material_from_structure(&subgraph, catalog)?);
+    }
+    Some(products)
 }
 
 pub(crate) fn resolve_environmental(
@@ -874,6 +1059,55 @@ mod tests {
     /// This deliberately does not force activation or alter chemistry thresholds.
     /// It searches bounded poses for a valid contact, then lets the existing
     /// environmental chemical step report whether reaction progress is made.
+    #[test]
+    fn unsearched_environmental_accumulations_are_preserved_without_decay() {
+        let key = format!("{ENVIRONMENT_PREFIX}unvisited-interface");
+        let mut accumulation = BTreeMap::new();
+        accumulation.insert(key.clone(), 0.75);
+        let updated_keys = BTreeSet::new();
+        let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+
+        record_unupdated_accumulations(&accumulation, &updated_keys, &mut diagnostics);
+
+        assert_eq!(
+            accumulation.get(&key),
+            Some(&0.75),
+            "a bounded search that does not revisit an interface must not dissipate its progress"
+        );
+        assert_eq!(diagnostics.accumulation_keys_preserved_unsearched, 1);
+        assert_eq!(diagnostics.accumulation_value_preserved_unsearched, 0.75);
+        assert_eq!(diagnostics.accumulation_keys_dissipated, 0);
+        assert_eq!(diagnostics.accumulation_value_dissipated, 0.0);
+    }
+
+    #[test]
+    fn rechecked_ineligible_interfaces_are_invalidated_without_touching_unsearched_keys() {
+        let checked_prefix = format!("{ENVIRONMENT_PREFIX}checked-source-pair|unit-b|");
+        let stale_key = format!("{checked_prefix}stale-interface");
+        let active_key = format!("{checked_prefix}active-interface");
+        let unsearched_key = format!("{ENVIRONMENT_PREFIX}unsearched-source-pair|unit-b|interface");
+        let mut accumulation = BTreeMap::new();
+        accumulation.insert(stale_key.clone(), 0.5);
+        accumulation.insert(active_key.clone(), 0.25);
+        accumulation.insert(unsearched_key.clone(), 0.75);
+        let checked_prefixes = BTreeSet::from([checked_prefix]);
+        let updated_keys = BTreeSet::from([active_key.clone()]);
+        let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
+
+        invalidate_unupdated_constituent_accumulations(
+            &mut accumulation,
+            &checked_prefixes,
+            &updated_keys,
+            &mut diagnostics,
+        );
+
+        assert!(!accumulation.contains_key(&stale_key));
+        assert_eq!(accumulation.get(&active_key), Some(&0.25));
+        assert_eq!(accumulation.get(&unsearched_key), Some(&0.75));
+        assert_eq!(diagnostics.accumulation_keys_invalidated, 1);
+        assert_eq!(diagnostics.accumulation_value_invalidated, 0.5);
+    }
+
     #[test]
     fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
@@ -2938,14 +3172,16 @@ mod tests {
             &mut cache,
             component_pair_start(0, pair_count),
             &mut first_window_work,
+            None,
         );
         assert!(
-            first_window.is_none(),
+            first_window.is_empty(),
             "the first bounded row-major window must not accidentally inspect the final constituent pair"
         );
         assert_eq!(first_window_work, 0);
 
         let mut second_window_work = FIELD_COMPONENT_PAIR_LIMIT;
+        let mut search_diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
         let late_window = select_best_contact_from_offset(
             &structure,
             &indices_a,
@@ -2954,11 +3190,36 @@ mod tests {
             &mut cache,
             component_pair_start(41, pair_count),
             &mut second_window_work,
-        )
-        .expect("the rotated window must reach the late physical contact within the cycle");
-        assert_eq!(late_window.unit_a, indices_a[12]);
-        assert_eq!(late_window.unit_b, indices_b[12]);
+            Some(&mut search_diagnostics),
+        );
+        assert!(
+            late_window.iter().any(|selected| {
+                selected.unit_a == indices_a[12] && selected.unit_b == indices_b[12]
+            }),
+            "the rotated window must retain the late physical contact within the cycle"
+        );
         assert_eq!(second_window_work, 0);
+        assert_eq!(
+            search_diagnostics.constituent_pairs_inspected,
+            FIELD_COMPONENT_PAIR_LIMIT
+        );
+        assert!(
+            search_diagnostics.constituent_pairs_with_valid_interfaces > 0,
+            "the rotated window must report its physically valid constituent pair"
+        );
+        assert_eq!(
+            search_diagnostics.constituent_pairs_suppressed_by_global_selection, 0,
+            "every inspected constituent pair with a valid interface must reach chemistry"
+        );
+        assert_eq!(
+            search_diagnostics.interfaces_suppressed_by_global_selection, 0,
+            "no physically valid interface may be suppressed by a single-contact selector"
+        );
+        assert_eq!(
+            search_diagnostics.interfaces_sent_to_chemistry,
+            search_diagnostics.physically_evaluable_interfaces,
+            "every physically evaluable interface must receive an independent chemistry step"
+        );
 
         let varied_budget_pair_count = 1_000;
         let visited_starts: HashSet<_> = (0..varied_budget_pair_count)
