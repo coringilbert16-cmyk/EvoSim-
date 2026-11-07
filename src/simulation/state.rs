@@ -831,6 +831,8 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub(crate) struct EnvironmentalCombineSearchDiagnostics {
+    /// Enable stable ID capture only for the explicit census diagnostic run.
+    pub(crate) capture_stable_ids: bool,
     pub(crate) anchor_cells_inspected: usize,
     pub(crate) anchor_materials_inspected: usize,
     pub(crate) target_cells_inspected: usize,
@@ -978,6 +980,8 @@ pub(crate) struct Simulation {
     pub(crate) hotspot: Option<crate::hotspot::RadialHotspot>,
     /// Last-tick environmental reaction counters for UI and headless diagnostics.
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
+    /// Opt-in capture avoids adding stable-ID allocation overhead to ordinary runs.
+    pub(crate) capture_environmental_combine_discovery_ids: bool,
     /// Run-wide stable identities observed by the bounded live COMBINE discovery path.
     pub(crate) environmental_combine_live_inspected_material_pair_ids:
         std::collections::BTreeSet<String>,
