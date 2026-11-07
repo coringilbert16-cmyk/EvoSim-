@@ -1246,7 +1246,9 @@ pub(crate) fn append_discovered_contacts_to_inventory(
         let local_b = indices_b
             .iter()
             .position(|index| *index == contact.unit_b)
-            .ok_or(crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex)?;
+            .ok_or(
+                crate::environmental_interaction::InventoryBuildError::InvalidConstituentIndex,
+            )?;
         records.push(ContactInterfaceRecord {
             constituent_a: ConstituentRef {
                 material: identity_a,
@@ -4145,5 +4147,4 @@ mod shared_inventory_adapter_tests {
                 && contact.constituent_b.local_index < indices_b.len()
         }));
     }
-
 }
