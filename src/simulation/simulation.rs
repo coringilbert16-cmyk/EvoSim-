@@ -203,6 +203,12 @@ impl Simulation {
             world_tone_cycle: Some(world_tone_cycle),
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
+            environmental_combine_live_inspected_material_pair_ids:
+                std::collections::BTreeSet::new(),
+            environmental_combine_live_physical_interface_ids:
+                std::collections::BTreeSet::new(),
+            environmental_combine_live_discovered_interface_ids:
+                std::collections::BTreeSet::new(),
             environmental_chemistry_events: Vec::new(),
         }
     }
@@ -914,6 +920,27 @@ impl Simulation {
                 &mut environmental_combine_discovery_remaining,
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
+        self.environmental_combine_live_inspected_material_pair_ids.extend(
+            self.environmental_chemistry_diagnostics
+                .combine_search
+                .live_inspected_material_pair_ids
+                .iter()
+                .cloned(),
+        );
+        self.environmental_combine_live_physical_interface_ids.extend(
+            self.environmental_chemistry_diagnostics
+                .combine_search
+                .live_physical_interface_ids
+                .iter()
+                .cloned(),
+        );
+        self.environmental_combine_live_discovered_interface_ids.extend(
+            self.environmental_chemistry_diagnostics
+                .combine_search
+                .live_discovered_interface_ids
+                .iter()
+                .cloned(),
+        );
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
