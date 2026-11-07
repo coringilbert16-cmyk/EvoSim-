@@ -1811,7 +1811,8 @@ mod tests {
                                 (energy_ranked, fastest_activation)
                             {
                                 if census.alternatives.len() >= 2
-                                    && fastest_activation.activation_increment > energy_ranked.activation_increment
+                                    && fastest_activation.activation_increment
+                                        > energy_ranked.activation_increment
                                 {
                                     replacement = Some((placement, energy_ranked.candidate));
                                     break 'poses;
