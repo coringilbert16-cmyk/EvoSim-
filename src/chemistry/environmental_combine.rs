@@ -4156,15 +4156,23 @@ mod shared_inventory_adapter_tests {
                     contact.candidate,
                     &catalog,
                 )
-                .map(|_| format!("{:?}|{:?}", contact.endpoint_a, contact.endpoint_b))
+                .map(|_| {
+                    format!(
+                        "{unit_a}|{unit_b}|{:?}|{:?}",
+                        contact.endpoint_a, contact.endpoint_b
+                    )
+                })
             })
             .collect();
         let mut production_evaluable: Vec<String> = live_contacts
             .iter()
             .map(|contact| {
                 format!(
-                    "{:?}|{:?}",
-                    contact.candidate.endpoint_a, contact.candidate.endpoint_b
+                    "{}|{}|{:?}|{:?}",
+                    contact.unit_a,
+                    contact.unit_b,
+                    contact.candidate.endpoint_a,
+                    contact.candidate.endpoint_b
                 )
             })
             .collect();
