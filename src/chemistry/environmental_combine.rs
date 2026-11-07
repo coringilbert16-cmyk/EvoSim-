@@ -199,7 +199,9 @@ fn is_current_combine_accumulation_key(key: &str) -> bool {
                     .is_some_and(|unit| unit.parse::<usize>().is_ok())
                 && parts.next().is_none()
         } else {
-            parts.next().is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
+            parts
+                .next()
+                .is_some_and(|id| id.parse::<u64>().is_ok_and(|id| id != 0))
                 && parts
                     .next()
                     .is_some_and(|unit| unit.parse::<usize>().is_ok())
