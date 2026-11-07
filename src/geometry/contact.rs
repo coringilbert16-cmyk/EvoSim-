@@ -349,8 +349,7 @@ fn multi_contact_fluid_endpoint_pairs(
             if length_squared <= f64::EPSILON {
                 return false;
             }
-            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
-                .clamp(0.0, 1.0);
+            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
             let px = start_x + t * dx;
             let py = start_y + t * dy;
             (x - px).hypot(y - py) <= tolerance
@@ -501,9 +500,7 @@ fn candidate_endpoints_bounded(
             ..
         })
     ) {
-        candidates.extend(multi_contact_fluid_endpoint_pairs(
-            a, b, catalog, remaining,
-        ));
+        candidates.extend(multi_contact_fluid_endpoint_pairs(a, b, catalog, remaining));
         if candidates.len() >= limit {
             return (candidates, true);
         }
@@ -647,26 +644,6 @@ pub(crate) fn connection_pair_candidate_for_endpoints(
                     && connection_endpoint_matches(*candidate_b, endpoint_b)
             })?;
     candidate_for_endpoints(s, ua, ub, candidate_a, candidate_b, c)
-}
-
-/// Generate at most `limit` raw endpoint pairs before geometry conversion.
-/// The boolean is true when the limit stopped or exhausted candidate generation.
-pub(crate) fn connection_pair_candidates_bounded(
-    s: &OrganismStructure,
-    ua: usize,
-    ub: usize,
-    c: &[crate::resources::BaseResource],
-    limit: usize,
-) -> (Vec<ConnectionPairCandidate>, usize, bool) {
-    let (Some(a), Some(b)) = (s.units.get(ua), s.units.get(ub)) else {
-        return (Vec::new(), 0, false);
-    };
-    let (endpoints, limit_reached) = candidate_endpoints_bounded(a, b, c, limit);
-    let raw_count = endpoints.len();
-    let candidates = endpoints.into_iter()
-        .filter_map(|(a, b)| candidate_for_endpoints(s, ua, ub, a, b, c))
-        .collect();
-    (candidates, raw_count, limit_reached)
 }
 
 /// Generate at most `limit` raw endpoint pairs before geometry conversion.
