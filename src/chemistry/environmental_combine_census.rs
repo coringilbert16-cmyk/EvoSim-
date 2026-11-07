@@ -32,10 +32,15 @@ pub(crate) struct EnvironmentalCombineCensus {
     pub(crate) activation_already_reached_interfaces: u64,
     pub(crate) activation_reached_after_one_more_evaluation: u64,
     pub(crate) activation_below_threshold_after_one_more_evaluation: u64,
+    pub(crate) activation_no_progress_interfaces: u64,
     pub(crate) max_accumulated_reaction: f64,
     /// Instantaneous COMBINE funding uses the usable-energy pool.
     pub(crate) usable_energy_available: f64,
     pub(crate) usable_energy_sufficient_interfaces: u64,
+    pub(crate) structurally_self_funding_interfaces: u64,
+    pub(crate) positive_energy_funded_interfaces: u64,
+    pub(crate) minimum_required_energy: Option<f64>,
+    pub(crate) maximum_required_energy: Option<f64>,
     /// Resonance is recorded for context but is not a COMBINE funding source.
     pub(crate) resonant_energy_available: f64,
     pub(crate) resonance_funding_supported: bool,
@@ -420,6 +425,31 @@ pub(crate) fn census_environmental_combine(
                                 census.census_pair_ids.push(interface_id);
                             }
                         }
+                        if required_energy.is_finite() {
+                            census.minimum_required_energy = Some(
+                                census
+                                    .minimum_required_energy
+                                    .map_or(required_energy, |current| current.min(required_energy)),
+                            );
+                            census.maximum_required_energy = Some(
+                                census
+                                    .maximum_required_energy
+                                    .map_or(required_energy, |current| current.max(required_energy)),
+                            );
+                            if required_energy <= 0.0 {
+                                census.structurally_self_funding_interfaces += 1;
+                            } else if usable_energy.is_finite()
+                                && usable_energy >= required_energy
+                            {
+                                census.positive_energy_funded_interfaces += 1;
+                            }
+                            if usable_energy.is_finite()
+                                && usable_energy >= 0.0
+                                && required_energy <= usable_energy
+                            {
+                                census.usable_energy_sufficient_interfaces += 1;
+                            }
+                        }
 
                         let [(material_name_a, _)] =
                             combined.units[unit_a].material.parts.as_slice()
@@ -513,14 +543,14 @@ pub(crate) fn census_environmental_combine(
                         census.max_accumulated_reaction =
                             census.max_accumulated_reaction.max(previous);
 
-                        if let Some(next) = crate::chemistry::accumulate_reaction(
+                        match crate::chemistry::accumulate_reaction(
                             previous,
                             static_potential,
                             contact,
                             engagement,
                             crate::chemistry::CHEMICAL_DISSIPATION,
                         ) {
-                            if next > 0.0 {
+                            Some(next) if next > 0.0 => {
                                 census.max_accumulated_reaction =
                                     census.max_accumulated_reaction.max(next);
                                 if crate::chemistry::normalized_chemistry_to_activation_signal(next)
@@ -534,14 +564,7 @@ pub(crate) fn census_environmental_combine(
                                         1;
                                 }
                             }
-                        }
-
-                        if usable_energy.is_finite()
-                            && usable_energy >= 0.0
-                            && required_energy.is_finite()
-                            && required_energy <= usable_energy
-                        {
-                            census.usable_energy_sufficient_interfaces += 1;
+                            _ => census.activation_no_progress_interfaces += 1,
                         }
 
                     }
