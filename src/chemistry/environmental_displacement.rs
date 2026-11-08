@@ -1941,8 +1941,8 @@ mod tests {
         let mut replacement_trial = source.clone();
         replacement_trial.break_matching_bond(old_bond).unwrap();
         // Search physically valid Oxygen poses rather than relying on a guessed
-        // offset. The selected pose must engage a different available Carbon
-        // endpoint and avoid penetrating either existing source constituent.
+        // offset. The selected pose must engage a different available endpoint
+        // on the chosen bonded anchor and avoid penetrating either source unit.
         let mut replacement = None;
         'poses: for x_step in -8..=8 {
             for y_step in -8..=8 {
@@ -2035,7 +2035,7 @@ mod tests {
             }
         }
         let (incoming_placement, replacement_candidate) =
-            replacement.expect("valid alternate Carbon endpoint must be physically engaged");
+            replacement.expect("valid alternate bonded-anchor endpoint must be physically engaged");
         source.units[2].placement = incoming_placement;
         replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
