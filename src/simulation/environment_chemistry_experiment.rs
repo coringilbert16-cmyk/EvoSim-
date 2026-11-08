@@ -202,7 +202,8 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5)
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
                 .clamp(1.0, width - 1.0);
             let y =
                 (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5 + rng.gen_range(-0.4..0.4)).clamp(1.0, height - 1.0);
@@ -299,7 +300,8 @@ fn seed_randomized_molecular_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5)
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
                 .clamp(1.0, width - 2.8);
             let y =
                 (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5 + rng.gen_range(-0.4..0.4)).clamp(1.0, height - 1.0);
@@ -498,8 +500,8 @@ fn randomized_pile_centers(
         .map(|pile_size| {
             let columns = (*pile_size as f64).sqrt().ceil() as usize;
             let rows = pile_size.div_ceil(columns);
-            let half_width = (columns.saturating_sub(1) as f64) * 0.75 + 1.0;
-            let half_height = (rows.saturating_sub(1) as f64) * 0.75 + 1.0;
+            let half_width = (columns.saturating_sub(1) as f64) * 1.25 + 1.0;
+            let half_height = (rows.saturating_sub(1) as f64) * 1.25 + 1.0;
             half_width.hypot(half_height)
         })
         .collect::<Vec<_>>();
