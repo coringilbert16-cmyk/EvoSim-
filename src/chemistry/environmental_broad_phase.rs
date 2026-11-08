@@ -2041,6 +2041,14 @@ mod tests {
         assert!(!stale.complete);
         assert_eq!(stale.visited_work, 0);
 
+        let mut changed_field = field.clone();
+        changed_field.mark_changed_at_index(0);
+        let mut stale_field_cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let stale_field =
+            stale_field_cursor.next_page(&snapshot, &changed_field, &catalog, 10);
+        assert!(!stale_field.complete);
+        assert_eq!(stale_field.visited_work, 0);
+
         let mut duplicate_catalog = catalog.clone();
         duplicate_catalog.push(duplicate_catalog[0].clone());
         let mut invalid_cursor = MaterialBoundsCursor::new(&snapshot, &duplicate_catalog);
