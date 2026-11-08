@@ -12,7 +12,6 @@ use crate::observation::{
 };
 use crate::resource_visualization::appearance;
 use crate::runtime::RuntimeState;
-use crate::state::Simulation;
 
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
@@ -76,7 +75,8 @@ impl CommandResponse {
 }
 
 pub(crate) async fn run_child(port: u16) {
-    let runtime = Arc::new(Mutex::new(RuntimeState::new(Simulation::new(42, 10.0))));
+    let simulation = crate::runtime::environment_chemistry_simulation(10.0, true);
+    let runtime = Arc::new(Mutex::new(RuntimeState::new(simulation)));
     let (tick_sender, _) = tokio::sync::broadcast::channel::<String>(32);
     start_tick_loop(runtime.clone(), tick_sender.clone());
 
