@@ -1826,7 +1826,15 @@ mod tests {
     #[test]
     fn indexed_cursor_matches_spatial_reference_across_cell_edges_and_page_sizes() {
         let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
-        let placements = [(70, 0), (10, 0), (60, 5), (20, 6), (50, 11), (30, 17), (40, 23)];
+        let placements = [
+            (70, 0),
+            (10, 0),
+            (60, 5),
+            (20, 6),
+            (50, 11),
+            (30, 17),
+            (40, 23),
+        ];
         for (identity, cell_index) in placements {
             field.cells[cell_index]
                 .physical_materials
@@ -1853,7 +1861,10 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+        ] {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected = reference
