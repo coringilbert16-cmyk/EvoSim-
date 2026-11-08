@@ -140,6 +140,7 @@ enum DisplacementTrialFailureStage {
     Insertion,
     Energy,
     Products,
+    ReplacementBondStrength,
     #[default]
     Other,
 }
@@ -261,7 +262,7 @@ fn build_displacement_trial_with_activation_status(
     // cannot displace the existing bond.
     if preflight.replacement_bond_energy <= preflight.old_bond_energy {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Other;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::ReplacementBondStrength;
         }
         return None;
     }
@@ -711,9 +712,15 @@ fn best_replacement_contact(
     incoming_unit: usize,
     old_bond: Bond,
     catalog: &[BaseResource],
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
-    topology_trial.break_matching_bond(old_bond)?;
+    if topology_trial.break_matching_bond(old_bond).is_none() {
+        diagnostics.replacement_search_topology_rejections = diagnostics
+            .replacement_search_topology_rejections
+            .saturating_add(1);
+        return None;
+    }
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
     for candidate in crate::contact::connection_pair_candidates_cached(
@@ -723,6 +730,9 @@ fn best_replacement_contact(
         catalog,
         &mut cache,
     ) {
+        diagnostics.replacement_candidates_inspected = diagnostics
+            .replacement_candidates_inspected
+            .saturating_add(1);
         if !candidate.available_a
             || !candidate.available_b
             || !candidate.distance.is_finite()
@@ -731,6 +741,9 @@ fn best_replacement_contact(
             || !candidate.facing.is_finite()
             || candidate.facing <= 0.0
         {
+            diagnostics.replacement_candidate_geometry_rejections = diagnostics
+                .replacement_candidate_geometry_rejections
+                .saturating_add(1);
             continue;
         }
         let Some((_evaluation, _formation_work, investment, required_energy)) =
@@ -742,8 +755,14 @@ fn best_replacement_contact(
                 catalog,
             )
         else {
+            diagnostics.replacement_candidate_evaluation_rejections = diagnostics
+                .replacement_candidate_evaluation_rejections
+                .saturating_add(1);
             continue;
         };
+        diagnostics.replacement_candidate_evaluations_succeeded = diagnostics
+            .replacement_candidate_evaluations_succeeded
+            .saturating_add(1);
         let replace = best.map_or(true, |(current, _, current_energy)| {
             required_energy
                 .partial_cmp(&current_energy)
@@ -984,6 +1003,7 @@ pub(crate) fn accumulate_environmental(
                                     incoming_unit,
                                     old_bond,
                                     &environment.catalog,
+                                    diagnostics,
                                 ) else {
                                     continue;
                                 };
@@ -1137,6 +1157,11 @@ pub(crate) fn accumulate_environmental(
                                             DisplacementTrialFailureStage::Products => {
                                                 diagnostics.trial_rejections_products = diagnostics
                                                     .trial_rejections_products
+                                                    .saturating_add(1);
+                                            }
+                                            DisplacementTrialFailureStage::ReplacementBondStrength => {
+                                                diagnostics.trial_rejections_replacement_bond_strength = diagnostics
+                                                    .trial_rejections_replacement_bond_strength
                                                     .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Other => {
