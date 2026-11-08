@@ -947,7 +947,7 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(objects.len(), 1);
-        let placement = objects[0].placements.as_ref().unwrap()[0];
+        let placement = &objects[0].placements.as_ref().unwrap()[0];
         let destination = field.index_for_position(placement.x, placement.y).unwrap();
         assert_ne!(
             destination, source,
