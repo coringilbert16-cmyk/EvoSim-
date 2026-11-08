@@ -101,6 +101,8 @@ mod environmental_broad_phase;
 mod environmental_combine;
 #[path = "chemistry/environmental_displacement.rs"]
 mod environmental_displacement;
+#[path = "chemistry/environmental_evaluation.rs"]
+mod environmental_evaluation;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
 
