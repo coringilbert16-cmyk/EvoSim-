@@ -596,6 +596,12 @@ pub(crate) struct Environment {
 pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     /// Cell, material, and bond entries traversed by bounded discovery.
     pub(crate) scan_entries_inspected: u64,
+    /// Total live environmental bond records, from an exhaustive field census.
+    #[serde(default)]
+    pub(crate) total_environmental_bonds: u64,
+    /// Live bond records outside this tick's bounded scan window.
+    #[serde(default)]
+    pub(crate) environmental_bonds_unvisited: u64,
     /// Physical bond records yielded by the candidate window.
     pub(crate) bond_candidates_inspected: u64,
     /// Candidates with a valid realized connection record and accumulation key.
@@ -642,6 +648,8 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.scan_entries_inspected = self
             .scan_entries_inspected
             .saturating_add(tick.scan_entries_inspected);
+        self.total_environmental_bonds = tick.total_environmental_bonds;
+        self.environmental_bonds_unvisited = tick.environmental_bonds_unvisited;
         self.bond_candidates_inspected = self
             .bond_candidates_inspected
             .saturating_add(tick.bond_candidates_inspected);
@@ -752,6 +760,18 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     /// Raw endpoint-pair candidates generated during replacement contact searches.
     #[serde(default)]
     pub(crate) replacement_candidates_inspected: u64,
+    /// Bounded all-alternatives audits performed beside the live selector.
+    #[serde(default)]
+    pub(crate) replacement_alternative_audits: u64,
+    /// Fully evaluated alternatives in those audits.
+    #[serde(default)]
+    pub(crate) replacement_alternatives_evaluated: u64,
+    /// Searches where an unselected valid alternative had stronger intrinsic bond energy than the live selector's winner.
+    #[serde(default)]
+    pub(crate) selected_contact_hides_stronger_alternative: u64,
+    /// All-alternatives audits truncated by their independent work limit.
+    #[serde(default)]
+    pub(crate) replacement_alternative_audits_truncated: u64,
     /// Generated endpoint pairs rejected by availability, distance, or facing checks.
     #[serde(default)]
     pub(crate) replacement_candidate_geometry_rejections: u64,
@@ -850,6 +870,18 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.replacement_candidates_inspected = self
             .replacement_candidates_inspected
             .saturating_add(tick.replacement_candidates_inspected);
+        self.replacement_alternative_audits = self
+            .replacement_alternative_audits
+            .saturating_add(tick.replacement_alternative_audits);
+        self.replacement_alternatives_evaluated = self
+            .replacement_alternatives_evaluated
+            .saturating_add(tick.replacement_alternatives_evaluated);
+        self.selected_contact_hides_stronger_alternative = self
+            .selected_contact_hides_stronger_alternative
+            .saturating_add(tick.selected_contact_hides_stronger_alternative);
+        self.replacement_alternative_audits_truncated = self
+            .replacement_alternative_audits_truncated
+            .saturating_add(tick.replacement_alternative_audits_truncated);
         self.replacement_candidate_geometry_rejections = self
             .replacement_candidate_geometry_rejections
             .saturating_add(tick.replacement_candidate_geometry_rejections);
@@ -956,6 +988,12 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) target_material_pairs_rejected_for_overlap: usize,
     pub(crate) constituent_pairs_available: usize,
     pub(crate) constituent_pairs_inspected: usize,
+    /// Exhaustive count of unordered realized material pairs in the field.
+    #[serde(default)]
+    pub(crate) global_realized_material_pairs: usize,
+    /// Global pairs not reached by this tick's spatial/budgeted discovery.
+    #[serde(default)]
+    pub(crate) global_realized_material_pairs_unvisited: usize,
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,
     pub(crate) constituent_pairs_with_valid_interfaces: usize,
