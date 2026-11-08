@@ -749,6 +749,21 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) replacement_contact_searches: u64,
     /// Searches that found a geometrically and chemically valid replacement contact.
     pub(crate) replacement_contacts_found: u64,
+    /// Raw endpoint-pair candidates generated during replacement contact searches.
+    #[serde(default)]
+    pub(crate) replacement_candidates_inspected: u64,
+    /// Generated endpoint pairs rejected by availability, distance, or facing checks.
+    #[serde(default)]
+    pub(crate) replacement_candidate_geometry_rejections: u64,
+    /// Geometrically valid endpoint pairs rejected by the ordinary COMBINE evaluator.
+    #[serde(default)]
+    pub(crate) replacement_candidate_evaluation_rejections: u64,
+    /// Geometrically valid endpoint pairs accepted by the ordinary COMBINE evaluator.
+    #[serde(default)]
+    pub(crate) replacement_candidate_evaluations_succeeded: u64,
+    /// Search attempts whose old bond could not be removed from the trial graph.
+    #[serde(default)]
+    pub(crate) replacement_search_topology_rejections: u64,
     /// Valid incoming-contact activation accumulations updated.
     pub(crate) activation_updates: u64,
     /// Activation checks that reached the existing bond's displacement barrier.
@@ -786,6 +801,9 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) trial_rejections_products: u64,
     /// Activated trials rejected at another validation stage.
     pub(crate) trial_rejections_other: u64,
+    /// Activated trials rejected because the proposed A-C bond is not stronger than A-B.
+    #[serde(default)]
+    pub(crate) trial_rejections_replacement_bond_strength: u64,
     /// Highest updated incoming-contact activation accumulation observed this tick.
     pub(crate) max_accumulated_reaction: f64,
     /// Shared lifecycle counts emitted by the live environmental DISPLACEMENT pass.
@@ -814,6 +832,21 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.replacement_contacts_found = self
             .replacement_contacts_found
             .saturating_add(tick.replacement_contacts_found);
+        self.replacement_candidates_inspected = self
+            .replacement_candidates_inspected
+            .saturating_add(tick.replacement_candidates_inspected);
+        self.replacement_candidate_geometry_rejections = self
+            .replacement_candidate_geometry_rejections
+            .saturating_add(tick.replacement_candidate_geometry_rejections);
+        self.replacement_candidate_evaluation_rejections = self
+            .replacement_candidate_evaluation_rejections
+            .saturating_add(tick.replacement_candidate_evaluation_rejections);
+        self.replacement_candidate_evaluations_succeeded = self
+            .replacement_candidate_evaluations_succeeded
+            .saturating_add(tick.replacement_candidate_evaluations_succeeded);
+        self.replacement_search_topology_rejections = self
+            .replacement_search_topology_rejections
+            .saturating_add(tick.replacement_search_topology_rejections);
         self.activation_updates = self
             .activation_updates
             .saturating_add(tick.activation_updates);
@@ -864,6 +897,9 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.trial_rejections_other = self
             .trial_rejections_other
             .saturating_add(tick.trial_rejections_other);
+        self.trial_rejections_replacement_bond_strength = self
+            .trial_rejections_replacement_bond_strength
+            .saturating_add(tick.trial_rejections_replacement_bond_strength);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
