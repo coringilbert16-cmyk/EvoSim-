@@ -537,6 +537,113 @@ mod tests {
     }
 
     #[test]
+    fn spatial_candidate_sets_match_directed_reference_filtered_by_field_queries() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        field.cells[0]
+            .physical_materials
+            .push(physical(40, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Oxygen"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
+        field.cells[14]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 8);
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: -1.0,
+                max_x: 11.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 10.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 9.0,
+                max_x: 21.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 39.0,
+                max_x: 51.0,
+                min_y: 19.0,
+                max_y: 31.0,
+            }),
+        ];
+        let padding = 2.1;
+
+        let mut expected_directed = std::collections::BTreeSet::new();
+        let mut oracle_start = 0;
+        loop {
+            let (window, coverage) = snapshot.directed_pair_window(oracle_start, 3);
+            for pair in window {
+                let anchor = &snapshot.materials[pair.left];
+                let incoming = &snapshot.materials[pair.right];
+                let Some(expanded) = bounds[pair.left].and_then(|value| value.expanded(padding))
+                else {
+                    continue;
+                };
+                let target_cells = field.cells_intersecting_bounds(
+                    expanded.min_x,
+                    expanded.max_x,
+                    expanded.min_y,
+                    expanded.max_y,
+                );
+                if target_cells.contains(&incoming.locator.cell_index) {
+                    expected_directed.insert((pair.identity_left, pair.identity_right));
+                }
+                let _ = anchor;
+            }
+            oracle_start += coverage.visited_pairs;
+            if oracle_start >= coverage.known_pairs {
+                break;
+            }
+        }
+
+        let (actual_directed, directed_coverage) = snapshot.spatial_pair_window(
+            &field,
+            &bounds,
+            padding,
+            0,
+            usize::MAX,
+            PairOrientation::Directed,
+        );
+        let actual_directed = actual_directed
+            .into_iter()
+            .map(|pair| (pair.identity_left, pair.identity_right))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(actual_directed, expected_directed);
+        assert_eq!(directed_coverage.known_pairs, expected_directed.len() as u64);
+
+        let expected_unordered = expected_directed
+            .iter()
+            .map(|(a, b)| if a < b { (*a, *b) } else { (*b, *a) })
+            .collect::<std::collections::BTreeSet<_>>();
+        let (actual_unordered, unordered_coverage) = snapshot.spatial_pair_window(
+            &field,
+            &bounds,
+            padding,
+            0,
+            usize::MAX,
+            PairOrientation::Unordered,
+        );
+        let actual_unordered = actual_unordered
+            .into_iter()
+            .map(|pair| (pair.identity_left, pair.identity_right))
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(actual_unordered, expected_unordered);
+        assert_eq!(unordered_coverage.known_pairs, expected_unordered.len() as u64);
+    }
+
+    #[test]
     fn directed_reference_empty_and_single_material_windows_are_empty() {
         let empty = EnvironmentalMaterialSnapshot::default();
         let (empty_pairs, empty_coverage) = empty.directed_pair_window(0, 10);
