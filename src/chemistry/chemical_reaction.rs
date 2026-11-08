@@ -952,9 +952,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.progress_preserved_unsearched = preserved;
     diagnostics.progress_dissipated_checked = dissipated;
 
-    use crate::environmental_evaluation::{
-        EnvironmentalReactionKind, EvaluationStage,
-    };
+    use crate::environmental_evaluation::{EnvironmentalReactionKind, EvaluationStage};
     let rejected_candidates = diagnostics
         .candidate_geometry_rejections
         .saturating_add(diagnostics.candidate_chemistry_rejections);
