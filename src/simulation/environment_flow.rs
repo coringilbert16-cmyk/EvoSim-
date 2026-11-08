@@ -710,6 +710,17 @@ mod tests {
     }
 
     #[test]
+    fn background_flow_is_periodic_left_to_right_but_not_top_to_bottom() {
+        let left = background_velocity(0.0, 30.0, 100.0, 80.0);
+        let right = background_velocity(100.0, 30.0, 100.0, 80.0);
+        assert!((left.x - right.x).abs() < 1e-12);
+        assert!((left.y - right.y).abs() < 1e-12);
+        let top = background_velocity(50.0, 0.0, 100.0, 80.0);
+        let bottom = background_velocity(50.0, 80.0, 100.0, 80.0);
+        assert_ne!(top, bottom, "vertical edges must not share a wrap seam");
+    }
+
+    #[test]
     fn current_has_a_speed_gradient_and_vortices() {
         let core = background_velocity(25.0, 40.0 + 80.0 * 0.23, 100.0, 80.0).length();
         let outer = background_velocity(25.0, 5.0, 100.0, 80.0).length();
@@ -868,6 +879,28 @@ mod tests {
         assert!(placements.iter().all(|p| p.x > 1000.0));
         assert!(((placements[1].x - placements[0].x) - 1.0).abs() < 1e-9);
         assert!((material_center(&moved, 1000.0, 1000.0).unwrap().0 - 0.8).abs() < 1e-9);
+    }
+
+    #[test]
+    fn transport_moves_material_across_the_horizontal_seam() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
+        let material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement { x: 999.99, y: 500.0, rotation_radians: 0.0 }],
+            &catalog,
+        ).expect("catalog carbon should realize");
+        let source = field.index_for_position(999.99, 500.0).unwrap();
+        assert!(field.deposit_physical(999.99, 500.0, material, &catalog));
+        let before = field.total_material();
+        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+        assert_eq!(field.total_material(), before);
+        let objects: Vec<_> = field.cells.iter().flat_map(|cell| cell.physical_materials.iter()).collect();
+        assert_eq!(objects.len(), 1);
+        let placement = objects[0].placements.as_ref().unwrap()[0];
+        let destination = field.index_for_position(placement.x, placement.y).unwrap();
+        assert_ne!(destination, source, "crossing the seam must transfer to the opposite edge cell");
+        assert!(destination % field.width_cells == 0, "material should re-enter at the left edge");
     }
 
     #[test]
