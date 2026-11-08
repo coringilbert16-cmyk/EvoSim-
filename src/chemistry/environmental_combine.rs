@@ -552,6 +552,11 @@ fn chemical_step(
             reject_step!();
         };
         accumulation.remove(&key);
+        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+            tick,
+            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+            (),
+        ));
         operations.push(EnvironmentalCombineOperation {
             cell_a,
             material_a,
@@ -567,6 +572,12 @@ fn chemical_step(
             accumulated_reaction: next,
         });
     } else {
+        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::deferred(
+            tick,
+            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+            crate::environmental_evaluation::EvaluationStage::Activation,
+            "activation_accumulation_below_threshold",
+        ));
         accumulation.insert(key, next);
     }
 }
@@ -632,6 +643,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let cell_scan_count = field_cell_count.min(FIELD_SCAN_ANCHOR_LIMIT);
     let mut operations = Vec::new();
+    let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
     let mut updated_keys = BTreeSet::new();
     let mut checked_prefixes = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
@@ -767,6 +779,15 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         pair_count.saturating_sub(component_work_initial);
                     diagnostics.constituent_pair_windows_truncated +=
                         usize::from(component_work_initial < pair_count);
+                    let uninspected_pairs = pair_count.saturating_sub(component_work_initial);
+                    for _ in 0..uninspected_pairs {
+                        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::deferred(
+                            tick,
+                            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                            crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+                            "bounded_constituent_pair_window_exhausted",
+                        ));
+                    }
                     let pair_start = component_pair_start(tick, pair_count);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
@@ -809,6 +830,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             accumulation,
                             &mut updated_keys,
                             &mut operations,
+                            tick,
+                            &mut journal,
                         );
                     }
                 }
@@ -824,6 +847,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     );
     diagnostics.budget_exhausted = *remaining_discovery_work == 0;
     diagnostics.accumulation_keys_updated = updated_keys.len();
+    diagnostics.evaluation_outcomes = journal.counts();
     record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
 
     // The simulation tick is the stable identity of this COMBINE evaluation
