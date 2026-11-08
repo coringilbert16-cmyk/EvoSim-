@@ -204,6 +204,25 @@ mod tests {
     }
 
     #[test]
+    fn viewer_starts_in_live_seeded_organism_free_environment() {
+        let simulation = environment_chemistry_simulation(10.0, true);
+        let physical_objects = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+
+        assert!(simulation.organisms.is_empty());
+        assert_eq!(simulation.environment.width, 250.0);
+        assert_eq!(simulation.environment.height, 250.0);
+        assert_eq!(physical_objects, 1_280);
+        assert_eq!(simulation.ticks_per_second, 10.0);
+        assert!(simulation.running);
+    }
+
+    #[test]
     fn reset_restores_seeded_organism_free_environment() {
         let mut runtime = RuntimeState::new(Simulation::new(7, 20.0));
         runtime.reset();
