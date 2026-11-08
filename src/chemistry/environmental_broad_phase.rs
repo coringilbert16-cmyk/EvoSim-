@@ -555,22 +555,12 @@ mod tests {
             .physical_materials
             .push(physical(20, "Carbon"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 8);
+        // Snapshot materials are sorted by environmental identity (10, 20, 30, 40),
+        // so keep the fixture bounds in that same order rather than insertion order.
         let bounds = vec![
-            Some(MaterialSpatialBounds {
-                min_x: -1.0,
-                max_x: 11.0,
-                min_y: 0.0,
-                max_y: 10.0,
-            }),
             Some(MaterialSpatialBounds {
                 min_x: 0.0,
                 max_x: 10.0,
-                min_y: 0.0,
-                max_y: 10.0,
-            }),
-            Some(MaterialSpatialBounds {
-                min_x: 9.0,
-                max_x: 21.0,
                 min_y: 0.0,
                 max_y: 10.0,
             }),
@@ -579,6 +569,18 @@ mod tests {
                 max_x: 51.0,
                 min_y: 19.0,
                 max_y: 31.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 9.0,
+                max_x: 21.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: -1.0,
+                max_x: 11.0,
+                min_y: 0.0,
+                max_y: 10.0,
             }),
         ];
         let padding = 2.1;
