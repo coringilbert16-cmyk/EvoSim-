@@ -693,6 +693,22 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.progress_dissipated_checked = self
             .progress_dissipated_checked
             .saturating_add(tick.progress_dissipated_checked);
+        self.evaluation_outcomes.ready = self
+            .evaluation_outcomes
+            .ready
+            .saturating_add(tick.evaluation_outcomes.ready);
+        self.evaluation_outcomes.rejected = self
+            .evaluation_outcomes
+            .rejected
+            .saturating_add(tick.evaluation_outcomes.rejected);
+        self.evaluation_outcomes.deferred = self
+            .evaluation_outcomes
+            .deferred
+            .saturating_add(tick.evaluation_outcomes.deferred);
+        self.evaluation_outcomes.stale = self
+            .evaluation_outcomes
+            .stale
+            .saturating_add(tick.evaluation_outcomes.stale);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
@@ -769,6 +785,9 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) trial_rejections_other: u64,
     /// Highest updated incoming-contact activation accumulation observed this tick.
     pub(crate) max_accumulated_reaction: f64,
+    /// Shared lifecycle counts emitted by the live environmental DISPLACEMENT pass.
+    #[serde(default)]
+    pub(crate) evaluation_outcomes: crate::environmental_evaluation::EvaluationOutcomeCounts,
 }
 
 impl EnvironmentalDisplacementDiscoveryDiagnostics {
