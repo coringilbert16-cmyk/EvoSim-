@@ -17,7 +17,7 @@ The shared broad-phase module now has two distinct pair sources:
 
 The spatial window supports two contracts:
 
-- **Unordered:** one candidate per material pair, canonicalized by current field locator, matching COMBINE's pair-role symmetry.
+- **Unordered:** one candidate per material pair, canonicalized by current field locator. It takes the union of both materials' expanded-bounds cell queries before deduplication, avoiding a direction-dependent miss when only one query reaches the other material's cell. This is deliberately conservative and may be a superset of the current COMBINE traversal; exact parity is still required.
 - **Directed:** both anchor-to-incoming orientations, preserving DISPLACEMENT's role-sensitive search.
 
 The window reports the total known spatial candidates plus visited and deferred counts. It does not perform endpoint geometry, chemistry, activation, scheduling, funding, or commits. The all-pairs oracle remains available for set comparisons.
