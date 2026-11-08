@@ -880,6 +880,9 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) accumulation_entries_after_search: usize,
     pub(crate) accumulation_value_after_search: f64,
     pub(crate) budget_exhausted: bool,
+    /// Shared lifecycle counts emitted by the live COMBINE chemistry pass.
+    #[serde(default)]
+    pub(crate) evaluation_outcomes: crate::environmental_evaluation::EvaluationOutcomeCounts,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
