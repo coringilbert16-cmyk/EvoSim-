@@ -105,6 +105,8 @@ mod environmental_displacement;
 mod environmental_evaluation;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
+#[path = "chemistry/environmental_snapshot_cursor.rs"]
+mod environmental_snapshot_cursor;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
