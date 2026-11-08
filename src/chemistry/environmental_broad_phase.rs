@@ -441,7 +441,7 @@ pub(crate) struct SpatialCursorPage {
 
 impl SpatialPairCursor {
     pub(crate) fn new(snapshot: &EnvironmentalMaterialSnapshot, orientation: PairOrientation) -> Self {
-        let next_right = usize::from(orientation == PairOrientation::Directed);
+        let next_right = if orientation == PairOrientation::Directed { 1 } else { 0 };
         Self {
             pass_id: snapshot.pass_id,
             orientation,
