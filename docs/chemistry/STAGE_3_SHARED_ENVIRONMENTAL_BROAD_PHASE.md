@@ -25,7 +25,8 @@ The window reports the total known spatial candidates plus visited and deferred 
 Current limitations:
 - This is still a read-only candidate generator; no reaction adapter or production path consumes it.
 - Bounds are rebuilt from the current field snapshot. There is no persistent registry or incremental refresh yet.
-- The spatial candidate set intentionally follows the existing field-cell query semantics. It is a conservative filter at the material-pair layer, not proof of complete endpoint-interface parity.
+- The spatial candidate set intentionally follows the existing field-cell query semantics. The current helper clamps horizontal X to the field and wraps vertical Y; this is opposite the earlier Master Spec 2.4 map description (left/right wrap, hard top/bottom). This prototype preserves current production behavior and does not silently change world geometry. Resolve that discrepancy explicitly before any geometry-policy change or production cutover.
+- The spatial filter is at the material-pair layer, not proof of complete endpoint-interface parity.
 - The first test fixtures exercise spatial pruning, pair orientation, and deferred-window accounting. They do not yet cover wrap seams, geometry asymmetry, or exhaustive comparison with live COMBINE/DISPLACEMENT discovery.
 
 ## Confirmed current behavior
@@ -65,8 +66,7 @@ Do not promote the current pass-local state_version placeholder into a persisten
 Generate deterministic candidate relationships from the snapshot, deduplicated by stable material identity pair while retaining the source locator needed for revalidation.
 
 The broad phase must preserve:
-- world left/right wrapping;
-- hard top/bottom boundaries;
+- the exact current field-cell query semantics (including its current axis-specific wrap/clamp behavior);
 - all target-cell and bounds-padding semantics already used by the existing paths;
 - distinct material pairs even when they share a cell;
 - candidate ordering/rotation and explicit deferred coverage under bounded work;
