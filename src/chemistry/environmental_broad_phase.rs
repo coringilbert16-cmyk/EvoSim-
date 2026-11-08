@@ -193,10 +193,11 @@ impl MaterialBoundsCursor {
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
             || field.revision != self.field_revision
-            || self
-                .bounds
-                .as_ref()
-                .is_none_or(|bounds| snapshot.materials.len() != bounds.len())
+            || (!self.complete
+                && self
+                    .bounds
+                    .as_ref()
+                    .is_none_or(|bounds| snapshot.materials.len() != bounds.len()))
             || catalog.len() != self.catalog_len
         {
             return MaterialBoundsCursorPage {
