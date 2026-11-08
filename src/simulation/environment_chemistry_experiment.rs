@@ -148,8 +148,7 @@ pub(crate) fn realize_natural_molecule(
     molecule
 }
 
-/// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
-/// are an unrestricted random partition, not a fixed 6–20 range.
+/// Seed exactly 1,280 individual base resources in 24 separated, balanced piles.
 pub(crate) fn seed_randomized_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -174,20 +173,18 @@ pub(crate) fn seed_randomized_resources(
     }
     identities.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+    // Keep the starting inventory visibly organized into roughly two dozen
+    // similarly sized piles, while shuffling pile sizes and object contents for
+    // a deterministic but nonuniform map.
+    const PILE_COUNT: usize = 24;
+    let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
+    for size in pile_sizes
+        .iter_mut()
+        .take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT)
     {
-        pile_sizes.push(cut - previous);
-        previous = cut;
+        *size += 1;
     }
+    pile_sizes.shuffle(&mut rng);
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
@@ -207,10 +204,14 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 1.0);
-            let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+            let x = (center_x
+                + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
+            .clamp(1.0, width - 1.0);
+            let y = (center_y
+                + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
+            .clamp(1.0, height - 1.0);
             let placement = Placement {
                 x,
                 y,
@@ -276,20 +277,18 @@ fn seed_randomized_molecular_resources(
     }
     objects.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+    // Keep the starting inventory visibly organized into roughly two dozen
+    // similarly sized piles, while shuffling pile sizes and object contents for
+    // a deterministic but nonuniform map.
+    const PILE_COUNT: usize = 24;
+    let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
+    for size in pile_sizes
+        .iter_mut()
+        .take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT)
     {
-        pile_sizes.push(cut - previous);
-        previous = cut;
+        *size += 1;
     }
+    pile_sizes.shuffle(&mut rng);
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
@@ -309,10 +308,14 @@ fn seed_randomized_molecular_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 2.8);
-            let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+            let x = (center_x
+                + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
+            .clamp(1.0, width - 2.8);
+            let y = (center_y
+                + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5
+                + rng.gen_range(-0.4..0.4))
+            .clamp(1.0, height - 1.0);
             let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
             let placement = Placement {
                 x,
@@ -508,8 +511,8 @@ fn randomized_pile_centers(
         .map(|pile_size| {
             let columns = (*pile_size as f64).sqrt().ceil() as usize;
             let rows = pile_size.div_ceil(columns);
-            let half_width = (columns.saturating_sub(1) as f64) * 0.75 + 1.0;
-            let half_height = (rows.saturating_sub(1) as f64) * 0.75 + 1.0;
+            let half_width = (columns.saturating_sub(1) as f64) * 1.25 + 1.0;
+            let half_height = (rows.saturating_sub(1) as f64) * 1.25 + 1.0;
             half_width.hypot(half_height)
         })
         .collect::<Vec<_>>();
@@ -526,8 +529,8 @@ fn randomized_pile_centers(
             .iter()
             .zip(pile_radii.iter())
             .all(|((x, y), existing_radius)| {
-                let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-                (candidate.0 - *x).hypot(vertical) >= radius + *existing_radius + 3.0
+                let horizontal = (candidate.0 - *x + width * 0.5).rem_euclid(width) - width * 0.5;
+                (horizontal).hypot(candidate.1 - *y) >= radius + *existing_radius + 3.0
             });
         if separated {
             centers.push(candidate);
@@ -573,9 +576,8 @@ mod tests {
             first.pile_sizes.iter().sum::<usize>(),
             ENVIRONMENT_OBJECT_COUNT
         );
-        assert!((3..=10).contains(&first.pile_sizes.len()));
-        assert!(first.pile_sizes.iter().all(|size| *size >= 1));
-        assert!(first.pile_sizes.iter().any(|size| *size < 6 || *size > 20));
+        assert_eq!(first.pile_sizes.len(), 24);
+        assert!(first.pile_sizes.iter().all(|size| (53..=54).contains(size)));
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
         assert_eq!(first.simulation.environment.width, 250.0);

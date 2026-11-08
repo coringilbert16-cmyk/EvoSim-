@@ -151,20 +151,18 @@ impl ActiveMaterialField {
     }
 
     pub fn row_col_for_position(&self, x: f64, y: f64) -> Option<(usize, usize)> {
-        if !x.is_finite()
-            || !y.is_finite()
-            || x < 0.0
-            || x >= self.width_cells as f64 * self.cell_size
-        {
+        if !x.is_finite() || !y.is_finite() || self.width_cells == 0 || self.height_cells == 0 {
             return None;
         }
-        let wrapped_y = y.rem_euclid(self.height_cells as f64 * self.cell_size);
-        let col = (x / self.cell_size).floor() as usize;
-        let row = (wrapped_y / self.cell_size).floor() as usize;
-        if col >= self.width_cells || row >= self.height_cells {
+        let width = self.width_cells as f64 * self.cell_size;
+        let height = self.height_cells as f64 * self.cell_size;
+        if y < 0.0 || y >= height {
             return None;
         }
-        Some((row, col))
+        let wrapped_x = x.rem_euclid(width);
+        let col = (wrapped_x / self.cell_size).floor() as usize;
+        let row = (y / self.cell_size).floor() as usize;
+        (col < self.width_cells && row < self.height_cells).then_some((row, col))
     }
 
     pub fn index_for_position(&self, x: f64, y: f64) -> Option<usize> {
@@ -195,26 +193,21 @@ impl ActiveMaterialField {
         {
             return Vec::new();
         }
-        let min_x = (x - radius).max(0.0);
-        let max_x = x + radius;
-        let min_col = (min_x / self.cell_size).floor() as usize;
-        let max_col =
-            ((max_x / self.cell_size).floor() as usize).min(self.width_cells.saturating_sub(1));
-        if min_col >= self.width_cells || min_col > max_col {
+        let width = self.width_cells as f64 * self.cell_size;
+        let height = self.height_cells as f64 * self.cell_size;
+        if y < 0.0 || y >= height {
             return Vec::new();
         }
-
-        let field_height = self.height_cells as f64 * self.cell_size;
-        let wrapped_y = y.rem_euclid(field_height);
+        let wrapped_x = x.rem_euclid(width);
         let radius_squared = radius * radius;
         let mut indices = Vec::new();
         for row in 0..self.height_cells {
-            for col in min_col..=max_col {
+            for col in 0..self.width_cells {
                 let index = row * self.width_cells + col;
                 let (cell_x, cell_y) = self.cell_center(index);
-                let dx = cell_x - x;
-                let direct_dy = (cell_y - wrapped_y).abs();
-                let dy = direct_dy.min(field_height - direct_dy);
+                let direct_dx = (cell_x - wrapped_x).abs();
+                let dx = direct_dx.min(width - direct_dx);
+                let dy = (cell_y - y).abs();
                 if dx * dx + dy * dy <= radius_squared {
                     indices.push(index);
                 }
@@ -224,8 +217,8 @@ impl ActiveMaterialField {
     }
 
     /// Return field cells whose spatial bounds intersect the supplied
-    /// axis-aligned bounds. Horizontal coordinates remain bounded; vertical
-    /// coordinates wrap continuously from top to bottom.
+    /// axis-aligned bounds. Horizontal coordinates wrap; vertical coordinates
+    /// are clipped at the hard top and bottom boundaries.
     pub(crate) fn cells_intersecting_bounds(
         &self,
         min_x: f64,
@@ -233,40 +226,37 @@ impl ActiveMaterialField {
         min_y: f64,
         max_y: f64,
     ) -> Vec<usize> {
-        if !min_x.is_finite()
-            || !max_x.is_finite()
-            || !min_y.is_finite()
-            || !max_y.is_finite()
+        if ![min_x, max_x, min_y, max_y].iter().all(|v| v.is_finite())
             || min_x > max_x
             || min_y > max_y
+            || self.width_cells == 0
+            || self.height_cells == 0
         {
             return Vec::new();
         }
-
-        let min_col = ((min_x / self.cell_size).floor() as isize).max(0) as usize;
-        let max_col = ((max_x / self.cell_size).floor() as isize)
-            .min(self.width_cells.saturating_sub(1) as isize)
-            .max(0) as usize;
-        if min_col > max_col || self.width_cells == 0 || self.height_cells == 0 {
+        let width = self.width_cells as f64 * self.cell_size;
+        let height = self.height_cells as f64 * self.cell_size;
+        if max_y < 0.0 || min_y >= height {
             return Vec::new();
         }
-
-        let row_start = (min_y / self.cell_size).floor() as isize;
-        let row_end = (max_y / self.cell_size).floor() as isize;
-        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
-        let rows: Vec<usize> = if row_count >= self.height_cells {
-            (0..self.height_cells).collect()
+        let row_start = (min_y.max(0.0) / self.cell_size).floor() as usize;
+        let row_end = ((max_y.min(height - 1e-9) / self.cell_size).floor() as usize)
+            .min(self.height_cells - 1);
+        if row_start > row_end {
+            return Vec::new();
+        }
+        let cols: Vec<usize> = if max_x - min_x >= width {
+            (0..self.width_cells).collect()
         } else {
-            (0..row_count)
-                .map(|offset| {
-                    (row_start + offset as isize).rem_euclid(self.height_cells as isize) as usize
-                })
+            let first = (min_x / self.cell_size).floor() as isize;
+            let last = (max_x / self.cell_size).floor() as isize;
+            (first..=last)
+                .map(|col| col.rem_euclid(self.width_cells as isize) as usize)
                 .collect()
         };
-
-        let mut indices = Vec::with_capacity(rows.len() * (max_col - min_col + 1));
-        for row in rows {
-            for col in min_col..=max_col {
+        let mut indices = Vec::with_capacity((row_end - row_start + 1) * cols.len());
+        for row in row_start..=row_end {
+            for &col in &cols {
                 indices.push(row * self.width_cells + col);
             }
         }
@@ -274,9 +264,8 @@ impl ActiveMaterialField {
     }
 
     /// Return at most `limit` cells intersecting the supplied bounds without
-    /// materializing the full spatial query. `start_offset` rotates through the
-    /// deterministic row-major candidate sequence so bounded callers can make
-    /// progress across large bounds over successive ticks.
+    /// materializing the full spatial query. Horizontal columns wrap and vertical
+    /// rows are clipped to the hard world boundaries.
     pub(crate) fn cells_intersecting_bounds_limited(
         &self,
         min_x: f64,
@@ -287,10 +276,7 @@ impl ActiveMaterialField {
         start_offset: usize,
     ) -> Vec<usize> {
         if limit == 0
-            || !min_x.is_finite()
-            || !max_x.is_finite()
-            || !min_y.is_finite()
-            || !max_y.is_finite()
+            || ![min_x, max_x, min_y, max_y].iter().all(|v| v.is_finite())
             || min_x > max_x
             || min_y > max_y
             || self.width_cells == 0
@@ -298,37 +284,38 @@ impl ActiveMaterialField {
         {
             return Vec::new();
         }
-
-        let min_col = ((min_x / self.cell_size).floor() as isize).max(0) as usize;
-        let max_col = ((max_x / self.cell_size).floor() as isize)
-            .min(self.width_cells.saturating_sub(1) as isize)
-            .max(0) as usize;
-        if min_col > max_col {
+        let width = self.width_cells as f64 * self.cell_size;
+        let height = self.height_cells as f64 * self.cell_size;
+        if max_y < 0.0 || min_y >= height {
             return Vec::new();
         }
-
-        let row_start = (min_y / self.cell_size).floor() as isize;
-        let row_end = (max_y / self.cell_size).floor() as isize;
-        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
-        let candidate_rows = row_count.min(self.height_cells);
-        let candidate_cols = max_col - min_col + 1;
-        let total = candidate_rows.saturating_mul(candidate_cols);
+        let row_start = (min_y.max(0.0) / self.cell_size).floor() as usize;
+        let row_end = ((max_y.min(height - 1e-9) / self.cell_size).floor() as usize)
+            .min(self.height_cells - 1);
+        if row_start > row_end {
+            return Vec::new();
+        }
+        let cols: Vec<usize> = if max_x - min_x >= width {
+            (0..self.width_cells).collect()
+        } else {
+            let first = (min_x / self.cell_size).floor() as isize;
+            let last = (max_x / self.cell_size).floor() as isize;
+            (first..=last)
+                .map(|col| col.rem_euclid(self.width_cells as isize) as usize)
+                .collect()
+        };
+        let row_count = row_end - row_start + 1;
+        let total = row_count.saturating_mul(cols.len());
         if total == 0 {
             return Vec::new();
         }
-
         let count = limit.min(total);
         let start = start_offset % total;
         let mut indices = Vec::with_capacity(count);
         for offset in 0..count {
             let linear = start.wrapping_add(offset) % total;
-            let row_offset = linear / candidate_cols;
-            let col = min_col + linear % candidate_cols;
-            let row = if row_count >= self.height_cells {
-                row_offset
-            } else {
-                (row_start + row_offset as isize).rem_euclid(self.height_cells as isize) as usize
-            };
+            let row = row_start + linear / cols.len();
+            let col = cols[linear % cols.len()];
             indices.push(row * self.width_cells + col);
         }
         indices
@@ -676,23 +663,19 @@ impl ActiveMaterialField {
     pub fn neighbor_indices(&self, index: usize) -> Vec<usize> {
         let (row, col) = self.row_col_for_index(index);
         let mut out = Vec::with_capacity(4);
-        let above = if row == 0 {
-            self.height_cells.saturating_sub(1)
-        } else {
-            row - 1
-        };
-        let below = if row + 1 == self.height_cells {
-            0
-        } else {
-            row + 1
-        };
-        out.push(above * self.width_cells + col);
-        out.push(below * self.width_cells + col);
-        if col > 0 {
-            out.push(row * self.width_cells + (col - 1));
+        if row > 0 {
+            out.push((row - 1) * self.width_cells + col);
         }
-        if col + 1 < self.width_cells {
-            out.push(row * self.width_cells + (col + 1));
+        if row + 1 < self.height_cells {
+            out.push((row + 1) * self.width_cells + col);
+        }
+        if self.width_cells > 1 {
+            let left = (col + self.width_cells - 1) % self.width_cells;
+            let right = (col + 1) % self.width_cells;
+            out.push(row * self.width_cells + left);
+            if right != left {
+                out.push(row * self.width_cells + right);
+            }
         }
         out
     }

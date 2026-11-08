@@ -102,12 +102,24 @@ pub(crate) struct WorldOrganismPhysicalObservation {
     pub(crate) silhouette: Vec<OrganismSilhouettePart>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub(crate) struct WorldFieldPartObservation {
+    pub(crate) resource: String,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) rotation_radians: f64,
+    pub(crate) form: crate::resources::Form,
+    pub(crate) resonance_frequency_cycles_per_day: f64,
+    pub(crate) resonance_amplitude: f64,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldFieldObservation {
     pub(crate) cell_index: usize,
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) revision: u64,
     pub(crate) materials: Option<Vec<(String, f64)>>,
+    #[serde(default)]
+    pub(crate) physical_parts: Option<Vec<WorldFieldPartObservation>>,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct WorldPointObservation {
@@ -118,6 +130,7 @@ pub(crate) struct WorldPointObservation {
 pub(crate) struct WorldObservation {
     pub(crate) width: f64,
     pub(crate) height: f64,
+    pub(crate) sunlight_brightness: f64,
     pub(crate) organisms: Vec<WorldOrganismObservation>,
     pub(crate) field: Vec<WorldFieldObservation>,
     pub(crate) decomposing_bodies: Vec<WorldPointObservation>,
@@ -125,6 +138,67 @@ pub(crate) struct WorldObservation {
     pub(crate) chemistry_diagnostics: crate::state::EnvironmentalChemistryTickDiagnostics,
     pub(crate) chemistry_events: Vec<crate::state::EnvironmentalChemistryEvent>,
 }
+fn observe_field_physical_parts(
+    cell: &crate::environment::FieldCell,
+    catalog: &[crate::resources::BaseResource],
+) -> Vec<WorldFieldPartObservation> {
+    let mut parts = Vec::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+    for physical in &cell.physical_materials {
+        let Some(placements) = physical.placements.as_ref() else {
+            continue;
+        };
+        for (index, (resource, _)) in physical.material.parts.iter().enumerate() {
+            let Some(placement) = placements.get(index) else {
+                continue;
+            };
+            let form = physical
+                .realized_shapes
+                .as_ref()
+                .and_then(|shapes| shapes.get(index))
+                .or_else(|| {
+                    catalog
+                        .iter()
+                        .find(|entry| entry.name == *resource)
+                        .map(|entry| &entry.shape)
+                })
+                .map(|shape| shape.form.clone());
+            let Some(form) = form else {
+                continue;
+            };
+            let Some(definition) = catalog.iter().find(|entry| entry.name == *resource) else {
+                continue;
+            };
+            let response =
+                crate::harmonics::material_response(definition.properties, baselines, 0.0);
+            let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
+                definition.properties,
+                baselines,
+            );
+            // Invalid catalog resonance parameters have no drawable frequency.
+            // Keep the observation JSON finite without changing simulation state.
+            let frequency = if natural_frequency.is_finite() {
+                natural_frequency.max(0.0)
+            } else {
+                0.0
+            };
+            parts.push(WorldFieldPartObservation {
+                resource: resource.clone(),
+                x: placement.x,
+                y: placement.y,
+                rotation_radians: placement.rotation_radians,
+                form,
+                resonance_frequency_cycles_per_day: frequency,
+                resonance_amplitude: response
+                    .components
+                    .first()
+                    .map_or(0.0, |component| component.amplitude),
+            });
+        }
+    }
+    parts
+}
+
 impl WorldObservation {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Self {
         Self::from_simulation_in_bounds(simulation, None, &[], &[])
@@ -252,6 +326,7 @@ impl WorldObservation {
                                 y,
                                 revision,
                                 materials: None,
+                                physical_parts: None,
                             });
                         }
                         let materials = cell.total_material();
@@ -265,6 +340,7 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
+                            physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                         })
                     })
                     .collect()
@@ -288,6 +364,7 @@ impl WorldObservation {
                         y,
                         revision: simulation.environment.field.cell_revisions[cell_index],
                         materials: Some(materials),
+                        physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                     })
                 })
                 .collect()
@@ -311,9 +388,36 @@ impl WorldObservation {
                 })
             })
             .collect();
+        let sunlight_brightness = simulation
+            .world_tone
+            .and_then(|config| {
+                let sample = simulation
+                    .world_tone_cycle
+                    .as_ref()
+                    .and_then(|cycle| cycle.sample(simulation.tick))
+                    .or_else(|| {
+                        config.sample(
+                            simulation.tick,
+                            simulation.environment.width,
+                            simulation.environment.height,
+                        )
+                    })?;
+                let minimum = config
+                    .parameters
+                    .minimum_energy_intensity_per_tick_per_width;
+                let maximum = config
+                    .parameters
+                    .maximum_energy_intensity_per_tick_per_width;
+                let fraction = ((sample.energy_intensity_per_tick_per_width - minimum)
+                    / (maximum - minimum))
+                    .clamp(0.0, 1.0);
+                Some(0.4 + fraction * 0.6)
+            })
+            .unwrap_or(1.0);
         Self {
             width: simulation.environment.width,
             height: simulation.environment.height,
+            sunlight_brightness,
             organisms,
             field,
             decomposing_bodies,
@@ -547,6 +651,39 @@ mod tests {
         assert_ne!(ObservationLevel::World, ObservationLevel::Organism);
         assert_ne!(ObservationLevel::Organism, ObservationLevel::Structure)
     }
+    #[test]
+    fn environmental_world_observation_exposes_physical_resource_geometry() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let observation = WorldObservation::from_simulation(&fixture.simulation);
+        let parts = observation
+            .field
+            .iter()
+            .flat_map(|cell| cell.physical_parts.iter().flatten())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            parts.len(),
+            1_360,
+            "world view must expose all 1,280 seeded objects as 1,360 physical constituents"
+        );
+        assert!(parts.iter().all(|part| {
+            part.x.is_finite()
+                && part.y.is_finite()
+                && part.rotation_radians.is_finite()
+                && part.form.is_valid()
+                && part.resonance_frequency_cycles_per_day.is_finite()
+                && part.resonance_amplitude.is_finite()
+        }));
+        let water_parts = parts
+            .iter()
+            .filter(|part| part.resource == "Water")
+            .collect::<Vec<_>>();
+        assert!(!water_parts.is_empty());
+        assert!(water_parts.iter().all(|part| {
+            part.resonance_frequency_cycles_per_day == 0.0 && part.resonance_amplitude == 0.0
+        }));
+        assert!((0.4..=1.0).contains(&observation.sunlight_brightness));
+    }
+
     #[test]
     fn world_context_contains_no_selection() {
         let context = ObservationContext::world();

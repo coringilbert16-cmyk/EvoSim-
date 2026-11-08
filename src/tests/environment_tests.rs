@@ -34,28 +34,43 @@ fn field_starts_empty() {
 }
 
 #[test]
-fn horizontal_bounds_remain_closed_while_vertical_positions_wrap() {
+fn horizontal_positions_wrap_while_vertical_positions_are_bounded() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
-    assert!(field.index_for_position(-1.0, 5.0).is_none());
     assert_eq!(
-        field.index_for_position(5.0, 1000.0),
-        field.index_for_position(5.0, 0.0)
+        field.index_for_position(-1.0, 5.0),
+        field.index_for_position(999.0, 5.0)
     );
     assert_eq!(
-        field.index_for_position(5.0, -0.1),
-        field.index_for_position(5.0, 999.9)
+        field.index_for_position(1000.0, 5.0),
+        field.index_for_position(0.0, 5.0)
     );
-    assert!(field.index_for_position(1000.0, 5.0).is_none());
+    assert!(field.index_for_position(5.0, 1000.0).is_none());
+    assert!(field.index_for_position(5.0, -0.1).is_none());
     assert!(field.index_for_position(f64::NAN, 5.0).is_none());
 }
 
 #[test]
-fn vertical_neighbors_wrap_from_top_to_bottom() {
+fn horizontal_neighbors_wrap_from_left_to_right() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let left = field.index_for_position(12.5, 37.5).unwrap();
+    let right = field.index_for_position(87.5, 37.5).unwrap();
+    assert!(field.neighbor_indices(left).contains(&right));
+    assert!(field.neighbor_indices(right).contains(&left));
+}
+
+#[test]
+fn vertical_neighbors_stop_at_hard_top_and_bottom_boundaries() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let top = field.index_for_position(37.5, 12.5).unwrap();
     let bottom = field.index_for_position(37.5, 87.5).unwrap();
-    assert!(field.neighbor_indices(top).contains(&bottom));
-    assert!(field.neighbor_indices(bottom).contains(&top));
+    assert!(field
+        .neighbor_indices(top)
+        .iter()
+        .all(|index| index / 4 != 3));
+    assert!(field
+        .neighbor_indices(bottom)
+        .iter()
+        .all(|index| index / 4 != 0));
 }
 
 #[test]
@@ -82,6 +97,32 @@ fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
             .filter(|m| !m.has_internal_structure())
             .count(),
         1
+    );
+}
+
+#[test]
+fn radius_queries_wrap_horizontally_but_not_vertically() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let seam_cells = field.cells_within_radius(0.0, 37.5, 15.0);
+    assert!(seam_cells.contains(&4), "left-edge cell should be included");
+    assert!(
+        seam_cells.contains(&7),
+        "right-edge cell should be included across the seam"
+    );
+    assert!(field.cells_within_radius(0.0, -1.0, 15.0).is_empty());
+}
+
+#[test]
+fn bounds_queries_wrap_columns_and_clip_rows() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let across_seam = field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 49.0);
+    assert_eq!(across_seam, vec![7, 4]);
+    assert!(field
+        .cells_intersecting_bounds(25.0, 50.0, -20.0, -1.0)
+        .is_empty());
+    assert_eq!(
+        field.cells_intersecting_bounds(25.0, 50.0, -20.0, 0.0),
+        vec![1, 2]
     );
 }
 
@@ -181,12 +222,12 @@ fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commi
 
     let simulation = Simulation::new(771, 10.0);
     let catalog = &simulation.environment.catalog;
-    let make_carbon = |x: f64| {
+    let make_carbon = |x: f64, y: f64| {
         PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
             vec![Placement {
                 x,
-                y: 12.5,
+                y,
                 rotation_radians: 0.0,
             }],
             catalog,
@@ -199,8 +240,8 @@ fn physical_batch_deposit_rejects_late_invalid_destination_without_partial_commi
 
     assert!(!field.deposit_physical_batch(
         vec![
-            (12.5, 12.5, make_carbon(12.5)),
-            (100.0, 12.5, make_carbon(37.5)),
+            (12.5, 12.5, make_carbon(12.5, 12.5)),
+            (37.5, 100.0, make_carbon(37.5, 100.0)),
         ],
         catalog,
     ));
@@ -515,8 +556,8 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
     let invalid_hydrogen = PhysicalMaterial::realized(
         Material::free_base("Hydrogen", 1.0),
         vec![Placement {
-            x: 100.0,
-            y: 12.5,
+            x: 14.3,
+            y: 100.0,
             rotation_radians: 0.0,
         }],
         catalog,

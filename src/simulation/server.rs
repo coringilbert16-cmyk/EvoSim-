@@ -29,10 +29,12 @@ fn error_response(error: &'static str) -> axum::response::Response {
 
 async fn index_handler() -> impl IntoResponse {
     let page = include_str!("../../ui/index.html");
+    let theme = include_str!("../../ui/simulation_theme.css");
     let resource_visualization = include_str!("../../ui/resource_visualization.js");
     let organism_inspector = include_str!("../../ui/organism_inspector.js");
+    let themed_page = page.replace("</head>", &format!("<style>{theme}</style></head>"));
     Html(format!(
-        "{page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
+        "{themed_page}\n<script>{resource_visualization}</script>\n<script>{organism_inspector}</script>"
     ))
 }
 
@@ -140,8 +142,8 @@ async fn world_observation_handler(
         serde_json::json!({
             "command": "world",
             "bounds": bounds,
-            "known_organisms": known_organisms,
-            "known_cells": known_cells,
+            "known_organisms": known_organisms.unwrap_or_default(),
+            "known_cells": known_cells.unwrap_or_default(),
         }),
     )
     .await
@@ -325,4 +327,29 @@ pub(crate) async fn run() {
     axum::serve(listener, app)
         .await
         .expect("viewer server stopped");
+}
+
+#[cfg(test)]
+mod viewer_asset_acceptance_tests {
+    const PAGE: &str = include_str!("../../ui/index.html");
+    const THEME: &str = include_str!("../../ui/simulation_theme.css");
+    const RESOURCE_RENDERER: &str = include_str!("../../ui/resource_visualization.js");
+
+    #[test]
+    fn environmental_viewer_assets_are_world_first_and_render_the_required_scene() {
+        assert!(PAGE.contains("loadObservation('World')"));
+        assert!(!PAGE.contains("loadObservation('Structure', '1')"));
+        assert!(PAGE.contains("S-shaped spine"));
+        assert!(PAGE.contains("#075985"));
+        assert!(PAGE.contains("#020617"));
+        assert!(PAGE.contains("xFraction"));
+        assert!(PAGE.contains("renderHotspot"));
+        assert!(PAGE.contains("HOTSPOT"));
+        assert!(RESOURCE_RENDERER.contains("data-zoom"));
+        assert!(THEME.contains("#0d0d0d"));
+        assert!(THEME.contains(".ev-world-column"));
+        assert!(RESOURCE_RENDERER.contains("physical_parts"));
+        assert!(RESOURCE_RENDERER.contains("resonance_frequency_cycles_per_day"));
+        assert!(RESOURCE_RENDERER.contains("drawPhysicalFieldPart"));
+    }
 }
