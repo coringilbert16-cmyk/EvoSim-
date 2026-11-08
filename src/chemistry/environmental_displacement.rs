@@ -1080,17 +1080,15 @@ pub(crate) fn accumulate_environmental(
                                 // which endpoint interface joins that pair. The
                                 // meaningful alternative-selection audit is therefore
                                 // whether another valid interface supplies more activation.
-                                let selected_alternative = census.alternatives.iter().find(
-                                    |alternative| {
+                                let selected_alternative =
+                                    census.alternatives.iter().find(|alternative| {
                                         alternative.candidate.endpoint_a == candidate.endpoint_a
                                             && alternative.candidate.endpoint_b
                                                 == candidate.endpoint_b
-                                    },
-                                );
+                                    });
                                 if let Some(selected_alternative) = selected_alternative {
                                     if census.alternatives.iter().any(|alternative| {
-                                        (alternative.candidate.endpoint_a
-                                            != candidate.endpoint_a
+                                        (alternative.candidate.endpoint_a != candidate.endpoint_a
                                             || alternative.candidate.endpoint_b
                                                 != candidate.endpoint_b)
                                             && alternative.activation_increment
