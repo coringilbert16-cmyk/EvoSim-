@@ -1,12 +1,13 @@
 //! Resumable construction of the environmental material/bond snapshot.
 //! Every cell, material, and bond inspection consumes one unit of caller budget.
 
+use std::collections::{BTreeMap, VecDeque};
+
 use crate::environment::ActiveMaterialField;
 use crate::environmental_broad_phase::EnvironmentalMaterialSnapshot;
 use crate::environmental_interaction::{
     BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
 };
-use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SnapshotCursorStatus {
