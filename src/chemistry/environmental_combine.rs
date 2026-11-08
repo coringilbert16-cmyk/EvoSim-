@@ -869,9 +869,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         .flat_map(|cell| cell.physical_materials.iter())
         .filter(|material| material.is_realized() && !material.material.is_empty())
         .count();
-    diagnostics.global_realized_material_pairs = realized_material_count
-        .saturating_mul(realized_material_count.saturating_sub(1))
-        / 2;
+    diagnostics.global_realized_material_pairs =
+        realized_material_count.saturating_mul(realized_material_count.saturating_sub(1)) / 2;
     diagnostics.global_realized_material_pairs_unvisited = diagnostics
         .global_realized_material_pairs
         .saturating_sub(diagnostics.forward_ordered_target_material_pair_inspections);
