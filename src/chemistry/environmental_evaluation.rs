@@ -48,9 +48,7 @@ pub(crate) enum EvaluationOutcome<T> {
         reason: &'static str,
     },
     /// A source reference or snapshot became invalid and must be rediscovered.
-    Stale {
-        stage: EvaluationStage,
-    },
+    Stale { stage: EvaluationStage },
 }
 
 /// Shared envelope around a reaction-specific assessment.
@@ -67,11 +65,7 @@ pub(crate) struct EnvironmentalReactionEvaluation<T> {
 }
 
 impl<T> EnvironmentalReactionEvaluation<T> {
-    pub(crate) fn ready(
-        pass_id: u64,
-        reaction: EnvironmentalReactionKind,
-        payload: T,
-    ) -> Self {
+    pub(crate) fn ready(pass_id: u64, reaction: EnvironmentalReactionKind, payload: T) -> Self {
         Self {
             pass_id,
             reaction,
@@ -225,12 +219,11 @@ mod tests {
                 EvaluationStage::EnergySettlement,
                 "replacement_energy_not_favorable",
             );
-        let stale: EnvironmentalReactionEvaluation<u8> =
-            EnvironmentalReactionEvaluation::stale(
-                3,
-                EnvironmentalReactionKind::Combine,
-                EvaluationStage::CommitRevalidation,
-            );
+        let stale: EnvironmentalReactionEvaluation<u8> = EnvironmentalReactionEvaluation::stale(
+            3,
+            EnvironmentalReactionKind::Combine,
+            EvaluationStage::CommitRevalidation,
+        );
 
         assert!(deferred.into_ready().is_none());
         assert!(rejected.into_ready().is_none());
