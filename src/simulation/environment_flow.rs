@@ -941,11 +941,18 @@ mod tests {
         let before = field.total_material();
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
         assert_eq!(field.total_material(), before);
-        let objects: Vec<_> = field.cells.iter().flat_map(|cell| cell.physical_materials.iter()).collect();
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
         assert_eq!(objects.len(), 1);
         let placement = objects[0].placements.as_ref().unwrap()[0];
         let destination = field.index_for_position(placement.x, placement.y).unwrap();
-        assert_ne!(destination, source, "crossing the seam must transfer to the opposite edge cell");
+        assert_ne!(
+            destination, source,
+            "crossing the seam must transfer to the opposite edge cell"
+        );
         assert!(destination % field.width_cells == 0, "material should re-enter at the left edge");
     }
 
@@ -962,10 +969,17 @@ mod tests {
         let before = field.total_material();
         let _ = transport_field(&mut field, &catalog, 1000.0, 1000.0);
         assert_eq!(field.total_material(), before);
-        let objects: Vec<_> = field.cells.iter().flat_map(|cell| cell.physical_materials.iter()).collect();
+        let objects: Vec<_> = field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
-        assert!(placement.y < 1000.0 && placement.y > 999.0, "vertical motion must stop at the hard boundary");
+        assert!(
+            placement.y < 1000.0 && placement.y > 999.0,
+            "vertical motion must stop at the hard boundary"
+        );
     }
 
     #[test]
