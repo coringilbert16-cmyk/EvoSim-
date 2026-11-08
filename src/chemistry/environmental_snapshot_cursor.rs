@@ -259,6 +259,30 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_material_identities_match_the_eager_snapshot() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        field.cells[0]
+            .physical_materials
+            .push(physical(7, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(7, "Oxygen"));
+
+        let mut cursor = EnvironmentalSnapshotCursor::new(&field, 12);
+        let snapshot = loop {
+            let page = cursor.next_page(&field, 3);
+            if let Some(snapshot) = page.snapshot {
+                break snapshot;
+            }
+            assert_eq!(page.status, Some(SnapshotCursorStatus::Incomplete));
+        };
+
+        let eager = EnvironmentalMaterialSnapshot::from_field(&field, 12);
+        assert_eq!(snapshot, eager);
+        assert_eq!(snapshot.materials.len(), 2);
+    }
+
+    #[test]
     fn revision_change_explicitly_invalidates_cursor() {
         let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
         field.cells[0]
