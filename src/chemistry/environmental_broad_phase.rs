@@ -1824,6 +1824,88 @@ mod tests {
     }
 
     #[test]
+    fn indexed_cursor_matches_spatial_reference_across_cell_edges_and_page_sizes() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        let placements = [(70, 0), (10, 0), (60, 5), (20, 6), (50, 11), (30, 17), (40, 23)];
+        for (identity, cell_index) in placements {
+            field.cells[cell_index]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 815);
+        let bounds = snapshot
+            .materials
+            .iter()
+            .map(|record| {
+                let (x, y) = field.cell_center(record.locator.cell_index);
+                let radius = match record.identity.0 % 4 {
+                    0 => 0.25,
+                    1 => 5.0,
+                    2 => 12.0,
+                    _ => 25.0,
+                };
+                Some(MaterialSpatialBounds {
+                    min_x: x - radius,
+                    max_x: x + radius,
+                    min_y: y - radius,
+                    max_y: y + radius,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+            let (reference, _) =
+                snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
+            let expected = reference
+                .into_iter()
+                .map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
+                    }
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                })
+                .collect::<std::collections::BTreeSet<_>>();
+
+            for work_limit in 1..=5 {
+                for output_limit in 1..=3 {
+                    let mut cursor =
+                        IndexedSpatialCursor::new(&snapshot, &field, orientation);
+                    let mut actual = Vec::new();
+                    let mut pages = 0;
+                    loop {
+                        let page = cursor.next_page(
+                            &snapshot,
+                            &field,
+                            &bounds,
+                            2.1,
+                            work_limit,
+                            output_limit,
+                        );
+                        assert!(page.visited_work <= work_limit as u64);
+                        assert!(page.pairs.len() <= output_limit);
+                        actual.extend(page.pairs.into_iter().map(|pair| {
+                            (pair.identity_left, pair.identity_right)
+                        }));
+                        pages += 1;
+                        if page.complete {
+                            assert_eq!(page.deferred_anchors, 0);
+                            break;
+                        }
+                        assert!(pages < 2_000, "cursor failed to make bounded progress");
+                    }
+                    actual.sort_unstable();
+                    assert_eq!(
+                        actual,
+                        expected.iter().copied().collect::<Vec<_>>(),
+                        "orientation={orientation:?}, work_limit={work_limit}, output_limit={output_limit}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn indexed_cursor_prunes_pair_work_for_sparse_materials() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
         let mut bounds = Vec::new();
