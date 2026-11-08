@@ -258,6 +258,8 @@ The first Stage 4 increment adds `src/chemistry/environmental_evaluation.rs` as 
 - `EvaluationStage` records the furthest common lifecycle stage reached: candidate validation, chemistry, activation, energy settlement, scheduling, or commit revalidation.
 - `EvaluationOutcome<T>` distinguishes ready, rejected, deferred, and stale results.
 - `EnvironmentalReactionEvaluation<T>` carries the inventory pass ID and reaction kind while retaining the native reaction-specific payload type.
+- `EvaluationJournal` retains payload-free lifecycle records for ready, rejected, deferred, and stale assessments. `EvaluationOutcomeCounts` summarizes those records without discarding their stage/reason detail. Recording is observational: it does not enqueue, retry, settle, or commit operations.
+- Bounded work that was not inspected must be represented as deferred/unexamined, never rejected. A stale record is reserved for invalidated references or snapshots, not failed chemistry.
 
 ### Deliberate non-unification
 
