@@ -1,4 +1,3 @@
-#![expect(dead_code, reason = "Stage 1 snapshot cursor is parity-tested before production cutover")]
 //! Resumable construction of the environmental material/bond snapshot.
 //! Every cell, material, and bond inspection consumes one unit of caller budget.
 
@@ -80,13 +79,19 @@ impl EnvironmentalSnapshotCursor {
         let mut page = SnapshotCursorPage::default();
         while page.visited_work < work_limit as u64 && !self.complete {
             if let Some((cell_index, material_index, bond_index)) = self.active_bond {
-                let Some(physical) = field.cells.get(cell_index)
-                    .and_then(|cell| cell.physical_materials.get(material_index)) else {
+                let Some(physical) = field
+                    .cells
+                    .get(cell_index)
+                    .and_then(|cell| cell.physical_materials.get(material_index))
+                else {
                     self.invalidated = true;
                     break;
                 };
-                let Some(bond) = physical.internal_connections.as_ref()
-                    .and_then(|bonds| bonds.get(bond_index)) else {
+                let Some(bond) = physical
+                    .internal_connections
+                    .as_ref()
+                    .and_then(|bonds| bonds.get(bond_index))
+                else {
                     self.active_bond = None;
                     continue;
                 };
@@ -99,9 +104,17 @@ impl EnvironmentalSnapshotCursor {
                             material: identity,
                             topology_generation: generation,
                             bond_index,
-                            constituent_a: ConstituentRef { material: identity, topology_generation: generation, local_index: bond.part_a },
+                            constituent_a: ConstituentRef {
+                                material: identity,
+                                topology_generation: generation,
+                                local_index: bond.part_a,
+                            },
                             endpoint_a: bond.endpoint_a,
-                            constituent_b: ConstituentRef { material: identity, topology_generation: generation, local_index: bond.part_b },
+                            constituent_b: ConstituentRef {
+                                material: identity,
+                                topology_generation: generation,
+                                local_index: bond.part_b,
+                            },
                             endpoint_b: bond.endpoint_b,
                             bond_energy: bond.bond_energy,
                         };
@@ -109,7 +122,10 @@ impl EnvironmentalSnapshotCursor {
                     }
                 }
                 let next = bond_index + 1;
-                let bond_count = physical.internal_connections.as_ref().map_or(0, Vec::len);
+                let bond_count = physical
+                    .internal_connections
+                    .as_ref()
+                    .map_or(0, Vec::len);
                 self.active_bond = (next < bond_count).then_some((cell_index, material_index, next));
                 page.bond_visits = page.bond_visits.saturating_add(1);
                 self.consume_work(&mut page);
@@ -219,7 +235,9 @@ mod tests {
             let page = cursor.next_page(&field, 2);
             assert!(page.visited_work <= 2);
             total += page.visited_work;
-            if let Some(snapshot) = page.snapshot { break snapshot; }
+            if let Some(snapshot) = page.snapshot {
+                break snapshot;
+            }
             assert_eq!(page.status, Some(SnapshotCursorStatus::Incomplete));
         };
         let eager = EnvironmentalMaterialSnapshot::from_field(&field, 77);
