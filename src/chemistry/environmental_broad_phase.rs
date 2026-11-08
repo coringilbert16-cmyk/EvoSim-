@@ -440,8 +440,15 @@ pub(crate) struct SpatialCursorPage {
 }
 
 impl SpatialPairCursor {
-    pub(crate) fn new(snapshot: &EnvironmentalMaterialSnapshot, orientation: PairOrientation) -> Self {
-        let next_right = if orientation == PairOrientation::Directed { 1 } else { 0 };
+    pub(crate) fn new(
+        snapshot: &EnvironmentalMaterialSnapshot,
+        orientation: PairOrientation,
+    ) -> Self {
+        let next_right = if orientation == PairOrientation::Directed {
+            1
+        } else {
+            0
+        };
         Self {
             pass_id: snapshot.pass_id,
             orientation,
@@ -1041,7 +1048,7 @@ mod tests {
         assert_eq!(second.deferred_pairs, 0);
     }
 
- 
+
     #[test]
     fn bounded_cursor_pages_match_spatial_reference_for_both_orientations() {
         let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
@@ -1051,20 +1058,47 @@ mod tests {
         field.cells[14].physical_materials.push(physical(20, "Carbon"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 81);
         let bounds = vec![
-            Some(MaterialSpatialBounds { min_x: 0.0, max_x: 10.0, min_y: 0.0, max_y: 10.0 }),
-            Some(MaterialSpatialBounds { min_x: 39.0, max_x: 51.0, min_y: 19.0, max_y: 31.0 }),
-            Some(MaterialSpatialBounds { min_x: 9.0, max_x: 21.0, min_y: 0.0, max_y: 10.0 }),
-            Some(MaterialSpatialBounds { min_x: -1.0, max_x: 11.0, min_y: 0.0, max_y: 10.0 }),
+            Some(MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 10.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 39.0,
+                max_x: 51.0,
+                min_y: 19.0,
+                max_y: 31.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 9.0,
+                max_x: 21.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: -1.0,
+                max_x: 11.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
         ];
         for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
             let (reference, _) = snapshot.spatial_pair_window(
-                &field, &bounds, 2.1, 0, usize::MAX, orientation,
+                &field,
+                &bounds,
+                2.1,
+                0,
+                usize::MAX,
+                orientation,
             );
-            let expected = reference.iter()
+            let expected = reference
+                .iter()
                 .map(|pair| match orientation {
                     PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                    PairOrientation::Unordered if pair.identity_left < pair.identity_right =>
-                        (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
+                    }
                     PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
                 })
                 .collect::<std::collections::BTreeSet<_>>();
@@ -1079,12 +1113,15 @@ mod tests {
                 total_visited += page.visited_pair_checks;
                 actual.extend(page.pairs.into_iter().map(|pair| match orientation {
                     PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                    PairOrientation::Unordered if pair.identity_left < pair.identity_right =>
-                        (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
+                    }
                     PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
                 }));
                 pages += 1;
-                if page.complete { break; }
+                if page.complete {
+                    break;
+                }
                 assert!(pages < 100);
             }
             let expected_checks = match orientation {
@@ -1100,7 +1137,9 @@ mod tests {
     fn bounded_cursor_rejects_snapshot_refresh_and_empty_pages_keep_continuation() {
         let mut field = ActiveMaterialField::new(30.0, 10.0, 10.0);
         for identity in 1..=4 {
-            field.cells[0].physical_materials.push(physical(identity, "Carbon"));
+            field.cells[0]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 9);
         let bounds = vec![None; 4];
