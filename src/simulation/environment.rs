@@ -240,7 +240,7 @@ impl ActiveMaterialField {
             return Vec::new();
         }
         let row_start = (min_y.max(0.0) / self.cell_size).floor() as usize;
-        let row_end = ((max_y.min(height - f64::EPSILON) / self.cell_size).floor() as usize)
+        let row_end = ((max_y.min(height - 1e-9) / self.cell_size).floor() as usize)
             .min(self.height_cells - 1);
         if row_start > row_end {
             return Vec::new();
@@ -290,7 +290,7 @@ impl ActiveMaterialField {
             return Vec::new();
         }
         let row_start = (min_y.max(0.0) / self.cell_size).floor() as usize;
-        let row_end = ((max_y.min(height - f64::EPSILON) / self.cell_size).floor() as usize)
+        let row_end = ((max_y.min(height - 1e-9) / self.cell_size).floor() as usize)
             .min(self.height_cells - 1);
         if row_start > row_end {
             return Vec::new();
@@ -670,8 +670,12 @@ impl ActiveMaterialField {
             out.push((row + 1) * self.width_cells + col);
         }
         if self.width_cells > 1 {
-            out.push(row * self.width_cells + (col + self.width_cells - 1) % self.width_cells);
-            out.push(row * self.width_cells + (col + 1) % self.width_cells);
+            let left = (col + self.width_cells - 1) % self.width_cells;
+            let right = (col + 1) % self.width_cells;
+            out.push(row * self.width_cells + left);
+            if right != left {
+                out.push(row * self.width_cells + right);
+            }
         }
         out
     }
