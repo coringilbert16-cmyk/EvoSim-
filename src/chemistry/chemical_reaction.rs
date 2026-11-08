@@ -986,20 +986,17 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         "break_candidate_validation_or_chemistry_failed",
         usize::try_from(rejected_candidates).unwrap_or(usize::MAX),
     );
-    evaluation_journal.record_deferred_count(
+    evaluation_journal.record_stale_count(
         tick,
         EnvironmentalReactionKind::Break,
         EvaluationStage::CandidateValidation,
-        "stale_break_progress_invalidated",
         usize::try_from(diagnostics.stale_progress_invalidated).unwrap_or(usize::MAX),
     );
-    for _ in 0..operations.len() {
-        evaluation_journal.record(EnvironmentalReactionEvaluation::ready(
-            tick,
-            EnvironmentalReactionKind::Break,
-            (),
-        ));
-    }
+    evaluation_journal.record_ready_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        operations.len(),
+    );
     diagnostics.evaluation_outcomes = evaluation_journal.counts();
 
     // The simulation tick identifies this BREAK evaluation pass. These
