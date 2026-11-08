@@ -73,6 +73,261 @@ impl MaterialSpatialBounds {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+struct MaterialBoundsProgress {
+    material_index: usize,
+    next_constituent: usize,
+    valid: bool,
+    min_x: f64,
+    max_x: f64,
+    min_y: f64,
+    max_y: f64,
+}
+
+impl MaterialBoundsProgress {
+    fn new(material_index: usize, valid: bool) -> Self {
+        Self {
+            material_index,
+            next_constituent: 0,
+            valid,
+            min_x: f64::INFINITY,
+            max_x: f64::NEG_INFINITY,
+            min_y: f64::INFINITY,
+            max_y: f64::NEG_INFINITY,
+        }
+    }
+
+    fn finish(self) -> Option<MaterialSpatialBounds> {
+        (self.valid
+            && self.min_x.is_finite()
+            && self.max_x.is_finite()
+            && self.min_y.is_finite()
+            && self.max_y.is_finite()
+            && self.min_x <= self.max_x
+            && self.min_y <= self.max_y)
+            .then_some(MaterialSpatialBounds {
+                min_x: self.min_x,
+                max_x: self.max_x,
+                min_y: self.min_y,
+                max_y: self.max_y,
+            })
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct MaterialBoundsCursorPage {
+    pub(crate) material_headers_inspected: u64,
+    pub(crate) constituent_inspections: u64,
+    pub(crate) visited_work: u64,
+    pub(crate) deferred_work: u64,
+    pub(crate) completed_materials: u64,
+    pub(crate) complete: bool,
+    /// Available only after every material header and constituent has been
+    /// visited. The vector is aligned with the snapshot material records.
+    pub(crate) bounds: Option<Vec<Option<MaterialSpatialBounds>>>,
+}
+
+/// Resumable preparation of conservative material bounds. Each call performs
+/// at most work_limit units: one material-header validation or one
+/// constituent shape/placement inspection. It never restores a structure or
+/// performs constituent penetration checks.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MaterialBoundsCursor {
+    pass_id: u64,
+    next_material: usize,
+    current: Option<MaterialBoundsProgress>,
+    bounds: Vec<Option<MaterialSpatialBounds>>,
+    catalog_indices: std::collections::BTreeMap<String, usize>,
+    catalog_valid: bool,
+    visited_work: u64,
+    complete: bool,
+}
+
+impl MaterialBoundsCursor {
+    pub(crate) fn new(
+        snapshot: &EnvironmentalMaterialSnapshot,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Self {
+        let mut catalog_indices = std::collections::BTreeMap::new();
+        let mut catalog_valid = true;
+        for (index, resource) in catalog.iter().enumerate() {
+            if resource.name.is_empty()
+                || catalog_indices.insert(resource.name.clone(), index).is_some()
+            {
+                catalog_valid = false;
+            }
+        }
+        Self {
+            pass_id: snapshot.pass_id,
+            next_material: 0,
+            current: None,
+            bounds: vec![None; snapshot.materials.len()],
+            catalog_indices,
+            catalog_valid,
+            visited_work: 0,
+            complete: snapshot.materials.is_empty(),
+        }
+    }
+
+    pub(crate) fn next_page(
+        &mut self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        catalog: &[crate::resources::BaseResource],
+        work_limit: usize,
+    ) -> MaterialBoundsCursorPage {
+        let known_work = snapshot
+            .materials
+            .iter()
+            .fold(snapshot.materials.len() as u64, |total, material| {
+                total.saturating_add(material.constituent_count as u64)
+            });
+        if snapshot.pass_id != self.pass_id
+            || snapshot.materials.len() != self.bounds.len()
+            || catalog.len() != self.catalog_indices.len()
+        {
+            return MaterialBoundsCursorPage {
+                deferred_work: known_work.saturating_sub(self.visited_work),
+                ..MaterialBoundsCursorPage::default()
+            };
+        }
+
+        let mut page = MaterialBoundsCursorPage::default();
+        while page.visited_work < work_limit as u64 && !self.complete {
+            if self.current.is_none() {
+                let material_index = self.next_material;
+                let Some(record) = snapshot.materials.get(material_index) else {
+                    self.complete = true;
+                    break;
+                };
+                self.next_material += 1;
+                page.material_headers_inspected =
+                    page.material_headers_inspected.saturating_add(1);
+                page.visited_work = page.visited_work.saturating_add(1);
+                self.visited_work = self.visited_work.saturating_add(1);
+
+                let physical = field
+                    .cells
+                    .get(record.locator.cell_index)
+                    .and_then(|cell| cell.physical_materials.get(record.locator.material_index));
+                let valid = self.catalog_valid
+                    && physical.is_some_and(|physical| {
+                        physical.environmental_identity == record.identity.0
+                            && physical.is_realized()
+                            && !physical.material.parts.is_empty()
+                            && physical.material.parts.len() == record.constituent_count
+                            && physical.material.parts.iter().all(|(name, amount)| {
+                                let Some(resource_index) = self.catalog_indices.get(name) else {
+                                    return false;
+                                };
+                                let Some(resource) = catalog.get(*resource_index) else {
+                                    return false;
+                                };
+                                amount.is_finite()
+                                    && *amount >= 1.0
+                                    && amount.fract() == 0.0
+                                    && ((*amount - 1.0).abs() <= 1e-9
+                                        || (physical.material.parts.len() == 1
+                                            && physical.material.internal_bonds.is_empty()
+                                            && resource.physical_state
+                                                == crate::resources::PhysicalState::Fluid))
+                            })
+                    });
+                self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                continue;
+            }
+
+            let mut progress = self.current.take().expect("current bounds work exists");
+            let record = &snapshot.materials[progress.material_index];
+            let physical = field
+                .cells
+                .get(record.locator.cell_index)
+                .and_then(|cell| cell.physical_materials.get(record.locator.material_index));
+            if progress.valid {
+                let resolved = physical.and_then(|physical| {
+                    if physical.environmental_identity != record.identity.0 {
+                        return None;
+                    }
+                    let (name, amount) = physical.material.parts.get(progress.next_constituent)?;
+                    let resource_index = *self.catalog_indices.get(name)?;
+                    let resource = catalog.get(resource_index)?;
+                    let placement = *physical.placements.as_ref()?.get(progress.next_constituent)?;
+                    if !placement.x.is_finite()
+                        || !placement.y.is_finite()
+                        || !placement.rotation_radians.is_finite()
+                    {
+                        return None;
+                    }
+                    let shape = match physical.realized_shapes.as_ref() {
+                        Some(shapes) => shapes.get(progress.next_constituent)?,
+                        None => &resource.shape,
+                    };
+                    if !shape.is_valid()
+                        || (shape != &resource.shape
+                            && resource.physical_state != crate::resources::PhysicalState::Fluid)
+                    {
+                        return None;
+                    }
+                    if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                        let area = |shape: &crate::resources::Shape| match &shape.form {
+                            crate::resources::Form::Circle { radius } => {
+                                Some(std::f64::consts::PI * radius * radius)
+                            }
+                            crate::resources::Form::Fluid { nominal_area, .. } => {
+                                Some(*nominal_area)
+                            }
+                            _ => None,
+                        };
+                        let default_area = area(&resource.shape)?;
+                        let realized_area = area(shape)?;
+                        let expected_area = default_area * *amount;
+                        if !expected_area.is_finite()
+                            || (realized_area - expected_area).abs()
+                                > 1e-9 * expected_area.max(1.0)
+                        {
+                            return None;
+                        }
+                    }
+                    let radius = shape.form.bounding_radius();
+                    (radius.is_finite() && radius >= 0.0).then_some((
+                        placement.x,
+                        placement.y,
+                        radius,
+                    ))
+                });
+                if let Some((x, y, radius)) = resolved {
+                    progress.min_x = progress.min_x.min(x - radius);
+                    progress.max_x = progress.max_x.max(x + radius);
+                    progress.min_y = progress.min_y.min(y - radius);
+                    progress.max_y = progress.max_y.max(y + radius);
+                } else {
+                    progress.valid = false;
+                }
+            }
+
+            progress.next_constituent += 1;
+            page.constituent_inspections =
+                page.constituent_inspections.saturating_add(1);
+            page.visited_work = page.visited_work.saturating_add(1);
+            self.visited_work = self.visited_work.saturating_add(1);
+            if progress.next_constituent >= record.constituent_count {
+                self.bounds[progress.material_index] = progress.finish();
+                page.completed_materials = page.completed_materials.saturating_add(1);
+            } else {
+                self.current = Some(progress);
+            }
+        }
+
+        self.complete = self.current.is_none() && self.next_material >= snapshot.materials.len();
+        page.deferred_work = known_work.saturating_sub(self.visited_work);
+        page.complete = self.complete;
+        if self.complete {
+            page.bounds = Some(self.bounds.clone());
+        }
+        page
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PairOrientation {
     /// One pair, ordered by current field locator. This is the COMBINE contract.
@@ -1149,6 +1404,115 @@ mod tests {
         assert!(rejected.pairs.is_empty());
         assert!(!rejected.complete);
         assert_eq!(rejected.visited_pair_checks, 0);
+    }
+
+    fn realized_physical(
+        identity: u64,
+        material: Material,
+        placements: Vec<crate::structure::Placement>,
+        catalog: &[crate::resources::BaseResource],
+    ) -> PhysicalMaterial {
+        let mut physical = PhysicalMaterial::realized(material, placements, catalog)
+            .expect("test material should have a valid physical realization");
+        physical.environmental_identity = identity;
+        physical
+    }
+
+    #[test]
+    fn material_bounds_cursor_matches_restore_oracle_across_single_work_pages() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        field.cells[0].physical_materials.push(realized_physical(
+            20,
+            Material {
+                parts: vec![("Carbon".to_owned(), 1.0), ("Oxygen".to_owned(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 1.0,
+                    y: 2.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 5.0,
+                    y: -1.0,
+                    rotation_radians: 0.4,
+                },
+            ],
+            &catalog,
+        ));
+        field.cells[1].physical_materials.push(realized_physical(
+            10,
+            Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 14.0,
+                y: 3.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 101);
+        let expected = snapshot.spatial_bounds_from_field(&field, &catalog);
+        let expected_work = snapshot.materials.len() as u64
+            + snapshot
+                .materials
+                .iter()
+                .map(|material| material.constituent_count as u64)
+                .sum::<u64>();
+        let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let mut actual = None;
+        let mut visited = 0;
+        let mut pages = 0;
+        loop {
+            let page = cursor.next_page(&snapshot, &field, &catalog, 1);
+            assert!(page.visited_work <= 1);
+            visited += page.visited_work;
+            pages += 1;
+            if page.complete {
+                actual = page.bounds;
+                assert_eq!(page.deferred_work, 0);
+                break;
+            }
+            assert!(page.bounds.is_none());
+            assert!(pages < 20);
+        }
+        assert_eq!(visited, expected_work);
+        assert_eq!(actual.expect("completed cursor returns all bounds"), expected);
+    }
+
+    #[test]
+    fn material_bounds_cursor_rejects_stale_snapshot_and_duplicate_catalog_names() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
+        field.cells[0].physical_materials.push(realized_physical(
+            1,
+            Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 1.0,
+                y: 1.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 102);
+        let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let refreshed = EnvironmentalMaterialSnapshot::from_field(&field, 103);
+        let stale = cursor.next_page(&refreshed, &field, &catalog, 10);
+        assert!(!stale.complete);
+        assert_eq!(stale.visited_work, 0);
+
+        let mut duplicate_catalog = catalog.clone();
+        duplicate_catalog.push(duplicate_catalog[0].clone());
+        let mut invalid_cursor = MaterialBoundsCursor::new(&snapshot, &duplicate_catalog);
+        let invalid = loop {
+            let page = invalid_cursor.next_page(&snapshot, &field, &duplicate_catalog, 1);
+            if page.complete {
+                break page;
+            }
+        };
+        assert_eq!(invalid.bounds, Some(vec![None]));
     }
 
     #[test]
