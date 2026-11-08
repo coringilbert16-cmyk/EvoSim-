@@ -1897,7 +1897,7 @@ mod tests {
                     assert_eq!(
                         actual,
                         expected.iter().copied().collect::<Vec<_>>(),
-                        "orientation={orientation:?}, work_limit={work_limit}, output_limit={output_limit}"
+                        "{orientation:?}/{work_limit}/{output_limit}"
                     );
                 }
             }
