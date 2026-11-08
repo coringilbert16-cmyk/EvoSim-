@@ -178,7 +178,10 @@ pub(crate) fn seed_randomized_resources(
     // a deterministic but nonuniform map.
     const PILE_COUNT: usize = 24;
     let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
-    for size in pile_sizes.iter_mut().take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT) {
+    for size in pile_sizes
+        .iter_mut()
+        .take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT)
+    {
         *size += 1;
     }
     pile_sizes.shuffle(&mut rng);
