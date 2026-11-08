@@ -900,7 +900,6 @@ pub(crate) struct IndexedSpatialCursor {
     col: usize,
     target_slot: usize,
     cell_loaded: bool,
-    seen_unordered_pairs: std::collections::BTreeSet<(usize, usize)>,
     complete: bool,
 }
 
@@ -924,7 +923,6 @@ impl IndexedSpatialCursor {
             col: 0,
             target_slot: 0,
             cell_loaded: false,
-            seen_unordered_pairs: std::collections::BTreeSet::new(),
             complete: snapshot.materials.is_empty(),
         }
     }
@@ -1046,18 +1044,28 @@ impl IndexedSpatialCursor {
                     identity_right: target_record.identity,
                 }),
                 PairOrientation::Unordered => {
-                    let (left, right) =
-                        if (anchor.locator.cell_index, anchor.locator.material_index)
-                            < (
-                                target_record.locator.cell_index,
-                                target_record.locator.material_index,
+                    // Snapshot materials are identity-sorted. Emit a pair on
+                    // its lower-identity anchor pass when that anchor reaches
+                    // the higher-identity target. If only the higher anchor's
+                    // bounds reach the lower target, emit it on that reverse
+                    // pass. When both queries reach, the lower anchor already
+                    // emitted it, so the reverse pass is suppressed without
+                    // retaining an O(candidate-pairs) seen set.
+                    let (left, right) = if self.anchor_index < target_index {
+                        (self.anchor_index, target_index)
+                    } else {
+                        (target_index, self.anchor_index)
+                    };
+                    let lower_anchor_reaches_higher = bounds[left]
+                        .and_then(|value| value.expanded(padding))
+                        .is_some_and(|value| {
+                            bounds_include_cell(
+                                field,
+                                value,
+                                snapshot.materials[right].locator.cell_index,
                             )
-                        {
-                            (self.anchor_index, target_index)
-                        } else {
-                            (target_index, self.anchor_index)
-                        };
-                    if self.seen_unordered_pairs.insert((left, right)) {
+                        });
+                    if self.anchor_index < target_index || !lower_anchor_reaches_higher {
                         page.pairs.push(MaterialPairRecord {
                             left,
                             right,
@@ -1759,7 +1767,7 @@ mod tests {
                 .collect::<std::collections::BTreeSet<_>>();
 
             let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
-            let mut actual = std::collections::BTreeSet::new();
+            let mut actual = Vec::new();
             let mut total_work = 0;
             let mut total_cells = 0;
             let mut total_materials = 0;
@@ -1777,12 +1785,8 @@ mod tests {
                 total_work += page.visited_work;
                 total_cells += page.visited_cell_checks;
                 total_materials += page.visited_material_checks;
-                actual.extend(page.pairs.into_iter().map(|pair| match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
-                        (pair.identity_left, pair.identity_right)
-                    }
-                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                actual.extend(page.pairs.into_iter().map(|pair| {
+                    (pair.identity_left, pair.identity_right)
                 }));
                 pages += 1;
                 if page.complete {
@@ -1791,7 +1795,8 @@ mod tests {
                 }
                 assert!(pages < 200);
             }
-            assert_eq!(actual, expected);
+            actual.sort_unstable();
+            assert_eq!(actual, expected.into_iter().collect::<Vec<_>>());
             assert!(total_cells > 0);
             assert!(total_materials > 0);
             assert!(total_work > 0);
