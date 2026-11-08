@@ -919,6 +919,7 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
 
+        let break_operations_ready_for_scheduling = environmental_break_operations.len();
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
         let environmental_break_operations =
@@ -927,6 +928,18 @@ impl Simulation {
                 self.tick,
                 &mut environmental_break_work_remaining,
                 &mut self.chemical_reaction_accumulation,
+            );
+        self.environmental_chemistry_diagnostics
+            .break_discovery
+            .evaluation_outcomes
+            .deferred = self
+            .environmental_chemistry_diagnostics
+            .break_discovery
+            .evaluation_outcomes
+            .deferred
+            .saturating_add(
+                break_operations_ready_for_scheduling
+                    .saturating_sub(environmental_break_operations.len()),
             );
         self.environmental_chemistry_diagnostics.break_scheduled =
             environmental_break_operations.len();
@@ -955,6 +968,20 @@ impl Simulation {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
             } else {
                 self.environmental_chemistry_diagnostics.break_rejected += 1;
+                if failure_reason
+                    .as_deref()
+                    .is_some_and(|reason| reason.starts_with("stale_"))
+                {
+                    self.environmental_chemistry_diagnostics
+                        .break_discovery
+                        .evaluation_outcomes
+                        .stale += 1;
+                } else {
+                    self.environmental_chemistry_diagnostics
+                        .break_discovery
+                        .evaluation_outcomes
+                        .rejected += 1;
+                }
             }
             let post_commit_source_cell_materials = if committed {
                 self.environment
