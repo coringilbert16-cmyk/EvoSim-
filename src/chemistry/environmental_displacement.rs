@@ -2737,18 +2737,57 @@ mod tests {
                 inventory.displacement_joins().len(),
                 expected.interfaces.len()
             );
-            assert!(inventory.contact_interfaces.iter().all(|contact| {
-                matches!(
-                    contact.context,
+
+            // Compare the complete endpoint alternatives, not only their count.
+            // The source material has the lower stable identity in this fixture,
+            // so inventory canonicalization retains anchor/incoming endpoint order.
+            for expected_candidate in &expected.interfaces {
+                let matching = inventory
+                    .contact_interfaces
+                    .iter()
+                    .find(|contact| {
+                        contact.endpoint_a == expected_candidate.endpoint_a
+                            && contact.endpoint_b == expected_candidate.endpoint_b
+                    })
+                    .expect("every census endpoint pair must exist in the inventory");
+                assert_eq!(matching.candidate, *expected_candidate);
+                assert_eq!(
+                    matching.constituent_a.local_index,
+                    anchor_local
+                );
+                assert_eq!(
+                    matching.constituent_b.local_index,
+                    0
+                );
+                assert_eq!(
+                    matching.constituent_a.material,
+                    crate::environmental_interaction::MaterialIdentity(101)
+                );
+                assert_eq!(
+                    matching.constituent_b.material,
+                    crate::environmental_interaction::MaterialIdentity(202)
+                );
+                assert_eq!(
+                    matching.context,
                     crate::environmental_interaction::ContactContext::Replacement {
-                        removed_bond,
-                        anchor,
-                        displaced,
-                    } if removed_bond.bond_index == 0
-                        && anchor.local_index == anchor_local
-                        && displaced.local_index == 1 - anchor_local
-                )
-            }));
+                        removed_bond: crate::environmental_interaction::BondRef {
+                            material: crate::environmental_interaction::MaterialIdentity(101),
+                            topology_generation: 0,
+                            bond_index: 0,
+                        },
+                        anchor: crate::environmental_interaction::ConstituentRef {
+                            material: crate::environmental_interaction::MaterialIdentity(101),
+                            topology_generation: 0,
+                            local_index: anchor_local,
+                        },
+                        displaced: crate::environmental_interaction::ConstituentRef {
+                            material: crate::environmental_interaction::MaterialIdentity(101),
+                            topology_generation: 0,
+                            local_index: 1 - anchor_local,
+                        },
+                    }
+                );
+            }
         }
     }
 }
