@@ -444,10 +444,9 @@ impl SpatialPairCursor {
         snapshot: &EnvironmentalMaterialSnapshot,
         orientation: PairOrientation,
     ) -> Self {
-        let next_right = if orientation == PairOrientation::Directed {
-            1
-        } else {
-            0
+        let next_right = match orientation {
+            PairOrientation::Directed => 1,
+            PairOrientation::Unordered => 0,
         };
         Self {
             pass_id: snapshot.pass_id,
@@ -530,8 +529,7 @@ impl SpatialPairCursor {
             self.visited_pair_checks = self.visited_pair_checks.saturating_add(1);
             self.advance(snapshot.materials.len());
         }
-        page.deferred_pair_checks =
-            known_pair_checks.saturating_sub(self.visited_pair_checks);
+        page.deferred_pair_checks = known_pair_checks.saturating_sub(self.visited_pair_checks);
         page.complete = self.complete;
         page
     }
