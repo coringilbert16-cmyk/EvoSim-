@@ -2751,14 +2751,8 @@ mod tests {
                     })
                     .expect("every census endpoint pair must exist in the inventory");
                 assert_eq!(matching.candidate, *expected_candidate);
-                assert_eq!(
-                    matching.constituent_a.local_index,
-                    anchor_local
-                );
-                assert_eq!(
-                    matching.constituent_b.local_index,
-                    0
-                );
+                assert_eq!(matching.constituent_a.local_index, anchor_local);
+                assert_eq!(matching.constituent_b.local_index, 0);
                 assert_eq!(
                     matching.constituent_a.material,
                     crate::environmental_interaction::MaterialIdentity(101)
