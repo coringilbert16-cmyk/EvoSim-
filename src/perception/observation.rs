@@ -177,8 +177,8 @@ fn observe_field_physical_parts(
             );
             // Invalid catalog resonance parameters have no drawable frequency.
             // Keep the observation JSON finite without changing simulation state.
-            let frequency = if natural_frequency.is_finite() && natural_frequency >= 0.0 {
-                natural_frequency
+            let frequency = if natural_frequency.is_finite() {
+                natural_frequency.max(0.0)
             } else {
                 0.0
             };
