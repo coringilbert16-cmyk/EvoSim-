@@ -66,8 +66,8 @@ Do not promote the current pass-local state_version placeholder into a persisten
 Generate deterministic candidate relationships from the snapshot, deduplicated by stable material identity pair while retaining the source locator needed for revalidation.
 
 The broad phase must preserve:
-- the exact current field-cell query semantics (including its current axis-specific wrap/clamp behavior);
-- all target-cell and bounds-padding semantics already used by the existing paths;
+- the exact current field-cell query semantics (horizontal X clamping and vertical Y wrapping);
+- all target-cell and bounds-padding semantics already used by the existing paths (both COMBINE and DISPLACEMENT currently expand restored body bounds by 2.1 world units);
 - distinct material pairs even when they share a cell;
 - candidate ordering/rotation and explicit deferred coverage under bounded work;
 - no self-pairs and no duplicate unordered ordinary pairs.
@@ -119,7 +119,7 @@ Use deterministic small worlds and compare shared output to existing implementat
 
 1. Empty and sparse fields; multiple materials in one cell.
 2. Same-cell and adjacent-cell pairs; cell-size and bounds-padding edge cases.
-3. Left/right wrap seam; top/bottom hard walls.
+3. Current field boundary behavior: horizontal X hard clamping and vertical Y wrap seam. Separately track the Master Spec 2.4 discrepancy; do not silently change the field policy as part of this refactor.
 4. Movement across cells and across the wrap seam.
 5. Rotation and asymmetric material bounds.
 6. Multi-constituent materials with multiple bonds and multiple endpoint alternatives.
