@@ -242,8 +242,16 @@ fn obstacle_adjusted_velocity(
 fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, height: f64) -> Option<f64> {
     let placements = material.placements.as_ref()?;
     if placements.is_empty() || !height.is_finite() || height <= 0.0 { return None; }
-    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
-    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for (index, placement) in placements.iter().enumerate() {
+        let radius = material.realized_shapes.as_ref()
+            .and_then(|shapes| shapes.get(index))
+            .map(|shape| shape_radius(&shape.form))
+            .unwrap_or(0.5);
+        min_y = min_y.min(placement.y - radius);
+        max_y = max_y.max(placement.y + radius);
+    }
     Some(requested_dy.clamp(-min_y, (height - 1e-6) - max_y))
 }
 
