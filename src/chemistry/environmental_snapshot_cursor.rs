@@ -217,8 +217,8 @@ mod tests {
     use super::*;
     use crate::environment::ActiveMaterialField;
     use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
-    use crate::structure::ConnectionEndpoint;
     use crate::resources::Material;
+    use crate::structure::ConnectionEndpoint;
 
     fn physical(identity: u64, name: &str) -> PhysicalMaterial {
         PhysicalMaterial {
