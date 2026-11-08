@@ -459,6 +459,35 @@ mod tests {
     }
 
     #[test]
+    fn spatial_pairs_preserve_existing_vertical_wrap_and_horizontal_bounds() {
+        let mut field = ActiveMaterialField::new(40.0, 40.0, 10.0);
+        field.cells[0].physical_materials.push(physical(10, "Carbon"));
+        field.cells[12].physical_materials.push(physical(20, "Oxygen"));
+        field.cells[3].physical_materials.push(physical(30, "Hydrogen"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 5);
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: -1.0, max_x: 1.0, min_y: -1.0, max_y: 1.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 0.0, max_x: 10.0, min_y: 29.0, max_y: 31.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 29.0, max_x: 31.0, min_y: 0.0, max_y: 10.0,
+            }),
+        ];
+        let (pairs, coverage) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+        );
+        assert_eq!(coverage.known_pairs, 1);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(
+            (pairs[0].identity_left, pairs[0].identity_right),
+            (MaterialIdentity(10), MaterialIdentity(20))
+        );
+    }
+
+    #[test]
     fn spatial_pair_windows_report_deferred_work_without_losing_candidates() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
         for identity in 1..=3 {
