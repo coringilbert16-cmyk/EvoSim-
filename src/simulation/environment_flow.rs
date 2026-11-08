@@ -874,10 +874,10 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![crate::structure::Placement { x: 500.0, y: 999.999, rotation_radians: 0.0 }],
+            vec![crate::structure::Placement { x: 500.0, y: 999.0, rotation_radians: 0.0 }],
             &catalog,
         ).expect("catalog carbon should realize");
-        assert!(field.deposit_physical(500.0, 999.999, material, &catalog));
+        assert!(field.deposit_physical(500.0, 999.0, material, &catalog));
         let before = field.total_material();
         let _ = transport_field(&mut field, &catalog, 1000.0, 1000.0);
         assert_eq!(field.total_material(), before);
