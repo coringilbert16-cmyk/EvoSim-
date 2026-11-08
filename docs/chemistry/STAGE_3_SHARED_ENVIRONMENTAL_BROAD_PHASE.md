@@ -187,3 +187,23 @@ The cursor cannot claim bounded discovery if it eagerly calls `spatial_bounds_fr
 The same accounting must include failed restorations, invalid catalog/material checks, and materials with no realized body. Otherwise large or malformed materials can consume unreported work while producing no candidate. Snapshot ownership enumeration remains a distinct one-pass cost and must be measured separately from lazy bounds construction and pair traversal.
 
 This prevents moving the unbounded eager scan one function earlier and calling the resulting pair cursor bounded.
+
+
+## First bounded pair-cursor implementation
+
+Commit `f7b78a077fab65f031ea96e0eeeb1cf804c5ab1e` adds `SpatialPairCursor` as an isolated, read-only implementation.
+
+- It retains only the pass ID, orientation, next pair indices, and completed pair-check count; it does not build a candidate vector, map, or per-page seen set.
+- Each page evaluates no more than its explicit pair-work limit and emits no more than its output limit.
+- A page may emit zero candidates while remaining incomplete. The caller must keep the cursor until `complete` is true.
+- COMBINE uses stable identity ordering and tests the union of both materials' expanded-bounds cell membership.
+- DISPLACEMENT walks every ordered non-self pair, preserving both directions.
+- Cell membership is computed in O(1) using the exact current field query semantics (X clamped, Y wrapped), avoiding an allocated full cell-query vector per pair.
+- The cursor is bound to one snapshot pass ID; a refreshed snapshot is rejected.
+- Tests compare concatenated pages against the existing exhaustive spatial candidate oracle for both orientations and exercise empty intermediate pages and stale-pass rejection.
+
+### Deliberate limitation
+
+This is a **bounded pair-predicate cursor**, not yet the final spatial-cell traversal. It scans the exhaustive pair universe and checks whether the target cell belongs to the source bounds query; this proves deterministic bounded work and set parity but is still O(n²) in material count. It also accepts a precomputed bounds slice, so it does not yet bound the cost of constructing that slice. Do not wire it into production or describe it as the final optimized shared broad phase.
+
+The next substage is a separately resumable, lazy material-bounds preparation cursor, with explicit work accounting for every restoration/geometry attempt. Once that is proven, we can replace the exhaustive pair scan with a genuinely indexed cell/material cursor while retaining the same parity oracle. The existing eager `spatial_bounds_from_field` and `spatial_pair_window` remain reference helpers only.
