@@ -834,9 +834,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     operations
         .into_iter()
         .filter_map(|operation| {
-            crate::chemistry::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
                 tick,
-                crate::chemistry::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
                 operation,
             )
             .into_ready()
