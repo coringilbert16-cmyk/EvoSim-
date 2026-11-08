@@ -415,6 +415,183 @@ impl EnvironmentalMaterialSnapshot {
         )
     }
 
+
+/// Work-bounded cursor over the exhaustive material-pair universe. Unlike
+/// `spatial_pair_window`, this never constructs the complete candidate set.
+/// Bounds are supplied by a separately prepared snapshot phase; this cursor
+/// accounts for every pair predicate it evaluates.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SpatialPairCursor {
+    pass_id: u64,
+    orientation: PairOrientation,
+    next_left: usize,
+    next_right: usize,
+    visited_pair_checks: u64,
+    complete: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct SpatialCursorPage {
+    pub(crate) pairs: Vec<MaterialPairRecord>,
+    pub(crate) known_pair_checks: u64,
+    pub(crate) visited_pair_checks: u64,
+    pub(crate) deferred_pair_checks: u64,
+    pub(crate) complete: bool,
+}
+
+impl SpatialPairCursor {
+    pub(crate) fn new(snapshot: &EnvironmentalMaterialSnapshot, orientation: PairOrientation) -> Self {
+        let next_right = usize::from(orientation == PairOrientation::Directed);
+        Self {
+            pass_id: snapshot.pass_id,
+            orientation,
+            next_left: 0,
+            next_right,
+            visited_pair_checks: 0,
+            complete: snapshot.materials.len() < 2,
+        }
+    }
+
+    /// Evaluate at most `work_limit` material-pair predicates and emit at most
+    /// `output_limit` candidates. A page can be empty but incomplete; callers
+    /// must retain the cursor until `complete` is true.
+    ///
+    /// COMBINE's unordered predicate uses the union of both expanded-bounds
+    /// cell queries. DISPLACEMENT evaluates every ordered anchor/incoming pair.
+    pub(crate) fn next_page(
+        &mut self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        padding: f64,
+        work_limit: usize,
+        output_limit: usize,
+    ) -> SpatialCursorPage {
+        let known_pair_checks = match self.orientation {
+            PairOrientation::Unordered => snapshot.known_pair_count(),
+            PairOrientation::Directed => snapshot.known_directed_pair_count(),
+        };
+        if snapshot.pass_id != self.pass_id || bounds.len() != snapshot.materials.len() {
+            return SpatialCursorPage {
+                known_pair_checks,
+                complete: false,
+                ..SpatialCursorPage::default()
+            };
+        }
+
+        let mut page = SpatialCursorPage {
+            known_pair_checks,
+            ..SpatialCursorPage::default()
+        };
+        if self.complete {
+            page.complete = true;
+            page.visited_pair_checks = self.visited_pair_checks;
+            return page;
+        }
+
+        while page.visited_pair_checks < work_limit as u64
+            && page.pairs.len() < output_limit
+            && !self.complete
+        {
+            let left = self.next_left;
+            let right = self.next_right;
+            let left_record = &snapshot.materials[left];
+            let right_record = &snapshot.materials[right];
+            let left_bounds = bounds[left].and_then(|value| value.expanded(padding));
+            let right_bounds = bounds[right].and_then(|value| value.expanded(padding));
+            let left_reaches_right = left_bounds.is_some_and(|value| {
+                bounds_include_cell(field, value, right_record.locator.cell_index)
+            });
+            let candidate = match self.orientation {
+                PairOrientation::Directed => left_reaches_right,
+                PairOrientation::Unordered => {
+                    left_reaches_right
+                        || right_bounds.is_some_and(|value| {
+                            bounds_include_cell(field, value, left_record.locator.cell_index)
+                        })
+                }
+            };
+            if candidate {
+                page.pairs.push(MaterialPairRecord {
+                    left,
+                    right,
+                    identity_left: left_record.identity,
+                    identity_right: right_record.identity,
+                });
+            }
+            page.visited_pair_checks = page.visited_pair_checks.saturating_add(1);
+            self.visited_pair_checks = self.visited_pair_checks.saturating_add(1);
+            self.advance(snapshot.materials.len());
+        }
+        page.deferred_pair_checks =
+            known_pair_checks.saturating_sub(self.visited_pair_checks);
+        page.complete = self.complete;
+        page
+    }
+
+    fn advance(&mut self, material_count: usize) {
+        match self.orientation {
+            PairOrientation::Unordered => {
+                self.next_right += 1;
+                if self.next_right >= material_count {
+                    self.next_left += 1;
+                    self.next_right = self.next_left + 1;
+                }
+                self.complete = self.next_left + 1 >= material_count;
+            }
+            PairOrientation::Directed => {
+                self.next_right += 1;
+                if self.next_right >= material_count {
+                    self.next_left += 1;
+                    self.next_right = 0;
+                }
+                if self.next_right == self.next_left {
+                    self.next_right += 1;
+                }
+                self.complete = self.next_left >= material_count;
+            }
+        }
+    }
+}
+
+/// O(1) equivalent of membership in `cells_intersecting_bounds`. It preserves
+/// the current field semantics (X clamped, Y wrapped) without allocating or
+/// traversing the full cell-query vector for each pair.
+fn bounds_include_cell(
+    field: &ActiveMaterialField,
+    bounds: MaterialSpatialBounds,
+    cell_index: usize,
+) -> bool {
+    if field.width_cells == 0
+        || field.height_cells == 0
+        || field.cell_size <= 0.0
+        || cell_index >= field.cells.len()
+    {
+        return false;
+    }
+    let min_col = ((bounds.min_x / field.cell_size).floor() as isize).max(0) as usize;
+    let max_col = ((bounds.max_x / field.cell_size).floor() as isize)
+        .min(field.width_cells.saturating_sub(1) as isize)
+        .max(0) as usize;
+    if min_col > max_col {
+        return false;
+    }
+    let col = cell_index % field.width_cells;
+    if col < min_col || col > max_col {
+        return false;
+    }
+    let row = cell_index / field.width_cells;
+    let row_start = (bounds.min_y / field.cell_size).floor() as isize;
+    let row_end = (bounds.max_y / field.cell_size).floor() as isize;
+    let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
+    if row_count >= field.height_cells {
+        return true;
+    }
+    let normalized_start = row_start.rem_euclid(field.height_cells as isize) as usize;
+    let offset = (row + field.height_cells - normalized_start) % field.height_cells;
+    offset < row_count
+}
+
     pub(crate) fn bond_reference_is_current(&self, reference: BondRef) -> bool {
         self.existing_bonds
             .iter()
@@ -861,6 +1038,72 @@ mod tests {
         assert_eq!(first.deferred_pairs, 2);
         assert_eq!(second.visited_pairs, 2);
         assert_eq!(second.deferred_pairs, 0);
+    }
+
+ 
+    #[test]
+    fn bounded_cursor_pages_match_spatial_reference_for_both_orientations() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        field.cells[0].physical_materials.push(physical(40, "Carbon"));
+        field.cells[0].physical_materials.push(physical(10, "Oxygen"));
+        field.cells[1].physical_materials.push(physical(30, "Hydrogen"));
+        field.cells[14].physical_materials.push(physical(20, "Carbon"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 81);
+        let bounds = vec![
+            Some(MaterialSpatialBounds { min_x: 0.0, max_x: 10.0, min_y: 0.0, max_y: 10.0 }),
+            Some(MaterialSpatialBounds { min_x: 39.0, max_x: 51.0, min_y: 19.0, max_y: 31.0 }),
+            Some(MaterialSpatialBounds { min_x: 9.0, max_x: 21.0, min_y: 0.0, max_y: 10.0 }),
+            Some(MaterialSpatialBounds { min_x: -1.0, max_x: 11.0, min_y: 0.0, max_y: 10.0 }),
+        ];
+        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+            let (reference, _) = snapshot.spatial_pair_window(
+                &field, &bounds, 2.1, 0, usize::MAX, orientation,
+            );
+            let expected = reference.iter()
+                .map(|pair| (pair.identity_left, pair.identity_right))
+                .collect::<std::collections::BTreeSet<_>>();
+            let mut cursor = SpatialPairCursor::new(&snapshot, orientation);
+            let mut actual = std::collections::BTreeSet::new();
+            let mut total_visited = 0;
+            let mut pages = 0;
+            loop {
+                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 3, 2);
+                assert!(page.visited_pair_checks <= 3);
+                assert!(page.pairs.len() <= 2);
+                total_visited += page.visited_pair_checks;
+                actual.extend(page.pairs.into_iter().map(|pair| (pair.identity_left, pair.identity_right)));
+                pages += 1;
+                if page.complete { break; }
+                assert!(pages < 100);
+            }
+            let expected_checks = match orientation {
+                PairOrientation::Unordered => snapshot.known_pair_count(),
+                PairOrientation::Directed => snapshot.known_directed_pair_count(),
+            };
+            assert_eq!(total_visited, expected_checks);
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn bounded_cursor_rejects_snapshot_refresh_and_empty_pages_keep_continuation() {
+        let mut field = ActiveMaterialField::new(30.0, 10.0, 10.0);
+        for identity in 1..=4 {
+            field.cells[0].physical_materials.push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 9);
+        let bounds = vec![None; 4];
+        let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Directed);
+        let first = cursor.next_page(&snapshot, &field, &bounds, 0.0, 2, 8);
+        assert!(first.pairs.is_empty());
+        assert!(!first.complete);
+        assert_eq!(first.visited_pair_checks, 2);
+
+        let refreshed = EnvironmentalMaterialSnapshot::from_field(&field, 10);
+        let rejected = cursor.next_page(&refreshed, &field, &bounds, 0.0, 8, 8);
+        assert!(rejected.pairs.is_empty());
+        assert!(!rejected.complete);
+        assert_eq!(rejected.visited_pair_checks, 0);
     }
 
     #[test]
