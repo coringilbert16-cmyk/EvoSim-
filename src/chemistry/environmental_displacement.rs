@@ -1076,38 +1076,30 @@ pub(crate) fn accumulate_environmental(
                                         diagnostics.replacement_alternative_audits_truncated
                                             .saturating_add(1);
                                 }
-                                let selected_bond_energy = combined.units[anchor_unit]
-                                    .properties(&environment.catalog)
-                                    .zip(combined.units[incoming_unit].properties(&environment.catalog));
-                                if let Some((anchor_properties, incoming_properties)) =
-                                    selected_bond_energy
-                                {
-                                    let selected_strength =
-                                        bond_strength(anchor_properties, incoming_properties);
-                                    let selected_energy = intrinsic_bond_potential(
-                                        anchor_properties,
-                                        incoming_properties,
-                                        selected_strength,
-                                    );
-                                    let alternative_is_stronger = census.alternatives.iter().any(
-                                        |alternative| {
-                                            let same_interface = alternative.candidate.endpoint_a
-                                                == candidate.endpoint_a
-                                                && alternative.candidate.endpoint_b
-                                                    == candidate.endpoint_b;
-                                            !same_interface
-                                                && intrinsic_bond_potential(
-                                                    anchor_properties,
-                                                    incoming_properties,
-                                                    selected_strength,
-                                                ) > old_bond.bond_energy
-                                        },
-                                    );
-                                    if selected_energy <= old_bond.bond_energy
-                                        && alternative_is_stronger
-                                    {
-                                        diagnostics.selected_contact_hides_stronger_alternative =
-                                            diagnostics.selected_contact_hides_stronger_alternative
+                                // Bond potential depends on the reactant pair, not
+                                // which endpoint interface joins that pair. The
+                                // meaningful alternative-selection audit is therefore
+                                // whether another valid interface supplies more activation.
+                                let selected_alternative = census.alternatives.iter().find(
+                                    |alternative| {
+                                        alternative.candidate.endpoint_a == candidate.endpoint_a
+                                            && alternative.candidate.endpoint_b
+                                                == candidate.endpoint_b
+                                    },
+                                );
+                                if let Some(selected_alternative) = selected_alternative {
+                                    if census.alternatives.iter().any(|alternative| {
+                                        (alternative.candidate.endpoint_a
+                                            != candidate.endpoint_a
+                                            || alternative.candidate.endpoint_b
+                                                != candidate.endpoint_b)
+                                            && alternative.activation_increment
+                                                > selected_alternative.activation_increment
+                                    }) {
+                                        diagnostics
+                                            .selected_contact_hides_higher_activation_alternative =
+                                            diagnostics
+                                                .selected_contact_hides_higher_activation_alternative
                                                 .saturating_add(1);
                                     }
                                 }
