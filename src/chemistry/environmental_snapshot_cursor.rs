@@ -1,5 +1,5 @@
 //! Resumable construction of the environmental material/bond snapshot.
-//! Every cell, material, and bond inspection consumes one unit of caller budget.
+//! Every cell, material, and bond inspection, plus each finalized record, consumes one unit.
 
 use std::collections::{BTreeMap, VecDeque};
 
@@ -317,6 +317,12 @@ mod tests {
         };
         let eager = EnvironmentalMaterialSnapshot::from_field(&field, 77);
         assert_eq!(snapshot, eager);
+        assert_eq!(
+            total,
+            field.cells.len() as u64
+                + 2 * snapshot.materials.len() as u64
+                + 2 * snapshot.existing_bonds.len() as u64
+        );
         assert!(total > 2);
     }
 
@@ -360,8 +366,11 @@ mod tests {
         }
 
         let mut cursor = EnvironmentalSnapshotCursor::new(&field, 13);
+        let mut total = 0;
         let snapshot = loop {
             let page = cursor.next_page(&field, 2);
+            assert!(page.visited_work <= 2);
+            total += page.visited_work;
             if let Some(snapshot) = page.snapshot {
                 break snapshot;
             }
@@ -371,6 +380,12 @@ mod tests {
         let eager = EnvironmentalMaterialSnapshot::from_field(&field, 13);
         assert_eq!(snapshot, eager);
         assert_eq!(snapshot.existing_bonds.len(), 2);
+        assert_eq!(
+            total,
+            field.cells.len() as u64
+                + 2 * snapshot.materials.len() as u64
+                + 2 * snapshot.existing_bonds.len() as u64
+        );
     }
 
     #[test]
