@@ -58,14 +58,16 @@ impl EnvironmentalMaterialSnapshot {
                 snapshot.material_visits = snapshot.material_visits.saturating_add(1);
                 let identity = MaterialIdentity(physical.environmental_identity);
                 if identity.0 == 0 {
-                    snapshot.unassigned_materials =
-                        snapshot.unassigned_materials.saturating_add(1);
+                    snapshot.unassigned_materials = snapshot.unassigned_materials.saturating_add(1);
                     continue;
                 }
                 let topology_generation = 0;
                 snapshot.materials.push(MaterialRecord {
                     identity,
-                    locator: MaterialLocator { cell_index, material_index },
+                    locator: MaterialLocator {
+                        cell_index,
+                        material_index,
+                    },
                     topology_generation,
                     state_version: 0,
                     constituent_count: physical.material.parts.len(),
@@ -181,9 +183,15 @@ mod tests {
     #[test]
     fn snapshot_visits_field_once_and_retains_stable_identity_across_locators() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
-        field.cells[1].physical_materials.push(physical(20, "Carbon"));
-        field.cells[1].physical_materials.push(physical(10, "Oxygen"));
-        field.cells[3].physical_materials.push(physical(30, "Hydrogen"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(10, "Oxygen"));
+        field.cells[3]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 77);
         assert_eq!(snapshot.pass_id, 77);
         assert_eq!(snapshot.cell_visits, 8);
@@ -229,7 +237,9 @@ mod tests {
     #[test]
     fn unassigned_materials_are_reported_not_given_fabricated_identity() {
         let mut field = ActiveMaterialField::new(10.0, 10.0, 10.0);
-        field.cells[0].physical_materials.push(physical(0, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(0, "Carbon"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 2);
         assert_eq!(snapshot.unassigned_materials, 1);
         assert!(snapshot.materials.is_empty());
