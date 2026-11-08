@@ -541,12 +541,12 @@ impl SpatialPairCursor {
             }
             PairOrientation::Directed => {
                 self.next_right += 1;
+                if self.next_right == self.next_left {
+                    self.next_right += 1;
+                }
                 if self.next_right >= material_count {
                     self.next_left += 1;
                     self.next_right = 0;
-                }
-                if self.next_right == self.next_left {
-                    self.next_right += 1;
                 }
                 self.complete = self.next_left >= material_count;
             }
@@ -1060,7 +1060,12 @@ mod tests {
                 &field, &bounds, 2.1, 0, usize::MAX, orientation,
             );
             let expected = reference.iter()
-                .map(|pair| (pair.identity_left, pair.identity_right))
+                .map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right =>
+                        (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                })
                 .collect::<std::collections::BTreeSet<_>>();
             let mut cursor = SpatialPairCursor::new(&snapshot, orientation);
             let mut actual = std::collections::BTreeSet::new();
@@ -1071,7 +1076,12 @@ mod tests {
                 assert!(page.visited_pair_checks <= 3);
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
-                actual.extend(page.pairs.into_iter().map(|pair| (pair.identity_left, pair.identity_right)));
+                actual.extend(page.pairs.into_iter().map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right =>
+                        (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                }));
                 pages += 1;
                 if page.complete { break; }
                 assert!(pages < 100);
