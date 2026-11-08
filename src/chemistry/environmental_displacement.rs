@@ -1880,8 +1880,9 @@ mod tests {
         .is_none());
     }
 
-    fn three_participant_fixture(
+    fn three_participant_fixture_for_anchor(
         catalog: &[BaseResource],
+        anchor_unit: usize,
     ) -> (OrganismStructure, Bond, ConnectionPairCandidate, f64) {
         let mut source = OrganismStructure::new();
         source.add_unit(crate::structure::StructuralUnit::new(
@@ -1919,8 +1920,14 @@ mod tests {
                         && candidate.available_b
                 })
                 .expect("Carbon-Hydrogen physical contact");
-        let anchor = source.units[0].properties(catalog).unwrap();
-        let displaced = source.units[1].properties(catalog).unwrap();
+        let displaced_unit = 1 - anchor_unit;
+        let anchor = source.units[anchor_unit].properties(catalog).unwrap();
+        let displaced = source.units[displaced_unit].properties(catalog).unwrap();
+        let old_anchor_endpoint = if anchor_unit == 0 {
+            old_candidate.endpoint_a
+        } else {
+            old_candidate.endpoint_b
+        };
         let strength = bond_strength(anchor, displaced);
         let old_bond = Bond {
             endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
@@ -1941,8 +1948,8 @@ mod tests {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
                     let placement = crate::structure::Placement {
-                        x: f64::from(x_step) * 0.2,
-                        y: f64::from(y_step) * 0.2,
+                        x: source.units[anchor_unit].placement.x + f64::from(x_step) * 0.2,
+                        y: source.units[anchor_unit].placement.y + f64::from(y_step) * 0.2,
                         rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
                     };
                     replacement_trial.units[2].placement = placement;
@@ -1957,14 +1964,14 @@ mod tests {
                     }
                     let candidate = crate::contact::connection_pair_candidates_cached(
                         &replacement_trial,
-                        0,
+                        anchor_unit,
                         2,
                         catalog,
                         &mut cache,
                     )
                     .into_iter()
                     .find(|candidate| {
-                        candidate.endpoint_a != old_candidate.endpoint_a
+                        candidate.endpoint_a != old_anchor_endpoint
                             && candidate.distance >= 0.0
                             && candidate.distance
                                 <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -1976,7 +1983,7 @@ mod tests {
                     if let Some(candidate) = candidate {
                         if crate::combine_runtime::selected_candidate_evaluation(
                             &replacement_trial,
-                            0,
+                            anchor_unit,
                             2,
                             candidate,
                             catalog,
@@ -1986,7 +1993,7 @@ mod tests {
                             source.units[2].placement = placement;
                             let census = census_replacement_contacts(
                                 &source,
-                                0,
+                                anchor_unit,
                                 2,
                                 old_bond,
                                 catalog,
@@ -2026,13 +2033,19 @@ mod tests {
         replacement_trial.units[2].placement = incoming_placement;
         let (_, _, investment, _) = crate::combine_runtime::selected_candidate_evaluation(
             &replacement_trial,
-            0,
+            anchor_unit,
             2,
             replacement_candidate,
             catalog,
         )
         .expect("replacement candidate should pass ordinary COMBINE evaluation");
         (source, old_bond, replacement_candidate, investment)
+    }
+
+    fn three_participant_fixture(
+        catalog: &[BaseResource],
+    ) -> (OrganismStructure, Bond, ConnectionPairCandidate, f64) {
+        three_participant_fixture_for_anchor(catalog, 0)
     }
 
     #[test]
