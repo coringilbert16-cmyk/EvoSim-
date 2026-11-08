@@ -10,6 +10,16 @@ use tokio::process::{Child, Command};
 
 pub(crate) const HISTORY_CAPACITY: usize = 30;
 
+pub(crate) fn environment_chemistry_simulation(
+    ticks_per_second: f64,
+    running: bool,
+) -> Simulation {
+    let mut simulation = crate::environment_chemistry_experiment::build(42).simulation;
+    simulation.ticks_per_second = ticks_per_second;
+    simulation.running = running;
+    simulation
+}
+
 pub(crate) struct RuntimeState {
     pub(crate) simulation: Simulation,
     history: VecDeque<Simulation>,
@@ -33,8 +43,7 @@ impl RuntimeState {
 
     pub(crate) fn reset(&mut self) {
         let ticks_per_second = self.simulation.ticks_per_second;
-        self.simulation = Simulation::new(42, ticks_per_second);
-        self.simulation.running = false;
+        self.simulation = environment_chemistry_simulation(ticks_per_second, false);
         self.history.clear();
         self.history.push_back(self.simulation.clone());
     }
@@ -192,6 +201,28 @@ mod tests {
         assert_eq!(runtime.history.len(), HISTORY_CAPACITY);
         assert_eq!(runtime.history_ticks().first(), Some(&6));
         assert_eq!(runtime.history_ticks().last(), Some(&35));
+    }
+
+    #[test]
+    fn reset_restores_seeded_organism_free_environment() {
+        let mut runtime = RuntimeState::new(Simulation::new(7, 20.0));
+        runtime.reset();
+
+        let physical_objects = runtime
+            .simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.len())
+            .sum::<usize>();
+        assert!(runtime.simulation.organisms.is_empty());
+        assert_eq!(runtime.simulation.environment.width, 250.0);
+        assert_eq!(runtime.simulation.environment.height, 250.0);
+        assert_eq!(physical_objects, 1_280);
+        assert_eq!(runtime.simulation.ticks_per_second, 20.0);
+        assert!(!runtime.simulation.running);
+        assert_eq!(runtime.history_ticks(), vec![0]);
     }
 
     #[test]
