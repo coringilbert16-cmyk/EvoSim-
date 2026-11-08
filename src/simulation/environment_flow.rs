@@ -252,7 +252,9 @@ fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, h
         min_y = min_y.min(placement.y - radius);
         max_y = max_y.max(placement.y + radius);
     }
-    Some(requested_dy.clamp(-min_y, (height - 1e-6) - max_y))
+    let minimum_shift = -min_y;
+    let maximum_shift = (height - 1e-6) - max_y;
+    (minimum_shift <= maximum_shift).then(|| requested_dy.clamp(minimum_shift, maximum_shift))?
 }
 
 fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Option<PhysicalMaterial> {
