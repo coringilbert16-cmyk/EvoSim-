@@ -391,12 +391,13 @@ pub(crate) fn audit_transport_endpoints(seed: u64) {
     audit_endpoint_resolution("before", &fixture.simulation.environment.field, &catalog);
 
     let mut transported = fixture.simulation.environment.field.clone();
-    let moved = crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
-        &mut transported,
-        &catalog,
-        fixture.simulation.environment.width,
-        fixture.simulation.environment.height,
-    );
+    let moved =
+        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
+            &mut transported,
+            &catalog,
+            fixture.simulation.environment.width,
+            fixture.simulation.environment.height,
+        );
     println!("TRANSPORT ENDPOINT AUDIT: moved_materials={moved}");
     audit_endpoint_resolution("after", &transported, &catalog);
 }
