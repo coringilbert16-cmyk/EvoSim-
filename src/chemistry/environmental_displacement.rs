@@ -262,7 +262,7 @@ fn build_displacement_trial_with_activation_status(
     // cannot displace the existing bond.
     if preflight.replacement_bond_energy <= preflight.old_bond_energy {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::ReplacementBondStrength;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::ReplacementBondTooWeak;
         }
         return None;
     }
@@ -1178,7 +1178,7 @@ pub(crate) fn accumulate_environmental(
                                                     .trial_rejections_products
                                                     .saturating_add(1);
                                             }
-                                            DisplacementTrialFailureStage::ReplacementBondStrength => {
+                                            DisplacementTrialFailureStage::ReplacementBondTooWeak => {
                                                 diagnostics
                                                     .trial_rejections_replacement_bond_strength =
                                                     diagnostics
