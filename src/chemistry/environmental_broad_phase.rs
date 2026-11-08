@@ -1869,8 +1869,7 @@ mod tests {
 
             for work_limit in 1..=5 {
                 for output_limit in 1..=3 {
-                    let mut cursor =
-                        IndexedSpatialCursor::new(&snapshot, &field, orientation);
+                    let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
                     let mut actual = Vec::new();
                     let mut pages = 0;
                     loop {
@@ -1884,9 +1883,9 @@ mod tests {
                         );
                         assert!(page.visited_work <= work_limit as u64);
                         assert!(page.pairs.len() <= output_limit);
-                        actual.extend(page.pairs.into_iter().map(|pair| {
-                            (pair.identity_left, pair.identity_right)
-                        }));
+                        for pair in page.pairs {
+                            actual.push((pair.identity_left, pair.identity_right));
+                        }
                         pages += 1;
                         if page.complete {
                             assert_eq!(page.deferred_anchors, 0);
