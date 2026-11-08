@@ -514,7 +514,11 @@ mod tests {
         assert_eq!(second_coverage.deferred_pairs, 6);
         assert_eq!(third_coverage.deferred_pairs, 0);
 
-        let pairs = first.into_iter().chain(second).chain(third).collect::<Vec<_>>();
+        let pairs = first
+            .into_iter()
+            .chain(second)
+            .chain(third)
+            .collect::<Vec<_>>();
         let mut identities = pairs
             .iter()
             .map(|pair| (pair.identity_left, pair.identity_right))
@@ -522,16 +526,15 @@ mod tests {
         identities.sort();
         identities.dedup();
         assert_eq!(identities.len(), 20);
-        assert!(identities.iter().all(|(anchor, incoming)| anchor != incoming));
+        assert!(identities
+            .iter()
+            .all(|(anchor, incoming)| anchor != incoming));
         for identity in 1..=5 {
             for other in 1..=5 {
                 if identity == other {
                     continue;
                 }
-                assert!(identities.contains(&(
-                    MaterialIdentity(identity),
-                    MaterialIdentity(other)
-                )));
+                assert!(identities.contains(&(MaterialIdentity(identity), MaterialIdentity(other))));
             }
         }
     }
@@ -619,7 +622,10 @@ mod tests {
             .map(|pair| (pair.identity_left, pair.identity_right))
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(actual_directed, expected_directed);
-        assert_eq!(directed_coverage.known_pairs, expected_directed.len() as u64);
+        assert_eq!(
+            directed_coverage.known_pairs,
+            expected_directed.len() as u64
+        );
 
         let expected_unordered = expected_directed
             .iter()
@@ -638,7 +644,10 @@ mod tests {
             .map(|pair| (pair.identity_left, pair.identity_right))
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(actual_unordered, expected_unordered);
-        assert_eq!(unordered_coverage.known_pairs, expected_unordered.len() as u64);
+        assert_eq!(
+            unordered_coverage.known_pairs,
+            expected_unordered.len() as u64
+        );
     }
 
     #[test]
