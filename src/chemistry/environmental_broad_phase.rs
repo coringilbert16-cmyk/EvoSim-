@@ -444,10 +444,7 @@ impl SpatialPairCursor {
         snapshot: &EnvironmentalMaterialSnapshot,
         orientation: PairOrientation,
     ) -> Self {
-        let next_right = match orientation {
-            PairOrientation::Directed => 1,
-            PairOrientation::Unordered => 0,
-        };
+        let next_right = 1;
         Self {
             pass_id: snapshot.pass_id,
             orientation,
