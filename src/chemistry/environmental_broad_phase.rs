@@ -228,10 +228,9 @@ impl EnvironmentalMaterialSnapshot {
                     },
                     catalog,
                 )?;
-                let body =
-                    crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                        &structure,
-                    )?;
+                let body = crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                    &structure,
+                )?;
                 Some(MaterialSpatialBounds {
                     min_x: body.min_x,
                     max_x: body.max_x,
@@ -294,8 +293,7 @@ impl EnvironmentalMaterialSnapshot {
                     continue;
                 };
                 for target_slot in 0..cell.physical_materials.len() {
-                    let Some(&target_index) =
-                        locator_to_material.get(&(cell_index, target_slot))
+                    let Some(&target_index) = locator_to_material.get(&(cell_index, target_slot))
                     else {
                         continue;
                     };
@@ -308,29 +306,27 @@ impl EnvironmentalMaterialSnapshot {
                         // physically overlapping target may occupy a cell that
                         // is reached only by the target's expanded bounds.
                         // Keeping the union avoids a direction-dependent miss.
-                        let anchor_locator = (
-                            anchor.locator.cell_index,
-                            anchor.locator.material_index,
-                        );
-                        let target_locator = (
-                            target.locator.cell_index,
-                            target.locator.material_index,
-                        );
+                        let anchor_locator =
+                            (anchor.locator.cell_index, anchor.locator.material_index);
+                        let target_locator =
+                            (target.locator.cell_index, target.locator.material_index);
                         let (left, right) = if anchor_locator < target_locator {
                             (anchor_index, target_index)
                         } else {
                             (target_index, anchor_index)
                         };
-                        unordered_candidates.entry((left, right)).or_insert_with(|| {
-                            let left_material = &self.materials[left];
-                            let right_material = &self.materials[right];
-                            MaterialPairRecord {
-                                left,
-                                right,
-                                identity_left: left_material.identity,
-                                identity_right: right_material.identity,
-                            }
-                        });
+                        unordered_candidates
+                            .entry((left, right))
+                            .or_insert_with(|| {
+                                let left_material = &self.materials[left];
+                                let right_material = &self.materials[right];
+                                MaterialPairRecord {
+                                    left,
+                                    right,
+                                    identity_left: left_material.identity,
+                                    identity_right: right_material.identity,
+                                }
+                            });
                     } else {
                         directed_candidates.push(MaterialPairRecord {
                             left: anchor_index,
@@ -446,9 +442,15 @@ mod tests {
     #[test]
     fn spatial_pairs_prune_distant_materials_and_keep_displacement_directions() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
-        field.cells[0].physical_materials.push(physical(10, "Carbon"));
-        field.cells[11].physical_materials.push(physical(20, "Oxygen"));
-        field.cells[99].physical_materials.push(physical(30, "Hydrogen"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Carbon"));
+        field.cells[11]
+            .physical_materials
+            .push(physical(20, "Oxygen"));
+        field.cells[99]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 3);
         let bounds = vec![
             Some(MaterialSpatialBounds {
@@ -508,8 +510,12 @@ mod tests {
     #[test]
     fn unordered_spatial_pair_uses_union_of_both_material_queries() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
-        field.cells[0].physical_materials.push(physical(10, "Carbon"));
-        field.cells[1].physical_materials.push(physical(20, "Oxygen"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(20, "Oxygen"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 6);
         // Only the higher-locator material's expanded bounds reach the
         // lower-locator material's cell. Unordered discovery must not lose it.
@@ -546,9 +552,15 @@ mod tests {
     #[test]
     fn spatial_pairs_preserve_existing_vertical_wrap_and_horizontal_bounds() {
         let mut field = ActiveMaterialField::new(40.0, 40.0, 10.0);
-        field.cells[0].physical_materials.push(physical(10, "Carbon"));
-        field.cells[12].physical_materials.push(physical(20, "Oxygen"));
-        field.cells[3].physical_materials.push(physical(30, "Hydrogen"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Carbon"));
+        field.cells[12]
+            .physical_materials
+            .push(physical(20, "Oxygen"));
+        field.cells[3]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 5);
         let bounds = vec![
             Some(MaterialSpatialBounds {
@@ -590,7 +602,9 @@ mod tests {
     fn spatial_pair_windows_report_deferred_work_without_losing_candidates() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
         for identity in 1..=3 {
-            field.cells[0].physical_materials.push(physical(identity, "Carbon"));
+            field.cells[0]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 4);
         let bounds = vec![
