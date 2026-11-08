@@ -414,7 +414,7 @@ impl EnvironmentalMaterialSnapshot {
             },
         )
     }
-
+}
 
 /// Work-bounded cursor over the exhaustive material-pair universe. Unlike
 /// `spatial_pair_window`, this never constructs the complete candidate set.
@@ -592,6 +592,7 @@ fn bounds_include_cell(
     offset < row_count
 }
 
+impl EnvironmentalMaterialSnapshot {
     pub(crate) fn bond_reference_is_current(&self, reference: BondRef) -> bool {
         self.existing_bonds
             .iter()
