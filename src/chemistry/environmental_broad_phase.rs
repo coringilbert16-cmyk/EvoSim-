@@ -140,7 +140,7 @@ pub(crate) struct MaterialBoundsCursor {
     field_revision: u64,
     next_material: usize,
     current: Option<MaterialBoundsProgress>,
-    bounds: Vec<Option<MaterialSpatialBounds>>,
+    bounds: Option<Vec<Option<MaterialSpatialBounds>>>,
     catalog_indices: std::collections::BTreeMap<String, usize>,
     catalog_valid: bool,
     catalog_len: usize,
@@ -170,7 +170,7 @@ impl MaterialBoundsCursor {
             field_revision: snapshot.field_revision,
             next_material: 0,
             current: None,
-            bounds: vec![None; snapshot.materials.len()],
+            bounds: Some(vec![None; snapshot.materials.len()]),
             catalog_indices,
             catalog_valid,
             catalog_len: catalog.len(),
@@ -193,7 +193,10 @@ impl MaterialBoundsCursor {
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
             || field.revision != self.field_revision
-            || snapshot.materials.len() != self.bounds.len()
+            || self
+                .bounds
+                .as_ref()
+                .is_none_or(|bounds| snapshot.materials.len() != bounds.len())
             || catalog.len() != self.catalog_len
         {
             return MaterialBoundsCursorPage {
@@ -325,7 +328,11 @@ impl MaterialBoundsCursor {
             self.visited_work = self.visited_work.saturating_add(1);
             if progress.next_constituent >= record.constituent_count {
                 let material_index = progress.material_index;
-                self.bounds[material_index] = progress.finish();
+                self
+                    .bounds
+                    .as_mut()
+                    .expect("bounds remain available until completion")[material_index] =
+                    progress.finish();
                 page.completed_materials = page.completed_materials.saturating_add(1);
             } else {
                 self.current = Some(progress);
@@ -336,7 +343,7 @@ impl MaterialBoundsCursor {
         page.deferred_work = self.known_work.saturating_sub(self.visited_work);
         page.complete = self.complete;
         if self.complete {
-            page.bounds = Some(self.bounds.clone());
+            page.bounds = self.bounds.take();
         }
         page
     }
