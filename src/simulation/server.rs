@@ -328,3 +328,25 @@ pub(crate) async fn run() {
         .await
         .expect("viewer server stopped");
 }
+
+#[cfg(test)]
+mod viewer_asset_acceptance_tests {
+    const PAGE: &str = include_str!("../../ui/index.html");
+    const THEME: &str = include_str!("../../ui/simulation_theme.css");
+    const RESOURCE_RENDERER: &str = include_str!("../../ui/resource_visualization.js");
+
+    #[test]
+    fn environmental_viewer_assets_are_world_first_and_render_the_required_scene() {
+        assert!(PAGE.contains("loadObservation('World')"));
+        assert!(!PAGE.contains("loadObservation('Structure', '1')"));
+        assert!(PAGE.contains("S-shaped spine"));
+        assert!(PAGE.contains("#075985"));
+        assert!(PAGE.contains("renderHotspot"));
+        assert!(PAGE.contains("data-zoom"));
+        assert!(THEME.contains("#0d0d0d"));
+        assert!(THEME.contains(".ev-world-column"));
+        assert!(RESOURCE_RENDERER.contains("physical_parts"));
+        assert!(RESOURCE_RENDERER.contains("resonance_frequency_cycles_per_day"));
+        assert!(RESOURCE_RENDERER.contains("drawPhysicalFieldPart"));
+    }
+}
