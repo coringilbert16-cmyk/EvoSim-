@@ -29,6 +29,9 @@ pub(crate) struct MaterialPairRecord {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) pass_id: u64,
+    /// Coarse field mutation epoch captured with this pass snapshot. It is an
+    /// invalidation token, not a per-material topology or state version.
+    pub(crate) field_revision: u64,
     pub(crate) materials: Vec<MaterialRecord>,
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     pub(crate) cell_visits: u64,
@@ -134,6 +137,7 @@ pub(crate) struct MaterialBoundsCursorPage {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MaterialBoundsCursor {
     pass_id: u64,
+    field_revision: u64,
     next_material: usize,
     current: Option<MaterialBoundsProgress>,
     bounds: Vec<Option<MaterialSpatialBounds>>,
@@ -162,6 +166,7 @@ impl MaterialBoundsCursor {
         }
         Self {
             pass_id: snapshot.pass_id,
+            field_revision: snapshot.field_revision,
             next_material: 0,
             current: None,
             bounds: vec![None; snapshot.materials.len()],
@@ -187,6 +192,8 @@ impl MaterialBoundsCursor {
                 total.saturating_add(material.constituent_count as u64)
             });
         if snapshot.pass_id != self.pass_id
+            || snapshot.field_revision != self.field_revision
+            || field.revision != self.field_revision
             || snapshot.materials.len() != self.bounds.len()
             || catalog.len() != self.catalog_len
         {
@@ -350,6 +357,7 @@ impl EnvironmentalMaterialSnapshot {
     pub(crate) fn from_field(field: &ActiveMaterialField, pass_id: u64) -> Self {
         let mut snapshot = Self {
             pass_id,
+            field_revision: field.revision,
             cell_visits: field.cells.len() as u64,
             ..Self::default()
         };
@@ -686,6 +694,7 @@ impl EnvironmentalMaterialSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SpatialPairCursor {
     pass_id: u64,
+    field_revision: u64,
     orientation: PairOrientation,
     next_left: usize,
     next_right: usize,
@@ -710,6 +719,7 @@ impl SpatialPairCursor {
         let next_right = 1;
         Self {
             pass_id: snapshot.pass_id,
+            field_revision: snapshot.field_revision,
             orientation,
             next_left: 0,
             next_right,
@@ -737,7 +747,11 @@ impl SpatialPairCursor {
             PairOrientation::Unordered => snapshot.known_pair_count(),
             PairOrientation::Directed => snapshot.known_directed_pair_count(),
         };
-        if snapshot.pass_id != self.pass_id || bounds.len() != snapshot.materials.len() {
+        if snapshot.pass_id != self.pass_id
+            || snapshot.field_revision != self.field_revision
+            || field.revision != self.field_revision
+            || bounds.len() != snapshot.materials.len()
+        {
             return SpatialCursorPage {
                 known_pair_checks,
                 complete: false,
@@ -888,6 +902,7 @@ pub(crate) struct IndexedSpatialCursorPage {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct IndexedSpatialCursor {
     pass_id: u64,
+    field_revision: u64,
     orientation: PairOrientation,
     field_width_cells: usize,
     field_height_cells: usize,
@@ -911,6 +926,7 @@ impl IndexedSpatialCursor {
     ) -> Self {
         Self {
             pass_id: snapshot.pass_id,
+            field_revision: field.revision,
             orientation,
             field_width_cells: field.width_cells,
             field_height_cells: field.height_cells,
@@ -937,6 +953,8 @@ impl IndexedSpatialCursor {
         output_limit: usize,
     ) -> IndexedSpatialCursorPage {
         if snapshot.pass_id != self.pass_id
+            || snapshot.field_revision != self.field_revision
+            || field.revision != self.field_revision
             || bounds.len() != snapshot.materials.len()
             || field.width_cells != self.field_width_cells
             || field.height_cells != self.field_height_cells
@@ -1868,7 +1886,7 @@ mod tests {
         assert_eq!(stale.visited_work, 0);
 
         let mut changed_field = field.clone();
-        changed_field.cell_size += 1.0;
+        changed_field.mark_changed_at_index(0);
         let stale_field = cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, 8, 8);
         assert!(stale_field.pairs.is_empty());
         assert!(!stale_field.complete);
