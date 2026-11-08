@@ -308,11 +308,15 @@ impl EnvironmentalMaterialSnapshot {
                         // physically overlapping target may occupy a cell that
                         // is reached only by the target's expanded bounds.
                         // Keeping the union avoids a direction-dependent miss.
-                        let (left, right) = if (
+                        let anchor_locator = (
                             anchor.locator.cell_index,
                             anchor.locator.material_index,
-                        ) < (target.locator.cell_index, target.locator.material_index)
-                        {
+                        );
+                        let target_locator = (
+                            target.locator.cell_index,
+                            target.locator.material_index,
+                        );
+                        let (left, right) = if anchor_locator < target_locator {
                             (anchor_index, target_index)
                         } else {
                             (target_index, anchor_index)
@@ -589,12 +593,15 @@ mod tests {
             field.cells[0].physical_materials.push(physical(identity, "Carbon"));
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 4);
-        let bounds = vec![Some(MaterialSpatialBounds {
-            min_x: 0.0,
-            max_x: 10.0,
-            min_y: 0.0,
-            max_y: 10.0,
-        }); 3];
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 10.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            });
+            3
+        ];
         let (_, first) = snapshot.spatial_pair_window(
             &field,
             &bounds,
