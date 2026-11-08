@@ -277,7 +277,8 @@ impl EnvironmentalMaterialSnapshot {
                 index,
             );
         }
-        let mut candidates = Vec::new();
+        let mut unordered_candidates = std::collections::BTreeMap::new();
+        let mut directed_candidates = Vec::new();
         for (anchor_index, anchor) in self.materials.iter().enumerate() {
             let Some(expanded) = bounds[anchor_index].and_then(|value| value.expanded(padding))
             else {
@@ -303,21 +304,45 @@ impl EnvironmentalMaterialSnapshot {
                         continue;
                     }
                     let target = &self.materials[target_index];
-                    if orientation == PairOrientation::Unordered
-                        && (anchor.locator.cell_index, anchor.locator.material_index)
-                            >= (target.locator.cell_index, target.locator.material_index)
-                    {
-                        continue;
+                    if orientation == PairOrientation::Unordered {
+                        // Query both material bounds before canonicalizing. A
+                        // physically overlapping target may occupy a cell that
+                        // is reached only by the target's expanded bounds.
+                        // Keeping the union avoids a direction-dependent miss.
+                        let (left, right) = if (
+                            anchor.locator.cell_index,
+                            anchor.locator.material_index,
+                        ) < (target.locator.cell_index, target.locator.material_index)
+                        {
+                            (anchor_index, target_index)
+                        } else {
+                            (target_index, anchor_index)
+                        };
+                        unordered_candidates.entry((left, right)).or_insert_with(|| {
+                            let left_material = &self.materials[left];
+                            let right_material = &self.materials[right];
+                            MaterialPairRecord {
+                                left,
+                                right,
+                                identity_left: left_material.identity,
+                                identity_right: right_material.identity,
+                            }
+                        });
+                    } else {
+                        directed_candidates.push(MaterialPairRecord {
+                            left: anchor_index,
+                            right: target_index,
+                            identity_left: anchor.identity,
+                            identity_right: target.identity,
+                        });
                     }
-                    candidates.push(MaterialPairRecord {
-                        left: anchor_index,
-                        right: target_index,
-                        identity_left: anchor.identity,
-                        identity_right: target.identity,
-                    });
                 }
             }
         }
+        let candidates = match orientation {
+            PairOrientation::Unordered => unordered_candidates.into_values().collect::<Vec<_>>(),
+            PairOrientation::Directed => directed_candidates,
+        };
         let known_pairs = candidates.len() as u64;
         let start = start.min(known_pairs);
         let count = (known_pairs - start).min(limit as u64) as usize;
@@ -456,6 +481,33 @@ mod tests {
             pair.identity_left == MaterialIdentity(20)
                 && pair.identity_right == MaterialIdentity(10)
         }));
+    }
+
+    #[test]
+    fn unordered_spatial_pair_uses_union_of_both_material_queries() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        field.cells[0].physical_materials.push(physical(10, "Carbon"));
+        field.cells[1].physical_materials.push(physical(20, "Oxygen"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 6);
+        // Only the higher-locator material's expanded bounds reach the
+        // lower-locator material's cell. Unordered discovery must not lose it.
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: 0.0, max_x: 1.0, min_y: 0.0, max_y: 1.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 0.0, max_x: 11.0, min_y: 0.0, max_y: 1.0,
+            }),
+        ];
+        let (pairs, coverage) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+        );
+        assert_eq!(coverage.known_pairs, 1);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(
+            (pairs[0].identity_left, pairs[0].identity_right),
+            (MaterialIdentity(10), MaterialIdentity(20))
+        );
     }
 
     #[test]
