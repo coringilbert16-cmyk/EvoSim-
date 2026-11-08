@@ -406,6 +406,11 @@
       ctx.fillStyle = '#075985';
       ctx.fillRect(fieldTopLeft.x, fieldTopLeft.y,
         fieldBottomRight.x - fieldTopLeft.x, fieldBottomRight.y - fieldTopLeft.y);
+      // A crisp black perimeter makes the finite world boundary explicit.
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(fieldTopLeft.x, fieldTopLeft.y,
+        fieldBottomRight.x - fieldTopLeft.x, fieldBottomRight.y - fieldTopLeft.y);
 
       // Visualize the same S-shaped spine used by the transport model. These
       // lines are a rendering aid only; the Rust flow field remains authoritative.
@@ -424,6 +429,25 @@
         // must remain screen-space constant as the camera zooms.
         ctx.lineWidth = offset === 0 ? 1.5 : 1.0;
         ctx.stroke();
+      }
+
+      // Direction markers make the light-blue S-shaped current legible at every zoom.
+      ctx.fillStyle = 'rgba(224, 242, 254, 0.86)';
+      for (const xFraction of [0.16, 0.39, 0.62, 0.85]) {
+        const x = width * xFraction;
+        const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * x / width);
+        const slope = -height * 0.23 * (Math.PI * 2 / width) * Math.cos(Math.PI * 2 * x / width);
+        const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
+        ctx.save();
+        ctx.translate(point.x, point.y);
+        ctx.rotate(Math.atan2(slope, 1));
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(-4, -3);
+        ctx.lineTo(-4, 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
 
       const vortexRadius = Math.max(2, height * 0.13 * camera.scale);
@@ -464,7 +488,7 @@
       ctx.stroke();
       ctx.fillStyle = 'rgba(255, 245, 220, 0.95)';
       ctx.font = '11px sans-serif';
-      ctx.fillText('Hotspot · 100 energy/tick/area', point.x + 7, point.y - 7);
+      ctx.fillText('HOTSPOT', point.x + 7, point.y - 7);
       ctx.restore();
     }
 
