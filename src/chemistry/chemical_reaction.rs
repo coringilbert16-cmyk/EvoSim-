@@ -3128,7 +3128,7 @@ mod shared_break_inventory_adapter_tests {
         assert_eq!(inventory.existing_bonds.len(), 6);
 
         let snapshot =
-            crate::chemistry::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
                 &environment.field,
                 13,
             );
