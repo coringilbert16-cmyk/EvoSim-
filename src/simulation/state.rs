@@ -648,8 +648,12 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.scan_entries_inspected = self
             .scan_entries_inspected
             .saturating_add(tick.scan_entries_inspected);
-        self.total_environmental_bonds = tick.total_environmental_bonds;
-        self.environmental_bonds_unvisited = tick.environmental_bonds_unvisited;
+        self.total_environmental_bonds = self
+            .total_environmental_bonds
+            .saturating_add(tick.total_environmental_bonds);
+        self.environmental_bonds_unvisited = self
+            .environmental_bonds_unvisited
+            .saturating_add(tick.environmental_bonds_unvisited);
         self.bond_candidates_inspected = self
             .bond_candidates_inspected
             .saturating_add(tick.bond_candidates_inspected);
