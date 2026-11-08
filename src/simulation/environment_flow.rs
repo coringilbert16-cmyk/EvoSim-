@@ -61,27 +61,20 @@ fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a 
     catalog.iter().find(|resource| resource.name == name)
 }
 
-fn material_center(material: &PhysicalMaterial, height: f64) -> Option<(f64, f64)> {
+fn periodic_delta(delta: f64, period: f64) -> f64 {
+    (delta + period * 0.5).rem_euclid(period) - period * 0.5
+}
+
+fn material_center(material: &PhysicalMaterial, width: f64, height: f64) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
     let anchor = placements.first()?;
-    if !height.is_finite()
-        || height <= 0.0
-        || placements
-            .iter()
-            .any(|p| !p.x.is_finite() || !p.y.is_finite())
-    {
-        return None;
-    }
+    if !width.is_finite() || width <= 0.0 || !height.is_finite() || height <= 0.0
+        || placements.iter().any(|p| !p.x.is_finite() || !p.y.is_finite())
+    { return None; }
     let count = placements.len() as f64;
-    let x = placements.iter().map(|p| p.x).sum::<f64>() / count;
-    // Average vertical offsets relative to one constituent so composites
-    // crossing the wrapped top/bottom seam keep a compact center.
-    let y_offset = placements
-        .iter()
-        .map(|p| (p.y - anchor.y + height * 0.5).rem_euclid(height) - height * 0.5)
-        .sum::<f64>()
-        / count;
-    Some((x, (anchor.y + y_offset).rem_euclid(height)))
+    let x_offset = placements.iter().map(|p| periodic_delta(p.x - anchor.x, width)).sum::<f64>() / count;
+    let y_offset = placements.iter().map(|p| p.y - anchor.y).sum::<f64>() / count;
+    Some(((anchor.x + x_offset).rem_euclid(width), anchor.y + y_offset))
 }
 
 fn shape_radius(form: &Form) -> f64 {
@@ -124,9 +117,10 @@ fn obstacle_for(
     source_index: usize,
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
+    width: f64,
     height: f64,
 ) -> Option<Obstacle> {
-    let (x, y) = material_center(material, height)?;
+    let (x, y) = material_center(material, width, height)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
     let mut weighted_cohesion = 0.0;
@@ -135,7 +129,7 @@ fn obstacle_for(
         let resource = resource_for_part(name, catalog)?;
         let placement = placements.get(index)?;
         radius = radius
-            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
+            .max(periodic_delta(placement.x - x, width).hypot(placement.y - y) + shape_radius(&resource.shape.form));
         weighted_cohesion += resource.properties.cohesion * *amount;
         total += *amount;
     }
@@ -172,7 +166,7 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     let phase = std::f64::consts::TAU * x / width;
     let center_y = height * 0.5 + height * 0.23 * phase.sin();
     let slope = height * 0.23 * std::f64::consts::TAU / width * phase.cos();
-    let vertical_delta = (y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+    let vertical_delta = y - center_y;
     let width_scale = (height * 0.16).max(1.0);
     let envelope = (-0.5 * (vertical_delta / width_scale).powi(2)).exp();
     let tangent = Velocity { x: 1.0, y: slope }.normalized();
@@ -184,8 +178,8 @@ fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     for (fraction, sign) in [(0.25, 1.0), (0.75, -1.0)] {
         let cx = width * fraction;
         let cy = height * 0.5 + height * 0.23 * (std::f64::consts::TAU * fraction).sin();
-        let dx = x - cx;
-        let dy = (y - cy + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = periodic_delta(x - cx, width);
+        let dy = y - cy;
         let radial_sq = dx * dx + dy * dy;
         let weight = (-radial_sq / (2.0 * vortex_radius * vortex_radius)).exp() * sign * 1.2;
         velocity = velocity.add(Velocity {
@@ -203,7 +197,8 @@ fn obstacle_adjusted_velocity(
     source_cell: usize,
     source_index: usize,
     obstacles: &[Obstacle],
-    height: f64,
+    width: f64,
+    _height: f64,
 ) -> Velocity {
     for obstacle in obstacles {
         if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
@@ -212,8 +207,8 @@ fn obstacle_adjusted_velocity(
         if obstacle.solidity <= 1e-6 {
             continue;
         }
-        let dx = x - obstacle.x;
-        let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = periodic_delta(x - obstacle.x, width);
+        let dy = y - obstacle.y;
         let radius = obstacle.radius.max(0.5);
         // Neither proximity deflection nor the downstream wake can reach a
         // point outside this union's enclosing axis-aligned bounds. Reject it
@@ -244,51 +239,23 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
-fn clamp_horizontal_displacement(
-    material: &PhysicalMaterial,
-    requested_dx: f64,
-    width: f64,
-) -> Option<f64> {
+fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, height: f64) -> Option<f64> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty() || !width.is_finite() || width <= 0.0 {
-        return None;
-    }
-    let min_x = placements.iter().map(|p| p.x).fold(f64::INFINITY, f64::min);
-    let max_x = placements
-        .iter()
-        .map(|p| p.x)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let world_max = (width - 1e-6).max(0.0);
-    let min_dx = -min_x;
-    let max_dx = world_max - max_x;
-    if min_dx <= max_dx {
-        Some(requested_dx.clamp(min_dx, max_dx))
-    } else {
-        // If an object is wider than the world, preserve it as a unit and keep
-        // its anchor in range; never split the object to satisfy the boundary.
-        let anchor_x = placements[0].x;
-        Some((anchor_x + requested_dx).clamp(0.0, world_max) - anchor_x)
-    }
+    if placements.is_empty() || !height.is_finite() || height <= 0.0 { return None; }
+    let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
+    let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
+    Some(requested_dy.clamp(-min_y, height - max_y))
 }
 
-fn translated(
-    material: &PhysicalMaterial,
-    dx: f64,
-    dy: f64,
-    height: f64,
-) -> Option<PhysicalMaterial> {
+fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Option<PhysicalMaterial> {
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
-    if placements.is_empty() {
-        return None;
-    }
+    if placements.is_empty() { return None; }
+    let clamped_dy = clamp_vertical_displacement(material, dy, height)?;
     for placement in placements {
         placement.x += dx;
-        placement.y = (placement.y + dy).rem_euclid(height);
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !placement.rotation_radians.is_finite()
-        {
+        placement.y += clamped_dy;
+        if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() {
             return None;
         }
     }
@@ -324,6 +291,7 @@ fn angular_displacement(
     {
         return 0.0;
     }
+    let anchor_x = placements[0].x;
     let anchor_y = placements[0].y;
     let mut weighted_x = 0.0;
     let mut weighted_y = 0.0;
@@ -338,12 +306,11 @@ fn angular_displacement(
         if !part_mass.is_finite() || part_mass <= 0.0 {
             return 0.0;
         }
-        weighted_x += placement.x * part_mass;
-        weighted_y +=
-            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * part_mass;
+        weighted_x += periodic_delta(placement.x - anchor_x, width) * part_mass;
+        weighted_y += (placement.y - anchor_y) * part_mass;
     }
-    let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+    let center_x = (anchor_x + weighted_x / total_mass).rem_euclid(width);
+    let center_y = anchor_y + weighted_y / total_mass;
 
     // Single-part materials have identical arithmetic and mass-weighted centers.
     // Reuse the translational sample instead of scanning the same obstacles again.
@@ -355,6 +322,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         )
     });
@@ -371,8 +339,8 @@ fn angular_displacement(
         if !part_mass.is_finite() || part_mass <= 0.0 {
             continue;
         }
-        let rx = placement.x - center_x;
-        let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let rx = periodic_delta(placement.x - center_x, width);
+        let ry = placement.y - center_y;
         let radius_sq = rx * rx + ry * ry;
         let form = material
             .realized_shapes
@@ -504,14 +472,11 @@ fn rotated(
     width: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
-    if !angle.is_finite() {
-        return None;
-    }
+    if !angle.is_finite() { return None; }
     let mut result = material.clone();
     let placements = result.placements.as_mut()?;
-    if placements.is_empty() {
-        return None;
-    }
+    if placements.is_empty() { return None; }
+    let anchor_x = placements[0].x;
     let anchor_y = placements[0].y;
     let mut total_mass = 0.0;
     let mut weighted_x = 0.0;
@@ -520,39 +485,28 @@ fn rotated(
         let (name, amount) = material.material.parts.get(index)?;
         let resource = resource_for_part(name, catalog)?;
         let mass = resource.properties.mass * *amount;
-        if !mass.is_finite() || mass <= 0.0 {
-            return None;
-        }
+        if !mass.is_finite() || mass <= 0.0 { return None; }
         total_mass += mass;
-        weighted_x += placement.x * mass;
-        weighted_y +=
-            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * mass;
+        weighted_x += periodic_delta(placement.x - anchor_x, width) * mass;
+        weighted_y += (placement.y - anchor_y) * mass;
     }
-    if !total_mass.is_finite() || total_mass <= 0.0 {
-        return None;
-    }
-    let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+    if !total_mass.is_finite() || total_mass <= 0.0 { return None; }
+    let center_x = (anchor_x + weighted_x / total_mass).rem_euclid(width);
+    let center_y = anchor_y + weighted_y / total_mass;
     let (sin, cos) = angle.sin_cos();
     for placement in placements.iter_mut() {
-        let dx = placement.x - center_x;
-        let dy = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        let dx = periodic_delta(placement.x - center_x, width);
+        let dy = placement.y - center_y;
         placement.x = center_x + dx * cos - dy * sin;
-        placement.y = (center_y + dx * sin + dy * cos).rem_euclid(height);
-        placement.rotation_radians =
-            (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !placement.rotation_radians.is_finite()
-        {
+        placement.y = center_y + dx * sin + dy * cos;
+        placement.rotation_radians = (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+        if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() {
             return None;
         }
     }
-    let dx = clamp_horizontal_displacement(&result, 0.0, width)?;
-    if dx != 0.0 {
-        for placement in result.placements.as_mut()? {
-            placement.x += dx;
-        }
+    let dy = clamp_vertical_displacement(&result, 0.0, height)?;
+    if dy != 0.0 {
+        for placement in result.placements.as_mut()? { placement.y += dy; }
     }
     Some(result)
 }
@@ -611,7 +565,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     let obstacles: Vec<Obstacle> = snapshot
         .iter()
         .filter_map(|(cell, index, material)| {
-            obstacle_for(*cell, *index, material, catalog, height)
+            obstacle_for(*cell, *index, material, catalog, width, height)
         })
         .collect();
     let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
@@ -619,33 +573,25 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
     for obstacle in obstacles {
         let radius = obstacle.radius.max(0.5).min(width.max(height));
-        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col =
-            ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = max_col.min(flow_cols.saturating_sub(1));
-        if min_col > max_col {
-            continue;
-        }
-        let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
-        let rows = if row_count >= flow_rows {
-            (0..flow_rows).collect::<Vec<_>>()
+        let min_col = ((obstacle.x - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+        let max_col = ((obstacle.x + radius * 6.0) / FLOW_BIN_SIZE).floor() as isize;
+        let cols: Vec<usize> = if (max_col - min_col + 1) as usize >= flow_cols {
+            (0..flow_cols).collect()
         } else {
-            (0..row_count)
-                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
-                .collect::<Vec<_>>()
+            (min_col..=max_col).map(|col| col.rem_euclid(flow_cols as isize) as usize).collect()
         };
-        for row in rows {
-            for col in min_col..=max_col {
-                obstacle_bins[row * flow_cols + col].push(obstacle);
-            }
+        let min_row = (((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize).max(0);
+        let max_row = (((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize)
+            .min(flow_rows.saturating_sub(1) as isize);
+        if min_row > max_row { continue; }
+        for row in min_row as usize..=max_row as usize {
+            for &col in &cols { obstacle_bins[row * flow_cols + col].push(obstacle); }
         }
     }
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
-        let Some((x, y)) = material_center(&material, height) else {
+        let Some((x, y)) = material_center(&material, width, height) else {
             continue;
         };
         let mass = material.material.mass(catalog);
@@ -662,12 +608,11 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             height,
         );
         let scale = mobility(mass) * FLOW_RESPONSE_SCALE;
-        let mut dx = velocity.x * scale;
-        let dy = velocity.y * scale;
-        let Some(clamped_dx) = clamp_horizontal_displacement(&material, dx, width) else {
+        let dx = velocity.x * scale;
+        let requested_dy = velocity.y * scale;
+        let Some(dy) = clamp_vertical_displacement(&material, requested_dy, height) else {
             continue;
         };
-        dx = clamped_dx;
         let angular_step = angular_displacement(
             &material,
             catalog,
@@ -795,7 +740,7 @@ mod tests {
         };
         let water = make_material("Water");
         let carbon = make_material("Carbon");
-        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
+        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0, 100.0).unwrap();
         let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
 
         assert_eq!(water_obstacle.solidity, 0.0);
@@ -821,7 +766,7 @@ mod tests {
         };
         let free = Velocity { x: 1.0, y: 0.0 };
         assert_eq!(
-            obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[porous], 100.0),
+            obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[porous], 100.0, 100.0),
             free
         );
     }
@@ -866,7 +811,7 @@ mod tests {
             field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
             Some(source_cell)
         );
-        let (center_x, center_y) = material_center(&original, 1000.0).unwrap();
+        let (center_x, center_y) = material_center(&original, 1000.0, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
         let displacement_scale = mobility(original.material.mass(&catalog)) * FLOW_RESPONSE_SCALE;
         let translated_expected = translated(
@@ -1034,7 +979,7 @@ mod tests {
             &catalog,
         )
         .expect("catalog resource should realize");
-        let (x, y) = material_center(&material, 80.0).unwrap();
+        let (x, y) = material_center(&material, 100.0, 80.0).unwrap();
         let velocity = obstacle_adjusted_velocity(
             background_velocity(x, y, 100.0, 80.0),
             x,
@@ -1042,6 +987,7 @@ mod tests {
             0,
             0,
             &[],
+            100.0,
             80.0,
         );
         let recomputed = angular_displacement(&material, &catalog, 100.0, 80.0, &[], None, 0, 0);
@@ -1219,6 +1165,7 @@ mod tests {
                     source_cell,
                     source_index,
                     &obstacles,
+                    1000.0,
                     height,
                 );
                 let actual = obstacle_adjusted_velocity(
@@ -1291,7 +1238,7 @@ mod tests {
             solidity: 1.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
-        let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0);
+        let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0, 100.0);
         assert!(wake.length() < free.length());
         let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
         assert_eq!(upstream, free);
