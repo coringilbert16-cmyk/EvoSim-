@@ -427,11 +427,19 @@ fn chemical_step(
     accumulation: &mut BTreeMap<String, f64>,
     updated_keys: &mut BTreeSet<String>,
     operations: &mut Vec<EnvironmentalCombineOperation>,
+    tick: u64,
+    journal: &mut crate::environmental_evaluation::EvaluationJournal,
 ) {
-    macro_rules! reject_step {
-        () => {
+    macro_rules! reject_step! {
+        () => {{
+            journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::rejected(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                crate::environmental_evaluation::EvaluationStage::Chemistry,
+                "combine_chemistry_validation_failed",
+            ));
             return;
-        };
+        }};
     }
     // A structural unit is one physical constituent. Resolve its chemical
     // position from that constituent's catalog identity; aggregate properties
