@@ -221,9 +221,10 @@ impl MaterialBoundsCursor {
                             && physical.placements.as_ref().is_some_and(|placements| {
                                 placements.len() == record.constituent_count
                             })
-                            && physical.realized_shapes.as_ref().is_none_or(|shapes| {
-                                shapes.len() == record.constituent_count
-                            })
+                            && physical
+                                .realized_shapes
+                                .as_ref()
+                                .is_none_or(|shapes| shapes.len() == record.constituent_count)
                     });
                 self.current = Some(MaterialBoundsProgress::new(material_index, valid));
                 continue;
