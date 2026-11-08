@@ -2033,6 +2033,9 @@ mod material_identity_tests {
     #[test]
     fn environmental_chemical_break_with_insufficient_work_rolls_back_everything() {
         let mut simulation = crate::state::Simulation::new(934, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
         let source = environmental_test_composite(&simulation.environment.catalog);
         let bond = source
             .internal_connections
