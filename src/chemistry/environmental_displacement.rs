@@ -1053,9 +1053,8 @@ pub(crate) fn accumulate_environmental(
 
                                 // Diagnostic-only all-alternatives oracle. Keep the
                                 // production selector and its chosen candidate untouched;
-                                // independently check whether another physically valid,
-                                // evaluated contact could satisfy the existing bond-energy
-                                // comparison that the chosen contact later fails.
+                                // independently compare activation supplied by every valid
+                                // evaluated interface against the selected interface.
                                 const ALTERNATIVE_AUDIT_LIMIT: usize =
                                     crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
                                 let census = census_replacement_contacts(
