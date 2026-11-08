@@ -139,6 +139,7 @@ pub(crate) struct MaterialBoundsCursor {
     bounds: Vec<Option<MaterialSpatialBounds>>,
     catalog_indices: std::collections::BTreeMap<String, usize>,
     catalog_valid: bool,
+    catalog_len: usize,
     visited_work: u64,
     complete: bool,
 }
@@ -164,6 +165,7 @@ impl MaterialBoundsCursor {
             bounds: vec![None; snapshot.materials.len()],
             catalog_indices,
             catalog_valid,
+            catalog_len: catalog.len(),
             visited_work: 0,
             complete: snapshot.materials.is_empty(),
         }
@@ -184,7 +186,7 @@ impl MaterialBoundsCursor {
             });
         if snapshot.pass_id != self.pass_id
             || snapshot.materials.len() != self.bounds.len()
-            || catalog.len() != self.catalog_indices.len()
+            || catalog.len() != self.catalog_len
         {
             return MaterialBoundsCursorPage {
                 deferred_work: known_work.saturating_sub(self.visited_work),
