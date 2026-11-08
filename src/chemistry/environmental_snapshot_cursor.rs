@@ -56,7 +56,7 @@ impl EnvironmentalSnapshotCursor {
             cell_visits: 0,
             material_visits: 0,
             unassigned_materials: 0,
-            complete: field.cells.is_empty(),
+            complete: false,
             invalidated: false,
         }
     }
