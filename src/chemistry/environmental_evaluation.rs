@@ -128,6 +128,8 @@ pub(crate) struct EvaluationRecord {
     pub(crate) pass_id: u64,
     pub(crate) reaction: EnvironmentalReactionKind,
     pub(crate) outcome: EvaluationRecordOutcome,
+    /// Number of equivalent candidates represented by this compact record.
+    pub(crate) multiplicity: usize,
 }
 
 /// Lifecycle state without a reaction-specific operation payload.
@@ -163,6 +165,7 @@ impl<T> From<EnvironmentalReactionEvaluation<T>> for EvaluationRecord {
             pass_id: evaluation.pass_id,
             reaction: evaluation.reaction,
             outcome,
+            multiplicity: 1,
         }
     }
 }
@@ -180,6 +183,23 @@ impl EvaluationJournal {
         self.records.push(evaluation.into());
     }
 
+    pub(crate) fn record_deferred_count(
+        &mut self,
+        pass_id: u64,
+        reaction: EnvironmentalReactionKind,
+        stage: EvaluationStage,
+        reason: &'static str,
+        count: usize,
+    ) {
+        if count == 0 { return; }
+        self.records.push(EvaluationRecord {
+            pass_id,
+            reaction,
+            outcome: EvaluationRecordOutcome::Deferred { stage, reason },
+            multiplicity: count,
+        });
+    }
+
     pub(crate) fn records(&self) -> &[EvaluationRecord] {
         &self.records
     }
@@ -188,10 +208,10 @@ impl EvaluationJournal {
         let mut counts = EvaluationOutcomeCounts::default();
         for record in &self.records {
             match record.outcome {
-                EvaluationRecordOutcome::Ready => counts.ready += 1,
-                EvaluationRecordOutcome::Rejected { .. } => counts.rejected += 1,
-                EvaluationRecordOutcome::Deferred { .. } => counts.deferred += 1,
-                EvaluationRecordOutcome::Stale { .. } => counts.stale += 1,
+                EvaluationRecordOutcome::Ready => counts.ready += record.multiplicity,
+                EvaluationRecordOutcome::Rejected { .. } => counts.rejected += record.multiplicity,
+                EvaluationRecordOutcome::Deferred { .. } => counts.deferred += record.multiplicity,
+                EvaluationRecordOutcome::Stale { .. } => counts.stale += record.multiplicity,
             }
         }
         counts
