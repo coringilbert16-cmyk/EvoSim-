@@ -2,14 +2,13 @@
     dead_code,
     reason = "Stage 3 broad phase is being parity-tested before production cutover"
 )]
-//! Conservative shared environmental material snapshot and pair traversal.
+//! Shared environmental material snapshot and read-only pair traversal.
 //!
-//! This is the Stage 3 reference broad phase: it scans field ownership once,
-//! then exposes every unordered pair of distinct physical materials. It is
-//! intentionally conservative (no spatial rejection yet), so it can serve as
-//! a no-false-negative oracle while a bounded spatial index is developed.
-//! Reaction-specific geometry, activation, scheduling, funding, and commits
-//! remain in their existing subsystems.
+//! The all-pairs window remains a conservative reference oracle. A separate
+//! spatial window derives realized-material bounds and queries intersecting
+//! field cells, preserving unordered COMBINE pairs and directed DISPLACEMENT
+//! roles. Reaction-specific endpoint geometry, activation, scheduling,
+//! funding, and commits remain in their existing subsystems.
 
 use crate::environment::ActiveMaterialField;
 use crate::environmental_interaction::BondRef;
@@ -449,13 +448,22 @@ mod tests {
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 3);
         let bounds = vec![
             Some(MaterialSpatialBounds {
-                min_x: 9.0, max_x: 11.0, min_y: 9.0, max_y: 11.0,
+                min_x: 9.0,
+                max_x: 11.0,
+                min_y: 9.0,
+                max_y: 11.0,
             }),
             Some(MaterialSpatialBounds {
-                min_x: 9.0, max_x: 11.0, min_y: 9.0, max_y: 11.0,
+                min_x: 9.0,
+                max_x: 11.0,
+                min_y: 9.0,
+                max_y: 11.0,
             }),
             Some(MaterialSpatialBounds {
-                min_x: 89.0, max_x: 91.0, min_y: 89.0, max_y: 91.0,
+                min_x: 89.0,
+                max_x: 91.0,
+                min_y: 89.0,
+                max_y: 91.0,
             }),
         ];
         let (unordered, coverage) = snapshot.spatial_pair_window(
@@ -493,10 +501,16 @@ mod tests {
         // lower-locator material's cell. Unordered discovery must not lose it.
         let bounds = vec![
             Some(MaterialSpatialBounds {
-                min_x: 0.0, max_x: 1.0, min_y: 0.0, max_y: 1.0,
+                min_x: 0.0,
+                max_x: 1.0,
+                min_y: 0.0,
+                max_y: 1.0,
             }),
             Some(MaterialSpatialBounds {
-                min_x: 0.0, max_x: 11.0, min_y: 0.0, max_y: 1.0,
+                min_x: 0.0,
+                max_x: 11.0,
+                min_y: 0.0,
+                max_y: 1.0,
             }),
         ];
         let (pairs, coverage) = snapshot.spatial_pair_window(
@@ -519,13 +533,22 @@ mod tests {
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 5);
         let bounds = vec![
             Some(MaterialSpatialBounds {
-                min_x: -1.0, max_x: 1.0, min_y: -1.0, max_y: 1.0,
+                min_x: -1.0,
+                max_x: 1.0,
+                min_y: -1.0,
+                max_y: 1.0,
             }),
             Some(MaterialSpatialBounds {
-                min_x: 0.0, max_x: 10.0, min_y: 29.0, max_y: 31.0,
+                min_x: 0.0,
+                max_x: 10.0,
+                min_y: 29.0,
+                max_y: 31.0,
             }),
             Some(MaterialSpatialBounds {
-                min_x: 29.0, max_x: 31.0, min_y: 0.0, max_y: 10.0,
+                min_x: 29.0,
+                max_x: 31.0,
+                min_y: 0.0,
+                max_y: 10.0,
             }),
         ];
         let (pairs, coverage) = snapshot.spatial_pair_window(
@@ -547,7 +570,10 @@ mod tests {
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 4);
         let bounds = vec![Some(MaterialSpatialBounds {
-            min_x: 0.0, max_x: 10.0, min_y: 0.0, max_y: 10.0,
+            min_x: 0.0,
+            max_x: 10.0,
+            min_y: 0.0,
+            max_y: 10.0,
         }); 3];
         let (_, first) = snapshot.spatial_pair_window(
             &field, &bounds, 0.0, 0, 1, PairOrientation::Unordered,
