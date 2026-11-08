@@ -652,6 +652,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut restored_materials = std::collections::BTreeMap::new();
+    let mut evaluation_journal = crate::environmental_evaluation::EvaluationJournal::default();
 
     for candidate_index in indices {
         let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
@@ -950,6 +951,56 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     );
     diagnostics.progress_preserved_unsearched = preserved;
     diagnostics.progress_dissipated_checked = dissipated;
+
+    use crate::environmental_evaluation::{
+        EnvironmentalReactionEvaluation, EnvironmentalReactionKind, EvaluationStage,
+    };
+    let rejected_candidates = diagnostics
+        .candidate_geometry_rejections
+        .saturating_add(diagnostics.candidate_chemistry_rejections);
+    evaluation_journal.record_deferred_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        EvaluationStage::CandidateValidation,
+        "bounded_break_progress_not_inspected",
+        usize::try_from(preserved).unwrap_or(usize::MAX),
+    );
+    evaluation_journal.record_deferred_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        EvaluationStage::Activation,
+        "activation_accumulation_below_threshold",
+        usize::try_from(diagnostics.activation_below_threshold).unwrap_or(usize::MAX),
+    );
+    evaluation_journal.record_deferred_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        EvaluationStage::CandidateValidation,
+        "bounded_break_discovery_window_exhausted",
+        usize::from(candidates.len() == count && count > 0),
+    );
+    evaluation_journal.record_rejected_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        EvaluationStage::Chemistry,
+        "break_candidate_validation_or_chemistry_failed",
+        usize::try_from(rejected_candidates).unwrap_or(usize::MAX),
+    );
+    evaluation_journal.record_deferred_count(
+        tick,
+        EnvironmentalReactionKind::Break,
+        EvaluationStage::CandidateValidation,
+        "stale_break_progress_invalidated",
+        usize::try_from(diagnostics.stale_progress_invalidated).unwrap_or(usize::MAX),
+    );
+    for _ in 0..operations.len() {
+        evaluation_journal.record(EnvironmentalReactionEvaluation::ready(
+            tick,
+            EnvironmentalReactionKind::Break,
+            (),
+        ));
+    }
+    diagnostics.evaluation_outcomes = evaluation_journal.counts();
 
     // The simulation tick identifies this BREAK evaluation pass. These
     // operations have already passed BREAK chemistry and activation; the
