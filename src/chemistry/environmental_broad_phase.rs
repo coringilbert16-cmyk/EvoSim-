@@ -641,7 +641,13 @@ mod tests {
         );
         let actual_unordered = actual_unordered
             .into_iter()
-            .map(|pair| (pair.identity_left, pair.identity_right))
+            .map(|pair| {
+                if pair.identity_left < pair.identity_right {
+                    (pair.identity_left, pair.identity_right)
+                } else {
+                    (pair.identity_right, pair.identity_left)
+                }
+            })
             .collect::<std::collections::BTreeSet<_>>();
         assert_eq!(actual_unordered, expected_unordered);
         assert_eq!(
