@@ -770,9 +770,9 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     /// Fully evaluated alternatives in those audits.
     #[serde(default)]
     pub(crate) replacement_alternatives_evaluated: u64,
-    /// Searches where an unselected valid alternative had stronger intrinsic bond energy than the live selector's winner.
+    /// Searches where an unselected valid alternative accumulates more activation than the live selector's winner.
     #[serde(default)]
-    pub(crate) selected_contact_hides_stronger_alternative: u64,
+    pub(crate) selected_contact_hides_higher_activation_alternative: u64,
     /// All-alternatives audits truncated by their independent work limit.
     #[serde(default)]
     pub(crate) replacement_alternative_audits_truncated: u64,
@@ -880,9 +880,9 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.replacement_alternatives_evaluated = self
             .replacement_alternatives_evaluated
             .saturating_add(tick.replacement_alternatives_evaluated);
-        self.selected_contact_hides_stronger_alternative = self
-            .selected_contact_hides_stronger_alternative
-            .saturating_add(tick.selected_contact_hides_stronger_alternative);
+        self.selected_contact_hides_higher_activation_alternative = self
+            .selected_contact_hides_higher_activation_alternative
+            .saturating_add(tick.selected_contact_hides_higher_activation_alternative);
         self.replacement_alternative_audits_truncated = self
             .replacement_alternative_audits_truncated
             .saturating_add(tick.replacement_alternative_audits_truncated);
