@@ -712,6 +712,23 @@ fn best_replacement_contact(
     incoming_unit: usize,
     old_bond: Bond,
     catalog: &[BaseResource],
+) -> Option<(ConnectionPairCandidate, f64)> {
+    best_replacement_contact_with_diagnostics(
+        combined,
+        anchor_unit,
+        incoming_unit,
+        old_bond,
+        catalog,
+        &mut EnvironmentalDisplacementDiscoveryDiagnostics::default(),
+    )
+}
+
+fn best_replacement_contact_with_diagnostics(
+    combined: &OrganismStructure,
+    anchor_unit: usize,
+    incoming_unit: usize,
+    old_bond: Bond,
+    catalog: &[BaseResource],
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
@@ -997,7 +1014,7 @@ pub(crate) fn accumulate_environmental(
                                     diagnostics.replacement_contact_searches.saturating_add(1);
                                 *remaining_discovery_work =
                                     remaining_discovery_work.saturating_sub(1);
-                                let Some((candidate, investment)) = best_replacement_contact(
+                                let Some((candidate, investment)) = best_replacement_contact_with_diagnostics(
                                     &combined,
                                     anchor_unit,
                                     incoming_unit,
