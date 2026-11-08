@@ -68,12 +68,27 @@ fn periodic_delta(delta: f64, period: f64) -> f64 {
 fn material_center(material: &PhysicalMaterial, width: f64, height: f64) -> Option<(f64, f64)> {
     let placements = material.placements.as_ref()?;
     let anchor = placements.first()?;
-    if !width.is_finite() || width <= 0.0 || !height.is_finite() || height <= 0.0
-        || placements.iter().any(|p| !p.x.is_finite() || !p.y.is_finite())
-    { return None; }
+    if !width.is_finite()
+        || width <= 0.0
+        || !height.is_finite()
+        || height <= 0.0
+        || placements
+            .iter()
+            .any(|placement| !placement.x.is_finite() || !placement.y.is_finite())
+    {
+        return None;
+    }
     let count = placements.len() as f64;
-    let x_offset = placements.iter().map(|p| periodic_delta(p.x - anchor.x, width)).sum::<f64>() / count;
-    let y_offset = placements.iter().map(|p| p.y - anchor.y).sum::<f64>() / count;
+    let x_offset = placements
+        .iter()
+        .map(|placement| periodic_delta(placement.x - anchor.x, width))
+        .sum::<f64>()
+        / count;
+    let y_offset = placements
+        .iter()
+        .map(|placement| placement.y - anchor.y)
+        .sum::<f64>()
+        / count;
     Some(((anchor.x + x_offset).rem_euclid(width), anchor.y + y_offset))
 }
 
@@ -128,8 +143,10 @@ fn obstacle_for(
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         let placement = placements.get(index)?;
-        radius = radius
-            .max(periodic_delta(placement.x - x, width).hypot(placement.y - y) + shape_radius(&resource.shape.form));
+        radius = radius.max(
+            periodic_delta(placement.x - x, width).hypot(placement.y - y)
+                + shape_radius(&resource.shape.form),
+        );
         weighted_cohesion += resource.properties.cohesion * *amount;
         total += *amount;
     }
@@ -239,13 +256,21 @@ fn obstacle_adjusted_velocity(
     velocity
 }
 
-fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, height: f64) -> Option<f64> {
+fn clamp_vertical_displacement(
+    material: &PhysicalMaterial,
+    requested_dy: f64,
+    height: f64,
+) -> Option<f64> {
     let placements = material.placements.as_ref()?;
-    if placements.is_empty() || !height.is_finite() || height <= 0.0 { return None; }
+    if placements.is_empty() || !height.is_finite() || height <= 0.0 {
+        return None;
+    }
     let mut min_y = f64::INFINITY;
     let mut max_y = f64::NEG_INFINITY;
     for (index, placement) in placements.iter().enumerate() {
-        let radius = material.realized_shapes.as_ref()
+        let radius = material
+            .realized_shapes
+            .as_ref()
             .and_then(|shapes| shapes.get(index))
             .map(|shape| shape_radius(&shape.form))
             .unwrap_or(0.5);
@@ -254,30 +279,37 @@ fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, h
     }
     let minimum_shift = -min_y;
     let maximum_shift = (height - 1e-6) - max_y;
-    (minimum_shift <= maximum_shift).then(|| requested_dy.clamp(minimum_shift, maximum_shift))?
+    if minimum_shift > maximum_shift {
+        return None;
+    }
+    Some(requested_dy.clamp(minimum_shift, maximum_shift))
 }
 
-fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Option<PhysicalMaterial> {
+fn translated(
+    material: &PhysicalMaterial,
+    dx: f64,
+    dy: f64,
+    height: f64,
+) -> Option<PhysicalMaterial> {
     let mut moved = material.clone();
     let placements = moved.placements.as_mut()?;
-    if placements.is_empty() { return None; }
+    if placements.is_empty() {
+        return None;
+    }
     let clamped_dy = clamp_vertical_displacement(material, dy, height)?;
     for placement in placements {
         placement.x += dx;
         placement.y += clamped_dy;
-        if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() {
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
             return None;
         }
     }
     Some(moved)
 }
 
-/// Estimate angular response to local flow shear. Compound torque is
-/// accumulated from constituent mass and the velocity difference across the
-/// object's extent; the geometry-derived moment of inertia resists rotation.
-/// Single non-circular resources respond to local vorticity according to their
-/// shape anisotropy. This is an overdamped response: it adds no arbitrary spin
-/// or per-tick angle cap, and has no hidden angular state to lose on transfer.
 fn angular_displacement(
     material: &PhysicalMaterial,
     catalog: &[BaseResource],
@@ -487,10 +519,14 @@ fn rotated(
     width: f64,
     height: f64,
 ) -> Option<PhysicalMaterial> {
-    if !angle.is_finite() { return None; }
+    if !angle.is_finite() {
+        return None;
+    }
     let mut result = material.clone();
     let placements = result.placements.as_mut()?;
-    if placements.is_empty() { return None; }
+    if placements.is_empty() {
+        return None;
+    }
     let anchor_x = placements[0].x;
     let anchor_y = placements[0].y;
     let mut total_mass = 0.0;
@@ -500,12 +536,16 @@ fn rotated(
         let (name, amount) = material.material.parts.get(index)?;
         let resource = resource_for_part(name, catalog)?;
         let mass = resource.properties.mass * *amount;
-        if !mass.is_finite() || mass <= 0.0 { return None; }
+        if !mass.is_finite() || mass <= 0.0 {
+            return None;
+        }
         total_mass += mass;
         weighted_x += periodic_delta(placement.x - anchor_x, width) * mass;
         weighted_y += (placement.y - anchor_y) * mass;
     }
-    if !total_mass.is_finite() || total_mass <= 0.0 { return None; }
+    if !total_mass.is_finite() || total_mass <= 0.0 {
+        return None;
+    }
     let center_x = (anchor_x + weighted_x / total_mass).rem_euclid(width);
     let center_y = anchor_y + weighted_y / total_mass;
     let (sin, cos) = angle.sin_cos();
@@ -514,14 +554,20 @@ fn rotated(
         let dy = placement.y - center_y;
         placement.x = center_x + dx * cos - dy * sin;
         placement.y = center_y + dx * sin + dy * cos;
-        placement.rotation_radians = (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
-        if !placement.x.is_finite() || !placement.y.is_finite() || !placement.rotation_radians.is_finite() {
+        placement.rotation_radians =
+            (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
             return None;
         }
     }
     let dy = clamp_vertical_displacement(&result, 0.0, height)?;
     if dy != 0.0 {
-        for placement in result.placements.as_mut()? { placement.y += dy; }
+        for placement in result.placements.as_mut()? {
+            placement.y += dy;
+        }
     }
     Some(result)
 }
