@@ -157,7 +157,7 @@ The next implementation must be a resumable cursor, not another eager window wra
 5. **Stable deterministic order:** order source anchors by stable environmental identity and target cells/material slots by a documented deterministic sequence. Unordered pair emission must not depend on mutable locator ordering or require an unbounded seen-pair set. Cursor continuation must be independent of vector allocation addresses and must not skip or repeat an inspection.
 6. **COMBINE unordered parity:** canonicalize each emitted pair by stable identity, never by mutable locator. Preserve the union of both endpoint-bounds queries. Deduplication must not hide an uninspected reverse query or turn a deferred query into a negative result. The implementation may use a bounded per-cursor seen set, but its memory growth must be explicit and covered by limits; alternatively prove a canonical query rule that is equivalent to the union.
 7. **DISPLACEMENT directed parity:** preserve anchor → incoming direction and the reverse direction as separate records. The cursor must not canonicalize these role-sensitive pairs.
-8. **Refresh semantics:** a cursor belongs to one immutable pass snapshot. After any topology or ownership commit, discard affected cursors and rebuild from the refreshed field snapshot. Do not carry old locators, bounds, or bond references across BREAK/COMBINE refresh boundaries.
+8. **Refresh semantics:** a cursor belongs to one immutable pass snapshot and captures the field's coarse mutation revision. Every page rejects a changed field revision or refreshed snapshot; this revision is an invalidation token only, never a per-material topology/state version. After any topology or ownership commit, discard affected cursors and rebuild from the refreshed field snapshot. Do not carry old locators, bounds, or bond references across BREAK/COMBINE refresh boundaries.
 9. **Fairness:** if a query exceeds one tick's budget, continuation advances monotonically through its deterministic work universe. A later tick may rotate the starting anchor for fairness only if the rotation is represented explicitly and the full cycle is proven to cover every item without starvation. Do not combine a rotated restart with an old continuation.
 
 ### Required cursor tests
@@ -171,7 +171,7 @@ The next implementation must be a resumable cursor, not another eager window wra
 - Unordered mode covers the union of both bounds queries, deduplicates exactly once, and does not emit a pair until the relevant query work is complete enough to establish it.
 - Directed mode retains both orientations and exact anchor/incoming identities.
 - Repeated page sizes (1, uneven sizes, and sizes larger than remaining work) produce identical final sets and coverage.
-- A snapshot refresh invalidates old continuation state; stale cursor use is rejected rather than silently resolving old locators against new ownership.
+- A snapshot refresh or field mutation invalidates old continuation state; bounds-preparation and pair cursors compare the captured coarse field revision and reject stale use rather than silently resolving old locators against new ownership. The revision is not treated as a persistent per-material version.
 
 ### Implementation boundary
 
