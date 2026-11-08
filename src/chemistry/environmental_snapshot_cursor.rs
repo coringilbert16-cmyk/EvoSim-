@@ -216,7 +216,8 @@ impl EnvironmentalSnapshotCursor {
 mod tests {
     use super::*;
     use crate::environment::ActiveMaterialField;
-    use crate::physical_material::PhysicalMaterial;
+    use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
+    use crate::structure::ConnectionEndpoint;
     use crate::resources::Material;
 
     fn physical(identity: u64, name: &str) -> PhysicalMaterial {
@@ -280,6 +281,35 @@ mod tests {
         let eager = EnvironmentalMaterialSnapshot::from_field(&field, 12);
         assert_eq!(snapshot, eager);
         assert_eq!(snapshot.materials.len(), 2);
+    }
+
+    #[test]
+    fn duplicate_bond_references_match_the_eager_snapshot() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        for name in ["Carbon", "Oxygen"] {
+            let mut material = physical(9, name);
+            material.internal_connections = Some(vec![PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                part_b: 0,
+                endpoint_b: ConnectionEndpoint::Fluid { x: 1.0, y: 0.0 },
+                bond_energy: 1.0,
+            }]);
+            field.cells[0].physical_materials.push(material);
+        }
+
+        let mut cursor = EnvironmentalSnapshotCursor::new(&field, 13);
+        let snapshot = loop {
+            let page = cursor.next_page(&field, 2);
+            if let Some(snapshot) = page.snapshot {
+                break snapshot;
+            }
+            assert_eq!(page.status, Some(SnapshotCursorStatus::Incomplete));
+        };
+
+        let eager = EnvironmentalMaterialSnapshot::from_field(&field, 13);
+        assert_eq!(snapshot, eager);
+        assert_eq!(snapshot.existing_bonds.len(), 2);
     }
 
     #[test]
