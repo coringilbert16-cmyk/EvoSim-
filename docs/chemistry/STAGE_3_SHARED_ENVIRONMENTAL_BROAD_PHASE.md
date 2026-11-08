@@ -246,3 +246,31 @@ In particular:
 4. The broad-phase module remains read-only and intentionally isolated. The next stage is a staged production integration with exact candidate parity at each refresh boundary—not a change to chemistry eligibility, activation, energy, budgets, or transaction semantics.
 
 **Audit disposition:** broad-phase cursor parity and adapter-level candidate parity are covered by focused tests. The architecture is ready for a separately reviewed integration stage, but it is not yet safe to claim a single shared production discovery pass or to merge solely on the basis of these fixtures.
+
+
+## Stage 4 — shared reaction-evaluation contract (2026-11-08)
+
+The first Stage 4 increment adds `src/chemistry/environmental_evaluation.rs` as a typed result envelope around reaction-specific assessments.
+
+### Shared vocabulary
+
+- `EnvironmentalReactionKind` identifies COMBINE, BREAK, or DISPLACEMENT.
+- `EvaluationStage` records the furthest common lifecycle stage reached: candidate validation, chemistry, activation, energy settlement, scheduling, or commit revalidation.
+- `EvaluationOutcome<T>` distinguishes ready, rejected, deferred, and stale results.
+- `EnvironmentalReactionEvaluation<T>` carries the inventory pass ID and reaction kind while retaining the native reaction-specific payload type.
+
+### Deliberate non-unification
+
+The envelope does not define a common score, activation signal, threshold, energy unit, funding authority, or commit operation. A COMBINE payload remains an `EnvironmentalCombineOperation`; BREAK retains its own disruption/activation operation; DISPLACEMENT retains its coupled replacement trial/preflight semantics. Reaction-specific rejection reasons remain caller-owned descriptions rather than being normalized into a shared eligibility policy.
+
+The common stage ordering is descriptive lifecycle metadata, not permission to move existing production work between stages. Existing same-tick order and refresh boundaries remain BREAK commit → refresh → COMBINE commit → refresh → atomic DISPLACEMENT commit. A stale result must be discarded and rediscovered from a fresh snapshot. Deferred results remain eligible for their existing reaction-specific progress/fairness handling.
+
+### Tests and current boundary
+
+Focused unit tests prove:
+- all three reaction kinds retain distinct native payload types through the common envelope;
+- ready is the only outcome that yields a scheduler payload;
+- rejected, deferred, and stale outcomes cannot be mistaken for ready work;
+- lifecycle stages have a deterministic descriptive order.
+
+This is the **contract foundation**, not yet a shared evaluator wired into production. The three existing evaluators remain authoritative, and no live reaction behavior, activation accumulation, energy settlement, discovery budget, realization slot, scheduling policy, or topology transaction has changed. The next Stage 4 increment is to adapt one reaction at a time behind this envelope and compare its full ready/deferred/rejected/stale result stream against the current production path before any cutover.
