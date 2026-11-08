@@ -1177,7 +1177,21 @@ pub(crate) fn accumulate_environmental(
     }
 
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
+
+    // The simulation tick identifies this DISPLACEMENT evaluation pass. Each
+    // payload still represents the existing atomic replacement trial; the
+    // envelope only hands ready trials to the unchanged scheduler.
     operations
+        .into_iter()
+        .filter_map(|operation| {
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Displacement,
+                operation,
+            )
+            .into_ready()
+        })
+        .collect()
 }
 
 /// Keep field-owned displacement commits mutually exclusive with other
