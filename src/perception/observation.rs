@@ -411,7 +411,7 @@ impl WorldObservation {
                 let fraction = ((sample.energy_intensity_per_tick_per_width - minimum)
                     / (maximum - minimum))
                     .clamp(0.0, 1.0);
-                Some(0.1 + fraction * 0.9)
+                Some(0.4 + fraction * 0.6)
             })
             .unwrap_or(1.0);
         Self {
