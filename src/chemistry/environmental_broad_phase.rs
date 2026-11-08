@@ -1090,16 +1090,16 @@ mod tests {
                 usize::MAX,
                 orientation,
             );
-            let expected = reference
-                .iter()
-                .map(|pair| match orientation {
+            let expected_pairs = reference.iter().map(|pair| {
+                match orientation {
                     PairOrientation::Directed => (pair.identity_left, pair.identity_right),
                     PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                         (pair.identity_left, pair.identity_right)
                     }
                     PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
-                })
-                .collect::<std::collections::BTreeSet<_>>();
+                }
+            });
+            let expected = expected_pairs.collect::<std::collections::BTreeSet<_>>();
             let mut cursor = SpatialPairCursor::new(&snapshot, orientation);
             let mut actual = std::collections::BTreeSet::new();
             let mut total_visited = 0;
@@ -1109,13 +1109,16 @@ mod tests {
                 assert!(page.visited_pair_checks <= 3);
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
-                actual.extend(page.pairs.into_iter().map(|pair| match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
-                        (pair.identity_left, pair.identity_right)
+                let page_pairs = page.pairs.into_iter().map(|pair| {
+                    match orientation {
+                        PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                        PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                            (pair.identity_left, pair.identity_right)
+                        }
+                        PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
                     }
-                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
-                }));
+                });
+                actual.extend(page_pairs);
                 pages += 1;
                 if page.complete {
                     break;
