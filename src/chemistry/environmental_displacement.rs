@@ -751,14 +751,30 @@ fn best_replacement_contact_with_diagnostics(
         diagnostics.replacement_candidates_inspected = diagnostics
             .replacement_candidates_inspected
             .saturating_add(1);
-        if !candidate.available_a
-            || !candidate.available_b
-            || !candidate.distance.is_finite()
-            || candidate.distance < 0.0
-            || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            || !candidate.facing.is_finite()
-            || candidate.facing <= 0.0
-        {
+        let geometry_rejection = if !candidate.available_a || !candidate.available_b {
+            diagnostics.replacement_geometry_rejected_unavailable_endpoint =
+                diagnostics.replacement_geometry_rejected_unavailable_endpoint.saturating_add(1);
+            true
+        } else if !candidate.distance.is_finite() || candidate.distance < 0.0 {
+            diagnostics.replacement_geometry_rejected_invalid_distance =
+                diagnostics.replacement_geometry_rejected_invalid_distance.saturating_add(1);
+            true
+        } else if candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE {
+            diagnostics.replacement_geometry_rejected_distance_too_large =
+                diagnostics.replacement_geometry_rejected_distance_too_large.saturating_add(1);
+            true
+        } else if !candidate.facing.is_finite() {
+            diagnostics.replacement_geometry_rejected_invalid_facing =
+                diagnostics.replacement_geometry_rejected_invalid_facing.saturating_add(1);
+            true
+        } else if candidate.facing <= 0.0 {
+            diagnostics.replacement_geometry_rejected_nonpositive_facing =
+                diagnostics.replacement_geometry_rejected_nonpositive_facing.saturating_add(1);
+            true
+        } else {
+            false
+        };
+        if geometry_rejection {
             diagnostics.replacement_candidate_geometry_rejections = diagnostics
                 .replacement_candidate_geometry_rejections
                 .saturating_add(1);
