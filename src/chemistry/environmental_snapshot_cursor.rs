@@ -122,11 +122,9 @@ impl EnvironmentalSnapshotCursor {
                     }
                 }
                 let next = bond_index + 1;
-                let bond_count = physical
-                    .internal_connections
-                    .as_ref()
-                    .map_or(0, Vec::len);
-                self.active_bond = (next < bond_count).then_some((cell_index, material_index, next));
+                let bond_count = physical.internal_connections.as_ref().map_or(0, Vec::len);
+                self.active_bond =
+                    (next < bond_count).then_some((cell_index, material_index, next));
                 page.bond_visits = page.bond_visits.saturating_add(1);
                 self.consume_work(&mut page);
                 continue;
@@ -160,13 +158,20 @@ impl EnvironmentalSnapshotCursor {
             } else {
                 let record = MaterialRecord {
                     identity,
-                    locator: MaterialLocator { cell_index, material_index },
+                    locator: MaterialLocator {
+                        cell_index,
+                        material_index,
+                    },
                     topology_generation: 0,
                     state_version: 0,
                     constituent_count: physical.material.parts.len(),
                 };
                 self.materials.insert(identity, record);
-                if physical.internal_connections.as_ref().is_some_and(|bonds| !bonds.is_empty()) {
+                if physical
+                    .internal_connections
+                    .as_ref()
+                    .is_some_and(|bonds| !bonds.is_empty())
+                {
                     self.active_bond = Some((cell_index, material_index, 0));
                 }
             }
@@ -226,9 +231,15 @@ mod tests {
     #[test]
     fn pages_respect_budget_and_match_snapshot_ordering() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
-        field.cells[1].physical_materials.push(physical(20, "Carbon"));
-        field.cells[1].physical_materials.push(physical(10, "Oxygen"));
-        field.cells[3].physical_materials.push(physical(30, "Hydrogen"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(10, "Oxygen"));
+        field.cells[3]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
         let mut cursor = EnvironmentalSnapshotCursor::new(&field, 77);
         let mut total = 0;
         let snapshot = loop {
@@ -248,7 +259,9 @@ mod tests {
     #[test]
     fn revision_change_explicitly_invalidates_cursor() {
         let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
-        field.cells[0].physical_materials.push(physical(1, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(1, "Carbon"));
         let mut cursor = EnvironmentalSnapshotCursor::new(&field, 1);
         let first = cursor.next_page(&field, 1);
         assert_eq!(first.status, Some(SnapshotCursorStatus::Incomplete));
