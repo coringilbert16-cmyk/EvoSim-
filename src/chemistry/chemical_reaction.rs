@@ -3127,11 +3127,10 @@ mod shared_break_inventory_adapter_tests {
         assert_eq!(inventory.materials.len(), 2);
         assert_eq!(inventory.existing_bonds.len(), 6);
 
-        let snapshot =
-            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                &environment.field,
-                13,
-            );
+        let snapshot = crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+            &environment.field,
+            13,
+        );
         let mut snapshot_bonds = snapshot.existing_bonds.clone();
         snapshot_bonds.sort_by_key(|bond| bond.reference());
         let mut inventory_bonds = inventory.existing_bonds.clone();
