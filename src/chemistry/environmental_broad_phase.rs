@@ -149,6 +149,60 @@ impl EnvironmentalMaterialSnapshot {
         count.saturating_mul(count.saturating_sub(1)) / 2
     }
 
+    /// Count all ordered, non-self material pairs. This is the conservative
+    /// reference universe for role-sensitive DISPLACEMENT discovery.
+    pub(crate) fn known_directed_pair_count(&self) -> u64 {
+        let count = self.materials.len() as u64;
+        count.saturating_mul(count.saturating_sub(1))
+    }
+
+    /// Return a deterministic window over every anchor-to-incoming direction.
+    /// Each ordered pair appears once; the reverse direction is a distinct role.
+    pub(crate) fn directed_pair_window(
+        &self,
+        start: u64,
+        limit: usize,
+    ) -> (Vec<MaterialPairRecord>, PairWindowCoverage) {
+        let known_pairs = self.known_directed_pair_count();
+        let start = start.min(known_pairs);
+        let count = (known_pairs - start).min(limit as u64);
+        let mut pairs = Vec::with_capacity(count as usize);
+        let mut ordinal = 0u64;
+        for anchor in 0..self.materials.len() {
+            for incoming in 0..self.materials.len() {
+                if anchor == incoming {
+                    continue;
+                }
+                if ordinal >= start && pairs.len() < count as usize {
+                    let a = &self.materials[anchor];
+                    let b = &self.materials[incoming];
+                    pairs.push(MaterialPairRecord {
+                        left: anchor,
+                        right: incoming,
+                        identity_left: a.identity,
+                        identity_right: b.identity,
+                    });
+                }
+                ordinal = ordinal.saturating_add(1);
+                if pairs.len() == count as usize {
+                    break;
+                }
+            }
+            if pairs.len() == count as usize {
+                break;
+            }
+        }
+        let visited_pairs = pairs.len() as u64;
+        (
+            pairs,
+            PairWindowCoverage {
+                known_pairs,
+                visited_pairs,
+                deferred_pairs: known_pairs.saturating_sub(start + visited_pairs),
+            },
+        )
+    }
+
     /// Return a deterministic window over all unordered material pairs.
     /// `start` is a pair ordinal, not a material index or cell locator.
     pub(crate) fn pair_window(
@@ -437,6 +491,66 @@ mod tests {
         identities.dedup();
         assert_eq!(identities.len(), 10);
         assert!(identities.iter().all(|(a, b)| a < b));
+    }
+
+    #[test]
+    fn directed_reference_windows_cover_both_roles_without_self_pairs_or_gaps() {
+        let mut field = ActiveMaterialField::new(50.0, 10.0, 10.0);
+        for identity in 1..=5 {
+            field.cells[0]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 2);
+        assert_eq!(snapshot.known_directed_pair_count(), 20);
+
+        let (first, first_coverage) = snapshot.directed_pair_window(0, 7);
+        let (second, second_coverage) = snapshot.directed_pair_window(7, 7);
+        let (third, third_coverage) = snapshot.directed_pair_window(14, 7);
+        assert_eq!(first.len(), 7);
+        assert_eq!(second.len(), 7);
+        assert_eq!(third.len(), 6);
+        assert_eq!(first_coverage.deferred_pairs, 13);
+        assert_eq!(second_coverage.deferred_pairs, 6);
+        assert_eq!(third_coverage.deferred_pairs, 0);
+
+        let pairs = first.into_iter().chain(second).chain(third).collect::<Vec<_>>();
+        let mut identities = pairs
+            .iter()
+            .map(|pair| (pair.identity_left, pair.identity_right))
+            .collect::<Vec<_>>();
+        identities.sort();
+        identities.dedup();
+        assert_eq!(identities.len(), 20);
+        assert!(identities.iter().all(|(anchor, incoming)| anchor != incoming));
+        for identity in 1..=5 {
+            for other in 1..=5 {
+                if identity == other {
+                    continue;
+                }
+                assert!(identities.contains(&(
+                    MaterialIdentity(identity),
+                    MaterialIdentity(other)
+                )));
+            }
+        }
+    }
+
+    #[test]
+    fn directed_reference_empty_and_single_material_windows_are_empty() {
+        let empty = EnvironmentalMaterialSnapshot::default();
+        let (empty_pairs, empty_coverage) = empty.directed_pair_window(0, 10);
+        assert!(empty_pairs.is_empty());
+        assert_eq!(empty_coverage.known_pairs, 0);
+
+        let mut field = ActiveMaterialField::new(10.0, 10.0, 10.0);
+        field.cells[0]
+            .physical_materials
+            .push(physical(1, "Carbon"));
+        let single = EnvironmentalMaterialSnapshot::from_field(&field, 3);
+        let (single_pairs, single_coverage) = single.directed_pair_window(0, 10);
+        assert!(single_pairs.is_empty());
+        assert_eq!(single_coverage.known_pairs, 0);
     }
 
     #[test]
