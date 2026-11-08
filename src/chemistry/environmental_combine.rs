@@ -3184,8 +3184,7 @@ mod tests {
         let mut direct_accumulation = BTreeMap::new();
         let mut direct_updated = BTreeSet::new();
         let mut direct_operations = Vec::new();
-        let mut evaluation_journal =
-            crate::environmental_evaluation::EvaluationJournal::default();
+        let mut evaluation_journal = crate::environmental_evaluation::EvaluationJournal::default();
         chemical_step(
             &simulation.environment,
             &mut simulation.chemistry_library,
@@ -3910,8 +3909,7 @@ mod tests {
         let mut accumulation = BTreeMap::new();
         let mut updated_keys = BTreeSet::new();
         let mut operations = Vec::new();
-        let mut evaluation_journal =
-            crate::environmental_evaluation::EvaluationJournal::default();
+        let mut evaluation_journal = crate::environmental_evaluation::EvaluationJournal::default();
         chemical_step(
             &simulation.environment,
             &mut chemistry_library,
