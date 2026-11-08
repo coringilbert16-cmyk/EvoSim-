@@ -4,7 +4,7 @@
 use crate::environment::ActiveMaterialField;
 use crate::environmental_broad_phase::EnvironmentalMaterialSnapshot;
 use crate::environmental_interaction::{
-    BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
+    ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
