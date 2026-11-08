@@ -371,6 +371,14 @@ mod tests {
             }
         );
         assert_eq!(journal.records().len(), 4);
+        journal.record_deferred_count(
+            41,
+            EnvironmentalReactionKind::Combine,
+            EvaluationStage::CandidateValidation,
+            "bounded_constituent_pair_window_exhausted",
+            17,
+        );
+        assert_eq!(journal.counts().deferred, 18);
         assert_eq!(
             journal.records()[1].outcome,
             EvaluationRecordOutcome::Rejected {
