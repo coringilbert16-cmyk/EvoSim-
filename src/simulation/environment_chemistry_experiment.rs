@@ -148,8 +148,7 @@ pub(crate) fn realize_natural_molecule(
     molecule
 }
 
-/// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
-/// are an unrestricted random partition, not a fixed 6–20 range.
+/// Seed exactly 1,280 individual base resources in 24 separated, balanced piles.
 pub(crate) fn seed_randomized_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
