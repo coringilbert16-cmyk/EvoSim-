@@ -1065,11 +1065,12 @@ pub(crate) fn accumulate_environmental(
                                     &environment.catalog,
                                     ALTERNATIVE_AUDIT_LIMIT,
                                 );
-                                diagnostics.replacement_alternative_audits =
-                                    diagnostics.replacement_alternative_audits.saturating_add(1);
-                                diagnostics.replacement_alternatives_evaluated =
-                                    diagnostics.replacement_alternatives_evaluated
-                                        .saturating_add(census.alternatives.len() as u64);
+                                diagnostics.replacement_alternative_audits = diagnostics
+                                    .replacement_alternative_audits
+                                    .saturating_add(1);
+                                diagnostics.replacement_alternatives_evaluated = diagnostics
+                                    .replacement_alternatives_evaluated
+                                    .saturating_add(census.alternatives.len() as u64);
                                 if census.work_limit_reached {
                                     diagnostics.replacement_alternative_audits_truncated =
                                         diagnostics.replacement_alternative_audits_truncated
