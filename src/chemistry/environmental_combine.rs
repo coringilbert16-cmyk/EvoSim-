@@ -432,12 +432,14 @@ fn chemical_step(
 ) {
     macro_rules! reject_step! {
         () => {{
-            journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::rejected(
-                tick,
-                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
-                crate::environmental_evaluation::EvaluationStage::Chemistry,
-                "combine_chemistry_validation_failed",
-            ));
+            journal.record(
+                crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::rejected(
+                    tick,
+                    crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                    crate::environmental_evaluation::EvaluationStage::Chemistry,
+                    "combine_chemistry_validation_failed",
+                ),
+            );
             return;
         }};
     }
@@ -560,11 +562,13 @@ fn chemical_step(
             reject_step!();
         };
         accumulation.remove(&key);
-        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
-            tick,
-            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
-            (),
-        ));
+        journal.record(
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                (),
+            ),
+        );
         operations.push(EnvironmentalCombineOperation {
             cell_a,
             material_a,
@@ -580,12 +584,14 @@ fn chemical_step(
             accumulated_reaction: next,
         });
     } else {
-        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::deferred(
-            tick,
-            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
-            crate::environmental_evaluation::EvaluationStage::Activation,
-            "activation_accumulation_below_threshold",
-        ));
+        journal.record(
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::deferred(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                crate::environmental_evaluation::EvaluationStage::Activation,
+                "activation_accumulation_below_threshold",
+            ),
+        );
         accumulation.insert(key, next);
     }
 }
