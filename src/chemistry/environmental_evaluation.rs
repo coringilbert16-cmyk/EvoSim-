@@ -202,6 +202,41 @@ impl EvaluationJournal {
         });
     }
 
+    pub(crate) fn record_ready_count(
+        &mut self,
+        pass_id: u64,
+        reaction: EnvironmentalReactionKind,
+        count: usize,
+    ) {
+        if count == 0 {
+            return;
+        }
+        self.records.push(EvaluationRecord {
+            pass_id,
+            reaction,
+            outcome: EvaluationRecordOutcome::Ready,
+            multiplicity: count,
+        });
+    }
+
+    pub(crate) fn record_stale_count(
+        &mut self,
+        pass_id: u64,
+        reaction: EnvironmentalReactionKind,
+        stage: EvaluationStage,
+        count: usize,
+    ) {
+        if count == 0 {
+            return;
+        }
+        self.records.push(EvaluationRecord {
+            pass_id,
+            reaction,
+            outcome: EvaluationRecordOutcome::Stale { stage },
+            multiplicity: count,
+        });
+    }
+
     pub(crate) fn record_rejected_count(
         &mut self,
         pass_id: u64,
