@@ -1123,6 +1123,7 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .displacement_discovery_work_remaining = environmental_displacement_discovery_remaining;
 
+        let displacement_ready_for_scheduling = environmental_displacement_operations.len();
         let mut environmental_displacement_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
         let environmental_displacement_operations =
@@ -1131,6 +1132,18 @@ impl Simulation {
                 self.tick,
                 &mut environmental_displacement_work_remaining,
                 &mut self.chemical_reaction_accumulation,
+            );
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery
+            .evaluation_outcomes
+            .deferred = self
+            .environmental_chemistry_diagnostics
+            .displacement_discovery
+            .evaluation_outcomes
+            .deferred
+            .saturating_add(
+                displacement_ready_for_scheduling
+                    .saturating_sub(environmental_displacement_operations.len()),
             );
         self.environmental_chemistry_diagnostics
             .displacement_scheduled = environmental_displacement_operations.len();
@@ -1164,6 +1177,18 @@ impl Simulation {
             } else {
                 self.environmental_chemistry_diagnostics
                     .displacement_rejected += 1;
+                let outcomes = &mut self
+                    .environmental_chemistry_diagnostics
+                    .displacement_discovery
+                    .evaluation_outcomes;
+                if failure_reason
+                    .as_deref()
+                    .is_some_and(|reason| reason.starts_with("stale_"))
+                {
+                    outcomes.stale = outcomes.stale.saturating_add(1);
+                } else {
+                    outcomes.rejected = outcomes.rejected.saturating_add(1);
+                }
             }
             let mut post_commit_source_cell_materials = Vec::new();
             if committed {
