@@ -44,6 +44,44 @@ pub(crate) struct PairWindowCoverage {
     pub(crate) deferred_pairs: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MaterialSpatialBounds {
+    pub(crate) min_x: f64,
+    pub(crate) max_x: f64,
+    pub(crate) min_y: f64,
+    pub(crate) max_y: f64,
+}
+
+impl MaterialSpatialBounds {
+    fn expanded(self, padding: f64) -> Option<Self> {
+        if !padding.is_finite()
+            || padding < 0.0
+            || !self.min_x.is_finite()
+            || !self.max_x.is_finite()
+            || !self.min_y.is_finite()
+            || !self.max_y.is_finite()
+            || self.min_x > self.max_x
+            || self.min_y > self.max_y
+        {
+            return None;
+        }
+        Some(Self {
+            min_x: self.min_x - padding,
+            max_x: self.max_x + padding,
+            min_y: self.min_y - padding,
+            max_y: self.max_y + padding,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PairOrientation {
+    /// One pair, ordered by current field locator. This is the COMBINE contract.
+    Unordered,
+    /// Every anchor-to-target direction. DISPLACEMENT needs both roles.
+    Directed,
+}
+
 impl EnvironmentalMaterialSnapshot {
     /// Build one pass-local ownership snapshot. Topology generation is scoped
     /// to this immutable snapshot; it is not a fabricated persistent version.
@@ -156,6 +194,100 @@ impl EnvironmentalMaterialSnapshot {
         )
     }
 
+    /// Enumerate spatially plausible material pairs using the same cell-bound
+    /// query used by the live COMBINE and DISPLACEMENT discovery paths.
+    ///
+    /// The bounds slice is aligned with self.materials and must be computed from
+    /// each restored material's complete realized geometry. The cell query is
+    /// only a broad-phase filter; constituent endpoint geometry remains
+    /// authoritative. COMBINE requests unordered pairs, while DISPLACEMENT
+    /// requests both directed anchor/incoming orientations.
+    pub(crate) fn spatial_pair_window(
+        &self,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        padding: f64,
+        start: u64,
+        limit: usize,
+        orientation: PairOrientation,
+    ) -> (Vec<MaterialPairRecord>, PairWindowCoverage) {
+        if bounds.len() != self.materials.len() || limit == 0 {
+            return (
+                Vec::new(),
+                PairWindowCoverage {
+                    known_pairs: 0,
+                    visited_pairs: 0,
+                    deferred_pairs: 0,
+                },
+            );
+        }
+        let mut locator_to_material = std::collections::BTreeMap::new();
+        for (index, material) in self.materials.iter().enumerate() {
+            locator_to_material.insert(
+                (material.locator.cell_index, material.locator.material_index),
+                index,
+            );
+        }
+        let mut candidates = Vec::new();
+        for (anchor_index, anchor) in self.materials.iter().enumerate() {
+            let Some(expanded) = bounds[anchor_index].and_then(|value| value.expanded(padding))
+            else {
+                continue;
+            };
+            let target_cells = field.cells_intersecting_bounds(
+                expanded.min_x,
+                expanded.max_x,
+                expanded.min_y,
+                expanded.max_y,
+            );
+            for cell_index in target_cells {
+                let Some(cell) = field.cells.get(cell_index) else {
+                    continue;
+                };
+                for target_slot in 0..cell.physical_materials.len() {
+                    let Some(&target_index) =
+                        locator_to_material.get(&(cell_index, target_slot))
+                    else {
+                        continue;
+                    };
+                    if target_index == anchor_index {
+                        continue;
+                    }
+                    let target = &self.materials[target_index];
+                    if orientation == PairOrientation::Unordered
+                        && (anchor.locator.cell_index, anchor.locator.material_index)
+                            >= (target.locator.cell_index, target.locator.material_index)
+                    {
+                        continue;
+                    }
+                    candidates.push(MaterialPairRecord {
+                        left: anchor_index,
+                        right: target_index,
+                        identity_left: anchor.identity,
+                        identity_right: target.identity,
+                    });
+                }
+            }
+        }
+        let known_pairs = candidates.len() as u64;
+        let start = start.min(known_pairs);
+        let count = (known_pairs - start).min(limit as u64) as usize;
+        let pairs = candidates
+            .into_iter()
+            .skip(start as usize)
+            .take(count)
+            .collect::<Vec<_>>();
+        let visited_pairs = pairs.len() as u64;
+        (
+            pairs,
+            PairWindowCoverage {
+                known_pairs,
+                visited_pairs,
+                deferred_pairs: known_pairs.saturating_sub(start + visited_pairs),
+            },
+        )
+    }
+
     pub(crate) fn bond_reference_is_current(&self, reference: BondRef) -> bool {
         self.existing_bonds
             .iter()
@@ -232,6 +364,72 @@ mod tests {
         identities.dedup();
         assert_eq!(identities.len(), 10);
         assert!(identities.iter().all(|(a, b)| a < b));
+    }
+
+    #[test]
+    fn spatial_pairs_prune_distant_materials_and_keep_displacement_directions() {
+        let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+        field.cells[0].physical_materials.push(physical(10, "Carbon"));
+        field.cells[11].physical_materials.push(physical(20, "Oxygen"));
+        field.cells[99].physical_materials.push(physical(30, "Hydrogen"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 3);
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: 9.0, max_x: 11.0, min_y: 9.0, max_y: 11.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 9.0, max_x: 11.0, min_y: 9.0, max_y: 11.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 89.0, max_x: 91.0, min_y: 89.0, max_y: 91.0,
+            }),
+        ];
+        let (unordered, coverage) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+        );
+        assert_eq!(coverage.known_pairs, 1);
+        assert_eq!(unordered.len(), 1);
+        assert_eq!(
+            (unordered[0].identity_left, unordered[0].identity_right),
+            (MaterialIdentity(10), MaterialIdentity(20))
+        );
+
+        let (directed, directed_coverage) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Directed,
+        );
+        assert_eq!(directed_coverage.known_pairs, 2);
+        assert_eq!(directed.len(), 2);
+        assert!(directed.iter().any(|pair| {
+            pair.identity_left == MaterialIdentity(10)
+                && pair.identity_right == MaterialIdentity(20)
+        }));
+        assert!(directed.iter().any(|pair| {
+            pair.identity_left == MaterialIdentity(20)
+                && pair.identity_right == MaterialIdentity(10)
+        }));
+    }
+
+    #[test]
+    fn spatial_pair_windows_report_deferred_work_without_losing_candidates() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        for identity in 1..=3 {
+            field.cells[0].physical_materials.push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 4);
+        let bounds = vec![Some(MaterialSpatialBounds {
+            min_x: 0.0, max_x: 10.0, min_y: 0.0, max_y: 10.0,
+        }); 3];
+        let (_, first) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 0, 1, PairOrientation::Unordered,
+        );
+        let (_, second) = snapshot.spatial_pair_window(
+            &field, &bounds, 0.0, 1, 8, PairOrientation::Unordered,
+        );
+        assert_eq!(first.known_pairs, 3);
+        assert_eq!(first.visited_pairs, 1);
+        assert_eq!(first.deferred_pairs, 2);
+        assert_eq!(second.visited_pairs, 2);
+        assert_eq!(second.deferred_pairs, 0);
     }
 
     #[test]
