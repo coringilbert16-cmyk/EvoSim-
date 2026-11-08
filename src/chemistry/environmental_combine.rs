@@ -859,6 +859,21 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         diagnostics,
     );
     diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+    // Exhaustive field-wide reference count. This is deliberately separate
+    // from spatially eligible pairs: it exposes the portion of the global
+    // material-pair space not reached by this bounded broad-phase pass.
+    let realized_material_count = environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| material.is_realized() && !material.material.is_empty())
+        .count();
+    diagnostics.global_realized_material_pairs =
+        realized_material_count.saturating_mul(realized_material_count.saturating_sub(1)) / 2;
+    diagnostics.global_realized_material_pairs_unvisited = diagnostics
+        .global_realized_material_pairs
+        .saturating_sub(diagnostics.forward_ordered_target_material_pair_inspections);
     diagnostics.accumulation_keys_updated = updated_keys.len();
     diagnostics.evaluation_outcomes = journal.counts();
     record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
