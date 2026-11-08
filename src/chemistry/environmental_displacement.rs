@@ -1005,6 +1005,9 @@ pub(crate) fn accumulate_environmental(
                                     previous,
                                     &environment.catalog,
                                 ) else {
+                                    diagnostics.activation_accumulation_unavailable = diagnostics
+                                        .activation_accumulation_unavailable
+                                        .saturating_add(1);
                                     continue;
                                 };
                                 diagnostics.activation_updates =
@@ -1206,6 +1209,13 @@ pub(crate) fn accumulate_environmental(
         crate::environmental_evaluation::EvaluationStage::CandidateValidation,
         "activation_status_unavailable",
         diagnostics.activation_status_unavailable as usize,
+    );
+    evaluation_journal.record_rejected_count(
+        tick,
+        reaction,
+        crate::environmental_evaluation::EvaluationStage::Chemistry,
+        "activation_accumulation_unavailable",
+        diagnostics.activation_accumulation_unavailable as usize,
     );
     evaluation_journal.record_rejected_count(
         tick,
