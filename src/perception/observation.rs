@@ -660,9 +660,10 @@ mod tests {
             .iter()
             .flat_map(|cell| cell.physical_parts.iter().flatten())
             .collect::<Vec<_>>();
-        assert!(
-            !parts.is_empty(),
-            "world view must expose realized physical resources"
+        assert_eq!(
+            parts.len(),
+            1_360,
+            "world view must expose all 1,280 seeded objects as 1,360 physical constituents"
         );
         assert!(parts.iter().all(|part| {
             part.x.is_finite()
