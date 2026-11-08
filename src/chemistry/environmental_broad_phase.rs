@@ -329,8 +329,7 @@ impl MaterialBoundsCursor {
             self.visited_work = self.visited_work.saturating_add(1);
             if progress.next_constituent >= record.constituent_count {
                 let material_index = progress.material_index;
-                self
-                    .bounds
+                self.bounds
                     .as_mut()
                     .expect("bounds remain available until completion")[material_index] =
                     progress.finish();
