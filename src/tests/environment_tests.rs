@@ -95,6 +95,27 @@ fn deposit_preserves_distinct_structures_and_aggregates_raw_stock() {
 }
 
 #[test]
+fn radius_queries_wrap_horizontally_but_not_vertically() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let seam_cells = field.cells_within_radius(0.0, 37.5, 15.0);
+    assert!(seam_cells.contains(&4), "left-edge cell should be included");
+    assert!(seam_cells.contains(&7), "right-edge cell should be included across the seam");
+    assert!(!field.cells_within_radius(0.0, -1.0, 15.0).iter().any(|i| *i < 4));
+}
+
+#[test]
+fn bounds_queries_wrap_columns_and_clip_rows() {
+    let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let across_seam = field.cells_intersecting_bounds(-5.0, 5.0, 25.0, 49.0);
+    assert_eq!(across_seam, vec![7, 4]);
+    assert!(field.cells_intersecting_bounds(25.0, 50.0, -20.0, -1.0).is_empty());
+    assert_eq!(
+        field.cells_intersecting_bounds(25.0, 50.0, -20.0, 0.0),
+        vec![1]
+    );
+}
+
+#[test]
 fn cells_within_radius_returns_only_cells_inside_radius() {
     let field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     assert_eq!(field.cells_within_radius(37.5, 37.5, 1.0), vec![5]);
