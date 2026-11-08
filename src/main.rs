@@ -106,6 +106,7 @@ mod environmental_evaluation;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
 #[path = "chemistry/environmental_snapshot_cursor.rs"]
+#[allow(dead_code)] // Stage 1 prototype stays unwired until snapshot parity is proven.
 mod environmental_snapshot_cursor;
 
 // Organism genome, behavior, and lifecycle.
