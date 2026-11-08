@@ -178,7 +178,10 @@ pub(crate) fn seed_randomized_resources(
     // a deterministic but nonuniform map.
     const PILE_COUNT: usize = 24;
     let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
-    for size in pile_sizes.iter_mut().take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT) {
+    for size in pile_sizes
+        .iter_mut()
+        .take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT)
+    {
         *size += 1;
     }
     pile_sizes.shuffle(&mut rng);
@@ -201,9 +204,10 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+            let x = (center_x
+                + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
                 + rng.gen_range(-0.4..0.4))
-                .clamp(1.0, width - 1.0);
+            .clamp(1.0, width - 1.0);
             let y = (center_y
                 + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5
                 + rng.gen_range(-0.4..0.4))
@@ -301,9 +305,10 @@ fn seed_randomized_molecular_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
+            let x = (center_x
+                + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5
                 + rng.gen_range(-0.4..0.4))
-                .clamp(1.0, width - 2.8);
+            .clamp(1.0, width - 2.8);
             let y = (center_y
                 + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5
                 + rng.gen_range(-0.4..0.4))
@@ -390,13 +395,12 @@ pub(crate) fn audit_transport_endpoints(seed: u64) {
     audit_endpoint_resolution("before", &fixture.simulation.environment.field, &catalog);
 
     let mut transported = fixture.simulation.environment.field.clone();
-    let moved =
-        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
-            &mut transported,
-            &catalog,
-            fixture.simulation.environment.width,
-            fixture.simulation.environment.height,
-        );
+    let moved = crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<true>(
+        &mut transported,
+        &catalog,
+        fixture.simulation.environment.width,
+        fixture.simulation.environment.height,
+    );
     println!("TRANSPORT ENDPOINT AUDIT: moved_materials={moved}");
     audit_endpoint_resolution("after", &transported, &catalog);
 }
