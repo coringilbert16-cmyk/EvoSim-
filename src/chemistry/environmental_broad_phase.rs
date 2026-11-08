@@ -219,22 +219,6 @@ impl MaterialBoundsCursor {
                             && physical.is_realized()
                             && !physical.material.parts.is_empty()
                             && physical.material.parts.len() == record.constituent_count
-                            && physical.material.parts.iter().all(|(name, amount)| {
-                                let Some(resource_index) = self.catalog_indices.get(name) else {
-                                    return false;
-                                };
-                                let Some(resource) = catalog.get(*resource_index) else {
-                                    return false;
-                                };
-                                amount.is_finite()
-                                    && *amount >= 1.0
-                                    && amount.fract() == 0.0
-                                    && ((*amount - 1.0).abs() <= 1e-9
-                                        || (physical.material.parts.len() == 1
-                                            && physical.material.internal_bonds.is_empty()
-                                            && resource.physical_state
-                                                == crate::resources::PhysicalState::Fluid))
-                            })
                     });
                 self.current = Some(MaterialBoundsProgress::new(material_index, valid));
                 continue;
@@ -254,6 +238,17 @@ impl MaterialBoundsCursor {
                     let (name, amount) = physical.material.parts.get(progress.next_constituent)?;
                     let resource_index = *self.catalog_indices.get(name)?;
                     let resource = catalog.get(resource_index)?;
+                    if !amount.is_finite()
+                        || *amount < 1.0
+                        || amount.fract() != 0.0
+                        || ((*amount - 1.0).abs() > 1e-9
+                            && !(physical.material.parts.len() == 1
+                                && physical.material.internal_bonds.is_empty()
+                                && resource.physical_state
+                                    == crate::resources::PhysicalState::Fluid))
+                    {
+                        return None;
+                    }
                     let placement = *physical
                         .placements
                         .as_ref()?
@@ -1803,7 +1798,49 @@ mod tests {
                 PairOrientation::Unordered => snapshot.known_pair_count(),
                 PairOrientation::Directed => snapshot.known_directed_pair_count(),
             };
-            assert!(total_work < exhaustive_checks);
+            assert!(total_work > 0);
+            assert!(total_cells > 0);
+            assert!(total_materials > 0);
+        }
+    }
+
+    #[test]
+    fn indexed_cursor_prunes_pair_work_for_sparse_materials() {
+        let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+        let mut bounds = Vec::new();
+        for identity in 1..=30 {
+            let cell_index = (identity as usize - 1) * 3;
+            let (x, y) = field.cell_center(cell_index);
+            field.cells[cell_index]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+            bounds.push(Some(MaterialSpatialBounds {
+                min_x: x - 0.25,
+                max_x: x + 0.25,
+                min_y: y - 0.25,
+                max_y: y + 0.25,
+            }));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 814);
+        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+            let exhaustive = match orientation {
+                PairOrientation::Unordered => snapshot.known_pair_count(),
+                PairOrientation::Directed => snapshot.known_directed_pair_count(),
+            };
+            let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
+            let mut visited_work = 0;
+            let mut pages = 0;
+            loop {
+                let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, 7, 4);
+                assert!(page.visited_work <= 7);
+                visited_work += page.visited_work;
+                pages += 1;
+                if page.complete {
+                    break;
+                }
+                assert!(pages < 100);
+            }
+            assert!(visited_work < exhaustive);
         }
     }
 
