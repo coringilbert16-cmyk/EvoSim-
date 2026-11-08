@@ -191,7 +191,9 @@ impl EvaluationJournal {
         reason: &'static str,
         count: usize,
     ) {
-        if count == 0 { return; }
+        if count == 0 {
+            return;
+        }
         self.records.push(EvaluationRecord {
             pass_id,
             reaction,
