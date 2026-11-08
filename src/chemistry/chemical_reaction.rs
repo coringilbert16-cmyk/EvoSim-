@@ -3131,7 +3131,8 @@ mod shared_break_inventory_adapter_tests {
             .candidates
             .iter()
             .map(|(cell_index, material_index, bond_index)| {
-                let physical = &environment.field.cells[*cell_index].physical_materials[*material_index];
+                let physical =
+                    &environment.field.cells[*cell_index].physical_materials[*material_index];
                 let connection = &physical.internal_connections.as_ref().unwrap()[*bond_index];
                 (
                     physical.environmental_identity,
