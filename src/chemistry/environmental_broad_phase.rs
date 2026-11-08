@@ -844,21 +844,23 @@ impl BoundsCellRange {
         }
         let row_start = (bounds.min_y / field.cell_size).floor() as isize;
         let row_end = (bounds.max_y / field.cell_size).floor() as isize;
-        let row_count = row_end
-            .saturating_sub(row_start)
-            .saturating_add(1)
-            .max(0) as usize;
+        let row_count = row_end.saturating_sub(row_start).saturating_add(1) as usize;
+        let (row_start, row_count) = if row_count >= field.height_cells {
+            (0, field.height_cells)
+        } else {
+            (row_start, row_count)
+        };
         Some(Self {
             min_col,
             max_col,
             row_start,
-            row_count: row_count.min(field.height_cells),
+            row_count,
         })
     }
 
     fn cell_index(self, field: &ActiveMaterialField, row_offset: usize, col: usize) -> usize {
-        let row = (self.row_start + row_offset as isize)
-            .rem_euclid(field.height_cells as isize) as usize;
+        let row =
+            (self.row_start + row_offset as isize).rem_euclid(field.height_cells as isize) as usize;
         row * field.width_cells + col
     }
 }
@@ -943,10 +945,7 @@ impl IndexedSpatialCursor {
             || field.cells.len() != self.field_cell_count
         {
             return IndexedSpatialCursorPage {
-                deferred_anchors: snapshot
-                    .materials
-                    .len()
-                    .saturating_sub(self.anchor_index) as u64,
+                deferred_anchors: snapshot.materials.len().saturating_sub(self.anchor_index) as u64,
                 ..IndexedSpatialCursorPage::default()
             };
         }
@@ -965,8 +964,7 @@ impl IndexedSpatialCursor {
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_anchor_initializations =
                     page.visited_anchor_initializations.saturating_add(1);
-                let expanded = bounds[self.anchor_index]
-                    .and_then(|value| value.expanded(padding));
+                let expanded = bounds[self.anchor_index].and_then(|value| value.expanded(padding));
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
                 self.anchor_initialized = true;
                 self.row_offset = 0;
@@ -1047,17 +1045,17 @@ impl IndexedSpatialCursor {
                     identity_right: target_record.identity,
                 }),
                 PairOrientation::Unordered => {
-                    let (left, right) = if (
-                        anchor.locator.cell_index,
-                        anchor.locator.material_index,
-                    ) < (
-                        target_record.locator.cell_index,
-                        target_record.locator.material_index,
-                    ) {
-                        (self.anchor_index, target_index)
-                    } else {
-                        (target_index, self.anchor_index)
-                    };
+                    let (left, right) =
+                        if (anchor.locator.cell_index, anchor.locator.material_index)
+                            < (
+                                target_record.locator.cell_index,
+                                target_record.locator.material_index,
+                            )
+                        {
+                            (self.anchor_index, target_index)
+                        } else {
+                            (target_index, self.anchor_index)
+                        };
                     if self.seen_unordered_pairs.insert((left, right)) {
                         page.pairs.push(MaterialPairRecord {
                             left,
@@ -1071,8 +1069,7 @@ impl IndexedSpatialCursor {
         }
 
         self.complete = self.anchor_index >= snapshot.materials.len();
-        page.deferred_anchors =
-            snapshot.materials.len().saturating_sub(self.anchor_index) as u64;
+        page.deferred_anchors = snapshot.materials.len().saturating_sub(self.anchor_index) as u64;
         page.complete = self.complete;
         page
     }
@@ -1747,14 +1744,8 @@ mod tests {
         ];
 
         for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
-            let (reference, _) = snapshot.spatial_pair_window(
-                &field,
-                &bounds,
-                2.1,
-                0,
-                usize::MAX,
-                orientation,
-            );
+            let (reference, _) =
+                snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected = reference
                 .into_iter()
                 .map(|pair| match orientation {
@@ -1802,10 +1793,6 @@ mod tests {
             assert_eq!(actual, expected);
             assert!(total_cells > 0);
             assert!(total_materials > 0);
-            let exhaustive_checks = match orientation {
-                PairOrientation::Unordered => snapshot.known_pair_count(),
-                PairOrientation::Directed => snapshot.known_directed_pair_count(),
-            };
             assert!(total_work > 0);
             assert!(total_cells > 0);
             assert!(total_materials > 0);
@@ -1876,8 +1863,7 @@ mod tests {
 
         let mut changed_field = field.clone();
         changed_field.cell_size += 1.0;
-        let stale_field =
-            cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, 8, 8);
+        let stale_field = cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, 8, 8);
         assert!(stale_field.pairs.is_empty());
         assert!(!stale_field.complete);
         assert_eq!(stale_field.visited_work, 0);
