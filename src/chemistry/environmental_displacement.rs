@@ -140,7 +140,7 @@ enum DisplacementTrialFailureStage {
     Insertion,
     Energy,
     Products,
-    ReplacementBondStrength,
+    ReplacementBondTooWeak,
     #[default]
     Other,
 }
@@ -1014,14 +1014,16 @@ pub(crate) fn accumulate_environmental(
                                     diagnostics.replacement_contact_searches.saturating_add(1);
                                 *remaining_discovery_work =
                                     remaining_discovery_work.saturating_sub(1);
-                                let Some((candidate, investment)) = best_replacement_contact_with_diagnostics(
-                                    &combined,
-                                    anchor_unit,
-                                    incoming_unit,
-                                    old_bond,
-                                    &environment.catalog,
-                                    diagnostics,
-                                ) else {
+                                let Some((candidate, investment)) =
+                                    best_replacement_contact_with_diagnostics(
+                                        &combined,
+                                        anchor_unit,
+                                        incoming_unit,
+                                        old_bond,
+                                        &environment.catalog,
+                                        diagnostics,
+                                    )
+                                else {
                                     continue;
                                 };
                                 diagnostics.replacement_contacts_found =
@@ -1177,9 +1179,11 @@ pub(crate) fn accumulate_environmental(
                                                     .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::ReplacementBondStrength => {
-                                                diagnostics.trial_rejections_replacement_bond_strength = diagnostics
-                                                    .trial_rejections_replacement_bond_strength
-                                                    .saturating_add(1);
+                                                diagnostics
+                                                    .trial_rejections_replacement_bond_strength =
+                                                    diagnostics
+                                                        .trial_rejections_replacement_bond_strength
+                                                        .saturating_add(1);
                                             }
                                             DisplacementTrialFailureStage::Other => {
                                                 diagnostics.trial_rejections_other = diagnostics
