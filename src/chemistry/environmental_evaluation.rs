@@ -202,6 +202,25 @@ impl EvaluationJournal {
         });
     }
 
+    pub(crate) fn record_rejected_count(
+        &mut self,
+        pass_id: u64,
+        reaction: EnvironmentalReactionKind,
+        stage: EvaluationStage,
+        reason: &'static str,
+        count: usize,
+    ) {
+        if count == 0 {
+            return;
+        }
+        self.records.push(EvaluationRecord {
+            pass_id,
+            reaction,
+            outcome: EvaluationRecordOutcome::Rejected { stage, reason },
+            multiplicity: count,
+        });
+    }
+
     pub(crate) fn records(&self) -> &[EvaluationRecord] {
         &self.records
     }
