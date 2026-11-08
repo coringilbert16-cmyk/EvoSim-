@@ -171,10 +171,17 @@ fn observe_field_physical_parts(
             };
             let response =
                 crate::harmonics::material_response(definition.properties, baselines, 0.0);
-            let frequency = crate::harmonics::natural_frequency_cycles_per_day(
+            let natural_frequency = crate::harmonics::natural_frequency_cycles_per_day(
                 definition.properties,
                 baselines,
             );
+            // Invalid catalog resonance parameters have no drawable frequency.
+            // Keep the observation JSON finite without changing simulation state.
+            let frequency = if natural_frequency.is_finite() && natural_frequency >= 0.0 {
+                natural_frequency
+            } else {
+                0.0
+            };
             parts.push(WorldFieldPartObservation {
                 resource: resource.clone(),
                 x: placement.x,
