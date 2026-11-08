@@ -1043,14 +1043,21 @@ mod tests {
         assert_eq!(second.deferred_pairs, 0);
     }
 
-
     #[test]
     fn bounded_cursor_pages_match_spatial_reference_for_both_orientations() {
         let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
-        field.cells[0].physical_materials.push(physical(40, "Carbon"));
-        field.cells[0].physical_materials.push(physical(10, "Oxygen"));
-        field.cells[1].physical_materials.push(physical(30, "Hydrogen"));
-        field.cells[14].physical_materials.push(physical(20, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(40, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Oxygen"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
+        field.cells[14]
+            .physical_materials
+            .push(physical(20, "Carbon"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 81);
         let bounds = vec![
             Some(MaterialSpatialBounds {
@@ -1079,22 +1086,14 @@ mod tests {
             }),
         ];
         for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
-            let (reference, _) = snapshot.spatial_pair_window(
-                &field,
-                &bounds,
-                2.1,
-                0,
-                usize::MAX,
-                orientation,
-            );
-            let expected_pairs = reference.iter().map(|pair| {
-                match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
-                        (pair.identity_left, pair.identity_right)
-                    }
-                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+            let (reference, _) =
+                snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
+            let expected_pairs = reference.iter().map(|pair| match orientation {
+                PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                    (pair.identity_left, pair.identity_right)
                 }
+                PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
             });
             let expected = expected_pairs.collect::<std::collections::BTreeSet<_>>();
             let mut cursor = SpatialPairCursor::new(&snapshot, orientation);
@@ -1106,14 +1105,12 @@ mod tests {
                 assert!(page.visited_pair_checks <= 3);
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
-                let page_pairs = page.pairs.into_iter().map(|pair| {
-                    match orientation {
-                        PairOrientation::Directed => (pair.identity_left, pair.identity_right),
-                        PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
-                            (pair.identity_left, pair.identity_right)
-                        }
-                        PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                let page_pairs = page.pairs.into_iter().map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
                     }
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
                 });
                 actual.extend(page_pairs);
                 pages += 1;
