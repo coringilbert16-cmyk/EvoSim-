@@ -216,9 +216,14 @@ impl MaterialBoundsCursor {
                 let valid = self.catalog_valid
                     && physical.is_some_and(|physical| {
                         physical.environmental_identity == record.identity.0
-                            && physical.is_realized()
                             && !physical.material.parts.is_empty()
                             && physical.material.parts.len() == record.constituent_count
+                            && physical.placements.as_ref().is_some_and(|placements| {
+                                placements.len() == record.constituent_count
+                            })
+                            && physical.realized_shapes.as_ref().is_none_or(|shapes| {
+                                shapes.len() == record.constituent_count
+                            })
                     });
                 self.current = Some(MaterialBoundsProgress::new(material_index, valid));
                 continue;
@@ -238,8 +243,10 @@ impl MaterialBoundsCursor {
                     let (name, amount) = physical.material.parts.get(progress.next_constituent)?;
                     let resource_index = *self.catalog_indices.get(name)?;
                     let resource = catalog.get(resource_index)?;
-                    if !amount.is_finite()
+                    if name.is_empty()
+                        || !amount.is_finite()
                         || *amount < 1.0
+                        || *amount >= u64::MAX as f64
                         || amount.fract() != 0.0
                         || ((*amount - 1.0).abs() > 1e-9
                             && !(physical.material.parts.len() == 1
@@ -862,6 +869,7 @@ pub(crate) struct IndexedSpatialCursorPage {
     /// Work includes anchor initialization, cell visits, and material-slot
     /// inspections. Each unit is charged before its corresponding operation.
     pub(crate) visited_work: u64,
+    pub(crate) visited_anchor_initializations: u64,
     pub(crate) visited_cell_checks: u64,
     pub(crate) visited_material_checks: u64,
     /// Number of anchor materials not yet fully traversed. This is a
@@ -955,6 +963,8 @@ impl IndexedSpatialCursor {
 
             if !self.anchor_initialized {
                 page.visited_work = page.visited_work.saturating_add(1);
+                page.visited_anchor_initializations =
+                    page.visited_anchor_initializations.saturating_add(1);
                 let expanded = bounds[self.anchor_index]
                     .and_then(|value| value.expanded(padding));
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
@@ -1768,11 +1778,9 @@ mod tests {
                 assert!(page.pairs.len() <= 2);
                 assert_eq!(
                     page.visited_work,
-                    page.visited_cell_checks
+                    page.visited_anchor_initializations
+                        + page.visited_cell_checks
                         + page.visited_material_checks
-                        + (page.visited_work
-                            - page.visited_cell_checks
-                            - page.visited_material_checks)
                 );
                 total_work += page.visited_work;
                 total_cells += page.visited_cell_checks;
