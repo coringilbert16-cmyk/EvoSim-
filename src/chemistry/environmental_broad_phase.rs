@@ -194,6 +194,55 @@ impl EnvironmentalMaterialSnapshot {
         )
     }
 
+    /// Build exact broad-phase bounds by restoring each snapshot material
+    /// with the same origin pose used by the live environmental reaction paths.
+    /// Invalid, unrealized, or stale locators produce no spatial bounds and
+    /// therefore cannot create a false candidate.
+    pub(crate) fn spatial_bounds_from_field(
+        &self,
+        field: &ActiveMaterialField,
+        catalog: &[crate::resources::BaseResource],
+    ) -> Vec<Option<MaterialSpatialBounds>> {
+        self.materials
+            .iter()
+            .map(|record| {
+                let physical = field
+                    .cells
+                    .get(record.locator.cell_index)?
+                    .physical_materials
+                    .get(record.locator.material_index)?;
+                if physical.environmental_identity != record.identity.0
+                    || !physical.is_realized()
+                    || physical.material.is_empty()
+                    || !physical.material.is_valid_for_catalog(catalog)
+                {
+                    return None;
+                }
+                let mut structure = crate::structure::OrganismStructure::new();
+                crate::material_restoration::restore_material(
+                    &mut structure,
+                    physical,
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    catalog,
+                )?;
+                let body =
+                    crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                        &structure,
+                    )?;
+                Some(MaterialSpatialBounds {
+                    min_x: body.min_x,
+                    max_x: body.max_x,
+                    min_y: body.min_y,
+                    max_y: body.max_y,
+                })
+            })
+            .collect()
+    }
+
     /// Enumerate spatially plausible material pairs using the same cell-bound
     /// query used by the live COMBINE and DISPLACEMENT discovery paths.
     ///
@@ -211,7 +260,7 @@ impl EnvironmentalMaterialSnapshot {
         limit: usize,
         orientation: PairOrientation,
     ) -> (Vec<MaterialPairRecord>, PairWindowCoverage) {
-        if bounds.len() != self.materials.len() || limit == 0 {
+        if bounds.len() != self.materials.len() {
             return (
                 Vec::new(),
                 PairWindowCoverage {
