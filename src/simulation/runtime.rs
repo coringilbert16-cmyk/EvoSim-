@@ -10,10 +10,7 @@ use tokio::process::{Child, Command};
 
 pub(crate) const HISTORY_CAPACITY: usize = 30;
 
-pub(crate) fn environment_chemistry_simulation(
-    ticks_per_second: f64,
-    running: bool,
-) -> Simulation {
+pub(crate) fn environment_chemistry_simulation(ticks_per_second: f64, running: bool) -> Simulation {
     let mut simulation = crate::environment_chemistry_experiment::build(42).simulation;
     simulation.ticks_per_second = ticks_per_second;
     simulation.running = running;
