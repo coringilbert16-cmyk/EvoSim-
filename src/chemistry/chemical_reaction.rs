@@ -950,7 +950,21 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     );
     diagnostics.progress_preserved_unsearched = preserved;
     diagnostics.progress_dissipated_checked = dissipated;
+
+    // The simulation tick identifies this BREAK evaluation pass. These
+    // operations have already passed BREAK chemistry and activation; the
+    // envelope is only the typed handoff to the unchanged BREAK scheduler.
     operations
+        .into_iter()
+        .filter_map(|operation| {
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Break,
+                operation,
+            )
+            .into_ready()
+        })
+        .collect()
 }
 
 fn environmental_break_accumulation_key(
