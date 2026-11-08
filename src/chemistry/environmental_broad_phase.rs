@@ -816,6 +816,284 @@ impl SpatialPairCursor {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BoundsCellRange {
+    min_col: usize,
+    max_col: usize,
+    row_start: isize,
+    row_count: usize,
+}
+
+impl BoundsCellRange {
+    fn new(field: &ActiveMaterialField, bounds: MaterialSpatialBounds) -> Option<Self> {
+        if field.width_cells == 0
+            || field.height_cells == 0
+            || !field.cell_size.is_finite()
+            || field.cell_size <= 0.0
+        {
+            return None;
+        }
+        let min_col = ((bounds.min_x / field.cell_size).floor() as isize).max(0) as usize;
+        let max_col = ((bounds.max_x / field.cell_size).floor() as isize)
+            .min(field.width_cells.saturating_sub(1) as isize)
+            .max(0) as usize;
+        if min_col > max_col {
+            return None;
+        }
+        let row_start = (bounds.min_y / field.cell_size).floor() as isize;
+        let row_end = (bounds.max_y / field.cell_size).floor() as isize;
+        let row_count = row_end
+            .saturating_sub(row_start)
+            .saturating_add(1)
+            .max(0) as usize;
+        Some(Self {
+            min_col,
+            max_col,
+            row_start,
+            row_count: row_count.min(field.height_cells),
+        })
+    }
+
+    fn cell_index(self, field: &ActiveMaterialField, row_offset: usize, col: usize) -> usize {
+        let row = (self.row_start + row_offset as isize)
+            .rem_euclid(field.height_cells as isize) as usize;
+        row * field.width_cells + col
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct IndexedSpatialCursorPage {
+    pub(crate) pairs: Vec<MaterialPairRecord>,
+    /// Work includes anchor initialization, cell visits, and material-slot
+    /// inspections. Each unit is charged before its corresponding operation.
+    pub(crate) visited_work: u64,
+    pub(crate) visited_cell_checks: u64,
+    pub(crate) visited_material_checks: u64,
+    /// Number of anchor materials not yet fully traversed. This is a
+    /// continuation indicator, not a count of deferred candidate pairs.
+    pub(crate) deferred_anchors: u64,
+    pub(crate) complete: bool,
+}
+
+/// Spatial-cell traversal that visits only cells reached by each material's
+/// expanded bounds, then inspects the physical materials actually stored in
+/// those cells. It preserves the existing field query semantics (X clamped,
+/// Y wrapped) and resumes at the exact cell/material slot across pages.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct IndexedSpatialCursor {
+    pass_id: u64,
+    orientation: PairOrientation,
+    field_width_cells: usize,
+    field_height_cells: usize,
+    field_cell_size_bits: u64,
+    field_cell_count: usize,
+    anchor_index: usize,
+    anchor_initialized: bool,
+    range: Option<BoundsCellRange>,
+    row_offset: usize,
+    col: usize,
+    target_slot: usize,
+    cell_loaded: bool,
+    seen_unordered_pairs: std::collections::BTreeSet<(usize, usize)>,
+    complete: bool,
+}
+
+impl IndexedSpatialCursor {
+    pub(crate) fn new(
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        orientation: PairOrientation,
+    ) -> Self {
+        Self {
+            pass_id: snapshot.pass_id,
+            orientation,
+            field_width_cells: field.width_cells,
+            field_height_cells: field.height_cells,
+            field_cell_size_bits: field.cell_size.to_bits(),
+            field_cell_count: field.cells.len(),
+            anchor_index: 0,
+            anchor_initialized: false,
+            range: None,
+            row_offset: 0,
+            col: 0,
+            target_slot: 0,
+            cell_loaded: false,
+            seen_unordered_pairs: std::collections::BTreeSet::new(),
+            complete: snapshot.materials.is_empty(),
+        }
+    }
+
+    pub(crate) fn next_page(
+        &mut self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        padding: f64,
+        work_limit: usize,
+        output_limit: usize,
+    ) -> IndexedSpatialCursorPage {
+        if snapshot.pass_id != self.pass_id
+            || bounds.len() != snapshot.materials.len()
+            || field.width_cells != self.field_width_cells
+            || field.height_cells != self.field_height_cells
+            || field.cell_size.to_bits() != self.field_cell_size_bits
+            || field.cells.len() != self.field_cell_count
+        {
+            return IndexedSpatialCursorPage {
+                deferred_anchors: snapshot
+                    .materials
+                    .len()
+                    .saturating_sub(self.anchor_index) as u64,
+                ..IndexedSpatialCursorPage::default()
+            };
+        }
+
+        let mut page = IndexedSpatialCursorPage::default();
+        while page.visited_work < work_limit as u64
+            && page.pairs.len() < output_limit
+            && !self.complete
+        {
+            if self.anchor_index >= snapshot.materials.len() {
+                self.complete = true;
+                break;
+            }
+
+            if !self.anchor_initialized {
+                page.visited_work = page.visited_work.saturating_add(1);
+                let expanded = bounds[self.anchor_index]
+                    .and_then(|value| value.expanded(padding));
+                self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
+                self.anchor_initialized = true;
+                self.row_offset = 0;
+                self.col = self.range.map_or(0, |range| range.min_col);
+                self.target_slot = 0;
+                self.cell_loaded = false;
+                if self.range.is_none_or(|range| range.row_count == 0) {
+                    self.advance_anchor(snapshot.materials.len());
+                }
+                continue;
+            }
+
+            let Some(range) = self.range else {
+                self.advance_anchor(snapshot.materials.len());
+                continue;
+            };
+            if self.row_offset >= range.row_count {
+                self.advance_anchor(snapshot.materials.len());
+                continue;
+            }
+
+            if !self.cell_loaded {
+                let cell_index = range.cell_index(field, self.row_offset, self.col);
+                page.visited_work = page.visited_work.saturating_add(1);
+                page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
+                self.cell_loaded = true;
+                self.target_slot = 0;
+                if field
+                    .cells
+                    .get(cell_index)
+                    .is_none_or(|cell| cell.physical_materials.is_empty())
+                {
+                    self.advance_cell(range);
+                }
+                continue;
+            }
+
+            let cell_index = range.cell_index(field, self.row_offset, self.col);
+            let Some(cell) = field.cells.get(cell_index) else {
+                self.advance_cell(range);
+                continue;
+            };
+            if self.target_slot >= cell.physical_materials.len() {
+                self.advance_cell(range);
+                continue;
+            }
+
+            let target_slot = self.target_slot;
+            self.target_slot += 1;
+            page.visited_work = page.visited_work.saturating_add(1);
+            page.visited_material_checks = page.visited_material_checks.saturating_add(1);
+
+            let physical = &cell.physical_materials[target_slot];
+            if physical.environmental_identity == 0 {
+                continue;
+            }
+            let identity = MaterialIdentity(physical.environmental_identity);
+            let Ok(target_index) = snapshot
+                .materials
+                .binary_search_by_key(&identity, |record| record.identity)
+            else {
+                continue;
+            };
+            let target_record = &snapshot.materials[target_index];
+            if target_record.locator.cell_index != cell_index
+                || target_record.locator.material_index != target_slot
+                || target_index == self.anchor_index
+            {
+                continue;
+            }
+
+            let anchor = &snapshot.materials[self.anchor_index];
+            match self.orientation {
+                PairOrientation::Directed => page.pairs.push(MaterialPairRecord {
+                    left: self.anchor_index,
+                    right: target_index,
+                    identity_left: anchor.identity,
+                    identity_right: target_record.identity,
+                }),
+                PairOrientation::Unordered => {
+                    let (left, right) = if (
+                        anchor.locator.cell_index,
+                        anchor.locator.material_index,
+                    ) < (
+                        target_record.locator.cell_index,
+                        target_record.locator.material_index,
+                    ) {
+                        (self.anchor_index, target_index)
+                    } else {
+                        (target_index, self.anchor_index)
+                    };
+                    if self.seen_unordered_pairs.insert((left, right)) {
+                        page.pairs.push(MaterialPairRecord {
+                            left,
+                            right,
+                            identity_left: snapshot.materials[left].identity,
+                            identity_right: snapshot.materials[right].identity,
+                        });
+                    }
+                }
+            }
+        }
+
+        self.complete = self.anchor_index >= snapshot.materials.len();
+        page.deferred_anchors =
+            snapshot.materials.len().saturating_sub(self.anchor_index) as u64;
+        page.complete = self.complete;
+        page
+    }
+
+    fn advance_cell(&mut self, range: BoundsCellRange) {
+        self.cell_loaded = false;
+        self.target_slot = 0;
+        self.col += 1;
+        if self.col > range.max_col {
+            self.row_offset += 1;
+            self.col = range.min_col;
+        }
+    }
+
+    fn advance_anchor(&mut self, material_count: usize) {
+        self.anchor_index += 1;
+        self.anchor_initialized = false;
+        self.range = None;
+        self.row_offset = 0;
+        self.col = 0;
+        self.target_slot = 0;
+        self.cell_loaded = false;
+        self.complete = self.anchor_index >= material_count;
+    }
+}
+
 /// O(1) equivalent of membership in `cells_intersecting_bounds`. It preserves
 /// the current field semantics (X clamped, Y wrapped) without allocating or
 /// traversing the full cell-query vector for each pair.
@@ -1409,6 +1687,205 @@ mod tests {
         assert!(rejected.pairs.is_empty());
         assert!(!rejected.complete);
         assert_eq!(rejected.visited_pair_checks, 0);
+    }
+
+    #[test]
+    fn indexed_cursor_matches_spatial_reference_with_bounded_work_and_both_orientations() {
+        let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+        field.cells[0]
+            .physical_materials
+            .push(physical(40, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Oxygen"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(30, "Hydrogen"));
+        field.cells[14]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        field.cells[99]
+            .physical_materials
+            .push(physical(50, "Nitrogen"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 811);
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 10.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 39.0,
+                max_x: 51.0,
+                min_y: 19.0,
+                max_y: 31.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 9.0,
+                max_x: 21.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: -1.0,
+                max_x: 11.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 89.0,
+                max_x: 91.0,
+                min_y: 89.0,
+                max_y: 91.0,
+            }),
+        ];
+
+        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+            let (reference, _) = snapshot.spatial_pair_window(
+                &field,
+                &bounds,
+                2.1,
+                0,
+                usize::MAX,
+                orientation,
+            );
+            let expected = reference
+                .into_iter()
+                .map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
+                    }
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                })
+                .collect::<std::collections::BTreeSet<_>>();
+
+            let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
+            let mut actual = std::collections::BTreeSet::new();
+            let mut total_work = 0;
+            let mut total_cells = 0;
+            let mut total_materials = 0;
+            let mut pages = 0;
+            loop {
+                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 3, 2);
+                assert!(page.visited_work <= 3);
+                assert!(page.pairs.len() <= 2);
+                assert_eq!(
+                    page.visited_work,
+                    page.visited_cell_checks
+                        + page.visited_material_checks
+                        + (page.visited_work
+                            - page.visited_cell_checks
+                            - page.visited_material_checks)
+                );
+                total_work += page.visited_work;
+                total_cells += page.visited_cell_checks;
+                total_materials += page.visited_material_checks;
+                actual.extend(page.pairs.into_iter().map(|pair| match orientation {
+                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
+                        (pair.identity_left, pair.identity_right)
+                    }
+                    PairOrientation::Unordered => (pair.identity_right, pair.identity_left),
+                }));
+                pages += 1;
+                if page.complete {
+                    assert_eq!(page.deferred_anchors, 0);
+                    break;
+                }
+                assert!(pages < 200);
+            }
+            assert_eq!(actual, expected);
+            assert!(total_cells > 0);
+            assert!(total_materials > 0);
+            let exhaustive_checks = match orientation {
+                PairOrientation::Unordered => snapshot.known_pair_count(),
+                PairOrientation::Directed => snapshot.known_directed_pair_count(),
+            };
+            assert!(total_work < exhaustive_checks);
+        }
+    }
+
+    #[test]
+    fn indexed_cursor_empty_pages_resume_and_reject_stale_field_or_snapshot() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        for identity in 1..=3 {
+            field.cells[0]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 812);
+        let bounds = vec![None; 3];
+        let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, PairOrientation::Directed);
+        let first = cursor.next_page(&snapshot, &field, &bounds, 0.0, 1, 8);
+        assert!(first.pairs.is_empty());
+        assert!(!first.complete);
+        assert_eq!(first.visited_work, 1);
+
+        let refreshed = EnvironmentalMaterialSnapshot::from_field(&field, 813);
+        let stale = cursor.next_page(&refreshed, &field, &bounds, 0.0, 8, 8);
+        assert!(stale.pairs.is_empty());
+        assert!(!stale.complete);
+        assert_eq!(stale.visited_work, 0);
+
+        let mut changed_field = field.clone();
+        changed_field.cell_size += 1.0;
+        let stale_field =
+            cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, 8, 8);
+        assert!(stale_field.pairs.is_empty());
+        assert!(!stale_field.complete);
+        assert_eq!(stale_field.visited_work, 0);
+    }
+
+    #[test]
+    fn bounds_cell_range_matches_existing_field_query_membership() {
+        let field = ActiveMaterialField::new(40.0, 40.0, 10.0);
+        let bounds_cases = [
+            MaterialSpatialBounds {
+                min_x: -1.0,
+                max_x: 11.0,
+                min_y: -1.0,
+                max_y: 11.0,
+            },
+            MaterialSpatialBounds {
+                min_x: 9.0,
+                max_x: 21.0,
+                min_y: 29.0,
+                max_y: 51.0,
+            },
+            MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 100.0,
+                min_y: -100.0,
+                max_y: 100.0,
+            },
+            MaterialSpatialBounds {
+                min_x: 40.0,
+                max_x: 60.0,
+                min_y: 0.0,
+                max_y: 10.0,
+            },
+        ];
+        for bounds in bounds_cases {
+            let expected = field.cells_intersecting_bounds(
+                bounds.min_x,
+                bounds.max_x,
+                bounds.min_y,
+                bounds.max_y,
+            );
+            let range = BoundsCellRange::new(&field, bounds);
+            let actual = range.map_or_else(Vec::new, |range| {
+                let mut cells = Vec::new();
+                for row_offset in 0..range.row_count {
+                    for col in range.min_col..=range.max_col {
+                        cells.push(range.cell_index(&field, row_offset, col));
+                    }
+                }
+                cells
+            });
+            assert_eq!(actual, expected);
+        }
     }
 
     fn realized_physical(
