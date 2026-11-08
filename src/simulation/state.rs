@@ -757,6 +757,9 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) activation_below_threshold: u64,
     /// Trial validation ended before the activation barrier status was available.
     pub(crate) activation_status_unavailable: u64,
+    /// Valid replacement contacts whose activation chemistry could not be evaluated.
+    #[serde(default)]
+    pub(crate) activation_accumulation_unavailable: u64,
     /// Trial graph builds attempted and rejected after contact activation was sufficient.
     pub(crate) trial_build_rejections_after_activation: u64,
     /// Activated trials rejected because the stored A-B bond energy no longer matched its graph.
@@ -823,6 +826,9 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.activation_status_unavailable = self
             .activation_status_unavailable
             .saturating_add(tick.activation_status_unavailable);
+        self.activation_accumulation_unavailable = self
+            .activation_accumulation_unavailable
+            .saturating_add(tick.activation_accumulation_unavailable);
         self.trial_build_rejections_after_activation = self
             .trial_build_rejections_after_activation
             .saturating_add(tick.trial_build_rejections_after_activation);
