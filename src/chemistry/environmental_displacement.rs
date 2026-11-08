@@ -2438,6 +2438,26 @@ mod tests {
             &mut discovery_work,
             &mut discovery_diagnostics,
         );
+        assert_eq!(
+            discovery_diagnostics.evaluation_outcomes.ready,
+            operations.len(),
+            "the shared lifecycle journal must count every ready native displacement operation"
+        );
+        assert_eq!(
+            discovery_diagnostics.evaluation_outcomes.deferred as u64,
+            discovery_diagnostics.activation_below_threshold,
+            "below-threshold activation must remain deferred"
+        );
+        assert_eq!(
+            discovery_diagnostics.evaluation_outcomes.rejected as u64,
+            discovery_diagnostics
+                .replacement_contact_searches
+                .saturating_sub(discovery_diagnostics.replacement_contacts_found)
+                .saturating_add(discovery_diagnostics.activation_status_unavailable)
+                .saturating_add(discovery_diagnostics.activation_accumulation_unavailable)
+                .saturating_add(discovery_diagnostics.trial_build_rejections_after_activation),
+            "every evaluated rejection stage must be represented exactly once"
+        );
         assert!(
             accumulation.contains_key(&key) || !operations.is_empty(),
             "field scheduler should discover and accumulate the validated contact"
