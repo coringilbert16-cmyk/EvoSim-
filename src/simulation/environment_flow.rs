@@ -918,17 +918,29 @@ mod tests {
         let material = PhysicalMaterial::realized(
             crate::resources::Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
             },
             vec![
-                crate::structure::Placement { x: 998.8, y: 500.0, rotation_radians: 0.0 },
-                crate::structure::Placement { x: 999.8, y: 500.0, rotation_radians: 0.25 },
+                crate::structure::Placement {
+                    x: 998.8,
+                    y: 500.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 999.8,
+                    y: 500.0,
+                    rotation_radians: 0.25,
+                },
             ],
             &catalog,
-        ).expect("realized carbon-hydrogen compound should realize");
+        )
+        .expect("realized carbon-hydrogen compound should realize");
         let moved = translated(&material, 1.5, 0.0, 1000.0).unwrap();
         let placements = moved.placements.as_ref().unwrap();
-        assert!(placements.iter().all(|p| p.x > 1000.0));
+        assert!(placements.iter().all(|placement| placement.x > 1000.0));
         assert!(((placements[1].x - placements[0].x) - 1.0).abs() < 1e-9);
         assert!((material_center(&moved, 1000.0, 1000.0).unwrap().0 - 0.8).abs() < 1e-9);
     }
@@ -939,12 +951,18 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![crate::structure::Placement { x: 999.99, y: 500.0, rotation_radians: 0.0 }],
+            vec![crate::structure::Placement {
+                x: 999.99,
+                y: 500.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).expect("catalog carbon should realize");
+        )
+        .expect("catalog carbon should realize");
         let source = field.index_for_position(999.99, 500.0).unwrap();
         assert!(field.deposit_physical(999.99, 500.0, material, &catalog));
         let before = field.total_material();
+
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
         assert_eq!(field.total_material(), before);
         let objects: Vec<_> = field
@@ -959,7 +977,10 @@ mod tests {
             destination, source,
             "crossing the seam must transfer to the opposite edge cell"
         );
-        assert!(destination % field.width_cells == 0, "material should re-enter at the left edge");
+        assert!(
+            destination % field.width_cells == 0,
+            "material should re-enter at the left edge"
+        );
     }
 
     #[test]
@@ -968,9 +989,14 @@ mod tests {
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![crate::structure::Placement { x: 500.0, y: 999.0, rotation_radians: 0.0 }],
+            vec![crate::structure::Placement {
+                x: 500.0,
+                y: 999.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
-        ).expect("catalog carbon should realize");
+        )
+        .expect("catalog carbon should realize");
         assert!(field.deposit_physical(500.0, 999.0, material, &catalog));
         let before = field.total_material();
         let _ = transport_field(&mut field, &catalog, 1000.0, 1000.0);
