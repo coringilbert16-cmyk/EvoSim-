@@ -639,14 +639,20 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         let cols: Vec<usize> = if (max_col - min_col + 1) as usize >= flow_cols {
             (0..flow_cols).collect()
         } else {
-            (min_col..=max_col).map(|col| col.rem_euclid(flow_cols as isize) as usize).collect()
+            (min_col..=max_col)
+                .map(|col| col.rem_euclid(flow_cols as isize) as usize)
+                .collect()
         };
         let min_row = (((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize).max(0);
         let max_row = (((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize)
             .min(flow_rows.saturating_sub(1) as isize);
-        if min_row > max_row { continue; }
+        if min_row > max_row {
+            continue;
+        }
         for row in min_row as usize..=max_row as usize {
-            for &col in &cols { obstacle_bins[row * flow_cols + col].push(obstacle); }
+            for &col in &cols {
+                obstacle_bins[row * flow_cols + col].push(obstacle);
+            }
         }
     }
     let mut staged = Vec::new();
