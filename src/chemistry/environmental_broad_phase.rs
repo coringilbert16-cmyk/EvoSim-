@@ -1059,11 +1059,7 @@ impl IndexedSpatialCursor {
                     let lower_anchor_reaches_higher = bounds[left]
                         .and_then(|value| value.expanded(padding))
                         .is_some_and(|value| {
-                            bounds_include_cell(
-                                field,
-                                value,
-                                snapshot.materials[right].locator.cell_index,
-                            )
+                            bounds_include_cell(field, value, snapshot.materials[right].locator.cell_index)
                         });
                     if self.anchor_index < target_index || !lower_anchor_reaches_higher {
                         page.pairs.push(MaterialPairRecord {
@@ -1785,9 +1781,11 @@ mod tests {
                 total_work += page.visited_work;
                 total_cells += page.visited_cell_checks;
                 total_materials += page.visited_material_checks;
-                actual.extend(page.pairs.into_iter().map(|pair| {
-                    (pair.identity_left, pair.identity_right)
-                }));
+                actual.extend(
+                    page.pairs
+                        .into_iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right)),
+                );
                 pages += 1;
                 if page.complete {
                     assert_eq!(page.deferred_anchors, 0);
@@ -1800,8 +1798,6 @@ mod tests {
             assert!(total_cells > 0);
             assert!(total_materials > 0);
             assert!(total_work > 0);
-            assert!(total_cells > 0);
-            assert!(total_materials > 0);
         }
     }
 
