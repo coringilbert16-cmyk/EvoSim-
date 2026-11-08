@@ -1,8 +1,6 @@
 //! Resumable construction of the environmental material/bond snapshot.
 //! Every cell, material, and bond inspection consumes one unit of caller budget.
 
-use std::collections::BTreeMap;
-
 use crate::environment::ActiveMaterialField;
 use crate::environmental_broad_phase::EnvironmentalMaterialSnapshot;
 use crate::environmental_interaction::{
@@ -33,8 +31,8 @@ pub(crate) struct EnvironmentalSnapshotCursor {
     next_cell: usize,
     next_material: usize,
     active_bond: Option<(usize, usize, usize)>,
-    materials: BTreeMap<MaterialIdentity, MaterialRecord>,
-    bonds: BTreeMap<BondRef, ExistingBondRecord>,
+    materials: Vec<MaterialRecord>,
+    bonds: Vec<ExistingBondRecord>,
     cell_visits: u64,
     material_visits: u64,
     unassigned_materials: u64,
@@ -50,8 +48,8 @@ impl EnvironmentalSnapshotCursor {
             next_cell: 0,
             next_material: 0,
             active_bond: None,
-            materials: BTreeMap::new(),
-            bonds: BTreeMap::new(),
+            materials: Vec::new(),
+            bonds: Vec::new(),
             cell_visits: 0,
             material_visits: 0,
             unassigned_materials: 0,
@@ -118,7 +116,7 @@ impl EnvironmentalSnapshotCursor {
                             endpoint_b: bond.endpoint_b,
                             bond_energy: bond.bond_energy,
                         };
-                        self.bonds.insert(record.reference(), record);
+                        self.bonds.push(record);
                     }
                 }
                 let next = bond_index + 1;
@@ -166,7 +164,7 @@ impl EnvironmentalSnapshotCursor {
                     state_version: 0,
                     constituent_count: physical.material.parts.len(),
                 };
-                self.materials.insert(identity, record);
+                self.materials.push(record);
                 if physical
                     .internal_connections
                     .as_ref()
@@ -181,11 +179,15 @@ impl EnvironmentalSnapshotCursor {
         if self.invalidated {
             page.status = Some(SnapshotCursorStatus::Invalidated);
         } else if self.complete {
+            let mut materials = std::mem::take(&mut self.materials);
+            materials.sort_by_key(|material| material.identity);
+            let mut existing_bonds = std::mem::take(&mut self.bonds);
+            existing_bonds.sort_by_key(|bond| bond.reference());
             let snapshot = EnvironmentalMaterialSnapshot {
                 pass_id: self.pass_id,
                 field_revision: self.field_revision,
-                materials: std::mem::take(&mut self.materials).into_values().collect(),
-                existing_bonds: std::mem::take(&mut self.bonds).into_values().collect(),
+                materials,
+                existing_bonds,
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
                 unassigned_materials: self.unassigned_materials,
