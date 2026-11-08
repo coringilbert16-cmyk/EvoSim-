@@ -953,7 +953,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.progress_dissipated_checked = dissipated;
 
     use crate::environmental_evaluation::{
-        EnvironmentalReactionEvaluation, EnvironmentalReactionKind, EvaluationStage,
+        EnvironmentalReactionKind, EvaluationStage,
     };
     let rejected_candidates = diagnostics
         .candidate_geometry_rejections
@@ -992,11 +992,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         EvaluationStage::CandidateValidation,
         usize::try_from(diagnostics.stale_progress_invalidated).unwrap_or(usize::MAX),
     );
-    evaluation_journal.record_ready_count(
-        tick,
-        EnvironmentalReactionKind::Break,
-        operations.len(),
-    );
+    evaluation_journal.record_ready_count(tick, EnvironmentalReactionKind::Break, operations.len());
     diagnostics.evaluation_outcomes = evaluation_journal.counts();
 
     // The simulation tick identifies this BREAK evaluation pass. These
