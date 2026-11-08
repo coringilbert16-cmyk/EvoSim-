@@ -165,7 +165,7 @@ impl ActiveMaterialField {
         (col < self.width_cells && row < self.height_cells).then_some((row, col))
     }
 
-        pub fn index_for_position(&self, x: f64, y: f64) -> Option<usize> {
+    pub fn index_for_position(&self, x: f64, y: f64) -> Option<usize> {
         self.row_col_for_position(x, y)
             .map(|(row, col)| row * self.width_cells + col)
     }
@@ -216,7 +216,7 @@ impl ActiveMaterialField {
         indices
     }
 
-        /// Return field cells whose spatial bounds intersect the supplied
+    /// Return field cells whose spatial bounds intersect the supplied
     /// axis-aligned bounds. Horizontal coordinates wrap; vertical coordinates
     /// are clipped at the hard top and bottom boundaries.
     pub(crate) fn cells_intersecting_bounds(
@@ -263,7 +263,7 @@ impl ActiveMaterialField {
         indices
     }
 
-        /// Return at most `limit` cells intersecting the supplied bounds without
+    /// Return at most `limit` cells intersecting the supplied bounds without
     /// materializing the full spatial query. Horizontal columns wrap and vertical
     /// rows are clipped to the hard world boundaries.
     pub(crate) fn cells_intersecting_bounds_limited(
@@ -321,7 +321,7 @@ impl ActiveMaterialField {
         indices
     }
 
-        /// Remove already-realized physical constituents only when their entire
+    /// Remove already-realized physical constituents only when their entire
     /// realized geometry is inside one accessible enclosed region. The body
     /// bounds are only a spatial index; enclosed topology is authoritative.
     pub(crate) fn take_contained_physical_materials_in_regions(
