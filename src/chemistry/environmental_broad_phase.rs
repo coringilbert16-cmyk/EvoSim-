@@ -174,10 +174,12 @@ impl MaterialBoundsCursor {
             catalog_indices,
             catalog_valid,
             catalog_len: catalog.len(),
-            known_work: snapshot.materials.iter().fold(
-                snapshot.materials.len() as u64,
-                |total, material| total.saturating_add(material.constituent_count as u64),
-            ),
+            known_work: snapshot
+                .materials
+                .iter()
+                .fold(snapshot.materials.len() as u64, |total, material| {
+                    total.saturating_add(material.constituent_count as u64)
+                }),
             visited_work: 0,
             complete: snapshot.materials.is_empty(),
         }
