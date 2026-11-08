@@ -201,10 +201,7 @@ impl EnvironmentalSnapshotCursor {
             }
 
             if !self.materials_finalized {
-                let next_record = self
-                    .finalizing_materials
-                    .as_mut()
-                    .and_then(VecDeque::pop_front);
+                let next_record = self.finalizing_materials.as_mut().and_then(VecDeque::pop_front);
                 if let Some(record) = next_record {
                     self.sorted_materials.push(record);
                     self.consume_work(&mut page);
@@ -220,10 +217,7 @@ impl EnvironmentalSnapshotCursor {
             }
 
             if !self.bonds_finalized {
-                let next_record = self
-                    .finalizing_bonds
-                    .as_mut()
-                    .and_then(VecDeque::pop_front);
+                let next_record = self.finalizing_bonds.as_mut().and_then(VecDeque::pop_front);
                 if let Some(record) = next_record {
                     self.sorted_bonds.push(record);
                     self.consume_work(&mut page);
