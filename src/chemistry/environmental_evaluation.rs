@@ -121,6 +121,91 @@ impl<T> EnvironmentalReactionEvaluation<T> {
     }
 }
 
+/// Payload-free lifecycle entry suitable for retaining rejected, deferred,
+/// and stale assessments alongside ready operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct EvaluationRecord {
+    pub(crate) pass_id: u64,
+    pub(crate) reaction: EnvironmentalReactionKind,
+    pub(crate) outcome: EvaluationRecordOutcome,
+}
+
+/// Lifecycle state without a reaction-specific operation payload.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EvaluationRecordOutcome {
+    Ready,
+    Rejected {
+        stage: EvaluationStage,
+        reason: &'static str,
+    },
+    Deferred {
+        stage: EvaluationStage,
+        reason: &'static str,
+    },
+    Stale {
+        stage: EvaluationStage,
+    },
+}
+
+impl<T> From<EnvironmentalReactionEvaluation<T>> for EvaluationRecord {
+    fn from(evaluation: EnvironmentalReactionEvaluation<T>) -> Self {
+        let outcome = match evaluation.outcome {
+            EvaluationOutcome::Ready(_) => EvaluationRecordOutcome::Ready,
+            EvaluationOutcome::Rejected { stage, reason } => {
+                EvaluationRecordOutcome::Rejected { stage, reason }
+            }
+            EvaluationOutcome::Deferred { stage, reason } => {
+                EvaluationRecordOutcome::Deferred { stage, reason }
+            }
+            EvaluationOutcome::Stale { stage } => EvaluationRecordOutcome::Stale { stage },
+        };
+        Self {
+            pass_id: evaluation.pass_id,
+            reaction: evaluation.reaction,
+            outcome,
+        }
+    }
+}
+
+/// Append-only record sink for one evaluation pass. It deliberately stores
+/// metadata rather than native payloads, so recording an outcome cannot alter
+/// scheduling, retain invalid operations, or change reaction-specific state.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct EvaluationJournal {
+    records: Vec<EvaluationRecord>,
+}
+
+impl EvaluationJournal {
+    pub(crate) fn record<T>(&mut self, evaluation: EnvironmentalReactionEvaluation<T>) {
+        self.records.push(evaluation.into());
+    }
+
+    pub(crate) fn records(&self) -> &[EvaluationRecord] {
+        &self.records
+    }
+
+    pub(crate) fn counts(&self) -> EvaluationOutcomeCounts {
+        let mut counts = EvaluationOutcomeCounts::default();
+        for record in &self.records {
+            match record.outcome {
+                EvaluationRecordOutcome::Ready => counts.ready += 1,
+                EvaluationRecordOutcome::Rejected { .. } => counts.rejected += 1,
+                EvaluationRecordOutcome::Deferred { .. } => counts.deferred += 1,
+                EvaluationRecordOutcome::Stale { .. } => counts.stale += 1,
+            }
+        }
+        counts
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct EvaluationOutcomeCounts {
+    pub(crate) ready: usize,
+    pub(crate) rejected: usize,
+    pub(crate) deferred: usize,
+    pub(crate) stale: usize,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +313,64 @@ mod tests {
         assert!(deferred.into_ready().is_none());
         assert!(rejected.into_ready().is_none());
         assert!(stale.into_ready().is_none());
+    }
+
+    #[test]
+    fn journal_retains_all_lifecycle_outcomes_without_native_payloads() {
+        let mut journal = EvaluationJournal::default();
+        journal.record(EnvironmentalReactionEvaluation::ready(
+            41,
+            EnvironmentalReactionKind::Combine,
+            7_u8,
+        ));
+        journal.record(EnvironmentalReactionEvaluation::<u8>::rejected(
+            41,
+            EnvironmentalReactionKind::Combine,
+            EvaluationStage::Chemistry,
+            "candidate_evaluation_returned_none",
+        ));
+        journal.record(EnvironmentalReactionEvaluation::<u8>::deferred(
+            41,
+            EnvironmentalReactionKind::Combine,
+            EvaluationStage::CandidateValidation,
+            "bounded_pair_window_exhausted",
+        ));
+        journal.record(EnvironmentalReactionEvaluation::<u8>::stale(
+            41,
+            EnvironmentalReactionKind::Combine,
+            EvaluationStage::CommitRevalidation,
+        ));
+
+        assert_eq!(
+            journal.counts(),
+            EvaluationOutcomeCounts {
+                ready: 1,
+                rejected: 1,
+                deferred: 1,
+                stale: 1,
+            }
+        );
+        assert_eq!(journal.records().len(), 4);
+        assert_eq!(
+            journal.records()[1].outcome,
+            EvaluationRecordOutcome::Rejected {
+                stage: EvaluationStage::Chemistry,
+                reason: "candidate_evaluation_returned_none",
+            }
+        );
+        assert_eq!(
+            journal.records()[2].outcome,
+            EvaluationRecordOutcome::Deferred {
+                stage: EvaluationStage::CandidateValidation,
+                reason: "bounded_pair_window_exhausted",
+            }
+        );
+        assert_eq!(
+            journal.records()[3].outcome,
+            EvaluationRecordOutcome::Stale {
+                stage: EvaluationStage::CommitRevalidation,
+            }
+        );
     }
 
     #[test]
