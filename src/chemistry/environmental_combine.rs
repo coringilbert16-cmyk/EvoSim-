@@ -1568,8 +1568,8 @@ mod tests {
                         &mut accumulation,
                         &mut updated,
                         &mut operations,
-                    0,
-                    &mut evaluation_journal,
+                        0,
+                        &mut evaluation_journal,
                     );
                     let outcome = if !operations.is_empty() {
                         "activated"
@@ -1723,7 +1723,7 @@ mod tests {
                 let mut updated = BTreeSet::new();
                 let mut operations = Vec::new();
                 let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
+                    crate::environmental_evaluation::EvaluationJournal::default();
                 chemical_step(
                     &simulation.environment,
                     &mut simulation.chemistry_library,
@@ -1740,8 +1740,8 @@ mod tests {
                     &mut accumulation,
                     &mut updated,
                     &mut operations,
-                0,
-                &mut evaluation_journal,
+                    0,
+                    &mut evaluation_journal,
                 );
                 if !accumulation.is_empty() || !operations.is_empty() {
                     chemical_progress += 1;
@@ -2231,7 +2231,7 @@ mod tests {
                     let mut updated = BTreeSet::new();
                     let mut operations = Vec::new();
                     let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
+                        crate::environmental_evaluation::EvaluationJournal::default();
                     chemical_step(
                         &simulation.environment,
                         &mut simulation.chemistry_library,
@@ -2248,8 +2248,8 @@ mod tests {
                         &mut accumulation,
                         &mut updated,
                         &mut operations,
-                    0,
-                    &mut evaluation_journal,
+                        0,
+                        &mut evaluation_journal,
                     );
                     if !accumulation.is_empty() || !operations.is_empty() {
                         fixture = Some((base, resource.name.clone(), original_b_energy));
@@ -2726,7 +2726,7 @@ mod tests {
                 let mut updated = BTreeSet::new();
                 let mut operations = Vec::new();
                 let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
+                    crate::environmental_evaluation::EvaluationJournal::default();
                 chemical_step(
                     &simulation.environment,
                     &mut simulation.chemistry_library,
@@ -2743,8 +2743,8 @@ mod tests {
                     &mut accumulation,
                     &mut updated,
                     &mut operations,
-                0,
-                &mut evaluation_journal,
+                    0,
+                    &mut evaluation_journal,
                 );
                 let outcome = if !operations.is_empty() {
                     chemical_progress += 1;
@@ -3185,7 +3185,7 @@ mod tests {
         let mut direct_updated = BTreeSet::new();
         let mut direct_operations = Vec::new();
         let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
+            crate::environmental_evaluation::EvaluationJournal::default();
         chemical_step(
             &simulation.environment,
             &mut simulation.chemistry_library,
@@ -3202,8 +3202,8 @@ mod tests {
             &mut direct_accumulation,
             &mut direct_updated,
             &mut direct_operations,
-        0,
-        &mut evaluation_journal,
+            0,
+            &mut evaluation_journal,
         );
         assert!(
             !direct_accumulation.is_empty() || !direct_operations.is_empty(),
@@ -3911,7 +3911,7 @@ mod tests {
         let mut updated_keys = BTreeSet::new();
         let mut operations = Vec::new();
         let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
+            crate::environmental_evaluation::EvaluationJournal::default();
         chemical_step(
             &simulation.environment,
             &mut chemistry_library,
@@ -3928,8 +3928,8 @@ mod tests {
             &mut accumulation,
             &mut updated_keys,
             &mut operations,
-        0,
-        &mut evaluation_journal,
+            0,
+            &mut evaluation_journal,
         );
         assert_eq!(
             chemistry_library.len(),
