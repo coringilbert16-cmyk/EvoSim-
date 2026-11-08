@@ -755,6 +755,21 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     /// Generated endpoint pairs rejected by availability, distance, or facing checks.
     #[serde(default)]
     pub(crate) replacement_candidate_geometry_rejections: u64,
+    /// Geometry rejections caused by unavailable endpoints.
+    #[serde(default)]
+    pub(crate) replacement_geometry_rejected_unavailable_endpoint: u64,
+    /// Geometry rejections caused by non-finite or negative endpoint distance.
+    #[serde(default)]
+    pub(crate) replacement_geometry_rejected_invalid_distance: u64,
+    /// Geometry rejections caused by endpoint distance exceeding contact tolerance.
+    #[serde(default)]
+    pub(crate) replacement_geometry_rejected_distance_too_large: u64,
+    /// Geometry rejections caused by non-finite facing compatibility.
+    #[serde(default)]
+    pub(crate) replacement_geometry_rejected_invalid_facing: u64,
+    /// Geometry rejections caused by non-positive facing compatibility.
+    #[serde(default)]
+    pub(crate) replacement_geometry_rejected_nonpositive_facing: u64,
     /// Geometrically valid endpoint pairs rejected by the ordinary COMBINE evaluator.
     #[serde(default)]
     pub(crate) replacement_candidate_evaluation_rejections: u64,
@@ -838,6 +853,11 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.replacement_candidate_geometry_rejections = self
             .replacement_candidate_geometry_rejections
             .saturating_add(tick.replacement_candidate_geometry_rejections);
+        self.replacement_geometry_rejected_unavailable_endpoint = self.replacement_geometry_rejected_unavailable_endpoint.saturating_add(tick.replacement_geometry_rejected_unavailable_endpoint);
+        self.replacement_geometry_rejected_invalid_distance = self.replacement_geometry_rejected_invalid_distance.saturating_add(tick.replacement_geometry_rejected_invalid_distance);
+        self.replacement_geometry_rejected_distance_too_large = self.replacement_geometry_rejected_distance_too_large.saturating_add(tick.replacement_geometry_rejected_distance_too_large);
+        self.replacement_geometry_rejected_invalid_facing = self.replacement_geometry_rejected_invalid_facing.saturating_add(tick.replacement_geometry_rejected_invalid_facing);
+        self.replacement_geometry_rejected_nonpositive_facing = self.replacement_geometry_rejected_nonpositive_facing.saturating_add(tick.replacement_geometry_rejected_nonpositive_facing);
         self.replacement_candidate_evaluation_rejections = self
             .replacement_candidate_evaluation_rejections
             .saturating_add(tick.replacement_candidate_evaluation_rejections);
