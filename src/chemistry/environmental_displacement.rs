@@ -1073,7 +1073,8 @@ pub(crate) fn accumulate_environmental(
                                     .saturating_add(census.alternatives.len() as u64);
                                 if census.work_limit_reached {
                                     diagnostics.replacement_alternative_audits_truncated =
-                                        diagnostics.replacement_alternative_audits_truncated
+                                        diagnostics
+                                            .replacement_alternative_audits_truncated
                                             .saturating_add(1);
                                 }
                                 // Bond potential depends on the reactant pair, not
