@@ -359,6 +359,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         );
         torque += part_mass
@@ -414,6 +415,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         );
         let left = obstacle_adjusted_velocity(
@@ -423,6 +425,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         );
         let up = obstacle_adjusted_velocity(
@@ -432,6 +435,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         );
         let down = obstacle_adjusted_velocity(
@@ -441,6 +445,7 @@ fn angular_displacement(
             source_cell,
             source_index,
             obstacles,
+            width,
             height,
         );
         let dv_y_dx = (right.y - left.y) / (2.0 * epsilon);
@@ -1022,7 +1027,8 @@ mod tests {
             source_cell: usize,
             source_index: usize,
             obstacles: &[Obstacle],
-            height: f64,
+            width: f64,
+            _height: f64,
         ) -> Velocity {
             for obstacle in obstacles {
                 if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
@@ -1031,8 +1037,8 @@ mod tests {
                 if obstacle.solidity <= 1e-6 {
                     continue;
                 }
-                let dx = x - obstacle.x;
-                let dy = (y - obstacle.y + height * 0.5).rem_euclid(height) - height * 0.5;
+                let dx = periodic_delta(x - obstacle.x, width);
+                let dy = y - obstacle.y;
                 let distance = dx.hypot(dy).max(1e-9);
                 let radius = obstacle.radius.max(0.5);
                 if distance < radius * 2.5 {
@@ -1143,6 +1149,7 @@ mod tests {
                     source_cell,
                     source_index,
                     &obstacles,
+                    1000.0,
                     height,
                 );
                 assert_eq!(actual, expected, "output differs at ({x}, {y})");
