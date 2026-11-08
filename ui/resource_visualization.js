@@ -292,7 +292,7 @@
     if (!world) return;
     updateChemistryReadout(world);
     const sunlightBrightness = Number.isFinite(world.sunlight_brightness)
-      ? Math.max(0.1, Math.min(1.0, world.sunlight_brightness)) : 1.0;
+      ? Math.max(0.4, Math.min(1.0, world.sunlight_brightness)) : 1.0;
     const sunlightPercent = Math.round(sunlightBrightness * 100);
     const sunlightLevel = document.getElementById('ev-sunlight-level');
     if (sunlightLevel) sunlightLevel.textContent = `SUNLIGHT ${sunlightPercent}%`;
@@ -341,11 +341,8 @@
         bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
     }
     ctx.restore();
-    ctx.save();
-    ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(topLeft.x, topLeft.y, bottomRight.x - topLeft.x, bottomRight.y - topLeft.y);
-    ctx.restore();
+    // Keep the black world perimeter drawn by renderWaterField. Do not add a
+    // second pale outline over it: that was the unwanted white boundary.
   };
 
   renderStructure = function resourceAwareStructureRender() {
