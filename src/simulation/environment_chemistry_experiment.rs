@@ -518,8 +518,8 @@ fn randomized_pile_centers(
             .iter()
             .zip(pile_radii.iter())
             .all(|((x, y), existing_radius)| {
-                let vertical = (candidate.1 - *y + height * 0.5).rem_euclid(height) - height * 0.5;
-                (candidate.0 - *x).hypot(vertical) >= radius + *existing_radius + 3.0
+                let horizontal = (candidate.0 - *x + width * 0.5).rem_euclid(width) - width * 0.5;
+                (horizontal).hypot(candidate.1 - *y) >= radius + *existing_radius + 3.0
             });
         if separated {
             centers.push(candidate);
@@ -565,9 +565,8 @@ mod tests {
             first.pile_sizes.iter().sum::<usize>(),
             ENVIRONMENT_OBJECT_COUNT
         );
-        assert!((3..=10).contains(&first.pile_sizes.len()));
-        assert!(first.pile_sizes.iter().all(|size| *size >= 1));
-        assert!(first.pile_sizes.iter().any(|size| *size < 6 || *size > 20));
+        assert_eq!(first.pile_sizes.len(), 24);
+        assert!(first.pile_sizes.iter().all(|size| (53..=54).contains(size)));
         assert!(first.simulation.organisms.is_empty());
         assert!(first.simulation.hotspot.is_some());
         assert_eq!(first.simulation.environment.width, 250.0);
