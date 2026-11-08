@@ -430,7 +430,7 @@ fn chemical_step(
     tick: u64,
     journal: &mut crate::environmental_evaluation::EvaluationJournal,
 ) {
-    macro_rules! reject_step! {
+    macro_rules! reject_step {
         () => {{
             journal.record(
                 crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::rejected(
