@@ -342,7 +342,7 @@ mod viewer_asset_acceptance_tests {
         assert!(PAGE.contains("S-shaped spine"));
         assert!(PAGE.contains("#075985"));
         assert!(PAGE.contains("renderHotspot"));
-        assert!(PAGE.contains("data-zoom"));
+        assert!(RESOURCE_RENDERER.contains("data-zoom"));
         assert!(THEME.contains("#0d0d0d"));
         assert!(THEME.contains(".ev-world-column"));
         assert!(RESOURCE_RENDERER.contains("physical_parts"));
