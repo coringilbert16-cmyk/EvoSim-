@@ -825,7 +825,23 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.budget_exhausted = *remaining_discovery_work == 0;
     diagnostics.accumulation_keys_updated = updated_keys.len();
     record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
+
+    // The simulation tick is the stable identity of this COMBINE evaluation
+    // pass. At this boundary every operation has already passed the existing
+    // COMBINE chemistry, activation accumulation, and energy checks; the
+    // envelope records readiness for the unchanged reaction-specific scheduler.
+    // Discovery and all COMBINE policy remain in their existing implementation.
     operations
+        .into_iter()
+        .filter_map(|operation| {
+            crate::chemistry::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+                tick,
+                crate::chemistry::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                operation,
+            )
+            .into_ready()
+        })
+        .collect()
 }
 
 pub(crate) fn schedule_environmental_operations(
