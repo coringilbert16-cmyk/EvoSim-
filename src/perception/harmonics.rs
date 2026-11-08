@@ -1868,13 +1868,18 @@ mod tests {
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![crate::structure::Placement {
                 x: boundary.x + 40.0,
-                y: boundary.y,
+                y: boundary.y.clamp(0.0, 999.0),
                 rotation_radians: 0.0,
             }],
             &catalog,
         )
         .unwrap();
-        assert!(field.deposit_physical(boundary.x + 40.0, boundary.y, source, &catalog));
+        assert!(field.deposit_physical(
+            boundary.x + 40.0,
+            boundary.y.clamp(0.0, 999.0),
+            source,
+            &catalog
+        ));
         let coupled = genome_cavity_spectrum(&catalog, &field, &cavity);
 
         let baseline_fundamental = baseline
