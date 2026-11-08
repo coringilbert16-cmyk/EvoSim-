@@ -1178,6 +1178,45 @@ pub(crate) fn accumulate_environmental(
 
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
 
+    // Record each lifecycle outcome without retaining or changing the native
+    // atomic replacement operation. Unsearched work is not classified as a
+    // rejection or deferral because the bounded scan has not evaluated it.
+    let mut evaluation_journal = crate::environmental_evaluation::EvaluationJournal::default();
+    let reaction = crate::environmental_evaluation::EnvironmentalReactionKind::Displacement;
+    let candidate_rejections = diagnostics
+        .replacement_contact_searches
+        .saturating_sub(diagnostics.replacement_contacts_found);
+    evaluation_journal.record_rejected_count(
+        tick,
+        reaction,
+        crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+        "no_valid_replacement_contact",
+        candidate_rejections as usize,
+    );
+    evaluation_journal.record_deferred_count(
+        tick,
+        reaction,
+        crate::environmental_evaluation::EvaluationStage::Activation,
+        "below_displacement_activation_threshold",
+        diagnostics.activation_below_threshold as usize,
+    );
+    evaluation_journal.record_rejected_count(
+        tick,
+        reaction,
+        crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+        "activation_status_unavailable",
+        diagnostics.activation_status_unavailable as usize,
+    );
+    evaluation_journal.record_rejected_count(
+        tick,
+        reaction,
+        crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+        "replacement_trial_validation_failed",
+        diagnostics.trial_build_rejections_after_activation as usize,
+    );
+    evaluation_journal.record_ready_count(tick, reaction, operations.len());
+    diagnostics.evaluation_outcomes = evaluation_journal.counts();
+
     // The simulation tick identifies this DISPLACEMENT evaluation pass. Each
     // payload still represents the existing atomic replacement trial; the
     // envelope only hands ready trials to the unchanged scheduler.
