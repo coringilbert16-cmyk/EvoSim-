@@ -585,7 +585,6 @@ mod tests {
         loop {
             let (window, coverage) = snapshot.directed_pair_window(oracle_start, 3);
             for pair in window {
-                let anchor = &snapshot.materials[pair.left];
                 let incoming = &snapshot.materials[pair.right];
                 let Some(expanded) = bounds[pair.left].and_then(|value| value.expanded(padding))
                 else {
@@ -600,7 +599,6 @@ mod tests {
                 if target_cells.contains(&incoming.locator.cell_index) {
                     expected_directed.insert((pair.identity_left, pair.identity_right));
                 }
-                let _ = anchor;
             }
             oracle_start += coverage.visited_pairs;
             if oracle_start >= coverage.known_pairs {
