@@ -244,7 +244,7 @@ fn clamp_vertical_displacement(material: &PhysicalMaterial, requested_dy: f64, h
     if placements.is_empty() || !height.is_finite() || height <= 0.0 { return None; }
     let min_y = placements.iter().map(|p| p.y).fold(f64::INFINITY, f64::min);
     let max_y = placements.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max);
-    Some(requested_dy.clamp(-min_y, height - max_y))
+    Some(requested_dy.clamp(-min_y, (height - 1e-6) - max_y))
 }
 
 fn translated(material: &PhysicalMaterial, dx: f64, dy: f64, height: f64) -> Option<PhysicalMaterial> {
@@ -605,6 +605,7 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             source_cell,
             source_index,
             nearby,
+            width,
             height,
         );
         let scale = mobility(mass) * FLOW_RESPONSE_SCALE;
@@ -741,7 +742,7 @@ mod tests {
         let water = make_material("Water");
         let carbon = make_material("Carbon");
         let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0, 100.0).unwrap();
-        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
+        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0, 100.0).unwrap();
 
         assert_eq!(water_obstacle.solidity, 0.0);
         assert!(
@@ -834,76 +835,43 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_boundary_keeps_every_constituent_inside_world() {
+    fn horizontal_boundary_wraps_complete_composites_without_splitting_them() {
         let catalog = crate::resources::default_catalog();
         let material = PhysicalMaterial::realized(
             crate::resources::Material {
                 parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-                internal_bonds: vec![crate::resources::InternalBond {
-                    part_a: 0,
-                    part_b: 1,
-                }],
+                internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
             },
             vec![
-                crate::structure::Placement {
-                    x: 998.8,
-                    y: 500.0,
-                    rotation_radians: 0.0,
-                },
-                crate::structure::Placement {
-                    x: 999.8,
-                    y: 500.0,
-                    rotation_radians: 0.25,
-                },
+                crate::structure::Placement { x: 998.8, y: 500.0, rotation_radians: 0.0 },
+                crate::structure::Placement { x: 999.8, y: 500.0, rotation_radians: 0.25 },
             ],
             &catalog,
-        )
-        .expect("realized carbon-hydrogen compound should realize");
-
-        let dx = clamp_horizontal_displacement(&material, 0.15, 1000.0).unwrap();
-        let moved = translated(&material, dx, 0.0, 1000.0).unwrap();
+        ).expect("realized carbon-hydrogen compound should realize");
+        let moved = translated(&material, 1.5, 0.0, 1000.0).unwrap();
         let placements = moved.placements.as_ref().unwrap();
-        assert!(placements.iter().all(|p| p.x >= 0.0 && p.x < 1000.0));
-        let original_placements = material.placements.as_ref().unwrap();
-        let original_separation = original_placements[1].x - original_placements[0].x;
-        let moved_separation = placements[1].x - placements[0].x;
-        assert!(
-            (moved_separation - original_separation).abs() < 1e-9,
-            "boundary handling must preserve the object's internal geometry"
-        );
+        assert!(placements.iter().all(|p| p.x > 1000.0));
+        assert!(((placements[1].x - placements[0].x) - 1.0).abs() < 1e-9);
+        assert!((material_center(&moved, 1000.0, 1000.0).unwrap().0 - 0.8).abs() < 1e-9);
     }
 
     #[test]
-    fn vertical_boundary_wraps_without_losing_material() {
+    fn vertical_boundary_is_hard_and_does_not_wrap_material() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
         let material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![crate::structure::Placement {
-                x: 0.0,
-                y: 999.999,
-                rotation_radians: 0.0,
-            }],
+            vec![crate::structure::Placement { x: 500.0, y: 999.999, rotation_radians: 0.0 }],
             &catalog,
-        )
-        .expect("catalog carbon should realize");
-        assert!(field.deposit_physical(0.0, 999.999, material, &catalog));
+        ).expect("catalog carbon should realize");
+        assert!(field.deposit_physical(500.0, 999.999, material, &catalog));
         let before = field.total_material();
-
-        assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
+        let _ = transport_field(&mut field, &catalog, 1000.0, 1000.0);
         assert_eq!(field.total_material(), before);
-        let objects: Vec<_> = field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .collect();
+        let objects: Vec<_> = field.cells.iter().flat_map(|cell| cell.physical_materials.iter()).collect();
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
-        assert!((0.0..1000.0).contains(&placement.y));
-        assert!(
-            placement.y < 1.0,
-            "positive vertical motion should wrap across the seam"
-        );
+        assert!(placement.y < 1000.0 && placement.y > 999.0, "vertical motion must stop at the hard boundary");
     }
 
     #[test]
@@ -1240,7 +1208,7 @@ mod tests {
         let free = Velocity { x: 1.0, y: 0.0 };
         let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0, 100.0);
         assert!(wake.length() < free.length());
-        let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0);
+        let upstream = obstacle_adjusted_velocity(free, 0.0, 10.0, 1, 1, &[obstacle], 100.0, 100.0);
         assert_eq!(upstream, free);
     }
 }
