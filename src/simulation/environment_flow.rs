@@ -1231,7 +1231,7 @@ mod tests {
             Obstacle {
                 source_cell: 5,
                 source_index: 5,
-                x: 99.0,
+                x: 999.0,
                 y: 2.0,
                 radius: 2.0,
                 solidity: 1.0,
@@ -1248,8 +1248,8 @@ mod tests {
         let velocity = Velocity { x: 0.73, y: -0.21 };
         let height = 100.0;
 
-        // Include exact bounds, just-inside/outside values, the vertical wrap
-        // seam, and a broad deterministic grid of query points.
+        // Include exact influence bounds, the horizontal wrap seam, hard
+        // vertical edges, and a broad deterministic grid of query points.
         let mut points = vec![
             (20.0 - 1.25, 30.0),
             (20.0 + 1.25, 30.0),
@@ -1257,7 +1257,7 @@ mod tests {
             (20.0 + 0.5, 30.0 + 1.0),
             (20.0 + 0.5, 30.0 + 1.25),
             (20.0 + 0.5, 30.0 + 1.2500001),
-            (99.0, 0.0),
+            (0.0, 2.0),
             (5.0, 0.0),
         ];
         for xi in -20..=120 {
