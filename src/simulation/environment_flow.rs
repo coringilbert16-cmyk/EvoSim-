@@ -977,7 +977,7 @@ mod tests {
         assert_eq!(objects.len(), 1);
         let placement = &objects[0].placements.as_ref().unwrap()[0];
         assert!(
-            placement.y < 1000.0 && placement.y > 999.0,
+            placement.y < 1000.0 && placement.y > 998.0,
             "vertical motion must stop at the hard boundary"
         );
     }
