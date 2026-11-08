@@ -1861,10 +1861,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        for orientation in [
-            PairOrientation::Unordered,
-            PairOrientation::Directed,
-        ] {
+        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected = reference
