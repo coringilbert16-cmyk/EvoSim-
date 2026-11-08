@@ -1,6 +1,6 @@
 # Stage 3 — Shared environmental broad phase
 
-Status: read-only spatial candidate-window prototype implemented; production discovery remains unchanged pending exhaustive parity.
+Status: read-only indexed spatial cursor and three reaction adapters are implemented and parity-tested against their existing discovery references. Production discovery remains unchanged; production cutover is a separate stage.
 
 ## Objective
 
@@ -207,3 +207,42 @@ Commit `f7b78a077fab65f031ea96e0eeeb1cf804c5ab1e` adds `SpatialPairCursor` as an
 This is a **bounded pair-predicate cursor**, not yet the final spatial-cell traversal. It scans the exhaustive pair universe and checks whether the target cell belongs to the source bounds query; this proves deterministic bounded work and set parity but is still O(n²) in material count. It also accepts a precomputed bounds slice, so it does not yet bound the cost of constructing that slice. Do not wire it into production or describe it as the final optimized shared broad phase.
 
 The next substage is a separately resumable, lazy material-bounds preparation cursor, with explicit work accounting for every restoration/geometry attempt. Once that is proven, we can replace the exhaustive pair scan with a genuinely indexed cell/material cursor while retaining the same parity oracle. The existing eager `spatial_bounds_from_field` and `spatial_pair_window` remain reference helpers only.
+
+
+## Current implementation and parity audit (2026-11-08)
+
+This section supersedes the earlier pair-cursor-only status and its description of lazy bounds preparation as the next substage.
+
+### Implemented traversal layers
+
+- **Snapshot:** one pass over field cells and physical materials, retaining stable environmental identity separately from mutable cell/material locators and projecting existing bonds.
+- **Bounds preparation:** `MaterialBoundsCursor` validates a material header once, then charges each constituent placement/shape inspection as its own work item. It does not restore the whole structure or run penetration checks merely to calculate conservative bounds. The eager restore-based helper remains a reference oracle.
+- **Indexed traversal:** `IndexedSpatialCursor` walks only cells intersected by each material's expanded bounds and inspects the materials actually stored in those cells. It retains the exact cell and material-slot continuation position.
+- **Unordered COMBINE pairs:** stable-identity ordering emits each pair once while preserving the union of both materials' bounds queries; no candidate-sized seen-pair set is retained.
+- **Directed DISPLACEMENT pairs:** both anchor/incoming orientations remain separate records.
+- **Work and invalidation:** anchor initialization, cell checks, and material-slot checks are separately counted and charged. A cursor is bound to one snapshot pass ID and captured field revision. A refreshed snapshot or changed field revision rejects continuation. The field revision is only a coarse invalidation token, not a per-material state or topology version.
+
+### Parity results
+
+| Layer | Reference comparison | Coverage |
+|---|---|---|
+| Indexed broad phase | Exhaustive spatial reference using the field's current bounds-query semantics | Exact pair identities for unordered and directed modes; both bounds-reach directions; edge-crossing and same-cell fixtures; page work limits 1–5 and output limits 1–3; empty-page continuation; stale snapshot/field rejection |
+| Sparse-field work | Exhaustive all-pairs count | Indexed cursor performs fewer work units than the exhaustive pair universe in a sparse 30-material fixture |
+| COMBINE adapter | Existing production contact-selection helper | Exact constituent/endpoint interfaces after the same duplicate-interface normalization; chemistry evaluation is applied after discovery, not used as a shared broad-phase filter |
+| BREAK adapter | Existing bounded production bond discovery | Exact material identity, bond index, constituent indices, endpoints, and stored bond energy; snapshot bond inventory and adapter inventory agree; nested cell/material/bond work counters agree |
+| DISPLACEMENT adapter | All-alternatives post-removal census | Exact endpoint candidate values and interface count for both bonded-anchor orientations; exact incoming/anchor/displaced constituent identities and removed-bond reference |
+
+The COMBINE fixture exercises a bounded component-pair window and compares the adapter output with the existing production selector for that same window. BREAK parity covers a fixture with six bonds across two physical materials. DISPLACEMENT parity covers both orientations of a two-constituent bonded source plus an incoming constituent. These are deterministic reference fixtures, not claims that all possible material/catalog combinations have been exhaustively enumerated.
+
+### Explicit boundary: not a production cutover
+
+The parity tests establish the shared snapshot, indexed candidate traversal, and read-only reaction adapters independently. They do **not** establish that live COMBINE, BREAK, or DISPLACEMENT now consume the shared cursor. Production discovery, reaction-specific activation, scheduling, funding, commit revalidation, and topology transactions remain unchanged.
+
+In particular:
+
+1. A cursor must be discarded after any topology or ownership mutation and rebuilt from a fresh field snapshot. The coarse field revision and pass ID prevent stale continuation; they do not provide persistent per-material versions.
+2. BREAK, COMBINE, and DISPLACEMENT must retain their current same-tick order and refresh boundaries: BREAK commits, refresh; COMBINE commits, refresh; then DISPLACEMENT. One frozen snapshot cannot span those mutations.
+3. The shared traversal currently follows the field's existing cell-query semantics (horizontal X clamped, vertical Y wrapped). The separate Master Spec 2.4 world-boundary discrepancy remains unresolved and must not be silently changed as part of this refactor.
+4. The broad-phase module remains read-only and intentionally isolated. The next stage is a staged production integration with exact candidate parity at each refresh boundary—not a change to chemistry eligibility, activation, energy, budgets, or transaction semantics.
+
+**Audit disposition:** broad-phase cursor parity and adapter-level candidate parity are covered by focused tests. The architecture is ready for a separately reviewed integration stage, but it is not yet safe to claim a single shared production discovery pass or to merge solely on the basis of these fixtures.
