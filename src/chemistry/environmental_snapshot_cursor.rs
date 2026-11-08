@@ -4,8 +4,9 @@
 use crate::environment::ActiveMaterialField;
 use crate::environmental_broad_phase::EnvironmentalMaterialSnapshot;
 use crate::environmental_interaction::{
-    ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
+    BondRef, ConstituentRef, ExistingBondRecord, MaterialIdentity, MaterialLocator, MaterialRecord,
 };
+use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SnapshotCursorStatus {
@@ -31,8 +32,15 @@ pub(crate) struct EnvironmentalSnapshotCursor {
     next_cell: usize,
     next_material: usize,
     active_bond: Option<(usize, usize, usize)>,
-    materials: Vec<MaterialRecord>,
-    bonds: Vec<ExistingBondRecord>,
+    materials_by_identity: BTreeMap<MaterialIdentity, VecDeque<MaterialRecord>>,
+    bonds_by_reference: BTreeMap<BondRef, VecDeque<ExistingBondRecord>>,
+    finalizing_materials: Option<VecDeque<MaterialRecord>>,
+    finalizing_bonds: Option<VecDeque<ExistingBondRecord>>,
+    sorted_materials: Vec<MaterialRecord>,
+    sorted_bonds: Vec<ExistingBondRecord>,
+    scanning_complete: bool,
+    materials_finalized: bool,
+    bonds_finalized: bool,
     cell_visits: u64,
     material_visits: u64,
     unassigned_materials: u64,
@@ -48,8 +56,15 @@ impl EnvironmentalSnapshotCursor {
             next_cell: 0,
             next_material: 0,
             active_bond: None,
-            materials: Vec::new(),
-            bonds: Vec::new(),
+            materials_by_identity: BTreeMap::new(),
+            bonds_by_reference: BTreeMap::new(),
+            finalizing_materials: None,
+            finalizing_bonds: None,
+            sorted_materials: Vec::new(),
+            sorted_bonds: Vec::new(),
+            scanning_complete: false,
+            materials_finalized: false,
+            bonds_finalized: false,
             cell_visits: 0,
             material_visits: 0,
             unassigned_materials: 0,
@@ -116,7 +131,10 @@ impl EnvironmentalSnapshotCursor {
                             endpoint_b: bond.endpoint_b,
                             bond_energy: bond.bond_energy,
                         };
-                        self.bonds.push(record);
+                        self.bonds_by_reference
+                            .entry(record.reference())
+                            .or_default()
+                            .push_back(record);
                     }
                 }
                 let next = bond_index + 1;
@@ -128,66 +146,108 @@ impl EnvironmentalSnapshotCursor {
                 continue;
             }
 
-            let Some(cell) = field.cells.get(self.next_cell) else {
-                self.complete = true;
-                break;
-            };
-            if self.next_material >= cell.physical_materials.len() {
-                self.next_cell += 1;
-                self.next_material = 0;
-                self.cell_visits = self.cell_visits.saturating_add(1);
-                page.cell_visits = page.cell_visits.saturating_add(1);
-                self.consume_work(&mut page);
-                if self.next_cell >= field.cells.len() {
-                    self.complete = true;
+            if !self.scanning_complete {
+                let Some(cell) = field.cells.get(self.next_cell) else {
+                    self.scanning_complete = true;
+                    continue;
+                };
+                if self.next_material >= cell.physical_materials.len() {
+                    self.next_cell += 1;
+                    self.next_material = 0;
+                    self.cell_visits = self.cell_visits.saturating_add(1);
+                    page.cell_visits = page.cell_visits.saturating_add(1);
+                    self.consume_work(&mut page);
+                    if self.next_cell >= field.cells.len() {
+                        self.scanning_complete = true;
+                    }
+                    continue;
                 }
+
+                let cell_index = self.next_cell;
+                let material_index = self.next_material;
+                let physical = &cell.physical_materials[material_index];
+                self.next_material += 1;
+                self.material_visits = self.material_visits.saturating_add(1);
+                page.material_visits = page.material_visits.saturating_add(1);
+                let identity = MaterialIdentity(physical.environmental_identity);
+                if identity.0 == 0 {
+                    self.unassigned_materials = self.unassigned_materials.saturating_add(1);
+                } else {
+                    let record = MaterialRecord {
+                        identity,
+                        locator: MaterialLocator {
+                            cell_index,
+                            material_index,
+                        },
+                        topology_generation: 0,
+                        state_version: 0,
+                        constituent_count: physical.material.parts.len(),
+                    };
+                    self.materials_by_identity
+                        .entry(identity)
+                        .or_default()
+                        .push_back(record);
+                    if physical
+                        .internal_connections
+                        .as_ref()
+                        .is_some_and(|bonds| !bonds.is_empty())
+                    {
+                        self.active_bond = Some((cell_index, material_index, 0));
+                    }
+                }
+                self.consume_work(&mut page);
                 continue;
             }
 
-            let cell_index = self.next_cell;
-            let material_index = self.next_material;
-            let physical = &cell.physical_materials[material_index];
-            self.next_material += 1;
-            self.material_visits = self.material_visits.saturating_add(1);
-            page.material_visits = page.material_visits.saturating_add(1);
-            let identity = MaterialIdentity(physical.environmental_identity);
-            if identity.0 == 0 {
-                self.unassigned_materials = self.unassigned_materials.saturating_add(1);
-            } else {
-                let record = MaterialRecord {
-                    identity,
-                    locator: MaterialLocator {
-                        cell_index,
-                        material_index,
-                    },
-                    topology_generation: 0,
-                    state_version: 0,
-                    constituent_count: physical.material.parts.len(),
-                };
-                self.materials.push(record);
-                if physical
-                    .internal_connections
-                    .as_ref()
-                    .is_some_and(|bonds| !bonds.is_empty())
-                {
-                    self.active_bond = Some((cell_index, material_index, 0));
+            if !self.materials_finalized {
+                let next_record = self
+                    .finalizing_materials
+                    .as_mut()
+                    .and_then(VecDeque::pop_front);
+                if let Some(record) = next_record {
+                    self.sorted_materials.push(record);
+                    self.consume_work(&mut page);
+                    continue;
                 }
+                self.finalizing_materials = None;
+                if let Some((_, records)) = self.materials_by_identity.pop_first() {
+                    self.finalizing_materials = Some(records);
+                    continue;
+                }
+                self.materials_finalized = true;
+                continue;
             }
-            self.consume_work(&mut page);
+
+            if !self.bonds_finalized {
+                let next_record = self
+                    .finalizing_bonds
+                    .as_mut()
+                    .and_then(VecDeque::pop_front);
+                if let Some(record) = next_record {
+                    self.sorted_bonds.push(record);
+                    self.consume_work(&mut page);
+                    continue;
+                }
+                self.finalizing_bonds = None;
+                if let Some((_, records)) = self.bonds_by_reference.pop_first() {
+                    self.finalizing_bonds = Some(records);
+                    continue;
+                }
+                self.bonds_finalized = true;
+                continue;
+            }
+
+            self.complete = true;
         }
 
         if self.invalidated {
             page.status = Some(SnapshotCursorStatus::Invalidated);
         } else if self.complete {
-            let mut materials = std::mem::take(&mut self.materials);
-            materials.sort_by_key(|material| material.identity);
-            let mut existing_bonds = std::mem::take(&mut self.bonds);
-            existing_bonds.sort_by_key(|bond| bond.reference());
             let snapshot = EnvironmentalMaterialSnapshot {
                 pass_id: self.pass_id,
                 field_revision: self.field_revision,
-                materials,
-                existing_bonds,
+                materials: std::mem::take(&mut self.sorted_materials),
+                existing_bonds: std::mem::take(&mut self.sorted_bonds),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
                 unassigned_materials: self.unassigned_materials,
