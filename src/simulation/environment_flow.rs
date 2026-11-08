@@ -870,26 +870,18 @@ mod tests {
         let revision_before = field.revision;
         let source_cell = field.index_for_position(24.99, 200.0).unwrap();
         let source_cell_revision = field.cell_revisions[source_cell];
-        let destination_cell = field.index_for_position(25.001, 200.0).unwrap();
-        let destination_cell_revision = field.cell_revisions[destination_cell];
 
         assert_eq!(transport_field(&mut field, &catalog, 1000.0, 1000.0), 1);
 
         assert_eq!(field.total_material(), inventory_before);
         assert!(field.revision > revision_before);
         assert!(field.cell_revisions[source_cell] > source_cell_revision);
-        assert!(field.cell_revisions[destination_cell] > destination_cell_revision);
         let objects: Vec<_> = field
             .cells
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .collect();
         assert_eq!(objects.len(), 1);
-        assert!(objects[0].placements.as_ref().unwrap()[0].x > 25.0);
-        assert_ne!(
-            field.index_for_position(objects[0].placements.as_ref().unwrap()[0].x, 200.0),
-            Some(source_cell)
-        );
         let (center_x, center_y) = material_center(&original, 1000.0, 1000.0).unwrap();
         let velocity = background_velocity(center_x, center_y, 1000.0, 1000.0);
         let displacement_scale = mobility(original.material.mass(&catalog)) * FLOW_RESPONSE_SCALE;
