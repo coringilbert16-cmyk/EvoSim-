@@ -680,7 +680,7 @@ mod tests {
         assert!(water_parts.iter().all(|part| {
             part.resonance_frequency_cycles_per_day == 0.0 && part.resonance_amplitude == 0.0
         }));
-        assert!((0.1..=1.0).contains(&observation.sunlight_brightness));
+        assert!((0.4..=1.0).contains(&observation.sunlight_brightness));
     }
 
     #[test]
