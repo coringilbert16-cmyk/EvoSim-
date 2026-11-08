@@ -142,3 +142,37 @@ Stage 3 is complete only when:
 - full tests, formatting, architecture checks, and Clippy pass.
 
 Until then, all production discovery paths remain authoritative. No merge or production cutover is implied by this design checkpoint.
+
+
+## Bounded cursor design checkpoint (after full CI pass)
+
+The current `spatial_pair_window` is not an acceptable bounded traversal: it constructs the complete candidate set (including a map/vector and deduplication) and only then applies `start` and `limit`. Its returned vector is bounded, but its discovery work and temporary memory are not.
+
+The next implementation must be a resumable cursor, not another eager window wrapper. The cursor contract is:
+
+1. **Persistent continuation state:** retain the source-material ordinal, target-cell window ordinal, target-material slot ordinal, and the current target-cell window position. A call resumes from that exact position; it must not restart an anchor or silently rotate past unvisited work.
+2. **Bounded cell enumeration:** use the field's limited bounds-query primitive in finite windows. The cursor must know the total candidate-cell count (or an equivalent completion token) without first materializing the complete cell list. Each returned cell consumes the documented cell-inspection budget, including empty cells.
+3. **Bounded material enumeration:** inspect target material slots incrementally. Each inspected slot consumes material-inspection budget, including self-pairs, stale/unassigned entries, and role/order rejections. Candidate count is not a proxy for work performed.
+4. **Bounded output and accounting:** stop when the explicit work budget is exhausted, not merely when enough candidates have been emitted. Return emitted records, exact inspected-work counters, and a continuation token. Distinguish exhausted from deferred; an empty output with a continuation is not proof that no candidates exist.
+5. **Stable deterministic order:** order source anchors by stable environmental identity and target cells/material slots by a documented deterministic sequence. Cursor continuation must be independent of vector allocation addresses and must not skip or repeat an inspection.
+6. **COMBINE unordered parity:** canonicalize each emitted pair by stable identity, never by mutable locator. Preserve the union of both endpoint-bounds queries. Deduplication must not hide an uninspected reverse query or turn a deferred query into a negative result. The implementation may use a bounded per-cursor seen set, but its memory growth must be explicit and covered by limits; alternatively prove a canonical query rule that is equivalent to the union.
+7. **DISPLACEMENT directed parity:** preserve anchor → incoming direction and the reverse direction as separate records. The cursor must not canonicalize these role-sensitive pairs.
+8. **Refresh semantics:** a cursor belongs to one immutable pass snapshot. After any topology or ownership commit, discard affected cursors and rebuild from the refreshed field snapshot. Do not carry old locators, bounds, or bond references across BREAK/COMBINE refresh boundaries.
+9. **Fairness:** if a query exceeds one tick's budget, continuation advances monotonically through its deterministic work universe. A later tick may rotate the starting anchor for fairness only if the rotation is represented explicitly and the full cycle is proven to cover every item without starvation. Do not combine a rotated restart with an old continuation.
+
+### Required cursor tests
+
+- A large bounds query proves the cursor never asks the field for more than the configured cell window and never allocates the full cell list.
+- Work-budget exhaustion in the middle of a target cell resumes at the next material slot, with no repeat or omission.
+- Exhaustion between cell windows resumes at the next cell ordinal.
+- Empty cells and rejected/self/stale material slots consume work and are counted.
+- Candidate output may be empty for a page while continuation remains; subsequent pages still find later candidates.
+- Concatenating all pages yields exactly the exhaustive spatial reference set for both unordered and directed modes.
+- Unordered mode covers the union of both bounds queries, deduplicates exactly once, and does not emit a pair until the relevant query work is complete enough to establish it.
+- Directed mode retains both orientations and exact anchor/incoming identities.
+- Repeated page sizes (1, uneven sizes, and sizes larger than remaining work) produce identical final sets and coverage.
+- A snapshot refresh invalidates old continuation state; stale cursor use is rejected rather than silently resolving old locators against new ownership.
+
+### Implementation boundary
+
+Do not change live COMBINE/DISPLACEMENT budgets, per-tick partitions, rotation policy, reaction thresholds, or transaction behavior while implementing the cursor. First prove cursor work accounting and parity in isolation. Only then compare the cursor against each production adapter and design the sequential refresh integration.
