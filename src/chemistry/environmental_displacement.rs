@@ -1050,6 +1050,65 @@ pub(crate) fn accumulate_environmental(
                                 };
                                 diagnostics.replacement_contacts_found =
                                     diagnostics.replacement_contacts_found.saturating_add(1);
+
+                                // Diagnostic-only all-alternatives oracle. Keep the
+                                // production selector and its chosen candidate untouched;
+                                // independently check whether another physically valid,
+                                // evaluated contact could satisfy the existing bond-energy
+                                // comparison that the chosen contact later fails.
+                                const ALTERNATIVE_AUDIT_LIMIT: usize =
+                                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+                                let census = census_replacement_contacts(
+                                    &combined,
+                                    anchor_unit,
+                                    incoming_unit,
+                                    old_bond,
+                                    &environment.catalog,
+                                    ALTERNATIVE_AUDIT_LIMIT,
+                                );
+                                diagnostics.replacement_alternative_audits =
+                                    diagnostics.replacement_alternative_audits.saturating_add(1);
+                                diagnostics.replacement_alternatives_evaluated =
+                                    diagnostics.replacement_alternatives_evaluated
+                                        .saturating_add(census.alternatives.len() as u64);
+                                diagnostics.replacement_alternative_audits_truncated =
+                                    diagnostics.replacement_alternative_audits_truncated
+                                        .saturating_add(u64::from(census.work_limit_reached));
+                                let selected_bond_energy = combined.units[anchor_unit]
+                                    .properties(&environment.catalog)
+                                    .zip(combined.units[incoming_unit].properties(&environment.catalog))
+                                    .map(|(anchor, incoming)| {
+                                        let strength = bond_strength(anchor, incoming);
+                                        intrinsic_bond_potential(anchor, incoming, strength)
+                                    });
+                                if let Some(selected_energy) = selected_bond_energy {
+                                    if selected_energy <= old_bond.bond_energy
+                                        && census.alternatives.iter().any(|alternative| {
+                                            (alternative.candidate.endpoint_a != candidate.endpoint_a
+                                                || alternative.candidate.endpoint_b != candidate.endpoint_b)
+                                                && intrinsic_bond_potential(
+                                                    combined.units[anchor_unit]
+                                                        .properties(&environment.catalog)
+                                                        .expect("audited anchor properties remain available"),
+                                                    combined.units[incoming_unit]
+                                                        .properties(&environment.catalog)
+                                                        .expect("audited incoming properties remain available"),
+                                                    bond_strength(
+                                                        combined.units[anchor_unit]
+                                                            .properties(&environment.catalog)
+                                                            .expect("audited anchor properties remain available"),
+                                                        combined.units[incoming_unit]
+                                                            .properties(&environment.catalog)
+                                                            .expect("audited incoming properties remain available"),
+                                                    ),
+                                                ) > old_bond.bond_energy
+                                        })
+                                    {
+                                        diagnostics.selected_contact_hides_stronger_alternative =
+                                            diagnostics.selected_contact_hides_stronger_alternative
+                                                .saturating_add(1);
+                                    }
+                                }
                                 let key = displacement_accumulation_key(
                                     &source_a,
                                     &source_b,
