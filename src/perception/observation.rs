@@ -333,7 +333,6 @@ impl WorldObservation {
                             y,
                             revision,
                             materials: Some(materials),
-                        physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                             physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                         })
                     })
@@ -358,6 +357,7 @@ impl WorldObservation {
                         y,
                         revision: simulation.environment.field.cell_revisions[cell_index],
                         materials: Some(materials),
+                        physical_parts: Some(observe_field_physical_parts(cell, catalog)),
                     })
                 })
                 .collect()
