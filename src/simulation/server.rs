@@ -142,8 +142,8 @@ async fn world_observation_handler(
         serde_json::json!({
             "command": "world",
             "bounds": bounds,
-            "known_organisms": known_organisms,
-            "known_cells": known_cells,
+            "known_organisms": known_organisms.unwrap_or_default(),
+            "known_cells": known_cells.unwrap_or_default(),
         }),
     )
     .await
