@@ -467,7 +467,12 @@ mod tests {
             }),
         ];
         let (unordered, coverage) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+            &field,
+            &bounds,
+            0.0,
+            0,
+            usize::MAX,
+            PairOrientation::Unordered,
         );
         assert_eq!(coverage.known_pairs, 1);
         assert_eq!(unordered.len(), 1);
@@ -477,7 +482,12 @@ mod tests {
         );
 
         let (directed, directed_coverage) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Directed,
+            &field,
+            &bounds,
+            0.0,
+            0,
+            usize::MAX,
+            PairOrientation::Directed,
         );
         assert_eq!(directed_coverage.known_pairs, 2);
         assert_eq!(directed.len(), 2);
@@ -514,7 +524,12 @@ mod tests {
             }),
         ];
         let (pairs, coverage) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+            &field,
+            &bounds,
+            0.0,
+            0,
+            usize::MAX,
+            PairOrientation::Unordered,
         );
         assert_eq!(coverage.known_pairs, 1);
         assert_eq!(pairs.len(), 1);
@@ -552,7 +567,12 @@ mod tests {
             }),
         ];
         let (pairs, coverage) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 0, usize::MAX, PairOrientation::Unordered,
+            &field,
+            &bounds,
+            0.0,
+            0,
+            usize::MAX,
+            PairOrientation::Unordered,
         );
         assert_eq!(coverage.known_pairs, 1);
         assert_eq!(pairs.len(), 1);
@@ -576,10 +596,20 @@ mod tests {
             max_y: 10.0,
         }); 3];
         let (_, first) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 0, 1, PairOrientation::Unordered,
+            &field,
+            &bounds,
+            0.0,
+            0,
+            1,
+            PairOrientation::Unordered,
         );
         let (_, second) = snapshot.spatial_pair_window(
-            &field, &bounds, 0.0, 1, 8, PairOrientation::Unordered,
+            &field,
+            &bounds,
+            0.0,
+            1,
+            8,
+            PairOrientation::Unordered,
         );
         assert_eq!(first.known_pairs, 3);
         assert_eq!(first.visited_pairs, 1);
