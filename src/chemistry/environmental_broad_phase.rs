@@ -125,7 +125,7 @@ pub(crate) struct MaterialBoundsCursorPage {
     pub(crate) deferred_work: u64,
     pub(crate) completed_materials: u64,
     pub(crate) complete: bool,
-    /// Available only after every material header and constituent has been
+    /// Available once after every material header and constituent has been
     /// visited. The vector is aligned with the snapshot material records.
     pub(crate) bounds: Option<Vec<Option<MaterialSpatialBounds>>>,
 }
@@ -2113,6 +2113,9 @@ mod tests {
             actual.expect("completed cursor returns all bounds"),
             expected
         );
+        let completed_again = cursor.next_page(&snapshot, &field, &catalog, 1);
+        assert!(completed_again.complete);
+        assert!(completed_again.bounds.is_none());
     }
 
     #[test]
