@@ -706,6 +706,7 @@ fn census_replacement_contacts(
     census
 }
 
+#[cfg(test)]
 fn best_replacement_contact(
     combined: &OrganismStructure,
     anchor_unit: usize,
