@@ -1059,7 +1059,11 @@ impl IndexedSpatialCursor {
                     let lower_anchor_reaches_higher = bounds[left]
                         .and_then(|value| value.expanded(padding))
                         .is_some_and(|value| {
-                            bounds_include_cell(field, value, snapshot.materials[right].locator.cell_index)
+                            bounds_include_cell(
+                                field,
+                                value,
+                                snapshot.materials[right].locator.cell_index,
+                            )
                         });
                     if self.anchor_index < target_index || !lower_anchor_reaches_higher {
                         page.pairs.push(MaterialPairRecord {
