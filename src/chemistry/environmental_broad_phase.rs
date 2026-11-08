@@ -616,22 +616,10 @@ mod tests {
             });
             3
         ];
-        let (_, first) = snapshot.spatial_pair_window(
-            &field,
-            &bounds,
-            0.0,
-            0,
-            1,
-            PairOrientation::Unordered,
-        );
-        let (_, second) = snapshot.spatial_pair_window(
-            &field,
-            &bounds,
-            0.0,
-            1,
-            8,
-            PairOrientation::Unordered,
-        );
+        let (_, first) =
+            snapshot.spatial_pair_window(&field, &bounds, 0.0, 0, 1, PairOrientation::Unordered);
+        let (_, second) =
+            snapshot.spatial_pair_window(&field, &bounds, 0.0, 1, 8, PairOrientation::Unordered);
         assert_eq!(first.known_pairs, 3);
         assert_eq!(first.visited_pairs, 1);
         assert_eq!(first.deferred_pairs, 2);
