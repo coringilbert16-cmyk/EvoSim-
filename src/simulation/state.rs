@@ -698,10 +698,22 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
                 .max_accumulated_reaction
                 .max(tick.max_accumulated_reaction);
         }
-        self.evaluation_outcomes.ready = self.evaluation_outcomes.ready.saturating_add(tick.evaluation_outcomes.ready);
-        self.evaluation_outcomes.rejected = self.evaluation_outcomes.rejected.saturating_add(tick.evaluation_outcomes.rejected);
-        self.evaluation_outcomes.deferred = self.evaluation_outcomes.deferred.saturating_add(tick.evaluation_outcomes.deferred);
-        self.evaluation_outcomes.stale = self.evaluation_outcomes.stale.saturating_add(tick.evaluation_outcomes.stale);
+        self.evaluation_outcomes.ready = self
+            .evaluation_outcomes
+            .ready
+            .saturating_add(tick.evaluation_outcomes.ready);
+        self.evaluation_outcomes.rejected = self
+            .evaluation_outcomes
+            .rejected
+            .saturating_add(tick.evaluation_outcomes.rejected);
+        self.evaluation_outcomes.deferred = self
+            .evaluation_outcomes
+            .deferred
+            .saturating_add(tick.evaluation_outcomes.deferred);
+        self.evaluation_outcomes.stale = self
+            .evaluation_outcomes
+            .stale
+            .saturating_add(tick.evaluation_outcomes.stale);
     }
 }
 
