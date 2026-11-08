@@ -198,7 +198,7 @@ impl EvaluationJournal {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EvaluationOutcomeCounts {
     pub(crate) ready: usize,
     pub(crate) rejected: usize,
