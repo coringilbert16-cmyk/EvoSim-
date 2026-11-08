@@ -827,8 +827,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         }
                     }
                     for selected in selected {
-                        let mut evaluation_journal =
-                            crate::environmental_evaluation::EvaluationJournal::default();
                         chemical_step(
                             environment,
                             chemistry_library,
@@ -1552,6 +1550,8 @@ mod tests {
                     let mut accumulation = BTreeMap::new();
                     let mut updated = BTreeSet::new();
                     let mut operations = Vec::new();
+                    let mut evaluation_journal =
+                        crate::environmental_evaluation::EvaluationJournal::default();
                     chemical_step(
                         &simulation.environment,
                         &mut simulation.chemistry_library,
