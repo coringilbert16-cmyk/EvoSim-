@@ -1,12 +1,32 @@
 # Stage 3 — Shared environmental broad phase
 
-Status: design/audit checkpoint. No production discovery path is switched over by this document.
+Status: read-only spatial candidate-window prototype implemented; production discovery remains unchanged pending exhaustive parity.
 
 ## Objective
 
 Replace three independent walks over environmental field ownership with one reusable, bounded broad-phase snapshot and candidate-pair traversal. Reaction-specific geometry and chemistry remain separate.
 
 The shared traversal locates potentially interacting physical materials and exposes current material identities, locators, placements/bounds, and candidate relationships. It does not decide whether a reaction is chemically valid.
+
+## Implemented read-only prototype
+
+The shared broad-phase module now has two distinct pair sources:
+
+- The original all-pairs window remains the conservative reference oracle.
+- A spatial pair window derives complete realized-material bounds by restoring each snapshot material at the same origin pose used by the live environmental paths, then calls the field's existing bounds-to-cell query with explicit padding.
+
+The spatial window supports two contracts:
+
+- **Unordered:** one candidate per material pair, canonicalized by current field locator, matching COMBINE's pair-role symmetry.
+- **Directed:** both anchor-to-incoming orientations, preserving DISPLACEMENT's role-sensitive search.
+
+The window reports the total known spatial candidates plus visited and deferred counts. It does not perform endpoint geometry, chemistry, activation, scheduling, funding, or commits. The all-pairs oracle remains available for set comparisons.
+
+Current limitations:
+- This is still a read-only candidate generator; no reaction adapter or production path consumes it.
+- Bounds are rebuilt from the current field snapshot. There is no persistent registry or incremental refresh yet.
+- The spatial candidate set intentionally follows the existing field-cell query semantics. It is a conservative filter at the material-pair layer, not proof of complete endpoint-interface parity.
+- The first test fixtures exercise spatial pruning, pair orientation, and deferred-window accounting. They do not yet cover wrap seams, geometry asymmetry, or exhaustive comparison with live COMBINE/DISPLACEMENT discovery.
 
 ## Confirmed current behavior
 
