@@ -14,6 +14,8 @@
     #timeline { position:fixed; left:12px; right:12px; bottom:10px; display:flex; align-items:center; gap:8px; padding:8px 10px; background:rgba(255,255,255,.94); border:1px solid #999; border-radius:6px; z-index:20; }
     #history { flex:1; min-width:120px; }
     #timeline-label { min-width:150px; font-size:12px; text-align:right; }
+    .transport-button { border:1px solid #777; border-radius:4px; padding:5px 10px; background:#fff; color:#111; cursor:pointer; white-space:nowrap; }
+    .transport-button.primary { background:#166534; color:#fff; border-color:#166534; }
     main { flex: 1; display: flex; align-items: center; justify-content: center; }
     #world { width: min(90vw, 1000px); height: min(80vh, 700px); background: #fff; border: 1px solid #888; cursor: crosshair; touch-action: none; }
     #world.panning { cursor: grabbing; }
@@ -26,7 +28,11 @@
       <div id="keyboard-help">Space: pause/play · &lt;: back one tick · &gt;: forward one tick · Esc: reset</div>
     </header>
     <div id="timeline">
-      <input id="history" type="range" min="0" max="0" value="0" step="1">
+      <button id="run-toggle" class="transport-button primary" type="button">Run</button>
+      <button id="step-back" class="transport-button" type="button" title="Rewind one simulation tick">Back</button>
+      <button id="step-once" class="transport-button" type="button" title="Advance one simulation tick">Step</button>
+      <button id="live-follow" class="transport-button" type="button" hidden>Continue from Here</button>
+      <input id="history" type="range" min="0" max="0" value="0" step="1" aria-label="Simulation history">
       <span id="timeline-label">Live</span>
       <label class="speed-control">Speed <input id="speed" type="range" min="0.1" max="100" step="0.1" value="10"><span id="speed-value">10</span> ticks/s</label>
     </div>
@@ -35,16 +41,33 @@
   <script>
     // Browser-only camera transform. It owns view state, never simulation state.
     class Camera {
-      constructor() { this.x = 0; this.y = 0; this.scale = 1; }
+      constructor() { this.x = 0; this.y = 0; this.scale = 1; this.minScale = 0.04; this.maxScale = 24; this.worldBounds = null; }
       fitBounds(minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding = 0.82) {
         if (![minX, maxX, minY, maxY, viewportWidth, viewportHeight, padding].every(Number.isFinite)) return;
         const width = Math.max(maxX - minX, 1e-9), height = Math.max(maxY - minY, 1e-9);
         if (viewportWidth <= 0 || viewportHeight <= 0 || padding <= 0) return;
         this.x = (minX + maxX) / 2; this.y = (minY + maxY) / 2;
-        this.scale = Math.min(viewportWidth / width, viewportHeight / height) * padding;
+        const fitScale = Math.min(viewportWidth / width, viewportHeight / height) * padding;
+        // The fitted view is the zoom-out limit: never show less than the
+        // complete world. Preserve a useful zoom-in range for inspecting detail.
+        this.minScale = fitScale;
+        this.maxScale = Math.min(300, fitScale * 24);
+        this.scale = fitScale;
       }
       fitWorld(worldWidth, worldHeight, viewportWidth, viewportHeight, padding = 0.92) {
+        this.worldBounds = { minX: 0, maxX: worldWidth, minY: 0, maxY: worldHeight };
         this.fitBounds(0, worldWidth, 0, worldHeight, viewportWidth, viewportHeight, padding);
+        this.clampView(viewportWidth, viewportHeight);
+      }
+      clampView(viewportWidth, viewportHeight) {
+        if (!this.worldBounds || this.scale <= 0 || viewportWidth <= 0 || viewportHeight <= 0) return;
+        const halfWidth = viewportWidth / (2 * this.scale), halfHeight = viewportHeight / (2 * this.scale);
+        const bounds = this.worldBounds;
+        const centerX = (bounds.minX + bounds.maxX) / 2, centerY = (bounds.minY + bounds.maxY) / 2;
+        this.x = halfWidth * 2 >= bounds.maxX - bounds.minX
+          ? centerX : Math.max(bounds.minX + halfWidth, Math.min(bounds.maxX - halfWidth, this.x));
+        this.y = halfHeight * 2 >= bounds.maxY - bounds.minY
+          ? centerY : Math.max(bounds.minY + halfHeight, Math.min(bounds.maxY - halfHeight, this.y));
       }
       worldToScreen(x, y, viewportWidth, viewportHeight) {
         return { x: (x - this.x) * this.scale + viewportWidth / 2, y: (y - this.y) * this.scale + viewportHeight / 2 };
@@ -52,18 +75,27 @@
       screenToWorld(x, y, viewportWidth, viewportHeight) {
         return { x: (x - viewportWidth / 2) / this.scale + this.x, y: (y - viewportHeight / 2) / this.scale + this.y };
       }
-      pan(dx, dy) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.x -= dx / this.scale; this.y -= dy / this.scale; } }
+      pan(dx, dy, viewportWidth, viewportHeight) { if (Number.isFinite(dx) && Number.isFinite(dy)) { this.x -= dx / this.scale; this.y -= dy / this.scale; this.clampView(viewportWidth, viewportHeight); } }
       zoomAt(screenX, screenY, factor, viewportWidth, viewportHeight) {
         if (!Number.isFinite(factor) || factor <= 0) return;
         const before = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
-        this.scale *= factor;
+        this.scale = Math.max(this.minScale, Math.min(this.maxScale, this.scale * factor));
         const after = this.screenToWorld(screenX, screenY, viewportWidth, viewportHeight);
         this.x += before.x - after.x; this.y += before.y - after.y;
+        this.clampView(viewportWidth, viewportHeight);
       }
       centerOn(x, y) { if (Number.isFinite(x) && Number.isFinite(y)) { this.x = x; this.y = y; } }
     }
 
     const status = document.getElementById('status');
+    window.addEventListener('error', event => {
+      const message = event.message || 'Unknown browser error';
+      if (status) status.textContent = 'Viewer script error: ' + message.slice(0, 180);
+    });
+    window.addEventListener('unhandledrejection', event => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason);
+      if (status) status.textContent = 'Viewer async error: ' + reason.slice(0, 180);
+    });
     const canvas = document.getElementById('world');
     const ctx = canvas.getContext('2d');
     const camera = new Camera();
@@ -75,12 +107,24 @@
     let interaction = null;
     let requestSerial = 0;
     let runtimeStatus = null;
+    let speedControlActive = false;
     let noLivingOrganisms = false;
     let historyViewTick = null;
     let historyTicks = [];
+    let timelineScrubbing = false;
     const worldCache = {
       organisms: new Map(),
       field: new Map()
+    };
+    // Display interpolation is presentation-only. Simulation observations remain authoritative.
+    let displayAnimationStartedAt = 0;
+    let displayAnimationDurationMs = 100;
+    const displayPositionStarts = new WeakMap();
+    window.__evosimGetDisplayPosition = part => {
+      const start = displayPositionStarts.get(part);
+      if (!start) return { x: part.x, y: part.y };
+      const alpha = Math.max(0, Math.min(1, (performance.now() - displayAnimationStartedAt) / displayAnimationDurationMs));
+      return { x: start.x + (part.x - start.x) * alpha, y: start.y + (part.y - start.y) * alpha };
     };
 
     async function control(path) {
@@ -101,8 +145,10 @@
         noLivingOrganisms = runtimeStatus.population === 0;
         historyTicks = runtimeStatus.history_ticks || [];
         const slider = document.getElementById('history');
-        slider.max = Math.max(0, historyTicks.length - 1);
-        if (historyViewTick == null) slider.value = Math.max(0, historyTicks.length - 1);
+        slider.min = historyTicks.length ? historyTicks[0] : 0;
+        slider.max = runtimeStatus.tick ?? 0;
+        slider.step = 1;
+        if (!timelineScrubbing) slider.value = historyViewTick ?? runtimeStatus.tick ?? 0;
         updateTimeline();
         updateControls();
         return runtimeStatus;
@@ -115,11 +161,17 @@
     function updateTimeline() {
       const slider = document.getElementById('history');
       const label = document.getElementById('timeline-label');
+      const liveButton = document.getElementById('live-follow');
+      if (liveButton) liveButton.hidden = historyViewTick == null;
+      if (timelineScrubbing) {
+        label.textContent = 'Seek to tick ' + slider.value;
+        return;
+      }
       if (!historyTicks.length) { label.textContent = 'No history'; return; }
-      const index = Math.max(0, Math.min(historyTicks.length - 1, Number(slider.value)));
-      const tick = historyTicks[index];
-      const liveTick = runtimeStatus?.tick;
-      label.textContent = (historyViewTick == null || tick === liveTick) ? 'Live — tick ' + (liveTick ?? tick) : 'History — tick ' + tick;
+      const tick = historyViewTick ?? runtimeStatus?.tick ?? Number(slider.value);
+      label.textContent = historyViewTick == null
+        ? (runtimeStatus?.running ? 'Playing — tick ' : 'Paused — tick ') + tick
+        : 'Paused at tick ' + tick;
     }
 
     function clearWorldCache() {
@@ -129,65 +181,82 @@
 
     async function loadHistoricalWorld(tick) {
       const serial = ++requestSerial;
-      clearWorldCache();
       try {
-        const response = await fetch('/observation/history/' + encodeURIComponent(tick) + '/world', { cache: 'no-store' });
+        // Seeking restores simulation state and replays from the nearest
+        // retained checkpoint; it does not display a detached old snapshot.
+        const response = await fetch('/control/restore/' + encodeURIComponent(tick), {
+          method: 'POST', cache: 'no-store'
+        });
         if (!response.ok) throw new Error();
         if (serial !== requestSerial) return;
-        observation = await response.json();
-        observationLevel = 'World';
         historyViewTick = tick;
+        observationLevel = 'World';
+        selectedIds.clear();
+        focusedOrganismId = null;
+        clearWorldCache();
+        observation = null;
         cameraInitialized = false;
-        render();
+        await refreshRuntimeStatus();
+        await loadObservation('World');
+        updateTimeline();
       } catch (_) {
-        if (serial === requestSerial) status.textContent = 'Historical observation unavailable.';
+        if (serial === requestSerial) status.textContent = 'Could not seek to that simulation tick.';
       }
     }
 
-    async function returnToLiveWorld() {
-      clearWorldCache();
+    async function continueFromHere() {
       historyViewTick = null;
-      cameraInitialized = false;
-      await loadObservation('World');
-      await refreshRuntimeStatus();
+      await control('/control/resume');
+      updateTimeline();
     }
 
     function updateControls() {
       const speed = document.getElementById('speed');
       const speedValue = document.getElementById('speed-value');
-      if (runtimeStatus?.ticks_per_second != null) {
+      const runToggle = document.getElementById('run-toggle');
+      if (runToggle) {
+        runToggle.textContent = runtimeStatus?.running ? 'Pause' : 'Run';
+        runToggle.classList.toggle('primary', !runtimeStatus?.running);
+        runToggle.setAttribute('aria-label', runtimeStatus?.running ? 'Pause simulation' : 'Run simulation');
+      }
+      if (runtimeStatus?.ticks_per_second != null && !speedControlActive) {
         speed.value = runtimeStatus.ticks_per_second;
         speedValue.textContent = Number(runtimeStatus.ticks_per_second).toFixed(1).replace(/\\.0$/, '');
       }
     }
 
-    async function stepForward() {
-      if (historyViewTick != null) await returnToLiveWorld();
+    document.getElementById('run-toggle').addEventListener('click', async () => {
       if (runtimeStatus?.running) await control('/control/pause');
-      await control('/control/step');
-      await refreshRuntimeStatus();
-      if (runtimeStatus?.population > 0 && observationLevel === 'Structure' && focusedOrganismId != null) {
-        await loadObservation('Structure', focusedOrganismId);
+      else {
+        historyViewTick = null;
+        await control('/control/resume');
       }
+      updateTimeline();
+    });
+    document.getElementById('step-back').addEventListener('click', stepBack);
+    document.getElementById('step-once').addEventListener('click', stepForward);
+
+    async function stepForward() {
+      if (runtimeStatus?.running) await control('/control/pause');
+      const response = await fetch('/control/step', { method: 'POST', cache: 'no-store' });
+      if (!response.ok) return;
+      const state = await response.json();
+      historyViewTick = state.tick;
+      observationLevel = 'World';
+      selectedIds.clear();
+      focusedOrganismId = null;
+      clearWorldCache();
+      await refreshRuntimeStatus();
+      await loadObservation('World');
+      updateTimeline();
     }
 
     async function stepBack() {
-      if (historyViewTick != null) await returnToLiveWorld();
       await refreshRuntimeStatus();
-      const currentTick = runtimeStatus?.tick;
-      const previousTick = Number.isInteger(currentTick) ? currentTick - 1 : -1;
-      if (previousTick < 0 || !historyTicks.includes(previousTick)) return;
+      const currentTick = historyViewTick ?? runtimeStatus?.tick;
+      if (!Number.isFinite(currentTick) || currentTick <= Number(document.getElementById('history').min)) return;
       if (runtimeStatus?.running) await control('/control/pause');
-      const response = await fetch('/control/restore/' + encodeURIComponent(previousTick), { method: 'POST', cache: 'no-store' });
-      if (!response.ok) {
-        status.textContent = 'Could not restore the previous tick.';
-        return;
-      }
-      historyViewTick = null;
-      cameraInitialized = false;
-      clearWorldCache();
-      await refreshRuntimeStatus();
-      await loadObservation(observationLevel, focusedOrganismId);
+      await loadHistoricalWorld(currentTick - 1);
     }
 
     document.getElementById('speed').addEventListener('input', event => {
@@ -199,34 +268,39 @@
       const value = Number(event.target.value);
       if (Number.isFinite(value) && value > 0) await control('/control/speed/' + encodeURIComponent(value));
     });
+    document.getElementById('speed').addEventListener('focus', () => { speedControlActive = true; });
+    document.getElementById('speed').addEventListener('blur', () => { speedControlActive = false; });
+    // The playhead addresses every retained simulation tick. Seeking changes
+    // authoritative state; it does not merely display a stored screenshot.
     document.getElementById('history').addEventListener('input', event => {
-      if (!historyTicks.length) return;
-      const tick = historyTicks[Math.max(0, Math.min(historyTicks.length - 1, Number(event.target.value)))];
-      loadHistoricalWorld(tick);
+      timelineScrubbing = true;
+      document.getElementById('timeline-label').textContent = 'Seek to tick ' + event.target.value;
     });
+    document.getElementById('history').addEventListener('change', event => {
+      timelineScrubbing = false;
+      const tick = Number(event.target.value);
+      if (Number.isSafeInteger(tick)) loadHistoricalWorld(tick);
+    });
+    document.getElementById('live-follow').textContent = 'Continue from Here';
+    document.getElementById('live-follow').addEventListener('click', continueFromHere);
 
 
     function resize() {
       const rect = canvas.getBoundingClientRect();
-      canvas.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
-      canvas.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+      const pixelWidth = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+      const pixelHeight = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+      // The workspace reparents the canvas into a flex viewport after this
+      // script runs. Keep its backing store synchronized with its CSS box or
+      // the browser stretches the old bitmap and distorts every world shape.
+      if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+      if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
       if (!cameraInitialized && observation) fitCurrentObservation();
       render();
     }
     function viewportSize() { return { width: canvas.clientWidth, height: canvas.clientHeight }; }
-    function worldObservationBounds() {
-      if (!observation || observationLevel !== 'World' || !cameraInitialized) return null;
-      const viewport = viewportSize();
-      const a = camera.screenToWorld(0, 0, viewport.width, viewport.height);
-      const b = camera.screenToWorld(viewport.width, viewport.height, viewport.width, viewport.height);
-      const margin = Math.max(1, Math.min(Math.abs(b.x - a.x), Math.abs(b.y - a.y)) * 0.08);
-      return { min_x: Math.min(a.x, b.x) - margin, max_x: Math.max(a.x, b.x) + margin, min_y: Math.min(a.y, b.y) - margin, max_y: Math.max(a.y, b.y) + margin };
-    }
-    function observationViewKey() {
-      const b = worldObservationBounds();
-      return b ? [b.min_x, b.max_x, b.min_y, b.max_y].map(v => v.toFixed(3)).join(',') : 'full';
-    }
+    function observationViewKey() { return 'full-world-observation'; }
+
     function payload() { return observation?.payload || null; }
     function worldPayload() { return payload()?.World || null; }
     function organismPayload() { return payload()?.Organism || null; }
@@ -280,7 +354,7 @@
       cameraInitialized = true;
     }
 
-    function drawForm(form, x, y, rotation = 0) {
+    function drawForm(form, x, y, rotation = 0, appearance = null) {
       if (!form) return;
       ctx.save(); ctx.translate(x, y); ctx.rotate(rotation); ctx.beginPath();
       if (form.Circle) {
@@ -298,9 +372,9 @@
       } else {
         ctx.restore(); return; // Do not invent a boundary for Fluid.
       }
-      ctx.fillStyle = '#d9e2ec';
-      ctx.strokeStyle = '#17202a';
-      ctx.lineWidth = Math.max(1 / Math.max(camera.scale, 1e-9), 0.75);
+      ctx.fillStyle = appearance?.fill || '#d9e2ec';
+      ctx.strokeStyle = appearance?.outline || '#17202a';
+      ctx.lineWidth = Math.max(0.75 / Math.max(camera.scale, 1e-9), 0.01);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -325,8 +399,13 @@
       const width = Number(world.width) || 1;
       const height = Number(world.height) || 1;
       ctx.save();
-      ctx.fillStyle = '#075985';
+      ctx.fillStyle = '#071522';
       ctx.fillRect(0, 0, viewport.width, viewport.height);
+      const fieldTopLeft = camera.worldToScreen(0, 0, viewport.width, viewport.height);
+      const fieldBottomRight = camera.worldToScreen(width, height, viewport.width, viewport.height);
+      ctx.fillStyle = '#075985';
+      ctx.fillRect(fieldTopLeft.x, fieldTopLeft.y,
+        fieldBottomRight.x - fieldTopLeft.x, fieldBottomRight.y - fieldTopLeft.y);
 
       // Visualize the same S-shaped spine used by the transport model. These
       // lines are a rendering aid only; the Rust flow field remains authoritative.
@@ -335,25 +414,31 @@
         const samples = 120;
         for (let index = 0; index <= samples; index += 1) {
           const x = width * index / samples;
-          const y = height * 0.5 + height * 0.23 * Math.sin(Math.PI * 2 * x / width) + height * offset;
+          const y = height * 0.5 - height * 0.23 * Math.sin(Math.PI * 2 * x / width) + height * offset;
           const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
           if (index === 0) ctx.moveTo(point.x, point.y);
           else ctx.lineTo(point.x, point.y);
         }
         ctx.strokeStyle = offset === 0 ? 'rgba(224, 242, 254, 0.72)' : 'rgba(186, 230, 253, 0.24)';
-        ctx.lineWidth = offset === 0 ? Math.max(1.5, camera.scale * 0.8) : Math.max(1, camera.scale * 0.45);
+        // Streamlines are projected into screen coordinates, so stroke width
+        // must remain screen-space constant as the camera zooms.
+        ctx.lineWidth = offset === 0 ? 1.5 : 1.0;
         ctx.stroke();
       }
 
       const vortexRadius = Math.max(2, height * 0.13 * camera.scale);
-      for (const fraction of [0.25, 0.75]) {
-        const x = width * fraction;
-        const y = height * 0.5 + height * 0.23 * Math.sin(Math.PI * 2 * fraction);
-        const point = camera.worldToScreen(x, y, viewport.width, viewport.height);
+      // Place the left eddy on the lower bend and the right eddy on the upper
+      // bend. The right eddy sits beside the hotspot so their visual regions overlap.
+      const eddies = [
+        { x: width * 0.25, y: height * 0.73, start: Math.PI * 0.8, end: Math.PI * 2.8 },
+        { x: width * 0.75, y: height * 0.27, start: -Math.PI * 0.2, end: Math.PI * 1.45 }
+      ];
+      for (const eddy of eddies) {
+        const point = camera.worldToScreen(eddy.x, eddy.y, viewport.width, viewport.height);
         ctx.beginPath();
-        ctx.arc(point.x, point.y, vortexRadius, fraction < 0.5 ? -Math.PI * 0.2 : Math.PI * 0.8, fraction < 0.5 ? Math.PI * 1.45 : Math.PI * 2.8);
-        ctx.strokeStyle = 'rgba(186, 230, 253, 0.38)';
-        ctx.lineWidth = Math.max(1, camera.scale * 0.5);
+        ctx.arc(point.x, point.y, vortexRadius, eddy.start, eddy.end);
+        ctx.strokeStyle = 'rgba(186, 230, 253, 0.48)';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       }
       ctx.restore();
@@ -375,7 +460,7 @@
       ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = 'rgba(255, 150, 40, 0.72)';
-      ctx.lineWidth = Math.max(1, camera.scale * 0.5);
+      ctx.lineWidth = 1.25;
       ctx.stroke();
       ctx.fillStyle = 'rgba(255, 245, 220, 0.95)';
       ctx.font = '11px sans-serif';
@@ -425,15 +510,39 @@
       const width = Math.abs(interaction.currentX - interaction.startX), height = Math.abs(interaction.currentY - interaction.startY);
       ctx.save(); ctx.setLineDash([5, 4]); ctx.strokeStyle = '#555'; ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height); ctx.restore();
     }
-    function render() {
+    function render(updateUi = true) {
       const viewport = viewportSize();
       ctx.clearRect(0, 0, viewport.width, viewport.height);
-      if (!observation) return;
-      if (!cameraInitialized) fitCurrentObservation();
-      if (observationLevel === 'World') renderWorld();
-      else if (observationLevel === 'Organism') renderOrganism();
-      else if (observationLevel === 'Structure') renderStructure();
-      drawSelectionRectangle(); updateStatus();
+      ctx.fillStyle = '#071522';
+      ctx.fillRect(0, 0, viewport.width, viewport.height);
+      try {
+        if (!observation) {
+          ctx.fillStyle = '#d9e2ec';
+          ctx.font = '13px ui-monospace, monospace';
+          ctx.fillText('Waiting for simulation observation…', 18, 30);
+          return;
+        }
+        if (!cameraInitialized) fitCurrentObservation();
+        if (observationLevel === 'World') {
+          if (!worldPayload()) {
+            ctx.fillStyle = '#ffd28a';
+            ctx.font = '13px ui-monospace, monospace';
+            ctx.fillText('World observation received without payload.World', 18, 30);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '11px ui-monospace, monospace';
+            ctx.fillText('Check /observation/world response and browser console.', 18, 50);
+          } else renderWorld();
+        } else if (observationLevel === 'Organism') renderOrganism();
+        else if (observationLevel === 'Structure') renderStructure();
+        drawSelectionRectangle();
+        if (updateUi) updateStatus();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ctx.fillStyle = '#ffd28a';
+        ctx.font = '13px ui-monospace, monospace';
+        ctx.fillText('World renderer error: ' + message.slice(0, 140), 18, 30);
+        status.textContent = 'World renderer error: ' + message.slice(0, 180);
+      }
     }
     function selectedIndex() { return focusedOrganismId == null ? -1 : [...selectedIds].indexOf(focusedOrganismId); }
     function updateStatus() {
@@ -504,8 +613,7 @@
       const levelChanged = observationLevel !== level;
       let url = '/observation/world';
       if (level === 'World') {
-        const bounds = worldObservationBounds();
-        const params = new URLSearchParams(bounds || {});
+        const params = new URLSearchParams();
         if (worldCache.organisms.size) {
           params.set('known_organisms', JSON.stringify([...worldCache.organisms.entries()].map(([id, value]) => [
             id, value.structure_revision, value.position_revision
@@ -540,11 +648,21 @@
         }
       }
       try {
-        const response = await fetch(url, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        // Bound observation requests so a stalled simulation endpoint cannot
+        // leave the canvas indefinitely showing its initial waiting state.
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        let response;
+        try {
+          response = await fetch(url, { cache: 'no-store', signal: controller.signal });
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`);
         const next = await response.json();
         if (serial !== requestSerial) return;
         if (level === 'World' && next?.payload?.World) {
+          const previousParts = [...worldCache.field.values()].flatMap(cell => cell.physical_parts || []);
           const world = next.payload.World;
           for (const organism of world.organisms || []) {
             const cached = worldCache.organisms.get(organism.id);
@@ -554,13 +672,37 @@
             worldCache.organisms.set(organism.id, organism);
           }
           for (const cell of world.field || []) {
-            if (cell.materials == null) {
-              const cached = worldCache.field.get(cell.cell_index);
-              if (cached) cell.materials = cached.materials;
-            }
-            if (cell.materials?.length) worldCache.field.set(cell.cell_index, cell);
+            const cached = worldCache.field.get(cell.cell_index);
+            if (cell.materials == null && cached) cell.materials = cached.materials;
+            if (cell.physical_parts == null && cached) cell.physical_parts = cached.physical_parts;
+            if (cell.materials?.length || cell.physical_parts?.length) worldCache.field.set(cell.cell_index, cell);
             else worldCache.field.delete(cell.cell_index);
           }
+          // Match constituents by resource and nearest prior position. The observation
+          // schema has no persistent constituent ID, so this is a display-only pairing.
+          const nextParts = [...worldCache.field.values()].flatMap(cell => cell.physical_parts || []);
+          const available = new Map();
+          for (const part of previousParts) {
+            const list = available.get(part.resource) || [];
+            list.push({ x: part.x, y: part.y, used: false });
+            available.set(part.resource, list);
+          }
+          for (const part of nextParts) {
+            const candidates = available.get(part.resource) || [];
+            let best = null, bestDistance = Infinity;
+            for (const candidate of candidates) {
+              if (candidate.used) continue;
+              const distance = (candidate.x - part.x) ** 2 + (candidate.y - part.y) ** 2;
+              if (distance < bestDistance) { best = candidate; bestDistance = distance; }
+            }
+            if (best) {
+              best.used = true;
+              displayPositionStarts.set(part, { x: best.x, y: best.y });
+            }
+          }
+          displayAnimationStartedAt = performance.now();
+          const configuredTps = Number(runtimeStatus?.ticks_per_second) || 10;
+          displayAnimationDurationMs = Math.max(16, Math.min(250, 1000 / configuredTps));
         }
         if (
           level === 'Organism' &&
@@ -580,8 +722,20 @@
         observation = next; observationLevel = level;
         if (levelChanged) cameraInitialized = false;
         render();
-      } catch (_) {
-        if (serial === requestSerial) status.textContent = 'Observation unavailable — retrying…';
+      } catch (error) {
+        if (serial === requestSerial) {
+          const message = error instanceof Error ? error.message : String(error);
+          status.textContent = 'Observation request failed: ' + message.slice(0, 180);
+          const viewport = viewportSize();
+          ctx.clearRect(0, 0, viewport.width, viewport.height);
+          ctx.fillStyle = '#071522';
+          ctx.fillRect(0, 0, viewport.width, viewport.height);
+          ctx.fillStyle = '#ffd28a';
+          ctx.font = '13px ui-monospace, monospace';
+          ctx.fillText('Could not load /observation/world', 18, 30);
+          ctx.fillStyle = '#d9e2ec';
+          ctx.fillText(message.slice(0, 140), 18, 52);
+        }
       }
     }
     async function enterOrganismLevel(id) { if (id == null) return; focusedOrganismId = id; selectedIds.add(id); await loadObservation('Organism', id); }
@@ -627,7 +781,6 @@
       event.preventDefault(); const point = canvasPoint(event), viewport = viewportSize();
       camera.zoomAt(point.x, point.y, Math.exp(-event.deltaY * 0.001), viewport.width, viewport.height);
       render();
-      if (observationLevel === 'World' && historyViewTick == null) loadObservation('World');
     }, { passive: false });
     canvas.addEventListener('pointerdown', event => {
       event.preventDefault();
@@ -640,15 +793,27 @@
       if (event.button !== 0 || observationLevel !== 'World') return;
       const point = canvasPoint(event);
       canvas.setPointerCapture(event.pointerId);
+      // In the organism-free chemistry experiment, empty-world dragging must
+      // pan the camera. Keep click/drag selection for an organism hit target.
+      if (!organismAtScreenPoint(point.x, point.y)) {
+        interaction = {
+          pointerId: event.pointerId, panning: true, clearOnClick: true, moved: false,
+          lastX: event.clientX, lastY: event.clientY
+        };
+        canvas.classList.add('panning');
+        return;
+      }
       interaction = { pointerId: event.pointerId, selecting: true, startX: point.x, startY: point.y, currentX: point.x, currentY: point.y };
     });
     canvas.addEventListener('pointermove', event => {
       if (!interaction || interaction.pointerId !== event.pointerId) return;
       event.preventDefault();
       if (interaction.panning) {
-        camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY);
-        interaction.lastX = event.clientX; interaction.lastY = event.clientY; render();
-        if (observationLevel === 'World' && historyViewTick == null) queueViewportRefresh();
+        const viewport = viewportSize();
+        camera.pan(event.clientX - interaction.lastX, event.clientY - interaction.lastY, viewport.width, viewport.height);
+        interaction.lastX = event.clientX; interaction.lastY = event.clientY;
+        interaction.moved = true;
+        render();
       } else if (interaction.selecting) {
         const point = canvasPoint(event); interaction.currentX = point.x; interaction.currentY = point.y; render();
       }
@@ -656,8 +821,15 @@
     function endPointer(event) {
       if (!interaction || interaction.pointerId !== event.pointerId) return;
       event.preventDefault();
-      if (interaction.panning) { interaction = null; canvas.classList.remove('panning'); }
-      else if (interaction.selecting) finishWorldSelection(canvasPoint(event));
+      if (interaction.panning) {
+        if (interaction.clearOnClick && !interaction.moved) {
+          selectedIds.clear();
+          focusedOrganismId = null;
+          render();
+        }
+        interaction = null;
+        canvas.classList.remove('panning');
+      } else if (interaction.selecting) finishWorldSelection(canvasPoint(event));
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
     }
     canvas.addEventListener('pointerup', endPointer);
@@ -681,8 +853,11 @@
 
       if (event.code === 'Space') {
         event.preventDefault();
-        if (historyViewTick != null) await returnToLiveWorld();
-        await control(runtimeStatus?.running ? '/control/pause' : '/control/resume');
+        if (runtimeStatus?.running) await control('/control/pause');
+        else {
+          historyViewTick = null;
+          await control('/control/resume');
+        }
       } else if (event.key === '<' || (event.code === 'Comma' && event.shiftKey)) {
         event.preventDefault();
         await stepBack();
@@ -700,15 +875,6 @@
     let liveRefreshQueued = false;
     let liveStream = null;
 
-    let viewportRefreshQueued = false;
-    function queueViewportRefresh() {
-      if (viewportRefreshQueued || historyViewTick != null || observationLevel !== 'World') return;
-      viewportRefreshQueued = true;
-      setTimeout(async () => {
-        viewportRefreshQueued = false;
-        if (historyViewTick == null && observationLevel === 'World') await loadObservation('World');
-      }, 75);
-    }
 
     function queueLiveRefresh() {
       if (historyViewTick != null || liveRefreshQueued) return;
@@ -716,11 +882,16 @@
       setTimeout(async () => {
         liveRefreshQueued = false;
         if (historyViewTick != null) return;
+        const previousTick = runtimeStatus?.tick;
         await refreshRuntimeStatus();
-        if (historyViewTick != null) return;
+        if (historyViewTick != null || runtimeStatus?.tick == null) return;
+        // Fetch a new observation only when the authoritative simulation tick
+        // advances. WebSocket events provide the fast path; periodic status
+        // checks below keep live mode working if a tick event is missed.
+        if (runtimeStatus.tick === previousTick) return;
         if (observationLevel === 'World') await loadObservation('World');
         else if (focusedOrganismId != null) await loadObservation(observationLevel, focusedOrganismId);
-      }, 50);
+      }, 25);
     }
 
     function connectLiveStream() {
@@ -752,18 +923,38 @@
       liveStream.onerror = () => liveStream?.close();
     }
 
+    // Draw continuously at the browser's refresh rate. New simulation observations
+    // update targets; interpolation above makes constituent motion continuous between them.
+    function animationFrame() {
+      if (historyViewTick == null) render(false);
+      requestAnimationFrame(animationFrame);
+    }
+    requestAnimationFrame(animationFrame);
+
     window.addEventListener('resize', resize);
+    // Keep live playback attached to the newest simulation tick even if the
+    // browser drops a WebSocket notification. This is status-only polling;
+    // observations are fetched only when the tick actually advances.
+    setInterval(queueLiveRefresh, 250);
+    if (typeof ResizeObserver !== 'undefined') {
+      const canvasResizeObserver = new ResizeObserver(() => resize());
+      canvasResizeObserver.observe(canvas);
+    }
     resize();
     awaitInitialObservation();
 
-    function awaitInitialObservation() {
-      refreshRuntimeStatus().finally(async () => {
-        selectedIds.clear();
-        selectedIds.add('1');
-        focusedOrganismId = '1';
-        await loadObservation('Structure', '1');
-        connectLiveStream();
-      });
+    async function awaitInitialObservation() {
+      // Do not make the first world render wait for the status endpoint. A slow
+      // status request must not block the independent world-observation request.
+      selectedIds.clear();
+      focusedOrganismId = null;
+      observationLevel = 'World';
+      const observationRequest = loadObservation('World');
+      const statusRequest = refreshRuntimeStatus();
+      await Promise.allSettled([observationRequest, statusRequest]);
+      connectLiveStream();
+      // This viewer opens the environmental chemistry experiment in live mode.
+      if (!runtimeStatus?.running) await control('/control/resume');
     }
   </script>
 </body>
