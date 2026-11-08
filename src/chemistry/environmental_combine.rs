@@ -780,14 +780,13 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     diagnostics.constituent_pair_windows_truncated +=
                         usize::from(component_work_initial < pair_count);
                     let uninspected_pairs = pair_count.saturating_sub(component_work_initial);
-                    for _ in 0..uninspected_pairs {
-                        journal.record(crate::environmental_evaluation::EnvironmentalReactionEvaluation::<()>::deferred(
-                            tick,
-                            crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
-                            crate::environmental_evaluation::EvaluationStage::CandidateValidation,
-                            "bounded_constituent_pair_window_exhausted",
-                        ));
-                    }
+                    journal.record_deferred_count(
+                        tick,
+                        crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                        crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+                        "bounded_constituent_pair_window_exhausted",
+                        uninspected_pairs,
+                    );
                     let pair_start = component_pair_start(tick, pair_count);
                     let selected = select_best_contact_from_offset(
                         &trial_structure,
