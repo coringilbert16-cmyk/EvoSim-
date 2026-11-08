@@ -153,7 +153,9 @@ impl MaterialBoundsCursor {
         let mut catalog_valid = true;
         for (index, resource) in catalog.iter().enumerate() {
             if resource.name.is_empty()
-                || catalog_indices.insert(resource.name.clone(), index).is_some()
+                || catalog_indices
+                    .insert(resource.name.clone(), index)
+                    .is_some()
             {
                 catalog_valid = false;
             }
@@ -203,8 +205,7 @@ impl MaterialBoundsCursor {
                     break;
                 };
                 self.next_material += 1;
-                page.material_headers_inspected =
-                    page.material_headers_inspected.saturating_add(1);
+                page.material_headers_inspected = page.material_headers_inspected.saturating_add(1);
                 page.visited_work = page.visited_work.saturating_add(1);
                 self.visited_work = self.visited_work.saturating_add(1);
 
@@ -253,7 +254,10 @@ impl MaterialBoundsCursor {
                     let (name, amount) = physical.material.parts.get(progress.next_constituent)?;
                     let resource_index = *self.catalog_indices.get(name)?;
                     let resource = catalog.get(resource_index)?;
-                    let placement = *physical.placements.as_ref()?.get(progress.next_constituent)?;
+                    let placement = *physical
+                        .placements
+                        .as_ref()?
+                        .get(progress.next_constituent)?;
                     if !placement.x.is_finite()
                         || !placement.y.is_finite()
                         || !placement.rotation_radians.is_finite()
@@ -284,8 +288,7 @@ impl MaterialBoundsCursor {
                         let realized_area = area(shape)?;
                         let expected_area = default_area * *amount;
                         if !expected_area.is_finite()
-                            || (realized_area - expected_area).abs()
-                                > 1e-9 * expected_area.max(1.0)
+                            || (realized_area - expected_area).abs() > 1e-9 * expected_area.max(1.0)
                         {
                             return None;
                         }
@@ -308,12 +311,12 @@ impl MaterialBoundsCursor {
             }
 
             progress.next_constituent += 1;
-            page.constituent_inspections =
-                page.constituent_inspections.saturating_add(1);
+            page.constituent_inspections = page.constituent_inspections.saturating_add(1);
             page.visited_work = page.visited_work.saturating_add(1);
             self.visited_work = self.visited_work.saturating_add(1);
             if progress.next_constituent >= record.constituent_count {
-                self.bounds[progress.material_index] = progress.finish();
+                let material_index = progress.material_index;
+                self.bounds[material_index] = progress.finish();
                 page.completed_materials = page.completed_materials.saturating_add(1);
             } else {
                 self.current = Some(progress);
@@ -1464,24 +1467,25 @@ mod tests {
                 .map(|material| material.constituent_count as u64)
                 .sum::<u64>();
         let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
-        let mut actual = None;
         let mut visited = 0;
         let mut pages = 0;
-        loop {
+        let actual = loop {
             let page = cursor.next_page(&snapshot, &field, &catalog, 1);
             assert!(page.visited_work <= 1);
             visited += page.visited_work;
             pages += 1;
             if page.complete {
-                actual = page.bounds;
                 assert_eq!(page.deferred_work, 0);
-                break;
+                break page.bounds;
             }
             assert!(page.bounds.is_none());
             assert!(pages < 20);
-        }
+        };
         assert_eq!(visited, expected_work);
-        assert_eq!(actual.expect("completed cursor returns all bounds"), expected);
+        assert_eq!(
+            actual.expect("completed cursor returns all bounds"),
+            expected
+        );
     }
 
     #[test]
