@@ -3057,24 +3057,43 @@ mod shared_break_inventory_adapter_tests {
     fn environment_with_one_bonded_material() -> Environment {
         let mut material = Material::free_base("Carbon".to_owned(), 1.0);
         material.parts.push(("Oxygen".to_owned(), 1.0));
+        material.parts.push(("Hydrogen".to_owned(), 1.0));
         let physical = PhysicalMaterial {
             material,
             environmental_identity: 44,
             placements: None,
-            internal_connections: Some(vec![PhysicalMaterialBond {
-                part_a: 0,
-                endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
-                part_b: 1,
-                endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
-                bond_energy: 1.5,
-            }]),
+            internal_connections: Some(vec![
+                PhysicalMaterialBond {
+                    part_a: 0,
+                    endpoint_a: ConnectionEndpoint::Corner { point_index: 0 },
+                    part_b: 1,
+                    endpoint_b: ConnectionEndpoint::Corner { point_index: 1 },
+                    bond_energy: 1.5,
+                },
+                PhysicalMaterialBond {
+                    part_a: 1,
+                    endpoint_a: ConnectionEndpoint::Corner { point_index: 1 },
+                    part_b: 2,
+                    endpoint_b: ConnectionEndpoint::Corner { point_index: 2 },
+                    bond_energy: 2.5,
+                },
+                PhysicalMaterialBond {
+                    part_a: 2,
+                    endpoint_a: ConnectionEndpoint::Corner { point_index: 2 },
+                    part_b: 0,
+                    endpoint_b: ConnectionEndpoint::Corner { point_index: 3 },
+                    bond_energy: 3.5,
+                },
+            ]),
             owner_relative_origin: None,
             realized_shapes: None,
         };
+        let mut second = physical.clone();
+        second.environmental_identity = 45;
         let mut field = ActiveMaterialField::new(25.0, 25.0, 25.0);
         field.cells[0] = FieldCell {
             materials: Vec::new(),
-            physical_materials: vec![physical],
+            physical_materials: vec![physical, second],
         };
         Environment {
             width: 25.0,
@@ -3089,29 +3108,63 @@ mod shared_break_inventory_adapter_tests {
     #[test]
     fn break_adapter_preserves_bond_records_and_reports_all_nested_scan_work() {
         let environment = environment_with_one_bonded_material();
-        let discovery = discover_environmental_bonds(&environment, 0, 8);
-        assert_eq!(discovery.candidates.len(), 1);
+        let discovery = discover_environmental_bonds(&environment, 0, 16);
+        assert_eq!(discovery.candidates.len(), 6);
         assert_eq!(
             discovery.inspected_entries as u64,
             discovery.inspected_cells + discovery.inspected_materials + discovery.inspected_bonds
         );
         assert_eq!(discovery.inspected_cells, 1);
-        assert_eq!(discovery.inspected_materials, 1);
-        assert_eq!(discovery.inspected_bonds, 1);
+        assert_eq!(discovery.inspected_materials, 2);
+        assert_eq!(discovery.inspected_bonds, 6);
 
         let mut builder = EnvironmentalInteractionInventoryBuilder::new(13);
         let (inserted, inspected_entries) =
-            append_environmental_bond_inventory(&mut builder, &environment, 0, 8).unwrap();
+            append_environmental_bond_inventory(&mut builder, &environment, 0, 16).unwrap();
         let inventory = builder.finish();
-        assert_eq!(inserted, 1);
-        assert_eq!(inspected_entries, 3);
-        assert_eq!(inventory.materials.len(), 1);
-        assert_eq!(inventory.existing_bonds.len(), 1);
-        assert_eq!(inventory.existing_bonds[0].bond_energy, 1.5);
-        assert_eq!(inventory.existing_bonds[0].constituent_a.local_index, 0);
-        assert_eq!(inventory.existing_bonds[0].constituent_b.local_index, 1);
+        assert_eq!(inserted, discovery.candidates.len());
+        assert_eq!(inspected_entries, discovery.inspected_entries);
+        assert_eq!(inventory.materials.len(), 2);
+        assert_eq!(inventory.existing_bonds.len(), 6);
+
+        let mut expected = discovery
+            .candidates
+            .iter()
+            .map(|(cell_index, material_index, bond_index)| {
+                let physical = &environment.field.cells[*cell_index].physical_materials[*material_index];
+                let connection = &physical.internal_connections.as_ref().unwrap()[*bond_index];
+                (
+                    physical.environmental_identity,
+                    *bond_index,
+                    connection.part_a,
+                    connection.endpoint_a,
+                    connection.part_b,
+                    connection.endpoint_b,
+                    connection.bond_energy,
+                )
+            })
+            .collect::<Vec<_>>();
+        expected.sort_by_key(|(identity, bond_index, ..)| (*identity, *bond_index));
+
+        let mut actual = inventory
+            .existing_bonds
+            .iter()
+            .map(|bond| {
+                (
+                    bond.material.0,
+                    bond.bond_index,
+                    bond.constituent_a.local_index,
+                    bond.endpoint_a,
+                    bond.constituent_b.local_index,
+                    bond.endpoint_b,
+                    bond.bond_energy,
+                )
+            })
+            .collect::<Vec<_>>();
+        actual.sort_by_key(|(identity, bond_index, ..)| (*identity, *bond_index));
+        assert_eq!(actual, expected);
         assert_eq!(inventory.work.broad_phase_cell_visits, 1);
-        assert_eq!(inventory.work.material_visits, 1);
-        assert_eq!(inventory.work.bond_visits, 1);
+        assert_eq!(inventory.work.material_visits, 2);
+        assert_eq!(inventory.work.bond_visits, 6);
     }
 }
