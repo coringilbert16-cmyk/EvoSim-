@@ -174,20 +174,15 @@ pub(crate) fn seed_randomized_resources(
     }
     identities.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
-    {
-        pile_sizes.push(cut - previous);
-        previous = cut;
+    // Keep the starting inventory visibly organized into roughly two dozen
+    // similarly sized piles, while shuffling pile sizes and object contents for
+    // a deterministic but nonuniform map.
+    const PILE_COUNT: usize = 24;
+    let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
+    for size in pile_sizes.iter_mut().take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT) {
+        *size += 1;
     }
+    pile_sizes.shuffle(&mut rng);
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
@@ -207,10 +202,10 @@ pub(crate) fn seed_randomized_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5)
                 .clamp(1.0, width - 1.0);
             let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5 + rng.gen_range(-0.4..0.4)).clamp(1.0, height - 1.0);
             let placement = Placement {
                 x,
                 y,
@@ -276,20 +271,15 @@ fn seed_randomized_molecular_resources(
     }
     objects.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
-    {
-        pile_sizes.push(cut - previous);
-        previous = cut;
+    // Keep the starting inventory visibly organized into roughly two dozen
+    // similarly sized piles, while shuffling pile sizes and object contents for
+    // a deterministic but nonuniform map.
+    const PILE_COUNT: usize = 24;
+    let mut pile_sizes = vec![ENVIRONMENT_OBJECT_COUNT / PILE_COUNT; PILE_COUNT];
+    for size in pile_sizes.iter_mut().take(ENVIRONMENT_OBJECT_COUNT % PILE_COUNT) {
+        *size += 1;
     }
+    pile_sizes.shuffle(&mut rng);
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
@@ -309,10 +299,10 @@ fn seed_randomized_molecular_resources(
         for local_index in 0..pile_size {
             let column = local_index % columns;
             let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 2.5)
                 .clamp(1.0, width - 2.8);
             let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
+                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 2.5 + rng.gen_range(-0.4..0.4)).clamp(1.0, height - 1.0);
             let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
             let placement = Placement {
                 x,
