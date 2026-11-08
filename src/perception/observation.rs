@@ -156,14 +156,25 @@ fn observe_field_physical_parts(
                 .realized_shapes
                 .as_ref()
                 .and_then(|shapes| shapes.get(index))
-                .or_else(|| catalog.iter().find(|entry| entry.name == *resource).map(|entry| &entry.shape))
+                .or_else(|| {
+                    catalog
+                        .iter()
+                        .find(|entry| entry.name == *resource)
+                        .map(|entry| &entry.shape)
+                })
                 .map(|shape| shape.form.clone());
-            let Some(form) = form else { continue; };
+            let Some(form) = form else {
+                continue;
+            };
             let Some(definition) = catalog.iter().find(|entry| entry.name == *resource) else {
                 continue;
             };
-            let response = crate::harmonics::material_response(definition.properties, baselines, 0.0);
-            let frequency = crate::harmonics::natural_frequency_cycles_per_day(definition.properties, baselines);
+            let response =
+                crate::harmonics::material_response(definition.properties, baselines, 0.0);
+            let frequency = crate::harmonics::natural_frequency_cycles_per_day(
+                definition.properties,
+                baselines,
+            );
             parts.push(WorldFieldPartObservation {
                 resource: resource.clone(),
                 x: placement.x,
@@ -171,7 +182,10 @@ fn observe_field_physical_parts(
                 rotation_radians: placement.rotation_radians,
                 form,
                 resonance_frequency_cycles_per_day: frequency,
-                resonance_amplitude: response.components.first().map_or(0.0, |c| c.amplitude),
+                resonance_amplitude: response
+                    .components
+                    .first()
+                    .map_or(0.0, |component| component.amplitude),
             });
         }
     }
@@ -370,12 +384,22 @@ impl WorldObservation {
         let sunlight_brightness = simulation
             .world_tone
             .and_then(|config| {
-                let sample = simulation.world_tone_cycle.as_ref()
+                let sample = simulation
+                    .world_tone_cycle
+                    .as_ref()
                     .and_then(|cycle| cycle.sample(simulation.tick))
-                    .or_else(|| config.sample(simulation.tick, simulation.environment.width, simulation.environment.height))?;
+                    .or_else(|| {
+                        config.sample(
+                            simulation.tick,
+                            simulation.environment.width,
+                            simulation.environment.height,
+                        )
+                    })?;
                 let minimum = config.parameters.minimum_energy_intensity_per_tick_per_width;
                 let maximum = config.parameters.maximum_energy_intensity_per_tick_per_width;
-                let fraction = ((sample.energy_intensity_per_tick_per_width - minimum) / (maximum - minimum)).clamp(0.0, 1.0);
+                let fraction = ((sample.energy_intensity_per_tick_per_width - minimum)
+                    / (maximum - minimum))
+                    .clamp(0.0, 1.0);
                 Some(0.1 + fraction * 0.9)
             })
             .unwrap_or(1.0);
@@ -620,10 +644,15 @@ mod tests {
     fn environmental_world_observation_exposes_physical_resource_geometry() {
         let fixture = crate::environment_chemistry_experiment::build(42);
         let observation = WorldObservation::from_simulation(&fixture.simulation);
-        let parts = observation.field.iter()
+        let parts = observation
+            .field
+            .iter()
             .flat_map(|cell| cell.physical_parts.iter().flatten())
             .collect::<Vec<_>>();
-        assert!(!parts.is_empty(), "world view must expose realized physical resources");
+        assert!(
+            !parts.is_empty(),
+            "world view must expose realized physical resources"
+        );
         assert!(parts.iter().all(|part| {
             part.x.is_finite()
                 && part.y.is_finite()
