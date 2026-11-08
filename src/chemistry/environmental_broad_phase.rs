@@ -144,6 +144,7 @@ pub(crate) struct MaterialBoundsCursor {
     catalog_indices: std::collections::BTreeMap<String, usize>,
     catalog_valid: bool,
     catalog_len: usize,
+    known_work: u64,
     visited_work: u64,
     complete: bool,
 }
@@ -173,6 +174,10 @@ impl MaterialBoundsCursor {
             catalog_indices,
             catalog_valid,
             catalog_len: catalog.len(),
+            known_work: snapshot.materials.iter().fold(
+                snapshot.materials.len() as u64,
+                |total, material| total.saturating_add(material.constituent_count as u64),
+            ),
             visited_work: 0,
             complete: snapshot.materials.is_empty(),
         }
@@ -185,12 +190,6 @@ impl MaterialBoundsCursor {
         catalog: &[crate::resources::BaseResource],
         work_limit: usize,
     ) -> MaterialBoundsCursorPage {
-        let known_work = snapshot
-            .materials
-            .iter()
-            .fold(snapshot.materials.len() as u64, |total, material| {
-                total.saturating_add(material.constituent_count as u64)
-            });
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
             || field.revision != self.field_revision
@@ -198,7 +197,7 @@ impl MaterialBoundsCursor {
             || catalog.len() != self.catalog_len
         {
             return MaterialBoundsCursorPage {
-                deferred_work: known_work.saturating_sub(self.visited_work),
+                deferred_work: self.known_work.saturating_sub(self.visited_work),
                 ..MaterialBoundsCursorPage::default()
             };
         }
@@ -334,7 +333,7 @@ impl MaterialBoundsCursor {
         }
 
         self.complete = self.current.is_none() && self.next_material >= snapshot.materials.len();
-        page.deferred_work = known_work.saturating_sub(self.visited_work);
+        page.deferred_work = self.known_work.saturating_sub(self.visited_work);
         page.complete = self.complete;
         if self.complete {
             page.bounds = Some(self.bounds.clone());
