@@ -617,6 +617,25 @@ mod tests {
         assert_ne!(ObservationLevel::Organism, ObservationLevel::Structure)
     }
     #[test]
+    fn environmental_world_observation_exposes_physical_resource_geometry() {
+        let fixture = crate::environment_chemistry_experiment::build(42);
+        let observation = WorldObservation::from_simulation(&fixture.simulation);
+        let parts = observation.field.iter()
+            .flat_map(|cell| cell.physical_parts.iter().flatten())
+            .collect::<Vec<_>>();
+        assert!(!parts.is_empty(), "world view must expose realized physical resources");
+        assert!(parts.iter().all(|part| {
+            part.x.is_finite()
+                && part.y.is_finite()
+                && part.rotation_radians.is_finite()
+                && part.form.is_valid()
+                && part.resonance_frequency_cycles_per_day.is_finite()
+                && part.resonance_amplitude.is_finite()
+        }));
+        assert!((0.1..=1.0).contains(&observation.sunlight_brightness));
+    }
+
+    #[test]
     fn world_context_contains_no_selection() {
         let context = ObservationContext::world();
         assert_eq!(context.level, ObservationLevel::World);
