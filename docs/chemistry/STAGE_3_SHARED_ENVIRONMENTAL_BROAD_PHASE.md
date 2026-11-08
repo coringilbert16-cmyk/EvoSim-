@@ -176,3 +176,14 @@ The next implementation must be a resumable cursor, not another eager window wra
 ### Implementation boundary
 
 Do not change live COMBINE/DISPLACEMENT budgets, per-tick partitions, rotation policy, reaction thresholds, or transaction behavior while implementing the cursor. First prove cursor work accounting and parity in isolation. Only then compare the cursor against each production adapter and design the sequential refresh integration.
+
+
+### Additional work-boundary finding
+
+The cursor cannot claim bounded discovery if it eagerly calls `spatial_bounds_from_field` first. That helper restores every material and computes every body's geometry before the pair window starts. The implementation must either:
+- derive and cache one material's bounds only when its source anchor is reached, charging restoration/geometry work to the same explicit budget; or
+- define a separately bounded snapshot-preparation phase with its own continuation and counters.
+
+The same accounting must include failed restorations, invalid catalog/material checks, and materials with no realized body. Otherwise large or malformed materials can consume unreported work while producing no candidate. Snapshot ownership enumeration remains a distinct one-pass cost and must be measured separately from lazy bounds construction and pair traversal.
+
+This prevents moving the unbounded eager scan one function earlier and calling the resulting pair cursor bounded.
