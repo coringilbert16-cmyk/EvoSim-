@@ -388,6 +388,17 @@ mod tests {
             }]);
             field.cells[0].physical_materials.push(material);
         }
+        field.cells[0].physical_materials[0]
+            .internal_connections
+            .as_mut()
+            .expect("fixture bonds exist")
+            .push(PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: ConnectionEndpoint::Fluid { x: 2.0, y: 0.0 },
+                part_b: 9,
+                endpoint_b: ConnectionEndpoint::Fluid { x: 3.0, y: 0.0 },
+                bond_energy: 0.5,
+            });
 
         let mut cursor = EnvironmentalSnapshotCursor::new(&field, 13);
         let mut total = 0;
@@ -404,11 +415,12 @@ mod tests {
         let eager = EnvironmentalMaterialSnapshot::from_field(&field, 13);
         assert_eq!(snapshot, eager);
         assert_eq!(snapshot.existing_bonds.len(), 2);
+        assert_eq!(snapshot.bond_record_count, 3);
         assert_eq!(
             total,
             field.cells.len() as u64
                 + 2 * snapshot.materials.len() as u64
-                + 2 * snapshot.existing_bonds.len() as u64
+                + 3
         );
     }
 
