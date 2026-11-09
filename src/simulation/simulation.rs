@@ -901,7 +901,6 @@ impl Simulation {
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics
-
             .break_discovery_elapsed_ns = elapsed_nanos(break_discovery_started);
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
@@ -925,7 +924,6 @@ impl Simulation {
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
         self.environmental_chemistry_diagnostics
-
             .combine_discovery_elapsed_ns = elapsed_nanos(combine_discovery_started);
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
@@ -1116,7 +1114,6 @@ impl Simulation {
                 &mut displacement_discovery,
             );
         self.environmental_chemistry_diagnostics
-
             .displacement_discovery_elapsed_ns = elapsed_nanos(displacement_discovery_started);
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
