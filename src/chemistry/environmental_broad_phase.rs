@@ -2886,10 +2886,10 @@ mod tests {
         let mut field = ActiveMaterialField::new(10.0, 10.0, 10.0);
         let mut material = physical(0, "Carbon");
         material.internal_connections = Some(vec![
-            crate::physical_material::PhysicalConnection {
+            crate::physical_material::PhysicalMaterialBond {
                 part_a: 0,
                 part_b: 9,
-                endpoint_a: crate::structure::ConnectionEndpoint::default(),
+                endpoint_a: crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 endpoint_b: crate::structure::ConnectionEndpoint::default(),
                 bond_energy: 1.0,
             },
