@@ -66,8 +66,8 @@ jobs:
             target_dir="$3"
             log="$GITHUB_WORKSPACE/profiling-overhead-$label.log"
             diag="/tmp/profiling-overhead-$label.jsonl"
-            (cd "$source_dir" && CARGO_TARGET_DIR="$target_dir" cargo run --locked -- \\
-              --headless --environment-chemistry-experiment --seconds 60 --seed 42 \\
+            (cd "$source_dir" && CARGO_TARGET_DIR="$target_dir" cargo run --locked -- \
+              --headless --environment-chemistry-experiment --seconds 60 --seed 42 \
               --diagnostics "$diag" --diagnostic-interval 100) > "$log"
             grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | tee -a "$GITHUB_WORKSPACE/profiling-overhead-summary.txt"
             rm -f "$diag"
