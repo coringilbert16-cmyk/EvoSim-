@@ -1054,8 +1054,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 min_y: body.min_y,
                 max_y: body.max_y,
             });
-        let target_cell_limit =
-            FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
+        let target_cell_limit = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
         let target_cell_count =
             crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
                 &environment.field,
