@@ -1041,11 +1041,21 @@ impl IndexedSpatialCursor {
                 let expanded = bounds[self.anchor_index].and_then(|value| value.expanded(padding));
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
                 self.anchor_initialized = true;
-                self.row_offset = 0;
-                self.col = self.range.map_or(0, |range| range.min_col);
                 self.target_slot = 0;
+                self.target_slots_visited = 0;
+                self.cells_visited = 0;
                 self.cell_loaded = false;
-                if self.range.is_none_or(|range| range.row_count == 0) {
+                if let Some(range) = self.range {
+                    let columns = range.max_col - range.min_col + 1;
+                    let total_cells = range.row_count.saturating_mul(columns);
+                    let anchor = &snapshot.materials[self.anchor_index];
+                    self.cell_start_offset = self
+                        .tick
+                        .wrapping_add(anchor.locator.cell_index)
+                        .wrapping_add(anchor.locator.material_index)
+                        % total_cells;
+                    self.set_cell_position(range, self.cell_start_offset);
+                } else {
                     self.advance_anchor(snapshot.materials.len());
                 }
                 continue;
@@ -1068,16 +1078,23 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                     continue;
                 }
-                page.visited_work = page.visited_work.saturating_add(1);
-                page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
-                self.cell_loaded = true;
-                self.target_slot = 0;
-                if field
+                let target_count = field
                     .cells
                     .get(cell_index)
-                    .is_none_or(|cell| cell.physical_materials.is_empty())
-                {
+                    .map_or(0, |cell| cell.physical_materials.len());
+                page.visited_work = page.visited_work.saturating_add(1);
+                page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
+                if target_count == 0 {
                     self.advance_cell(range);
+                } else {
+                    let anchor = &snapshot.materials[self.anchor_index];
+                    self.cell_loaded = true;
+                    self.target_slots_visited = 0;
+                    self.target_slot = self
+                        .tick
+                        .wrapping_add(cell_index)
+                        .wrapping_add(anchor.locator.material_index)
+                        % target_count;
                 }
                 continue;
             }
@@ -1093,7 +1110,13 @@ impl IndexedSpatialCursor {
             }
 
             let target_slot = self.target_slot;
-            self.target_slot += 1;
+            let target_count = cell.physical_materials.len();
+            self.target_slots_visited = self.target_slots_visited.saturating_add(1);
+            if self.target_slots_visited >= target_count {
+                self.advance_cell(range);
+            } else {
+                self.target_slot = (target_slot + 1) % target_count;
+            }
             let anchor = &snapshot.materials[self.anchor_index];
             if self.orientation == PairOrientation::ForwardOrdered
                 && (cell_index, target_slot)
@@ -1175,13 +1198,25 @@ impl IndexedSpatialCursor {
         page
     }
 
+    fn set_cell_position(&mut self, range: BoundsCellRange, offset: usize) {
+        let columns = range.max_col - range.min_col + 1;
+        self.row_offset = offset / columns;
+        self.col = range.min_col + offset % columns;
+    }
+
     fn advance_cell(&mut self, range: BoundsCellRange) {
         self.cell_loaded = false;
         self.target_slot = 0;
-        self.col += 1;
-        if self.col > range.max_col {
-            self.row_offset += 1;
+        self.target_slots_visited = 0;
+        self.cells_visited = self.cells_visited.saturating_add(1);
+        let columns = range.max_col - range.min_col + 1;
+        let total_cells = range.row_count.saturating_mul(columns);
+        if self.cells_visited >= total_cells {
+            self.row_offset = range.row_count;
             self.col = range.min_col;
+        } else {
+            let offset = self.cell_start_offset.wrapping_add(self.cells_visited) % total_cells;
+            self.set_cell_position(range, offset);
         }
     }
 
@@ -1194,7 +1229,10 @@ impl IndexedSpatialCursor {
         self.range = None;
         self.row_offset = 0;
         self.col = 0;
+        self.cell_start_offset = 0;
+        self.cells_visited = 0;
         self.target_slot = 0;
+        self.target_slots_visited = 0;
         self.cell_loaded = false;
         self.complete = self.anchors_visited >= material_count;
     }
