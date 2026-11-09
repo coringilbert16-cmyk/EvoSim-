@@ -953,29 +953,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         }
     };
 
-    let cell_count = environment.field.cells.len();
-    let cell_start = tick as usize % cell_count;
-    let anchor_start = snapshot
-        .materials
-        .iter()
-        .enumerate()
-        .min_by_key(|(_, material)| {
-            (
-                material
-                    .locator
-                    .cell_index
-                    .wrapping_add(cell_count)
-                    .wrapping_sub(cell_start)
-                    % cell_count,
-                material.locator.material_index,
-            )
-        })
-        .map_or(0, |(index, _)| index);
     let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new_rotated(
         snapshot,
         &environment.field,
         crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
-        anchor_start,
         tick as usize,
     );
     let mut operations = Vec::new();
