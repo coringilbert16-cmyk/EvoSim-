@@ -1011,7 +1011,9 @@ impl MaterialSpatialIndex {
             }
         }
         for indices in &mut materials_by_cell {
-            indices.sort_unstable();
+            indices.sort_unstable_by_key(|&material_index| {
+                snapshot.materials[material_index].locator.material_index
+            });
             indices.dedup();
         }
         Self {
@@ -1437,11 +1439,26 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                 } else {
                     let anchor = &snapshot.materials[anchor_index];
-                    let rotated_start = self
-                        .tick
-                        .wrapping_add(cell_index)
-                        .wrapping_add(anchor.locator.material_index)
-                        % target_count;
+                    let rotated_start = if let Some(index) = spatial_index {
+                        let physical_count = field.cells[cell_index].physical_materials.len().max(1);
+                        let physical_start = self
+                            .tick
+                            .wrapping_add(cell_index)
+                            .wrapping_add(anchor.locator.material_index)
+                            % physical_count;
+                        index
+                            .materials_in_cell(cell_index)
+                            .partition_point(|&target_index| {
+                                snapshot.materials[target_index].locator.material_index
+                                    < physical_start
+                            })
+                            % target_count
+                    } else {
+                        self.tick
+                            .wrapping_add(cell_index)
+                            .wrapping_add(anchor.locator.material_index)
+                            % target_count
+                    };
                     let same_cell = cell_index == anchor.locator.cell_index;
                     self.target_slots_to_visit = if spatial_index.is_none()
                         && same_cell
