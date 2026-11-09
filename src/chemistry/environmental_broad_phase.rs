@@ -1408,11 +1408,14 @@ impl IndexedSpatialCursor {
                 );
                 let cell_before_anchor = cell_index < anchor_locator.0;
                 let cell_after_anchor = cell_index > anchor_locator.0;
-                if self.orientation == PairOrientation::ForwardOrdered && cell_before_anchor {
+                if spatial_index.is_none()
+                    && self.orientation == PairOrientation::ForwardOrdered
+                    && cell_before_anchor
+                {
                     self.advance_cell(range);
                     continue;
                 }
-                if self.reverse_only && cell_after_anchor {
+                if spatial_index.is_none() && self.reverse_only && cell_after_anchor {
                     // Locator-rejected cells are not part of the reverse
                     // target-cell budget. Preserve the requested number of
                     // eligible cells even when the rotated range starts later.
