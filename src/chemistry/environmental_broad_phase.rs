@@ -963,9 +963,9 @@ pub(crate) struct IndexedSpatialCursor {
     pass_id: u64,
     field_revision: u64,
     orientation: PairOrientation,
-    /// In shared COMBINE/DISPLACEMENT mode, bonded anchors scan both
-    /// directions while unbonded anchors retain COMBINE's forward-only scan.
-    shared_reaction_projection: bool,
+    /// DISPLACEMENT's second phase visits only targets preceding the anchor
+    /// in field locator order; COMBINE's forward candidates are already cached.
+    reverse_only: bool,
     anchor_order: Vec<usize>,
     field_width_cells: usize,
     field_height_cells: usize,
@@ -988,10 +988,9 @@ pub(crate) struct IndexedSpatialCursor {
 }
 
 impl IndexedSpatialCursor {
-    /// One bounded directed traversal for both ordinary COMBINE and
-    /// DISPLACEMENT. Unbonded anchors need only COMBINE's forward targets;
-    /// bonded anchors retain both directions for replacement discovery.
-    pub(crate) fn new_for_shared_reactions(
+    /// Reverse-only continuation for DISPLACEMENT after COMBINE has already
+    /// inspected and retained this anchor's forward candidate directions.
+    pub(crate) fn new_for_reverse_anchor(
         snapshot: &EnvironmentalMaterialSnapshot,
         field: &ActiveMaterialField,
         tick: usize,
@@ -1004,28 +1003,8 @@ impl IndexedSpatialCursor {
             tick,
             anchor_index,
         )?;
-        cursor.shared_reaction_projection = true;
+        cursor.reverse_only = true;
         Some(cursor)
-    }
-
-    fn anchor_requires_forward_order(
-        &self,
-        snapshot: &EnvironmentalMaterialSnapshot,
-        anchor_index: usize,
-    ) -> bool {
-        if self.orientation == PairOrientation::ForwardOrdered {
-            return true;
-        }
-        if !self.shared_reaction_projection {
-            return false;
-        }
-        let Some(anchor) = snapshot.materials.get(anchor_index) else {
-            return true;
-        };
-        !snapshot
-            .bond_indices_by_material
-            .get(&anchor.identity)
-            .is_some_and(|indices| !indices.is_empty())
     }
 
     pub(crate) fn new(
@@ -1050,7 +1029,7 @@ impl IndexedSpatialCursor {
             pass_id: snapshot.pass_id,
             field_revision: field.revision,
             orientation,
-            shared_reaction_projection: false,
+            reverse_only: false,
             anchor_order: vec![anchor_index],
             field_width_cells: field.width_cells,
             field_height_cells: field.height_cells,
@@ -1112,7 +1091,7 @@ impl IndexedSpatialCursor {
             pass_id: snapshot.pass_id,
             field_revision: field.revision,
             orientation,
-            shared_reaction_projection: false,
+            reverse_only: false,
             anchor_order,
             field_width_cells: field.width_cells,
             field_height_cells: field.height_cells,
@@ -1210,8 +1189,14 @@ impl IndexedSpatialCursor {
 
             if !self.cell_loaded {
                 let cell_index = range.cell_index(field, self.row_offset, self.col);
-                if self.anchor_requires_forward_order(snapshot, anchor_index)
-                    && cell_index < snapshot.materials[anchor_index].locator.cell_index
+                let anchor_locator = (
+                    snapshot.materials[anchor_index].locator.cell_index,
+                    snapshot.materials[anchor_index].locator.material_index,
+                );
+                let cell_before_anchor = cell_index < anchor_locator.0;
+                let cell_after_anchor = cell_index > anchor_locator.0;
+                if (self.orientation == PairOrientation::ForwardOrdered && cell_before_anchor)
+                    || (self.reverse_only && cell_after_anchor)
                 {
                     self.advance_cell(range);
                     continue;
@@ -1260,9 +1245,11 @@ impl IndexedSpatialCursor {
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
             let anchor = &snapshot.materials[anchor_index];
-            if self.anchor_requires_forward_order(snapshot, anchor_index)
-                && (cell_index, target_slot)
-                    <= (anchor.locator.cell_index, anchor.locator.material_index)
+            let target_locator = (cell_index, target_slot);
+            let anchor_locator = (anchor.locator.cell_index, anchor.locator.material_index);
+            if (self.orientation == PairOrientation::ForwardOrdered
+                && target_locator <= anchor_locator)
+                || (self.reverse_only && target_locator >= anchor_locator)
             {
                 continue;
             }
