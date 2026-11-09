@@ -768,6 +768,7 @@ impl SpatialPairCursor {
                 snapshot.known_pair_count()
             }
             PairOrientation::Directed => snapshot.known_directed_pair_count(),
+                PairOrientation::ForwardOrdered => snapshot.known_pair_count(),
         };
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
@@ -1725,7 +1726,9 @@ mod tests {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected_pairs = reference.iter().map(|pair| match orientation {
-                PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                        (pair.identity_left, pair.identity_right)
+                    },
                 PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                     (pair.identity_left, pair.identity_right)
                 }
@@ -1742,7 +1745,9 @@ mod tests {
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
                 let page_pairs = page.pairs.into_iter().map(|pair| match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                        (pair.identity_left, pair.identity_right)
+                    },
                     PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                         (pair.identity_left, pair.identity_right)
                     }
@@ -1758,6 +1763,7 @@ mod tests {
             let expected_checks = match orientation {
                 PairOrientation::Unordered => snapshot.known_pair_count(),
                 PairOrientation::Directed => snapshot.known_directed_pair_count(),
+                PairOrientation::ForwardOrdered => snapshot.known_pair_count(),
             };
             assert_eq!(total_visited, expected_checks);
             assert_eq!(actual, expected);
@@ -1845,7 +1851,9 @@ mod tests {
             let expected = reference
                 .into_iter()
                 .map(|pair| match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                        (pair.identity_left, pair.identity_right)
+                    },
                     PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                         (pair.identity_left, pair.identity_right)
                     }
@@ -1936,7 +1944,9 @@ mod tests {
             let expected = reference
                 .into_iter()
                 .map(|pair| match orientation {
-                    PairOrientation::Directed => (pair.identity_left, pair.identity_right),
+                    PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                        (pair.identity_left, pair.identity_right)
+                    },
                     PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                         (pair.identity_left, pair.identity_right)
                     }
@@ -2003,6 +2013,7 @@ mod tests {
             let exhaustive = match orientation {
                 PairOrientation::Unordered => snapshot.known_pair_count(),
                 PairOrientation::Directed => snapshot.known_directed_pair_count(),
+                PairOrientation::ForwardOrdered => snapshot.known_pair_count(),
             };
             let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
             let mut visited_work = 0;
