@@ -50,6 +50,60 @@ jobs:
           path: environmental-chemistry-default-baseline.jsonl
           if-no-files-found: error
           retention-days: 14
+      - name: Compare BREAK progress index against original main
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 334
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          base_sha=1761a3be04635af828038ba93d9340f153511a2c
+          git worktree add ../evosim-unoptimized "$base_sha"
+          shared_target="$GITHUB_WORKSPACE/target-break-index"
+          (cd ../evosim-unoptimized && CARGO_TARGET_DIR="$shared_target" cargo build --locked --bin evosim)
+          cp "$shared_target/debug/evosim" /tmp/evosim-unoptimized
+          CARGO_TARGET_DIR="$shared_target" cargo build --locked --bin evosim
+          cp "$shared_target/debug/evosim" /tmp/evosim-break-index
+          run_case() {
+            label="$1"
+            binary="$2"
+            log="$GITHUB_WORKSPACE/break-index-$label.log"
+            diag="/tmp/break-index-$label.jsonl"
+            "$binary" --headless --environment-chemistry-experiment --seconds 60 --seed 42 \
+              --diagnostics "$diag" --diagnostic-interval 100 > "$log"
+            grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | sed "s/^/$label /" | tee -a "$GITHUB_WORKSPACE/break-index-benchmark.txt"
+            python3 - "$diag" "$label" <<'PY'
+          import json, sys
+          path, label = sys.argv[1:]
+          with open(path, encoding="utf-8") as stream:
+              for line in stream:
+                  record = json.loads(line)
+                  if record.get("event") == "environmental_chemistry_summary":
+                      print(
+                          f"{label} SUMMARY ticks={record.get('ticks_observed')} "
+                          f"break_committed={record.get('break_committed')} "
+                          f"combine_committed={record.get('combine_committed')} "
+                          f"energy_residual={record.get('energy_balance_residual')} "
+                          f"inventory={record.get('final_material_inventory')}"
+                      )
+                      break
+          PY
+            rm -f "$diag"
+          }
+          : > break-index-benchmark.txt
+          run_case original-a /tmp/evosim-unoptimized
+          run_case indexed-a /tmp/evosim-break-index
+          run_case original-b /tmp/evosim-unoptimized
+          run_case indexed-b /tmp/evosim-break-index
+          run_case original-c /tmp/evosim-unoptimized
+          run_case indexed-c /tmp/evosim-break-index
+          cat break-index-benchmark.txt
+      - name: Upload BREAK progress index benchmark
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 334
+        uses: actions/upload-artifact@v4
+        with:
+          name: break-progress-index-benchmark
+          path: break-index-benchmark.txt
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Energy accounting (focused tests)
         if: always()
         timeout-minutes: 30
