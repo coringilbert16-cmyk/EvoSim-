@@ -1120,8 +1120,10 @@ impl IndexedSpatialCursor {
         }
 
         self.complete = self.anchors_visited >= snapshot.materials.len();
-        page.deferred_anchors =
-            snapshot.materials.len().saturating_sub(self.anchors_visited) as u64;
+        page.deferred_anchors = snapshot
+            .materials
+            .len()
+            .saturating_sub(self.anchors_visited) as u64;
         page.complete = self.complete;
         page
     }
