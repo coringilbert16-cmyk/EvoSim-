@@ -1140,6 +1140,7 @@ impl IndexedSpatialCursor {
             current_cell_limit: usize::MAX,
             target_slot: 0,
             target_slots_visited: 0,
+            target_slots_to_visit: 0,
             cell_loaded: false,
             complete: material_count == 0,
         }
