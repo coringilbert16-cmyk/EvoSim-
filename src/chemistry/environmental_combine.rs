@@ -980,18 +980,32 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         }
 
         for pair in page.pairs {
-            let Some(record_a) = snapshot.materials.get(pair.left) else {
+            let Some(record_left) = snapshot.materials.get(pair.left) else {
                 continue;
             };
-            let Some(record_b) = snapshot.materials.get(pair.right) else {
+            let Some(record_right) = snapshot.materials.get(pair.right) else {
                 continue;
+            };
+            // The legacy COMBINE evaluator canonicalizes source orientation by
+            // field locator. Restore that ordering even though the shared
+            // snapshot itself is identity-sorted.
+            let (record_a, record_b) = if (
+                record_left.locator.cell_index,
+                record_left.locator.material_index,
+            ) <= (
+                record_right.locator.cell_index,
+                record_right.locator.material_index,
+            ) {
+                (record_left, record_right)
+            } else {
+                (record_right, record_left)
             };
             let Some(source_a) = environment
                 .field
                 .cells
                 .get(record_a.locator.cell_index)
                 .and_then(|cell| cell.physical_materials.get(record_a.locator.material_index))
-                .filter(|material| material.environmental_identity == pair.identity_left.0)
+                .filter(|material| material.environmental_identity == record_a.identity.0)
                 .cloned()
             else {
                 continue;
@@ -1001,7 +1015,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
                 .cells
                 .get(record_b.locator.cell_index)
                 .and_then(|cell| cell.physical_materials.get(record_b.locator.material_index))
-                .filter(|material| material.environmental_identity == pair.identity_right.0)
+                .filter(|material| material.environmental_identity == record_b.identity.0)
                 .cloned()
             else {
                 continue;
