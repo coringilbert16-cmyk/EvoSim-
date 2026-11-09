@@ -36,7 +36,8 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     /// Snapshot-owned indexes reused by all reaction projections.
     pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
-    pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
+    pub(crate) bond_indices_by_material:
+        std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
     pub(crate) unassigned_materials: u64,
@@ -426,14 +427,23 @@ impl EnvironmentalMaterialSnapshot {
         }
         snapshot.materials.sort_by_key(|material| material.identity);
         snapshot.existing_bonds.sort_by_key(|bond| bond.reference());
-        snapshot.material_indices_by_cell.resize(field.cells.len(), Vec::new());
+        snapshot
+            .material_indices_by_cell
+            .resize(field.cells.len(), Vec::new());
         for (material_index, material) in snapshot.materials.iter().enumerate() {
-            if let Some(indices) = snapshot.material_indices_by_cell.get_mut(material.locator.cell_index) {
+            if let Some(indices) = snapshot
+                .material_indices_by_cell
+                .get_mut(material.locator.cell_index)
+            {
                 indices.push(material_index);
             }
         }
         for bond in &snapshot.existing_bonds {
-            snapshot.bond_indices_by_material.entry(bond.material).or_default().push(bond.bond_index);
+            snapshot
+                .bond_indices_by_material
+                .entry(bond.material)
+                .or_default()
+                .push(bond.bond_index);
         }
         for indices in &mut snapshot.material_indices_by_cell {
             indices.sort_by_key(|&index| snapshot.materials[index].locator.material_index);

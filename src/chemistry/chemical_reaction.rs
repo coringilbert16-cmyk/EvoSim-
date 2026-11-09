@@ -642,14 +642,15 @@ fn discover_environmental_bonds_from_snapshot(
             }
             scan_steps_remaining -= 1;
             inspected_materials = inspected_materials.saturating_add(1);
-            let material_index = material_indices[(material_start + material_offset) % material_count];
+            let material_index =
+                material_indices[(material_start + material_offset) % material_count];
             let material = &snapshot.materials[material_index];
             let bond_indices = snapshot
                 .bond_indices_by_material
                 .get(&material.identity)
                 .map_or(&[][..], Vec::as_slice);
             checked_materials.push((material.identity.0, bond_indices.len()));
-            if bonds.is_empty() {
+            if bond_indices.is_empty() {
                 continue;
             }
             let bond_count = bond_indices.len();
