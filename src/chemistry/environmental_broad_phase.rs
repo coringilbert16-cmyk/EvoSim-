@@ -1485,65 +1485,76 @@ impl IndexedSpatialCursor {
                 self.advance_cell(range);
                 continue;
             };
-            if self.target_slot >= cell.physical_materials.len() {
+            let target_count = spatial_index.map_or(cell.physical_materials.len(), |index| {
+                index.materials_in_cell(cell_index).len()
+            });
+            if self.target_slot >= target_count {
                 self.advance_cell(range);
                 continue;
             }
 
-            let target_slot = self.target_slot;
-            let target_count = cell.physical_materials.len();
+            let target_offset = self.target_slot;
             self.target_slots_visited = self.target_slots_visited.saturating_add(1);
             if self.target_slots_visited >= self.target_slots_to_visit {
                 self.advance_cell(range);
             } else {
-                let next_target_slot = (target_slot + 1) % target_count;
-                let anchor = &snapshot.materials[anchor_index];
-                self.target_slot = if cell_index == anchor.locator.cell_index
-                    && self.orientation == PairOrientation::ForwardOrdered
-                    && next_target_slot <= anchor.locator.material_index
-                {
-                    anchor.locator.material_index + 1
-                } else if cell_index == anchor.locator.cell_index
-                    && self.reverse_only
-                    && next_target_slot >= anchor.locator.material_index
-                {
-                    0
-                } else {
-                    next_target_slot
-                };
+                self.target_slot = (target_offset + 1) % target_count;
             }
-            // Every inspected target slot consumes work, including self-pairs.
-            // Same-cell locator-ineligible slots are skipped arithmetically before inspection.
+            // Indexed traversal inspects only materials whose realized bounds
+            // occupy this cell. The seen set removes duplicates where two
+            // bounds share more than one cell.
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
+            let target_index = if let Some(index) = spatial_index {
+                let Some(target_index) = index.materials_in_cell(cell_index).get(target_offset)
+                else {
+                    continue;
+                };
+                *target_index
+            } else {
+                let Some(target_index) = snapshot
+                    .material_index_by_cell_slot
+                    .get(cell_index)
+                    .and_then(|slots| slots.get(target_offset))
+                    .copied()
+                    .flatten()
+                else {
+                    continue;
+                };
+                target_index
+            };
+            let Some(target_record) = snapshot.materials.get(target_index) else {
+                continue;
+            };
+            let target_locator = (
+                target_record.locator.cell_index,
+                target_record.locator.material_index,
+            );
             let anchor = &snapshot.materials[anchor_index];
-            let target_locator = (cell_index, target_slot);
             let anchor_locator = (anchor.locator.cell_index, anchor.locator.material_index);
             if (self.orientation == PairOrientation::ForwardOrdered
                 && target_locator <= anchor_locator)
                 || (self.reverse_only && target_locator >= anchor_locator)
+                || target_index == anchor_index
             {
                 continue;
             }
-
-            let physical = &cell.physical_materials[target_slot];
-            if physical.environmental_identity == 0 {
+            if spatial_index.is_some() && !self.seen_targets.insert(target_index) {
                 continue;
             }
-            let Some(target_index) = snapshot
-                .material_index_by_cell_slot
-                .get(cell_index)
-                .and_then(|slots| slots.get(target_slot))
-                .copied()
-                .flatten()
+            let Some(physical) = field
+                .cells
+                .get(target_record.locator.cell_index)
+                .and_then(|target_cell| {
+                    target_cell
+                        .physical_materials
+                        .get(target_record.locator.material_index)
+                })
             else {
                 continue;
             };
-            let target_record = &snapshot.materials[target_index];
-            if target_record.identity.0 != physical.environmental_identity
-                || target_record.locator.cell_index != cell_index
-                || target_record.locator.material_index != target_slot
-                || target_index == anchor_index
+            if target_record.identity.0 == 0
+                || target_record.identity.0 != physical.environmental_identity
             {
                 continue;
             }
