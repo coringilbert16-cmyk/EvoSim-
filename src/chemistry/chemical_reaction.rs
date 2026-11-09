@@ -631,7 +631,10 @@ fn discover_environmental_bonds_from_snapshot(
         Vec<&ExistingBondRecord>,
     > = std::collections::BTreeMap::new();
     for bond in &snapshot.existing_bonds {
-        bonds_by_material.entry(bond.material).or_default().push(bond);
+        bonds_by_material
+            .entry(bond.material)
+            .or_default()
+            .push(bond);
     }
     for bonds in bonds_by_material.values_mut() {
         bonds.sort_by_key(|bond| bond.bond_index);
@@ -1575,11 +1578,10 @@ mod material_identity_tests {
         let catalog = simulation.environment.catalog.clone();
         for _ in 0..3 {
             let source = environmental_test_composite(&catalog);
-            assert!(simulation.environment.field.deposit_physical_at_index(
-                0,
-                source,
-                &catalog,
-            ));
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical_at_index(0, source, &catalog,));
         }
         simulation
             .environment
@@ -1589,11 +1591,10 @@ mod material_identity_tests {
         let tick = 0;
         let limit = 16;
         let live = discover_environmental_bonds(&simulation.environment, tick, limit);
-        let snapshot =
-            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                &simulation.environment.field,
-                tick,
-            );
+        let snapshot = crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+            &simulation.environment.field,
+            tick,
+        );
         let shared = discover_environmental_bonds_from_snapshot(&snapshot, tick, limit);
 
         assert_eq!(shared.candidates, live.candidates);
