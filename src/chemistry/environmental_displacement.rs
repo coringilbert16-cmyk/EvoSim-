@@ -1178,30 +1178,29 @@ fn accumulate_environmental_internal(
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
-                let (cell_b, material_b) =
-                    match target_scan.next(
-                        shared_snapshot,
-                        &environment.field,
-                        &shared_displacement_bounds,
-                    ) {
-                        DisplacementTargetStep::AnchorInitialized => continue,
-                        DisplacementTargetStep::CellInspected => {
-                            diagnostics.target_cells_inspected =
-                                diagnostics.target_cells_inspected.saturating_add(1);
-                            *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                let (cell_b, material_b) = match target_scan.next(
+                    shared_snapshot,
+                    &environment.field,
+                    &shared_displacement_bounds,
+                ) {
+                    DisplacementTargetStep::AnchorInitialized => continue,
+                    DisplacementTargetStep::CellInspected => {
+                        diagnostics.target_cells_inspected =
+                            diagnostics.target_cells_inspected.saturating_add(1);
+                        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                        continue;
+                    }
+                    DisplacementTargetStep::MaterialInspected(target) => {
+                        diagnostics.target_materials_inspected =
+                            diagnostics.target_materials_inspected.saturating_add(1);
+                        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                        let Some(target) = target else {
                             continue;
-                        }
-                        DisplacementTargetStep::MaterialInspected(target) => {
-                            diagnostics.target_materials_inspected =
-                                diagnostics.target_materials_inspected.saturating_add(1);
-                            *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                            let Some(target) = target else {
-                                continue;
-                            };
-                            target
-                        }
-                        DisplacementTargetStep::Complete => break,
-                    };
+                        };
+                        target
+                    }
+                    DisplacementTargetStep::Complete => break,
+                };
                 if cell_a == cell_b && material_a == material_b {
                     continue;
                 }
