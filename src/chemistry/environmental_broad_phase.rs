@@ -1986,6 +1986,10 @@ impl IndexedSpatialCursor {
         self.target_slots_visited = 0;
         self.target_slots_to_visit = 0;
         self.cell_loaded = false;
+        self.candidate_targets.clear();
+        self.candidate_position = 0;
+        self.candidate_targets_visited = 0;
+        self.query_stack.clear();
         self.complete = self.anchors_visited >= material_count;
     }
 }
