@@ -1185,7 +1185,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 let pair_start = component_pair_start(tick, pair_count);
                 let selected = select_best_contact_from_offset(
                     &trial_structure,
-                    &indices_a,
+                    indices_a,
                     &indices_b,
                     &environment.catalog,
                     &mut cache,
@@ -1204,7 +1204,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                         checked_prefixes.insert(source_pair_accumulation_prefix(
                             record_a.locator.cell_index,
                             record_a.locator.material_index,
-                            &source_a,
+                            source_a,
                             record_b.locator.cell_index,
                             record_b.locator.material_index,
                             &source_b,
@@ -1219,9 +1219,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                         chemistry_library,
                         &trial_structure,
                         selected,
-                        &indices_a,
+                        indices_a,
                         &indices_b,
-                        &source_a,
+                        source_a,
                         &source_b,
                         record_a.locator.cell_index,
                         record_a.locator.material_index,
