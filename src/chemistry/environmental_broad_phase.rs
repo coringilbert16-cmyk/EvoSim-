@@ -2298,15 +2298,8 @@ mod tests {
             let mut actual = Vec::new();
             let mut complete = false;
             for _ in 0..256 {
-                let page = cursor.next_page(
-                    &snapshot,
-                    &field,
-                    &bounds,
-                    2.1,
-                    target_cell_limit,
-                    1,
-                    1,
-                );
+                let page =
+                    cursor.next_page(&snapshot, &field, &bounds, 2.1, target_cell_limit, 1, 1);
                 actual.extend(
                     page.pairs
                         .iter()
