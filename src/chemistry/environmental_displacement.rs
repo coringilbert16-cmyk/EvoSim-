@@ -3673,22 +3673,52 @@ mod tests {
                     }
                 }
 
-                let mut directed = IndexedSpatialCursor::new_for_anchor(
+                // Independent reference: the pre-consolidation behavior was
+                // COMBINE's forward-only discovery plus DISPLACEMENT's
+                // reverse-only continuation. Their union must equal the
+                // directed candidate stream handed off by the shared pass.
+                let reverse_target_cell_limit = target_cell_count.saturating_add(1);
+                let mut expected = Vec::new();
+                let mut forward = IndexedSpatialCursor::new_for_anchor(
                     &snapshot,
                     &field,
-                    PairOrientation::Directed,
+                    PairOrientation::ForwardOrdered,
                     tick,
                     anchor_index,
                 )
                 .expect("anchor index is valid");
-                let mut expected = Vec::new();
                 loop {
-                    let page = directed.next_page(
+                    let page = forward.next_page(
                         &snapshot,
                         &field,
                         &bounds,
                         2.1,
                         target_cell_count,
+                        1,
+                        1,
+                    );
+                    expected.extend(page.pairs.into_iter().map(|pair| {
+                        let target = &snapshot.materials[pair.right];
+                        (target.locator.cell_index, target.locator.material_index)
+                    }));
+                    if page.complete {
+                        break;
+                    }
+                }
+                let mut reverse = IndexedSpatialCursor::new_for_reverse_anchor(
+                    &snapshot,
+                    &field,
+                    tick,
+                    anchor_index,
+                )
+                .expect("anchor index is valid");
+                loop {
+                    let page = reverse.next_page(
+                        &snapshot,
+                        &field,
+                        &bounds,
+                        2.1,
+                        reverse_target_cell_limit,
                         1,
                         1,
                     );
