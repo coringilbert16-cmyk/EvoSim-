@@ -23,6 +23,21 @@ jobs:
       - name: Check formatting
         timeout-minutes: 5
         run: cargo fmt --all -- --check
+      - name: Export rustfmt-normalized source for review
+        if: always()
+        run: |
+          cargo fmt --all
+          mkdir -p rustfmt-output
+          cp src/simulation/simulation.rs rustfmt-output/simulation.rs
+          cp src/chemistry/environmental_combine.rs rustfmt-output/environmental_combine.rs
+          cp src/chemistry/environmental_displacement.rs rustfmt-output/environmental_displacement.rs
+      - name: Upload rustfmt-normalized source
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temporary-rustfmt-source
+          path: rustfmt-output/
+          if-no-files-found: error
       # Exercise the independent world inventory on live source, reaction, and tick paths
       # before the full suite, whose historical runtime can exceed the job timeout.
       - name: Repository architecture checks
