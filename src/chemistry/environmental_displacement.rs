@@ -46,9 +46,9 @@ enum DisplacementTargetStep {
     Complete,
 }
 
-/// A populated marker means COMBINE exhausted this anchor's complete forward
-/// cell range. Its numeric value is the COMBINE budget cap, not a window key;
-/// DISPLACEMENT may reuse those candidates with a different reverse budget.
+/// Legacy coverage helper retained for focused cursor tests. Production
+/// displacement now consumes every pair present in the shared discovery result,
+/// including partial coverage, and never starts a reverse-only fallback scan.
 fn has_complete_shared_forward_coverage(
     completed_anchors: &[Option<usize>],
     anchor_index: usize,
@@ -1260,7 +1260,7 @@ fn accumulate_environmental_internal(
         .and_then(|snapshot| {
             shared_candidates
                 .filter(|(_, completed)| completed.len() == snapshot.materials.len())
-                .map(|(pairs, completed)| {
+                .map(|(pairs, _completed)| {
                     let mut targets = vec![Vec::new(); snapshot.materials.len()];
                     for pair in pairs {
                         if let Some(record) = snapshot.materials.get(pair.right) {
