@@ -23,6 +23,10 @@ enum DisplacementTargetScan {
         initialized: bool,
         target_cell_limit: usize,
     },
+    Inventory {
+        targets: Vec<(usize, usize)>,
+        next_target: usize,
+    },
     Legacy {
         cells: Vec<usize>,
         next_cell: usize,
@@ -39,6 +43,7 @@ enum DisplacementTargetStep {
     AnchorInitialized,
     CellInspected,
     MaterialInspected(Option<(usize, usize)>),
+    SharedCandidate(Option<(usize, usize)>),
     Complete,
 }
 
@@ -53,7 +58,14 @@ impl DisplacementTargetScan {
         tick: usize,
         target_cell_limit: usize,
         environmental_identity: u64,
+        shared_candidates: Option<Vec<(usize, usize)>>,
     ) -> Self {
+        if let Some(targets) = shared_candidates {
+            return Self::Inventory {
+                targets,
+                next_target: 0,
+            };
+        }
         if let Some(snapshot) = snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
             if let Ok(anchor_index) = snapshot.materials.binary_search_by_key(
                 &crate::environmental_interaction::MaterialIdentity(environmental_identity),
@@ -133,6 +145,17 @@ impl DisplacementTargetScan {
         shared_bounds: &[Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
     ) -> DisplacementTargetStep {
         match self {
+            Self::Inventory {
+                targets,
+                next_target,
+            } => {
+                if let Some(target) = targets.get(*next_target).copied() {
+                    *next_target += 1;
+                    DisplacementTargetStep::SharedCandidate(Some(target))
+                } else {
+                    DisplacementTargetStep::Complete
+                }
+            }
             Self::Shared {
                 cursor,
                 initialized,
@@ -1116,6 +1139,33 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
         diagnostics,
         Some(snapshot),
         shared_bounds,
+        None,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+    shared_candidate_pairs: &[crate::environmental_broad_phase::MaterialPairRecord],
+    completed_anchors: &[bool],
+) -> Vec<EnvironmentalDisplacementOperation> {
+    if shared_bounds.len() != snapshot.materials.len() {
+        *shared_bounds = vec![None; snapshot.materials.len()];
+    }
+    accumulate_environmental_internal(
+        environment,
+        accumulation,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        Some(snapshot),
+        shared_bounds,
+        Some((shared_candidate_pairs, completed_anchors)),
     )
 }
 
@@ -1127,6 +1177,10 @@ fn accumulate_environmental_internal(
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
     shared_snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+    shared_candidates: Option<(
+        &[crate::environmental_broad_phase::MaterialPairRecord],
+        &[bool],
+    )>,
 ) -> Vec<EnvironmentalDisplacementOperation> {
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
@@ -1156,6 +1210,26 @@ fn accumulate_environmental_internal(
     let shared_bond_indices_by_material = shared_snapshot
         .filter(|snapshot| snapshot.unassigned_materials == 0)
         .map(|snapshot| &snapshot.bond_indices_by_material);
+    let shared_targets_by_anchor = shared_snapshot
+        .filter(|snapshot| snapshot.unassigned_materials == 0)
+        .and_then(|snapshot| {
+            shared_candidates
+                .filter(|(_, completed)| completed.len() == snapshot.materials.len())
+                .map(|(pairs, completed)| {
+                    let mut targets = vec![Vec::new(); snapshot.materials.len()];
+                    for pair in pairs {
+                        if completed.get(pair.left).copied().unwrap_or(false) {
+                            if let Some(record) = snapshot.materials.get(pair.right) {
+                                targets[pair.left].push((
+                                    record.locator.cell_index,
+                                    record.locator.material_index,
+                                ));
+                            }
+                        }
+                    }
+                    targets
+                })
+        });
 
     'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
@@ -1242,6 +1316,27 @@ fn accumulate_environmental_internal(
                 tick as usize,
                 target_cell_limit,
                 source_a.environmental_identity,
+                shared_snapshot
+                    .filter(|snapshot| snapshot.unassigned_materials == 0)
+                    .and_then(|snapshot| {
+                        let anchor_index = snapshot.materials.binary_search_by_key(
+                            &crate::environmental_interaction::MaterialIdentity(
+                                source_a.environmental_identity,
+                            ),
+                            |record| record.identity,
+                        ).ok()?;
+                        let completed = shared_candidates
+                            .and_then(|(_, completed)| completed.get(anchor_index))
+                            .copied()
+                            .unwrap_or(false);
+                        completed.then(|| {
+                            shared_targets_by_anchor
+                                .as_ref()
+                                .and_then(|targets| targets.get(anchor_index))
+                                .cloned()
+                                .unwrap_or_default()
+                        })
+                    }),
             );
 
             loop {
@@ -1264,6 +1359,12 @@ fn accumulate_environmental_internal(
                         diagnostics.target_materials_inspected =
                             diagnostics.target_materials_inspected.saturating_add(1);
                         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                        let Some(target) = target else {
+                            continue;
+                        };
+                        target
+                    }
+                    DisplacementTargetStep::SharedCandidate(target) => {
                         let Some(target) = target else {
                             continue;
                         };
