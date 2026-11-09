@@ -1821,7 +1821,7 @@ mod tests {
             let mut total_visited = 0;
             let mut pages = 0;
             loop {
-                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 3, 2);
+                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, usize::MAX, 3, 2);
                 assert!(page.visited_pair_checks <= 3);
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
