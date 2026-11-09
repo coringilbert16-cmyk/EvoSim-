@@ -1021,36 +1021,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             else {
                 continue;
             };
-            let Some(body) =
-                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                    &source_structure,
-                )
-            else {
-                continue;
-            };
-            let Some(indices_b) = {
-                let mut trial = source_structure.clone();
-                crate::material_restoration::restore_material(
-                    &mut trial,
-                    &source_b,
-                    origin(),
-                    &environment.catalog,
-                )
-                .filter(|indices| {
-                    !indices.iter().any(|index| {
-                        crate::construction_runtime::placed_unit_overlaps(
-                            &trial,
-                            &trial.units[*index],
-                            indices,
-                            &environment.catalog,
-                        )
-                    })
-                })
-            } else {
-                diagnostics.target_material_pairs_restore_failed += 1;
-                continue;
-            };
-
             let mut trial_structure = source_structure.clone();
             let Some(indices_b) = crate::material_restoration::restore_material(
                 &mut trial_structure,
