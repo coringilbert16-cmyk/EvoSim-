@@ -1120,13 +1120,19 @@ fn accumulate_environmental_internal(
         snapshot
             .materials
             .iter()
-            .filter(|record| {
-                snapshot
+            .enumerate()
+            .filter(|(anchor_index, record)| {
+                let has_bonds = snapshot
                     .bond_indices_by_material
                     .get(&record.identity)
-                    .is_some_and(|indices| !indices.is_empty())
+                    .is_some_and(|indices| !indices.is_empty());
+                let has_shared_targets = shared_targets_by_anchor
+                    .as_ref()
+                    .and_then(|targets| targets.get(*anchor_index))
+                    .is_some_and(|targets| !targets.is_empty());
+                has_bonds && (shared_targets_by_anchor.is_none() || has_shared_targets)
             })
-            .map(|record| (record.locator.cell_index, record.locator.material_index))
+            .map(|(_, record)| (record.locator.cell_index, record.locator.material_index))
             .collect::<Vec<_>>()
     } else {
         environment
