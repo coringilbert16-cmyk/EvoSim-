@@ -1069,9 +1069,12 @@ pub(crate) fn accumulate_environmental(
     )
 }
 
-#[expect(
-    dead_code,
-    reason = "Compatibility wrapper for isolated reaction tests"
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "Compatibility wrapper for isolated reaction tests"
+    )
 )]
 pub(crate) fn accumulate_environmental_with_shared_snapshot(
     environment: &Environment,
