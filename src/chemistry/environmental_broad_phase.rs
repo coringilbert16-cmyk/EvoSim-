@@ -83,15 +83,36 @@ impl MaterialSpatialBounds {
         })
     }
 
-    /// Conservative material-level X filter after the cell broad phase.
-    /// Y is intentionally not filtered here: the existing field query wraps
-    /// vertical cell indices, and its seam semantics are not identical to
-    /// raw-coordinate AABB overlap.
-    pub(crate) fn overlaps_with_padding(self, other: Self, padding: f64) -> bool {
+    /// Conservative material-level filter after the cell broad phase. X is
+    /// bounded and Y is periodic. Invalid period data fails open.
+    pub(crate) fn overlaps_with_padding(
+        self,
+        other: Self,
+        padding: f64,
+        vertical_period: f64,
+    ) -> bool {
         if !padding.is_finite() || padding < 0.0 {
             return true;
         }
-        self.min_x - padding <= other.max_x && self.max_x + padding >= other.min_x
+        if self.min_x - padding > other.max_x
+            || self.max_x + padding < other.min_x
+        {
+            return false;
+        }
+        if !vertical_period.is_finite() || vertical_period <= 0.0 {
+            return true;
+        }
+        if self.max_y - self.min_y >= vertical_period
+            || other.max_y - other.min_y >= vertical_period
+        {
+            return true;
+        }
+        let overlaps_y = |other_min: f64, other_max: f64| {
+            self.min_y - padding <= other_max && self.max_y + padding >= other_min
+        };
+        overlaps_y(other.min_y, other.max_y)
+            || overlaps_y(other.min_y - vertical_period, other.max_y - vertical_period)
+            || overlaps_y(other.min_y + vertical_period, other.max_y + vertical_period)
     }
 }
 
@@ -704,7 +725,12 @@ impl EnvironmentalMaterialSnapshot {
                     if let (Some(anchor_bounds), Some(target_bounds)) =
                         (bounds[anchor_index], bounds[target_index])
                     {
-                        if !anchor_bounds.overlaps_with_padding(target_bounds, padding) {
+                        let vertical_period = field.height_cells as f64 * field.cell_size;
+                        if !anchor_bounds.overlaps_with_padding(
+                            target_bounds,
+                            padding,
+                            vertical_period,
+                        ) {
                             continue;
                         }
                     }
@@ -1394,7 +1420,8 @@ impl IndexedSpatialCursor {
             if let (Some(anchor_bounds), Some(target_bounds)) =
                 (bounds[anchor_index], bounds[target_index])
             {
-                if !anchor_bounds.overlaps_with_padding(target_bounds, padding) {
+                let vertical_period = field.height_cells as f64 * field.cell_size;
+                if !anchor_bounds.overlaps_with_padding(target_bounds, padding, vertical_period) {
                     page.target_materials_rejected_by_bounds =
                         page.target_materials_rejected_by_bounds.saturating_add(1);
                     continue;
@@ -1927,8 +1954,8 @@ mod tests {
             Some(MaterialSpatialBounds {
                 min_x: 0.0,
                 max_x: 10.0,
-                min_y: 29.0,
-                max_y: 31.0,
+                min_y: 39.0,
+                max_y: 41.0,
             }),
             Some(MaterialSpatialBounds {
                 min_x: 29.0,
