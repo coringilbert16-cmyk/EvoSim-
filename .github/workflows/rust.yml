@@ -247,7 +247,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      BASE_SHA: 415c2671ad5bcafc4271ad91cba2e72449446f2c
+      BASE_SHA: 1761a3be04635af828038ba93d9340f153511a2c
       PR_SHA: ${{ github.event.pull_request.head.sha }}
       TICKS: 1800
       SEED: 42
@@ -286,7 +286,7 @@ jobs:
             fi
             grep "ENVIRONMENTAL CHEMISTRY END:" "$output"
           }
-          # A = prior cell-based implementation; B = shared snapshot + cell grid;
+          # A = main before the shared architecture; B = shared snapshot + cell grid;
           # C = shared snapshot + AABB tree. Alternate order across repetitions.
           run_case A-baseline-1 "$baseline" baseline
           run_case B-shared-cell-1 "$shared" cell
