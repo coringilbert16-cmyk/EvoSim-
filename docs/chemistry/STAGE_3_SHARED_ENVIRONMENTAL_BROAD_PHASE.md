@@ -335,4 +335,6 @@ The production tick now treats the tick-start material snapshot as the common di
 - DISPLACEMENT's anchor ordering and bond lookup come from the snapshot material and bond indexes. Its production path no longer launches a reverse-only spatial cursor or falls back to a second target-cell/material scan when shared coverage is partial.
 - Partial shared coverage is authoritative for the current tick. Unvisited relationships remain deferred to the next rotated shared pass; they are not reclassified as chemically invalid.
 
+
+- The shared-target regression now also supplies deliberately partial shared coverage and asserts that DISPLACEMENT consumes exactly those retained targets, without invoking any independent target-cell/material discovery.
 The shared pair stream remains bounded by the existing per-tick discovery work and is retained only for the current tick. This is the first production ownership cutover; the next validation must confirm parity, no lost deferred work, and the runtime impact before considering removal of compatibility-only legacy paths.
