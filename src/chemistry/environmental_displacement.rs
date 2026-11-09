@@ -184,22 +184,22 @@ impl DisplacementTargetScan {
                     *prefer_shared = false;
                 }
                 let Some(snapshot) = snapshot else {
-                    return targets
-                        .get(*next_target)
-                        .copied()
-                        .map_or(DisplacementTargetStep::Complete, |target| {
+                    return targets.get(*next_target).copied().map_or(
+                        DisplacementTargetStep::Complete,
+                        |target| {
                             *next_target += 1;
                             DisplacementTargetStep::SharedCandidate(Some(target))
-                        });
+                        },
+                    );
                 };
                 let Some(active_cursor) = cursor.as_mut() else {
-                    return targets
-                        .get(*next_target)
-                        .copied()
-                        .map_or(DisplacementTargetStep::Complete, |target| {
+                    return targets.get(*next_target).copied().map_or(
+                        DisplacementTargetStep::Complete,
+                        |target| {
                             *next_target += 1;
                             DisplacementTargetStep::SharedCandidate(Some(target))
-                        });
+                        },
+                    );
                 };
                 let page = active_cursor.next_page(
                     snapshot,
@@ -212,13 +212,13 @@ impl DisplacementTargetScan {
                 );
                 if page.visited_work == 0 {
                     *cursor = None;
-                    return targets
-                        .get(*next_target)
-                        .copied()
-                        .map_or(DisplacementTargetStep::Complete, |target| {
+                    return targets.get(*next_target).copied().map_or(
+                        DisplacementTargetStep::Complete,
+                        |target| {
                             *next_target += 1;
                             DisplacementTargetStep::SharedCandidate(Some(target))
-                        });
+                        },
+                    );
                 }
                 if !*initialized && page.visited_anchor_initializations > 0 {
                     *initialized = true;
