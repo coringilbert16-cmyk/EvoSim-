@@ -17,6 +17,189 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBa
 use crate::resources::{BaseResource, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure};
 
+enum DisplacementTargetScan {
+    Shared {
+        cursor: crate::environmental_broad_phase::IndexedSpatialCursor,
+        bounds: Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+        initialized: bool,
+        target_cell_limit: usize,
+    },
+    Legacy {
+        cells: Vec<usize>,
+        next_cell: usize,
+        current_cell: Option<usize>,
+        target_count: usize,
+        target_start: usize,
+        target_offset: usize,
+        tick: usize,
+        anchor_material: usize,
+    },
+}
+
+enum DisplacementTargetStep {
+    AnchorInitialized,
+    CellInspected,
+    MaterialInspected(Option<(usize, usize)>),
+    Complete,
+}
+
+impl DisplacementTargetScan {
+    fn new(
+        snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+        field: &crate::state::ActiveMaterialField,
+        body: &crate::organism_geometry::OrganismBodyGeometry,
+        cell_a: usize,
+        material_a: usize,
+        tick: usize,
+        target_cell_limit: usize,
+        environmental_identity: u64,
+    ) -> Self {
+        if let Some(snapshot) = snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
+            if let Ok(anchor_index) = snapshot.materials.binary_search_by_key(
+                &crate::environmental_interaction::MaterialIdentity(environmental_identity),
+                |record| record.identity,
+            ) {
+                let record = &snapshot.materials[anchor_index];
+                if record.locator.cell_index == cell_a
+                    && record.locator.material_index == material_a
+                {
+                    let mut bounds = vec![None; snapshot.materials.len()];
+                    bounds[anchor_index] =
+                        Some(crate::environmental_broad_phase::MaterialSpatialBounds {
+                            min_x: body.min_x,
+                            max_x: body.max_x,
+                            min_y: body.min_y,
+                            max_y: body.max_y,
+                        });
+                    if let Some(cursor) =
+                        crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
+                            snapshot,
+                            field,
+                            crate::environmental_broad_phase::PairOrientation::Directed,
+                            tick,
+                            anchor_index,
+                        )
+                    {
+                        return Self::Shared {
+                            cursor,
+                            bounds,
+                            initialized: false,
+                            target_cell_limit,
+                        };
+                    }
+                }
+            }
+        }
+
+        let cells = field.cells_intersecting_bounds_limited(
+            body.min_x - 2.1,
+            body.max_x + 2.1,
+            body.min_y - 2.1,
+            body.max_y + 2.1,
+            target_cell_limit,
+            tick.wrapping_add(cell_a).wrapping_add(material_a),
+        );
+        Self::Legacy {
+            cells,
+            next_cell: 0,
+            current_cell: None,
+            target_count: 0,
+            target_start: 0,
+            target_offset: 0,
+            tick,
+            anchor_material: material_a,
+        }
+    }
+
+    fn next(
+        &mut self,
+        snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+        field: &crate::state::ActiveMaterialField,
+    ) -> DisplacementTargetStep {
+        match self {
+            Self::Shared {
+                cursor,
+                bounds,
+                initialized,
+                target_cell_limit,
+            } => {
+                let Some(snapshot) = snapshot else {
+                    return DisplacementTargetStep::Complete;
+                };
+                let page = cursor.next_page(
+                    snapshot,
+                    field,
+                    bounds,
+                    2.1,
+                    *target_cell_limit,
+                    1,
+                    1,
+                );
+                if page.visited_work == 0 {
+                    return DisplacementTargetStep::Complete;
+                }
+                if !*initialized && page.visited_anchor_initializations > 0 {
+                    *initialized = true;
+                    return DisplacementTargetStep::AnchorInitialized;
+                }
+                if page.visited_cell_checks > 0 {
+                    return DisplacementTargetStep::CellInspected;
+                }
+                if page.visited_material_checks > 0 {
+                    let target = page.pairs.first().and_then(|pair| {
+                        snapshot.materials.get(pair.right).map(|record| {
+                            (record.locator.cell_index, record.locator.material_index)
+                        })
+                    });
+                    return DisplacementTargetStep::MaterialInspected(target);
+                }
+                DisplacementTargetStep::Complete
+            }
+            Self::Legacy {
+                cells,
+                next_cell,
+                current_cell,
+                target_count,
+                target_start,
+                target_offset,
+                tick,
+                anchor_material,
+            } => {
+                if current_cell.is_none() {
+                    let Some(&cell_index) = cells.get(*next_cell) else {
+                        return DisplacementTargetStep::Complete;
+                    };
+                    *next_cell += 1;
+                    *current_cell = Some(cell_index);
+                    *target_count = field
+                        .cells
+                        .get(cell_index)
+                        .map_or(0, |cell| cell.physical_materials.len());
+                    *target_start = if *target_count == 0 {
+                        0
+                    } else {
+                        tick.wrapping_add(cell_index).wrapping_add(*anchor_material)
+                            % *target_count
+                    };
+                    *target_offset = 0;
+                    return DisplacementTargetStep::CellInspected;
+                }
+                if *target_offset >= *target_count {
+                    *current_cell = None;
+                    return self.next(snapshot, field);
+                }
+                let cell_index = current_cell.unwrap();
+                let material_index = (*target_start + *target_offset) % *target_count;
+                *target_offset += 1;
+                if *target_offset >= *target_count {
+                    *current_cell = None;
+                }
+                DisplacementTargetStep::MaterialInspected(Some((cell_index, material_index)))
+            }
+        }
+    }
+}
+
 /// Energy and activation assessment for one proposed constituent replacement.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct DisplacementPreflight {
