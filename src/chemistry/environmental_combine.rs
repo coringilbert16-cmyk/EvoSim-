@@ -899,6 +899,10 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
 /// Production COMBINE entry point backed by the tick's shared environmental
 /// snapshot. The spatial cursor supplies material-pair discovery; the existing
 /// COMBINE endpoint, chemistry, activation, and energy evaluators remain native.
+#[cfg_attr(
+    not(test),
+    expect(dead_code, reason = "Compatibility wrapper for isolated reaction tests")
+)]
 pub(crate) fn accumulate_environmental_with_shared_snapshot(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
