@@ -2423,15 +2423,14 @@ mod tests {
         );
         assert!(reverse_page.complete);
 
-        let mut directed =
-            IndexedSpatialCursor::new_for_anchor(
-                &snapshot,
-                &field,
-                PairOrientation::Directed,
-                17,
-                anchor_index,
-            )
-            .unwrap();
+        let mut directed = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            17,
+            anchor_index,
+        )
+        .unwrap();
         let directed_page = directed.next_page(
             &snapshot,
             &field,
