@@ -1236,8 +1236,48 @@ fn accumulate_environmental_internal(
         .min(DISPLACEMENT_FIELD_ANCHOR_LIMIT)
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let cell_count = environment.field.cells.len();
-    let cell_scan_count = cell_count.min(DISPLACEMENT_FIELD_ANCHOR_LIMIT);
-    let cell_start = tick as usize % cell_count;
+    let mut anchor_order = if let Some(snapshot) =
+        shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
+    {
+        snapshot
+            .materials
+            .iter()
+            .map(|record| (record.locator.cell_index, record.locator.material_index))
+            .collect::<Vec<_>>()
+    } else {
+        environment
+            .field
+            .cells
+            .iter()
+            .enumerate()
+            .flat_map(|(cell_index, cell)| {
+                (0..cell.physical_materials.len())
+                    .map(move |material_index| (cell_index, material_index))
+            })
+            .collect::<Vec<_>>()
+    };
+    anchor_order.sort_by_key(|&(cell_index, material_index)| {
+        let cell_offset = if cell_count == 0 {
+            0
+        } else {
+            cell_index
+                .wrapping_add(cell_count)
+                .wrapping_sub(tick as usize % cell_count)
+                % cell_count
+        };
+        let material_count = environment
+            .field
+            .cells
+            .get(cell_index)
+            .map_or(1, |cell| cell.physical_materials.len())
+            .max(1);
+        let material_start = (tick as usize + cell_index) % material_count;
+        let material_offset = material_index
+            .wrapping_add(material_count)
+            .wrapping_sub(material_start)
+            % material_count;
+        (cell_offset, material_offset)
+    });
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
@@ -1274,33 +1314,29 @@ fn accumulate_environmental_internal(
                 })
         });
 
-    'anchors: for cell_offset in 0..cell_scan_count {
+    'anchors: for (cell_a, material_a) in anchor_order {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
             break;
         }
-        let cell_a = (cell_start + cell_offset) % cell_count;
+        anchor_work -= 1;
         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-        let material_count = environment.field.cells[cell_a].physical_materials.len();
-        if material_count == 0 {
+        diagnostics.anchor_materials_inspected =
+            diagnostics.anchor_materials_inspected.saturating_add(1);
+        let Some(source_a) = environment
+            .field
+            .cells
+            .get(cell_a)
+            .and_then(|cell| cell.physical_materials.get(material_a))
+            .cloned()
+        else {
+            continue;
+        };
+        let Some(connections) = source_a.internal_connections.as_ref() else {
+            continue;
+        };
+        if connections.is_empty() {
             continue;
         }
-        let material_start = (tick as usize + cell_a) % material_count;
-        for material_offset in 0..material_count {
-            if anchor_work == 0 || *remaining_discovery_work == 0 {
-                break 'anchors;
-            }
-            anchor_work -= 1;
-            *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-            let material_a = (material_start + material_offset) % material_count;
-            diagnostics.anchor_materials_inspected =
-                diagnostics.anchor_materials_inspected.saturating_add(1);
-            let source_a = environment.field.cells[cell_a].physical_materials[material_a].clone();
-            let Some(connections) = source_a.internal_connections.as_ref() else {
-                continue;
-            };
-            if connections.is_empty() {
-                continue;
-            }
             let shared_bond_indices = shared_bond_indices_by_material
                 .as_ref()
                 .and_then(|indices| {
@@ -1763,7 +1799,6 @@ fn accumulate_environmental_internal(
                 }
             }
         }
-    }
 
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
 
