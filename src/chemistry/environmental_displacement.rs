@@ -60,15 +60,15 @@ fn has_complete_shared_forward_coverage(
 
 impl DisplacementTargetScan {
     fn new(
-        snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+        _snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
         field: &crate::environment::ActiveMaterialField,
         body: Option<&crate::organism_geometry::OrganismBodyGeometry>,
-        shared_bounds: &mut [Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
+        _shared_bounds: &mut [Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
         cell_a: usize,
         material_a: usize,
         tick: usize,
         target_cell_limit: usize,
-        environmental_identity: u64,
+        _environmental_identity: u64,
         shared_candidates: Option<Vec<(usize, usize)>>,
     ) -> Self {
         if let Some(targets) = shared_candidates {
