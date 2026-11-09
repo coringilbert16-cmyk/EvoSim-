@@ -1159,54 +1159,17 @@ impl MaterialSpatialIndex {
             && self.locators.len() == snapshot.materials.len()
     }
 
-    fn query_candidates(
+    fn query_bounds(
         &self,
         anchor: MaterialSpatialBounds,
         padding: f64,
-        output: &mut Vec<usize>,
-        stack: &mut Vec<usize>,
-    ) -> u64 {
-        output.clear();
-        stack.clear();
+    ) -> Option<MaterialSpatialBounds> {
         let normalized_anchor = if self.vertical_period.is_finite() && self.vertical_period > 0.0 {
             normalize_vertical_bounds(anchor, self.vertical_period)
         } else {
             anchor
         };
-        let Some(query) = normalized_anchor.expanded(padding) else {
-            output.extend(0..self.material_count);
-            return 0;
-        };
-        if let Some(root) = self.root {
-            stack.push(root);
-        }
-        let mut visited_nodes = 0u64;
-        while let Some(node_index) = stack.pop() {
-            visited_nodes = visited_nodes.saturating_add(1);
-            let Some(node) = self.nodes.get(node_index) else {
-                continue;
-            };
-            if !spatial_bounds_intersect(node.bounds, query) {
-                continue;
-            }
-            if let (Some(material_index), Some(material_bounds)) =
-                (node.material_index, node.material_bounds)
-            {
-                if spatial_bounds_intersect(material_bounds, query) {
-                    output.push(material_index);
-                }
-            }
-            if let Some(left) = node.left {
-                stack.push(left);
-            }
-            if let Some(right) = node.right {
-                stack.push(right);
-            }
-        }
-        output.extend(self.unbounded_materials.iter().copied());
-        output.sort_unstable_by_key(|&material_index| self.locators[material_index]);
-        output.dedup();
-        visited_nodes
+        normalized_anchor.expanded(padding)
     }
 }
 
@@ -1301,6 +1264,11 @@ pub(crate) struct IndexedSpatialCursor {
     candidate_position: usize,
     candidate_targets_visited: usize,
     query_stack: Vec<usize>,
+    query_bounds: Option<MaterialSpatialBounds>,
+    query_unbounded_position: usize,
+    query_fallback_position: usize,
+    query_fallback: bool,
+    query_complete: bool,
     complete: bool,
 }
 
@@ -1393,6 +1361,11 @@ impl IndexedSpatialCursor {
             candidate_position: 0,
             candidate_targets_visited: 0,
             query_stack: Vec::new(),
+            query_bounds: None,
+            query_unbounded_position: 0,
+            query_fallback_position: 0,
+            query_fallback: false,
+            query_complete: false,
             complete: false,
         })
     }
@@ -1460,6 +1433,11 @@ impl IndexedSpatialCursor {
             candidate_position: 0,
             candidate_targets_visited: 0,
             query_stack: Vec::new(),
+            query_bounds: None,
+            query_unbounded_position: 0,
+            query_fallback_position: 0,
+            query_fallback: false,
+            query_complete: false,
             complete: material_count == 0,
         }
     }
@@ -1553,19 +1531,78 @@ impl IndexedSpatialCursor {
                     page.visited_anchor_initializations =
                         page.visited_anchor_initializations.saturating_add(1);
                     self.candidate_targets.clear();
+                    self.query_stack.clear();
+                    self.query_unbounded_position = 0;
+                    self.query_fallback_position = 0;
+                    self.query_fallback = false;
+                    self.query_complete = bounds[anchor_index].is_none();
                     if let Some(anchor_bounds) = bounds[anchor_index] {
-                        let node_visits = index.query_candidates(
-                            anchor_bounds,
-                            padding,
-                            &mut self.candidate_targets,
-                            &mut self.query_stack,
-                        );
-                        page.visited_work = page.visited_work.saturating_add(node_visits);
-                        page.visited_cell_checks =
-                            page.visited_cell_checks.saturating_add(node_visits);
+                        if let Some(query) = index.query_bounds(anchor_bounds, padding) {
+                            self.query_bounds = Some(query);
+                            if let Some(root) = index.root {
+                                self.query_stack.push(root);
+                            }
+                        } else {
+                            self.query_fallback = true;
+                        }
+                    } else {
+                        self.query_bounds = None;
                     }
-                    let candidate_count = self.candidate_targets.len();
                     self.candidate_targets_visited = 0;
+                    self.anchor_initialized = true;
+                    continue;
+                }
+
+                if !self.query_complete {
+                    if self.query_fallback {
+                        if self.query_fallback_position < index.material_count {
+                            self.candidate_targets.push(self.query_fallback_position);
+                            self.query_fallback_position += 1;
+                            page.visited_work = page.visited_work.saturating_add(1);
+                            page.visited_cell_checks =
+                                page.visited_cell_checks.saturating_add(1);
+                            continue;
+                        }
+                    } else if let Some(node_index) = self.query_stack.pop() {
+                        page.visited_work = page.visited_work.saturating_add(1);
+                        page.visited_cell_checks =
+                            page.visited_cell_checks.saturating_add(1);
+                        if let (Some(node), Some(query)) =
+                            (index.nodes.get(node_index), self.query_bounds)
+                        {
+                            if spatial_bounds_intersect(node.bounds, query) {
+                                if let (Some(material_index), Some(material_bounds)) =
+                                    (node.material_index, node.material_bounds)
+                                {
+                                    if spatial_bounds_intersect(material_bounds, query) {
+                                        self.candidate_targets.push(material_index);
+                                    }
+                                }
+                                if let Some(left) = node.left {
+                                    self.query_stack.push(left);
+                                }
+                                if let Some(right) = node.right {
+                                    self.query_stack.push(right);
+                                }
+                            }
+                        }
+                        continue;
+                    } else if self.query_unbounded_position < index.unbounded_materials.len() {
+                        self.candidate_targets.push(
+                            index.unbounded_materials[self.query_unbounded_position],
+                        );
+                        self.query_unbounded_position += 1;
+                        page.visited_work = page.visited_work.saturating_add(1);
+                        page.visited_cell_checks =
+                            page.visited_cell_checks.saturating_add(1);
+                        continue;
+                    }
+
+                    self.candidate_targets.sort_unstable_by_key(|&material_index| {
+                        index.locators[material_index]
+                    });
+                    self.candidate_targets.dedup();
+                    let candidate_count = self.candidate_targets.len();
                     self.candidate_position = if candidate_count == 0 {
                         0
                     } else {
@@ -1574,7 +1611,7 @@ impl IndexedSpatialCursor {
                             .wrapping_add(snapshot.materials[anchor_index].locator.material_index)
                             % candidate_count
                     };
-                    self.anchor_initialized = true;
+                    self.query_complete = true;
                     continue;
                 }
 
@@ -1954,6 +1991,11 @@ impl IndexedSpatialCursor {
         self.candidate_position = 0;
         self.candidate_targets_visited = 0;
         self.query_stack.clear();
+        self.query_bounds = None;
+        self.query_unbounded_position = 0;
+        self.query_fallback_position = 0;
+        self.query_fallback = false;
+        self.query_complete = false;
         self.complete = self.anchors_visited >= anchor_count;
     }
 }
