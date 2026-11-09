@@ -1145,40 +1145,50 @@ fn accumulate_environmental_internal(
             else {
                 continue;
             };
-            let target_cells = environment.field.cells_intersecting_bounds_limited(
-                body.min_x - 2.1,
-                body.max_x + 2.1,
-                body.min_y - 2.1,
-                body.max_y + 2.1,
-                DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work),
-                (tick as usize)
-                    .wrapping_add(cell_a)
-                    .wrapping_add(material_a),
+            let target_cell_limit =
+                DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
+            let mut target_scan = DisplacementTargetScan::new(
+                shared_snapshot,
+                &environment.field,
+                &body,
+                cell_a,
+                material_a,
+                tick as usize,
+                target_cell_limit,
+                source_a.environmental_identity,
             );
 
-            for &cell_b in &target_cells {
+            loop {
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
-                diagnostics.target_cells_inspected =
-                    diagnostics.target_cells_inspected.saturating_add(1);
-                *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                let target_count = environment.field.cells[cell_b].physical_materials.len();
-                if target_count == 0 {
-                    continue;
-                }
-                let target_start = (tick as usize + cell_b + material_a) % target_count;
-                for target_offset in 0..target_count {
-                    if *remaining_discovery_work == 0 {
-                        break 'anchors;
-                    }
-                    diagnostics.target_materials_inspected =
-                        diagnostics.target_materials_inspected.saturating_add(1);
-                    *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                    let material_b = (target_start + target_offset) % target_count;
-                    if cell_a == cell_b && material_a == material_b {
+                let (cell_b, material_b) = match target_scan.next(
+                    shared_snapshot,
+                    &environment.field,
+                ) {
+                    DisplacementTargetStep::AnchorInitialized => continue,
+                    DisplacementTargetStep::CellInspected => {
+                        diagnostics.target_cells_inspected =
+                            diagnostics.target_cells_inspected.saturating_add(1);
+                        *remaining_discovery_work =
+                            remaining_discovery_work.saturating_sub(1);
                         continue;
                     }
+                    DisplacementTargetStep::MaterialInspected(target) => {
+                        diagnostics.target_materials_inspected =
+                            diagnostics.target_materials_inspected.saturating_add(1);
+                        *remaining_discovery_work =
+                            remaining_discovery_work.saturating_sub(1);
+                        let Some(target) = target else {
+                            continue;
+                        };
+                        target
+                    }
+                    DisplacementTargetStep::Complete => break,
+                };
+                if cell_a == cell_b && material_a == material_b {
+                    continue;
+                }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
                     let mut combined = source_structure.clone();
@@ -1534,7 +1544,6 @@ fn accumulate_environmental_internal(
                 }
             }
         }
-    }
 
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
 
