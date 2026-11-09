@@ -929,32 +929,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     )
 }
 
-pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
-    environment: &Environment,
-    accumulation: &mut BTreeMap<String, f64>,
-    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
-    tick: u64,
-    remaining_discovery_work: &mut usize,
-    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
-    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
-    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
-) -> Vec<EnvironmentalCombineOperation> {
-    let mut shared_candidate_pairs = Vec::new();
-    let mut completed_anchors = vec![false; snapshot.materials.len()];
-    accumulate_environmental_with_shared_snapshot_and_candidates(
-        environment,
-        accumulation,
-        chemistry_library,
-        tick,
-        remaining_discovery_work,
-        diagnostics,
-        snapshot,
-        shared_bounds,
-        &mut shared_candidate_pairs,
-        &mut completed_anchors,
-    )
-}
-
 pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
