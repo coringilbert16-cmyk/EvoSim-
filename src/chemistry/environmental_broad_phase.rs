@@ -1274,6 +1274,7 @@ impl IndexedSpatialCursor {
             target_slots_visited: 0,
             target_slots_to_visit: 0,
             cell_loaded: false,
+            seen_targets: std::collections::HashSet::new(),
             complete: material_count == 0,
         }
     }
