@@ -969,6 +969,80 @@ struct BoundsCellRange {
     row_count: usize,
 }
 
+/// Tick-local spatial occupancy index. Each material is inserted into every
+/// field cell intersected by its conservative realized bounds, rather than
+/// only the cell that currently owns its physical slot.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MaterialSpatialIndex {
+    pass_id: u64,
+    field_revision: u64,
+    materials_by_cell: Vec<Vec<usize>>,
+}
+
+impl MaterialSpatialIndex {
+    pub(crate) fn new(
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        padding: f64,
+    ) -> Self {
+        let mut materials_by_cell = vec![Vec::new(); field.cells.len()];
+        if bounds.len() == snapshot.materials.len() {
+            for (material_index, record) in snapshot.materials.iter().enumerate() {
+                match bounds[material_index].and_then(|value| value.expanded(padding)) {
+                    Some(expanded) => {
+                        if let Some(range) = BoundsCellRange::new(field, expanded) {
+                            let columns = range.max_col - range.min_col + 1;
+                            for row_offset in 0..range.row_count {
+                                for col in range.min_col..=range.max_col {
+                                    let cell_index = range.cell_index(field, row_offset, col);
+                                    materials_by_cell[cell_index].push(material_index);
+                                }
+                            }
+                            let _ = columns;
+                        }
+                    }
+                    None if bounds[material_index].is_none() => {
+                        if let Some(indices) =
+                            materials_by_cell.get_mut(record.locator.cell_index)
+                        {
+                            indices.push(material_index);
+                        }
+                    }
+                    None => {}
+                }
+            }
+        }
+        for indices in &mut materials_by_cell {
+            indices.sort_unstable();
+            indices.dedup();
+        }
+        Self {
+            pass_id: snapshot.pass_id,
+            field_revision: snapshot.field_revision,
+            materials_by_cell,
+        }
+    }
+
+    fn is_current(
+        &self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+    ) -> bool {
+        self.pass_id == snapshot.pass_id
+            && self.field_revision == snapshot.field_revision
+            && field.revision == self.field_revision
+            && self.materials_by_cell.len() == field.cells.len()
+    }
+
+    fn materials_in_cell(&self, cell_index: usize) -> &[usize] {
+        self.materials_by_cell
+            .get(cell_index)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+}
+
 impl BoundsCellRange {
     fn new(field: &ActiveMaterialField, bounds: MaterialSpatialBounds) -> Option<Self> {
         if field.width_cells == 0
