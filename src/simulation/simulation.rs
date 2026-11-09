@@ -1146,13 +1146,14 @@ impl Simulation {
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot(
+            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot_and_bounds(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
                 &mut displacement_discovery,
                 &environmental_shared_snapshot,
+                &mut environmental_shared_bounds,
             );
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
