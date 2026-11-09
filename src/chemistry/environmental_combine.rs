@@ -1061,14 +1061,23 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 shared_bounds[anchor_index].expect("anchor bounds were just populated"),
                 BOUNDS_PADDING,
             );
-        // The shared discovery stream is role-complete for every material,
-        // not only bonded anchors. COMBINE consumes the forward locator order;
-        // DISPLACEMENT later projects both directions from these same records.
+        // COMBINE needs only forward pairs. Bonded anchors additionally
+        // emit the reverse role into the same shared stream for DISPLACEMENT;
+        // unbonded anchors avoid that unnecessary second orientation.
+        let anchor_has_bonds = snapshot
+            .bond_indices_by_material
+            .get(&record_a.identity)
+            .is_some_and(|indices| !indices.is_empty());
+        let cursor_orientation = if anchor_has_bonds {
+            crate::environmental_broad_phase::PairOrientation::Directed
+        } else {
+            crate::environmental_broad_phase::PairOrientation::ForwardOrdered
+        };
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
                 &environment.field,
-                crate::environmental_broad_phase::PairOrientation::Directed,
+                cursor_orientation,
                 tick as usize,
                 anchor_index,
             )
