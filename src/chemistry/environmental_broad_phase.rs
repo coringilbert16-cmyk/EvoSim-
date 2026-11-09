@@ -1059,11 +1059,12 @@ impl IndexedSpatialCursor {
                 break;
             }
 
+            let anchor_index = self.anchor_order[self.anchor_index];
             if !self.anchor_initialized {
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_anchor_initializations =
                     page.visited_anchor_initializations.saturating_add(1);
-                let expanded = bounds[self.anchor_index].and_then(|value| value.expanded(padding));
+                let expanded = bounds[anchor_index].and_then(|value| value.expanded(padding));
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
                 self.anchor_initialized = true;
                 self.target_slot = 0;
@@ -1073,7 +1074,7 @@ impl IndexedSpatialCursor {
                 if let Some(range) = self.range {
                     let columns = range.max_col - range.min_col + 1;
                     let total_cells = range.row_count.saturating_mul(columns);
-                    let anchor = &snapshot.materials[self.anchor_index];
+                    let anchor = &snapshot.materials[anchor_index];
                     self.cell_start_offset = self
                         .tick
                         .wrapping_add(anchor.locator.cell_index)
@@ -1098,7 +1099,7 @@ impl IndexedSpatialCursor {
             if !self.cell_loaded {
                 let cell_index = range.cell_index(field, self.row_offset, self.col);
                 if self.orientation == PairOrientation::ForwardOrdered
-                    && cell_index < snapshot.materials[self.anchor_index].locator.cell_index
+                    && cell_index < snapshot.materials[anchor_index].locator.cell_index
                 {
                     self.advance_cell(range);
                     continue;
@@ -1112,7 +1113,7 @@ impl IndexedSpatialCursor {
                 if target_count == 0 {
                     self.advance_cell(range);
                 } else {
-                    let anchor = &snapshot.materials[self.anchor_index];
+                    let anchor = &snapshot.materials[anchor_index];
                     self.cell_loaded = true;
                     self.target_slots_visited = 0;
                     self.target_slot = self
@@ -1142,7 +1143,7 @@ impl IndexedSpatialCursor {
             } else {
                 self.target_slot = (target_slot + 1) % target_count;
             }
-            let anchor = &snapshot.materials[self.anchor_index];
+            let anchor = &snapshot.materials[anchor_index];
             if self.orientation == PairOrientation::ForwardOrdered
                 && (cell_index, target_slot)
                     <= (anchor.locator.cell_index, anchor.locator.material_index)
@@ -1166,7 +1167,7 @@ impl IndexedSpatialCursor {
             let target_record = &snapshot.materials[target_index];
             if target_record.locator.cell_index != cell_index
                 || target_record.locator.material_index != target_slot
-                || target_index == self.anchor_index
+                || target_index == anchor_index
             {
                 continue;
             }
@@ -1174,7 +1175,7 @@ impl IndexedSpatialCursor {
             match self.orientation {
                 PairOrientation::Directed | PairOrientation::ForwardOrdered => {
                     page.pairs.push(MaterialPairRecord {
-                        left: self.anchor_index,
+                        left: anchor_index,
                         right: target_index,
                         identity_left: anchor.identity,
                         identity_right: target_record.identity,
@@ -1188,10 +1189,10 @@ impl IndexedSpatialCursor {
                     // pass. When both queries reach, the lower anchor already
                     // emitted it, so the reverse pass is suppressed without
                     // retaining an O(candidate-pairs) seen set.
-                    let (left, right) = if self.anchor_index < target_index {
-                        (self.anchor_index, target_index)
+                    let (left, right) = if anchor_index < target_index {
+                        (anchor_index, target_index)
                     } else {
-                        (target_index, self.anchor_index)
+                        (target_index, anchor_index)
                     };
                     let lower_anchor_reaches_higher = bounds[left]
                         .and_then(|value| value.expanded(padding))
@@ -1202,7 +1203,7 @@ impl IndexedSpatialCursor {
                                 snapshot.materials[right].locator.cell_index,
                             )
                         });
-                    if self.anchor_index < target_index || !lower_anchor_reaches_higher {
+                    if anchor_index < target_index || !lower_anchor_reaches_higher {
                         page.pairs.push(MaterialPairRecord {
                             left,
                             right,
@@ -1248,7 +1249,7 @@ impl IndexedSpatialCursor {
     fn advance_anchor(&mut self, material_count: usize) {
         self.anchors_visited = self.anchors_visited.saturating_add(1);
         if self.anchors_visited < material_count {
-            self.anchor_index = (self.anchor_index + 1) % material_count;
+            self.anchor_index += 1;
         }
         self.anchor_initialized = false;
         self.range = None;
