@@ -1123,17 +1123,25 @@ impl Simulation {
             );
         }
 
+        // COMBINE commits may change ownership and topology. DISPLACEMENT
+        // receives a fresh snapshot and reuses its existing-bond inventory.
+        let environmental_displacement_snapshot =
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                &self.environment.field,
+                self.tick,
+            );
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental(
+            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
                 &mut displacement_discovery,
+                &environmental_displacement_snapshot,
             );
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
