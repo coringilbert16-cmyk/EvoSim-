@@ -854,6 +854,42 @@ pub(crate) fn accumulate_environmental(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
+    accumulate_environmental_internal(
+        environment,
+        accumulation,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        None,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_shared_snapshot(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+) -> Vec<EnvironmentalDisplacementOperation> {
+    accumulate_environmental_internal(
+        environment,
+        accumulation,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        Some(snapshot),
+    )
+}
+
+fn accumulate_environmental_internal(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
+    shared_snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+) -> Vec<EnvironmentalDisplacementOperation> {
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
@@ -970,7 +1006,24 @@ pub(crate) fn accumulate_environmental(
                         continue;
                     }
 
-                    for (bond_index, connection) in connections.iter().enumerate() {
+                    let shared_bond_indices = shared_snapshot
+                        .filter(|snapshot| snapshot.unassigned_materials == 0)
+                        .map(|snapshot| {
+                            snapshot
+                                .existing_bonds
+                                .iter()
+                                .filter(|bond| {
+                                    bond.material.0 == source_a.environmental_identity
+                                })
+                                .map(|bond| bond.bond_index)
+                                .collect::<Vec<_>>()
+                        });
+                    let bond_indices = shared_bond_indices
+                        .unwrap_or_else(|| (0..connections.len()).collect());
+                    for bond_index in bond_indices {
+                        let Some(connection) = connections.get(bond_index) else {
+                            continue;
+                        };
                         if *remaining_discovery_work == 0 {
                             break 'anchors;
                         }
