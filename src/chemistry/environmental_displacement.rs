@@ -1139,9 +1139,13 @@ fn accumulate_environmental_internal(
             let shared_bond_indices = shared_bond_indices_by_material
                 .as_ref()
                 .and_then(|indices| indices.get(&source_a.environmental_identity))
-                .cloned();
-            let bond_indices =
-                shared_bond_indices.unwrap_or_else(|| (0..connections.len()).collect());
+                .map(Vec::as_slice);
+            let fallback_bond_indices = shared_bond_indices
+                .is_none()
+                .then(|| (0..connections.len()).collect::<Vec<_>>());
+            let bond_indices = shared_bond_indices
+                .or_else(|| fallback_bond_indices.as_deref())
+                .unwrap_or(&[]);
             diagnostics.bonded_anchor_materials =
                 diagnostics.bonded_anchor_materials.saturating_add(1);
             let Some((source_structure, indices_a)) =
@@ -1232,7 +1236,7 @@ fn accumulate_environmental_internal(
                     continue;
                 }
 
-                for &bond_index in &bond_indices {
+                for &bond_index in bond_indices {
                     let Some(connection) = connections.get(bond_index) else {
                         continue;
                     };
