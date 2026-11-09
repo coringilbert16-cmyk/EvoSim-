@@ -93,8 +93,7 @@ impl MaterialSpatialBounds {
         if !padding.is_finite() || padding < 0.0 {
             return true;
         }
-        let x_overlaps = self.min_x - padding <= other.max_x
-            && self.max_x + padding >= other.min_x;
+        let x_overlaps = self.min_x - padding <= other.max_x && self.max_x + padding >= other.min_x;
         if !x_overlaps {
             return false;
         }
@@ -1405,11 +1404,7 @@ impl IndexedSpatialCursor {
                 (bounds[anchor_index], bounds[target_index])
             {
                 let vertical_period = field.height_cells as f64 * field.cell_size;
-                if !anchor_bounds.overlaps_with_padding(
-                    target_bounds,
-                    padding,
-                    vertical_period,
-                ) {
+                if !anchor_bounds.overlaps_with_padding(target_bounds, padding, vertical_period) {
                     page.target_materials_rejected_by_bounds =
                         page.target_materials_rejected_by_bounds.saturating_add(1);
                     continue;
