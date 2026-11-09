@@ -307,7 +307,7 @@ jobs:
           pattern = re.compile(
               r"tick=([0-9]+) elapsed_wall_seconds=([0-9.]+) "
               r"physical_resources=([0-9]+) constituents=([0-9]+) "
-              r".*energy_residual=Some\\(([^)]+)\\)"
+              r".*energy_residual=Some\(([^)]+)\)"
           )
           for path in sorted(Path("benchmark-results").glob("*.log")):
               match = pattern.search(path.read_text())
