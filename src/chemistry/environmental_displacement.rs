@@ -46,7 +46,7 @@ impl DisplacementTargetScan {
     fn new(
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
         field: &crate::environment::ActiveMaterialField,
-        body: &crate::organism_geometry::OrganismBodyGeometry,
+        body: Option<&crate::organism_geometry::OrganismBodyGeometry>,
         shared_bounds: &mut [Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
         cell_a: usize,
         material_a: usize,
@@ -73,12 +73,27 @@ impl DisplacementTargetScan {
                             anchor_index,
                         ),
                     ) {
-                        *bounds = Some(crate::environmental_broad_phase::MaterialSpatialBounds {
-                            min_x: body.min_x,
-                            max_x: body.max_x,
-                            min_y: body.min_y,
-                            max_y: body.max_y,
-                        });
+                        if bounds.is_none() {
+                            let Some(body) = body else {
+                                return Self::Legacy {
+                                    cells: Vec::new(),
+                                    next_cell: 0,
+                                    current_cell: None,
+                                    target_count: 0,
+                                    target_start: 0,
+                                    target_offset: 0,
+                                    tick,
+                                    anchor_material: material_a,
+                                };
+                            };
+                            *bounds =
+                                Some(crate::environmental_broad_phase::MaterialSpatialBounds {
+                                    min_x: body.min_x,
+                                    max_x: body.max_x,
+                                    min_y: body.min_y,
+                                    max_y: body.max_y,
+                                });
+                        }
                         return Self::Shared {
                             cursor,
                             initialized: false,
@@ -89,14 +104,16 @@ impl DisplacementTargetScan {
             }
         }
 
-        let cells = field.cells_intersecting_bounds_limited(
-            body.min_x - 2.1,
-            body.max_x + 2.1,
-            body.min_y - 2.1,
-            body.max_y + 2.1,
-            target_cell_limit,
-            tick.wrapping_add(cell_a).wrapping_add(material_a),
-        );
+        let cells = body.map_or_else(Vec::new, |body| {
+            field.cells_intersecting_bounds_limited(
+                body.min_x - 2.1,
+                body.max_x + 2.1,
+                body.min_y - 2.1,
+                body.max_y + 2.1,
+                target_cell_limit,
+                tick.wrapping_add(cell_a).wrapping_add(material_a),
+            )
+        });
         Self::Legacy {
             cells,
             next_cell: 0,
@@ -1048,6 +1065,7 @@ pub(crate) fn accumulate_environmental(
         remaining_discovery_work,
         diagnostics,
         None,
+        &mut Vec::new(),
     )
 }
 
@@ -1059,6 +1077,30 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
 ) -> Vec<EnvironmentalDisplacementOperation> {
+    let mut shared_bounds = vec![None; snapshot.materials.len()];
+    accumulate_environmental_with_shared_snapshot_and_bounds(
+        environment,
+        accumulation,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        snapshot,
+        &mut shared_bounds,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+) -> Vec<EnvironmentalDisplacementOperation> {
+    if shared_bounds.len() != snapshot.materials.len() {
+        *shared_bounds = vec![None; snapshot.materials.len()];
+    }
     accumulate_environmental_internal(
         environment,
         accumulation,
@@ -1066,6 +1108,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         remaining_discovery_work,
         diagnostics,
         Some(snapshot),
+        shared_bounds,
     )
 }
 
@@ -1076,6 +1119,7 @@ fn accumulate_environmental_internal(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
     shared_snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
 ) -> Vec<EnvironmentalDisplacementOperation> {
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
@@ -1095,7 +1139,15 @@ fn accumulate_environmental_internal(
     // topology epoch. Allocate it lazily only when a valid shared-snapshot
     // anchor is actually reached; each cursor reads only its own anchor entry,
     // so previous entries are harmless and no per-anchor initialization occurs.
-    let mut shared_displacement_bounds = Vec::new();
+    if let Some(snapshot) =
+        shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
+    {
+        if shared_bounds.len() != snapshot.materials.len() {
+            *shared_bounds = vec![None; snapshot.materials.len()];
+        }
+    } else {
+        shared_bounds.clear();
+    }
     let shared_bond_indices_by_material = shared_snapshot
         .filter(|snapshot| snapshot.unassigned_materials == 0)
         .map(|snapshot| &snapshot.bond_indices_by_material);
@@ -1148,26 +1200,35 @@ fn accumulate_environmental_internal(
             else {
                 continue;
             };
-            let Some(body) =
-                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                    &source_structure,
-                )
-            else {
-                continue;
+            let cached_bounds = shared_snapshot
+                .filter(|snapshot| snapshot.unassigned_materials == 0)
+                .and_then(|snapshot| {
+                    snapshot.materials.binary_search_by_key(
+                        &crate::environmental_interaction::MaterialIdentity(
+                            source_a.environmental_identity,
+                        ),
+                        |record| record.identity,
+                    ).ok()
+                })
+                .and_then(|index| shared_bounds.get(index).copied().flatten());
+            let body = if cached_bounds.is_none() {
+                let Some(body) =
+                    crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                        &source_structure,
+                    )
+                else {
+                    continue;
+                };
+                Some(body)
+            } else {
+                None
             };
-            if shared_displacement_bounds.is_empty() {
-                if let Some(snapshot) =
-                    shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
-                {
-                    shared_displacement_bounds.resize(snapshot.materials.len(), None);
-                }
-            }
             let target_cell_limit = DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
             let mut target_scan = DisplacementTargetScan::new(
                 shared_snapshot,
                 &environment.field,
-                &body,
-                &mut shared_displacement_bounds,
+                body.as_ref(),
+                shared_bounds,
                 cell_a,
                 material_a,
                 tick as usize,
@@ -1182,7 +1243,7 @@ fn accumulate_environmental_internal(
                 let (cell_b, material_b) = match target_scan.next(
                     shared_snapshot,
                     &environment.field,
-                    &shared_displacement_bounds,
+                    shared_bounds.as_slice(),
                 ) {
                     DisplacementTargetStep::AnchorInitialized => continue,
                     DisplacementTargetStep::CellInspected => {
