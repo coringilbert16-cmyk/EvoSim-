@@ -591,6 +591,82 @@ pub(crate) fn accumulate_environmental(
     )
 }
 
+struct EnvironmentalAccumulationKeyIndex<'a> {
+    by_material: std::collections::BTreeMap<u64, Vec<(usize, &'a str)>>,
+    by_bond: std::collections::BTreeMap<(u64, usize), Vec<&'a str>>,
+}
+
+impl<'a> EnvironmentalAccumulationKeyIndex<'a> {
+    fn new(accumulation: &'a std::collections::BTreeMap<String, f64>) -> Self {
+        let mut by_material = std::collections::BTreeMap::new();
+        let mut by_bond = std::collections::BTreeMap::new();
+
+        for key in accumulation.keys() {
+            let Some(suffix) = key.strip_prefix("environment|environment:") else {
+                continue;
+            };
+            let mut parts = suffix.splitn(3, ':');
+            let Some(identity_text) = parts.next() else {
+                continue;
+            };
+            let Some(bond_index_text) = parts.next() else {
+                continue;
+            };
+            let Ok(identity) = identity_text.parse::<u64>() else {
+                continue;
+            };
+            // The old prefix checks format the identity canonically. Do not
+            // make legacy keys with alternate numeric spellings match.
+            if identity == 0 || identity_text != identity.to_string() {
+                continue;
+            }
+            let Ok(bond_index) = bond_index_text.parse::<usize>() else {
+                continue;
+            };
+
+            by_material
+                .entry(identity)
+                .or_insert_with(Vec::new)
+                .push((bond_index, key.as_str()));
+
+            // Candidate invalidation used a prefix ending in "{bond_index}:",
+            // so require the same canonical bond-index spelling and separator.
+            if bond_index_text == bond_index.to_string() && parts.next().is_some() {
+                by_bond
+                    .entry((identity, bond_index))
+                    .or_insert_with(Vec::new)
+                    .push(key.as_str());
+            }
+        }
+
+        Self {
+            by_material,
+            by_bond,
+        }
+    }
+
+    fn material_keys_missing_bonds(
+        &self,
+        identity: u64,
+        bond_count: usize,
+    ) -> impl Iterator<Item = &'a str> + '_ {
+        self.by_material
+            .get(&identity)
+            .into_iter()
+            .flatten()
+            .filter_map(move |(existing_index, key)| {
+                (*existing_index >= bond_count).then_some(*key)
+            })
+    }
+
+    fn keys_for_bond(&self, identity: u64, bond_index: usize) -> &[&'a str] {
+        self.by_bond
+            .get(&(identity, bond_index))
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+}
+
 pub(crate) fn accumulate_environmental_with_diagnostics(
     environment: &crate::state::Environment,
     accumulation: &mut std::collections::BTreeMap<String, f64>,
@@ -612,26 +688,14 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    let accumulation_key_index = EnvironmentalAccumulationKeyIndex::new(accumulation);
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
     for (identity, bond_count) in checked_materials {
-        if identity == 0 {
-            continue;
-        }
-        let material_prefix = format!("environment|environment:{identity}:");
-        for key in accumulation.keys() {
-            let Some(existing_index) = key
-                .strip_prefix(&material_prefix)
-                .and_then(|suffix| suffix.split(':').next())
-                .and_then(|index| index.parse::<usize>().ok())
-            else {
-                continue;
-            };
-            if existing_index >= bond_count {
-                checked_keys.insert(key.clone());
-                diagnostics.stale_progress_invalidated =
-                    diagnostics.stale_progress_invalidated.saturating_add(1);
-            }
+        for key in accumulation_key_index.material_keys_missing_bonds(identity, bond_count) {
+            checked_keys.insert(key.to_owned());
+            diagnostics.stale_progress_invalidated =
+                diagnostics.stale_progress_invalidated.saturating_add(1);
         }
     }
     let mut operations = Vec::new();
@@ -661,13 +725,11 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         diagnostics.bond_candidates_checked = diagnostics.bond_candidates_checked.saturating_add(1);
         let key = environmental_break_accumulation_key(instance, bond_index, connection);
         if instance.environmental_identity != 0 {
-            let bond_prefix = format!(
-                "environment|environment:{}:{bond_index}:",
-                instance.environmental_identity
-            );
-            for previous_key in accumulation.keys() {
-                if previous_key.starts_with(&bond_prefix) && previous_key != &key {
-                    checked_keys.insert(previous_key.clone());
+            for previous_key in accumulation_key_index
+                .keys_for_bond(instance.environmental_identity, bond_index)
+            {
+                if *previous_key != key {
+                    checked_keys.insert((*previous_key).to_owned());
                     diagnostics.stale_progress_invalidated =
                         diagnostics.stale_progress_invalidated.saturating_add(1);
                 }
@@ -1255,6 +1317,75 @@ mod material_identity_tests {
             catalog,
         )
         .expect("test composite should be physically realizable")
+    }
+
+    #[test]
+    fn environmental_accumulation_key_index_matches_exhaustive_prefix_checks() {
+        let accumulation = std::collections::BTreeMap::from([
+            ("environment|environment:41:0:bond-a".to_string(), 0.1),
+            ("environment|environment:41:1:bond-b".to_string(), 0.2),
+            ("environment|environment:41:2:bond-c".to_string(), 0.3),
+            ("environment|environment:41:2:legacy-tail".to_string(), 0.4),
+            ("environment|environment:41:02:leading-zero-index".to_string(), 0.5),
+            ("environment|environment:41:2".to_string(), 0.6),
+            ("environment|environment:42:2:other-material".to_string(), 0.7),
+            ("environment|environment:041:2:noncanonical-identity".to_string(), 0.8),
+            ("environment|environment:0:2:unassigned-material".to_string(), 0.9),
+            ("other|environment:41:2:not-environmental".to_string(), 1.0),
+            ("environment|environment:41:not-an-index:malformed".to_string(), 1.1),
+        ]);
+        let index = EnvironmentalAccumulationKeyIndex::new(&accumulation);
+
+        for (identity, bond_count) in [(41_u64, 2_usize), (41, 3), (42, 3), (999, 0)] {
+            let prefix = format!("environment|environment:{identity}:");
+            let expected: Vec<String> = accumulation
+                .keys()
+                .filter_map(|key| {
+                    let existing_index = key
+                        .strip_prefix(&prefix)
+                        .and_then(|suffix| suffix.split(':').next())
+                        .and_then(|value| value.parse::<usize>().ok())?;
+                    (existing_index >= bond_count).then(|| key.clone())
+                })
+                .collect();
+            let actual: Vec<String> = index
+                .material_keys_missing_bonds(identity, bond_count)
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(actual, expected);
+        }
+
+        for (identity, bond_index, current_key) in [
+            (
+                41_u64,
+                2_usize,
+                "environment|environment:41:2:bond-c",
+            ),
+            (
+                41,
+                0,
+                "environment|environment:41:0:bond-a",
+            ),
+            (
+                42,
+                2,
+                "environment|environment:42:2:other-material",
+            ),
+        ] {
+            let prefix = format!("environment|environment:{identity}:{bond_index}:");
+            let expected: Vec<String> = accumulation
+                .keys()
+                .filter(|key| key.starts_with(&prefix) && key.as_str() != current_key)
+                .cloned()
+                .collect();
+            let actual: Vec<String> = index
+                .keys_for_bond(identity, bond_index)
+                .iter()
+                .filter(|key| **key != current_key)
+                .map(|key| (*key).to_owned())
+                .collect();
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
