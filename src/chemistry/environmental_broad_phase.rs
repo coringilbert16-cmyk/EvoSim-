@@ -2276,15 +2276,7 @@ mod tests {
             anchor_index,
         )
         .unwrap();
-        let page = cursor.next_page(
-            &snapshot,
-            &field,
-            &bounds,
-            2.1,
-            64,
-            usize::MAX,
-            usize::MAX,
-        );
+        let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 64, usize::MAX, usize::MAX);
         let actual = page
             .pairs
             .iter()
