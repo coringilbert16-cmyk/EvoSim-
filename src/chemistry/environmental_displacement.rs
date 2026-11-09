@@ -1113,6 +1113,40 @@ fn accumulate_environmental_internal(
     let mut anchor_work = (*remaining_discovery_work)
         .min(DISPLACEMENT_FIELD_ANCHOR_LIMIT)
         .min(crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let mut operations = Vec::new();
+    let mut updated_keys = BTreeSet::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    // One scratch bounds array serves every directed anchor cursor in this
+    // topology epoch. Allocate it lazily only when a valid shared-snapshot
+    // anchor is actually reached; each cursor reads only its own anchor entry,
+    // so previous entries are harmless and no per-anchor initialization occurs.
+    if let Some(snapshot) = shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
+        if shared_bounds.len() != snapshot.materials.len() {
+            *shared_bounds = vec![None; snapshot.materials.len()];
+        }
+    } else {
+        shared_bounds.clear();
+    }
+    let shared_bond_indices_by_material = shared_snapshot
+        .filter(|snapshot| snapshot.unassigned_materials == 0)
+        .map(|snapshot| &snapshot.bond_indices_by_material);
+    let shared_targets_by_anchor = shared_snapshot
+        .filter(|snapshot| snapshot.unassigned_materials == 0)
+        .and_then(|snapshot| {
+            shared_candidates
+                .filter(|(_, completed)| completed.len() == snapshot.materials.len())
+                .map(|(pairs, _completed)| {
+                    let mut targets = vec![Vec::new(); snapshot.materials.len()];
+                    for pair in pairs {
+                        if let Some(record) = snapshot.materials.get(pair.right) {
+                            targets[pair.left]
+                                .push((record.locator.cell_index, record.locator.material_index));
+                        }
+                    }
+                    targets
+                })
+        });
+
     let cell_count = environment.field.cells.len();
     let mut anchor_order = if let Some(snapshot) =
         shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
@@ -1168,39 +1202,6 @@ fn accumulate_environmental_internal(
             % material_count;
         (cell_offset, material_offset)
     });
-    let mut operations = Vec::new();
-    let mut updated_keys = BTreeSet::new();
-    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    // One scratch bounds array serves every directed anchor cursor in this
-    // topology epoch. Allocate it lazily only when a valid shared-snapshot
-    // anchor is actually reached; each cursor reads only its own anchor entry,
-    // so previous entries are harmless and no per-anchor initialization occurs.
-    if let Some(snapshot) = shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
-        if shared_bounds.len() != snapshot.materials.len() {
-            *shared_bounds = vec![None; snapshot.materials.len()];
-        }
-    } else {
-        shared_bounds.clear();
-    }
-    let shared_bond_indices_by_material = shared_snapshot
-        .filter(|snapshot| snapshot.unassigned_materials == 0)
-        .map(|snapshot| &snapshot.bond_indices_by_material);
-    let shared_targets_by_anchor = shared_snapshot
-        .filter(|snapshot| snapshot.unassigned_materials == 0)
-        .and_then(|snapshot| {
-            shared_candidates
-                .filter(|(_, completed)| completed.len() == snapshot.materials.len())
-                .map(|(pairs, _completed)| {
-                    let mut targets = vec![Vec::new(); snapshot.materials.len()];
-                    for pair in pairs {
-                        if let Some(record) = snapshot.materials.get(pair.right) {
-                            targets[pair.left]
-                                .push((record.locator.cell_index, record.locator.material_index));
-                        }
-                    }
-                    targets
-                })
-        });
 
     'anchors: for (cell_a, material_a) in anchor_order {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
@@ -1283,11 +1284,8 @@ fn accumulate_environmental_internal(
                             |record| record.identity,
                         )
                         .ok()?;
-                    // A shared result is authoritative even when this
-                    // tick's bounded cursor reports deferred coverage. The
-                    // remaining targets are resumed by the next tick's
-                    // rotated shared pass; never launch a reaction-owned
-                    // reverse spatial scan for the missing portion.
+                    // The shared result is authoritative. Never launch a
+                    // reaction-owned reverse spatial scan for missing targets.
                     shared_candidates.map(|_| {
                         shared_targets_by_anchor
                             .as_ref()
