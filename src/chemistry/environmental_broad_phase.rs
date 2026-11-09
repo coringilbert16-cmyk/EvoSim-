@@ -2159,10 +2159,7 @@ mod tests {
                         if (cell_b, material_b) <= (cell_a, material_a) {
                             continue;
                         }
-                        expected.push((
-                            identity_a,
-                            materials_b[material_b].environmental_identity,
-                        ));
+                        expected.push((identity_a, materials_b[material_b].environmental_identity));
                     }
                 }
             }
