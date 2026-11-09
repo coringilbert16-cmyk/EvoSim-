@@ -1138,7 +1138,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 let Some((source_structure, indices_a)) = restored_anchor.as_ref() else {
                     continue;
                 };
-                let source_b = source_b.clone();
                 if record_a.locator.cell_index == record_b.locator.cell_index {
                     diagnostics.same_cell_source_pair_inspections += 1;
                 }
@@ -1146,7 +1145,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 let mut trial_structure = source_structure.clone();
                 let Some(indices_b) = crate::material_restoration::restore_material(
                     &mut trial_structure,
-                    &source_b,
+                    source_b,
                     origin(),
                     &environment.catalog,
                 ) else {
@@ -1207,7 +1206,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                             source_a,
                             record_b.locator.cell_index,
                             record_b.locator.material_index,
-                            &source_b,
+                            source_b,
                             unit_a,
                             unit_b,
                         ));
@@ -1222,7 +1221,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                         indices_a,
                         &indices_b,
                         source_a,
-                        &source_b,
+                        source_b,
                         record_a.locator.cell_index,
                         record_a.locator.material_index,
                         record_b.locator.cell_index,
