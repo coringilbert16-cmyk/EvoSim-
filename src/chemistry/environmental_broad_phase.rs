@@ -2449,6 +2449,75 @@ mod tests {
     }
 
     #[test]
+    fn aabb_tree_cursor_matches_reference_across_vertical_wrap_and_orientations() {
+        let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
+        for (identity, cell_index) in [(11, 0), (12, 9), (13, 90), (14, 99), (15, 55)] {
+            field.cells[cell_index]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 918);
+        let bounds = vec![
+            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 1.0, max_y: 4.0 }),
+            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 96.0, max_y: 99.0 }),
+            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 48.0, max_y: 52.0 }),
+            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: -2.0, max_y: 2.0 }),
+            Some(MaterialSpatialBounds { min_x: 70.0, max_x: 74.0, min_y: 70.0, max_y: 74.0 }),
+        ];
+        let index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
+
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+            PairOrientation::ForwardOrdered,
+        ] {
+            let (reference, _) = snapshot.spatial_pair_window(
+                &field,
+                &bounds,
+                1.0,
+                0,
+                usize::MAX,
+                orientation,
+            );
+            let mut expected = reference
+                .into_iter()
+                .map(|pair| (pair.identity_left, pair.identity_right))
+                .collect::<Vec<_>>();
+            expected.sort_unstable();
+            expected.dedup();
+
+            let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
+            let mut actual = Vec::new();
+            let mut pages = 0;
+            loop {
+                let page = cursor.next_page_with_index(
+                    &snapshot,
+                    &field,
+                    &bounds,
+                    &index,
+                    1.0,
+                    usize::MAX,
+                    usize::MAX,
+                    2,
+                );
+                actual.extend(
+                    page.pairs
+                        .into_iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right)),
+                );
+                pages += 1;
+                if page.complete {
+                    break;
+                }
+                assert!(pages < 100);
+            }
+            actual.sort_unstable();
+            actual.dedup();
+            assert_eq!(actual, expected, "orientation: {orientation:?}");
+        }
+    }
+
+    #[test]
     fn spatial_pair_windows_report_deferred_work_without_losing_candidates() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
         for identity in 1..=3 {
