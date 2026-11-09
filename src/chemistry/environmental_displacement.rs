@@ -19,12 +19,8 @@ use crate::structure::{Bond, OrganismStructure};
 
 enum DisplacementTargetScan {
     Shared {
-        cursor: Option<crate::environmental_broad_phase::IndexedSpatialCursor>,
-        initialized: bool,
-        target_cell_limit: usize,
         targets: Vec<(usize, usize)>,
         next_target: usize,
-        prefer_shared: bool,
     },
     Legacy {
         cells: Vec<usize>,
@@ -39,7 +35,6 @@ enum DisplacementTargetScan {
 }
 
 enum DisplacementTargetStep {
-    AnchorInitialized,
     CellInspected,
     MaterialInspected(Option<(usize, usize)>),
     SharedCandidate(Option<(usize, usize)>),
@@ -77,12 +72,8 @@ impl DisplacementTargetScan {
             // is authoritative for this tick; deferred work is handled by the
             // next shared pass, never by a reaction-owned reverse scan.
             return Self::Shared {
-                cursor: None,
-                initialized: false,
-                target_cell_limit,
                 targets,
                 next_target: 0,
-                prefer_shared: tick % 2 == 0,
             };
         }
         let cells = body.map_or_else(Vec::new, |body| {
@@ -109,82 +100,20 @@ impl DisplacementTargetScan {
 
     fn next(
         &mut self,
-        snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+        _snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
         field: &crate::environment::ActiveMaterialField,
-        shared_bounds: &[Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
+        _shared_bounds: &[Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
     ) -> DisplacementTargetStep {
         match self {
             Self::Shared {
-                cursor,
-                initialized,
-                target_cell_limit,
                 targets,
                 next_target,
-                prefer_shared,
             } => {
-                if *prefer_shared {
-                    if let Some(target) = targets.get(*next_target).copied() {
-                        *next_target += 1;
-                        *prefer_shared = false;
-                        return DisplacementTargetStep::SharedCandidate(Some(target));
-                    }
-                    *prefer_shared = false;
-                }
-                let Some(snapshot) = snapshot else {
-                    return targets.get(*next_target).copied().map_or(
-                        DisplacementTargetStep::Complete,
-                        |target| {
-                            *next_target += 1;
-                            DisplacementTargetStep::SharedCandidate(Some(target))
-                        },
-                    );
+                let Some(target) = targets.get(*next_target).copied() else {
+                    return DisplacementTargetStep::Complete;
                 };
-                let Some(active_cursor) = cursor.as_mut() else {
-                    return targets.get(*next_target).copied().map_or(
-                        DisplacementTargetStep::Complete,
-                        |target| {
-                            *next_target += 1;
-                            DisplacementTargetStep::SharedCandidate(Some(target))
-                        },
-                    );
-                };
-                let page = active_cursor.next_page(
-                    snapshot,
-                    field,
-                    shared_bounds,
-                    2.1,
-                    *target_cell_limit,
-                    1,
-                    1,
-                );
-                if page.visited_work == 0 {
-                    *cursor = None;
-                    return targets.get(*next_target).copied().map_or(
-                        DisplacementTargetStep::Complete,
-                        |target| {
-                            *next_target += 1;
-                            DisplacementTargetStep::SharedCandidate(Some(target))
-                        },
-                    );
-                }
-                if !*initialized && page.visited_anchor_initializations > 0 {
-                    *initialized = true;
-                    return DisplacementTargetStep::AnchorInitialized;
-                }
-                if page.visited_cell_checks > 0 {
-                    *prefer_shared = true;
-                    return DisplacementTargetStep::CellInspected;
-                }
-                if page.visited_material_checks > 0 {
-                    *prefer_shared = true;
-                    let target = page.pairs.first().and_then(|pair| {
-                        snapshot.materials.get(pair.right).map(|record| {
-                            (record.locator.cell_index, record.locator.material_index)
-                        })
-                    });
-                    return DisplacementTargetStep::MaterialInspected(target);
-                }
-                DisplacementTargetStep::Complete
+                *next_target += 1;
+                DisplacementTargetStep::SharedCandidate(Some(target))
             }
             Self::Legacy {
                 cells,
@@ -1373,7 +1302,6 @@ fn accumulate_environmental_internal(
                 &environment.field,
                 shared_bounds.as_slice(),
             ) {
-                DisplacementTargetStep::AnchorInitialized => continue,
                 DisplacementTargetStep::CellInspected => {
                     diagnostics.target_cells_inspected =
                         diagnostics.target_cells_inspected.saturating_add(1);
@@ -3693,8 +3621,7 @@ mod tests {
                 let mut steps = 0;
                 loop {
                     match scan.next(Some(&snapshot), &field, &shared_bounds) {
-                        DisplacementTargetStep::AnchorInitialized
-                        | DisplacementTargetStep::CellInspected
+                        DisplacementTargetStep::CellInspected
                         | DisplacementTargetStep::MaterialInspected(None)
                         | DisplacementTargetStep::SharedCandidate(None) => {}
                         DisplacementTargetStep::MaterialInspected(Some(target))
@@ -3740,8 +3667,7 @@ mod tests {
                         }
                         DisplacementTargetStep::SharedCandidate(None)
                         | DisplacementTargetStep::Complete => break,
-                        DisplacementTargetStep::AnchorInitialized
-                        | DisplacementTargetStep::CellInspected
+                        DisplacementTargetStep::CellInspected
                         | DisplacementTargetStep::MaterialInspected(_) => {
                             panic!("partial shared coverage attempted independent discovery");
                         }
