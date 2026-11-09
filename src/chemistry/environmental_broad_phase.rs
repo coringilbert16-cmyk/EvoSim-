@@ -1722,7 +1722,11 @@ mod tests {
                 max_y: 10.0,
             }),
         ];
-        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+            PairOrientation::ForwardOrdered,
+        ] {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected_pairs = reference.iter().map(|pair| match orientation {
@@ -1845,7 +1849,11 @@ mod tests {
             }),
         ];
 
-        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+            PairOrientation::ForwardOrdered,
+        ] {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected = reference
@@ -1938,7 +1946,11 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+            PairOrientation::ForwardOrdered,
+        ] {
             let (reference, _) =
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected = reference
@@ -2009,7 +2021,11 @@ mod tests {
             }));
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 814);
-        for orientation in [PairOrientation::Unordered, PairOrientation::Directed] {
+        for orientation in [
+            PairOrientation::Unordered,
+            PairOrientation::Directed,
+            PairOrientation::ForwardOrdered,
+        ] {
             let exhaustive = match orientation {
                 PairOrientation::Unordered => snapshot.known_pair_count(),
                 PairOrientation::Directed => snapshot.known_directed_pair_count(),
