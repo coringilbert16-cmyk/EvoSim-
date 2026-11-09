@@ -784,19 +784,23 @@ fn accumulate_environmental_with_snapshot(
     let mut updated_keys = std::collections::BTreeSet::new();
     if let Some(snapshot) = shared_snapshot {
         for key in accumulation.keys() {
-            let Some((identity, bond_index)) = key
-                .strip_prefix(&current_prefix)
-                .and_then(|suffix| {
+            let Some((identity, bond_index)) =
+                key.strip_prefix(&current_prefix).and_then(|suffix| {
                     let (identity, remainder) = suffix.split_once(':')?;
                     let bond_index = remainder.split(':').next()?;
-                    Some((identity.parse::<u64>().ok()?, bond_index.parse::<usize>().ok()?))
+                    Some((
+                        identity.parse::<u64>().ok()?,
+                        bond_index.parse::<usize>().ok()?,
+                    ))
                 })
             else {
                 continue;
             };
             let bond_is_current = snapshot
                 .bond_indices_by_material
-                .get(&crate::environmental_interaction::MaterialIdentity(identity))
+                .get(&crate::environmental_interaction::MaterialIdentity(
+                    identity,
+                ))
                 .is_some_and(|indices| indices.binary_search(&bond_index).is_ok());
             if !bond_is_current {
                 checked_keys.insert(key.clone());
