@@ -920,7 +920,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         );
     }
 
-    accumulation.retain(|key, _| is_current_combine_accumulation_key(key));
+    accumulation.retain(|key, _| {
+        !key.starts_with(ENVIRONMENT_PREFIX) || is_current_combine_accumulation_key(key)
+    });
     let (initial_entries, initial_value) = environmental_accumulation_totals(accumulation);
     diagnostics.accumulation_entries_before_search = initial_entries;
     diagnostics.accumulation_value_before_search = initial_value;
