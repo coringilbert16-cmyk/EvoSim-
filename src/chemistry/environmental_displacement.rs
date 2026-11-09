@@ -192,7 +192,7 @@ impl DisplacementTargetScan {
                             DisplacementTargetStep::SharedCandidate(Some(target))
                         });
                 };
-                let Some(cursor) = cursor.as_mut() else {
+                let Some(active_cursor) = cursor.as_mut() else {
                     return targets
                         .get(*next_target)
                         .copied()
@@ -201,7 +201,7 @@ impl DisplacementTargetScan {
                             DisplacementTargetStep::SharedCandidate(Some(target))
                         });
                 };
-                let page = cursor.next_page(
+                let page = active_cursor.next_page(
                     snapshot,
                     field,
                     shared_bounds,
