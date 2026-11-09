@@ -976,6 +976,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         &environment.field,
         crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
         anchor_start,
+        tick as usize,
     );
     let mut operations = Vec::new();
     let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
