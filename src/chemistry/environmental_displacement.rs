@@ -55,7 +55,7 @@ fn has_complete_shared_forward_coverage(
 ) -> bool {
     completed_anchors
         .get(anchor_index)
-        .is_some_and(|completed_limit| completed_limit.is_some())
+        .is_some_and(Option::is_some)
 }
 
 impl DisplacementTargetScan {
