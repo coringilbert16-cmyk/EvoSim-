@@ -50,6 +50,42 @@ jobs:
           path: environmental-chemistry-default-baseline.jsonl
           if-no-files-found: error
           retention-days: 14
+      # Compare the timer instrumentation against the exact original-main source.
+      # Runs alternate A/B/A/B for the same 60-second, seed-42 workload; output is
+      # compact and the large per-tick JSONL files stay in the runner workspace.
+      - name: Measure reaction profiling instrumentation overhead
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 333
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          base_sha=1761a3be04635af828038ba93d9340f153511a2c
+          git worktree add ../evosim-uninstrumented "$base_sha"
+          run_case() {
+            label="$1"
+            source_dir="$2"
+            target_dir="$3"
+            log="$GITHUB_WORKSPACE/profiling-overhead-$label.log"
+            diag="/tmp/profiling-overhead-$label.jsonl"
+            (cd "$source_dir" && CARGO_TARGET_DIR="$target_dir" cargo run --locked -- \\
+              --headless --environment-chemistry-experiment --seconds 60 --seed 42 \\
+              --diagnostics "$diag" --diagnostic-interval 100) > "$log"
+            grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | tee -a "$GITHUB_WORKSPACE/profiling-overhead-summary.txt"
+            rm -f "$diag"
+          }
+          : > profiling-overhead-summary.txt
+          run_case original-a ../evosim-uninstrumented "$GITHUB_WORKSPACE/target-overhead-original"
+          run_case profiled-a "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/target-overhead-profiled"
+          run_case profiled-b "$GITHUB_WORKSPACE" "$GITHUB_WORKSPACE/target-overhead-profiled"
+          run_case original-b ../evosim-uninstrumented "$GITHUB_WORKSPACE/target-overhead-original"
+          cat profiling-overhead-summary.txt
+      - name: Upload reaction profiling overhead comparison
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 333
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaction-profiling-overhead-comparison
+          path: profiling-overhead-summary.txt
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Energy accounting (focused tests)
         if: always()
         timeout-minutes: 30
