@@ -969,14 +969,16 @@ struct BoundsCellRange {
     row_count: usize,
 }
 
-/// Tick-local spatial occupancy index. Each material is inserted into every
-/// field cell intersected by its conservative realized bounds, rather than
-/// only the cell that currently owns its physical slot.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Tick-local center-cell index. Each material is stored once, in the cell
+/// containing its realized-bounds center. Queries expand by the largest target
+/// half-extent, so every overlapping target center remains in the query range.
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MaterialSpatialIndex {
     pass_id: u64,
     field_revision: u64,
     materials_by_cell: Vec<Vec<usize>>,
+    max_half_extent_x: f64,
+    max_half_extent_y: f64,
 }
 
 impl MaterialSpatialIndex {
@@ -984,43 +986,77 @@ impl MaterialSpatialIndex {
         snapshot: &EnvironmentalMaterialSnapshot,
         field: &ActiveMaterialField,
         bounds: &[Option<MaterialSpatialBounds>],
-        padding: f64,
     ) -> Self {
         let mut materials_by_cell = vec![Vec::new(); field.cells.len()];
-        if bounds.len() == snapshot.materials.len() {
-            for (material_index, record) in snapshot.materials.iter().enumerate() {
-                match bounds[material_index].and_then(|value| value.expanded(padding)) {
-                    Some(expanded) => {
-                        if let Some(range) = BoundsCellRange::new(field, expanded) {
-                            for row_offset in 0..range.row_count {
-                                for col in range.min_col..=range.max_col {
-                                    let cell_index = range.cell_index(field, row_offset, col);
-                                    materials_by_cell[cell_index].push(material_index);
-                                }
-                            }
-                        }
-                    }
-                    None if bounds[material_index].is_none() => {
-                        if let Some(indices) = materials_by_cell.get_mut(record.locator.cell_index)
-                        {
-                            indices.push(material_index);
-                        }
-                    }
-                    None => {}
+        let mut max_half_extent_x: f64 = 0.0;
+        let mut max_half_extent_y: f64 = 0.0;
+        for (material_index, record) in snapshot.materials.iter().enumerate() {
+            let cell_index = if field.width_cells == 0
+                || field.height_cells == 0
+                || !field.cell_size.is_finite()
+                || field.cell_size <= 0.0
+            {
+                record.locator.cell_index
+            } else if let Some(value) = bounds.get(material_index).copied().flatten() {
+                let half_x = (value.max_x - value.min_x) * 0.5;
+                let half_y = (value.max_y - value.min_y) * 0.5;
+                if !half_x.is_finite()
+                    || !half_y.is_finite()
+                    || half_x < 0.0
+                    || half_y < 0.0
+                {
+                    record.locator.cell_index
+                } else {
+                    max_half_extent_x = max_half_extent_x.max(half_x);
+                    max_half_extent_y = max_half_extent_y.max(half_y);
+                    let center_x = (value.min_x + value.max_x) * 0.5;
+                    let center_y = (value.min_y + value.max_y) * 0.5;
+                    let col = ((center_x / field.cell_size).floor() as isize)
+                        .clamp(0, field.width_cells.saturating_sub(1) as isize)
+                        as usize;
+                    let row = ((center_y / field.cell_size).floor() as isize)
+                        .rem_euclid(field.height_cells as isize)
+                        as usize;
+                    row * field.width_cells + col
                 }
+            } else {
+                record.locator.cell_index
+            };
+            if let Some(indices) = materials_by_cell.get_mut(cell_index) {
+                indices.push(material_index);
             }
         }
         for indices in &mut materials_by_cell {
             indices.sort_unstable_by_key(|&material_index| {
-                snapshot.materials[material_index].locator.material_index
+                let locator = snapshot.materials[material_index].locator;
+                (locator.cell_index, locator.material_index)
             });
-            indices.dedup();
         }
         Self {
             pass_id: snapshot.pass_id,
             field_revision: snapshot.field_revision,
             materials_by_cell,
+            max_half_extent_x,
+            max_half_extent_y,
         }
+    }
+
+    fn query_bounds(
+        &self,
+        anchor: MaterialSpatialBounds,
+        padding: f64,
+    ) -> Option<MaterialSpatialBounds> {
+        if !padding.is_finite() || padding < 0.0 {
+            return None;
+        }
+        let x_padding = padding + self.max_half_extent_x;
+        let y_padding = padding + self.max_half_extent_y;
+        Some(MaterialSpatialBounds {
+            min_x: anchor.min_x - x_padding,
+            max_x: anchor.max_x + x_padding,
+            min_y: anchor.min_y - y_padding,
+            max_y: anchor.max_y + y_padding,
+        })
     }
 
     fn is_current(
