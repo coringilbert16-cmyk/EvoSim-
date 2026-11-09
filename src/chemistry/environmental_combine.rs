@@ -1116,7 +1116,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             }
 
             for pair in page.pairs {
-                shared_candidate_pairs.push(pair);
                 let Some(record_b) = snapshot.materials.get(pair.right) else {
                     continue;
                 };
@@ -1130,6 +1129,13 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 else {
                     continue;
                 };
+                if snapshot
+                    .bond_indices_by_material
+                    .get(&record_a.identity)
+                    .is_some_and(|indices| !indices.is_empty())
+                {
+                    shared_candidate_pairs.push(pair);
+                }
                 diagnostics.forward_ordered_target_material_pair_inspections += 1;
                 if record_a.locator.cell_index == record_b.locator.cell_index {
                     diagnostics.same_cell_source_pair_inspections += 1;
