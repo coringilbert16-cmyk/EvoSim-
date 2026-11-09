@@ -1205,6 +1205,10 @@ impl IndexedSpatialCursor {
 
             if !self.cell_loaded {
                 let cell_index = range.cell_index(field, self.row_offset, self.col);
+                let anchor_locator = (
+                    snapshot.materials[anchor_index].locator.cell_index,
+                    snapshot.materials[anchor_index].locator.material_index,
+                );
                 let cell_before_anchor = cell_index < anchor_locator.0;
                 let cell_after_anchor = cell_index > anchor_locator.0;
                 if self.orientation == PairOrientation::ForwardOrdered && cell_before_anchor {
@@ -2840,10 +2844,6 @@ mod tests {
 
         for tick in 0..9 {
             for anchor_index in 0..snapshot.materials.len() {
-                let anchor_locator = (
-                    snapshot.materials[anchor_index].locator.cell_index,
-                    snapshot.materials[anchor_index].locator.material_index,
-                );
                 let target_cell_count = IndexedSpatialCursor::target_cell_count(
                     &field,
                     bounds[anchor_index].expect("every fixture material has bounds"),
