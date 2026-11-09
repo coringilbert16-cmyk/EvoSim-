@@ -882,10 +882,10 @@ impl Simulation {
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
         // the organism iteration below.
-        // Capture one immutable ownership/topology view for the first
-        // environmental reaction phase. BREAK consumes its bond inventory;
-        // later reaction phases will rebuild this snapshot after each commit
-        // boundary so no cursor or locator survives a topology mutation.
+        // Capture one immutable ownership/topology view for every environmental
+        // reaction layer. BREAK, COMBINE, and DISPLACEMENT all discover against
+        // this tick-start snapshot; identity-based commit resolution handles
+        // slot shifts after the deferred commit boundary.
         let mut environmental_shared_snapshot =
             crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
                 &self.environment.field,
@@ -1024,6 +1024,8 @@ impl Simulation {
                 false
             }
         });
+        self.environmental_chemistry_diagnostics.combine_scheduled =
+            environmental_combine_operations.len();
 
         self.environmental_chemistry_diagnostics
             .combine_realization_work_remaining = environmental_combine_work_remaining;
