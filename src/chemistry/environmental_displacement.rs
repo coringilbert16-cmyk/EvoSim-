@@ -3655,8 +3655,15 @@ mod tests {
                 .expect("anchor index is valid");
                 let mut shared_targets = Vec::new();
                 loop {
-                    let page =
-                        shared_discovery.next_page(&snapshot, &field, &bounds, 2.1, target_cell_count, 1, 1);
+                    let page = shared_discovery.next_page(
+                        &snapshot,
+                        &field,
+                        &bounds,
+                        2.1,
+                        target_cell_count,
+                        1,
+                        1,
+                    );
                     shared_targets.extend(page.pairs.into_iter().map(|pair| {
                         let target = &snapshot.materials[pair.right];
                         (target.locator.cell_index, target.locator.material_index)
