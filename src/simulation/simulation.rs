@@ -3,10 +3,6 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 use std::time::Instant;
 
-fn elapsed_nanos(started: Instant) -> u64 {
-    started.elapsed().as_nanos().min(u64::MAX as u128) as u64
-}
-
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
@@ -17,6 +13,11 @@ use crate::environment::{ActiveMaterialField, DEFAULT_CELL_SIZE};
 use crate::genome::initial_genome;
 use crate::state::{EnergyLedger, Environment, Organism, Position, Simulation};
 use crate::structure::Placement;
+
+fn elapsed_nanos(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
 
 fn checked_next_organism_id(current: u64) -> Option<u64> {
     current.checked_add(1)
