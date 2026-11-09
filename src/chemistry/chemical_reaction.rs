@@ -1232,15 +1232,25 @@ fn environmental_material_location(
     fallback_cell_index: usize,
     fallback_material_index: usize,
 ) -> Option<(usize, usize)> {
-    // Zero is reserved for legacy/unassigned materials. Preserve the captured
-    // index fallback for those snapshots; assigned materials resolve by identity.
+    // Prefer the captured locator when it still names this exact identity.
+    // Besides avoiding a full-field search on the common commit path, this
+    // disambiguates duplicate/legacy identities without weakening relocation
+    // recovery: only a mismatch falls back to the identity search.
+    if environment
+        .field
+        .cells
+        .get(fallback_cell_index)
+        .and_then(|cell| cell.physical_materials.get(fallback_material_index))
+        .is_some_and(|material| {
+            material.environmental_identity == source_material.environmental_identity
+        })
+    {
+        return Some((fallback_cell_index, fallback_material_index));
+    }
+    // Zero is reserved for legacy/unassigned materials and has no stable
+    // identity lookup. Preserve the captured index-only behavior for them.
     if source_material.environmental_identity == 0 {
-        return environment
-            .field
-            .cells
-            .get(fallback_cell_index)
-            .and_then(|cell| cell.physical_materials.get(fallback_material_index))
-            .map(|_| (fallback_cell_index, fallback_material_index));
+        return None;
     }
     environment
         .field
@@ -1653,6 +1663,34 @@ mod material_identity_tests {
         assert_eq!(
             simulation.environment.field.cells[0].physical_materials[0].environmental_identity,
             queued_identity,
+        );
+    }
+
+    #[test]
+    fn environmental_break_location_prefers_matching_captured_locator() {
+        let mut simulation = crate::state::Simulation::new(942, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let mut source = environmental_test_composite(&catalog);
+        source.environmental_identity = 77;
+        simulation.environment.field.cells[0]
+            .physical_materials
+            .push(source.clone());
+        simulation.environment.field.cells[0]
+            .physical_materials
+            .push(source.clone());
+
+        assert_eq!(
+            environmental_material_location(
+                &simulation.environment,
+                &source,
+                0,
+                1,
+            ),
+            Some((0, 1)),
+            "the captured locator must win when duplicate identities exist"
         );
     }
 
