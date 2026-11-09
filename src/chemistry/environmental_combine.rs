@@ -991,6 +991,13 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             });
     }
 
+    let shared_spatial_index = crate::environmental_broad_phase::MaterialSpatialIndex::new(
+        snapshot,
+        &environment.field,
+        shared_bounds,
+        BOUNDS_PADDING,
+    );
+
     accumulation.retain(|key, _| {
         !key.starts_with(ENVIRONMENT_PREFIX) || is_current_combine_accumulation_key(key)
     });
@@ -1098,10 +1105,11 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             // Bounded batches reduce cursor-call overhead. The loop drains
             // every page before moving to the next anchor, so the batch size
             // is not a per-tick discovery cap and cannot drop a neighbor.
-            let page = cursor.next_page(
+            let page = cursor.next_page_with_index(
                 snapshot,
                 &environment.field,
                 shared_bounds.as_slice(),
+                &shared_spatial_index,
                 BOUNDS_PADDING,
                 target_cell_limit,
                 64,
