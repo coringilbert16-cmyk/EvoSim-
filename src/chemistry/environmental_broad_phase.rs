@@ -1000,11 +1000,7 @@ impl MaterialSpatialIndex {
             } else if let Some(value) = bounds.get(material_index).copied().flatten() {
                 let half_x = (value.max_x - value.min_x) * 0.5;
                 let half_y = (value.max_y - value.min_y) * 0.5;
-                if !half_x.is_finite()
-                    || !half_y.is_finite()
-                    || half_x < 0.0
-                    || half_y < 0.0
-                {
+                if !half_x.is_finite() || !half_y.is_finite() || half_x < 0.0 || half_y < 0.0 {
                     record.locator.cell_index
                 } else {
                     max_half_extent_x = max_half_extent_x.max(half_x);
