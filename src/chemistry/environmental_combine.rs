@@ -1127,14 +1127,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 if anchor_has_bonds {
                     shared_candidate_pairs.push(pair);
                 }
-                let source_locator = (
-                    record_a.locator.cell_index,
-                    record_a.locator.material_index,
-                );
-                let target_locator = (
-                    record_b.locator.cell_index,
-                    record_b.locator.material_index,
-                );
+                let source_locator = (record_a.locator.cell_index, record_a.locator.material_index);
+                let target_locator = (record_b.locator.cell_index, record_b.locator.material_index);
                 // The reverse half belongs to DISPLACEMENT only. COMBINE
                 // preserves its existing forward locator ordering.
                 if target_locator <= source_locator {
