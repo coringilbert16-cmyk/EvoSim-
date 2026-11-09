@@ -1194,7 +1194,7 @@ fn accumulate_environmental_internal(
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
     shared_candidates: Option<(
         &[crate::environmental_broad_phase::MaterialPairRecord],
-        &[bool],
+        &[Option<usize>],
     )>,
 ) -> Vec<EnvironmentalDisplacementOperation> {
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
@@ -1233,7 +1233,7 @@ fn accumulate_environmental_internal(
                 .map(|(pairs, completed)| {
                     let mut targets = vec![Vec::new(); snapshot.materials.len()];
                     for pair in pairs {
-                        if completed.get(pair.left).is_some_and(Option::is_some) {
+                        if completed.get(pair.left).is_some_and(|limit| limit.is_some()) {
                             if let Some(record) = snapshot.materials.get(pair.right) {
                                 targets[pair.left].push((
                                     record.locator.cell_index,
