@@ -2800,4 +2800,145 @@ mod tests {
         assert!(snapshot.materials.is_empty());
         assert_eq!(snapshot.known_pair_count(), 0);
     }
+
+
+    #[test]
+    fn reverse_only_cursor_matches_directed_candidates_for_asymmetric_bounds_and_page_sizes() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        for (cell_index, identities) in [
+            (0, vec![70, 10]),
+            (1, vec![60]),
+            (4, vec![20, 50]),
+            (7, vec![30]),
+            (11, vec![40]),
+            (17, vec![80]),
+            (23, vec![90]),
+        ] {
+            for identity in identities {
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(identity, "Carbon"));
+            }
+        }
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+        let bounds = snapshot
+            .materials
+            .iter()
+            .map(|record| {
+                let (x, y) = field.cell_center(record.locator.cell_index);
+                let radius = match record.identity.0 % 5 {
+                    0 => 0.25,
+                    1 => 3.0,
+                    2 => 8.0,
+                    3 => 14.0,
+                    _ => 19.0,
+                };
+                Some(MaterialSpatialBounds {
+                    min_x: x - radius,
+                    max_x: x + radius,
+                    min_y: y - radius,
+                    max_y: y + radius,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for tick in 0..9 {
+            for anchor_index in 0..snapshot.materials.len() {
+                let anchor_locator = (
+                    snapshot.materials[anchor_index].locator.cell_index,
+                    snapshot.materials[anchor_index].locator.material_index,
+                );
+                let target_cell_count = IndexedSpatialCursor::target_cell_count(
+                    &field,
+                    bounds[anchor_index].expect("every fixture material has bounds"),
+                    2.1,
+                )
+                .expect("fixture bounds intersect the field");
+
+                for work_limit in 1..=4 {
+                    for output_limit in 1..=2 {
+                        let mut directed = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::Directed,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut expected = Vec::new();
+                        let mut pages = 0;
+                        loop {
+                            let page = directed.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            expected.extend(page.pairs.into_iter().filter_map(|pair| {
+                                let target = &snapshot.materials[pair.right];
+                                let target_locator = (
+                                    target.locator.cell_index,
+                                    target.locator.material_index,
+                                );
+                                (target_locator < anchor_locator).then_some((
+                                    pair.identity_left,
+                                    pair.identity_right,
+                                ))
+                            }));
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "directed cursor failed to make progress");
+                        }
+
+                        let mut reverse = IndexedSpatialCursor::new_for_reverse_anchor(
+                            &snapshot,
+                            &field,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut actual = Vec::new();
+                        pages = 0;
+                        loop {
+                            let page = reverse.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "reverse cursor failed to make progress");
+                        }
+
+                        expected.sort_unstable();
+                        actual.sort_unstable();
+                        assert_eq!(
+                            actual,
+                            expected,
+                            "tick={tick}, anchor={anchor_index}, work={work_limit}, output={output_limit}"
+                        );
+                    }
+                }
+            }
+        }
+    }
 }
