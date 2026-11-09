@@ -1924,12 +1924,20 @@ fn environmental_material_location_by_identity(
             return Some((captured_cell, captured_material));
         }
     }
-    environment.field.cells.iter().enumerate().find_map(|(cell_index, cell)| {
-        cell.physical_materials.iter().position(|material| {
-            material.environmental_identity == source.environmental_identity
-                && material == source
-        }).map(|material_index| (cell_index, material_index))
-    })
+    environment
+        .field
+        .cells
+        .iter()
+        .enumerate()
+        .find_map(|(cell_index, cell)| {
+            cell.physical_materials
+                .iter()
+                .position(|material| {
+                    material.environmental_identity == source.environmental_identity
+                        && material == source
+                })
+                .map(|material_index| (cell_index, material_index))
+        })
 }
 
 pub(crate) fn resolve_environmental_diagnosed(
@@ -1938,21 +1946,35 @@ pub(crate) fn resolve_environmental_diagnosed(
     ledger: &mut EnergyLedger,
 ) -> Result<(), &'static str> {
     let Some((cell_a, material_a)) = environmental_material_location_by_identity(
-        environment, &operation.source_a, operation.cell_a, operation.material_a,
+        environment,
+        &operation.source_a,
+        operation.cell_a,
+        operation.material_a,
     ) else {
         return Err("stale_source_missing");
     };
     let Some((cell_b, material_b)) = environmental_material_location_by_identity(
-        environment, &operation.source_b, operation.cell_b, operation.material_b,
+        environment,
+        &operation.source_b,
+        operation.cell_b,
+        operation.material_b,
     ) else {
         return Err("stale_source_missing");
     };
-    let Some(source_a) = environment.field.cells.get(cell_a)
-        .and_then(|cell| cell.physical_materials.get(material_a)) else {
+    let Some(source_a) = environment
+        .field
+        .cells
+        .get(cell_a)
+        .and_then(|cell| cell.physical_materials.get(material_a))
+    else {
         return Err("stale_source_missing");
     };
-    let Some(source_b) = environment.field.cells.get(cell_b)
-        .and_then(|cell| cell.physical_materials.get(material_b)) else {
+    let Some(source_b) = environment
+        .field
+        .cells
+        .get(cell_b)
+        .and_then(|cell| cell.physical_materials.get(material_b))
+    else {
         return Err("stale_source_missing");
     };
     if source_a != &operation.source_a || source_b != &operation.source_b {
