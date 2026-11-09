@@ -1379,165 +1379,165 @@ fn accumulate_environmental_internal(
                             updated_keys.insert(key.clone());
                             if next <= 0.0 {
                                 accumulation.remove(&key);
-                                    continue;
+                                continue;
+                            }
+                            let Some(activation_signal) =
+                                crate::chemistry::normalized_chemistry_to_activation_signal(
+                                    next,
+                                )
+                            else {
+                                continue;
+                            };
+                            let mut trial_diagnostic = DisplacementTrialDiagnostic::default();
+                            let trial = build_displacement_trial_with_activation_status(
+                                &combined,
+                                anchor_unit,
+                                displaced_unit,
+                                incoming_unit,
+                                old_bond,
+                                candidate,
+                                investment,
+                                activation_signal,
+                                baselines.reactivity,
+                                0.0,
+                                &environment.catalog,
+                                Some(&mut trial_diagnostic),
+                            );
+                            match trial_diagnostic.activation_sufficient {
+                                Some(true) => {
+                                    diagnostics.activation_threshold_met =
+                                        diagnostics.activation_threshold_met.saturating_add(1);
                                 }
-                                let Some(activation_signal) =
-                                    crate::chemistry::normalized_chemistry_to_activation_signal(
-                                        next,
-                                    )
-                                else {
-                                    continue;
-                                };
-                                let mut trial_diagnostic = DisplacementTrialDiagnostic::default();
-                                let trial = build_displacement_trial_with_activation_status(
-                                    &combined,
-                                    anchor_unit,
-                                    displaced_unit,
-                                    incoming_unit,
-                                    old_bond,
-                                    candidate,
-                                    investment,
-                                    activation_signal,
-                                    baselines.reactivity,
-                                    0.0,
-                                    &environment.catalog,
-                                    Some(&mut trial_diagnostic),
-                                );
-                                match trial_diagnostic.activation_sufficient {
-                                    Some(true) => {
-                                        diagnostics.activation_threshold_met =
-                                            diagnostics.activation_threshold_met.saturating_add(1);
-                                    }
-                                    Some(false) => {
-                                        diagnostics.activation_below_threshold = diagnostics
-                                            .activation_below_threshold
-                                            .saturating_add(1);
-                                    }
-                                    None => {
-                                        diagnostics.activation_status_unavailable = diagnostics
-                                            .activation_status_unavailable
-                                            .saturating_add(1);
-                                    }
+                                Some(false) => {
+                                    diagnostics.activation_below_threshold = diagnostics
+                                        .activation_below_threshold
+                                        .saturating_add(1);
                                 }
-                                let Some(trial) = trial else {
-                                    if trial_diagnostic.activation_sufficient == Some(true) {
-                                        diagnostics.trial_build_rejections_after_activation =
-                                            diagnostics
-                                                .trial_build_rejections_after_activation
-                                                .saturating_add(1);
-                                        match trial_diagnostic.failure_stage {
-                                            DisplacementTrialFailureStage::OldBondEnergy => {
-                                                diagnostics.trial_rejections_old_bond_energy =
+                                None => {
+                                    diagnostics.activation_status_unavailable = diagnostics
+                                        .activation_status_unavailable
+                                        .saturating_add(1);
+                                }
+                            }
+                            let Some(trial) = trial else {
+                                if trial_diagnostic.activation_sufficient == Some(true) {
+                                    diagnostics.trial_build_rejections_after_activation =
+                                        diagnostics
+                                            .trial_build_rejections_after_activation
+                                            .saturating_add(1);
+                                    match trial_diagnostic.failure_stage {
+                                        DisplacementTrialFailureStage::OldBondEnergy => {
+                                            diagnostics.trial_rejections_old_bond_energy =
+                                                diagnostics
+                                                    .trial_rejections_old_bond_energy
+                                                    .saturating_add(1);
+                                            if let (
+                                                Some(stored),
+                                                Some(expected),
+                                                Some(abs_error),
+                                            ) = (
+                                                trial_diagnostic.old_bond_energy_stored,
+                                                trial_diagnostic.old_bond_energy_expected,
+                                                trial_diagnostic.old_bond_energy_abs_error,
+                                            ) {
+                                                let previous_max_error =
+                                                    diagnostics.old_bond_energy_max_abs_error;
+                                                if abs_error > previous_max_error {
+                                                    diagnostics.old_bond_energy_max_abs_error =
+                                                        abs_error;
                                                     diagnostics
-                                                        .trial_rejections_old_bond_energy
-                                                        .saturating_add(1);
-                                                if let (
-                                                    Some(stored),
-                                                    Some(expected),
-                                                    Some(abs_error),
-                                                ) = (
-                                                    trial_diagnostic.old_bond_energy_stored,
-                                                    trial_diagnostic.old_bond_energy_expected,
-                                                    trial_diagnostic.old_bond_energy_abs_error,
-                                                ) {
-                                                    let previous_max_error =
-                                                        diagnostics.old_bond_energy_max_abs_error;
-                                                    if abs_error > previous_max_error {
-                                                        diagnostics.old_bond_energy_max_abs_error =
-                                                            abs_error;
-                                                        diagnostics
-                                                            .old_bond_energy_stored_at_max_error =
-                                                            stored;
-                                                        diagnostics
-                                                            .old_bond_energy_expected_at_max_error =
-                                                            expected;
-                                                    }
+                                                        .old_bond_energy_stored_at_max_error =
+                                                        stored;
+                                                    diagnostics
+                                                        .old_bond_energy_expected_at_max_error =
+                                                        expected;
                                                 }
                                             }
-                                            DisplacementTrialFailureStage::Topology => {
-                                                diagnostics.trial_rejections_topology = diagnostics
-                                                    .trial_rejections_topology
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::CandidateCheck => {
-                                                let replacement_counter =
-                                                    &mut diagnostics.trial_rejections_replacement;
-                                                *replacement_counter =
-                                                    replacement_counter.saturating_add(1);
-                                                let candidate_counter = &mut diagnostics
-                                                    .trial_rejections_candidate_revalidation;
-                                                *candidate_counter =
-                                                    (*candidate_counter).saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Formation => {
-                                                diagnostics.trial_rejections_replacement =
-                                                    diagnostics
-                                                        .trial_rejections_replacement
-                                                        .saturating_add(1);
-                                                diagnostics.trial_rejections_formation_investment =
-                                                    diagnostics
-                                                        .trial_rejections_formation_investment
-                                                        .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Insertion => {
-                                                let replacement_counter =
-                                                    &mut diagnostics.trial_rejections_replacement;
-                                                *replacement_counter =
-                                                    replacement_counter.saturating_add(1);
-                                                let insertion_counter = &mut diagnostics
-                                                    .trial_rejections_physical_insertion;
-                                                *insertion_counter =
-                                                    (*insertion_counter).saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Energy => {
-                                                diagnostics.trial_rejections_energy = diagnostics
-                                                    .trial_rejections_energy
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Products => {
-                                                diagnostics.trial_rejections_products = diagnostics
-                                                    .trial_rejections_products
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::ReplacementBondTooWeak => {
+                                        }
+                                        DisplacementTrialFailureStage::Topology => {
+                                            diagnostics.trial_rejections_topology = diagnostics
+                                                .trial_rejections_topology
+                                                .saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::CandidateCheck => {
+                                            let replacement_counter =
+                                                &mut diagnostics.trial_rejections_replacement;
+                                            *replacement_counter =
+                                                replacement_counter.saturating_add(1);
+                                            let candidate_counter = &mut diagnostics
+                                                .trial_rejections_candidate_revalidation;
+                                            *candidate_counter =
+                                                (*candidate_counter).saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::Formation => {
+                                            diagnostics.trial_rejections_replacement =
                                                 diagnostics
-                                                    .trial_rejections_replacement_bond_strength =
-                                                    diagnostics
-                                                        .trial_rejections_replacement_bond_strength
-                                                        .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Other => {
-                                                diagnostics.trial_rejections_other = diagnostics
-                                                    .trial_rejections_other
+                                                    .trial_rejections_replacement
                                                     .saturating_add(1);
-                                            }
+                                            diagnostics.trial_rejections_formation_investment =
+                                                diagnostics
+                                                    .trial_rejections_formation_investment
+                                                    .saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::Insertion => {
+                                            let replacement_counter =
+                                                &mut diagnostics.trial_rejections_replacement;
+                                            *replacement_counter =
+                                                replacement_counter.saturating_add(1);
+                                            let insertion_counter = &mut diagnostics
+                                                .trial_rejections_physical_insertion;
+                                            *insertion_counter =
+                                                (*insertion_counter).saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::Energy => {
+                                            diagnostics.trial_rejections_energy = diagnostics
+                                                .trial_rejections_energy
+                                                .saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::Products => {
+                                            diagnostics.trial_rejections_products = diagnostics
+                                                .trial_rejections_products
+                                                .saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::ReplacementBondTooWeak => {
+                                            diagnostics
+                                                .trial_rejections_replacement_bond_strength =
+                                                diagnostics
+                                                    .trial_rejections_replacement_bond_strength
+                                                    .saturating_add(1);
+                                        }
+                                        DisplacementTrialFailureStage::Other => {
+                                            diagnostics.trial_rejections_other = diagnostics
+                                                .trial_rejections_other
+                                                .saturating_add(1);
                                         }
                                     }
-                                    accumulation.insert(key, next);
-                                    continue;
-                                };
-                                let work_required = trial.formation_work + trial.disruption_work;
-                                operations.push(EnvironmentalDisplacementOperation {
-                                    cell_a,
-                                    material_a,
-                                    source_a: source_a.clone(),
-                                    cell_b,
-                                    material_b,
-                                    source_b: source_b.clone(),
-                                    anchor_unit: anchor_part,
-                                    displaced_unit: displaced_part,
-                                    incoming_unit: incoming_part,
-                                    bond_index,
-                                    old_connection: connection.clone(),
-                                    candidate,
-                                    investment,
-                                    activation_signal,
-                                    reaction_frequency_cycles_per_day: frequency,
-                                    accumulation_key: key.clone(),
-                                    accumulated_reaction: next,
-                                    work_required,
-                                });
-                                accumulation.remove(&key);
+                                }
+                                accumulation.insert(key, next);
+                                continue;
+                            };
+                            let work_required = trial.formation_work + trial.disruption_work;
+                            operations.push(EnvironmentalDisplacementOperation {
+                                cell_a,
+                                material_a,
+                                source_a: source_a.clone(),
+                                cell_b,
+                                material_b,
+                                source_b: source_b.clone(),
+                                anchor_unit: anchor_part,
+                                displaced_unit: displaced_part,
+                                incoming_unit: incoming_part,
+                                bond_index,
+                                old_connection: connection.clone(),
+                                candidate,
+                                investment,
+                                activation_signal,
+                                reaction_frequency_cycles_per_day: frequency,
+                                accumulation_key: key.clone(),
+                                accumulated_reaction: next,
+                                work_required,
+                            });
+                            accumulation.remove(&key);
                             }
                         }
                     }
