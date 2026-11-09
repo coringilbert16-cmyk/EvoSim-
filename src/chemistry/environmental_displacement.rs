@@ -72,24 +72,10 @@ impl DisplacementTargetScan {
         shared_candidates: Option<Vec<(usize, usize)>>,
     ) -> Self {
         if let Some(targets) = shared_candidates {
-            let cursor = snapshot
-                .filter(|snapshot| snapshot.unassigned_materials == 0)
-                .and_then(|snapshot| {
-                    snapshot.materials.binary_search_by_key(
-                        &crate::environmental_interaction::MaterialIdentity(environmental_identity),
-                        |record| record.identity,
-                    ).ok()
-                    .and_then(|anchor_index| {
-                        crate::environmental_broad_phase::IndexedSpatialCursor::new_for_reverse_anchor(
-                            snapshot,
-                            field,
-                            tick,
-                            anchor_index,
-                        )
-                    })
-                });
+            // A completed shared anchor already contains both directions.
+            // Do not repeat the reverse-only spatial traversal here.
             return Self::Shared {
-                cursor,
+                cursor: None,
                 initialized: false,
                 target_cell_limit,
                 targets,
