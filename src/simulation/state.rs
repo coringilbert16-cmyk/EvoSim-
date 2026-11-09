@@ -885,6 +885,24 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryTickDiagnostics {
     pub(crate) tick: u64,
+    /// Wall-clock nanoseconds spent in the original environmental reaction paths.
+    #[serde(default)]
+    pub(crate) break_discovery_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) break_resolution_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) combine_discovery_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) combine_resolution_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) displacement_discovery_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) displacement_resolution_elapsed_ns: u64,
+    /// Organism-graph BREAK is measured separately from environmental BREAK.
+    #[serde(default)]
+    pub(crate) organism_break_discovery_elapsed_ns: u64,
+    #[serde(default)]
+    pub(crate) organism_break_resolution_elapsed_ns: u64,
     pub(crate) break_ready_candidates: usize,
     pub(crate) break_scheduled: usize,
     pub(crate) break_committed: usize,
