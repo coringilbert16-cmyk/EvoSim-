@@ -2608,6 +2608,17 @@ mod tests {
             );
         assert_eq!(shared_snapshot.unassigned_materials, 0);
         assert_eq!(shared_snapshot.existing_bonds.len(), 1);
+        let mut legacy_accumulation = BTreeMap::new();
+        let mut legacy_diagnostics = EnvironmentalDisplacementDiscoveryDiagnostics::default();
+        let mut legacy_work =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+        let legacy_operations = accumulate_environmental(
+            &simulation.environment,
+            &mut legacy_accumulation,
+            field_cell as u64,
+            &mut legacy_work,
+            &mut legacy_diagnostics,
+        );
         let mut discovery_work =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         let mut operations = accumulate_environmental_with_shared_snapshot(
@@ -2618,6 +2629,10 @@ mod tests {
             &mut discovery_diagnostics,
             &shared_snapshot,
         );
+        assert_eq!(operations, legacy_operations);
+        assert_eq!(accumulation, legacy_accumulation);
+        assert_eq!(discovery_work, legacy_work);
+        assert_eq!(discovery_diagnostics, legacy_diagnostics);
         assert_eq!(
             discovery_diagnostics.evaluation_outcomes.ready,
             operations.len(),
