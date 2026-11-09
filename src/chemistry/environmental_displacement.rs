@@ -1263,16 +1263,11 @@ fn accumulate_environmental_internal(
                 .map(|(pairs, completed)| {
                     let mut targets = vec![Vec::new(); snapshot.materials.len()];
                     for pair in pairs {
-                        if completed
-                            .get(pair.left)
-                            .is_some_and(|limit| limit.is_some())
-                        {
-                            if let Some(record) = snapshot.materials.get(pair.right) {
-                                targets[pair.left].push((
-                                    record.locator.cell_index,
-                                    record.locator.material_index,
-                                ));
-                            }
+                        if let Some(record) = snapshot.materials.get(pair.right) {
+                            targets[pair.left].push((
+                                record.locator.cell_index,
+                                record.locator.material_index,
+                            ));
                         }
                     }
                     targets
@@ -1376,11 +1371,12 @@ fn accumulate_environmental_internal(
                                 |record| record.identity,
                             )
                             .ok()?;
-                        let forward_coverage_complete =
-                            shared_candidates.is_some_and(|(_, completed)| {
-                                has_complete_shared_forward_coverage(completed, anchor_index)
-                            });
-                        forward_coverage_complete.then(|| {
+                        // A shared result is authoritative even when this
+                        // tick's bounded cursor reports deferred coverage. The
+                        // remaining targets are resumed by the next tick's
+                        // rotated shared pass; never launch a reaction-owned
+                        // reverse spatial scan for the missing portion.
+                        shared_candidates.map(|_| {
                             shared_targets_by_anchor
                                 .as_ref()
                                 .and_then(|targets| targets.get(anchor_index))
