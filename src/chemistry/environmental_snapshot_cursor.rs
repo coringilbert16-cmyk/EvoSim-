@@ -40,6 +40,7 @@ pub(crate) struct EnvironmentalSnapshotCursor {
     sorted_materials: Vec<MaterialRecord>,
     sorted_bonds: Vec<ExistingBondRecord>,
     material_indices_by_cell: Vec<Vec<usize>>,
+    material_index_by_cell_slot: Vec<Vec<Option<usize>>>,
     bond_indices_by_material: BTreeMap<MaterialIdentity, Vec<usize>>,
     scanning_complete: bool,
     materials_finalized: bool,
@@ -67,6 +68,11 @@ impl EnvironmentalSnapshotCursor {
             sorted_materials: Vec::new(),
             sorted_bonds: Vec::new(),
             material_indices_by_cell: vec![Vec::new(); field.cells.len()],
+            material_index_by_cell_slot: field
+                .cells
+                .iter()
+                .map(|cell| vec![None; cell.physical_materials.len()])
+                .collect(),
             bond_indices_by_material: BTreeMap::new(),
             scanning_complete: false,
             materials_finalized: false,
@@ -227,6 +233,13 @@ impl EnvironmentalSnapshotCursor {
                         self.sorted_materials[index].locator.material_index < material_index
                     });
                     indices.insert(insert_at, sorted_index);
+                    if let Some(slot) = self
+                        .material_index_by_cell_slot
+                        .get_mut(cell_index)
+                        .and_then(|slots| slots.get_mut(material_index))
+                    {
+                        *slot = Some(sorted_index);
+                    }
                     self.consume_work(&mut page);
                     continue;
                 }
@@ -265,26 +278,15 @@ impl EnvironmentalSnapshotCursor {
         if self.invalidated {
             page.status = Some(SnapshotCursorStatus::Invalidated);
         } else if self.complete {
-            let mut material_index_by_cell_slot = field
-                .cells
-                .iter()
-                .map(|cell| vec![None; cell.physical_materials.len()])
-                .collect::<Vec<_>>();
-            for (snapshot_index, material) in self.sorted_materials.iter().enumerate() {
-                if let Some(slot) = material_index_by_cell_slot
-                    .get_mut(material.locator.cell_index)
-                    .and_then(|slots| slots.get_mut(material.locator.material_index))
-                {
-                    *slot = Some(snapshot_index);
-                }
-            }
             let snapshot = EnvironmentalMaterialSnapshot {
                 pass_id: self.pass_id,
                 field_revision: self.field_revision,
                 materials: std::mem::take(&mut self.sorted_materials),
                 existing_bonds: std::mem::take(&mut self.sorted_bonds),
                 material_indices_by_cell: std::mem::take(&mut self.material_indices_by_cell),
-                material_index_by_cell_slot,
+                material_index_by_cell_slot: std::mem::take(
+                    &mut self.material_index_by_cell_slot,
+                ),
                 bond_indices_by_material: std::mem::take(&mut self.bond_indices_by_material),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
