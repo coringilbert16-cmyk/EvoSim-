@@ -596,6 +596,27 @@ pub(crate) struct Environment {
 pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     /// Cell, material, and bond entries traversed by bounded discovery.
     pub(crate) scan_entries_inspected: u64,
+    /// Wall-clock time spent traversing the bounded environmental bond window.
+    #[serde(default)]
+    pub(crate) scan_elapsed_ns: u64,
+    /// Number of realized materials reached by the scan.
+    #[serde(default)]
+    pub(crate) checked_materials_inspected: u64,
+    /// Time spent checking old progress against materials whose bond counts changed.
+    #[serde(default)]
+    pub(crate) stale_material_validation_elapsed_ns: u64,
+    /// Time spent matching candidate bond keys against prior progress entries.
+    #[serde(default)]
+    pub(crate) candidate_key_validation_elapsed_ns: u64,
+    /// Time spent restoring immutable realized materials into trial graphs.
+    #[serde(default)]
+    pub(crate) material_restoration_elapsed_ns: u64,
+    /// Time spent resolving the recorded bond endpoints into physical geometry.
+    #[serde(default)]
+    pub(crate) endpoint_geometry_elapsed_ns: u64,
+    /// Time spent resolving live material-pair interface eligibility.
+    #[serde(default)]
+    pub(crate) interface_resolution_elapsed_ns: u64,
     /// Physical bond records yielded by the candidate window.
     pub(crate) bond_candidates_inspected: u64,
     /// Candidates with a valid realized connection record and accumulation key.
@@ -639,6 +660,25 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.scan_entries_inspected = self
             .scan_entries_inspected
             .saturating_add(tick.scan_entries_inspected);
+        self.scan_elapsed_ns = self.scan_elapsed_ns.saturating_add(tick.scan_elapsed_ns);
+        self.checked_materials_inspected = self
+            .checked_materials_inspected
+            .saturating_add(tick.checked_materials_inspected);
+        self.stale_material_validation_elapsed_ns = self
+            .stale_material_validation_elapsed_ns
+            .saturating_add(tick.stale_material_validation_elapsed_ns);
+        self.candidate_key_validation_elapsed_ns = self
+            .candidate_key_validation_elapsed_ns
+            .saturating_add(tick.candidate_key_validation_elapsed_ns);
+        self.material_restoration_elapsed_ns = self
+            .material_restoration_elapsed_ns
+            .saturating_add(tick.material_restoration_elapsed_ns);
+        self.endpoint_geometry_elapsed_ns = self
+            .endpoint_geometry_elapsed_ns
+            .saturating_add(tick.endpoint_geometry_elapsed_ns);
+        self.interface_resolution_elapsed_ns = self
+            .interface_resolution_elapsed_ns
+            .saturating_add(tick.interface_resolution_elapsed_ns);
         self.bond_candidates_inspected = self
             .bond_candidates_inspected
             .saturating_add(tick.bond_candidates_inspected);
