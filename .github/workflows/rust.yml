@@ -72,12 +72,16 @@ jobs:
             diag="/tmp/profiling-overhead-$label.jsonl"
             "$binary" --headless --environment-chemistry-experiment --seconds 60 --seed 42 \
               --diagnostics "$diag" --diagnostic-interval 100 > "$log"
-            grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | tee -a "$GITHUB_WORKSPACE/profiling-overhead-summary.txt"
+            grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | sed "s/^/$label /" | tee -a "$GITHUB_WORKSPACE/profiling-overhead-summary.txt"
             rm -f "$diag"
           }
           : > profiling-overhead-summary.txt
-          run_case original /tmp/evosim-uninstrumented
-          run_case profiled /tmp/evosim-profiled
+          run_case original-a /tmp/evosim-uninstrumented
+          run_case profiled-a /tmp/evosim-profiled
+          run_case original-b /tmp/evosim-uninstrumented
+          run_case profiled-b /tmp/evosim-profiled
+          run_case original-c /tmp/evosim-uninstrumented
+          run_case profiled-c /tmp/evosim-profiled
           cat profiling-overhead-summary.txt
       - name: Upload reaction profiling overhead comparison
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 333
