@@ -1051,6 +1051,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         (cell_offset, material_offset)
     });
 
+    // One cursor owns reusable candidate/traversal buffers for the entire
+    // anchor pass. Resetting it avoids per-material Vec allocation churn.
+    let mut reusable_cursor: Option<crate::environmental_broad_phase::IndexedSpatialCursor> =
+        None;
     for anchor_index in anchor_order {
         let Some(record_a) = snapshot.materials.get(anchor_index) else {
             continue;
@@ -1082,15 +1086,19 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         } else {
             crate::environmental_broad_phase::PairOrientation::ForwardOrdered
         };
-        let Some(mut cursor) =
-            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
-                snapshot,
-                &environment.field,
-                cursor_orientation,
-                tick as usize,
-                anchor_index,
-            )
-        else {
+        if let Some(cursor) = reusable_cursor.as_mut() {
+            cursor.reset_for_anchor(cursor_orientation, tick as usize, anchor_index);
+        } else {
+            reusable_cursor =
+                crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
+                    snapshot,
+                    &environment.field,
+                    cursor_orientation,
+                    tick as usize,
+                    anchor_index,
+                );
+        }
+        let Some(cursor) = reusable_cursor.as_mut() else {
             continue;
         };
 
