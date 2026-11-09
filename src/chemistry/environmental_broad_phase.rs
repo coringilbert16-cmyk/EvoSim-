@@ -2801,7 +2801,6 @@ mod tests {
         assert_eq!(snapshot.known_pair_count(), 0);
     }
 
-
     #[test]
     fn reverse_only_cursor_matches_directed_candidates_for_asymmetric_bounds_and_page_sizes() {
         let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
