@@ -1244,7 +1244,9 @@ impl IndexedSpatialCursor {
                     self.target_slots_to_visit = if same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
                     {
-                        target_count.saturating_sub(anchor.locator.material_index.saturating_add(1))
+                        target_count.saturating_sub(
+                            anchor.locator.material_index.saturating_add(1),
+                        )
                     } else if same_cell && self.reverse_only {
                         anchor.locator.material_index.min(target_count)
                     } else {
