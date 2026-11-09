@@ -2552,8 +2552,15 @@ mod tests {
                     &index,
                     1.0,
                     usize::MAX,
-                    usize::MAX,
                     2,
+                    2,
+                );
+                assert!(page.visited_work <= 2);
+                assert_eq!(
+                    page.visited_work,
+                    page.visited_anchor_initializations
+                        + page.visited_cell_checks
+                        + page.visited_material_checks
                 );
                 actual.extend(
                     page.pairs
