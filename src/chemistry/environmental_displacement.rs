@@ -197,7 +197,10 @@ impl DisplacementTargetScan {
                 if *target_offset >= *target_count {
                     *current_cell = None;
                 }
-                return DisplacementTargetStep::MaterialInspected(Some((cell_index, material_index)));
+                return DisplacementTargetStep::MaterialInspected(Some((
+                    cell_index,
+                    material_index,
+                )));
             }
         }
     }
