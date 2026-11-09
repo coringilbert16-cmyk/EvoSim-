@@ -991,11 +991,18 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             });
     }
 
-    let shared_spatial_index = crate::environmental_broad_phase::MaterialSpatialIndex::new(
-        snapshot,
-        &environment.field,
-        shared_bounds,
-    );
+    // Benchmark-only selector: "cell" keeps the shared snapshot and exact
+    // candidate semantics but uses the cell-grid cursor instead of the AABB tree.
+    // Production defaults to the AABB path unless the experiment explicitly opts out.
+    let use_aabb_index = std::env::var_os("EVOSIM_DISCOVERY_MODE").as_deref()
+        != Some(std::ffi::OsStr::new("cell"));
+    let shared_spatial_index = use_aabb_index.then(|| {
+        crate::environmental_broad_phase::MaterialSpatialIndex::new(
+            snapshot,
+            &environment.field,
+            shared_bounds,
+        )
+    });
 
     accumulation.retain(|key, _| {
         !key.starts_with(ENVIRONMENT_PREFIX) || is_current_combine_accumulation_key(key)
@@ -1105,16 +1112,28 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             // Bounded batches reduce cursor-call overhead. The loop drains
             // every page before moving to the next anchor, so the batch size
             // is not a per-tick discovery cap and cannot drop a neighbor.
-            let page = cursor.next_page_with_index(
-                snapshot,
-                &environment.field,
-                shared_bounds.as_slice(),
-                &shared_spatial_index,
-                BOUNDS_PADDING,
-                target_cell_limit,
-                usize::MAX,
-                64,
-            );
+            let page = if let Some(spatial_index) = shared_spatial_index.as_ref() {
+                cursor.next_page_with_index(
+                    snapshot,
+                    &environment.field,
+                    shared_bounds.as_slice(),
+                    spatial_index,
+                    BOUNDS_PADDING,
+                    target_cell_limit,
+                    usize::MAX,
+                    64,
+                )
+            } else {
+                cursor.next_page(
+                    snapshot,
+                    &environment.field,
+                    shared_bounds.as_slice(),
+                    BOUNDS_PADDING,
+                    target_cell_limit,
+                    usize::MAX,
+                    64,
+                )
+            };
             diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
             diagnostics.target_cells_inspected += page.visited_cell_checks as usize;
             diagnostics.target_materials_inspected += page.visited_material_checks as usize;
