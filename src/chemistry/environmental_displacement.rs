@@ -46,7 +46,7 @@ enum DisplacementTargetStep {
 impl DisplacementTargetScan {
     fn new(
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
-        field: &crate::state::ActiveMaterialField,
+        field: &crate::environment::ActiveMaterialField,
         body: &crate::organism_geometry::OrganismBodyGeometry,
         cell_a: usize,
         material_a: usize,
@@ -114,7 +114,7 @@ impl DisplacementTargetScan {
     fn next(
         &mut self,
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
-        field: &crate::state::ActiveMaterialField,
+        field: &crate::environment::ActiveMaterialField,
     ) -> DisplacementTargetStep {
         match self {
             Self::Shared {
@@ -164,7 +164,7 @@ impl DisplacementTargetScan {
                 target_offset,
                 tick,
                 anchor_material,
-            } => {
+            } => loop {
                 if current_cell.is_none() {
                     let Some(&cell_index) = cells.get(*next_cell) else {
                         return DisplacementTargetStep::Complete;
@@ -182,19 +182,23 @@ impl DisplacementTargetScan {
                             % *target_count
                     };
                     *target_offset = 0;
-                    return DisplacementTargetStep::CellInspected;
+                    if *target_count > 0 {
+                        return DisplacementTargetStep::CellInspected;
+                    }
+                    *current_cell = None;
+                    continue;
                 }
                 if *target_offset >= *target_count {
                     *current_cell = None;
-                    return self.next(snapshot, field);
+                    continue;
                 }
-                let cell_index = current_cell.unwrap();
+                let cell_index = current_cell.expect("legacy target cell is initialized");
                 let material_index = (*target_start + *target_offset) % *target_count;
                 *target_offset += 1;
                 if *target_offset >= *target_count {
                     *current_cell = None;
                 }
-                DisplacementTargetStep::MaterialInspected(Some((cell_index, material_index)))
+                return DisplacementTargetStep::MaterialInspected(Some((cell_index, material_index)));
             }
         }
     }
