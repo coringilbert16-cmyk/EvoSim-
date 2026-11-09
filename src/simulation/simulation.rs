@@ -971,7 +971,6 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .break_realization_work_remaining = environmental_break_work_remaining;
 
-
         // Split the field-owned discovery share between COMBINE and the new
         // coupled displacement path; BREAK retains its independent quarter.
         let mut environmental_combine_discovery_remaining =
@@ -1041,7 +1040,6 @@ impl Simulation {
 
         self.environmental_chemistry_diagnostics
             .combine_realization_work_remaining = environmental_combine_work_remaining;
-
 
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
@@ -1118,7 +1116,6 @@ impl Simulation {
         });
         self.environmental_chemistry_diagnostics
             .displacement_scheduled = environmental_displacement_operations.len();
-
 
         // Commit only after all three layers have completed discovery.
         for operation in environmental_break_operations {
@@ -1337,10 +1334,8 @@ impl Simulation {
                 });
         }
 
-
         self.environmental_chemistry_diagnostics
             .displacement_realization_work_remaining = environmental_displacement_work_remaining;
-
 
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
