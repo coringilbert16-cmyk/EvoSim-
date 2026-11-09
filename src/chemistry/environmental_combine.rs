@@ -1394,7 +1394,7 @@ fn environmental_material_location_by_identity(
         .get(captured_cell)
         .and_then(|cell| cell.physical_materials.get(captured_material))
     {
-        if material.environmental_identity == source.environmental_identity && material == source {
+        if material.environmental_identity == source.environmental_identity {
             return Some((captured_cell, captured_material));
         }
     }
@@ -1407,7 +1407,6 @@ fn environmental_material_location_by_identity(
             .iter()
             .position(|material| {
                 material.environmental_identity == source.environmental_identity
-                    && material == source
             })
         {
             return Some((captured_cell, material_index));
@@ -1423,7 +1422,6 @@ fn environmental_material_location_by_identity(
                 .iter()
                 .position(|material| {
                     material.environmental_identity == source.environmental_identity
-                        && material == source
                 })
                 .map(|material_index| (cell_index, material_index))
         })
