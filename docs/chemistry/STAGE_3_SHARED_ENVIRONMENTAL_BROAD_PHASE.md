@@ -298,6 +298,8 @@ The integration branch remains draft and unmerged. The full green workflow at co
 
 ## Stage 6 — single-snapshot reaction handoff (2026-11-09)
 
+> This stage supersedes the earlier same-tick refresh-boundary statements in the historical sections above. Those sections describe the prior sequential-commit design.
+
 The production tick now follows the layered snapshot model:
 
 1. Build one environmental material snapshot after transport and environmental inputs settle.
@@ -311,4 +313,13 @@ COMBINE and DISPLACEMENT commit validation now resolves each source by stable en
 
 When a lower-priority operation conflicts with an already-reserved material, its accumulated reaction progress is restored rather than discarded. Chemistry evaluators, activation thresholds, energy settlement, reaction-specific budgets, and the atomic displacement transaction remain in their existing resolvers.
 
-This stage changes same-tick visibility intentionally: no reaction can consume a product created earlier in the same tick, and no individual source material can be committed through multiple environmental reaction types in one tick. Full formatting, test, Clippy, and equal-tick benchmark validation of this stage is pending.
+This stage changes same-tick visibility intentionally: no reaction can consume a product created earlier in the same tick, and no individual source material can be committed through multiple environmental reaction types in one tick.
+
+### Stage 6 validation and performance
+
+- Exact head: `a9e05ae0e1cb7a08853c5933cc3388849802d902`.
+- Full CI run [42675821503](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/42675821503) passed: formatting, architecture checks, default environmental baseline, all focused suites, full Rust tests, Clippy, and the equal-tick benchmark job.
+- Equal-tick runtime benchmark: 1,800 ticks, seed 42, three alternating-order repetitions, diagnostics disabled. Baseline median: **20.810 s**; single-snapshot revision median: **21.392 s**; **2.80% slower** in this run. A prior repeat measured 3.24% slower. The implementation is not currently a runtime speedup.
+- A diagnostic-enabled comparison on the same architecture recorded 124 committed environmental reactions versus 121 on baseline (+2.5%), with the reaction mix changing under the new exclusivity/priority rules. That coverage difference is useful, but it does not cancel the measured runtime regression.
+- The intended gains at this stage are semantic and architectural: one immutable snapshot per tick, no same-tick reaction cascades, and at most one selected reaction per source material per tick. Do not describe this as a proven runtime optimization.
+- No production cutover or merge is authorized by this milestone.
