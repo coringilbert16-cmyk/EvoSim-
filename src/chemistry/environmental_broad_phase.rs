@@ -917,6 +917,7 @@ pub(crate) struct IndexedSpatialCursor {
     field_cell_size_bits: u64,
     field_cell_count: usize,
     anchor_index: usize,
+    anchors_visited: usize,
     anchor_initialized: bool,
     range: Option<BoundsCellRange>,
     row_offset: usize,
@@ -932,6 +933,16 @@ impl IndexedSpatialCursor {
         field: &ActiveMaterialField,
         orientation: PairOrientation,
     ) -> Self {
+        Self::new_rotated(snapshot, field, orientation, 0)
+    }
+
+    pub(crate) fn new_rotated(
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        orientation: PairOrientation,
+        start_index: usize,
+    ) -> Self {
+        let material_count = snapshot.materials.len();
         Self {
             pass_id: snapshot.pass_id,
             field_revision: field.revision,
@@ -940,14 +951,19 @@ impl IndexedSpatialCursor {
             field_height_cells: field.height_cells,
             field_cell_size_bits: field.cell_size.to_bits(),
             field_cell_count: field.cells.len(),
-            anchor_index: 0,
+            anchor_index: if material_count == 0 {
+                0
+            } else {
+                start_index % material_count
+            },
+            anchors_visited: 0,
             anchor_initialized: false,
             range: None,
             row_offset: 0,
             col: 0,
             target_slot: 0,
             cell_loaded: false,
-            complete: snapshot.materials.is_empty(),
+            complete: material_count == 0,
         }
     }
 
@@ -980,7 +996,7 @@ impl IndexedSpatialCursor {
             && page.pairs.len() < output_limit
             && !self.complete
         {
-            if self.anchor_index >= snapshot.materials.len() {
+            if self.anchors_visited >= snapshot.materials.len() {
                 self.complete = true;
                 break;
             }
@@ -1103,8 +1119,9 @@ impl IndexedSpatialCursor {
             }
         }
 
-        self.complete = self.anchor_index >= snapshot.materials.len();
-        page.deferred_anchors = snapshot.materials.len().saturating_sub(self.anchor_index) as u64;
+        self.complete = self.anchors_visited >= snapshot.materials.len();
+        page.deferred_anchors =
+            snapshot.materials.len().saturating_sub(self.anchors_visited) as u64;
         page.complete = self.complete;
         page
     }
@@ -1120,14 +1137,17 @@ impl IndexedSpatialCursor {
     }
 
     fn advance_anchor(&mut self, material_count: usize) {
-        self.anchor_index += 1;
+        self.anchors_visited = self.anchors_visited.saturating_add(1);
+        if self.anchors_visited < material_count {
+            self.anchor_index = (self.anchor_index + 1) % material_count;
+        }
         self.anchor_initialized = false;
         self.range = None;
         self.row_offset = 0;
         self.col = 0;
         self.target_slot = 0;
         self.cell_loaded = false;
-        self.complete = self.anchor_index >= material_count;
+        self.complete = self.anchors_visited >= material_count;
     }
 }
 
