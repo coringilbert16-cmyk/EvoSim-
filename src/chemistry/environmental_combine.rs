@@ -943,6 +943,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
 ) -> Vec<EnvironmentalCombineOperation> {
     if shared_bounds.len() != snapshot.materials.len() {
         *shared_bounds = vec![None; snapshot.materials.len()];
+    } else {
+        shared_bounds.fill(None);
     }
     shared_candidate_pairs.clear();
     if completed_anchors.len() != snapshot.materials.len() {
@@ -959,6 +961,36 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             remaining_evaluation_work,
             diagnostics,
         );
+    }
+
+    // Prepare each material's realized AABB once. The indexed cell traversal
+    // uses these bounds to discard same-cell false positives before retaining
+    // shared pair records for COMBINE and DISPLACEMENT.
+    for (material_index, record) in snapshot.materials.iter().enumerate() {
+        let Some(physical) = environment
+            .field
+            .cells
+            .get(record.locator.cell_index)
+            .and_then(|cell| cell.physical_materials.get(record.locator.material_index))
+            .filter(|material| material.environmental_identity == record.identity.0)
+        else {
+            continue;
+        };
+        let Some(body) =
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                physical,
+                &environment.catalog,
+            )
+        else {
+            continue;
+        };
+        shared_bounds[material_index] =
+            Some(crate::environmental_broad_phase::MaterialSpatialBounds {
+                min_x: body.min_x,
+                max_x: body.max_x,
+                min_y: body.min_y,
+                max_y: body.max_y,
+            });
     }
 
     accumulation.retain(|key, _| {
@@ -1028,25 +1060,15 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         else {
             continue;
         };
-        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-            source_a,
-            &environment.catalog,
-        ) else {
+        let Some(anchor_bounds) = shared_bounds[anchor_index] else {
             continue;
         };
         let mut restored_anchor = None;
         let mut anchor_restore_attempted = false;
-        shared_bounds[anchor_index] =
-            Some(crate::environmental_broad_phase::MaterialSpatialBounds {
-                min_x: body.min_x,
-                max_x: body.max_x,
-                min_y: body.min_y,
-                max_y: body.max_y,
-            });
         let target_cell_count =
             crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
                 &environment.field,
-                shared_bounds[anchor_index].expect("anchor bounds were just populated"),
+                anchor_bounds,
                 BOUNDS_PADDING,
             );
         let target_cell_limit = target_cell_count.unwrap_or(0);
@@ -1090,6 +1112,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
             diagnostics.target_cells_inspected += page.visited_cell_checks as usize;
             diagnostics.target_materials_inspected += page.visited_material_checks as usize;
+            diagnostics.target_materials_rejected_by_bounds +=
+                page.target_materials_rejected_by_bounds as usize;
             if page.visited_work == 0 && page.pairs.is_empty() {
                 break;
             }
@@ -1112,6 +1136,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 // DISPLACEMENT can derive its own anchor roles without another
                 // spatial traversal.
                 shared_candidate_pairs.push(pair);
+                diagnostics.shared_candidate_pairs_emitted += 1;
                 let source_locator = (record_a.locator.cell_index, record_a.locator.material_index);
                 let target_locator = (record_b.locator.cell_index, record_b.locator.material_index);
                 // The reverse half belongs to DISPLACEMENT only. COMBINE
