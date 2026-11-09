@@ -587,7 +587,6 @@ fn discover_environmental_bonds(
     }
 }
 
-
 /// Discover BREAK candidates from the shared immutable material snapshot.
 /// The traversal retains the live scan's rotating cell/material/bond order and
 /// bounded nested-work accounting. If the snapshot cannot represent every
