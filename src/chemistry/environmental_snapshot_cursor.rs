@@ -284,9 +284,7 @@ impl EnvironmentalSnapshotCursor {
                 materials: std::mem::take(&mut self.sorted_materials),
                 existing_bonds: std::mem::take(&mut self.sorted_bonds),
                 material_indices_by_cell: std::mem::take(&mut self.material_indices_by_cell),
-                material_index_by_cell_slot: std::mem::take(
-                    &mut self.material_index_by_cell_slot,
-                ),
+                material_index_by_cell_slot: std::mem::take(&mut self.material_index_by_cell_slot),
                 bond_indices_by_material: std::mem::take(&mut self.bond_indices_by_material),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
