@@ -3645,10 +3645,10 @@ mod tests {
                 )
                 .expect("fixture bounds intersect the field");
 
-                let mut forward = IndexedSpatialCursor::new_for_anchor(
+                let mut shared_discovery = IndexedSpatialCursor::new_for_anchor(
                     &snapshot,
                     &field,
-                    PairOrientation::ForwardOrdered,
+                    PairOrientation::Directed,
                     tick,
                     anchor_index,
                 )
@@ -3656,7 +3656,7 @@ mod tests {
                 let mut shared_targets = Vec::new();
                 loop {
                     let page =
-                        forward.next_page(&snapshot, &field, &bounds, 2.1, target_cell_count, 1, 1);
+                        shared_discovery.next_page(&snapshot, &field, &bounds, 2.1, target_cell_count, 1, 1);
                     shared_targets.extend(page.pairs.into_iter().map(|pair| {
                         let target = &snapshot.materials[pair.right];
                         (target.locator.cell_index, target.locator.material_index)
