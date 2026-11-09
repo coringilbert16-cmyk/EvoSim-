@@ -3634,6 +3634,22 @@ mod tests {
                     }
                 }
 
+                let completed_anchors = vec![
+                    Some(target_cell_count.saturating_add(5));
+                    snapshot.materials.len()
+                ];
+                let reverse_target_cell_limit = target_cell_count.saturating_add(1);
+                assert_ne!(
+                    completed_anchors[anchor_index],
+                    Some(reverse_target_cell_limit),
+                    "fixture must exercise different forward and reverse budget values"
+                );
+                let reusable_targets = has_complete_shared_forward_coverage(
+                    &completed_anchors,
+                    anchor_index,
+                )
+                .then_some(shared_targets);
+
                 let mut shared_bounds = bounds.clone();
                 let mut scan = DisplacementTargetScan::new(
                     Some(&snapshot),
@@ -3643,9 +3659,9 @@ mod tests {
                     anchor.locator.cell_index,
                     anchor.locator.material_index,
                     tick,
-                    target_cell_count,
+                    reverse_target_cell_limit,
                     anchor.identity.0,
-                    Some(shared_targets),
+                    reusable_targets,
                 );
                 let mut actual = Vec::new();
                 let mut steps = 0;
