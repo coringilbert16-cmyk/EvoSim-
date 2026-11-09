@@ -220,15 +220,16 @@ impl DisplacementTargetScan {
                             DisplacementTargetStep::SharedCandidate(Some(target))
                         });
                 }
-                *prefer_shared = true;
                 if !*initialized && page.visited_anchor_initializations > 0 {
                     *initialized = true;
                     return DisplacementTargetStep::AnchorInitialized;
                 }
                 if page.visited_cell_checks > 0 {
+                    *prefer_shared = true;
                     return DisplacementTargetStep::CellInspected;
                 }
                 if page.visited_material_checks > 0 {
+                    *prefer_shared = true;
                     let target = page.pairs.first().and_then(|pair| {
                         snapshot.materials.get(pair.right).map(|record| {
                             (record.locator.cell_index, record.locator.material_index)
