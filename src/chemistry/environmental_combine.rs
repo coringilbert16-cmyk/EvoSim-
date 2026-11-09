@@ -1580,8 +1580,7 @@ pub(crate) fn resolve_environmental(
         let cell = &mut environment.field.cells[cell_a];
         cell.physical_materials.remove(material_b);
         cell.physical_materials.remove(material_a);
-        cell.physical_materials
-            .insert(material_a, product);
+        cell.physical_materials.insert(material_a, product);
         environment.field.mark_changed_at_index(cell_a);
     } else {
         environment.field.cells[cell_a]
