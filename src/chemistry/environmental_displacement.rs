@@ -1283,20 +1283,21 @@ fn accumulate_environmental_internal(
         if connections.is_empty() {
             continue;
         }
-        let shared_bond_indices = shared_bond_indices_by_material
-            .as_ref()
-            .and_then(|indices| {
-                indices.get(&crate::environmental_interaction::MaterialIdentity(
-                    source_a.environmental_identity,
-                ))
-            })
-            .map(Vec::as_slice);
-        let fallback_bond_indices = shared_bond_indices
+        let fallback_bond_indices = shared_bond_indices_by_material
             .is_none()
             .then(|| (0..connections.len()).collect::<Vec<_>>());
-        let bond_indices = shared_bond_indices
-            .or(fallback_bond_indices.as_deref())
-            .unwrap_or(&[]);
+        let bond_indices = match shared_bond_indices_by_material {
+            Some(indices) => indices
+                .get(&crate::environmental_interaction::MaterialIdentity(
+                    source_a.environmental_identity,
+                ))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]),
+            None => fallback_bond_indices.as_deref().unwrap_or(&[]),
+        };
+        if bond_indices.is_empty() {
+            continue;
+        }
         diagnostics.bonded_anchor_materials = diagnostics.bonded_anchor_materials.saturating_add(1);
         let Some((source_structure, indices_a)) =
             restore_displacement_source(&source_a, environment)
