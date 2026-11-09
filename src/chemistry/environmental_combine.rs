@@ -969,7 +969,17 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         // Single-work-unit pages make the shared cursor resumable at the exact
         // material/cell slot while leaving the remaining budget for COMBINE's
         // constituent-interface evaluation.
-        let page = cursor.next_page(snapshot, &environment.field, &bounds, BOUNDS_PADDING, 1, 1);
+        let target_cell_limit =
+            FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
+        let page = cursor.next_page(
+            snapshot,
+            &environment.field,
+            &bounds,
+            BOUNDS_PADDING,
+            target_cell_limit,
+            1,
+            1,
+        );
         *remaining_discovery_work =
             (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
         diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
