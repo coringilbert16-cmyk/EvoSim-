@@ -1556,9 +1556,8 @@ impl IndexedSpatialCursor {
                             &mut self.query_stack,
                         );
                         page.visited_work = page.visited_work.saturating_add(node_visits);
-                        page.visited_cell_checks = page
-                            .visited_cell_checks
-                            .saturating_add(node_visits);
+                        page.visited_cell_checks =
+                            page.visited_cell_checks.saturating_add(node_visits);
                     }
                     let candidate_count = self.candidate_targets.len();
                     self.candidate_targets_visited = 0;
@@ -1761,23 +1760,22 @@ impl IndexedSpatialCursor {
                     }
                     self.cell_loaded = true;
                     self.target_slots_visited = 0;
-                    self.target_slot = if same_cell
-                        && self.orientation == PairOrientation::ForwardOrdered
-                    {
-                        if rotated_start > anchor.locator.material_index {
-                            rotated_start
+                    self.target_slot =
+                        if same_cell && self.orientation == PairOrientation::ForwardOrdered {
+                            if rotated_start > anchor.locator.material_index {
+                                rotated_start
+                            } else {
+                                anchor.locator.material_index + 1
+                            }
+                        } else if same_cell && self.reverse_only {
+                            if rotated_start < anchor.locator.material_index {
+                                rotated_start
+                            } else {
+                                0
+                            }
                         } else {
-                            anchor.locator.material_index + 1
-                        }
-                    } else if same_cell && self.reverse_only {
-                        if rotated_start < anchor.locator.material_index {
                             rotated_start
-                        } else {
-                            0
-                        }
-                    } else {
-                        rotated_start
-                    };
+                        };
                 }
                 continue;
             }
