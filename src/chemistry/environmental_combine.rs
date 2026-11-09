@@ -914,7 +914,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
 ) -> Vec<EnvironmentalCombineOperation> {
     let mut shared_bounds = vec![None; snapshot.materials.len()];
     let mut shared_candidate_pairs = Vec::new();
-    let mut completed_anchors = vec![false; snapshot.materials.len()];
+    let mut completed_anchors = vec![None; snapshot.materials.len()];
     accumulate_environmental_with_shared_snapshot_and_candidates(
         environment,
         accumulation,
@@ -939,16 +939,16 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
     shared_candidate_pairs: &mut Vec<crate::environmental_broad_phase::MaterialPairRecord>,
-    completed_anchors: &mut Vec<bool>,
+    completed_anchors: &mut Vec<Option<usize>>,
 ) -> Vec<EnvironmentalCombineOperation> {
     if shared_bounds.len() != snapshot.materials.len() {
         *shared_bounds = vec![None; snapshot.materials.len()];
     }
     shared_candidate_pairs.clear();
     if completed_anchors.len() != snapshot.materials.len() {
-        *completed_anchors = vec![false; snapshot.materials.len()];
+        *completed_anchors = vec![None; snapshot.materials.len()];
     } else {
-        completed_anchors.fill(false);
+        completed_anchors.fill(None);
     }
     if snapshot.unassigned_materials != 0 {
         return accumulate_environmental_with_diagnostics(
@@ -1208,7 +1208,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 }
             }
             if page.complete {
-                completed_anchors[anchor_index] = true;
+                completed_anchors[anchor_index] = Some(target_cell_limit);
                 break;
             }
         }
