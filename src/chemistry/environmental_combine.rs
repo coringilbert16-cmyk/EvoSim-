@@ -1107,7 +1107,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                     .get(record_b.locator.cell_index)
                     .and_then(|cell| cell.physical_materials.get(record_b.locator.material_index))
                     .filter(|material| material.environmental_identity == record_b.identity.0)
-                    .cloned()
                 else {
                     continue;
                 };
@@ -1119,10 +1118,12 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 let source_locator = (record_a.locator.cell_index, record_a.locator.material_index);
                 let target_locator = (record_b.locator.cell_index, record_b.locator.material_index);
                 // The reverse half belongs to DISPLACEMENT only. COMBINE
-                // preserves its existing forward locator ordering.
+                // preserves its existing forward locator ordering and avoids
+                // cloning target material for reverse-only records.
                 if target_locator <= source_locator {
                     continue;
                 }
+                let source_b = source_b.clone();
                 diagnostics.forward_ordered_target_material_pair_inspections += 1;
                 if record_a.locator.cell_index == record_b.locator.cell_index {
                     diagnostics.same_cell_source_pair_inspections += 1;
