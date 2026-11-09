@@ -3667,6 +3667,8 @@ mod tests {
                     }
                 }
 
+                let partial_shared_targets =
+                    shared_targets.iter().take(1).copied().collect::<Vec<_>>();
                 let completed_anchors =
                     vec![Some(target_cell_count.saturating_add(5)); snapshot.materials.len()];
                 assert_ne!(
@@ -3717,6 +3719,41 @@ mod tests {
                     actual.len(),
                     expected.len(),
                     "shared target handoff duplicated a target: tick={tick}, anchor={anchor_index}"
+                );
+
+                // Partial shared coverage is still authoritative. It must not
+                // trigger a second reverse-only scan for the omitted targets.
+                let mut partial_bounds = bounds.clone();
+                let mut partial_scan = DisplacementTargetScan::new(
+                    Some(&snapshot),
+                    &field,
+                    None,
+                    &mut partial_bounds,
+                    anchor.locator.cell_index,
+                    anchor.locator.material_index,
+                    tick,
+                    reverse_target_cell_limit,
+                    anchor.identity.0,
+                    Some(partial_shared_targets.clone()),
+                );
+                let mut partial_actual = Vec::new();
+                loop {
+                    match partial_scan.next(Some(&snapshot), &field, &partial_bounds) {
+                        DisplacementTargetStep::SharedCandidate(Some(target)) => {
+                            partial_actual.push(target);
+                        }
+                        DisplacementTargetStep::SharedCandidate(None)
+                        | DisplacementTargetStep::Complete => break,
+                        DisplacementTargetStep::AnchorInitialized
+                        | DisplacementTargetStep::CellInspected
+                        | DisplacementTargetStep::MaterialInspected(_) => {
+                            panic!("partial shared coverage attempted independent discovery");
+                        }
+                    }
+                }
+                assert_eq!(
+                    partial_actual, partial_shared_targets,
+                    "partial shared result was not consumed exactly: tick={tick}, anchor={anchor_index}"
                 );
             }
         }
