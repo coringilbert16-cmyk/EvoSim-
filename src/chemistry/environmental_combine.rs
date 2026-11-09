@@ -961,8 +961,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             .get(record.locator.cell_index)
             .map_or(1, |cell| cell.physical_materials.len())
             .max(1);
-        let material_start =
-            (tick as usize).wrapping_add(record.locator.cell_index) % material_count;
+        let material_start = (tick as usize).wrapping_add(record.locator.cell_index)
+            % material_count;
         let material_offset = record
             .locator
             .material_index
@@ -998,25 +998,21 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         }
         *remaining_discovery_work =
             (*remaining_discovery_work).saturating_sub(anchor_preparation_work);
-        let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
-        else {
+        let Some((source_structure, indices_a)) = restored_source(&source_a, environment) else {
             continue;
         };
-        let Some(body) =
-            crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                &source_structure,
-            )
-        else {
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+            &source_structure,
+        ) else {
             continue;
         };
-        shared_bounds[anchor_index] = Some(
-            crate::environmental_broad_phase::MaterialSpatialBounds {
+        shared_bounds[anchor_index] =
+            Some(crate::environmental_broad_phase::MaterialSpatialBounds {
                 min_x: body.min_x,
                 max_x: body.max_x,
                 min_y: body.min_y,
                 max_y: body.max_y,
-            },
-        );
+            });
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
@@ -1094,7 +1090,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
                 }
                 diagnostics.target_material_pairs_restored += 1;
 
-                let mut component_work = (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
+                let mut component_work =
+                    (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                 let component_work_initial = component_work;
                 let pair_count = indices_a.len().saturating_mul(indices_b.len());
                 diagnostics.constituent_pairs_available += pair_count;
