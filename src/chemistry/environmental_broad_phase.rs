@@ -2638,7 +2638,7 @@ mod tests {
             &field,
             &bounds,
             0.0,
-            target_cell_count,
+            usize::MAX,
             usize::MAX,
             usize::MAX,
         );
