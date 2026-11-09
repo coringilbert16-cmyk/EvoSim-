@@ -1,6 +1,6 @@
 # Stage 3 — Shared environmental broad phase
 
-Status: read-only indexed spatial cursor and three reaction adapters are implemented and parity-tested against their existing discovery references. Production discovery remains unchanged; production cutover is a separate stage.
+Status: the read-only prototype and adapter parity described in the original Stage 3 checkpoint are complete. Production integration has since begun; see the Stage 5 update at the end of this document for the current boundary.
 
 ## Objective
 
@@ -276,3 +276,22 @@ Focused unit tests prove:
 - lifecycle stages have a deterministic descriptive order.
 
 This is the **contract foundation**, not yet a shared evaluator wired into production. The three existing evaluators remain authoritative, and no live reaction behavior, activation accumulation, energy settlement, discovery budget, realization slot, scheduling policy, or topology transaction has changed. The next Stage 4 increment is to adapt one reaction at a time behind this envelope and compare its full ready/deferred/rejected/stale result stream against the current production path before any cutover.
+
+
+## Stage 5 — production cursor integration (2026-11-09)
+
+The original Stage 3 “production discovery remains unchanged” statements above describe the checkpoint at which they were written. The following production paths have since been connected on the current integration branch:
+
+- **BREAK:** creates a fresh `EnvironmentalMaterialSnapshot` before its phase and discovers bounded bond records from that snapshot. Legacy field traversal remains the fallback when environmental identities are unassigned.
+- **COMBINE:** creates a new snapshot after BREAK commits and uses the indexed spatial cursor with `ForwardOrdered` traversal. The cursor preserves field-locator ordering and tick rotation; its evaluator still owns COMBINE chemistry, activation, and formation rules.
+- **DISPLACEMENT:** creates another fresh snapshot after COMBINE commits and uses the same indexed cursor in `Directed` mode for each bonded anchor. The old bond and atomic replacement evaluator remain unchanged. Unassigned identities fall back to the legacy target-cell query.
+
+The same-tick refresh sequence remains BREAK commit → fresh snapshot → COMBINE commit → fresh snapshot → DISPLACEMENT. No snapshot or pair reference is carried across a topology/ownership mutation.
+
+The displacement cursor now pages one unit of target-discovery work at a time. Its single-anchor directed fixture compares the emitted target-material sequence with `cells_intersecting_bounds_limited`, including tick rotation and both a short target-cell window and a complete window. The existing BREAK and COMBINE parity fixtures remain in place.
+
+**Important remaining boundary:** this is production integration of the common snapshot and indexed-cursor infrastructure, not yet proof of one fully materialized candidate-pair list shared by all three evaluators. COMBINE and DISPLACEMENT currently traverse the common cursor separately, while BREAK reads bond records from the same snapshot. A single shared discovery materialization, with reaction-specific projections and exact parity under the existing budgets, remains to be completed before this optimization can be considered finished.
+
+No chemistry eligibility, activation threshold, energy settlement, atomic replacement semantics, reaction budget, or world-boundary policy was intentionally changed. The horizontal/vertical field-query semantics discrepancy with Master Spec 2.4 remains unresolved and out of scope.
+
+The integration branch remains draft and unmerged. The full green workflow at commit `65529bb2d949565e16c8866d54d371ded50b8150` passed formatting, architecture checks, focused tests, the full Rust suite, and Clippy. Subsequent parity-test strengthening is still subject to its own full CI run.
