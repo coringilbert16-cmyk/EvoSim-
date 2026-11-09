@@ -126,15 +126,7 @@ impl DisplacementTargetScan {
                 let Some(snapshot) = snapshot else {
                     return DisplacementTargetStep::Complete;
                 };
-                let page = cursor.next_page(
-                    snapshot,
-                    field,
-                    bounds,
-                    2.1,
-                    *target_cell_limit,
-                    1,
-                    1,
-                );
+                let page = cursor.next_page(snapshot, field, bounds, 2.1, *target_cell_limit, 1, 1);
                 if page.visited_work == 0 {
                     return DisplacementTargetStep::Complete;
                 }
@@ -178,8 +170,7 @@ impl DisplacementTargetScan {
                     *target_start = if *target_count == 0 {
                         0
                     } else {
-                        tick.wrapping_add(cell_index).wrapping_add(*anchor_material)
-                            % *target_count
+                        tick.wrapping_add(cell_index).wrapping_add(*anchor_material) % *target_count
                     };
                     *target_offset = 0;
                     if *target_count == 0 {
@@ -201,7 +192,7 @@ impl DisplacementTargetScan {
                     cell_index,
                     material_index,
                 )));
-            }
+            },
         }
     }
 }
@@ -1148,8 +1139,7 @@ fn accumulate_environmental_internal(
             else {
                 continue;
             };
-            let target_cell_limit =
-                DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
+            let target_cell_limit = DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
             let mut target_scan = DisplacementTargetScan::new(
                 shared_snapshot,
                 &environment.field,
@@ -1165,16 +1155,13 @@ fn accumulate_environmental_internal(
                 if *remaining_discovery_work == 0 {
                     break 'anchors;
                 }
-                let (cell_b, material_b) = match target_scan.next(
-                    shared_snapshot,
-                    &environment.field,
-                ) {
+                let (cell_b, material_b) =
+                    match target_scan.next(shared_snapshot, &environment.field) {
                     DisplacementTargetStep::AnchorInitialized => continue,
                     DisplacementTargetStep::CellInspected => {
                         diagnostics.target_cells_inspected =
                             diagnostics.target_cells_inspected.saturating_add(1);
-                        *remaining_discovery_work =
-                            remaining_discovery_work.saturating_sub(1);
+                        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                         continue;
                     }
                     DisplacementTargetStep::MaterialInspected(target) => {
