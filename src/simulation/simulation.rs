@@ -893,6 +893,9 @@ impl Simulation {
             );
         let mut environmental_shared_bounds =
             vec![None; environmental_shared_snapshot.materials.len()];
+        let mut environmental_shared_candidate_pairs = Vec::new();
+        let mut environmental_combine_completed_anchors =
+            vec![false; environmental_shared_snapshot.materials.len()];
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
@@ -1026,9 +1029,12 @@ impl Simulation {
                     self.tick,
                 );
             environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
+            environmental_shared_candidate_pairs.clear();
+            environmental_combine_completed_anchors =
+                vec![false; environmental_shared_snapshot.materials.len()];
         }
         let environmental_combine_operations =
-            crate::environmental_combine::accumulate_environmental_with_shared_snapshot_and_bounds(
+            crate::environmental_combine::accumulate_environmental_with_shared_snapshot_and_candidates(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
@@ -1037,6 +1043,8 @@ impl Simulation {
                 &mut self.environmental_chemistry_diagnostics.combine_search,
                 &environmental_shared_snapshot,
                 &mut environmental_shared_bounds,
+                &mut environmental_shared_candidate_pairs,
+                &mut environmental_combine_completed_anchors,
             );
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
@@ -1138,13 +1146,16 @@ impl Simulation {
                     self.tick,
                 );
             environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
+            environmental_shared_candidate_pairs.clear();
+            environmental_combine_completed_anchors =
+                vec![false; environmental_shared_snapshot.materials.len()];
         }
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot_and_bounds(
+            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot_and_candidates(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
@@ -1152,6 +1163,8 @@ impl Simulation {
                 &mut displacement_discovery,
                 &environmental_shared_snapshot,
                 &mut environmental_shared_bounds,
+                &environmental_shared_candidate_pairs,
+                &environmental_combine_completed_anchors,
             );
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
