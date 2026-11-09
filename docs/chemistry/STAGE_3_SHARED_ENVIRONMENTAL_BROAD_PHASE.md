@@ -337,4 +337,6 @@ The production tick now treats the tick-start material snapshot as the common di
 
 
 - The shared-target regression now also supplies deliberately partial shared coverage and asserts that DISPLACEMENT consumes exactly those retained targets, without invoking any independent target-cell/material discovery.
+
+- Displacement enumerates only snapshot-bonded anchors. That index walk does not consume reaction work; the work allowance is spent on actual bond and replacement-contact evaluation, so anchor bookkeeping cannot exhaust the budget before the first bond is examined.
 The shared pair stream remains bounded by the existing per-tick discovery work and is retained only for the current tick. This is the first production ownership cutover; the next validation must confirm parity, no lost deferred work, and the runtime impact before considering removal of compatibility-only legacy paths.
