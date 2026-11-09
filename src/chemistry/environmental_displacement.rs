@@ -24,6 +24,7 @@ enum DisplacementTargetScan {
         target_cell_limit: usize,
         targets: Vec<(usize, usize)>,
         next_target: usize,
+        prefer_shared: bool,
     },
     Legacy {
         cells: Vec<usize>,
@@ -81,6 +82,7 @@ impl DisplacementTargetScan {
                 target_cell_limit,
                 targets,
                 next_target: 0,
+                prefer_shared: tick % 2 == 0,
             };
         }
         if let Some(snapshot) = snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
@@ -129,6 +131,7 @@ impl DisplacementTargetScan {
                             target_cell_limit,
                             targets: Vec::new(),
                             next_target: 0,
+                            prefer_shared: false,
                         };
                     }
                 }
@@ -170,13 +173,33 @@ impl DisplacementTargetScan {
                 target_cell_limit,
                 targets,
                 next_target,
+                prefer_shared,
             } => {
-                if let Some(target) = targets.get(*next_target).copied() {
-                    *next_target += 1;
-                    return DisplacementTargetStep::SharedCandidate(Some(target));
+                if *prefer_shared {
+                    if let Some(target) = targets.get(*next_target).copied() {
+                        *next_target += 1;
+                        *prefer_shared = false;
+                        return DisplacementTargetStep::SharedCandidate(Some(target));
+                    }
+                    *prefer_shared = false;
                 }
-                let (Some(snapshot), Some(cursor)) = (snapshot, cursor.as_mut()) else {
-                    return DisplacementTargetStep::Complete;
+                let Some(snapshot) = snapshot else {
+                    return targets
+                        .get(*next_target)
+                        .copied()
+                        .map_or(DisplacementTargetStep::Complete, |target| {
+                            *next_target += 1;
+                            DisplacementTargetStep::SharedCandidate(Some(target))
+                        });
+                };
+                let Some(cursor) = cursor.as_mut() else {
+                    return targets
+                        .get(*next_target)
+                        .copied()
+                        .map_or(DisplacementTargetStep::Complete, |target| {
+                            *next_target += 1;
+                            DisplacementTargetStep::SharedCandidate(Some(target))
+                        });
                 };
                 let page = cursor.next_page(
                     snapshot,
@@ -188,8 +211,16 @@ impl DisplacementTargetScan {
                     1,
                 );
                 if page.visited_work == 0 {
-                    return DisplacementTargetStep::Complete;
+                    *cursor = None;
+                    return targets
+                        .get(*next_target)
+                        .copied()
+                        .map_or(DisplacementTargetStep::Complete, |target| {
+                            *next_target += 1;
+                            DisplacementTargetStep::SharedCandidate(Some(target))
+                        });
                 }
+                *prefer_shared = true;
                 if !*initialized && page.visited_anchor_initializations > 0 {
                     *initialized = true;
                     return DisplacementTargetStep::AnchorInitialized;
