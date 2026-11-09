@@ -1076,17 +1076,17 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         };
 
         loop {
-            // Single-work-unit pages keep memory and per-call work bounded,
-            // but the cursor is drained completely before moving to the next
-            // anchor. Discovery itself cannot silently drop a neighbor.
+            // Bounded batches reduce cursor-call overhead. The loop drains
+            // every page before moving to the next anchor, so the batch size
+            // is not a per-tick discovery cap and cannot drop a neighbor.
             let page = cursor.next_page(
                 snapshot,
                 &environment.field,
                 shared_bounds.as_slice(),
                 BOUNDS_PADDING,
                 target_cell_limit,
-                1,
-                1,
+                64,
+                64,
             );
             diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
             diagnostics.target_cells_inspected += page.visited_cell_checks as usize;
