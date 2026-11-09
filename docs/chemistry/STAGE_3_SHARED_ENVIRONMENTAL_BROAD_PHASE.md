@@ -295,3 +295,20 @@ The displacement cursor now pages one unit of target-discovery work at a time. I
 No chemistry eligibility, activation threshold, energy settlement, atomic replacement semantics, reaction budget, or world-boundary policy was intentionally changed. The horizontal/vertical field-query semantics discrepancy with Master Spec 2.4 remains unresolved and out of scope.
 
 The integration branch remains draft and unmerged. The full green workflow at commit `65529bb2d949565e16c8866d54d371ded50b8150` passed formatting, architecture checks, focused tests, the full Rust suite, and Clippy. Subsequent parity-test strengthening is still subject to its own full CI run.
+
+## Stage 6 — single-snapshot reaction handoff (2026-11-09)
+
+The production tick now follows the layered snapshot model:
+
+1. Build one environmental material snapshot after transport and environmental inputs settle.
+2. Discover and schedule BREAK from that snapshot without committing.
+3. Discover and schedule COMBINE from the same unchanged snapshot.
+4. Discover and schedule DISPLACEMENT from the same unchanged snapshot, reusing the COMBINE candidate handoff where its coverage is complete.
+5. Reserve source material identities in reaction priority order: BREAK, then COMBINE, then DISPLACEMENT. A material can participate in at most one selected environmental reaction per tick. BREAK reserves the entire source material, not just one bond.
+6. Commit the selected operations only after all three discovery layers finish. Products and split pieces are therefore first discoverable on the next tick.
+
+COMBINE and DISPLACEMENT commit validation now resolves each source by stable environmental identity. The captured cell/material locator is a fast path when it still identifies the exact source; after another disjoint commit shifts vector slots, the resolver searches for the same identity and verifies the complete source material before proceeding. BREAK already uses identity-based location recovery. This permits deferred commits without carrying stale vector indices across mutations.
+
+When a lower-priority operation conflicts with an already-reserved material, its accumulated reaction progress is restored rather than discarded. Chemistry evaluators, activation thresholds, energy settlement, reaction-specific budgets, and the atomic displacement transaction remain in their existing resolvers.
+
+This stage changes same-tick visibility intentionally: no reaction can consume a product created earlier in the same tick, and no individual source material can be committed through multiple environmental reaction types in one tick. Full formatting, test, Clippy, and equal-tick benchmark validation of this stage is pending.
