@@ -1129,14 +1129,32 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 else {
                     continue;
                 };
-                // This is the tick's shared directed material-pair result.
-                // Retain it before reaction-specific COMBINE filtering so
-                // DISPLACEMENT can derive its own anchor roles without another
-                // spatial traversal.
-                shared_candidate_pairs.push(pair);
-                diagnostics.shared_candidate_pairs_emitted += 1;
                 let source_locator = (record_a.locator.cell_index, record_a.locator.material_index);
                 let target_locator = (record_b.locator.cell_index, record_b.locator.material_index);
+                // COMBINE consumes every pair immediately below. Retain only
+                // displacement-relevant directions for the later evaluator:
+                // bonded anchors keep their outgoing pair, while an unbonded
+                // anchor targeting a bonded material contributes the reverse
+                // bonded-anchor direction. This avoids storing the much larger
+                // unbonded/unbonded COMBINE stream.
+                let target_has_bonds = snapshot
+                    .bond_indices_by_material
+                    .get(&record_b.identity)
+                    .is_some_and(|indices| !indices.is_empty());
+                if anchor_has_bonds {
+                    shared_candidate_pairs.push(pair);
+                    diagnostics.shared_candidate_pairs_emitted += 1;
+                } else if target_has_bonds {
+                    shared_candidate_pairs.push(
+                        crate::environmental_broad_phase::MaterialPairRecord {
+                            left: pair.right,
+                            right: pair.left,
+                            identity_left: pair.identity_right,
+                            identity_right: pair.identity_left,
+                        },
+                    );
+                    diagnostics.shared_candidate_pairs_emitted += 1;
+                }
                 // The reverse half belongs to DISPLACEMENT only. COMBINE
                 // preserves its existing forward locator ordering and avoids
                 // cloning target material for reverse-only records.
