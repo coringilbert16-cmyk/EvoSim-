@@ -317,7 +317,7 @@ jobs:
               residual = float(match.group(5))
               if ticks != 1800:
                   raise SystemExit(f"{path} completed {ticks} ticks, expected 1800")
-              group = path.name.split("-")[0] + "-" + path.name.split("-")[1]
+              group = path.name.rsplit("-", 1)[0]
               groups[group].append(seconds)
               signatures[group].append((resources, constituents, residual))
 
