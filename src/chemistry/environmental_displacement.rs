@@ -46,6 +46,18 @@ enum DisplacementTargetStep {
     Complete,
 }
 
+/// A populated marker means COMBINE exhausted this anchor's complete forward
+/// cell range. Its numeric value is the COMBINE budget cap, not a window key;
+/// DISPLACEMENT may reuse those candidates with a different reverse budget.
+fn has_complete_shared_forward_coverage(
+    completed_anchors: &[Option<usize>],
+    anchor_index: usize,
+) -> bool {
+    completed_anchors
+        .get(anchor_index)
+        .is_some_and(|completed_limit| completed_limit.is_some())
+}
+
 impl DisplacementTargetScan {
     fn new(
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
@@ -1378,11 +1390,12 @@ fn accumulate_environmental_internal(
                                 |record| record.identity,
                             )
                             .ok()?;
-                        let completed_cell_limit = shared_candidates
-                            .and_then(|(_, completed)| completed.get(anchor_index))
-                            .copied()
-                            .flatten();
-                        (completed_cell_limit == Some(target_cell_limit)).then(|| {
+                        let forward_coverage_complete = shared_candidates.is_some_and(
+                            |(_, completed)| {
+                                has_complete_shared_forward_coverage(completed, anchor_index)
+                            },
+                        );
+                        forward_coverage_complete.then(|| {
                             shared_targets_by_anchor
                                 .as_ref()
                                 .and_then(|targets| targets.get(anchor_index))
@@ -3667,5 +3680,20 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn completed_forward_window_is_reusable_with_a_different_reverse_budget() {
+        let completed_anchors = [Some(64), None];
+        let displacement_target_cell_limit = 7;
+
+        assert_ne!(
+            completed_anchors[0],
+            Some(displacement_target_cell_limit),
+            "fixture must exercise different numeric budgets"
+        );
+        assert!(has_complete_shared_forward_coverage(&completed_anchors, 0));
+        assert!(!has_complete_shared_forward_coverage(&completed_anchors, 1));
+        assert!(!has_complete_shared_forward_coverage(&completed_anchors, 2));
     }
 }
