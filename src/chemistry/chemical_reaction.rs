@@ -1577,6 +1577,7 @@ mod material_identity_tests {
         );
         let shared = discover_environmental_bonds_from_snapshot(&snapshot, tick, limit);
 
+        assert_eq!(snapshot.bond_record_count, 3);
         assert_eq!(shared.candidates, live.candidates);
         assert_eq!(shared.inspected_entries, live.inspected_entries);
         assert_eq!(shared.inspected_cells, live.inspected_cells);
