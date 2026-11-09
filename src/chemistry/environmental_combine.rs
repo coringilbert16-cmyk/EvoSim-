@@ -994,8 +994,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     // Benchmark-only selector: "cell" keeps the shared snapshot and exact
     // candidate semantics but uses the cell-grid cursor instead of the AABB tree.
     // Production defaults to the AABB path unless the experiment explicitly opts out.
-    let use_aabb_index = std::env::var_os("EVOSIM_DISCOVERY_MODE").as_deref()
-        != Some(std::ffi::OsStr::new("cell"));
+    let use_aabb_index =
+        std::env::var_os("EVOSIM_DISCOVERY_MODE").as_deref() != Some(std::ffi::OsStr::new("cell"));
     let shared_spatial_index = use_aabb_index.then(|| {
         crate::environmental_broad_phase::MaterialSpatialIndex::new(
             snapshot,
