@@ -1088,6 +1088,7 @@ pub(crate) struct MaterialSpatialIndex {
     nodes: Vec<SpatialTreeNode>,
     root: Option<usize>,
     unbounded_materials: Vec<usize>,
+    locators: Vec<(usize, usize)>,
 }
 
 impl MaterialSpatialIndex {
@@ -1142,6 +1143,7 @@ impl MaterialSpatialIndex {
             nodes,
             root,
             unbounded_materials,
+            locators,
         }
     }
 
@@ -1154,6 +1156,7 @@ impl MaterialSpatialIndex {
             && self.field_revision == snapshot.field_revision
             && field.revision == self.field_revision
             && self.material_count == snapshot.materials.len()
+            && self.locators.len() == snapshot.materials.len()
     }
 
     fn query_candidates(
@@ -1201,8 +1204,7 @@ impl MaterialSpatialIndex {
             }
         }
         output.extend(self.unbounded_materials.iter().copied());
-        // Snapshot material indices already follow physical locator order.
-        output.sort_unstable();
+        output.sort_unstable_by_key(|&material_index| self.locators[material_index]);
         output.dedup();
         visited_nodes
     }
