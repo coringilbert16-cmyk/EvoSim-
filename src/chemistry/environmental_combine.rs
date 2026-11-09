@@ -1373,25 +1373,49 @@ pub(crate) fn physical_materials_from_structure_components(
     Some(products)
 }
 
+fn environmental_material_location_by_identity(
+    environment: &Environment,
+    source: &PhysicalMaterial,
+    captured_cell: usize,
+    captured_material: usize,
+) -> Option<(usize, usize)> {
+    if source.environmental_identity == 0 {
+        return environment
+            .field
+            .cells
+            .get(captured_cell)
+            .and_then(|cell| cell.physical_materials.get(captured_material))
+            .filter(|material| *material == source)
+            .map(|_| (captured_cell, captured_material));
+    }
+    environment.field.cells.iter().enumerate().find_map(|(cell_index, cell)| {
+        cell.physical_materials.iter().position(|material| {
+            material.environmental_identity == source.environmental_identity
+        }).map(|material_index| (cell_index, material_index))
+    })
+}
+
 pub(crate) fn resolve_environmental(
     operation: EnvironmentalCombineOperation,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> bool {
-    let Some(source_a) = environment
-        .field
-        .cells
-        .get(operation.cell_a)
-        .and_then(|cell| cell.physical_materials.get(operation.material_a))
-    else {
+    let Some((cell_a, material_a)) = environmental_material_location_by_identity(
+        environment, &operation.source_a, operation.cell_a, operation.material_a,
+    ) else {
         return false;
     };
-    let Some(source_b) = environment
-        .field
-        .cells
-        .get(operation.cell_b)
-        .and_then(|cell| cell.physical_materials.get(operation.material_b))
-    else {
+    let Some((cell_b, material_b)) = environmental_material_location_by_identity(
+        environment, &operation.source_b, operation.cell_b, operation.material_b,
+    ) else {
+        return false;
+    };
+    let Some(source_a) = environment.field.cells.get(cell_a)
+        .and_then(|cell| cell.physical_materials.get(material_a)) else {
+        return false;
+    };
+    let Some(source_b) = environment.field.cells.get(cell_b)
+        .and_then(|cell| cell.physical_materials.get(material_b)) else {
         return false;
     };
     if source_a != &operation.source_a || source_b != &operation.source_b {
@@ -1516,28 +1540,28 @@ pub(crate) fn resolve_environmental(
     // All fallible checks are complete. Remove in descending index order for a
     // same-cell pair, insert the product at the first source slot, and invalidate
     // every touched cell exactly once.
-    if operation.cell_a == operation.cell_b {
-        if operation.material_a >= operation.material_b {
+    if cell_a == cell_b {
+        if material_a >= material_b {
             return false;
         }
-        let cell = &mut environment.field.cells[operation.cell_a];
-        cell.physical_materials.remove(operation.material_b);
-        cell.physical_materials.remove(operation.material_a);
+        let cell = &mut environment.field.cells[cell_a];
+        cell.physical_materials.remove(material_b);
+        cell.physical_materials.remove(material_a);
         cell.physical_materials
-            .insert(operation.material_a, product);
-        environment.field.mark_changed_at_index(operation.cell_a);
+            .insert(material_a, product);
+        environment.field.mark_changed_at_index(cell_a);
     } else {
-        environment.field.cells[operation.cell_a]
+        environment.field.cells[cell_a]
             .physical_materials
-            .remove(operation.material_a);
-        environment.field.cells[operation.cell_b]
+            .remove(material_a);
+        environment.field.cells[cell_b]
             .physical_materials
-            .remove(operation.material_b);
-        environment.field.cells[operation.cell_a]
+            .remove(material_b);
+        environment.field.cells[cell_a]
             .physical_materials
-            .insert(operation.material_a, product);
-        environment.field.mark_changed_at_index(operation.cell_a);
-        environment.field.mark_changed_at_index(operation.cell_b);
+            .insert(material_a, product);
+        environment.field.mark_changed_at_index(cell_a);
+        environment.field.mark_changed_at_index(cell_b);
     }
     environment.chemistry_usable_energy = staged_usable_energy;
     *ledger = staged_ledger;
