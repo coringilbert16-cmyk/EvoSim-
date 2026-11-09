@@ -936,6 +936,7 @@ pub(crate) struct IndexedSpatialCursor {
     pass_id: u64,
     field_revision: u64,
     orientation: PairOrientation,
+    anchor_order: Vec<usize>,
     field_width_cells: usize,
     field_height_cells: usize,
     field_cell_size_bits: u64,
@@ -961,30 +962,54 @@ impl IndexedSpatialCursor {
         field: &ActiveMaterialField,
         orientation: PairOrientation,
     ) -> Self {
-        Self::new_rotated(snapshot, field, orientation, 0, 0)
+        Self::new_rotated(snapshot, field, orientation, 0)
     }
 
     pub(crate) fn new_rotated(
         snapshot: &EnvironmentalMaterialSnapshot,
         field: &ActiveMaterialField,
         orientation: PairOrientation,
-        start_index: usize,
         tick: usize,
     ) -> Self {
         let material_count = snapshot.materials.len();
+        let cell_count = field.cells.len();
+        let mut anchor_order = (0..material_count).collect::<Vec<_>>();
+        anchor_order.sort_by_key(|&index| {
+            let record = &snapshot.materials[index];
+            let cell_offset = if cell_count == 0 {
+                0
+            } else {
+                record
+                    .locator
+                    .cell_index
+                    .wrapping_add(cell_count)
+                    .wrapping_sub(tick % cell_count)
+                    % cell_count
+            };
+            let material_count = field
+                .cells
+                .get(record.locator.cell_index)
+                .map_or(1, |cell| cell.physical_materials.len())
+                .max(1);
+            let material_start = tick.wrapping_add(record.locator.cell_index) % material_count;
+            let material_offset = record
+                .locator
+                .material_index
+                .wrapping_add(material_count)
+                .wrapping_sub(material_start)
+                % material_count;
+            (cell_offset, material_offset)
+        });
         Self {
             pass_id: snapshot.pass_id,
             field_revision: field.revision,
             orientation,
+            anchor_order,
             field_width_cells: field.width_cells,
             field_height_cells: field.height_cells,
             field_cell_size_bits: field.cell_size.to_bits(),
             field_cell_count: field.cells.len(),
-            anchor_index: if material_count == 0 {
-                0
-            } else {
-                start_index % material_count
-            },
+            anchor_index: 0,
             anchors_visited: 0,
             anchor_initialized: false,
             range: None,
