@@ -1241,9 +1241,7 @@ impl IndexedSpatialCursor {
         self.cells_visited = self.cells_visited.saturating_add(1);
         let columns = range.max_col - range.min_col + 1;
         let total_cells = range.row_count.saturating_mul(columns);
-        if self.cells_visited >= total_cells
-            || self.cells_visited >= self.current_cell_limit
-        {
+        if self.cells_visited >= total_cells || self.cells_visited >= self.current_cell_limit {
             self.row_offset = range.row_count;
             self.col = range.min_col;
         } else {
@@ -1821,7 +1819,7 @@ mod tests {
             let mut total_visited = 0;
             let mut pages = 0;
             loop {
-                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, usize::MAX, 3, 2);
+                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 3, 2);
                 assert!(page.visited_pair_checks <= 3);
                 assert!(page.pairs.len() <= 2);
                 total_visited += page.visited_pair_checks;
@@ -1954,7 +1952,7 @@ mod tests {
             let mut total_materials = 0;
             let mut pages = 0;
             loop {
-                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 3, 2);
+                let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, usize::MAX, 3, 2);
                 assert!(page.visited_work <= 3);
                 assert!(page.pairs.len() <= 2);
                 assert_eq!(
@@ -2151,7 +2149,8 @@ mod tests {
 
         let mut changed_field = field.clone();
         changed_field.mark_changed_at_index(0);
-        let stale_field = cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, usize::MAX, 8, 8);
+        let stale_field =
+            cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, usize::MAX, 8, 8);
         assert!(stale_field.pairs.is_empty());
         assert!(!stale_field.complete);
         assert_eq!(stale_field.visited_work, 0);
