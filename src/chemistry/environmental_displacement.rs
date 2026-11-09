@@ -1538,12 +1538,12 @@ fn accumulate_environmental_internal(
                                 work_required,
                             });
                             accumulation.remove(&key);
-                            }
                         }
                     }
                 }
             }
         }
+    }
 
     dissipate_unupdated_displacement_accumulations(accumulation, &updated_keys);
 
