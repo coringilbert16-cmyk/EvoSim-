@@ -945,7 +945,11 @@ impl Simulation {
         let mut environmental_claimed_materials =
             std::collections::HashSet::<(u64, usize, usize)>::new();
         let material_claim = |identity: u64, cell: usize, material: usize| {
-            if identity == 0 { (0, cell, material) } else { (identity, 0, 0) }
+            if identity == 0 {
+                (0, cell, material)
+            } else {
+                (identity, 0, 0)
+            }
         };
         environmental_break_operations.retain(|operation| {
             let key = material_claim(
@@ -1007,8 +1011,16 @@ impl Simulation {
         self.environmental_chemistry_diagnostics.combine_scheduled =
             environmental_combine_operations.len();
         environmental_combine_operations.retain(|operation| {
-            let a = material_claim(operation.source_a.environmental_identity, operation.cell_a, operation.material_a);
-            let b = material_claim(operation.source_b.environmental_identity, operation.cell_b, operation.material_b);
+            let a = material_claim(
+                operation.source_a.environmental_identity,
+                operation.cell_a,
+                operation.material_a,
+            );
+            let b = material_claim(
+                operation.source_b.environmental_identity,
+                operation.cell_b,
+                operation.material_b,
+            );
             if a != b
                 && !environmental_claimed_materials.contains(&a)
                 && !environmental_claimed_materials.contains(&b)
