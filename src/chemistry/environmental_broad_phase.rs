@@ -1740,27 +1740,11 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                 } else {
                     let anchor = &snapshot.materials[anchor_index];
-                    let rotated_start = if let Some(index) = spatial_index {
-                        let physical_count =
-                            field.cells[cell_index].physical_materials.len().max(1);
-                        let physical_start = self
-                            .tick
-                            .wrapping_add(cell_index)
-                            .wrapping_add(anchor.locator.material_index)
-                            % physical_count;
-                        index
-                            .materials_in_cell(cell_index)
-                            .partition_point(|&target_index| {
-                                snapshot.materials[target_index].locator.material_index
-                                    < physical_start
-                            })
-                            % target_count
-                    } else {
-                        self.tick
-                            .wrapping_add(cell_index)
-                            .wrapping_add(anchor.locator.material_index)
-                            % target_count
-                    };
+                    let rotated_start = self
+                        .tick
+                        .wrapping_add(cell_index)
+                        .wrapping_add(anchor.locator.material_index)
+                        % target_count;
                     let same_cell = cell_index == anchor.locator.cell_index;
                     self.target_slots_to_visit = if same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
@@ -1803,9 +1787,7 @@ impl IndexedSpatialCursor {
                 self.advance_cell(range);
                 continue;
             };
-            let target_count = spatial_index.map_or(cell.physical_materials.len(), |index| {
-                index.materials_in_cell(cell_index).len()
-            });
+            let target_count = cell.physical_materials.len();
             if self.target_slot >= target_count {
                 self.advance_cell(range);
                 continue;
@@ -1818,9 +1800,7 @@ impl IndexedSpatialCursor {
             } else {
                 self.target_slot = (target_offset + 1) % target_count;
             }
-            // Indexed traversal inspects only materials whose realized bounds
-            // occupy this cell. The seen set removes duplicates where two
-            // bounds share more than one cell.
+            // Every inspected target slot consumes work, including self-pairs.
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
             let Some(target_index) = snapshot
