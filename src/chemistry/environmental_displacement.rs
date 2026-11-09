@@ -1139,7 +1139,7 @@ fn accumulate_environmental_internal(
                 .is_none()
                 .then(|| (0..connections.len()).collect::<Vec<_>>());
             let bond_indices = shared_bond_indices
-                .or_else(|| fallback_bond_indices.as_deref())
+                .or(fallback_bond_indices.as_deref())
                 .unwrap_or(&[]);
             diagnostics.bonded_anchor_materials =
                 diagnostics.bonded_anchor_materials.saturating_add(1);
