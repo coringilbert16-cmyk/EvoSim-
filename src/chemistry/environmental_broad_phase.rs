@@ -664,6 +664,15 @@ impl EnvironmentalMaterialSnapshot {
                                 }
                             });
                     } else {
+                        let anchor_locator =
+                            (anchor.locator.cell_index, anchor.locator.material_index);
+                        let target_locator =
+                            (target.locator.cell_index, target.locator.material_index);
+                        if orientation == PairOrientation::ForwardOrdered
+                            && anchor_locator >= target_locator
+                        {
+                            continue;
+                        }
                         directed_candidates.push(MaterialPairRecord {
                             left: anchor_index,
                             right: target_index,
@@ -676,7 +685,7 @@ impl EnvironmentalMaterialSnapshot {
         }
         let candidates = match orientation {
             PairOrientation::Unordered => unordered_candidates.into_values().collect::<Vec<_>>(),
-            PairOrientation::Directed => directed_candidates,
+            PairOrientation::Directed | PairOrientation::ForwardOrdered => directed_candidates,
         };
         let known_pairs = candidates.len() as u64;
         let start = start.min(known_pairs);
@@ -755,7 +764,9 @@ impl SpatialPairCursor {
         output_limit: usize,
     ) -> SpatialCursorPage {
         let known_pair_checks = match self.orientation {
-            PairOrientation::Unordered => snapshot.known_pair_count(),
+            PairOrientation::Unordered | PairOrientation::ForwardOrdered => {
+                snapshot.known_pair_count()
+            }
             PairOrientation::Directed => snapshot.known_directed_pair_count(),
         };
         if snapshot.pass_id != self.pass_id
@@ -795,6 +806,16 @@ impl SpatialPairCursor {
             });
             let candidate = match self.orientation {
                 PairOrientation::Directed => left_reaches_right,
+                PairOrientation::ForwardOrdered => {
+                    left_reaches_right
+                        && (
+                            left_record.locator.cell_index,
+                            left_record.locator.material_index,
+                        ) < (
+                            right_record.locator.cell_index,
+                            right_record.locator.material_index,
+                        )
+                }
                 PairOrientation::Unordered => {
                     left_reaches_right
                         || right_bounds.is_some_and(|value| {
@@ -829,7 +850,7 @@ impl SpatialPairCursor {
                 }
                 self.complete = self.next_left + 1 >= material_count;
             }
-            PairOrientation::Directed => {
+            PairOrientation::Directed | PairOrientation::ForwardOrdered => {
                 self.next_right += 1;
                 if self.next_right == self.next_left {
                     self.next_right += 1;
