@@ -969,16 +969,118 @@ struct BoundsCellRange {
     row_count: usize,
 }
 
-/// Tick-local center-cell index. Each material is stored once, in the cell
-/// containing its realized-bounds center. Queries expand by the largest target
-/// half-extent, so every overlapping target center remains in the query range.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SpatialTreeEntry {
+    bounds: MaterialSpatialBounds,
+    material_index: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct SpatialTreeNode {
+    bounds: MaterialSpatialBounds,
+    left: Option<usize>,
+    right: Option<usize>,
+    material_index: Option<usize>,
+}
+
+fn union_spatial_bounds(
+    left: MaterialSpatialBounds,
+    right: MaterialSpatialBounds,
+) -> MaterialSpatialBounds {
+    MaterialSpatialBounds {
+        min_x: left.min_x.min(right.min_x),
+        max_x: left.max_x.max(right.max_x),
+        min_y: left.min_y.min(right.min_y),
+        max_y: left.max_y.max(right.max_y),
+    }
+}
+
+fn spatial_bounds_intersect(left: MaterialSpatialBounds, right: MaterialSpatialBounds) -> bool {
+    left.min_x <= right.max_x
+        && left.max_x >= right.min_x
+        && left.min_y <= right.max_y
+        && left.max_y >= right.min_y
+}
+
+fn normalize_vertical_bounds(
+    bounds: MaterialSpatialBounds,
+    vertical_period: f64,
+) -> MaterialSpatialBounds {
+    let center_y = (bounds.min_y + bounds.max_y) * 0.5;
+    let turns = (center_y / vertical_period).floor();
+    let shift = turns * vertical_period;
+    MaterialSpatialBounds {
+        min_x: bounds.min_x,
+        max_x: bounds.max_x,
+        min_y: bounds.min_y - shift,
+        max_y: bounds.max_y - shift,
+    }
+}
+
+fn build_spatial_tree(
+    entries: &mut [SpatialTreeEntry],
+    nodes: &mut Vec<SpatialTreeNode>,
+) -> Option<usize> {
+    if entries.is_empty() {
+        return None;
+    }
+    let bounds = entries
+        .iter()
+        .skip(1)
+        .fold(entries[0].bounds, |bounds, entry| {
+            union_spatial_bounds(bounds, entry.bounds)
+        });
+    if entries.len() == 1 {
+        let node_index = nodes.len();
+        nodes.push(SpatialTreeNode {
+            bounds,
+            left: None,
+            right: None,
+            material_index: Some(entries[0].material_index),
+        });
+        return Some(node_index);
+    }
+
+    let split_x = bounds.max_x - bounds.min_x >= bounds.max_y - bounds.min_y;
+    entries.sort_unstable_by(|left, right| {
+        let left_center = if split_x {
+            left.bounds.min_x + (left.bounds.max_x - left.bounds.min_x) * 0.5
+        } else {
+            left.bounds.min_y + (left.bounds.max_y - left.bounds.min_y) * 0.5
+        };
+        let right_center = if split_x {
+            right.bounds.min_x + (right.bounds.max_x - right.bounds.min_x) * 0.5
+        } else {
+            right.bounds.min_y + (right.bounds.max_y - right.bounds.min_y) * 0.5
+        };
+        left_center.total_cmp(&right_center)
+    });
+    let middle = entries.len() / 2;
+    let (left_entries, right_entries) = entries.split_at_mut(middle);
+    let left = build_spatial_tree(left_entries, nodes);
+    let right = build_spatial_tree(right_entries, nodes);
+    let node_index = nodes.len();
+    nodes.push(SpatialTreeNode {
+        bounds,
+        left,
+        right,
+        material_index: None,
+    });
+    Some(node_index)
+}
+
+/// Tick-local AABB tree. Each material is represented by up to three vertical
+/// images so a single tree query covers the field's periodic Y seam.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct MaterialSpatialIndex {
     pass_id: u64,
     field_revision: u64,
-    materials_by_cell: Vec<Vec<usize>>,
-    max_half_extent_x: f64,
-    max_half_extent_y: f64,
+    material_count: usize,
+    vertical_period: f64,
+    nodes: Vec<SpatialTreeNode>,
+    root: Option<usize>,
+    unbounded_materials: Vec<usize>,
+    locators: Vec<(usize, usize)>,
 }
 
 impl MaterialSpatialIndex {
@@ -987,72 +1089,60 @@ impl MaterialSpatialIndex {
         field: &ActiveMaterialField,
         bounds: &[Option<MaterialSpatialBounds>],
     ) -> Self {
-        let mut materials_by_cell = vec![Vec::new(); field.cells.len()];
-        let mut max_half_extent_x: f64 = 0.0;
-        let mut max_half_extent_y: f64 = 0.0;
-        for (material_index, record) in snapshot.materials.iter().enumerate() {
-            let cell_index = if field.width_cells == 0
-                || field.height_cells == 0
-                || !field.cell_size.is_finite()
-                || field.cell_size <= 0.0
-            {
-                record.locator.cell_index
-            } else if let Some(value) = bounds.get(material_index).copied().flatten() {
-                let half_x = (value.max_x - value.min_x) * 0.5;
-                let half_y = (value.max_y - value.min_y) * 0.5;
-                if !half_x.is_finite() || !half_y.is_finite() || half_x < 0.0 || half_y < 0.0 {
-                    record.locator.cell_index
-                } else {
-                    max_half_extent_x = max_half_extent_x.max(half_x);
-                    max_half_extent_y = max_half_extent_y.max(half_y);
-                    let center_x = (value.min_x + value.max_x) * 0.5;
-                    let center_y = (value.min_y + value.max_y) * 0.5;
-                    let col = ((center_x / field.cell_size).floor() as isize)
-                        .clamp(0, field.width_cells.saturating_sub(1) as isize)
-                        as usize;
-                    let row = ((center_y / field.cell_size).floor() as isize)
-                        .rem_euclid(field.height_cells as isize)
-                        as usize;
-                    row * field.width_cells + col
-                }
-            } else {
-                record.locator.cell_index
+        let vertical_period = field.height_cells as f64 * field.cell_size;
+        let mut entries = Vec::new();
+        let mut unbounded_materials = Vec::new();
+        let locators = snapshot
+            .materials
+            .iter()
+            .map(|record| (record.locator.cell_index, record.locator.material_index))
+            .collect::<Vec<_>>();
+
+        for (material_index, _) in snapshot.materials.iter().enumerate() {
+            let Some(value) = bounds.get(material_index).copied().flatten() else {
+                unbounded_materials.push(material_index);
+                continue;
             };
-            if let Some(indices) = materials_by_cell.get_mut(cell_index) {
-                indices.push(material_index);
+            if !value.min_x.is_finite()
+                || !value.max_x.is_finite()
+                || !value.min_y.is_finite()
+                || !value.max_y.is_finite()
+                || value.min_x > value.max_x
+                || value.min_y > value.max_y
+                || !vertical_period.is_finite()
+                || vertical_period <= 0.0
+                || value.max_y - value.min_y >= vertical_period
+            {
+                unbounded_materials.push(material_index);
+                continue;
+            }
+
+            let normalized = normalize_vertical_bounds(value, vertical_period);
+            for shift in [-vertical_period, 0.0, vertical_period] {
+                entries.push(SpatialTreeEntry {
+                    bounds: MaterialSpatialBounds {
+                        min_x: normalized.min_x,
+                        max_x: normalized.max_x,
+                        min_y: normalized.min_y + shift,
+                        max_y: normalized.max_y + shift,
+                    },
+                    material_index,
+                });
             }
         }
-        for indices in &mut materials_by_cell {
-            indices.sort_unstable_by_key(|&material_index| {
-                let locator = snapshot.materials[material_index].locator;
-                (locator.cell_index, locator.material_index)
-            });
-        }
+
+        let mut nodes = Vec::with_capacity(entries.len().saturating_mul(2));
+        let root = build_spatial_tree(&mut entries, &mut nodes);
         Self {
             pass_id: snapshot.pass_id,
             field_revision: snapshot.field_revision,
-            materials_by_cell,
-            max_half_extent_x,
-            max_half_extent_y,
+            material_count: snapshot.materials.len(),
+            vertical_period,
+            nodes,
+            root,
+            unbounded_materials,
+            locators,
         }
-    }
-
-    fn query_bounds(
-        &self,
-        anchor: MaterialSpatialBounds,
-        padding: f64,
-    ) -> Option<MaterialSpatialBounds> {
-        if !padding.is_finite() || padding < 0.0 {
-            return None;
-        }
-        let x_padding = padding + self.max_half_extent_x;
-        let y_padding = padding + self.max_half_extent_y;
-        Some(MaterialSpatialBounds {
-            min_x: anchor.min_x - x_padding,
-            max_x: anchor.max_x + x_padding,
-            min_y: anchor.min_y - y_padding,
-            max_y: anchor.max_y + y_padding,
-        })
     }
 
     fn is_current(
@@ -1063,14 +1153,50 @@ impl MaterialSpatialIndex {
         self.pass_id == snapshot.pass_id
             && self.field_revision == snapshot.field_revision
             && field.revision == self.field_revision
-            && self.materials_by_cell.len() == field.cells.len()
+            && self.material_count == snapshot.materials.len()
+            && self.locators.len() == snapshot.materials.len()
     }
 
-    fn materials_in_cell(&self, cell_index: usize) -> &[usize] {
-        self.materials_by_cell
-            .get(cell_index)
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+    fn query_candidates(
+        &self,
+        anchor: MaterialSpatialBounds,
+        padding: f64,
+        output: &mut Vec<usize>,
+        stack: &mut Vec<usize>,
+    ) -> u64 {
+        output.clear();
+        stack.clear();
+        let Some(query) = anchor.expanded(padding) else {
+            output.extend(0..self.material_count);
+            return 0;
+        };
+        if let Some(root) = self.root {
+            stack.push(root);
+        }
+        let mut visited_nodes = 0u64;
+        while let Some(node_index) = stack.pop() {
+            visited_nodes = visited_nodes.saturating_add(1);
+            let Some(node) = self.nodes.get(node_index) else {
+                continue;
+            };
+            if !spatial_bounds_intersect(node.bounds, query) {
+                continue;
+            }
+            if let Some(material_index) = node.material_index {
+                output.push(material_index);
+            } else {
+                if let Some(left) = node.left {
+                    stack.push(left);
+                }
+                if let Some(right) = node.right {
+                    stack.push(right);
+                }
+            }
+        }
+        output.extend(self.unbounded_materials.iter().copied());
+        output.sort_unstable_by_key(|&material_index| self.locators[material_index]);
+        output.dedup();
+        visited_nodes
     }
 }
 
