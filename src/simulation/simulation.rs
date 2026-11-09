@@ -882,17 +882,27 @@ impl Simulation {
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
         // the organism iteration below.
+        // Capture one immutable ownership/topology view for the first
+        // environmental reaction phase. BREAK consumes its bond inventory;
+        // later reaction phases will rebuild this snapshot after each commit
+        // boundary so no cursor or locator survives a topology mutation.
+        let environmental_break_snapshot =
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                &self.environment.field,
+                self.tick,
+            );
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
         let environmental_break_operations =
-            crate::chemical_reaction::accumulate_environmental_with_diagnostics(
+            crate::chemical_reaction::accumulate_environmental_with_shared_snapshot(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_break_discovery_remaining,
                 &mut break_discovery,
+                &environmental_break_snapshot,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
