@@ -1089,6 +1089,7 @@ pub(crate) fn accumulate_environmental(
         diagnostics,
         None,
         &mut Vec::new(),
+        None,
     )
 }
 
