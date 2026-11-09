@@ -974,7 +974,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new_rotated(
         snapshot,
         &environment.field,
-        crate::environmental_broad_phase::PairOrientation::Directed,
+        crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
         anchor_start,
     );
     let mut operations = Vec::new();
@@ -1004,20 +1004,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             let Some(record_right) = snapshot.materials.get(pair.right) else {
                 continue;
             };
-            // The legacy COMBINE scan only evaluates the forward field-
-            // locator direction. Keep that rule here: the directed cursor may
-            // encounter the reverse role in a bounded partial page, but it
-            // must not suppress a forward pair that has not been visited yet.
-            if (
-                record_left.locator.cell_index,
-                record_left.locator.material_index,
-            ) >= (
-                record_right.locator.cell_index,
-                record_right.locator.material_index,
-            ) {
-                diagnostics.backward_ordered_target_materials += 1;
-                continue;
-            }
             let (record_a, record_b) = (record_left, record_right);
             let Some(source_a) = environment
                 .field
