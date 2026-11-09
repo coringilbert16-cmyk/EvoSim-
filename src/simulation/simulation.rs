@@ -18,7 +18,6 @@ fn elapsed_nanos(started: Instant) -> u64 {
     started.elapsed().as_nanos().min(u64::MAX as u128) as u64
 }
 
-
 fn checked_next_organism_id(current: u64) -> Option<u64> {
     current.checked_add(1)
 }
