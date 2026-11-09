@@ -1309,8 +1309,8 @@ impl IndexedSpatialCursor {
                     next_target_slot
                 };
             }
-            // Every inspected target slot consumes work, including self-pairs
-            // and locator-order rejections. Candidate output is not a work proxy.
+            // Every inspected target slot consumes work, including self-pairs.
+            // Same-cell locator-ineligible slots are skipped arithmetically before inspection.
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
             let anchor = &snapshot.materials[anchor_index];
@@ -2333,6 +2333,7 @@ mod tests {
             }
         }
         assert_eq!(actual, expected);
+        assert_eq!(page.visited_material_checks as usize, expected.len());
     }
 
     #[test]
@@ -2421,8 +2422,10 @@ mod tests {
             IndexedSpatialCursor::new_for_reverse_anchor(&snapshot, &field, 17, anchor_index)
                 .unwrap();
         let mut actual = Vec::new();
+        let mut visited_material_checks = 0;
         for _ in 0..64 {
             let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, 2, 1, 1);
+            visited_material_checks += page.visited_material_checks;
             actual.extend(
                 page.pairs
                     .iter()
@@ -2435,6 +2438,7 @@ mod tests {
         }
         actual.sort_unstable();
         assert_eq!(actual, vec![(20, 10), (20, 15)]);
+        assert_eq!(visited_material_checks, 2);
 
         let target_cell_count =
             IndexedSpatialCursor::target_cell_count(&field, bounds[anchor_index].unwrap(), 0.0)
