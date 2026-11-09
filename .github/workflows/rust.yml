@@ -22,7 +22,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
         timeout-minutes: 5
-        run: cargo fmt --all -- --check
+        run: |
+          set -o pipefail
+          cargo fmt --all -- --check 2>&1 | tee rustfmt-check.log
+      - name: Upload formatting diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustfmt-check-log
+          path: rustfmt-check.log
+          if-no-files-found: ignore
+          retention-days: 7
       # Exercise the independent world inventory on live source, reaction, and tick paths
       # before the full suite, whose historical runtime can exceed the job timeout.
       - name: Repository architecture checks
