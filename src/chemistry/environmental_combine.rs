@@ -995,7 +995,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         snapshot,
         &environment.field,
         shared_bounds,
-        BOUNDS_PADDING,
     );
 
     accumulation.retain(|key, _| {
@@ -1071,10 +1070,11 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         let mut restored_anchor = None;
         let mut anchor_restore_attempted = false;
         let target_cell_count =
-            crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
+            crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count_with_index(
                 &environment.field,
                 anchor_bounds,
                 BOUNDS_PADDING,
+                &shared_spatial_index,
             );
         let target_cell_limit = target_cell_count.unwrap_or(0);
         // COMBINE needs only forward pairs. Bonded anchors additionally
