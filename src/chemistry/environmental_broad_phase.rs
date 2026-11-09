@@ -39,6 +39,9 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
+    /// Raw live bond records, including records with invalid endpoints or
+    /// unassigned material identities. Used by exhaustive diagnostics.
+    pub(crate) bond_record_count: u64,
     pub(crate) unassigned_materials: u64,
 }
 
@@ -382,6 +385,12 @@ impl EnvironmentalMaterialSnapshot {
         for (cell_index, cell) in field.cells.iter().enumerate() {
             for (material_index, physical) in cell.physical_materials.iter().enumerate() {
                 snapshot.material_visits = snapshot.material_visits.saturating_add(1);
+                snapshot.bond_record_count = snapshot.bond_record_count.saturating_add(
+                    physical
+                        .internal_connections
+                        .as_ref()
+                        .map_or(0, |connections| connections.len() as u64),
+                );
                 let identity = MaterialIdentity(physical.environmental_identity);
                 if identity.0 == 0 {
                     snapshot.unassigned_materials = snapshot.unassigned_materials.saturating_add(1);
@@ -2870,6 +2879,28 @@ mod tests {
             }
         };
         assert_eq!(invalid.bounds, Some(vec![None]));
+    }
+
+    #[test]
+    fn snapshot_counts_raw_bond_records_even_when_inventory_references_are_invalid() {
+        let mut field = ActiveMaterialField::new(10.0, 10.0, 10.0);
+        let mut material = physical(0, "Carbon");
+        material.internal_connections = Some(vec![
+            crate::physical_material::PhysicalConnection {
+                part_a: 0,
+                part_b: 9,
+                endpoint_a: crate::structure::ConnectionEndpoint::default(),
+                endpoint_b: crate::structure::ConnectionEndpoint::default(),
+                bond_energy: 1.0,
+            },
+        ]);
+        field.cells[0].physical_materials.push(material);
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 2);
+
+        assert_eq!(snapshot.unassigned_materials, 1);
+        assert_eq!(snapshot.existing_bonds.len(), 0);
+        assert_eq!(snapshot.bond_record_count, 1);
     }
 
     #[test]
