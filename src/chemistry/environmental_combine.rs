@@ -913,7 +913,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
 ) -> Vec<EnvironmentalCombineOperation> {
     let mut shared_bounds = vec![None; snapshot.materials.len()];
-    accumulate_environmental_with_shared_snapshot_and_bounds(
+    let mut shared_candidate_pairs = Vec::new();
+    let mut completed_anchors = vec![false; snapshot.materials.len()];
+    accumulate_environmental_with_shared_snapshot_and_candidates(
         environment,
         accumulation,
         chemistry_library,
@@ -922,6 +924,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         diagnostics,
         snapshot,
         &mut shared_bounds,
+        &mut shared_candidate_pairs,
+        &mut completed_anchors,
     )
 }
 
@@ -934,6 +938,34 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+) -> Vec<EnvironmentalCombineOperation> {
+    let mut shared_candidate_pairs = Vec::new();
+    let mut completed_anchors = vec![false; snapshot.materials.len()];
+    accumulate_environmental_with_shared_snapshot_and_candidates(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        snapshot,
+        shared_bounds,
+        &mut shared_candidate_pairs,
+        &mut completed_anchors,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+    shared_candidate_pairs: &mut Vec<crate::environmental_broad_phase::MaterialPairRecord>,
+    completed_anchors: &mut Vec<bool>,
 ) -> Vec<EnvironmentalCombineOperation> {
     if shared_bounds.len() != snapshot.materials.len() {
         *shared_bounds = vec![None; snapshot.materials.len()];
@@ -1043,10 +1075,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
                 max_y: body.max_y,
             });
         let Some(mut cursor) =
-            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
+            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_shared_reactions(
                 snapshot,
                 &environment.field,
-                crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
                 tick as usize,
                 anchor_index,
             )
@@ -1078,9 +1109,15 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
             }
 
             for pair in page.pairs {
+                shared_candidate_pairs.push(pair);
                 let Some(record_b) = snapshot.materials.get(pair.right) else {
                     continue;
                 };
+                if (record_a.locator.cell_index, record_a.locator.material_index)
+                    >= (record_b.locator.cell_index, record_b.locator.material_index)
+                {
+                    continue;
+                }
                 let Some(source_b) = environment
                     .field
                     .cells
@@ -1189,6 +1226,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
                 }
             }
             if page.complete {
+                completed_anchors[anchor_index] = true;
                 break;
             }
         }
