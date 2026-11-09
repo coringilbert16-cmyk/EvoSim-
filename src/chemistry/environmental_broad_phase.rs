@@ -1001,9 +1001,7 @@ impl MaterialSpatialIndex {
                         }
                     }
                     None if bounds[material_index].is_none() => {
-                        if let Some(indices) =
-                            materials_by_cell.get_mut(record.locator.cell_index)
-                        {
+                        if let Some(indices) = materials_by_cell.get_mut(record.locator.cell_index) {
                             indices.push(material_index);
                         }
                     }
@@ -1544,14 +1542,15 @@ impl IndexedSpatialCursor {
             if spatial_index.is_some() && !self.seen_targets.insert(target_index) {
                 continue;
             }
-            let Some(physical) = field
-                .cells
-                .get(target_record.locator.cell_index)
-                .and_then(|target_cell| {
-                    target_cell
-                        .physical_materials
-                        .get(target_record.locator.material_index)
-                })
+            let Some(physical) =
+                field
+                    .cells
+                    .get(target_record.locator.cell_index)
+                    .and_then(|target_cell| {
+                        target_cell
+                            .physical_materials
+                            .get(target_record.locator.material_index)
+                    })
             else {
                 continue;
             };
@@ -2289,13 +2288,17 @@ mod tests {
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 91);
         let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds, 0.0);
         let anchor_bounds = bounds[0].expect("anchor bounds exist");
-        let target_cell_count =
-            IndexedSpatialCursor::target_cell_count(&field, anchor_bounds, 0.0)
-                .expect("anchor intersects field cells");
+        let target_cell_count = IndexedSpatialCursor::target_cell_count(&field, anchor_bounds, 0.0)
+            .expect("anchor intersects field cells");
 
-        let mut legacy =
-            IndexedSpatialCursor::new_for_anchor(&snapshot, &field, PairOrientation::Directed, 0, 0)
-                .expect("anchor index is valid");
+        let mut legacy = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            0,
+            0,
+        )
+        .expect("anchor index is valid");
         let legacy_page = legacy.next_page(
             &snapshot,
             &field,
@@ -2306,9 +2309,14 @@ mod tests {
             usize::MAX,
         );
 
-        let mut indexed =
-            IndexedSpatialCursor::new_for_anchor(&snapshot, &field, PairOrientation::Directed, 0, 0)
-                .expect("anchor index is valid");
+        let mut indexed = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            0,
+            0,
+        )
+        .expect("anchor index is valid");
         let indexed_page = indexed.next_page_with_index(
             &snapshot,
             &field,
