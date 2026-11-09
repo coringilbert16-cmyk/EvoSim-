@@ -182,11 +182,10 @@ impl DisplacementTargetScan {
                             % *target_count
                     };
                     *target_offset = 0;
-                    if *target_count > 0 {
-                        return DisplacementTargetStep::CellInspected;
+                    if *target_count == 0 {
+                        *current_cell = None;
                     }
-                    *current_cell = None;
-                    continue;
+                    return DisplacementTargetStep::CellInspected;
                 }
                 if *target_offset >= *target_count {
                     *current_cell = None;
