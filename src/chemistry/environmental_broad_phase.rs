@@ -80,6 +80,39 @@ impl MaterialSpatialBounds {
             max_y: self.max_y + padding,
         })
     }
+
+    /// Conservative material-level filter after the cell broad phase. The
+    /// field wraps vertically, so test the target AABB in the adjacent images
+    /// as well as its unshifted world coordinates.
+    pub(crate) fn overlaps_with_padding(
+        self,
+        other: Self,
+        padding: f64,
+        vertical_period: f64,
+    ) -> bool {
+        if !padding.is_finite() || padding < 0.0 {
+            return true;
+        }
+        let x_overlaps = self.min_x - padding <= other.max_x
+            && self.max_x + padding >= other.min_x;
+        if !x_overlaps {
+            return false;
+        }
+        let overlaps_y = |other_min: f64, other_max: f64| {
+            self.min_y - padding <= other_max && self.max_y + padding >= other_min
+        };
+        if !vertical_period.is_finite() || vertical_period <= 0.0 {
+            return overlaps_y(other.min_y, other.max_y);
+        }
+        if self.max_y - self.min_y >= vertical_period
+            || other.max_y - other.min_y >= vertical_period
+        {
+            return true;
+        }
+        overlaps_y(other.min_y, other.max_y)
+            || overlaps_y(other.min_y - vertical_period, other.max_y - vertical_period)
+            || overlaps_y(other.min_y + vertical_period, other.max_y + vertical_period)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -676,6 +709,18 @@ impl EnvironmentalMaterialSnapshot {
                     if target_index == anchor_index {
                         continue;
                     }
+                    if let (Some(anchor_bounds), Some(target_bounds)) =
+                        (bounds[anchor_index], bounds[target_index])
+                    {
+                        let vertical_period = field.height_cells as f64 * field.cell_size;
+                        if !anchor_bounds.overlaps_with_padding(
+                            target_bounds,
+                            padding,
+                            vertical_period,
+                        ) {
+                            continue;
+                        }
+                    }
                     let target = &self.materials[target_index];
                     if orientation == PairOrientation::Unordered {
                         // Query both material bounds before canonicalizing. A
@@ -961,6 +1006,8 @@ pub(crate) struct IndexedSpatialCursorPage {
     pub(crate) visited_anchor_initializations: u64,
     pub(crate) visited_cell_checks: u64,
     pub(crate) visited_material_checks: u64,
+    /// Target material slots pruned by conservative material AABB separation.
+    pub(crate) target_materials_rejected_by_bounds: u64,
     /// Number of anchor materials not yet fully traversed. This is a
     /// continuation indicator, not a count of deferred candidate pairs.
     pub(crate) deferred_anchors: u64,
@@ -1353,6 +1400,20 @@ impl IndexedSpatialCursor {
                 || target_index == anchor_index
             {
                 continue;
+            }
+            if let (Some(anchor_bounds), Some(target_bounds)) =
+                (bounds[anchor_index], bounds[target_index])
+            {
+                let vertical_period = field.height_cells as f64 * field.cell_size;
+                if !anchor_bounds.overlaps_with_padding(
+                    target_bounds,
+                    padding,
+                    vertical_period,
+                ) {
+                    page.target_materials_rejected_by_bounds =
+                        page.target_materials_rejected_by_bounds.saturating_add(1);
+                    continue;
+                }
             }
 
             match self.orientation {
