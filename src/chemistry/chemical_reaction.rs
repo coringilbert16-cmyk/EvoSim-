@@ -597,74 +597,79 @@ fn discover_environmental_bonds_from_snapshot(
     tick: u64,
     _candidate_limit: usize,
 ) -> EnvironmentalBondDiscovery {
-    // The shared tick snapshot already contains the complete material and bond
-    // inventory. Do not perform a second rotating field walk or truncate this
-    // authoritative list with a per-reaction candidate budget.
-    let mut candidates = Vec::with_capacity(snapshot.existing_bonds.len());
-    let mut checked_materials = Vec::with_capacity(snapshot.materials.len());
+    // Consume the shared bond inventory directly. The snapshot is identity
+    // sorted, so binary-search each bond's material locator and sort only the
+    // actual bond candidates into the established rotating evaluation order.
+    let mut ordered_candidates = Vec::with_capacity(snapshot.existing_bonds.len());
     if snapshot.unassigned_materials != 0 {
         return EnvironmentalBondDiscovery {
-            candidates,
+            candidates: Vec::new(),
             inspected_entries: 0,
             inspected_cells: 0,
             inspected_materials: 0,
             inspected_bonds: 0,
-            checked_materials,
+            checked_materials: Vec::new(),
         };
     }
 
     let cell_count = snapshot.cell_visits as usize;
-    let mut materials = (0..snapshot.materials.len()).collect::<Vec<_>>();
-    materials.sort_by_key(|&index| {
-        let record = &snapshot.materials[index];
+    let mut inspected_bonds = 0u64;
+    for bond in &snapshot.existing_bonds {
+        let Ok(material_index) = snapshot
+            .materials
+            .binary_search_by_key(&bond.material, |material| material.identity)
+        else {
+            continue;
+        };
+        let material = &snapshot.materials[material_index];
+        let Some(bond_indices) = snapshot.bond_indices_by_material.get(&bond.material) else {
+            continue;
+        };
+        let bond_count = bond_indices.len();
+        if bond_count == 0 {
+            continue;
+        }
+        let Ok(bond_position) = bond_indices.binary_search(&bond.bond_index) else {
+            continue;
+        };
         let cell_offset = if cell_count == 0 {
             0
         } else {
-            record
+            material
                 .locator
                 .cell_index
                 .wrapping_add(cell_count)
                 .wrapping_sub(tick as usize % cell_count)
                 % cell_count
         };
-        (cell_offset, record.locator.material_index)
-    });
-
-    let mut inspected_bonds = 0u64;
-    for material_index in materials {
-        let material = &snapshot.materials[material_index];
-        let bond_indices = snapshot
-            .bond_indices_by_material
-            .get(&material.identity)
-            .map_or(&[][..], Vec::as_slice);
-        checked_materials.push((material.identity.0, bond_indices.len()));
-        if bond_indices.is_empty() {
-            continue;
-        }
-        let bond_count = bond_indices.len();
         let bond_start = tick as usize % bond_count;
-        for offset in 0..bond_count {
-            let bond_index = bond_indices[(bond_start + offset) % bond_count];
-            candidates.push((
+        let bond_offset = bond_position
+            .wrapping_add(bond_count)
+            .wrapping_sub(bond_start)
+            % bond_count;
+        ordered_candidates.push((
+            (cell_offset, material.locator.material_index, bond_offset),
+            (
                 material.locator.cell_index,
                 material.locator.material_index,
-                bond_index,
-            ));
-            inspected_bonds = inspected_bonds.saturating_add(1);
-        }
+                bond.bond_index,
+            ),
+        ));
+        inspected_bonds = inspected_bonds.saturating_add(1);
     }
+    ordered_candidates.sort_unstable_by_key(|(order, _)| *order);
+    let candidates = ordered_candidates
+        .into_iter()
+        .map(|(_, candidate)| candidate)
+        .collect::<Vec<_>>();
 
-    let inspected_materials = snapshot.materials.len() as u64;
-    let inspected_cells = snapshot.cell_visits;
     EnvironmentalBondDiscovery {
-        candidates,
-        inspected_entries: inspected_cells
-            .saturating_add(inspected_materials)
-            .saturating_add(inspected_bonds) as usize,
-        inspected_cells,
-        inspected_materials,
+        inspected_entries: inspected_bonds as usize,
+        inspected_cells: 0,
+        inspected_materials: 0,
         inspected_bonds,
-        checked_materials,
+        candidates,
+        checked_materials: Vec::new(),
     }
 }
 
@@ -771,29 +776,53 @@ fn accumulate_environmental_with_snapshot(
         .total_environmental_bonds
         .saturating_sub(discovery.inspected_bonds);
     let candidates = discovery.candidates;
-    diagnostics.bond_candidates_inspected = candidates.len() as u64;
+    let candidate_count = candidates.len();
+    diagnostics.bond_candidates_inspected = candidate_count as u64;
     let checked_materials = discovery.checked_materials;
-    let indices: Vec<usize> = (0..candidates.len()).collect();
-    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(candidate_count);
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
-    for (identity, bond_count) in checked_materials {
-        if identity == 0 {
-            continue;
-        }
-        let material_prefix = format!("environment|environment:{identity}:");
+    if let Some(snapshot) = shared_snapshot {
         for key in accumulation.keys() {
-            let Some(existing_index) = key
-                .strip_prefix(&material_prefix)
-                .and_then(|suffix| suffix.split(':').next())
-                .and_then(|index| index.parse::<usize>().ok())
+            let Some((identity, bond_index)) = key
+                .strip_prefix(&current_prefix)
+                .and_then(|suffix| {
+                    let (identity, remainder) = suffix.split_once(':')?;
+                    let bond_index = remainder.split(':').next()?;
+                    Some((identity.parse::<u64>().ok()?, bond_index.parse::<usize>().ok()?))
+                })
             else {
                 continue;
             };
-            if existing_index >= bond_count {
+            let bond_is_current = snapshot
+                .bond_indices_by_material
+                .get(&crate::environmental_interaction::MaterialIdentity(identity))
+                .is_some_and(|indices| indices.binary_search(&bond_index).is_ok());
+            if !bond_is_current {
                 checked_keys.insert(key.clone());
                 diagnostics.stale_progress_invalidated =
                     diagnostics.stale_progress_invalidated.saturating_add(1);
+            }
+        }
+    } else {
+        for (identity, bond_count) in checked_materials {
+            if identity == 0 {
+                continue;
+            }
+            let material_prefix = format!("environment|environment:{identity}:");
+            for key in accumulation.keys() {
+                let Some(existing_index) = key
+                    .strip_prefix(&material_prefix)
+                    .and_then(|suffix| suffix.split(':').next())
+                    .and_then(|index| index.parse::<usize>().ok())
+                else {
+                    continue;
+                };
+                if existing_index >= bond_count {
+                    checked_keys.insert(key.clone());
+                    diagnostics.stale_progress_invalidated =
+                        diagnostics.stale_progress_invalidated.saturating_add(1);
+                }
             }
         }
     }
@@ -802,11 +831,7 @@ fn accumulate_environmental_with_snapshot(
     let mut restored_materials = std::collections::BTreeMap::new();
     let mut evaluation_journal = crate::environmental_evaluation::EvaluationJournal::default();
 
-    for candidate_index in indices {
-        let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
-        else {
-            continue;
-        };
+    for (cell_index, material_index, bond_index) in candidates {
         let Some(instance) = environment
             .field
             .cells
@@ -1123,7 +1148,7 @@ fn accumulate_environmental_with_snapshot(
         EnvironmentalReactionKind::Break,
         EvaluationStage::CandidateValidation,
         "bounded_break_discovery_window_exhausted",
-        usize::from(candidates.len() == count && count > 0),
+        usize::from(shared_snapshot.is_none() && candidate_count == count && count > 0),
     );
     evaluation_journal.record_rejected_count(
         tick,
