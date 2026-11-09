@@ -908,6 +908,31 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
 ) -> Vec<EnvironmentalCombineOperation> {
+    accumulate_environmental_with_shared_snapshot_and_bounds(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        snapshot,
+        &mut shared_bounds,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+    shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
+) -> Vec<EnvironmentalCombineOperation> {
+    if shared_bounds.len() != snapshot.materials.len() {
+        *shared_bounds = vec![None; snapshot.materials.len()];
+    }
     if snapshot.unassigned_materials != 0 {
         return accumulate_environmental_with_diagnostics(
             environment,
@@ -1033,7 +1058,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             let page = cursor.next_page(
                 snapshot,
                 &environment.field,
-                &shared_bounds,
+                shared_bounds.as_slice(),
                 BOUNDS_PADDING,
                 target_cell_limit,
                 1,
