@@ -587,6 +587,126 @@ fn discover_environmental_bonds(
     }
 }
 
+
+/// Discover BREAK candidates from the shared immutable material snapshot.
+/// The traversal retains the live scan's rotating cell/material/bond order and
+/// bounded nested-work accounting. If the snapshot cannot represent every
+/// material (legacy identity zero), production falls back to the authoritative
+/// field traversal rather than silently dropping candidates.
+fn discover_environmental_bonds_from_snapshot(
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+    tick: u64,
+    candidate_limit: usize,
+) -> EnvironmentalBondDiscovery {
+    use crate::environmental_interaction::{ExistingBondRecord, MaterialRecord};
+
+    let cell_count = snapshot.cell_visits as usize;
+    let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let mut candidates = Vec::with_capacity(limit);
+    let mut checked_materials = Vec::new();
+    if limit == 0 || cell_count == 0 || snapshot.unassigned_materials != 0 {
+        return EnvironmentalBondDiscovery {
+            candidates,
+            inspected_entries: 0,
+            inspected_cells: 0,
+            inspected_materials: 0,
+            inspected_bonds: 0,
+            checked_materials,
+        };
+    }
+
+    let mut materials_by_cell: std::collections::BTreeMap<usize, Vec<&MaterialRecord>> =
+        std::collections::BTreeMap::new();
+    for material in &snapshot.materials {
+        materials_by_cell
+            .entry(material.locator.cell_index)
+            .or_default()
+            .push(material);
+    }
+    for materials in materials_by_cell.values_mut() {
+        materials.sort_by_key(|material| material.locator.material_index);
+    }
+
+    let mut bonds_by_material: std::collections::BTreeMap<
+        crate::environmental_interaction::MaterialIdentity,
+        Vec<&ExistingBondRecord>,
+    > = std::collections::BTreeMap::new();
+    for bond in &snapshot.existing_bonds {
+        bonds_by_material.entry(bond.material).or_default().push(bond);
+    }
+    for bonds in bonds_by_material.values_mut() {
+        bonds.sort_by_key(|bond| bond.bond_index);
+    }
+
+    let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
+    let scan_steps_initial = scan_steps_remaining;
+    let scan_window = scan_steps_initial.min(cell_count).max(1);
+    let scan_stride = scan_window.saturating_sub(2).max(1);
+    let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
+    let mut inspected_cells = 0u64;
+    let mut inspected_materials = 0u64;
+    let mut inspected_bonds = 0u64;
+
+    'discovery: for cell_offset in 0..cell_count {
+        if scan_steps_remaining == 0 {
+            break;
+        }
+        scan_steps_remaining -= 1;
+        inspected_cells = inspected_cells.saturating_add(1);
+        let cell_index = (cell_start + cell_offset) % cell_count;
+        let Some(materials) = materials_by_cell.get(&cell_index) else {
+            continue;
+        };
+        let material_count = materials.len();
+        if material_count == 0 {
+            continue;
+        }
+        let material_start = tick as usize % material_count;
+        for material_offset in 0..material_count {
+            if scan_steps_remaining == 0 {
+                break 'discovery;
+            }
+            scan_steps_remaining -= 1;
+            inspected_materials = inspected_materials.saturating_add(1);
+            let material = materials[(material_start + material_offset) % material_count];
+            let bonds = bonds_by_material
+                .get(&material.identity)
+                .map_or(&[][..], Vec::as_slice);
+            checked_materials.push((material.identity.0, bonds.len()));
+            if bonds.is_empty() {
+                continue;
+            }
+            let bond_count = bonds.len();
+            let bond_start = tick as usize % bond_count;
+            for bond_offset in 0..bond_count {
+                if scan_steps_remaining == 0 {
+                    break 'discovery;
+                }
+                scan_steps_remaining -= 1;
+                inspected_bonds = inspected_bonds.saturating_add(1);
+                let bond = bonds[(bond_start + bond_offset) % bond_count];
+                candidates.push((
+                    material.locator.cell_index,
+                    material.locator.material_index,
+                    bond.bond_index,
+                ));
+                if candidates.len() >= limit {
+                    break 'discovery;
+                }
+            }
+        }
+    }
+
+    EnvironmentalBondDiscovery {
+        candidates,
+        inspected_entries: scan_steps_initial - scan_steps_remaining,
+        inspected_cells,
+        inspected_materials,
+        inspected_bonds,
+        checked_materials,
+    }
+}
+
 #[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
 pub(crate) fn accumulate_environmental(
     environment: &crate::state::Environment,
@@ -614,13 +734,62 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
+    accumulate_environmental_with_snapshot(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        None,
+    )
+}
+
+/// Production entry point for BREAK when the tick already owns a shared
+/// environmental snapshot. Reaction chemistry and activation remain unchanged.
+pub(crate) fn accumulate_environmental_with_shared_snapshot(
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
+    accumulate_environmental_with_snapshot(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        diagnostics,
+        Some(snapshot),
+    )
+}
+
+fn accumulate_environmental_with_snapshot(
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
+    shared_snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
     // Environmental progress belongs to the field, not to the organism
     // whose turn happens to discover it. Search the field directly; the
     // bounded candidate budget below keeps this world-owned scan finite.
     const ENVIRONMENT_PREFIX: &str = "environment|environment:";
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let discovery = discover_environmental_bonds(environment, tick, count);
+    let discovery = match shared_snapshot {
+        Some(snapshot) if snapshot.unassigned_materials == 0 => {
+            discover_environmental_bonds_from_snapshot(snapshot, tick, count)
+        }
+        // Preserve legacy identity-zero materials until the shared inventory
+        // can represent them without inventing identities.
+        _ => discover_environmental_bonds(environment, tick, count),
+    };
     diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     // Exhaustive diagnostic oracle: count live bond records independently of
     // the rotating scan so bounded-window omissions are visible in every run.
