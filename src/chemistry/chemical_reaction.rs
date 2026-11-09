@@ -1567,6 +1567,44 @@ mod material_identity_tests {
     use crate::chemistry_library::ChemistryKey;
     use crate::resources::{InternalBond, Material};
 
+    #[test]
+    fn shared_snapshot_break_discovery_matches_live_bounded_traversal() {
+        let mut simulation = crate::state::Simulation::new(943, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        for _ in 0..3 {
+            let source = environmental_test_composite(&catalog);
+            assert!(simulation.environment.field.deposit_physical_at_index(
+                0,
+                source,
+                &catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+
+        let tick = 0;
+        let limit = 16;
+        let live = discover_environmental_bonds(&simulation.environment, tick, limit);
+        let snapshot =
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                &simulation.environment.field,
+                tick,
+            );
+        let shared = discover_environmental_bonds_from_snapshot(&snapshot, tick, limit);
+
+        assert_eq!(shared.candidates, live.candidates);
+        assert_eq!(shared.inspected_entries, live.inspected_entries);
+        assert_eq!(shared.inspected_cells, live.inspected_cells);
+        assert_eq!(shared.inspected_materials, live.inspected_materials);
+        assert_eq!(shared.inspected_bonds, live.inspected_bonds);
+        assert_eq!(shared.checked_materials, live.checked_materials);
+    }
+
     fn environmental_test_composite(
         catalog: &[crate::resources::BaseResource],
     ) -> crate::physical_material::PhysicalMaterial {
