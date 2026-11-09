@@ -1265,7 +1265,10 @@ fn accumulate_environmental_internal(
                 .map(|(pairs, completed)| {
                     let mut targets = vec![Vec::new(); snapshot.materials.len()];
                     for pair in pairs {
-                        if completed.get(pair.left).is_some_and(|limit| limit.is_some()) {
+                        if completed
+                            .get(pair.left)
+                            .is_some_and(|limit| limit.is_some())
+                        {
                             if let Some(record) = snapshot.materials.get(pair.right) {
                                 targets[pair.left].push((
                                     record.locator.cell_index,
