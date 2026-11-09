@@ -1092,13 +1092,10 @@ fn accumulate_environmental_internal(
     let mut updated_keys = BTreeSet::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     // One scratch bounds array serves every directed anchor cursor in this
-    // topology epoch. Each cursor reads only its own anchor entry, so the
-    // previous anchor's value is harmless and no per-anchor O(materials)
-    // allocation or initialization is needed.
-    let mut shared_displacement_bounds = shared_snapshot
-        .filter(|snapshot| snapshot.unassigned_materials == 0)
-        .map(|snapshot| vec![None; snapshot.materials.len()])
-        .unwrap_or_default();
+    // topology epoch. Allocate it lazily only when a valid shared-snapshot
+    // anchor is actually reached; each cursor reads only its own anchor entry,
+    // so previous entries are harmless and no per-anchor initialization occurs.
+    let mut shared_displacement_bounds = Vec::new();
     let shared_bond_indices_by_material = shared_snapshot
         .filter(|snapshot| snapshot.unassigned_materials == 0)
         .map(|snapshot| {
@@ -1159,6 +1156,13 @@ fn accumulate_environmental_internal(
             else {
                 continue;
             };
+            if shared_displacement_bounds.is_empty() {
+                if let Some(snapshot) =
+                    shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
+                {
+                    shared_displacement_bounds.resize(snapshot.materials.len(), None);
+                }
+            }
             let target_cell_limit = DISPLACEMENT_TARGET_CELL_LIMIT.min(*remaining_discovery_work);
             let mut target_scan = DisplacementTargetScan::new(
                 shared_snapshot,
