@@ -1054,6 +1054,13 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 min_y: body.min_y,
                 max_y: body.max_y,
             });
+        let target_cell_limit =
+            FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
+        let target_cell_count = crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
+            &environment.field,
+            shared_bounds[anchor_index].expect("anchor bounds were just populated"),
+            BOUNDS_PADDING,
+        );
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
@@ -1069,8 +1076,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         while *remaining_discovery_work > 0 {
             // Single-work-unit pages preserve the exact target-cell/material
             // continuation while leaving budget for constituent evaluation.
-            let target_cell_limit =
-                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
             let page = cursor.next_page(
                 snapshot,
                 &environment.field,
@@ -1208,7 +1213,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 }
             }
             if page.complete {
-                completed_anchors[anchor_index] = Some(target_cell_limit);
+                completed_anchors[anchor_index] = target_cell_count
+                    .filter(|&count| target_cell_limit >= count)
+                    .map(|_| target_cell_limit);
                 break;
             }
         }
