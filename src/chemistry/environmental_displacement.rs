@@ -1897,25 +1897,49 @@ pub(crate) fn resolve_environmental(
     resolve_environmental_diagnosed(operation, environment, ledger).is_ok()
 }
 
+fn environmental_material_location_by_identity(
+    environment: &Environment,
+    source: &PhysicalMaterial,
+    captured_cell: usize,
+    captured_material: usize,
+) -> Option<(usize, usize)> {
+    if source.environmental_identity == 0 {
+        return environment
+            .field
+            .cells
+            .get(captured_cell)
+            .and_then(|cell| cell.physical_materials.get(captured_material))
+            .filter(|material| *material == source)
+            .map(|_| (captured_cell, captured_material));
+    }
+    environment.field.cells.iter().enumerate().find_map(|(cell_index, cell)| {
+        cell.physical_materials.iter().position(|material| {
+            material.environmental_identity == source.environmental_identity
+        }).map(|material_index| (cell_index, material_index))
+    })
+}
+
 pub(crate) fn resolve_environmental_diagnosed(
     operation: EnvironmentalDisplacementOperation,
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> Result<(), &'static str> {
-    let Some(source_a) = environment
-        .field
-        .cells
-        .get(operation.cell_a)
-        .and_then(|cell| cell.physical_materials.get(operation.material_a))
-    else {
+    let Some((cell_a, material_a)) = environmental_material_location_by_identity(
+        environment, &operation.source_a, operation.cell_a, operation.material_a,
+    ) else {
         return Err("stale_source_missing");
     };
-    let Some(source_b) = environment
-        .field
-        .cells
-        .get(operation.cell_b)
-        .and_then(|cell| cell.physical_materials.get(operation.material_b))
-    else {
+    let Some((cell_b, material_b)) = environmental_material_location_by_identity(
+        environment, &operation.source_b, operation.cell_b, operation.material_b,
+    ) else {
+        return Err("stale_source_missing");
+    };
+    let Some(source_a) = environment.field.cells.get(cell_a)
+        .and_then(|cell| cell.physical_materials.get(material_a)) else {
+        return Err("stale_source_missing");
+    };
+    let Some(source_b) = environment.field.cells.get(cell_b)
+        .and_then(|cell| cell.physical_materials.get(material_b)) else {
         return Err("stale_source_missing");
     };
     if source_a != &operation.source_a || source_b != &operation.source_b {
@@ -2152,26 +2176,26 @@ pub(crate) fn resolve_environmental_diagnosed(
     // All validation and energy work is staged. Remove both source objects
     // without index drift, then deposit each physical component at its own
     // retained world position.
-    if operation.cell_a == operation.cell_b {
-        let cell = &mut environment.field.cells[operation.cell_a];
-        let high = operation.material_a.max(operation.material_b);
-        let low = operation.material_a.min(operation.material_b);
+    if cell_a == cell_b {
+        let cell = &mut environment.field.cells[cell_a];
+        let high = material_a.max(material_b);
+        let low = material_a.min(material_b);
         if high == low {
             return Err("source_index_collision");
         }
         cell.physical_materials.remove(high);
         cell.physical_materials.remove(low);
     } else {
-        environment.field.cells[operation.cell_a]
+        environment.field.cells[cell_a]
             .physical_materials
-            .remove(operation.material_a);
-        environment.field.cells[operation.cell_b]
+            .remove(material_a);
+        environment.field.cells[cell_b]
             .physical_materials
-            .remove(operation.material_b);
+            .remove(material_b);
     }
     let mut changed_cells = BTreeSet::new();
-    changed_cells.insert(operation.cell_a);
-    changed_cells.insert(operation.cell_b);
+    changed_cells.insert(cell_a);
+    changed_cells.insert(cell_b);
     for (destination, product) in staged_products {
         environment.field.cells[destination]
             .physical_materials
