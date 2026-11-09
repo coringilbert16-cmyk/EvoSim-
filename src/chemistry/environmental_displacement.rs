@@ -1189,196 +1189,196 @@ fn accumulate_environmental_internal(
                 if cell_a == cell_b && material_a == material_b {
                     continue;
                 }
-                    let source_b =
-                        environment.field.cells[cell_b].physical_materials[material_b].clone();
-                    let mut combined = source_structure.clone();
-                    let Some(indices_b) = crate::material_restoration::restore_material(
-                        &mut combined,
-                        &source_b,
-                        crate::structure::Placement {
-                            x: 0.0,
-                            y: 0.0,
-                            rotation_radians: 0.0,
-                        },
+                let source_b =
+                    environment.field.cells[cell_b].physical_materials[material_b].clone();
+                let mut combined = source_structure.clone();
+                let Some(indices_b) = crate::material_restoration::restore_material(
+                    &mut combined,
+                    &source_b,
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    &environment.catalog,
+                ) else {
+                    continue;
+                };
+                if indices_b.iter().any(|index| {
+                    crate::construction_runtime::placed_unit_overlaps(
+                        &combined,
+                        &combined.units[*index],
+                        &indices_b,
                         &environment.catalog,
+                    )
+                }) {
+                    continue;
+                }
+
+                for &bond_index in &bond_indices {
+                    let Some(connection) = connections.get(bond_index) else {
+                        continue;
+                    };
+                    if *remaining_discovery_work == 0 {
+                        break 'anchors;
+                    }
+                    diagnostics.bonds_inspected = diagnostics.bonds_inspected.saturating_add(1);
+                    *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
+                    let (Some(&part_a), Some(&part_b)) = (
+                        indices_a.get(connection.part_a),
+                        indices_a.get(connection.part_b),
                     ) else {
                         continue;
                     };
-                    if indices_b.iter().any(|index| {
-                        crate::construction_runtime::placed_unit_overlaps(
-                            &combined,
-                            &combined.units[*index],
-                            &indices_b,
-                            &environment.catalog,
-                        )
-                    }) {
+                    let (Some(id_a), Some(id_b)) =
+                        (combined.physical_id(part_a), combined.physical_id(part_b))
+                    else {
                         continue;
-                    }
+                    };
+                    let expected_bond = Bond {
+                        endpoint_a: crate::structure::BondEndpoint::new(
+                            id_a,
+                            connection.endpoint_a,
+                        ),
+                        endpoint_b: crate::structure::BondEndpoint::new(
+                            id_b,
+                            connection.endpoint_b,
+                        ),
+                        strength: combined.units[part_a]
+                            .properties(&environment.catalog)
+                            .zip(combined.units[part_b].properties(&environment.catalog))
+                            .map(|(a, b)| bond_strength(a, b))
+                            .unwrap_or(f64::NAN),
+                        bond_energy: connection.bond_energy,
+                    };
+                    let Some(old_bond) = combined
+                        .bonds
+                        .iter()
+                        .find(|bond| bond.has_same_identity(&expected_bond))
+                        .cloned()
+                    else {
+                        continue;
+                    };
 
-                    for &bond_index in &bond_indices {
-                        let Some(connection) = connections.get(bond_index) else {
+                    for (anchor_part, displaced_part) in [
+                        (connection.part_a, connection.part_b),
+                        (connection.part_b, connection.part_a),
+                    ] {
+                        let (Some(&anchor_unit), Some(&displaced_unit)) =
+                            (indices_a.get(anchor_part), indices_a.get(displaced_part))
+                        else {
                             continue;
                         };
-                        if *remaining_discovery_work == 0 {
-                            break 'anchors;
-                        }
-                        diagnostics.bonds_inspected = diagnostics.bonds_inspected.saturating_add(1);
-                        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                        let (Some(&part_a), Some(&part_b)) = (
-                            indices_a.get(connection.part_a),
-                            indices_a.get(connection.part_b),
+                        let Some(frequency) = displacement_reaction_frequency(
+                            &combined.units[anchor_unit],
+                            &combined.units[displaced_unit],
+                            &environment.catalog,
                         ) else {
                             continue;
                         };
-                        let (Some(id_a), Some(id_b)) =
-                            (combined.physical_id(part_a), combined.physical_id(part_b))
-                        else {
-                            continue;
-                        };
-                        let expected_bond = Bond {
-                            endpoint_a: crate::structure::BondEndpoint::new(
-                                id_a,
-                                connection.endpoint_a,
-                            ),
-                            endpoint_b: crate::structure::BondEndpoint::new(
-                                id_b,
-                                connection.endpoint_b,
-                            ),
-                            strength: combined.units[part_a]
-                                .properties(&environment.catalog)
-                                .zip(combined.units[part_b].properties(&environment.catalog))
-                                .map(|(a, b)| bond_strength(a, b))
-                                .unwrap_or(f64::NAN),
-                            bond_energy: connection.bond_energy,
-                        };
-                        let Some(old_bond) = combined
-                            .bonds
-                            .iter()
-                            .find(|bond| bond.has_same_identity(&expected_bond))
-                            .cloned()
-                        else {
-                            continue;
-                        };
-
-                        for (anchor_part, displaced_part) in [
-                            (connection.part_a, connection.part_b),
-                            (connection.part_b, connection.part_a),
-                        ] {
-                            let (Some(&anchor_unit), Some(&displaced_unit)) =
-                                (indices_a.get(anchor_part), indices_a.get(displaced_part))
-                            else {
-                                continue;
-                            };
-                            let Some(frequency) = displacement_reaction_frequency(
-                                &combined.units[anchor_unit],
-                                &combined.units[displaced_unit],
-                                &environment.catalog,
-                            ) else {
-                                continue;
-                            };
-                            for (incoming_part, &incoming_unit) in indices_b.iter().enumerate() {
-                                if *remaining_discovery_work == 0 {
-                                    break 'anchors;
-                                }
-                                diagnostics.replacement_contact_searches =
-                                    diagnostics.replacement_contact_searches.saturating_add(1);
-                                *remaining_discovery_work =
-                                    remaining_discovery_work.saturating_sub(1);
-                                let Some((candidate, investment)) =
-                                    best_replacement_contact_with_diagnostics(
-                                        &combined,
-                                        anchor_unit,
-                                        incoming_unit,
-                                        old_bond,
-                                        &environment.catalog,
-                                        diagnostics,
-                                    )
-                                else {
-                                    continue;
-                                };
-                                diagnostics.replacement_contacts_found =
-                                    diagnostics.replacement_contacts_found.saturating_add(1);
-
-                                // Diagnostic-only all-alternatives oracle. Keep the
-                                // production selector and its chosen candidate untouched;
-                                // independently compare activation supplied by every valid
-                                // evaluated interface against the selected interface.
-                                const ALTERNATIVE_AUDIT_LIMIT: usize =
-                                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-                                let census = census_replacement_contacts(
+                        for (incoming_part, &incoming_unit) in indices_b.iter().enumerate() {
+                            if *remaining_discovery_work == 0 {
+                                break 'anchors;
+                            }
+                            diagnostics.replacement_contact_searches =
+                                diagnostics.replacement_contact_searches.saturating_add(1);
+                            *remaining_discovery_work =
+                                remaining_discovery_work.saturating_sub(1);
+                            let Some((candidate, investment)) =
+                                best_replacement_contact_with_diagnostics(
                                     &combined,
                                     anchor_unit,
                                     incoming_unit,
                                     old_bond,
                                     &environment.catalog,
-                                    ALTERNATIVE_AUDIT_LIMIT,
-                                );
-                                diagnostics.replacement_alternative_audits =
-                                    diagnostics.replacement_alternative_audits.saturating_add(1);
-                                diagnostics.replacement_alternatives_evaluated = diagnostics
-                                    .replacement_alternatives_evaluated
-                                    .saturating_add(census.alternatives.len() as u64);
-                                if census.work_limit_reached {
-                                    diagnostics.replacement_alternative_audits_truncated =
+                                    diagnostics,
+                                )
+                            else {
+                                continue;
+                            };
+                            diagnostics.replacement_contacts_found =
+                                diagnostics.replacement_contacts_found.saturating_add(1);
+
+                            // Diagnostic-only all-alternatives oracle. Keep the
+                            // production selector and its chosen candidate untouched;
+                            // independently compare activation supplied by every valid
+                            // evaluated interface against the selected interface.
+                            const ALTERNATIVE_AUDIT_LIMIT: usize =
+                                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+                            let census = census_replacement_contacts(
+                                &combined,
+                                anchor_unit,
+                                incoming_unit,
+                                old_bond,
+                                &environment.catalog,
+                                ALTERNATIVE_AUDIT_LIMIT,
+                            );
+                            diagnostics.replacement_alternative_audits =
+                                diagnostics.replacement_alternative_audits.saturating_add(1);
+                            diagnostics.replacement_alternatives_evaluated = diagnostics
+                                .replacement_alternatives_evaluated
+                                .saturating_add(census.alternatives.len() as u64);
+                            if census.work_limit_reached {
+                                diagnostics.replacement_alternative_audits_truncated =
+                                    diagnostics
+                                        .replacement_alternative_audits_truncated
+                                        .saturating_add(1);
+                            }
+                            // Bond potential depends on the reactant pair, not
+                            // which endpoint interface joins that pair. The
+                            // meaningful alternative-selection audit is therefore
+                            // whether another valid interface supplies more activation.
+                            let selected_alternative =
+                                census.alternatives.iter().find(|alternative| {
+                                    alternative.candidate.endpoint_a == candidate.endpoint_a
+                                        && alternative.candidate.endpoint_b
+                                            == candidate.endpoint_b
+                                });
+                            if let Some(selected_alternative) = selected_alternative {
+                                if census.alternatives.iter().any(|alternative| {
+                                    (alternative.candidate.endpoint_a != candidate.endpoint_a
+                                        || alternative.candidate.endpoint_b
+                                            != candidate.endpoint_b)
+                                        && alternative.activation_increment
+                                            > selected_alternative.activation_increment
+                                }) {
+                                    diagnostics
+                                        .selected_contact_hides_higher_activation_alternative =
                                         diagnostics
-                                            .replacement_alternative_audits_truncated
+                                            .selected_contact_hides_higher_activation_alternative
                                             .saturating_add(1);
                                 }
-                                // Bond potential depends on the reactant pair, not
-                                // which endpoint interface joins that pair. The
-                                // meaningful alternative-selection audit is therefore
-                                // whether another valid interface supplies more activation.
-                                let selected_alternative =
-                                    census.alternatives.iter().find(|alternative| {
-                                        alternative.candidate.endpoint_a == candidate.endpoint_a
-                                            && alternative.candidate.endpoint_b
-                                                == candidate.endpoint_b
-                                    });
-                                if let Some(selected_alternative) = selected_alternative {
-                                    if census.alternatives.iter().any(|alternative| {
-                                        (alternative.candidate.endpoint_a != candidate.endpoint_a
-                                            || alternative.candidate.endpoint_b
-                                                != candidate.endpoint_b)
-                                            && alternative.activation_increment
-                                                > selected_alternative.activation_increment
-                                    }) {
-                                        diagnostics
-                                            .selected_contact_hides_higher_activation_alternative =
-                                            diagnostics
-                                                .selected_contact_hides_higher_activation_alternative
-                                                .saturating_add(1);
-                                    }
-                                }
-                                let key = displacement_accumulation_key(
-                                    &source_a,
-                                    &source_b,
-                                    bond_index,
-                                    anchor_part,
-                                    incoming_part,
-                                    candidate,
-                                );
-                                let previous = accumulation.get(&key).copied().unwrap_or(0.0);
-                                let Some(next) = accumulate_incoming_activation(
-                                    &combined.units[anchor_unit],
-                                    &combined.units[incoming_unit],
-                                    candidate,
-                                    previous,
-                                    &environment.catalog,
-                                ) else {
-                                    diagnostics.activation_accumulation_unavailable = diagnostics
-                                        .activation_accumulation_unavailable
-                                        .saturating_add(1);
-                                    continue;
-                                };
-                                diagnostics.activation_updates =
-                                    diagnostics.activation_updates.saturating_add(1);
-                                if next.is_finite() {
-                                    diagnostics.max_accumulated_reaction =
-                                        diagnostics.max_accumulated_reaction.max(next);
-                                }
-                                updated_keys.insert(key.clone());
-                                if next <= 0.0 {
-                                    accumulation.remove(&key);
+                            }
+                            let key = displacement_accumulation_key(
+                                &source_a,
+                                &source_b,
+                                bond_index,
+                                anchor_part,
+                                incoming_part,
+                                candidate,
+                            );
+                            let previous = accumulation.get(&key).copied().unwrap_or(0.0);
+                            let Some(next) = accumulate_incoming_activation(
+                                &combined.units[anchor_unit],
+                                &combined.units[incoming_unit],
+                                candidate,
+                                previous,
+                                &environment.catalog,
+                            ) else {
+                                diagnostics.activation_accumulation_unavailable = diagnostics
+                                    .activation_accumulation_unavailable
+                                    .saturating_add(1);
+                                continue;
+                            };
+                            diagnostics.activation_updates =
+                                diagnostics.activation_updates.saturating_add(1);
+                            if next.is_finite() {
+                                diagnostics.max_accumulated_reaction =
+                                    diagnostics.max_accumulated_reaction.max(next);
+                            }
+                            updated_keys.insert(key.clone());
+                            if next <= 0.0 {
+                                accumulation.remove(&key);
                                     continue;
                                 }
                                 let Some(activation_signal) =
