@@ -770,14 +770,19 @@ fn accumulate_environmental_with_snapshot(
     diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     // Exhaustive diagnostic oracle: count live bond records independently of
     // the rotating scan so bounded-window omissions are visible in every run.
-    diagnostics.total_environmental_bonds = environment
-        .field
-        .cells
-        .iter()
-        .flat_map(|cell| cell.physical_materials.iter())
-        .filter_map(|material| material.internal_connections.as_ref())
-        .map(|connections| connections.len() as u64)
-        .sum();
+    diagnostics.total_environmental_bonds = shared_snapshot.map_or_else(
+        || {
+            environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .filter_map(|material| material.internal_connections.as_ref())
+                .map(|connections| connections.len() as u64)
+                .sum()
+        },
+        |snapshot| snapshot.bond_record_count,
+    );
     diagnostics.environmental_bonds_unvisited = diagnostics
         .total_environmental_bonds
         .saturating_sub(discovery.inspected_bonds);
