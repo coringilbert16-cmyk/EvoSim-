@@ -1912,9 +1912,22 @@ fn environmental_material_location_by_identity(
             .filter(|material| *material == source)
             .map(|_| (captured_cell, captured_material));
     }
+    if let Some(material) = environment
+        .field
+        .cells
+        .get(captured_cell)
+        .and_then(|cell| cell.physical_materials.get(captured_material))
+    {
+        if material.environmental_identity == source.environmental_identity
+            && material == source
+        {
+            return Some((captured_cell, captured_material));
+        }
+    }
     environment.field.cells.iter().enumerate().find_map(|(cell_index, cell)| {
         cell.physical_materials.iter().position(|material| {
             material.environmental_identity == source.environmental_identity
+                && material == source
         }).map(|material_index| (cell_index, material_index))
     })
 }
