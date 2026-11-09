@@ -3674,15 +3674,8 @@ mod tests {
                 )
                 .expect("anchor index is valid");
                 loop {
-                    let page = forward.next_page(
-                        &snapshot,
-                        &field,
-                        &bounds,
-                        2.1,
-                        target_cell_count,
-                        1,
-                        1,
-                    );
+                    let page =
+                        forward.next_page(&snapshot, &field, &bounds, 2.1, target_cell_count, 1, 1);
                     expected.extend(page.pairs.into_iter().map(|pair| {
                         let target = &snapshot.materials[pair.right];
                         (target.locator.cell_index, target.locator.material_index)
