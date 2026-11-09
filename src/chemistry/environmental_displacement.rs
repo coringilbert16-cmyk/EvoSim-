@@ -3719,7 +3719,6 @@ mod tests {
 
                 let completed_anchors =
                     vec![Some(target_cell_count.saturating_add(5)); snapshot.materials.len()];
-                let reverse_target_cell_limit = target_cell_count.saturating_add(1);
                 assert_ne!(
                     completed_anchors[anchor_index],
                     Some(reverse_target_cell_limit),
