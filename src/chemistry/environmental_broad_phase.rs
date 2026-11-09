@@ -2355,10 +2355,15 @@ mod tests {
             }));
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 91);
-        let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds, 0.0);
+        let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
         let anchor_bounds = bounds[0].expect("anchor bounds exist");
-        let target_cell_count = IndexedSpatialCursor::target_cell_count(&field, anchor_bounds, 0.0)
-            .expect("anchor intersects field cells");
+        let target_cell_count = IndexedSpatialCursor::target_cell_count_with_index(
+            &field,
+            anchor_bounds,
+            0.0,
+            &spatial_index,
+        )
+        .expect("anchor intersects indexed field cells");
 
         let mut legacy = IndexedSpatialCursor::new_for_anchor(
             &snapshot,
