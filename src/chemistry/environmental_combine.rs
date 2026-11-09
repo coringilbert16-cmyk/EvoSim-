@@ -976,12 +976,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         else {
             continue;
         };
-        let Some(body) =
-            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                physical,
-                &environment.catalog,
-            )
-        else {
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            physical,
+            &environment.catalog,
+        ) else {
             continue;
         };
         shared_bounds[material_index] =
