@@ -992,14 +992,12 @@ impl MaterialSpatialIndex {
                 match bounds[material_index].and_then(|value| value.expanded(padding)) {
                     Some(expanded) => {
                         if let Some(range) = BoundsCellRange::new(field, expanded) {
-                            let columns = range.max_col - range.min_col + 1;
                             for row_offset in 0..range.row_count {
                                 for col in range.min_col..=range.max_col {
                                     let cell_index = range.cell_index(field, row_offset, col);
                                     materials_by_cell[cell_index].push(material_index);
                                 }
                             }
-                            let _ = columns;
                         }
                     }
                     None if bounds[material_index].is_none() => {
