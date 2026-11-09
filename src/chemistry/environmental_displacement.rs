@@ -1167,7 +1167,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
     shared_candidate_pairs: &[crate::environmental_broad_phase::MaterialPairRecord],
-    completed_anchors: &[bool],
+    completed_anchors: &[Option<usize>],
 ) -> Vec<EnvironmentalDisplacementOperation> {
     if shared_bounds.len() != snapshot.materials.len() {
         *shared_bounds = vec![None; snapshot.materials.len()];
@@ -1233,7 +1233,7 @@ fn accumulate_environmental_internal(
                 .map(|(pairs, completed)| {
                     let mut targets = vec![Vec::new(); snapshot.materials.len()];
                     for pair in pairs {
-                        if completed.get(pair.left).copied().unwrap_or(false) {
+                        if completed.get(pair.left).is_some_and(Option::is_some) {
                             if let Some(record) = snapshot.materials.get(pair.right) {
                                 targets[pair.left].push((
                                     record.locator.cell_index,
@@ -1343,11 +1343,11 @@ fn accumulate_environmental_internal(
                                 |record| record.identity,
                             )
                             .ok()?;
-                        let completed = shared_candidates
+                        let completed_cell_limit = shared_candidates
                             .and_then(|(_, completed)| completed.get(anchor_index))
                             .copied()
-                            .unwrap_or(false);
-                        completed.then(|| {
+                            .flatten();
+                        (completed_cell_limit == Some(target_cell_limit)).then(|| {
                             shared_targets_by_anchor
                                 .as_ref()
                                 .and_then(|targets| targets.get(anchor_index))
