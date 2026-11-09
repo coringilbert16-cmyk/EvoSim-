@@ -849,9 +849,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     }
                 }
             }
-            if page.complete {
-                break;
-            }
         }
     }
 
@@ -1163,6 +1160,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
                     tick,
                     &mut journal,
                 );
+            }
+        }
+            if page.complete {
+                break;
             }
         }
     }
