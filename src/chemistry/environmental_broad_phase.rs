@@ -2081,6 +2081,96 @@ mod tests {
     }
 
     #[test]
+    fn forward_ordered_indexed_cursor_matches_legacy_tick_scan_order() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        for (cell_index, identity) in [
+            (0, 30),
+            (0, 10),
+            (0, 50),
+            (2, 20),
+            (2, 60),
+            (5, 40),
+            (7, 5),
+            (7, 70),
+        ] {
+            field.cells[cell_index]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+        }
+        let tick = 3;
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, tick as u64);
+        let bounds = vec![
+            Some(MaterialSpatialBounds {
+                min_x: 0.0,
+                max_x: 40.0,
+                min_y: 0.0,
+                max_y: 20.0,
+            });
+            snapshot.materials.len()
+        ];
+        let mut cursor = IndexedSpatialCursor::new_rotated(
+            &snapshot,
+            &field,
+            PairOrientation::ForwardOrdered,
+            tick,
+        );
+        let page = cursor.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(page.complete);
+        let actual = page
+            .pairs
+            .into_iter()
+            .map(|pair| (pair.identity_left.0, pair.identity_right.0))
+            .collect::<Vec<_>>();
+
+        let cell_count = field.cells.len();
+        let mut expected = Vec::new();
+        for cell_offset in 0..cell_count {
+            let cell_a = (tick + cell_offset) % cell_count;
+            let materials_a = &field.cells[cell_a].physical_materials;
+            if materials_a.is_empty() {
+                continue;
+            }
+            let material_start = (tick + cell_a) % materials_a.len();
+            for material_offset in 0..materials_a.len() {
+                let material_a = (material_start + material_offset) % materials_a.len();
+                let identity_a = materials_a[material_a].environmental_identity;
+                let target_cell_start = (tick + cell_a + material_a) % cell_count;
+                for target_cell_offset in 0..cell_count {
+                    let cell_b = (target_cell_start + target_cell_offset) % cell_count;
+                    if cell_b < cell_a {
+                        continue;
+                    }
+                    let materials_b = &field.cells[cell_b].physical_materials;
+                    if materials_b.is_empty() {
+                        continue;
+                    }
+                    let target_material_start = (tick + cell_b + material_a) % materials_b.len();
+                    for target_material_offset in 0..materials_b.len() {
+                        let material_b =
+                            (target_material_start + target_material_offset) % materials_b.len();
+                        if (cell_b, material_b) <= (cell_a, material_a) {
+                            continue;
+                        }
+                        expected.push((
+                            identity_a,
+                            materials_b[material_b].environmental_identity,
+                        ));
+                    }
+                }
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn indexed_cursor_prunes_pair_work_for_sparse_materials() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
         let mut bounds = Vec::new();
