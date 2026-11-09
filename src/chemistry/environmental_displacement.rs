@@ -20,7 +20,6 @@ use crate::structure::{Bond, OrganismStructure};
 enum DisplacementTargetScan {
     Shared {
         cursor: crate::environmental_broad_phase::IndexedSpatialCursor,
-        bounds: Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
         initialized: bool,
         target_cell_limit: usize,
     },
@@ -48,6 +47,7 @@ impl DisplacementTargetScan {
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
         field: &crate::environment::ActiveMaterialField,
         body: &crate::organism_geometry::OrganismBodyGeometry,
+        shared_bounds: &mut [Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
         cell_a: usize,
         material_a: usize,
         tick: usize,
@@ -63,26 +63,24 @@ impl DisplacementTargetScan {
                 if record.locator.cell_index == cell_a
                     && record.locator.material_index == material_a
                 {
-                    let mut bounds = vec![None; snapshot.materials.len()];
-                    bounds[anchor_index] =
-                        Some(crate::environmental_broad_phase::MaterialSpatialBounds {
-                            min_x: body.min_x,
-                            max_x: body.max_x,
-                            min_y: body.min_y,
-                            max_y: body.max_y,
-                        });
-                    if let Some(cursor) =
+                    if let (Some(bounds), Some(cursor)) = (
+                        shared_bounds.get_mut(anchor_index),
                         crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                             snapshot,
                             field,
                             crate::environmental_broad_phase::PairOrientation::Directed,
                             tick,
                             anchor_index,
-                        )
-                    {
+                        ),
+                    ) {
+                        *bounds = Some(crate::environmental_broad_phase::MaterialSpatialBounds {
+                            min_x: body.min_x,
+                            max_x: body.max_x,
+                            min_y: body.min_y,
+                            max_y: body.max_y,
+                        });
                         return Self::Shared {
                             cursor,
-                            bounds,
                             initialized: false,
                             target_cell_limit,
                         };
@@ -115,18 +113,26 @@ impl DisplacementTargetScan {
         &mut self,
         snapshot: Option<&crate::environmental_broad_phase::EnvironmentalMaterialSnapshot>,
         field: &crate::environment::ActiveMaterialField,
+        shared_bounds: &[Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
     ) -> DisplacementTargetStep {
         match self {
             Self::Shared {
                 cursor,
-                bounds,
                 initialized,
                 target_cell_limit,
             } => {
                 let Some(snapshot) = snapshot else {
                     return DisplacementTargetStep::Complete;
                 };
-                let page = cursor.next_page(snapshot, field, bounds, 2.1, *target_cell_limit, 1, 1);
+                let page = cursor.next_page(
+                    snapshot,
+                    field,
+                    shared_bounds,
+                    2.1,
+                    *target_cell_limit,
+                    1,
+                    1,
+                );
                 if page.visited_work == 0 {
                     return DisplacementTargetStep::Complete;
                 }
@@ -1085,6 +1091,14 @@ fn accumulate_environmental_internal(
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    // One scratch bounds array serves every directed anchor cursor in this
+    // topology epoch. Each cursor reads only its own anchor entry, so the
+    // previous anchor's value is harmless and no per-anchor O(materials)
+    // allocation or initialization is needed.
+    let mut shared_displacement_bounds = shared_snapshot
+        .filter(|snapshot| snapshot.unassigned_materials == 0)
+        .map(|snapshot| vec![None; snapshot.materials.len()])
+        .unwrap_or_default();
     let shared_bond_indices_by_material = shared_snapshot
         .filter(|snapshot| snapshot.unassigned_materials == 0)
         .map(|snapshot| {
@@ -1150,6 +1164,7 @@ fn accumulate_environmental_internal(
                 shared_snapshot,
                 &environment.field,
                 &body,
+                &mut shared_displacement_bounds,
                 cell_a,
                 material_a,
                 tick as usize,
@@ -1162,7 +1177,11 @@ fn accumulate_environmental_internal(
                     break 'anchors;
                 }
                 let (cell_b, material_b) =
-                    match target_scan.next(shared_snapshot, &environment.field) {
+                    match target_scan.next(
+                        shared_snapshot,
+                        &environment.field,
+                        &shared_displacement_bounds,
+                    ) {
                         DisplacementTargetStep::AnchorInitialized => continue,
                         DisplacementTargetStep::CellInspected => {
                             diagnostics.target_cells_inspected =
