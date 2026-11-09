@@ -1729,8 +1729,8 @@ mod tests {
                 snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
             let expected_pairs = reference.iter().map(|pair| match orientation {
                 PairOrientation::Directed | PairOrientation::ForwardOrdered => {
-                        (pair.identity_left, pair.identity_right)
-                    }
+                    (pair.identity_left, pair.identity_right)
+                }
                 PairOrientation::Unordered if pair.identity_left < pair.identity_right => {
                     (pair.identity_left, pair.identity_right)
                 }
