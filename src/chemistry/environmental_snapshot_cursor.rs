@@ -265,12 +265,26 @@ impl EnvironmentalSnapshotCursor {
         if self.invalidated {
             page.status = Some(SnapshotCursorStatus::Invalidated);
         } else if self.complete {
+            let mut material_index_by_cell_slot = field
+                .cells
+                .iter()
+                .map(|cell| vec![None; cell.physical_materials.len()])
+                .collect::<Vec<_>>();
+            for (snapshot_index, material) in self.sorted_materials.iter().enumerate() {
+                if let Some(slot) = material_index_by_cell_slot
+                    .get_mut(material.locator.cell_index)
+                    .and_then(|slots| slots.get_mut(material.locator.material_index))
+                {
+                    *slot = Some(snapshot_index);
+                }
+            }
             let snapshot = EnvironmentalMaterialSnapshot {
                 pass_id: self.pass_id,
                 field_revision: self.field_revision,
                 materials: std::mem::take(&mut self.sorted_materials),
                 existing_bonds: std::mem::take(&mut self.sorted_bonds),
                 material_indices_by_cell: std::mem::take(&mut self.material_indices_by_cell),
+                material_index_by_cell_slot,
                 bond_indices_by_material: std::mem::take(&mut self.bond_indices_by_material),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
