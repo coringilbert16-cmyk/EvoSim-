@@ -1569,7 +1569,7 @@ mod material_identity_tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
-    fn shared_snapshot_break_discovery_matches_live_bounded_traversal() {
+    fn shared_snapshot_break_discovery_consumes_inventory_without_rescanning_materials() {
         let mut simulation = crate::state::Simulation::new(943, 10.0);
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
@@ -1598,11 +1598,11 @@ mod material_identity_tests {
 
         assert_eq!(snapshot.bond_record_count, 3);
         assert_eq!(shared.candidates, live.candidates);
-        assert_eq!(shared.inspected_entries, live.inspected_entries);
-        assert_eq!(shared.inspected_cells, live.inspected_cells);
-        assert_eq!(shared.inspected_materials, live.inspected_materials);
-        assert_eq!(shared.inspected_bonds, live.inspected_bonds);
-        assert_eq!(shared.checked_materials, live.checked_materials);
+        assert_eq!(shared.inspected_entries, snapshot.existing_bonds.len());
+        assert_eq!(shared.inspected_cells, 0);
+        assert_eq!(shared.inspected_materials, 0);
+        assert_eq!(shared.inspected_bonds, snapshot.existing_bonds.len() as u64);
+        assert!(shared.checked_materials.is_empty());
     }
 
     fn environmental_test_composite(
