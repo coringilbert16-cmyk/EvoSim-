@@ -1699,11 +1699,11 @@ impl IndexedSpatialCursor {
             }
 
             let Some(range) = self.range else {
-                self.advance_anchor(snapshot.materials.len());
+                self.advance_anchor();
                 continue;
             };
             if self.row_offset >= range.row_count {
-                self.advance_anchor(snapshot.materials.len());
+                self.advance_anchor();
                 continue;
             }
 
