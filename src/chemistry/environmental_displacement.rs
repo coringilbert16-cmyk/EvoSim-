@@ -19,11 +19,9 @@ use crate::structure::{Bond, OrganismStructure};
 
 enum DisplacementTargetScan {
     Shared {
-        cursor: crate::environmental_broad_phase::IndexedSpatialCursor,
+        cursor: Option<crate::environmental_broad_phase::IndexedSpatialCursor>,
         initialized: bool,
         target_cell_limit: usize,
-    },
-    Inventory {
         targets: Vec<(usize, usize)>,
         next_target: usize,
     },
@@ -61,7 +59,26 @@ impl DisplacementTargetScan {
         shared_candidates: Option<Vec<(usize, usize)>>,
     ) -> Self {
         if let Some(targets) = shared_candidates {
-            return Self::Inventory {
+            let cursor = snapshot
+                .filter(|snapshot| snapshot.unassigned_materials == 0)
+                .and_then(|snapshot| {
+                    snapshot.materials.binary_search_by_key(
+                        &crate::environmental_interaction::MaterialIdentity(environmental_identity),
+                        |record| record.identity,
+                    ).ok()
+                    .and_then(|anchor_index| {
+                        crate::environmental_broad_phase::IndexedSpatialCursor::new_for_reverse_anchor(
+                            snapshot,
+                            field,
+                            tick,
+                            anchor_index,
+                        )
+                    })
+                });
+            return Self::Shared {
+                cursor,
+                initialized: false,
+                target_cell_limit,
                 targets,
                 next_target: 0,
             };
@@ -107,9 +124,11 @@ impl DisplacementTargetScan {
                                 });
                         }
                         return Self::Shared {
-                            cursor,
+                            cursor: Some(cursor),
                             initialized: false,
                             target_cell_limit,
+                            targets: Vec::new(),
+                            next_target: 0,
                         };
                     }
                 }
@@ -145,23 +164,18 @@ impl DisplacementTargetScan {
         shared_bounds: &[Option<crate::environmental_broad_phase::MaterialSpatialBounds>],
     ) -> DisplacementTargetStep {
         match self {
-            Self::Inventory {
+            Self::Shared {
+                cursor,
+                initialized,
+                target_cell_limit,
                 targets,
                 next_target,
             } => {
                 if let Some(target) = targets.get(*next_target).copied() {
                     *next_target += 1;
-                    DisplacementTargetStep::SharedCandidate(Some(target))
-                } else {
-                    DisplacementTargetStep::Complete
+                    return DisplacementTargetStep::SharedCandidate(Some(target));
                 }
-            }
-            Self::Shared {
-                cursor,
-                initialized,
-                target_cell_limit,
-            } => {
-                let Some(snapshot) = snapshot else {
+                let (Some(snapshot), Some(cursor)) = (snapshot, cursor.as_mut()) else {
                     return DisplacementTargetStep::Complete;
                 };
                 let page = cursor.next_page(
