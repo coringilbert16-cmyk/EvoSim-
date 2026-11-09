@@ -72,8 +72,9 @@ impl DisplacementTargetScan {
         shared_candidates: Option<Vec<(usize, usize)>>,
     ) -> Self {
         if let Some(targets) = shared_candidates {
-            // A completed shared anchor already contains both directions.
-            // Do not repeat the reverse-only spatial traversal here.
+            // Use only the shared discovery result. An empty or partial list
+            // is authoritative for this tick; deferred work is handled by the
+            // next shared pass, never by a reaction-owned reverse scan.
             return Self::Shared {
                 cursor: None,
                 initialized: false,
@@ -83,59 +84,6 @@ impl DisplacementTargetScan {
                 prefer_shared: tick % 2 == 0,
             };
         }
-        if let Some(snapshot) = snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
-            if let Ok(anchor_index) = snapshot.materials.binary_search_by_key(
-                &crate::environmental_interaction::MaterialIdentity(environmental_identity),
-                |record| record.identity,
-            ) {
-                let record = &snapshot.materials[anchor_index];
-                if record.locator.cell_index == cell_a
-                    && record.locator.material_index == material_a
-                {
-                    if let (Some(bounds), Some(cursor)) = (
-                        shared_bounds.get_mut(anchor_index),
-                        crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
-                            snapshot,
-                            field,
-                            crate::environmental_broad_phase::PairOrientation::Directed,
-                            tick,
-                            anchor_index,
-                        ),
-                    ) {
-                        if bounds.is_none() {
-                            let Some(body) = body else {
-                                return Self::Legacy {
-                                    cells: Vec::new(),
-                                    next_cell: 0,
-                                    current_cell: None,
-                                    target_count: 0,
-                                    target_start: 0,
-                                    target_offset: 0,
-                                    tick,
-                                    anchor_material: material_a,
-                                };
-                            };
-                            *bounds =
-                                Some(crate::environmental_broad_phase::MaterialSpatialBounds {
-                                    min_x: body.min_x,
-                                    max_x: body.max_x,
-                                    min_y: body.min_y,
-                                    max_y: body.max_y,
-                                });
-                        }
-                        return Self::Shared {
-                            cursor: Some(cursor),
-                            initialized: false,
-                            target_cell_limit,
-                            targets: Vec::new(),
-                            next_target: 0,
-                            prefer_shared: false,
-                        };
-                    }
-                }
-            }
-        }
-
         let cells = body.map_or_else(Vec::new, |body| {
             field.cells_intersecting_bounds_limited(
                 body.min_x - 2.1,
