@@ -1025,18 +1025,17 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             .get(record_a.locator.cell_index)
             .and_then(|cell| cell.physical_materials.get(record_a.locator.material_index))
             .filter(|material| material.environmental_identity == record_a.identity.0)
-            .cloned()
         else {
             continue;
         };
-        let Some((source_structure, indices_a)) = restored_source(&source_a, environment) else {
-            continue;
-        };
-        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-            &source_structure,
+        let Some(body) = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            source_a,
+            &environment.catalog,
         ) else {
             continue;
         };
+        let mut restored_anchor = None;
+        let mut anchor_restore_attempted = false;
         shared_bounds[anchor_index] =
             Some(crate::environmental_broad_phase::MaterialSpatialBounds {
                 min_x: body.min_x,
@@ -1121,7 +1120,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 if target_locator <= source_locator {
                     continue;
                 }
-                let source_b = source_b.clone();
                 diagnostics.forward_ordered_target_material_pair_inspections += 1;
                 if *remaining_evaluation_work == 0 {
                     journal.record_deferred_count(
@@ -1133,6 +1131,14 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                     );
                     continue;
                 }
+                if !anchor_restore_attempted {
+                    anchor_restore_attempted = true;
+                    restored_anchor = restored_source(source_a, environment);
+                }
+                let Some((source_structure, indices_a)) = restored_anchor.as_ref() else {
+                    continue;
+                };
+                let source_b = source_b.clone();
                 if record_a.locator.cell_index == record_b.locator.cell_index {
                     diagnostics.same_cell_source_pair_inspections += 1;
                 }
