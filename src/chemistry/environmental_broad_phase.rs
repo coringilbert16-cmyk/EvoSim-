@@ -2532,7 +2532,7 @@ mod tests {
     #[test]
     fn aabb_tree_cursor_matches_reference_across_vertical_wrap_and_orientations() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
-        for (identity, cell_index) in [(11, 0), (12, 9), (13, 90), (14, 99), (15, 55)] {
+        for (identity, cell_index) in [(11, 0), (12, 90), (13, 50), (14, 0), (15, 77)] {
             field.cells[cell_index]
                 .physical_materials
                 .push(physical(identity, "Carbon"));
