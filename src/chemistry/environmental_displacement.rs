@@ -3498,7 +3498,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn shared_target_handoff_matches_directed_discovery_without_duplicates() {
         use crate::environment::ActiveMaterialField;
