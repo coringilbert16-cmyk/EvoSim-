@@ -1166,7 +1166,12 @@ impl MaterialSpatialIndex {
     ) -> u64 {
         output.clear();
         stack.clear();
-        let Some(query) = anchor.expanded(padding) else {
+        let normalized_anchor = if self.vertical_period.is_finite() && self.vertical_period > 0.0 {
+            normalize_vertical_bounds(anchor, self.vertical_period)
+        } else {
+            anchor
+        };
+        let Some(query) = normalized_anchor.expanded(padding) else {
             output.extend(0..self.material_count);
             return 0;
         };
