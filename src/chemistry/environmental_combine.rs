@@ -1056,11 +1056,12 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             });
         let target_cell_limit =
             FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
-        let target_cell_count = crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
-            &environment.field,
-            shared_bounds[anchor_index].expect("anchor bounds were just populated"),
-            BOUNDS_PADDING,
-        );
+        let target_cell_count =
+            crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
+                &environment.field,
+                shared_bounds[anchor_index].expect("anchor bounds were just populated"),
+                BOUNDS_PADDING,
+            );
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
