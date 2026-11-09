@@ -1334,12 +1334,15 @@ fn accumulate_environmental_internal(
                 shared_snapshot
                     .filter(|snapshot| snapshot.unassigned_materials == 0)
                     .and_then(|snapshot| {
-                        let anchor_index = snapshot.materials.binary_search_by_key(
-                            &crate::environmental_interaction::MaterialIdentity(
-                                source_a.environmental_identity,
-                            ),
-                            |record| record.identity,
-                        ).ok()?;
+                        let anchor_index = snapshot
+                            .materials
+                            .binary_search_by_key(
+                                &crate::environmental_interaction::MaterialIdentity(
+                                    source_a.environmental_identity,
+                                ),
+                                |record| record.identity,
+                            )
+                            .ok()?;
                         let completed = shared_candidates
                             .and_then(|(_, completed)| completed.get(anchor_index))
                             .copied()
