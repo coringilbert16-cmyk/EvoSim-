@@ -47,6 +47,7 @@ pub(crate) struct EnvironmentalSnapshotCursor {
     cell_visits: u64,
     material_visits: u64,
     unassigned_materials: u64,
+    bond_record_count: u64,
     complete: bool,
     invalidated: bool,
 }
@@ -73,6 +74,7 @@ impl EnvironmentalSnapshotCursor {
             cell_visits: 0,
             material_visits: 0,
             unassigned_materials: 0,
+            bond_record_count: 0,
             complete: false,
             invalidated: false,
         }
@@ -171,6 +173,12 @@ impl EnvironmentalSnapshotCursor {
                 let cell_index = self.next_cell;
                 let material_index = self.next_material;
                 let physical = &cell.physical_materials[material_index];
+                self.bond_record_count = self.bond_record_count.saturating_add(
+                    physical
+                        .internal_connections
+                        .as_ref()
+                        .map_or(0, |connections| connections.len() as u64),
+                );
                 self.next_material += 1;
                 self.material_visits = self.material_visits.saturating_add(1);
                 page.material_visits = page.material_visits.saturating_add(1);
@@ -266,6 +274,7 @@ impl EnvironmentalSnapshotCursor {
                 bond_indices_by_material: std::mem::take(&mut self.bond_indices_by_material),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
+                bond_record_count: self.bond_record_count,
                 unassigned_materials: self.unassigned_materials,
             };
             page.snapshot = Some(snapshot);
