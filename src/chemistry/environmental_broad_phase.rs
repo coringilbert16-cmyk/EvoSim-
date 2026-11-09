@@ -2186,6 +2186,58 @@ mod tests {
     }
 
     #[test]
+    fn single_anchor_directed_cursor_discovers_incoming_materials() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        field.cells[0]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(10, "Carbon"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 7);
+        let anchor_index = snapshot
+            .materials
+            .binary_search_by_key(&MaterialIdentity(10), |record| record.identity)
+            .unwrap();
+        let mut bounds = vec![None; snapshot.materials.len()];
+        bounds[anchor_index] = Some(MaterialSpatialBounds {
+            min_x: 0.0,
+            max_x: 40.0,
+            min_y: 0.0,
+            max_y: 20.0,
+        });
+        let mut cursor = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            7,
+            anchor_index,
+        )
+        .unwrap();
+        let page = cursor.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(page.complete);
+        assert_eq!(page.pairs.len(), 1);
+        assert_eq!(page.pairs[0].identity_left, MaterialIdentity(10));
+        assert_eq!(page.pairs[0].identity_right, MaterialIdentity(20));
+        assert!(IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            7,
+            snapshot.materials.len(),
+        )
+        .is_none());
+    }
+
+    #[test]
     fn indexed_cursor_prunes_pair_work_for_sparse_materials() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
         let mut bounds = Vec::new();
