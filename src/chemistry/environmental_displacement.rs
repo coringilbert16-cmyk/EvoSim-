@@ -1271,8 +1271,7 @@ fn accumulate_environmental_internal(
                             }
                             diagnostics.replacement_contact_searches =
                                 diagnostics.replacement_contact_searches.saturating_add(1);
-                            *remaining_discovery_work =
-                                remaining_discovery_work.saturating_sub(1);
+                            *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                             let Some((candidate, investment)) =
                                 best_replacement_contact_with_diagnostics(
                                     &combined,
@@ -1308,10 +1307,9 @@ fn accumulate_environmental_internal(
                                 .replacement_alternatives_evaluated
                                 .saturating_add(census.alternatives.len() as u64);
                             if census.work_limit_reached {
-                                diagnostics.replacement_alternative_audits_truncated =
-                                    diagnostics
-                                        .replacement_alternative_audits_truncated
-                                        .saturating_add(1);
+                                diagnostics.replacement_alternative_audits_truncated = diagnostics
+                                    .replacement_alternative_audits_truncated
+                                    .saturating_add(1);
                             }
                             // Bond potential depends on the reactant pair, not
                             // which endpoint interface joins that pair. The
@@ -1320,14 +1318,12 @@ fn accumulate_environmental_internal(
                             let selected_alternative =
                                 census.alternatives.iter().find(|alternative| {
                                     alternative.candidate.endpoint_a == candidate.endpoint_a
-                                        && alternative.candidate.endpoint_b
-                                            == candidate.endpoint_b
+                                        && alternative.candidate.endpoint_b == candidate.endpoint_b
                                 });
                             if let Some(selected_alternative) = selected_alternative {
                                 if census.alternatives.iter().any(|alternative| {
                                     (alternative.candidate.endpoint_a != candidate.endpoint_a
-                                        || alternative.candidate.endpoint_b
-                                            != candidate.endpoint_b)
+                                        || alternative.candidate.endpoint_b != candidate.endpoint_b)
                                         && alternative.activation_increment
                                             > selected_alternative.activation_increment
                                 }) {
@@ -1371,9 +1367,7 @@ fn accumulate_environmental_internal(
                                 continue;
                             }
                             let Some(activation_signal) =
-                                crate::chemistry::normalized_chemistry_to_activation_signal(
-                                    next,
-                                )
+                                crate::chemistry::normalized_chemistry_to_activation_signal(next)
                             else {
                                 continue;
                             };
@@ -1398,14 +1392,12 @@ fn accumulate_environmental_internal(
                                         diagnostics.activation_threshold_met.saturating_add(1);
                                 }
                                 Some(false) => {
-                                    diagnostics.activation_below_threshold = diagnostics
-                                        .activation_below_threshold
-                                        .saturating_add(1);
+                                    diagnostics.activation_below_threshold =
+                                        diagnostics.activation_below_threshold.saturating_add(1);
                                 }
                                 None => {
-                                    diagnostics.activation_status_unavailable = diagnostics
-                                        .activation_status_unavailable
-                                        .saturating_add(1);
+                                    diagnostics.activation_status_unavailable =
+                                        diagnostics.activation_status_unavailable.saturating_add(1);
                                 }
                             }
                             let Some(trial) = trial else {
@@ -1420,11 +1412,7 @@ fn accumulate_environmental_internal(
                                                 diagnostics
                                                     .trial_rejections_old_bond_energy
                                                     .saturating_add(1);
-                                            if let (
-                                                Some(stored),
-                                                Some(expected),
-                                                Some(abs_error),
-                                            ) = (
+                                            if let (Some(stored), Some(expected), Some(abs_error)) = (
                                                 trial_diagnostic.old_bond_energy_stored,
                                                 trial_diagnostic.old_bond_energy_expected,
                                                 trial_diagnostic.old_bond_energy_abs_error,
@@ -1459,10 +1447,9 @@ fn accumulate_environmental_internal(
                                                 (*candidate_counter).saturating_add(1);
                                         }
                                         DisplacementTrialFailureStage::Formation => {
-                                            diagnostics.trial_rejections_replacement =
-                                                diagnostics
-                                                    .trial_rejections_replacement
-                                                    .saturating_add(1);
+                                            diagnostics.trial_rejections_replacement = diagnostics
+                                                .trial_rejections_replacement
+                                                .saturating_add(1);
                                             diagnostics.trial_rejections_formation_investment =
                                                 diagnostics
                                                     .trial_rejections_formation_investment
