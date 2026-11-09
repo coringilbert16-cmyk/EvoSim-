@@ -1290,6 +1290,52 @@ impl IndexedSpatialCursor {
         work_limit: usize,
         output_limit: usize,
     ) -> IndexedSpatialCursorPage {
+        self.next_page_internal(
+            snapshot,
+            field,
+            bounds,
+            None,
+            padding,
+            target_cell_limit,
+            work_limit,
+            output_limit,
+        )
+    }
+
+    pub(crate) fn next_page_with_index(
+        &mut self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        spatial_index: &MaterialSpatialIndex,
+        padding: f64,
+        target_cell_limit: usize,
+        work_limit: usize,
+        output_limit: usize,
+    ) -> IndexedSpatialCursorPage {
+        self.next_page_internal(
+            snapshot,
+            field,
+            bounds,
+            Some(spatial_index),
+            padding,
+            target_cell_limit,
+            work_limit,
+            output_limit,
+        )
+    }
+
+    fn next_page_internal(
+        &mut self,
+        snapshot: &EnvironmentalMaterialSnapshot,
+        field: &ActiveMaterialField,
+        bounds: &[Option<MaterialSpatialBounds>],
+        spatial_index: Option<&MaterialSpatialIndex>,
+        padding: f64,
+        target_cell_limit: usize,
+        work_limit: usize,
+        output_limit: usize,
+    ) -> IndexedSpatialCursorPage {
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
             || field.revision != self.field_revision
@@ -1298,6 +1344,7 @@ impl IndexedSpatialCursor {
             || field.height_cells != self.field_height_cells
             || field.cell_size.to_bits() != self.field_cell_size_bits
             || field.cells.len() != self.field_cell_count
+            || spatial_index.is_some_and(|index| !index.is_current(snapshot, field))
         {
             return IndexedSpatialCursorPage {
                 deferred_anchors: self.anchor_order.len().saturating_sub(self.anchor_index) as u64,
