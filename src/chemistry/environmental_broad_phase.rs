@@ -2188,6 +2188,40 @@ mod tests {
             (pairs[0].identity_left, pairs[0].identity_right),
             (MaterialIdentity(10), MaterialIdentity(20))
         );
+
+        let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
+        let anchor_bounds = bounds[0].expect("anchor bounds exist");
+        let target_cell_count = IndexedSpatialCursor::target_cell_count_with_index(
+            &field,
+            anchor_bounds,
+            0.0,
+            &spatial_index,
+        )
+        .expect("indexed anchor bounds intersect the field");
+        let mut cursor = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            0,
+            0,
+        )
+        .expect("anchor index is valid");
+        let page = cursor.next_page_with_index(
+            &snapshot,
+            &field,
+            &bounds,
+            &spatial_index,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(page.complete);
+        assert_eq!(page.pairs.len(), 1);
+        assert_eq!(
+            (page.pairs[0].identity_left, page.pairs[0].identity_right),
+            (MaterialIdentity(10), MaterialIdentity(20))
+        );
     }
 
     #[test]
