@@ -1061,24 +1061,14 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 shared_bounds[anchor_index].expect("anchor bounds were just populated"),
                 BOUNDS_PADDING,
             );
-        // A bonded anchor needs both target directions: COMBINE consumes
-        // the forward half, while DISPLACEMENT consumes the complete directed
-        // set from this same cursor. Unbonded anchors retain the cheaper
-        // forward-only traversal.
-        let anchor_has_bonds = snapshot
-            .bond_indices_by_material
-            .get(&record_a.identity)
-            .is_some_and(|indices| !indices.is_empty());
-        let cursor_orientation = if anchor_has_bonds {
-            crate::environmental_broad_phase::PairOrientation::Directed
-        } else {
-            crate::environmental_broad_phase::PairOrientation::ForwardOrdered
-        };
+        // The shared discovery stream is role-complete for every material,
+        // not only bonded anchors. COMBINE consumes the forward locator order;
+        // DISPLACEMENT later projects both directions from these same records.
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
                 &environment.field,
-                cursor_orientation,
+                crate::environmental_broad_phase::PairOrientation::Directed,
                 tick as usize,
                 anchor_index,
             )
@@ -1121,12 +1111,11 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 else {
                     continue;
                 };
-                // Retain every directed candidate for bonded anchors so
-                // DISPLACEMENT can consume both roles without a second
-                // reverse-only spatial traversal.
-                if anchor_has_bonds {
-                    shared_candidate_pairs.push(pair);
-                }
+                // This is the tick's shared directed material-pair result.
+                // Retain it before reaction-specific COMBINE filtering so
+                // DISPLACEMENT can derive its own anchor roles without another
+                // spatial traversal.
+                shared_candidate_pairs.push(pair);
                 let source_locator = (record_a.locator.cell_index, record_a.locator.material_index);
                 let target_locator = (record_b.locator.cell_index, record_b.locator.material_index);
                 // The reverse half belongs to DISPLACEMENT only. COMBINE
