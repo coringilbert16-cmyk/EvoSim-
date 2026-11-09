@@ -1377,6 +1377,48 @@ impl IndexedSpatialCursor {
         })
     }
 
+    /// Reuse the cursor's allocated candidate and traversal buffers for the
+    /// next anchor in the same immutable tick snapshot.
+    pub(crate) fn reset_for_anchor(
+        &mut self,
+        orientation: PairOrientation,
+        tick: usize,
+        anchor_index: usize,
+    ) {
+        self.orientation = orientation;
+        self.reverse_only = false;
+        if self.anchor_order.is_empty() {
+            self.anchor_order.push(anchor_index);
+        } else {
+            self.anchor_order[0] = anchor_index;
+            self.anchor_order.truncate(1);
+        }
+        self.anchor_index = 0;
+        self.anchors_visited = 0;
+        self.anchor_initialized = false;
+        self.range = None;
+        self.row_offset = 0;
+        self.col = 0;
+        self.tick = tick;
+        self.cell_start_offset = 0;
+        self.cells_visited = 0;
+        self.current_cell_limit = usize::MAX;
+        self.target_slot = 0;
+        self.target_slots_visited = 0;
+        self.target_slots_to_visit = 0;
+        self.cell_loaded = false;
+        self.candidate_targets.clear();
+        self.candidate_position = 0;
+        self.candidate_targets_visited = 0;
+        self.query_stack.clear();
+        self.query_bounds = None;
+        self.query_unbounded_position = 0;
+        self.query_fallback_position = 0;
+        self.query_fallback = false;
+        self.query_complete = false;
+        self.complete = false;
+    }
+
     pub(crate) fn new_rotated(
         snapshot: &EnvironmentalMaterialSnapshot,
         field: &ActiveMaterialField,
