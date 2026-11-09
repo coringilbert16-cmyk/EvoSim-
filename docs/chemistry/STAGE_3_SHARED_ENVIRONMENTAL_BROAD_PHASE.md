@@ -330,7 +330,7 @@ This stage changes same-tick visibility intentionally: no reaction can consume a
 The production tick now treats the tick-start material snapshot as the common discovery source:
 
 - BREAK consumes the snapshot-owned existing-bond inventory. It does not rebuild its candidate list by walking live field ownership.
-- The COMBINE broad-phase cursor emits directed material-pair records for every anchor, not just bonded anchors. The shared pair stream is retained before COMBINE applies its forward-locator filter.
+- The COMBINE broad-phase cursor emits one shared pair stream: forward-ordered records for unbonded anchors and both directed roles for bonded anchors. The stream is retained before COMBINE applies its forward-locator filter.
 - COMBINE evaluates only the forward locator ordering from that stream. DISPLACEMENT groups the same directed records by anchor and derives both anchor/displaced bond orientations from them.
 - DISPLACEMENT's anchor ordering and bond lookup come from the snapshot material and bond indexes. Its production path no longer launches a reverse-only spatial cursor or falls back to a second target-cell/material scan when shared coverage is partial.
 - Partial shared coverage is authoritative for the current tick. Unvisited relationships remain deferred to the next rotated shared pass; they are not reclassified as chemically invalid.
