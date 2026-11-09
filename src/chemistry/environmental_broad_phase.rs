@@ -1042,7 +1042,8 @@ fn build_spatial_tree(
     }
 
     let split_x = bounds.max_x - bounds.min_x >= bounds.max_y - bounds.min_y;
-    entries.sort_unstable_by(|left, right| {
+    let middle = entries.len() / 2;
+    let (_, median, _) = entries.select_nth_unstable_by(middle, |left, right| {
         let left_center = if split_x {
             left.bounds.min_x + (left.bounds.max_x - left.bounds.min_x) * 0.5
         } else {
@@ -1055,8 +1056,11 @@ fn build_spatial_tree(
         };
         left_center.total_cmp(&right_center)
     });
-    let middle = entries.len() / 2;
-    let (left_entries, right_entries) = entries.split_at_mut(middle);
+    let median_material = median.material_index;
+    let (left_entries, pivot_and_right) = entries.split_at_mut(middle);
+    let (_, right_entries) = pivot_and_right
+        .split_first_mut()
+        .expect("median entry exists");
     let left = build_spatial_tree(left_entries, nodes);
     let right = build_spatial_tree(right_entries, nodes);
     let node_index = nodes.len();
@@ -1064,7 +1068,7 @@ fn build_spatial_tree(
         bounds,
         left,
         right,
-        material_index: None,
+        material_index: Some(median_material),
     });
     Some(node_index)
 }
@@ -1189,13 +1193,12 @@ impl MaterialSpatialIndex {
             }
             if let Some(material_index) = node.material_index {
                 output.push(material_index);
-            } else {
-                if let Some(left) = node.left {
-                    stack.push(left);
-                }
-                if let Some(right) = node.right {
-                    stack.push(right);
-                }
+            }
+            if let Some(left) = node.left {
+                stack.push(left);
+            }
+            if let Some(right) = node.right {
+                stack.push(right);
             }
         }
         output.extend(self.unbounded_materials.iter().copied());
