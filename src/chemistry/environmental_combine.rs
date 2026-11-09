@@ -849,6 +849,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     }
                 }
             }
+            if page.complete {
+                break;
+            }
         }
     }
 
@@ -931,54 +934,118 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         return Vec::new();
     }
 
-    // Bounds are shared discovery metadata for COMBINE and DISPLACEMENT. The
-    // cursor validates every constituent against the immutable snapshot before
-    // any spatial pair page is consumed.
-    let mut bounds_cursor =
-        crate::environmental_broad_phase::MaterialBoundsCursor::new(snapshot, &environment.catalog);
-    let bounds = loop {
-        let page = bounds_cursor.next_page(
-            snapshot,
-            &environment.field,
-            &environment.catalog,
-            usize::MAX,
-        );
-        if let Some(bounds) = page.bounds {
-            break bounds;
-        }
-        if page.complete || page.visited_work == 0 {
-            diagnostics.budget_exhausted = true;
-            record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
-            return Vec::new();
-        }
-    };
-
-    let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new_rotated(
-        snapshot,
-        &environment.field,
-        crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
-        tick as usize,
-    );
+    // Prepare only the current anchor's geometry. This avoids the previous
+    // full-field, unbudgeted bounds pass and lets each anchor share its restored
+    // source structure with every target pair found around it.
     let mut operations = Vec::new();
     let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
     let mut updated_keys = BTreeSet::new();
     let mut checked_prefixes = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
 
-    while *remaining_discovery_work > 0 {
-        // Single-work-unit pages make the shared cursor resumable at the exact
-        // material/cell slot while leaving the remaining budget for COMBINE's
-        // constituent-interface evaluation.
-        let target_cell_limit = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
-        let page = cursor.next_page(
-            snapshot,
-            &environment.field,
-            &bounds,
-            BOUNDS_PADDING,
-            target_cell_limit,
-            1,
-            1,
+    let mut shared_bounds = vec![None; snapshot.materials.len()];
+    let cell_count = environment.field.cells.len();
+    let mut anchor_order = (0..snapshot.materials.len()).collect::<Vec<_>>();
+    anchor_order.sort_by_key(|&index| {
+        let record = &snapshot.materials[index];
+        let cell_offset = if cell_count == 0 {
+            0
+        } else {
+            record
+                .locator
+                .cell_index
+                .wrapping_add(cell_count)
+                .wrapping_sub(tick as usize % cell_count)
+                % cell_count
+        };
+        let material_count = environment
+            .field
+            .cells
+            .get(record.locator.cell_index)
+            .map_or(1, |cell| cell.physical_materials.len())
+            .max(1);
+        let material_start = (tick as usize).wrapping_add(record.locator.cell_index)
+            % material_count;
+        let material_offset = record
+            .locator
+            .material_index
+            .wrapping_add(material_count)
+            .wrapping_sub(material_start)
+            % material_count;
+        (cell_offset, material_offset)
+    });
+
+    for anchor_index in anchor_order {
+        if *remaining_discovery_work == 0 {
+            break;
+        }
+        let Some(record_a) = snapshot.materials.get(anchor_index) else {
+            continue;
+        };
+        let Some(source_a) = environment
+            .field
+            .cells
+            .get(record_a.locator.cell_index)
+            .and_then(|cell| cell.physical_materials.get(record_a.locator.material_index))
+            .filter(|material| material.environmental_identity == record_a.identity.0)
+            .cloned()
+        else {
+            continue;
+        };
+        // Charge anchor restoration by constituent count. Large anchors that
+        // do not fit this tick's remaining budget are deferred to a later,
+        // tick-rotated pass rather than forcing an unbounded preparation scan.
+        let anchor_preparation_work = record_a.constituent_count.max(1);
+        if anchor_preparation_work > *remaining_discovery_work {
+            continue;
+        }
+        *remaining_discovery_work =
+            (*remaining_discovery_work).saturating_sub(anchor_preparation_work);
+        let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
+        else {
+            continue;
+        };
+        let Some(body) =
+            crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                &source_structure,
+            )
+        else {
+            continue;
+        };
+        shared_bounds[anchor_index] = Some(
+            crate::environmental_broad_phase::MaterialSpatialBounds {
+                min_x: body.min_x,
+                max_x: body.max_x,
+                min_y: body.min_y,
+                max_y: body.max_y,
+            },
         );
+        let Some(mut cursor) =
+            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
+                snapshot,
+                &environment.field,
+                crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
+                tick as usize,
+                anchor_index,
+            )
+        else {
+            continue;
+        };
+
+        while *remaining_discovery_work > 0 {
+            // Single-work-unit pages preserve the exact target-cell/material
+            // continuation while leaving budget for constituent evaluation.
+            let target_cell_limit =
+                FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
+            let page = cursor.next_page(
+                snapshot,
+                &environment.field,
+                &shared_bounds,
+                BOUNDS_PADDING,
+                target_cell_limit,
+                1,
+                1,
+            );
         *remaining_discovery_work =
             (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
         diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
@@ -989,21 +1056,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         }
 
         for pair in page.pairs {
-            let Some(record_left) = snapshot.materials.get(pair.left) else {
-                continue;
-            };
-            let Some(record_right) = snapshot.materials.get(pair.right) else {
-                continue;
-            };
-            let (record_a, record_b) = (record_left, record_right);
-            let Some(source_a) = environment
-                .field
-                .cells
-                .get(record_a.locator.cell_index)
-                .and_then(|cell| cell.physical_materials.get(record_a.locator.material_index))
-                .filter(|material| material.environmental_identity == record_a.identity.0)
-                .cloned()
-            else {
+            let Some(record_b) = snapshot.materials.get(pair.right) else {
                 continue;
             };
             let Some(source_b) = environment
@@ -1021,10 +1074,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
                 diagnostics.same_cell_source_pair_inspections += 1;
             }
 
-            let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
-            else {
-                continue;
-            };
             let mut trial_structure = source_structure.clone();
             let Some(indices_b) = crate::material_restoration::restore_material(
                 &mut trial_structure,
