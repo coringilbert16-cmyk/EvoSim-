@@ -886,7 +886,7 @@ impl Simulation {
         // reaction layer. BREAK, COMBINE, and DISPLACEMENT all discover against
         // this tick-start snapshot; identity-based commit resolution handles
         // slot shifts after the deferred commit boundary.
-        let mut environmental_shared_snapshot =
+        let environmental_shared_snapshot =
             crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
                 &self.environment.field,
                 self.tick,
@@ -1079,8 +1079,16 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .displacement_scheduled = environmental_displacement_operations.len();
         environmental_displacement_operations.retain(|operation| {
-            let a = material_claim(operation.source_a.environmental_identity, operation.cell_a, operation.material_a);
-            let b = material_claim(operation.source_b.environmental_identity, operation.cell_b, operation.material_b);
+            let a = material_claim(
+                operation.source_a.environmental_identity,
+                operation.cell_a,
+                operation.material_a,
+            );
+            let b = material_claim(
+                operation.source_b.environmental_identity,
+                operation.cell_b,
+                operation.material_b,
+            );
             if a != b
                 && !environmental_claimed_materials.contains(&a)
                 && !environmental_claimed_materials.contains(&b)
@@ -1096,6 +1104,8 @@ impl Simulation {
                 false
             }
         });
+        self.environmental_chemistry_diagnostics
+            .displacement_scheduled = environmental_displacement_operations.len();
 
 
         // Commit only after all three layers have completed discovery.
