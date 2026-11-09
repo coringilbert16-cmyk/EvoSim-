@@ -2606,6 +2606,8 @@ mod tests {
                 &simulation.environment.field,
                 field_cell as u64,
             );
+        assert_eq!(shared_snapshot.unassigned_materials, 0);
+        assert_eq!(shared_snapshot.existing_bonds.len(), 1);
         let mut discovery_work =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         let mut operations = accumulate_environmental_with_shared_snapshot(
