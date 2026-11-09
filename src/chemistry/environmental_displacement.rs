@@ -1085,6 +1085,18 @@ fn accumulate_environmental_internal(
     let mut operations = Vec::new();
     let mut updated_keys = BTreeSet::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let shared_bond_indices_by_material = shared_snapshot
+        .filter(|snapshot| snapshot.unassigned_materials == 0)
+        .map(|snapshot| {
+            let mut indices_by_material = BTreeMap::<u64, Vec<usize>>::new();
+            for bond in &snapshot.existing_bonds {
+                indices_by_material
+                    .entry(bond.material.0)
+                    .or_default()
+                    .push(bond.bond_index);
+            }
+            indices_by_material
+        });
 
     'anchors: for cell_offset in 0..cell_scan_count {
         if anchor_work == 0 || *remaining_discovery_work == 0 {
@@ -1113,16 +1125,10 @@ fn accumulate_environmental_internal(
             if connections.is_empty() {
                 continue;
             }
-            let shared_bond_indices = shared_snapshot
-                .filter(|snapshot| snapshot.unassigned_materials == 0)
-                .map(|snapshot| {
-                    snapshot
-                        .existing_bonds
-                        .iter()
-                        .filter(|bond| bond.material.0 == source_a.environmental_identity)
-                        .map(|bond| bond.bond_index)
-                        .collect::<Vec<_>>()
-                });
+            let shared_bond_indices = shared_bond_indices_by_material
+                .as_ref()
+                .and_then(|indices| indices.get(&source_a.environmental_identity))
+                .cloned();
             let bond_indices =
                 shared_bond_indices.unwrap_or_else(|| (0..connections.len()).collect());
             diagnostics.bonded_anchor_materials =
