@@ -1191,6 +1191,12 @@ fn accumulate_environmental_internal(
         snapshot
             .materials
             .iter()
+            .filter(|record| {
+                snapshot
+                    .bond_indices_by_material
+                    .get(&record.identity)
+                    .is_some_and(|indices| !indices.is_empty())
+            })
             .map(|record| (record.locator.cell_index, record.locator.material_index))
             .collect::<Vec<_>>()
     } else {
