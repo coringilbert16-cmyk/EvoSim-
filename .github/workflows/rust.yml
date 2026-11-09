@@ -292,11 +292,9 @@ jobs:
             local label="$1"
             local binary="$2"
             local output="benchmark-results/${label}.log"
-            local diagnostics="benchmark-results/${label}.jsonl"
             echo "RUN label=$label revision=$([ "$binary" = "$baseline" ] && echo baseline || echo optimized) seed=$SEED ticks=$TICKS"
             "$binary" --headless --environment-chemistry-experiment \
               --ticks "$TICKS" --seed "$SEED" \
-              --diagnostics "$diagnostics" --diagnostic-interval "$TICKS" \
               > "$output"
             grep "ENVIRONMENTAL CHEMISTRY END:" "$output"
           }
@@ -339,6 +337,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: environmental-broad-phase-equal-tick-benchmark
-          path: benchmark-results/
+          path: benchmark-results/*.log
           if-no-files-found: error
           retention-days: 30
