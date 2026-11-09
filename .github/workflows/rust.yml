@@ -77,10 +77,16 @@ jobs:
               for line in stream:
                   record = json.loads(line)
                   if record.get("event") == "environmental_chemistry_summary":
+                      discovery = record.get("break_discovery", {})
                       print(
                           f"{label} SUMMARY ticks={record.get('ticks_observed')} "
                           f"break_committed={record.get('break_committed')} "
                           f"combine_committed={record.get('combine_committed')} "
+                          f"stale_validation_ns={discovery.get('stale_material_validation_elapsed_ns')} "
+                          f"checked_materials={discovery.get('checked_materials_inspected')} "
+                          f"break_scan_ns={discovery.get('scan_elapsed_ns')} "
+                          f"endpoint_geometry_ns={discovery.get('endpoint_geometry_elapsed_ns')} "
+                          f"material_restoration_ns={discovery.get('material_restoration_elapsed_ns')} "
                           f"energy_residual={record.get('energy_balance_residual')} "
                           f"inventory={record.get('final_material_inventory')}"
                       )
