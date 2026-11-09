@@ -1098,7 +1098,7 @@ impl MaterialSpatialIndex {
         bounds: &[Option<MaterialSpatialBounds>],
     ) -> Self {
         let vertical_period = field.height_cells as f64 * field.cell_size;
-        let mut entries = Vec::new();
+        let mut entries = Vec::with_capacity(snapshot.materials.len().saturating_mul(3));
         let mut unbounded_materials = Vec::new();
         let locators = snapshot
             .materials
@@ -1138,7 +1138,9 @@ impl MaterialSpatialIndex {
             }
         }
 
-        let mut nodes = Vec::with_capacity(entries.len().saturating_mul(2));
+        // Median entries live in internal nodes, so the tree has one node
+        // per image entry rather than the usual 2n-1 leaf/internal layout.
+        let mut nodes = Vec::with_capacity(entries.len());
         let root = build_spatial_tree(&mut entries, &mut nodes);
         Self {
             pass_id: snapshot.pass_id,
