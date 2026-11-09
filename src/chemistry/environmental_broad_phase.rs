@@ -764,11 +764,10 @@ impl SpatialPairCursor {
         output_limit: usize,
     ) -> SpatialCursorPage {
         let known_pair_checks = match self.orientation {
-            PairOrientation::Unordered | PairOrientation::ForwardOrdered => {
-                snapshot.known_pair_count()
+            PairOrientation::Unordered => snapshot.known_pair_count(),
+            PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                snapshot.known_directed_pair_count()
             }
-            PairOrientation::Directed => snapshot.known_directed_pair_count(),
-                PairOrientation::ForwardOrdered => snapshot.known_pair_count(),
         };
         if snapshot.pass_id != self.pass_id
             || snapshot.field_revision != self.field_revision
@@ -1766,8 +1765,9 @@ mod tests {
             }
             let expected_checks = match orientation {
                 PairOrientation::Unordered => snapshot.known_pair_count(),
-                PairOrientation::Directed => snapshot.known_directed_pair_count(),
-                PairOrientation::ForwardOrdered => snapshot.known_pair_count(),
+                PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                    snapshot.known_directed_pair_count()
+                }
             };
             assert_eq!(total_visited, expected_checks);
             assert_eq!(actual, expected);
