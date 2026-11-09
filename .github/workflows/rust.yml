@@ -256,70 +256,95 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build baseline and optimized revisions
+      - name: Build three controlled configurations
         shell: bash
         run: |
           set -euo pipefail
           git checkout --detach "$BASE_SHA"
           CARGO_TARGET_DIR="$RUNNER_TEMP/target-baseline" cargo build --release --locked
           git checkout --detach "$PR_SHA"
-          CARGO_TARGET_DIR="$RUNNER_TEMP/target-optimized" cargo build --release --locked
-      - name: Run paired equal-tick measurements
+          CARGO_TARGET_DIR="$RUNNER_TEMP/target-shared" cargo build --release --locked
+      - name: Run paired three-way equal-tick experiment
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p benchmark-results
           baseline="$RUNNER_TEMP/target-baseline/release/evosim"
-          optimized="$RUNNER_TEMP/target-optimized/release/evosim"
+          shared="$RUNNER_TEMP/target-shared/release/evosim"
           run_case() {
             local label="$1"
             local binary="$2"
+            local mode="$3"
             local output="benchmark-results/${label}.log"
-            echo "RUN label=$label revision=$([ "$binary" = "$baseline" ] && echo baseline || echo optimized) seed=$SEED ticks=$TICKS"
-            "$binary" --headless --environment-chemistry-experiment \
-              --ticks "$TICKS" --seed "$SEED" \
-              > "$output"
+            echo "RUN label=$label mode=$mode seed=$SEED ticks=$TICKS"
+            if [ "$mode" = "cell" ]; then
+              EVOSIM_DISCOVERY_MODE=cell "$binary" --headless --environment-chemistry-experiment --ticks "$TICKS" --seed "$SEED" > "$output"
+            elif [ "$mode" = "aabb" ]; then
+              EVOSIM_DISCOVERY_MODE=aabb "$binary" --headless --environment-chemistry-experiment --ticks "$TICKS" --seed "$SEED" > "$output"
+            else
+              env -u EVOSIM_DISCOVERY_MODE "$binary" --headless --environment-chemistry-experiment --ticks "$TICKS" --seed "$SEED" > "$output"
+            fi
             grep "ENVIRONMENTAL CHEMISTRY END:" "$output"
           }
-          # Alternate order to reduce systematic warm-up or runner-load bias.
-          run_case baseline-1 "$baseline"
-          run_case optimized-1 "$optimized"
-          run_case optimized-2 "$optimized"
-          run_case baseline-2 "$baseline"
-          run_case baseline-3 "$baseline"
-          run_case optimized-3 "$optimized"
+          # A = prior cell-based implementation; B = shared snapshot + cell grid;
+          # C = shared snapshot + AABB tree. Alternate order across repetitions.
+          run_case A-baseline-1 "$baseline" baseline
+          run_case B-shared-cell-1 "$shared" cell
+          run_case C-shared-aabb-1 "$shared" aabb
+          run_case C-shared-aabb-2 "$shared" aabb
+          run_case B-shared-cell-2 "$shared" cell
+          run_case A-baseline-2 "$baseline" baseline
+          run_case B-shared-cell-3 "$shared" cell
+          run_case A-baseline-3 "$baseline" baseline
+          run_case C-shared-aabb-3 "$shared" aabb
           python3 - <<'PY'
           import re
           from pathlib import Path
           import statistics
 
-          groups = {"baseline": [], "optimized": []}
+          groups = {"A-baseline": [], "B-shared-cell": [], "C-shared-aabb": []}
+          signatures = {name: [] for name in groups}
+          pattern = re.compile(
+              r"tick=([0-9]+) elapsed_wall_seconds=([0-9.]+) "
+              r"physical_resources=([0-9]+) constituents=([0-9]+) "
+              r".*energy_residual=Some\\(([^)]+)\\)"
+          )
           for path in sorted(Path("benchmark-results").glob("*.log")):
-              match = re.search(r"tick=([0-9]+) elapsed_wall_seconds=([0-9.]+)", path.read_text())
+              match = pattern.search(path.read_text())
               if not match:
-                  raise SystemExit(f"Missing final tick/time in {path}")
-              ticks, seconds = int(match.group(1)), float(match.group(2))
+                  raise SystemExit(f"Missing final metrics in {path}")
+              ticks, seconds, resources, constituents = map(int, match.groups()[:1] + match.groups()[2:4])
+              residual = float(match.group(5))
               if ticks != 1800:
                   raise SystemExit(f"{path} completed {ticks} ticks, expected 1800")
-              group = "baseline" if path.name.startswith("baseline") else "optimized"
+              group = path.name.split("-")[0] + "-" + path.name.split("-")[1]
               groups[group].append(seconds)
+              signatures[group].append((resources, constituents, residual))
 
           for name, values in groups.items():
               if len(values) != 3:
                   raise SystemExit(f"Expected 3 {name} samples, got {len(values)}")
-              print(f"{name}: samples_seconds={values} median_seconds={statistics.median(values):.3f}")
+              print(f"{name}: samples_seconds={values} median_seconds={statistics.median(values):.3f} chemistry_signatures={signatures[name]}")
 
-          old = statistics.median(groups["baseline"])
-          new = statistics.median(groups["optimized"])
-          delta = (new / old - 1.0) * 100.0
-          speedup = old / new
-          print(f"RESULT equal_ticks=1800 seed=42 baseline_median_s={old:.3f} optimized_median_s={new:.3f} time_change_percent={delta:+.2f}% speedup={speedup:.4f}x")
+          medians = {name: statistics.median(values) for name, values in groups.items()}
+          reference = medians["A-baseline"]
+          for name in groups:
+              delta = (medians[name] / reference - 1.0) * 100.0
+              print(f"RESULT {name} median_seconds={medians[name]:.3f} change_vs_A={delta:+.2f}%")
+          cell_signatures = signatures["B-shared-cell"]
+          aabb_signatures = signatures["C-shared-aabb"]
+          if cell_signatures[0][:2] != cell_signatures[1][:2] or cell_signatures[1][:2] != cell_signatures[2][:2]:
+              raise SystemExit("B shared-cell chemistry was not repeatable across runs")
+          if aabb_signatures[0][:2] != aabb_signatures[1][:2] or aabb_signatures[1][:2] != aabb_signatures[2][:2]:
+              raise SystemExit("C shared-AABB chemistry was not repeatable across runs")
+          if cell_signatures[0][:2] != aabb_signatures[0][:2]:
+              print("WARNING: B and C final chemistry differs; candidate ordering/coverage parity requires investigation")
           PY
-      - name: Upload benchmark logs and diagnostics
+      - name: Upload three-way benchmark logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: environmental-broad-phase-equal-tick-benchmark
+          name: environmental-discovery-three-way-benchmark
           path: benchmark-results/*.log
           if-no-files-found: error
           retention-days: 30
