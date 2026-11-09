@@ -241,7 +241,11 @@ impl MaterialBoundsCursor {
                                 .as_ref()
                                 .is_none_or(|shapes| shapes.len() == record.constituent_count)
                     });
-                self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                if record.constituent_count == 0 {
+                    page.completed_materials = page.completed_materials.saturating_add(1);
+                } else {
+                    self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                }
                 continue;
             }
 
@@ -2802,6 +2806,30 @@ mod tests {
         let completed_again = cursor.next_page(&snapshot, &field, &catalog, 1);
         assert!(completed_again.complete);
         assert!(completed_again.bounds.is_none());
+    }
+
+    #[test]
+    fn material_bounds_cursor_completes_empty_material_without_fake_constituent_work() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
+        let mut empty = physical(1, "Carbon");
+        empty.material.parts.clear();
+        field.cells[0].physical_materials.push(empty);
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 103);
+        assert_eq!(snapshot.materials.len(), 1);
+        assert_eq!(snapshot.materials[0].constituent_count, 0);
+
+        let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let page = cursor.next_page(&snapshot, &field, &catalog, 1);
+
+        assert!(page.complete);
+        assert_eq!(page.visited_work, 1);
+        assert_eq!(page.material_headers_inspected, 1);
+        assert_eq!(page.constituent_inspections, 0);
+        assert_eq!(page.deferred_work, 0);
+        assert_eq!(page.completed_materials, 1);
+        assert_eq!(page.bounds, Some(vec![None]));
     }
 
     #[test]
