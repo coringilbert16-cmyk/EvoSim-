@@ -1001,7 +1001,8 @@ impl MaterialSpatialIndex {
                         }
                     }
                     None if bounds[material_index].is_none() => {
-                        if let Some(indices) = materials_by_cell.get_mut(record.locator.cell_index) {
+                        if let Some(indices) = materials_by_cell.get_mut(record.locator.cell_index)
+                        {
                             indices.push(material_index);
                         }
                     }
