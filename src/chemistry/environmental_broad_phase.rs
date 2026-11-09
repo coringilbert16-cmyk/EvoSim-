@@ -2325,11 +2325,21 @@ mod tests {
     #[test]
     fn reverse_anchor_cursor_yields_only_preceding_locator_candidates() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
-        field.cells[0].physical_materials.push(physical(10, "Carbon"));
-        field.cells[1].physical_materials.push(physical(15, "Carbon"));
-        field.cells[1].physical_materials.push(physical(20, "Carbon"));
-        field.cells[1].physical_materials.push(physical(25, "Carbon"));
-        field.cells[2].physical_materials.push(physical(30, "Carbon"));
+        field.cells[0]
+            .physical_materials
+            .push(physical(10, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(15, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(20, "Carbon"));
+        field.cells[1]
+            .physical_materials
+            .push(physical(25, "Carbon"));
+        field.cells[2]
+            .physical_materials
+            .push(physical(30, "Carbon"));
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 17);
         let anchor_index = snapshot
             .materials
