@@ -1349,8 +1349,7 @@ fn accumulate_environmental_internal(
         let bond_indices = shared_bond_indices
             .or(fallback_bond_indices.as_deref())
             .unwrap_or(&[]);
-        diagnostics.bonded_anchor_materials =
-            diagnostics.bonded_anchor_materials.saturating_add(1);
+        diagnostics.bonded_anchor_materials = diagnostics.bonded_anchor_materials.saturating_add(1);
         let Some((source_structure, indices_a)) =
             restore_displacement_source(&source_a, environment)
         else {
@@ -1456,8 +1455,7 @@ fn accumulate_environmental_internal(
             if cell_a == cell_b && material_a == material_b {
                 continue;
             }
-            let source_b =
-                environment.field.cells[cell_b].physical_materials[material_b].clone();
+            let source_b = environment.field.cells[cell_b].physical_materials[material_b].clone();
             let mut combined = source_structure.clone();
             let Some(indices_b) = crate::material_restoration::restore_material(
                 &mut combined,
@@ -1503,14 +1501,8 @@ fn accumulate_environmental_internal(
                     continue;
                 };
                 let expected_bond = Bond {
-                    endpoint_a: crate::structure::BondEndpoint::new(
-                        id_a,
-                        connection.endpoint_a,
-                    ),
-                    endpoint_b: crate::structure::BondEndpoint::new(
-                        id_b,
-                        connection.endpoint_b,
-                    ),
+                    endpoint_a: crate::structure::BondEndpoint::new(id_a, connection.endpoint_a),
+                    endpoint_b: crate::structure::BondEndpoint::new(id_b, connection.endpoint_b),
                     strength: combined.units[part_a]
                         .properties(&environment.catalog)
                         .zip(combined.units[part_b].properties(&environment.catalog))
@@ -1593,11 +1585,10 @@ fn accumulate_environmental_internal(
                         // which endpoint interface joins that pair. The
                         // meaningful alternative-selection audit is therefore
                         // whether another valid interface supplies more activation.
-                        let selected_alternative =
-                            census.alternatives.iter().find(|alternative| {
-                                alternative.candidate.endpoint_a == candidate.endpoint_a
-                                    && alternative.candidate.endpoint_b == candidate.endpoint_b
-                            });
+                        let selected_alternative = census.alternatives.iter().find(|alternative| {
+                            alternative.candidate.endpoint_a == candidate.endpoint_a
+                                && alternative.candidate.endpoint_b == candidate.endpoint_b
+                        });
                         if let Some(selected_alternative) = selected_alternative {
                             if census.alternatives.iter().any(|alternative| {
                                 (alternative.candidate.endpoint_a != candidate.endpoint_a
@@ -1605,8 +1596,7 @@ fn accumulate_environmental_internal(
                                     && alternative.activation_increment
                                         > selected_alternative.activation_increment
                             }) {
-                                diagnostics
-                                    .selected_contact_hides_higher_activation_alternative =
+                                diagnostics.selected_contact_hides_higher_activation_alternative =
                                     diagnostics
                                         .selected_contact_hides_higher_activation_alternative
                                         .saturating_add(1);
@@ -1680,16 +1670,14 @@ fn accumulate_environmental_internal(
                         }
                         let Some(trial) = trial else {
                             if trial_diagnostic.activation_sufficient == Some(true) {
-                                diagnostics.trial_build_rejections_after_activation =
-                                    diagnostics
-                                        .trial_build_rejections_after_activation
-                                        .saturating_add(1);
+                                diagnostics.trial_build_rejections_after_activation = diagnostics
+                                    .trial_build_rejections_after_activation
+                                    .saturating_add(1);
                                 match trial_diagnostic.failure_stage {
                                     DisplacementTrialFailureStage::OldBondEnergy => {
-                                        diagnostics.trial_rejections_old_bond_energy =
-                                            diagnostics
-                                                .trial_rejections_old_bond_energy
-                                                .saturating_add(1);
+                                        diagnostics.trial_rejections_old_bond_energy = diagnostics
+                                            .trial_rejections_old_bond_energy
+                                            .saturating_add(1);
                                         if let (Some(stored), Some(expected), Some(abs_error)) = (
                                             trial_diagnostic.old_bond_energy_stored,
                                             trial_diagnostic.old_bond_energy_expected,
@@ -1700,19 +1688,16 @@ fn accumulate_environmental_internal(
                                             if abs_error > previous_max_error {
                                                 diagnostics.old_bond_energy_max_abs_error =
                                                     abs_error;
-                                                diagnostics
-                                                    .old_bond_energy_stored_at_max_error =
+                                                diagnostics.old_bond_energy_stored_at_max_error =
                                                     stored;
-                                                diagnostics
-                                                    .old_bond_energy_expected_at_max_error =
+                                                diagnostics.old_bond_energy_expected_at_max_error =
                                                     expected;
                                             }
                                         }
                                     }
                                     DisplacementTrialFailureStage::Topology => {
-                                        diagnostics.trial_rejections_topology = diagnostics
-                                            .trial_rejections_topology
-                                            .saturating_add(1);
+                                        diagnostics.trial_rejections_topology =
+                                            diagnostics.trial_rejections_topology.saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::CandidateCheck => {
                                         let replacement_counter =
@@ -1721,8 +1706,7 @@ fn accumulate_environmental_internal(
                                             replacement_counter.saturating_add(1);
                                         let candidate_counter = &mut diagnostics
                                             .trial_rejections_candidate_revalidation;
-                                        *candidate_counter =
-                                            (*candidate_counter).saturating_add(1);
+                                        *candidate_counter = (*candidate_counter).saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::Formation => {
                                         diagnostics.trial_rejections_replacement = diagnostics
@@ -1738,32 +1722,27 @@ fn accumulate_environmental_internal(
                                             &mut diagnostics.trial_rejections_replacement;
                                         *replacement_counter =
                                             replacement_counter.saturating_add(1);
-                                        let insertion_counter = &mut diagnostics
-                                            .trial_rejections_physical_insertion;
-                                        *insertion_counter =
-                                            (*insertion_counter).saturating_add(1);
+                                        let insertion_counter =
+                                            &mut diagnostics.trial_rejections_physical_insertion;
+                                        *insertion_counter = (*insertion_counter).saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::Energy => {
-                                        diagnostics.trial_rejections_energy = diagnostics
-                                            .trial_rejections_energy
-                                            .saturating_add(1);
+                                        diagnostics.trial_rejections_energy =
+                                            diagnostics.trial_rejections_energy.saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::Products => {
-                                        diagnostics.trial_rejections_products = diagnostics
-                                            .trial_rejections_products
-                                            .saturating_add(1);
+                                        diagnostics.trial_rejections_products =
+                                            diagnostics.trial_rejections_products.saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::ReplacementBondTooWeak => {
-                                        diagnostics
-                                            .trial_rejections_replacement_bond_strength =
+                                        diagnostics.trial_rejections_replacement_bond_strength =
                                             diagnostics
                                                 .trial_rejections_replacement_bond_strength
                                                 .saturating_add(1);
                                     }
                                     DisplacementTrialFailureStage::Other => {
-                                        diagnostics.trial_rejections_other = diagnostics
-                                            .trial_rejections_other
-                                            .saturating_add(1);
+                                        diagnostics.trial_rejections_other =
+                                            diagnostics.trial_rejections_other.saturating_add(1);
                                     }
                                 }
                             }
