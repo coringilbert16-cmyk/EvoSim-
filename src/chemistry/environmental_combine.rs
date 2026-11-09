@@ -1064,9 +1064,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         else {
             continue;
         };
-        let Some(anchor_bounds) = shared_bounds[anchor_index] else {
+        if shared_bounds[anchor_index].is_none() {
             continue;
-        };
+        }
         let mut restored_anchor = None;
         let mut anchor_restore_attempted = false;
         let target_cell_limit = usize::MAX;
