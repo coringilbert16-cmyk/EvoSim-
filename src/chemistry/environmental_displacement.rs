@@ -1201,7 +1201,6 @@ fn accumulate_environmental_internal(
             break;
         }
         anchor_work -= 1;
-        *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
         diagnostics.anchor_materials_inspected =
             diagnostics.anchor_materials_inspected.saturating_add(1);
         let Some(source_a) = environment
