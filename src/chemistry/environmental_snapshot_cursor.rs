@@ -249,6 +249,7 @@ impl EnvironmentalSnapshotCursor {
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
                 unassigned_materials: self.unassigned_materials,
+                ..EnvironmentalMaterialSnapshot::default()
             };
             page.snapshot = Some(snapshot);
             page.status = Some(SnapshotCursorStatus::Complete);
