@@ -1195,9 +1195,15 @@ impl IndexedSpatialCursor {
                 );
                 let cell_before_anchor = cell_index < anchor_locator.0;
                 let cell_after_anchor = cell_index > anchor_locator.0;
-                if (self.orientation == PairOrientation::ForwardOrdered && cell_before_anchor)
-                    || (self.reverse_only && cell_after_anchor)
-                {
+                if self.orientation == PairOrientation::ForwardOrdered && cell_before_anchor {
+                    self.advance_cell(range);
+                    continue;
+                }
+                if self.reverse_only && cell_after_anchor {
+                    // Locator-rejected cells are not part of the reverse
+                    // target-cell budget. Preserve the requested number of
+                    // eligible cells even when the rotated range starts later.
+                    self.current_cell_limit = self.current_cell_limit.saturating_add(1);
                     self.advance_cell(range);
                     continue;
                 }
@@ -2341,7 +2347,7 @@ mod tests {
                 .unwrap();
         let mut actual = Vec::new();
         for _ in 0..64 {
-            let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, usize::MAX, 1, 1);
+            let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, 2, 1, 1);
             actual.extend(
                 page.pairs
                     .iter()
