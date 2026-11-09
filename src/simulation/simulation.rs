@@ -962,10 +962,7 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns =
-                self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns
-                    .saturating_add(
-                        elapsed_nanos(resolution_started),
-                    );
+                self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns.saturating_add(elapsed_nanos(resolution_started));
             let committed = resolution.is_ok();
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
@@ -1044,10 +1041,7 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             self.environmental_chemistry_diagnostics.combine_resolution_elapsed_ns =
-                self.environmental_chemistry_diagnostics.combine_resolution_elapsed_ns
-                    .saturating_add(
-                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
-                    );
+                self.environmental_chemistry_diagnostics.combine_resolution_elapsed_ns.saturating_add(elapsed_nanos(resolution_started));
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
             } else {
@@ -1157,10 +1151,7 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             self.environmental_chemistry_diagnostics.displacement_resolution_elapsed_ns =
-                self.environmental_chemistry_diagnostics.displacement_resolution_elapsed_ns
-                    .saturating_add(
-                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
-                    );
+                self.environmental_chemistry_diagnostics.displacement_resolution_elapsed_ns.saturating_add(elapsed_nanos(resolution_started));
             let committed = resolution.is_ok();
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
@@ -1269,10 +1260,7 @@ impl Simulation {
                 &mut graph_discovery_remaining,
             );
             self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns =
-                self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns
-                    .saturating_add(
-                        elapsed_nanos(graph_discovery_started),
-                    );
+                self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns.saturating_add(elapsed_nanos(graph_discovery_started));
             // The environment is one chemistry owner, not one owner per
             // organism. Discover each field-owned bond at most once per tick;
             // its geometry and progress keys are independent of organism graphs.
@@ -1296,10 +1284,7 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
                 self.environmental_chemistry_diagnostics.organism_break_resolution_elapsed_ns =
-                    self.environmental_chemistry_diagnostics.organism_break_resolution_elapsed_ns
-                        .saturating_add(
-                            resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
-                        );
+                    self.environmental_chemistry_diagnostics.organism_break_resolution_elapsed_ns.saturating_add(elapsed_nanos(resolution_started));
             }
             // Carry unused graph slots forward, but never exceed the
             // graph half-budget reserved for this tick.
