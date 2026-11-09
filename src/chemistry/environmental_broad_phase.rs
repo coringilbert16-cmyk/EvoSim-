@@ -2269,6 +2269,64 @@ mod tests {
     }
 
     #[test]
+    fn bounds_occupancy_index_skips_materials_outside_anchor_cells() {
+        let mut field = ActiveMaterialField::new(2_000.0, 10.0, 10.0);
+        let mut bounds = Vec::new();
+        for identity in 1..=100 {
+            field.cells[0]
+                .physical_materials
+                .push(physical(identity, "Carbon"));
+            let min_x = (identity - 1) as f64 * 10.0 + 0.1;
+            bounds.push(Some(MaterialSpatialBounds {
+                min_x,
+                max_x: min_x + 0.8,
+                min_y: 0.1,
+                max_y: 0.9,
+            }));
+        }
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 91);
+        let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds, 0.0);
+        let anchor_bounds = bounds[0].expect("anchor bounds exist");
+        let target_cell_count =
+            IndexedSpatialCursor::target_cell_count(&field, anchor_bounds, 0.0)
+                .expect("anchor intersects field cells");
+
+        let mut legacy =
+            IndexedSpatialCursor::new_for_anchor(&snapshot, &field, PairOrientation::Directed, 0, 0)
+                .expect("anchor index is valid");
+        let legacy_page = legacy.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+
+        let mut indexed =
+            IndexedSpatialCursor::new_for_anchor(&snapshot, &field, PairOrientation::Directed, 0, 0)
+                .expect("anchor index is valid");
+        let indexed_page = indexed.next_page_with_index(
+            &snapshot,
+            &field,
+            &bounds,
+            &spatial_index,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+
+        assert!(legacy_page.complete);
+        assert!(indexed_page.complete);
+        assert!(legacy_page.pairs.is_empty());
+        assert!(indexed_page.pairs.is_empty());
+        assert_eq!(legacy_page.visited_material_checks, 100);
+        assert_eq!(indexed_page.visited_material_checks, 1);
+    }
+
+    #[test]
     fn indexed_cursor_matches_spatial_reference_with_bounded_work_and_both_orientations() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
         field.cells[0]
