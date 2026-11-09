@@ -353,10 +353,13 @@ impl MaterialBoundsCursor {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PairOrientation {
-    /// One pair, ordered by current field locator. This is the COMBINE contract.
+    /// One pair, deduplicated across both possible spatial query directions.
     Unordered,
     /// Every anchor-to-target direction. DISPLACEMENT needs both roles.
     Directed,
+    /// Only forward field-locator pairs. Backward cell/material slots are
+    /// skipped without consuming work, matching the legacy COMBINE scan.
+    ForwardOrdered,
 }
 
 impl EnvironmentalMaterialSnapshot {
@@ -1029,6 +1032,13 @@ impl IndexedSpatialCursor {
 
             if !self.cell_loaded {
                 let cell_index = range.cell_index(field, self.row_offset, self.col);
+                if self.orientation == PairOrientation::ForwardOrdered
+                    && cell_index
+                        < snapshot.materials[self.anchor_index].locator.cell_index
+                {
+                    self.advance_cell(range);
+                    continue;
+                }
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                 self.cell_loaded = true;
@@ -1055,6 +1065,13 @@ impl IndexedSpatialCursor {
 
             let target_slot = self.target_slot;
             self.target_slot += 1;
+            let anchor = &snapshot.materials[self.anchor_index];
+            if self.orientation == PairOrientation::ForwardOrdered
+                && (cell_index, target_slot)
+                    <= (anchor.locator.cell_index, anchor.locator.material_index)
+            {
+                continue;
+            }
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
 
@@ -1077,14 +1094,15 @@ impl IndexedSpatialCursor {
                 continue;
             }
 
-            let anchor = &snapshot.materials[self.anchor_index];
             match self.orientation {
-                PairOrientation::Directed => page.pairs.push(MaterialPairRecord {
-                    left: self.anchor_index,
-                    right: target_index,
-                    identity_left: anchor.identity,
-                    identity_right: target_record.identity,
-                }),
+                PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                    page.pairs.push(MaterialPairRecord {
+                        left: self.anchor_index,
+                        right: target_index,
+                        identity_left: anchor.identity,
+                        identity_right: target_record.identity,
+                    });
+                }
                 PairOrientation::Unordered => {
                     // Snapshot materials are identity-sorted. Emit a pair on
                     // its lower-identity anchor pass when that anchor reaches
