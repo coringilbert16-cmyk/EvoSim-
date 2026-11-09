@@ -1,6 +1,7 @@
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
+use std::time::Instant;
 
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
@@ -885,6 +886,7 @@ impl Simulation {
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+        let break_discovery_started = Instant::now();
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
@@ -894,6 +896,8 @@ impl Simulation {
                 &mut environmental_break_discovery_remaining,
                 &mut break_discovery,
             );
+        self.environmental_chemistry_diagnostics.break_discovery_elapsed_ns =
+            break_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
@@ -905,6 +909,7 @@ impl Simulation {
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         self.environmental_chemistry_diagnostics.combine_search =
             crate::state::EnvironmentalCombineSearchDiagnostics::default();
+        let combine_discovery_started = Instant::now();
         let environmental_combine_operations =
             crate::environmental_combine::accumulate_environmental_with_diagnostics(
                 &self.environment,
@@ -914,6 +919,8 @@ impl Simulation {
                 &mut environmental_combine_discovery_remaining,
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
+        self.environmental_chemistry_diagnostics.combine_discovery_elapsed_ns =
+            combine_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
@@ -942,6 +949,7 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
+            let resolution_started = Instant::now();
             let resolution =
                 crate::chemical_reaction::resolve_environmental_preserving_accumulation(
                     operation,
@@ -949,6 +957,11 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns =
+                self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns
+                    .saturating_add(
+                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    );
             let committed = resolution.is_ok();
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
@@ -1018,6 +1031,7 @@ impl Simulation {
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
             let product_material_index = operation.material_a;
+            let resolution_started = Instant::now();
             let committed =
                 crate::environmental_combine::resolve_environmental_preserving_accumulation(
                     operation,
@@ -1025,6 +1039,11 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            self.environmental_chemistry_diagnostics.combine_resolution_elapsed_ns =
+                self.environmental_chemistry_diagnostics.combine_resolution_elapsed_ns
+                    .saturating_add(
+                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
             } else {
@@ -1081,6 +1100,7 @@ impl Simulation {
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
+        let displacement_discovery_started = Instant::now();
         let environmental_displacement_operations =
             crate::environmental_displacement::accumulate_environmental(
                 &self.environment,
@@ -1089,6 +1109,8 @@ impl Simulation {
                 &mut environmental_displacement_discovery_remaining,
                 &mut displacement_discovery,
             );
+        self.environmental_chemistry_diagnostics.displacement_discovery_elapsed_ns =
+            displacement_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
         self.environmental_chemistry_diagnostics
@@ -1122,6 +1144,7 @@ impl Simulation {
             let activation_signal = Some(operation.activation_signal);
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let broken_bond_index = Some(operation.bond_index);
+            let resolution_started = Instant::now();
             let resolution =
                 crate::environmental_displacement::resolve_environmental_preserving_accumulation(
                     operation,
@@ -1129,6 +1152,11 @@ impl Simulation {
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+            self.environmental_chemistry_diagnostics.displacement_resolution_elapsed_ns =
+                self.environmental_chemistry_diagnostics.displacement_resolution_elapsed_ns
+                    .saturating_add(
+                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    );
             let committed = resolution.is_ok();
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
@@ -1227,6 +1255,7 @@ impl Simulation {
                 chemistry_discovery_work_remaining
             };
             let mut graph_discovery_remaining = graph_discovery_budget;
+            let graph_discovery_started = Instant::now();
             let chemical_operations = crate::chemical_reaction::accumulate(
                 organism,
                 &self.environment.catalog,
@@ -1235,6 +1264,11 @@ impl Simulation {
                 self.tick,
                 &mut graph_discovery_remaining,
             );
+            self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns =
+                self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns
+                    .saturating_add(
+                        graph_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                    );
             // The environment is one chemistry owner, not one owner per
             // organism. Discover each field-owned bond at most once per tick;
             // its geometry and progress keys are independent of organism graphs.
@@ -1250,12 +1284,18 @@ impl Simulation {
             // Deferred activations retain progress only; they must be discovered
             // and validated against live geometry again before a later commit.
             for operation in chemical_operations {
+                let resolution_started = Instant::now();
                 let _ = crate::chemical_reaction::resolve_preserving_accumulation(
                     operation,
                     organism,
                     &mut self.energy_ledger,
                     &mut self.chemical_reaction_accumulation,
                 );
+                self.environmental_chemistry_diagnostics.organism_break_resolution_elapsed_ns =
+                    self.environmental_chemistry_diagnostics.organism_break_resolution_elapsed_ns
+                        .saturating_add(
+                            resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                        );
             }
             // Carry unused graph slots forward, but never exceed the
             // graph half-budget reserved for this tick.
