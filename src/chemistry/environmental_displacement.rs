@@ -1305,21 +1305,10 @@ fn accumulate_environmental_internal(
         else {
             continue;
         };
-        let cached_bounds = shared_snapshot
-            .filter(|snapshot| snapshot.unassigned_materials == 0)
-            .and_then(|snapshot| {
-                snapshot
-                    .materials
-                    .binary_search_by_key(
-                        &crate::environmental_interaction::MaterialIdentity(
-                            source_a.environmental_identity,
-                        ),
-                        |record| record.identity,
-                    )
-                    .ok()
-            })
-            .and_then(|index| shared_bounds.get(index).copied().flatten());
-        let body = if cached_bounds.is_none() {
+        // Shared discovery already resolved this anchor's spatial targets.
+        // Rebuild body bounds only for compatibility callers that did not
+        // supply the shared pair stream.
+        let body = if shared_targets_by_anchor.is_none() {
             let Some(body) =
                 crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
                     &source_structure,
