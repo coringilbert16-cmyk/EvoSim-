@@ -1130,6 +1130,7 @@ pub(crate) struct IndexedSpatialCursor {
     target_slots_visited: usize,
     target_slots_to_visit: usize,
     cell_loaded: bool,
+    seen_targets: std::collections::HashSet<usize>,
     complete: bool,
 }
 
@@ -1211,6 +1212,7 @@ impl IndexedSpatialCursor {
             target_slots_visited: 0,
             target_slots_to_visit: 0,
             cell_loaded: false,
+            seen_targets: std::collections::HashSet::new(),
             complete: false,
         })
     }
