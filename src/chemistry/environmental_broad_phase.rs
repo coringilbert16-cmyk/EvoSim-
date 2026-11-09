@@ -1287,6 +1287,10 @@ pub(crate) struct IndexedSpatialCursor {
     target_slots_visited: usize,
     target_slots_to_visit: usize,
     cell_loaded: bool,
+    candidate_targets: Vec<usize>,
+    candidate_position: usize,
+    candidate_targets_visited: usize,
+    query_stack: Vec<usize>,
     complete: bool,
 }
 
@@ -1384,6 +1388,10 @@ impl IndexedSpatialCursor {
             target_slots_visited: 0,
             target_slots_to_visit: 0,
             cell_loaded: false,
+            candidate_targets: Vec::new(),
+            candidate_position: 0,
+            candidate_targets_visited: 0,
+            query_stack: Vec::new(),
             complete: false,
         })
     }
@@ -1447,6 +1455,10 @@ impl IndexedSpatialCursor {
             target_slots_visited: 0,
             target_slots_to_visit: 0,
             cell_loaded: false,
+            candidate_targets: Vec::new(),
+            candidate_position: 0,
+            candidate_targets_visited: 0,
+            query_stack: Vec::new(),
             complete: material_count == 0,
         }
     }
