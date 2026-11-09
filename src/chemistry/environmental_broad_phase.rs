@@ -983,6 +983,7 @@ pub(crate) struct IndexedSpatialCursor {
     current_cell_limit: usize,
     target_slot: usize,
     target_slots_visited: usize,
+    target_slots_to_visit: usize,
     cell_loaded: bool,
     complete: bool,
 }
@@ -1063,6 +1064,7 @@ impl IndexedSpatialCursor {
             current_cell_limit: usize::MAX,
             target_slot: 0,
             target_slots_visited: 0,
+            target_slots_to_visit: 0,
             cell_loaded: false,
             complete: false,
         })
@@ -1233,13 +1235,44 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                 } else {
                     let anchor = &snapshot.materials[anchor_index];
-                    self.cell_loaded = true;
-                    self.target_slots_visited = 0;
-                    self.target_slot = self
+                    let rotated_start = self
                         .tick
                         .wrapping_add(cell_index)
                         .wrapping_add(anchor.locator.material_index)
                         % target_count;
+                    let same_cell = cell_index == anchor.locator.cell_index;
+                    self.target_slots_to_visit = if same_cell
+                        && self.orientation == PairOrientation::ForwardOrdered
+                    {
+                        target_count.saturating_sub(anchor.locator.material_index.saturating_add(1))
+                    } else if same_cell && self.reverse_only {
+                        anchor.locator.material_index.min(target_count)
+                    } else {
+                        target_count
+                    };
+                    if self.target_slots_to_visit == 0 {
+                        self.advance_cell(range);
+                        continue;
+                    }
+                    self.cell_loaded = true;
+                    self.target_slots_visited = 0;
+                    self.target_slot = if same_cell
+                        && self.orientation == PairOrientation::ForwardOrdered
+                    {
+                        if rotated_start > anchor.locator.material_index {
+                            rotated_start
+                        } else {
+                            anchor.locator.material_index + 1
+                        }
+                    } else if same_cell && self.reverse_only {
+                        if rotated_start < anchor.locator.material_index {
+                            rotated_start
+                        } else {
+                            0
+                        }
+                    } else {
+                        rotated_start
+                    };
                 }
                 continue;
             }
@@ -1257,10 +1290,24 @@ impl IndexedSpatialCursor {
             let target_slot = self.target_slot;
             let target_count = cell.physical_materials.len();
             self.target_slots_visited = self.target_slots_visited.saturating_add(1);
-            if self.target_slots_visited >= target_count {
+            if self.target_slots_visited >= self.target_slots_to_visit {
                 self.advance_cell(range);
             } else {
-                self.target_slot = (target_slot + 1) % target_count;
+                let next_target_slot = (target_slot + 1) % target_count;
+                let anchor = &snapshot.materials[anchor_index];
+                self.target_slot = if cell_index == anchor.locator.cell_index
+                    && self.orientation == PairOrientation::ForwardOrdered
+                    && next_target_slot <= anchor.locator.material_index
+                {
+                    anchor.locator.material_index + 1
+                } else if cell_index == anchor.locator.cell_index
+                    && self.reverse_only
+                    && next_target_slot >= anchor.locator.material_index
+                {
+                    0
+                } else {
+                    next_target_slot
+                };
             }
             // Every inspected target slot consumes work, including self-pairs
             // and locator-order rejections. Candidate output is not a work proxy.
@@ -1357,6 +1404,7 @@ impl IndexedSpatialCursor {
         self.cell_loaded = false;
         self.target_slot = 0;
         self.target_slots_visited = 0;
+        self.target_slots_to_visit = 0;
         self.cells_visited = self.cells_visited.saturating_add(1);
         let columns = range.max_col - range.min_col + 1;
         let total_cells = range.row_count.saturating_mul(columns);
@@ -1382,6 +1430,7 @@ impl IndexedSpatialCursor {
         self.cells_visited = 0;
         self.target_slot = 0;
         self.target_slots_visited = 0;
+        self.target_slots_to_visit = 0;
         self.cell_loaded = false;
         self.complete = self.anchors_visited >= material_count;
     }
