@@ -2878,17 +2878,11 @@ mod tests {
                                 output_limit,
                             );
                             assert!(page.visited_work <= work_limit as u64);
-                            expected.extend(page.pairs.into_iter().filter_map(|pair| {
-                                let target = &snapshot.materials[pair.right];
-                                let target_locator = (
-                                    target.locator.cell_index,
-                                    target.locator.material_index,
-                                );
-                                (target_locator < anchor_locator).then_some((
-                                    pair.identity_left,
-                                    pair.identity_right,
-                                ))
-                            }));
+                            expected.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
                             pages += 1;
                             if page.complete {
                                 break;
@@ -2926,6 +2920,38 @@ mod tests {
                                 break;
                             }
                             assert!(pages < 2_000, "reverse cursor failed to make progress");
+                        }
+
+                        let mut forward = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::ForwardOrdered,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        pages = 0;
+                        loop {
+                            let page = forward.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "forward cursor failed to make progress");
                         }
 
                         expected.sort_unstable();
