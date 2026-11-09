@@ -2609,8 +2609,7 @@ mod tests {
         assert_eq!(shared_snapshot.existing_bonds.len(), 1);
         let mut legacy_accumulation = BTreeMap::new();
         let mut legacy_diagnostics = EnvironmentalDisplacementDiscoveryDiagnostics::default();
-        let mut legacy_work =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+        let mut legacy_work = crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
         let legacy_operations = accumulate_environmental(
             &simulation.environment,
             &mut legacy_accumulation,
