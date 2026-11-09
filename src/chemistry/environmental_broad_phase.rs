@@ -94,9 +94,7 @@ impl MaterialSpatialBounds {
         if !padding.is_finite() || padding < 0.0 {
             return true;
         }
-        if self.min_x - padding > other.max_x
-            || self.max_x + padding < other.min_x
-        {
+        if self.min_x - padding > other.max_x || self.max_x + padding < other.min_x {
             return false;
         }
         if !vertical_period.is_finite() || vertical_period <= 0.0 {
