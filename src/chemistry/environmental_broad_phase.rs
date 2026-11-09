@@ -2238,6 +2238,90 @@ mod tests {
     }
 
     #[test]
+    fn single_anchor_directed_cursor_matches_legacy_target_cell_order() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        for (cell_index, identities) in [
+            (0, vec![30, 10]),
+            (1, vec![20]),
+            (4, vec![40, 60]),
+            (7, vec![50]),
+        ] {
+            for identity in identities {
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(identity, "Carbon"));
+            }
+        }
+        let tick = 3;
+        let anchor_cell = 0;
+        let anchor_material = 1;
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, tick as u64);
+        let anchor_index = snapshot
+            .materials
+            .binary_search_by_key(&MaterialIdentity(10), |record| record.identity)
+            .unwrap();
+        let body = MaterialSpatialBounds {
+            min_x: 5.0,
+            max_x: 25.0,
+            min_y: 5.0,
+            max_y: 15.0,
+        };
+        let mut bounds = vec![None; snapshot.materials.len()];
+        bounds[anchor_index] = Some(body);
+        let mut cursor = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::Directed,
+            tick,
+            anchor_index,
+        )
+        .unwrap();
+        let page = cursor.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            2.1,
+            64,
+            usize::MAX,
+            usize::MAX,
+        );
+        let actual = page
+            .pairs
+            .iter()
+            .map(|pair| (pair.identity_left.0, pair.identity_right.0))
+            .collect::<Vec<_>>();
+
+        let target_cells = field.cells_intersecting_bounds_limited(
+            body.min_x - 2.1,
+            body.max_x + 2.1,
+            body.min_y - 2.1,
+            body.max_y + 2.1,
+            64,
+            tick + anchor_cell + anchor_material,
+        );
+        let mut expected = Vec::new();
+        for cell_b in target_cells {
+            let materials = &field.cells[cell_b].physical_materials;
+            if materials.is_empty() {
+                continue;
+            }
+            let target_start = (tick + cell_b + anchor_material) % materials.len();
+            for offset in 0..materials.len() {
+                let material_b = (target_start + offset) % materials.len();
+                if cell_b == anchor_cell && material_b == anchor_material {
+                    continue;
+                }
+                expected.push((
+                    10,
+                    materials[material_b].environmental_identity,
+                ));
+            }
+        }
+        assert!(page.complete);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn indexed_cursor_prunes_pair_work_for_sparse_materials() {
         let mut field = ActiveMaterialField::new(100.0, 100.0, 10.0);
         let mut bounds = Vec::new();
