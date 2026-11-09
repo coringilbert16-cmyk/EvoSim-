@@ -1575,7 +1575,7 @@ impl IndexedSpatialCursor {
                 }
 
                 if self.candidate_targets_visited >= self.candidate_targets.len() {
-                    self.advance_anchor(snapshot.materials.len());
+                    self.advance_anchor();
                     continue;
                 }
 
@@ -1697,7 +1697,7 @@ impl IndexedSpatialCursor {
                         % total_cells;
                     self.set_cell_position(range, self.cell_start_offset);
                 } else {
-                    self.advance_anchor(self.anchor_order.len());
+                    self.advance_anchor();
                 }
                 continue;
             }
@@ -1971,9 +1971,10 @@ impl IndexedSpatialCursor {
         }
     }
 
-    fn advance_anchor(&mut self, material_count: usize) {
+    fn advance_anchor(&mut self) {
+        let anchor_count = self.anchor_order.len();
         self.anchors_visited = self.anchors_visited.saturating_add(1);
-        if self.anchors_visited < material_count {
+        if self.anchors_visited < anchor_count {
             self.anchor_index += 1;
         }
         self.anchor_initialized = false;
@@ -1990,7 +1991,7 @@ impl IndexedSpatialCursor {
         self.candidate_position = 0;
         self.candidate_targets_visited = 0;
         self.query_stack.clear();
-        self.complete = self.anchors_visited >= material_count;
+        self.complete = self.anchors_visited >= anchor_count;
     }
 }
 
