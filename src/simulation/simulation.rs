@@ -886,7 +886,7 @@ impl Simulation {
         // environmental reaction phase. BREAK consumes its bond inventory;
         // later reaction phases will rebuild this snapshot after each commit
         // boundary so no cursor or locator survives a topology mutation.
-        let environmental_break_snapshot =
+        let mut environmental_shared_snapshot =
             crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
                 &self.environment.field,
                 self.tick,
@@ -902,7 +902,7 @@ impl Simulation {
                 self.tick,
                 &mut environmental_break_discovery_remaining,
                 &mut break_discovery,
-                &environmental_break_snapshot,
+                &environmental_shared_snapshot,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
@@ -1014,14 +1014,16 @@ impl Simulation {
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         self.environmental_chemistry_diagnostics.combine_search =
             crate::state::EnvironmentalCombineSearchDiagnostics::default();
-        // BREAK commits may change ownership, topology, and field revision.
-        // Rebuild the shared snapshot before COMBINE so no pre-BREAK locator
-        // or bond context can leak across the mutation boundary.
-        let environmental_combine_snapshot =
-            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                &self.environment.field,
-                self.tick,
-            );
+        // Reuse the pass inventory when BREAK made no field mutation. A
+        // successful BREAK invalidates every locator/bond projection, so only
+        // then pay for a fresh snapshot before COMBINE.
+        if environmental_shared_snapshot.field_revision != self.environment.field.revision {
+            environmental_shared_snapshot =
+                crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                    &self.environment.field,
+                    self.tick,
+                );
+        }
         let environmental_combine_operations =
             crate::environmental_combine::accumulate_environmental_with_shared_snapshot(
                 &self.environment,
@@ -1030,7 +1032,7 @@ impl Simulation {
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
                 &mut self.environmental_chemistry_diagnostics.combine_search,
-                &environmental_combine_snapshot,
+                &environmental_shared_snapshot,
             );
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
@@ -1123,13 +1125,15 @@ impl Simulation {
             );
         }
 
-        // COMBINE commits may change ownership and topology. DISPLACEMENT
-        // receives a fresh snapshot and reuses its existing-bond inventory.
-        let environmental_displacement_snapshot =
-            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                &self.environment.field,
-                self.tick,
-            );
+        // Likewise, preserve the COMBINE snapshot for DISPLACEMENT when no
+        // COMBINE operation committed. Refresh only after an actual mutation.
+        if environmental_shared_snapshot.field_revision != self.environment.field.revision {
+            environmental_shared_snapshot =
+                crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                    &self.environment.field,
+                    self.tick,
+                );
+        }
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         let mut displacement_discovery =
@@ -1141,7 +1145,7 @@ impl Simulation {
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
                 &mut displacement_discovery,
-                &environmental_displacement_snapshot,
+                &environmental_shared_snapshot,
             );
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
