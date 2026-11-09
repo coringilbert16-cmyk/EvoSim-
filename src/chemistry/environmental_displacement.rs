@@ -49,6 +49,7 @@ enum DisplacementTargetStep {
 /// Legacy coverage helper retained for focused cursor tests. Production
 /// displacement now consumes every pair present in the shared discovery result,
 /// including partial coverage, and never starts a reverse-only fallback scan.
+#[cfg(test)]
 fn has_complete_shared_forward_coverage(
     completed_anchors: &[Option<usize>],
     anchor_index: usize,
