@@ -995,9 +995,12 @@ impl IndexedSpatialCursor {
     ) -> Option<usize> {
         let range = BoundsCellRange::new(field, bounds.expanded(padding)?)?;
         Some(
-            range
-                .row_count
-                .saturating_mul(range.max_col.saturating_sub(range.min_col).saturating_add(1)),
+            range.row_count.saturating_mul(
+                range
+                    .max_col
+                    .saturating_sub(range.min_col)
+                    .saturating_add(1),
+            ),
         )
     }
 
