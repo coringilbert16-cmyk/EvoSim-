@@ -39,6 +39,8 @@ pub(crate) struct EnvironmentalSnapshotCursor {
     finalizing_bonds: Option<VecDeque<ExistingBondRecord>>,
     sorted_materials: Vec<MaterialRecord>,
     sorted_bonds: Vec<ExistingBondRecord>,
+    material_indices_by_cell: Vec<Vec<usize>>,
+    bond_indices_by_material: BTreeMap<MaterialIdentity, Vec<usize>>,
     scanning_complete: bool,
     materials_finalized: bool,
     bonds_finalized: bool,
@@ -63,6 +65,8 @@ impl EnvironmentalSnapshotCursor {
             finalizing_bonds: None,
             sorted_materials: Vec::new(),
             sorted_bonds: Vec::new(),
+            material_indices_by_cell: vec![Vec::new(); field.cells.len()],
+            bond_indices_by_material: BTreeMap::new(),
             scanning_complete: false,
             materials_finalized: false,
             bonds_finalized: false,
@@ -206,7 +210,15 @@ impl EnvironmentalSnapshotCursor {
                     .as_mut()
                     .and_then(VecDeque::pop_front);
                 if let Some(record) = next_record {
+                    let sorted_index = self.sorted_materials.len();
+                    let cell_index = record.locator.cell_index;
+                    let material_index = record.locator.material_index;
                     self.sorted_materials.push(record);
+                    let indices = &mut self.material_indices_by_cell[cell_index];
+                    let insert_at = indices.partition_point(|&index| {
+                        self.sorted_materials[index].locator.material_index < material_index
+                    });
+                    indices.insert(insert_at, sorted_index);
                     self.consume_work(&mut page);
                     continue;
                 }
@@ -222,6 +234,10 @@ impl EnvironmentalSnapshotCursor {
             if !self.bonds_finalized {
                 let next_record = self.finalizing_bonds.as_mut().and_then(VecDeque::pop_front);
                 if let Some(record) = next_record {
+                    self.bond_indices_by_material
+                        .entry(record.material)
+                        .or_default()
+                        .push(record.bond_index);
                     self.sorted_bonds.push(record);
                     self.consume_work(&mut page);
                     continue;
@@ -246,10 +262,11 @@ impl EnvironmentalSnapshotCursor {
                 field_revision: self.field_revision,
                 materials: std::mem::take(&mut self.sorted_materials),
                 existing_bonds: std::mem::take(&mut self.sorted_bonds),
+                material_indices_by_cell: std::mem::take(&mut self.material_indices_by_cell),
+                bond_indices_by_material: std::mem::take(&mut self.bond_indices_by_material),
                 cell_visits: self.cell_visits,
                 material_visits: self.material_visits,
                 unassigned_materials: self.unassigned_materials,
-                ..EnvironmentalMaterialSnapshot::default()
             };
             page.snapshot = Some(snapshot);
             page.status = Some(SnapshotCursorStatus::Complete);
