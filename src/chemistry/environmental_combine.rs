@@ -908,6 +908,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
 ) -> Vec<EnvironmentalCombineOperation> {
+    let mut shared_bounds = vec![None; snapshot.materials.len()];
     accumulate_environmental_with_shared_snapshot_and_bounds(
         environment,
         accumulation,
@@ -965,7 +966,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
     let mut checked_prefixes = BTreeSet::new();
     let mut cache = ConnectionCompatibilityCache::new();
 
-    let mut shared_bounds = vec![None; snapshot.materials.len()];
     let cell_count = environment.field.cells.len();
     let mut anchor_order = (0..snapshot.materials.len()).collect::<Vec<_>>();
     anchor_order.sort_by_key(|&index| {

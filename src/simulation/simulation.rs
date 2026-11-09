@@ -905,7 +905,6 @@ impl Simulation {
                 &mut environmental_break_discovery_remaining,
                 &mut break_discovery,
                 &environmental_shared_snapshot,
-                &mut environmental_shared_bounds,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
@@ -1038,6 +1037,7 @@ impl Simulation {
                 &mut environmental_combine_discovery_remaining,
                 &mut self.environmental_chemistry_diagnostics.combine_search,
                 &environmental_shared_snapshot,
+                &mut environmental_shared_bounds,
             );
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
