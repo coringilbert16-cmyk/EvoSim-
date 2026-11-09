@@ -1129,7 +1129,11 @@ fn accumulate_environmental_internal(
             }
             let shared_bond_indices = shared_bond_indices_by_material
                 .as_ref()
-                .and_then(|indices| indices.get(&crate::environmental_interaction::MaterialIdentity(source_a.environmental_identity)))
+                .and_then(|indices| {
+                    indices.get(&crate::environmental_interaction::MaterialIdentity(
+                        source_a.environmental_identity,
+                    ))
+                })
                 .map(Vec::as_slice);
             let fallback_bond_indices = shared_bond_indices
                 .is_none()
