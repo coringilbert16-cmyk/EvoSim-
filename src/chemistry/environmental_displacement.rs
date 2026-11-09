@@ -2601,14 +2601,20 @@ mod tests {
         );
         let mut accumulation = BTreeMap::new();
         let mut discovery_diagnostics = EnvironmentalDisplacementDiscoveryDiagnostics::default();
+        let shared_snapshot =
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                &simulation.environment.field,
+                field_cell as u64,
+            );
         let mut discovery_work =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-        let mut operations = accumulate_environmental(
+        let mut operations = accumulate_environmental_with_shared_snapshot(
             &simulation.environment,
             &mut accumulation,
             field_cell as u64,
             &mut discovery_work,
             &mut discovery_diagnostics,
+            &shared_snapshot,
         );
         assert_eq!(
             discovery_diagnostics.evaluation_outcomes.ready,
@@ -2642,12 +2648,13 @@ mod tests {
             accumulation.insert(key, 100.0 / one_unit_signal);
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
-            accumulate_environmental(
+            accumulate_environmental_with_shared_snapshot(
                 &simulation.environment,
                 &mut accumulation,
                 field_cell as u64,
                 &mut discovery_work,
                 &mut discovery_diagnostics,
+                &shared_snapshot,
             )
             .into_iter()
             .next()
