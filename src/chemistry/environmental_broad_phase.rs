@@ -1165,7 +1165,6 @@ pub(crate) struct IndexedSpatialCursor {
     target_slots_visited: usize,
     target_slots_to_visit: usize,
     cell_loaded: bool,
-    seen_targets: std::collections::HashSet<usize>,
     complete: bool,
 }
 
@@ -1175,7 +1174,23 @@ impl IndexedSpatialCursor {
         bounds: MaterialSpatialBounds,
         padding: f64,
     ) -> Option<usize> {
-        let range = BoundsCellRange::new(field, bounds.expanded(padding)?)?;
+        Self::cell_range_count(field, bounds.expanded(padding)?)
+    }
+
+    pub(crate) fn target_cell_count_with_index(
+        field: &ActiveMaterialField,
+        bounds: MaterialSpatialBounds,
+        padding: f64,
+        spatial_index: &MaterialSpatialIndex,
+    ) -> Option<usize> {
+        Self::cell_range_count(field, spatial_index.query_bounds(bounds, padding)?)
+    }
+
+    fn cell_range_count(
+        field: &ActiveMaterialField,
+        bounds: MaterialSpatialBounds,
+    ) -> Option<usize> {
+        let range = BoundsCellRange::new(field, bounds)?;
         Some(
             range.row_count.saturating_mul(
                 range
@@ -1247,7 +1262,6 @@ impl IndexedSpatialCursor {
             target_slots_visited: 0,
             target_slots_to_visit: 0,
             cell_loaded: false,
-            seen_targets: std::collections::HashSet::new(),
             complete: false,
         })
     }
@@ -1403,7 +1417,11 @@ impl IndexedSpatialCursor {
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_anchor_initializations =
                     page.visited_anchor_initializations.saturating_add(1);
-                let expanded = bounds[anchor_index].and_then(|value| value.expanded(padding));
+                let expanded = if let Some(index) = spatial_index {
+                    bounds[anchor_index].and_then(|value| index.query_bounds(value, padding))
+                } else {
+                    bounds[anchor_index].and_then(|value| value.expanded(padding))
+                };
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
                 self.anchor_initialized = true;
                 self.target_slot = 0;
@@ -1411,7 +1429,6 @@ impl IndexedSpatialCursor {
                 self.cells_visited = 0;
                 self.current_cell_limit = target_cell_limit;
                 self.cell_loaded = false;
-                self.seen_targets.clear();
                 if let Some(range) = self.range {
                     let columns = range.max_col - range.min_col + 1;
                     let total_cells = range.row_count.saturating_mul(columns);
@@ -1592,9 +1609,6 @@ impl IndexedSpatialCursor {
                 || (self.reverse_only && target_locator >= anchor_locator)
                 || target_index == anchor_index
             {
-                continue;
-            }
-            if spatial_index.is_some() && !self.seen_targets.insert(target_index) {
                 continue;
             }
             let Some(physical) =
