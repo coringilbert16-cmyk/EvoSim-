@@ -605,7 +605,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     const ENVIRONMENT_PREFIX: &str = "environment|environment:";
     let current_prefix = ENVIRONMENT_PREFIX.to_owned();
     let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let scan_started = std::time::Instant::now();
     let discovery = discover_environmental_bonds(environment, tick, count);
+    diagnostics.scan_elapsed_ns = elapsed_nanos(scan_started);
     diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
     let candidates = discovery.candidates;
     diagnostics.bond_candidates_inspected = candidates.len() as u64;
@@ -614,6 +616,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
+    diagnostics.checked_materials_inspected = checked_materials.len() as u64;
+    let stale_material_validation_started = std::time::Instant::now();
     for (identity, bond_count) in checked_materials {
         if identity == 0 {
             continue;
@@ -634,6 +638,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             }
         }
     }
+    diagnostics.stale_material_validation_elapsed_ns =
+        elapsed_nanos(stale_material_validation_started);
     let mut operations = Vec::new();
     let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
     let mut restored_materials = std::collections::BTreeMap::new();
@@ -665,6 +671,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 "environment|environment:{}:{bond_index}:",
                 instance.environmental_identity
             );
+            let candidate_key_validation_started = std::time::Instant::now();
             for previous_key in accumulation.keys() {
                 if previous_key.starts_with(&bond_prefix) && previous_key != &key {
                     checked_keys.insert(previous_key.clone());
@@ -672,6 +679,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         diagnostics.stale_progress_invalidated.saturating_add(1);
                 }
             }
+            diagnostics.candidate_key_validation_elapsed_ns = diagnostics
+                .candidate_key_validation_elapsed_ns
+                .saturating_add(elapsed_nanos(candidate_key_validation_started));
         }
         checked_keys.insert(key.clone());
         // Environmental chemistry must derive its candidate geometry from the
@@ -686,6 +696,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             restored_materials.entry(material_key)
         {
             let mut hypothetical = crate::structure::OrganismStructure::new();
+            let restoration_started = std::time::Instant::now();
             let restored = crate::material_restoration::restore_material(
                 &mut hypothetical,
                 instance,
@@ -697,6 +708,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 &environment.catalog,
             )
             .map(|restored_indices| (hypothetical, restored_indices));
+            diagnostics.material_restoration_elapsed_ns = diagnostics
+                .material_restoration_elapsed_ns
+                .saturating_add(elapsed_nanos(restoration_started));
             if restored.is_some() {
                 diagnostics.material_restorations_succeeded = diagnostics
                     .material_restorations_succeeded
@@ -762,14 +776,19 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
-        let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
+        let endpoint_geometry_started = std::time::Instant::now();
+        let endpoint_candidate = crate::contact::connection_pair_candidate_for_endpoints(
             hypothetical,
             unit_a,
             unit_b,
             &environment.catalog,
             connection.endpoint_a,
             connection.endpoint_b,
-        ) else {
+        );
+        diagnostics.endpoint_geometry_elapsed_ns = diagnostics
+            .endpoint_geometry_elapsed_ns
+            .saturating_add(elapsed_nanos(endpoint_geometry_started));
+        let Some(candidate) = endpoint_candidate else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
             diagnostics.candidate_endpoint_rejections =
@@ -816,14 +835,19 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             }
         };
         // Static potential reuse never bypasses live interface eligibility.
-        let Some(_interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+        let interface_resolution_started = std::time::Instant::now();
+        let interface = crate::geometry_reference_library::resolve_live_contact_candidate(
             geometry_material_a,
             &hypothetical.units[unit_a],
             geometry_material_b,
             &hypothetical.units[unit_b],
             candidate,
             &environment.catalog,
-        ) else {
+        );
+        diagnostics.interface_resolution_elapsed_ns = diagnostics
+            .interface_resolution_elapsed_ns
+            .saturating_add(elapsed_nanos(interface_resolution_started));
+        let Some(_interface) = interface else {
             diagnostics.candidate_geometry_rejections =
                 diagnostics.candidate_geometry_rejections.saturating_add(1);
             diagnostics.candidate_interface_rejections =
@@ -936,6 +960,10 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.progress_preserved_unsearched = preserved;
     diagnostics.progress_dissipated_checked = dissipated;
     operations
+}
+
+fn elapsed_nanos(started: std::time::Instant) -> u64 {
+    started.elapsed().as_nanos().min(u64::MAX as u128) as u64
 }
 
 fn environmental_break_accumulation_key(
