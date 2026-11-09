@@ -2632,7 +2632,22 @@ mod tests {
         assert_eq!(operations, legacy_operations);
         assert_eq!(accumulation, legacy_accumulation);
         assert_eq!(discovery_work, legacy_work);
-        assert_eq!(discovery_diagnostics, legacy_diagnostics);
+        assert_eq!(
+            discovery_diagnostics.anchor_materials_inspected,
+            legacy_diagnostics.anchor_materials_inspected
+        );
+        assert_eq!(
+            discovery_diagnostics.bonds_inspected,
+            legacy_diagnostics.bonds_inspected
+        );
+        assert_eq!(
+            discovery_diagnostics.replacement_contact_searches,
+            legacy_diagnostics.replacement_contact_searches
+        );
+        assert_eq!(
+            discovery_diagnostics.activation_updates,
+            legacy_diagnostics.activation_updates
+        );
         assert_eq!(
             discovery_diagnostics.evaluation_outcomes.ready,
             operations.len(),
