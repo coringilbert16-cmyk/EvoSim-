@@ -1402,13 +1402,9 @@ fn environmental_material_location_by_identity(
     // prior disjoint commit can shift this material's vector slot, so search
     // its captured cell before falling back to a full-field identity lookup.
     if let Some(cell) = environment.field.cells.get(captured_cell) {
-        if let Some(material_index) = cell
-            .physical_materials
-            .iter()
-            .position(|material| {
-                material.environmental_identity == source.environmental_identity
-            })
-        {
+        if let Some(material_index) = cell.physical_materials.iter().position(|material| {
+            material.environmental_identity == source.environmental_identity
+        }) {
             return Some((captured_cell, material_index));
         }
     }
