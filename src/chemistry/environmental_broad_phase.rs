@@ -1582,8 +1582,7 @@ impl IndexedSpatialCursor {
                 let target_index = self.candidate_targets[self.candidate_position];
                 self.candidate_position =
                     (self.candidate_position + 1) % self.candidate_targets.len();
-                self.candidate_targets_visited =
-                    self.candidate_targets_visited.saturating_add(1);
+                self.candidate_targets_visited = self.candidate_targets_visited.saturating_add(1);
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_material_checks = page.visited_material_checks.saturating_add(1);
 
@@ -1603,14 +1602,15 @@ impl IndexedSpatialCursor {
                 {
                     continue;
                 }
-                let Some(physical) = field
-                    .cells
-                    .get(target_record.locator.cell_index)
-                    .and_then(|target_cell| {
-                        target_cell
-                            .physical_materials
-                            .get(target_record.locator.material_index)
-                    })
+                let Some(physical) =
+                    field
+                        .cells
+                        .get(target_record.locator.cell_index)
+                        .and_then(|target_cell| {
+                            target_cell
+                                .physical_materials
+                                .get(target_record.locator.material_index)
+                        })
                 else {
                     continue;
                 };
