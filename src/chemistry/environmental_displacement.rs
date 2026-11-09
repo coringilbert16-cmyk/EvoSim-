@@ -1390,11 +1390,10 @@ fn accumulate_environmental_internal(
                                 |record| record.identity,
                             )
                             .ok()?;
-                        let forward_coverage_complete = shared_candidates.is_some_and(
-                            |(_, completed)| {
+                        let forward_coverage_complete =
+                            shared_candidates.is_some_and(|(_, completed)| {
                                 has_complete_shared_forward_coverage(completed, anchor_index)
-                            },
-                        );
+                            });
                         forward_coverage_complete.then(|| {
                             shared_targets_by_anchor
                                 .as_ref()
@@ -3588,15 +3587,8 @@ mod tests {
                 .expect("anchor index is valid");
                 let mut shared_targets = Vec::new();
                 loop {
-                    let page = forward.next_page(
-                        &snapshot,
-                        &field,
-                        &bounds,
-                        2.1,
-                        target_cell_count,
-                        1,
-                        1,
-                    );
+                    let page =
+                        forward.next_page(&snapshot, &field, &bounds, 2.1, target_cell_count, 1, 1);
                     shared_targets.extend(page.pairs.into_iter().map(|pair| {
                         let target = &snapshot.materials[pair.right];
                         (target.locator.cell_index, target.locator.material_index)
@@ -3634,21 +3626,17 @@ mod tests {
                     }
                 }
 
-                let completed_anchors = vec![
-                    Some(target_cell_count.saturating_add(5));
-                    snapshot.materials.len()
-                ];
+                let completed_anchors =
+                    vec![Some(target_cell_count.saturating_add(5)); snapshot.materials.len()];
                 let reverse_target_cell_limit = target_cell_count.saturating_add(1);
                 assert_ne!(
                     completed_anchors[anchor_index],
                     Some(reverse_target_cell_limit),
                     "fixture must exercise different forward and reverse budget values"
                 );
-                let reusable_targets = has_complete_shared_forward_coverage(
-                    &completed_anchors,
-                    anchor_index,
-                )
-                .then_some(shared_targets);
+                let reusable_targets =
+                    has_complete_shared_forward_coverage(&completed_anchors, anchor_index)
+                        .then_some(shared_targets);
 
                 let mut shared_bounds = bounds.clone();
                 let mut scan = DisplacementTargetScan::new(
@@ -3683,11 +3671,7 @@ mod tests {
 
                 expected.sort_unstable();
                 actual.sort_unstable();
-                assert_eq!(
-                    actual,
-                    expected,
-                    "tick={tick}, anchor={anchor_index}"
-                );
+                assert_eq!(actual, expected, "tick={tick}, anchor={anchor_index}");
                 actual.dedup();
                 assert_eq!(
                     actual.len(),

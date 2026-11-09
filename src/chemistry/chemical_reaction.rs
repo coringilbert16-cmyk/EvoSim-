@@ -1683,12 +1683,7 @@ mod material_identity_tests {
             .push(source.clone());
 
         assert_eq!(
-            environmental_material_location(
-                &simulation.environment,
-                &source,
-                0,
-                1,
-            ),
+            environmental_material_location(&simulation.environment, &source, 0, 1,),
             Some((0, 1)),
             "the captured locator must win when duplicate identities exist"
         );

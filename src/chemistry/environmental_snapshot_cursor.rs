@@ -420,7 +420,8 @@ mod tests {
             total,
             field.cells.len() as u64
                 + 2 * snapshot.materials.len() as u64
-                + 3
+                + snapshot.bond_record_count
+                + snapshot.existing_bonds.len() as u64
         );
     }
 

@@ -1258,9 +1258,7 @@ impl IndexedSpatialCursor {
                     self.target_slots_to_visit = if same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
                     {
-                        target_count.saturating_sub(
-                            anchor.locator.material_index.saturating_add(1),
-                        )
+                        target_count.saturating_sub(anchor.locator.material_index.saturating_add(1))
                     } else if same_cell && self.reverse_only {
                         anchor.locator.material_index.min(target_count)
                     } else {
@@ -1272,23 +1270,22 @@ impl IndexedSpatialCursor {
                     }
                     self.cell_loaded = true;
                     self.target_slots_visited = 0;
-                    self.target_slot = if same_cell
-                        && self.orientation == PairOrientation::ForwardOrdered
-                    {
-                        if rotated_start > anchor.locator.material_index {
-                            rotated_start
+                    self.target_slot =
+                        if same_cell && self.orientation == PairOrientation::ForwardOrdered {
+                            if rotated_start > anchor.locator.material_index {
+                                rotated_start
+                            } else {
+                                anchor.locator.material_index + 1
+                            }
+                        } else if same_cell && self.reverse_only {
+                            if rotated_start < anchor.locator.material_index {
+                                rotated_start
+                            } else {
+                                0
+                            }
                         } else {
-                            anchor.locator.material_index + 1
-                        }
-                    } else if same_cell && self.reverse_only {
-                        if rotated_start < anchor.locator.material_index {
                             rotated_start
-                        } else {
-                            0
-                        }
-                    } else {
-                        rotated_start
-                    };
+                        };
                 }
                 continue;
             }
@@ -2886,19 +2883,14 @@ mod tests {
     fn snapshot_counts_raw_bond_records_even_when_inventory_references_are_invalid() {
         let mut field = ActiveMaterialField::new(10.0, 10.0, 10.0);
         let mut material = physical(0, "Carbon");
-        material.internal_connections = Some(vec![
-            crate::physical_material::PhysicalMaterialBond {
+        material.internal_connections =
+            Some(vec![crate::physical_material::PhysicalMaterialBond {
                 part_a: 0,
                 part_b: 9,
-                endpoint_a: crate::structure::ConnectionEndpoint::Boundary {
-                    angle_radians: 0.0,
-                },
-                endpoint_b: crate::structure::ConnectionEndpoint::Boundary {
-                    angle_radians: 0.0,
-                },
+                endpoint_a: crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+                endpoint_b: crate::structure::ConnectionEndpoint::Boundary { angle_radians: 0.0 },
                 bond_energy: 1.0,
-            },
-        ]);
+            }]);
         field.cells[0].physical_materials.push(material);
 
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 2);
