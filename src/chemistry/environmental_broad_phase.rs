@@ -2443,14 +2443,6 @@ mod tests {
         );
 
         let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
-        let anchor_bounds = bounds[0].expect("anchor bounds exist");
-        let target_cell_count = IndexedSpatialCursor::target_cell_count_with_index(
-            &field,
-            anchor_bounds,
-            0.0,
-            &spatial_index,
-        )
-        .expect("indexed anchor bounds intersect the field");
         let mut cursor = IndexedSpatialCursor::new_for_anchor(
             &snapshot,
             &field,
@@ -2465,7 +2457,7 @@ mod tests {
             &bounds,
             &spatial_index,
             0.0,
-            target_cell_count,
+            usize::MAX,
             usize::MAX,
             usize::MAX,
         );
@@ -2642,14 +2634,6 @@ mod tests {
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 91);
         let spatial_index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
-        let anchor_bounds = bounds[0].expect("anchor bounds exist");
-        let target_cell_count = IndexedSpatialCursor::target_cell_count_with_index(
-            &field,
-            anchor_bounds,
-            0.0,
-            &spatial_index,
-        )
-        .expect("anchor intersects indexed field cells");
 
         let mut legacy = IndexedSpatialCursor::new_for_anchor(
             &snapshot,
