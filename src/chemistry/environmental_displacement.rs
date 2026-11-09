@@ -932,6 +932,18 @@ fn accumulate_environmental_internal(
             if connections.is_empty() {
                 continue;
             }
+            let shared_bond_indices = shared_snapshot
+                .filter(|snapshot| snapshot.unassigned_materials == 0)
+                .map(|snapshot| {
+                    snapshot
+                        .existing_bonds
+                        .iter()
+                        .filter(|bond| bond.material.0 == source_a.environmental_identity)
+                        .map(|bond| bond.bond_index)
+                        .collect::<Vec<_>>()
+                });
+            let bond_indices =
+                shared_bond_indices.unwrap_or_else(|| (0..connections.len()).collect());
             diagnostics.bonded_anchor_materials =
                 diagnostics.bonded_anchor_materials.saturating_add(1);
             let Some((source_structure, indices_a)) =
@@ -1006,21 +1018,7 @@ fn accumulate_environmental_internal(
                         continue;
                     }
 
-                    let shared_bond_indices = shared_snapshot
-                        .filter(|snapshot| snapshot.unassigned_materials == 0)
-                        .map(|snapshot| {
-                            snapshot
-                                .existing_bonds
-                                .iter()
-                                .filter(|bond| {
-                                    bond.material.0 == source_a.environmental_identity
-                                })
-                                .map(|bond| bond.bond_index)
-                                .collect::<Vec<_>>()
-                        });
-                    let bond_indices = shared_bond_indices
-                        .unwrap_or_else(|| (0..connections.len()).collect());
-                    for bond_index in bond_indices {
+                    for &bond_index in &bond_indices {
                         let Some(connection) = connections.get(bond_index) else {
                             continue;
                         };
