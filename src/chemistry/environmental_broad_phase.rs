@@ -1639,8 +1639,7 @@ impl IndexedSpatialCursor {
                             .push(index.unbounded_materials[self.query_unbounded_position]);
                         self.query_unbounded_position += 1;
                         page.visited_work = page.visited_work.saturating_add(1);
-                        page.visited_cell_checks =
-                            page.visited_cell_checks.saturating_add(1);
+                        page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                         continue;
                     }
 
