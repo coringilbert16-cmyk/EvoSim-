@@ -2667,7 +2667,7 @@ mod tests {
             &bounds,
             &spatial_index,
             0.0,
-            target_cell_count,
+            usize::MAX,
             usize::MAX,
             usize::MAX,
         );
