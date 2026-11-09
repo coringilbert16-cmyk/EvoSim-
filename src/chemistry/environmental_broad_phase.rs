@@ -1608,14 +1608,12 @@ impl IndexedSpatialCursor {
                             self.candidate_targets.push(self.query_fallback_position);
                             self.query_fallback_position += 1;
                             page.visited_work = page.visited_work.saturating_add(1);
-                            page.visited_cell_checks =
-                                page.visited_cell_checks.saturating_add(1);
+                            page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                             continue;
                         }
                     } else if let Some(node_index) = self.query_stack.pop() {
                         page.visited_work = page.visited_work.saturating_add(1);
-                        page.visited_cell_checks =
-                            page.visited_cell_checks.saturating_add(1);
+                        page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                         if let (Some(node), Some(query)) =
                             (index.nodes.get(node_index), self.query_bounds)
                         {
@@ -1637,9 +1635,8 @@ impl IndexedSpatialCursor {
                         }
                         continue;
                     } else if self.query_unbounded_position < index.unbounded_materials.len() {
-                        self.candidate_targets.push(
-                            index.unbounded_materials[self.query_unbounded_position],
-                        );
+                        self.candidate_targets
+                            .push(index.unbounded_materials[self.query_unbounded_position]);
                         self.query_unbounded_position += 1;
                         page.visited_work = page.visited_work.saturating_add(1);
                         page.visited_cell_checks =
@@ -1647,9 +1644,8 @@ impl IndexedSpatialCursor {
                         continue;
                     }
 
-                    self.candidate_targets.sort_unstable_by_key(|&material_index| {
-                        index.locators[material_index]
-                    });
+                    self.candidate_targets
+                        .sort_unstable_by_key(|&material_index| index.locators[material_index]);
                     self.candidate_targets.dedup();
                     let candidate_count = self.candidate_targets.len();
                     self.candidate_position = if candidate_count == 0 {
