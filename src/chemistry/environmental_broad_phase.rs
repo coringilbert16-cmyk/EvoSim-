@@ -976,12 +976,30 @@ impl IndexedSpatialCursor {
         if anchor_index >= snapshot.materials.len() {
             return None;
         }
-        let mut cursor = Self::new_rotated(snapshot, field, orientation, tick);
-        cursor.anchor_order = vec![anchor_index];
-        cursor.anchor_index = 0;
-        cursor.anchors_visited = 0;
-        cursor.complete = false;
-        Some(cursor)
+        Some(Self {
+            pass_id: snapshot.pass_id,
+            field_revision: field.revision,
+            orientation,
+            anchor_order: vec![anchor_index],
+            field_width_cells: field.width_cells,
+            field_height_cells: field.height_cells,
+            field_cell_size_bits: field.cell_size.to_bits(),
+            field_cell_count: field.cells.len(),
+            anchor_index: 0,
+            anchors_visited: 0,
+            anchor_initialized: false,
+            range: None,
+            row_offset: 0,
+            col: 0,
+            tick,
+            cell_start_offset: 0,
+            cells_visited: 0,
+            current_cell_limit: usize::MAX,
+            target_slot: 0,
+            target_slots_visited: 0,
+            cell_loaded: false,
+            complete: false,
+        })
     }
 
     pub(crate) fn new_rotated(
