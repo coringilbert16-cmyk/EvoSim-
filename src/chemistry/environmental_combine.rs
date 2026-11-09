@@ -896,7 +896,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         .collect()
 }
 
-
 /// Production COMBINE entry point backed by the tick's shared environmental
 /// snapshot. The spatial cursor supplies material-pair discovery; the existing
 /// COMBINE endpoint, chemistry, activation, and energy evaluators remain native.
@@ -936,10 +935,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
     // cursor validates every constituent against the immutable snapshot before
     // any spatial pair page is consumed.
     let mut bounds_cursor =
-        crate::environmental_broad_phase::MaterialBoundsCursor::new(
-            snapshot,
-            &environment.catalog,
-        );
+        crate::environmental_broad_phase::MaterialBoundsCursor::new(snapshot, &environment.catalog);
     let bounds = loop {
         let page = bounds_cursor.next_page(
             snapshot,
@@ -972,14 +968,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         // Single-work-unit pages make the shared cursor resumable at the exact
         // material/cell slot while leaving the remaining budget for COMBINE's
         // constituent-interface evaluation.
-        let page = cursor.next_page(
-            snapshot,
-            &environment.field,
-            &bounds,
-            BOUNDS_PADDING,
-            1,
-            1,
-        );
+        let page = cursor.next_page(snapshot, &environment.field, &bounds, BOUNDS_PADDING, 1, 1);
         *remaining_discovery_work =
             (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
         if page.visited_work == 0 && page.pairs.is_empty() {
@@ -1046,8 +1035,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             }
             diagnostics.target_material_pairs_restored += 1;
 
-            let mut component_work =
-                (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
+            let mut component_work = (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
             let component_work_initial = component_work;
             let pair_count = indices_a.len().saturating_mul(indices_b.len());
             diagnostics.constituent_pairs_available += pair_count;
