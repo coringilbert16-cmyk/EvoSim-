@@ -965,6 +965,10 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) anchor_materials_inspected: usize,
     pub(crate) target_cells_inspected: usize,
     pub(crate) target_materials_inspected: usize,
+    /// Same-cell/cell-query targets pruned by conservative realized AABB checks.
+    pub(crate) target_materials_rejected_by_bounds: usize,
+    /// Directed material-pair records retained for the shared reaction handoff.
+    pub(crate) shared_candidate_pairs_emitted: usize,
     /// Target material entries inspected but rejected by canonical pair ordering.
     pub(crate) backward_ordered_target_materials: usize,
     /// Unique forward-ordered source-material pairs reaching later validation.
