@@ -3,6 +3,10 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::HashSet;
 use std::time::Instant;
 
+fn elapsed_nanos(started: Instant) -> u64 {
+    started.elapsed().as_nanos().min(u64::MAX as u128) as u64
+}
+
 use crate::energy_ledger::{EnergyLedgerAuthority, ExternalEnergySource, ExternalInputTransaction};
 
 use crate::decision::{ActionEligibility, ActionKind, CurrentNeeds, DecisionParameters};
@@ -897,7 +901,7 @@ impl Simulation {
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics.break_discovery_elapsed_ns =
-            break_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            elapsed_nanos(break_discovery_started);
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
         self.environmental_chemistry_diagnostics
             .break_ready_candidates = environmental_break_operations.len();
@@ -920,7 +924,7 @@ impl Simulation {
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
         self.environmental_chemistry_diagnostics.combine_discovery_elapsed_ns =
-            combine_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            elapsed_nanos(combine_discovery_started);
         self.environmental_chemistry_diagnostics
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
@@ -960,7 +964,7 @@ impl Simulation {
             self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns =
                 self.environmental_chemistry_diagnostics.break_resolution_elapsed_ns
                     .saturating_add(
-                        resolution_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                        elapsed_nanos(resolution_started),
                     );
             let committed = resolution.is_ok();
             let failure_reason = resolution.err().map(str::to_string);
@@ -1110,7 +1114,7 @@ impl Simulation {
                 &mut displacement_discovery,
             );
         self.environmental_chemistry_diagnostics.displacement_discovery_elapsed_ns =
-            displacement_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+            elapsed_nanos(displacement_discovery_started);
         self.environmental_chemistry_diagnostics
             .displacement_discovery = displacement_discovery;
         self.environmental_chemistry_diagnostics
@@ -1267,7 +1271,7 @@ impl Simulation {
             self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns =
                 self.environmental_chemistry_diagnostics.organism_break_discovery_elapsed_ns
                     .saturating_add(
-                        graph_discovery_started.elapsed().as_nanos().min(u64::MAX as u128) as u64,
+                        elapsed_nanos(graph_discovery_started),
                     );
             // The environment is one chemistry owner, not one owner per
             // organism. Discover each field-owned bond at most once per tick;
