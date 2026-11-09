@@ -1139,9 +1139,7 @@ fn accumulate_environmental_internal(
     // topology epoch. Allocate it lazily only when a valid shared-snapshot
     // anchor is actually reached; each cursor reads only its own anchor entry,
     // so previous entries are harmless and no per-anchor initialization occurs.
-    if let Some(snapshot) =
-        shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0)
-    {
+    if let Some(snapshot) = shared_snapshot.filter(|snapshot| snapshot.unassigned_materials == 0) {
         if shared_bounds.len() != snapshot.materials.len() {
             *shared_bounds = vec![None; snapshot.materials.len()];
         }
@@ -1203,12 +1201,15 @@ fn accumulate_environmental_internal(
             let cached_bounds = shared_snapshot
                 .filter(|snapshot| snapshot.unassigned_materials == 0)
                 .and_then(|snapshot| {
-                    snapshot.materials.binary_search_by_key(
-                        &crate::environmental_interaction::MaterialIdentity(
-                            source_a.environmental_identity,
-                        ),
-                        |record| record.identity,
-                    ).ok()
+                    snapshot
+                        .materials
+                        .binary_search_by_key(
+                            &crate::environmental_interaction::MaterialIdentity(
+                                source_a.environmental_identity,
+                            ),
+                            |record| record.identity,
+                        )
+                        .ok()
                 })
                 .and_then(|index| shared_bounds.get(index).copied().flatten());
             let body = if cached_bounds.is_none() {

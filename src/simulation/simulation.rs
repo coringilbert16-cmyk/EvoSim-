@@ -1025,8 +1025,7 @@ impl Simulation {
                     &self.environment.field,
                     self.tick,
                 );
-            environmental_shared_bounds =
-                vec![None; environmental_shared_snapshot.materials.len()];
+            environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
         }
         let environmental_combine_operations =
             crate::environmental_combine::accumulate_environmental_with_shared_snapshot_and_bounds(
@@ -1138,8 +1137,7 @@ impl Simulation {
                     &self.environment.field,
                     self.tick,
                 );
-            environmental_shared_bounds =
-                vec![None; environmental_shared_snapshot.materials.len()];
+            environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
         }
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;

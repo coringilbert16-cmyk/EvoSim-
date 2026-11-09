@@ -986,8 +986,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_bounds(
             .get(record.locator.cell_index)
             .map_or(1, |cell| cell.physical_materials.len())
             .max(1);
-        let material_start = (tick as usize).wrapping_add(record.locator.cell_index)
-            % material_count;
+        let material_start =
+            (tick as usize).wrapping_add(record.locator.cell_index) % material_count;
         let material_offset = record
             .locator
             .material_index
