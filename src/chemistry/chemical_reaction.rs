@@ -626,7 +626,7 @@ impl<'a> EnvironmentalAccumulationKeyIndex<'a> {
 
             by_material
                 .entry(identity)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((bond_index, key.as_str()));
 
             // Candidate invalidation used a prefix ending in "{bond_index}:",
@@ -728,7 +728,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             for previous_key in accumulation_key_index
                 .keys_for_bond(instance.environmental_identity, bond_index)
             {
-                if *previous_key != key {
+                if *previous_key != key.as_str() {
                     checked_keys.insert((*previous_key).to_owned());
                     diagnostics.stale_progress_invalidated =
                         diagnostics.stale_progress_invalidated.saturating_add(1);
