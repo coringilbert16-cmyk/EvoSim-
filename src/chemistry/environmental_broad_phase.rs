@@ -981,6 +981,7 @@ struct SpatialTreeNode {
     left: Option<usize>,
     right: Option<usize>,
     material_index: Option<usize>,
+    material_bounds: Option<MaterialSpatialBounds>,
 }
 
 fn union_spatial_bounds(
@@ -1037,6 +1038,7 @@ fn build_spatial_tree(
             left: None,
             right: None,
             material_index: Some(entries[0].material_index),
+            material_bounds: Some(entries[0].bounds),
         });
         return Some(node_index);
     }
@@ -1057,6 +1059,7 @@ fn build_spatial_tree(
         left_center.total_cmp(&right_center)
     });
     let median_material = median.material_index;
+    let median_bounds = median.bounds;
     let (left_entries, pivot_and_right) = entries.split_at_mut(middle);
     let (_, right_entries) = pivot_and_right
         .split_first_mut()
@@ -1069,6 +1072,7 @@ fn build_spatial_tree(
         left,
         right,
         material_index: Some(median_material),
+        material_bounds: Some(median_bounds),
     });
     Some(node_index)
 }
@@ -1191,8 +1195,12 @@ impl MaterialSpatialIndex {
             if !spatial_bounds_intersect(node.bounds, query) {
                 continue;
             }
-            if let Some(material_index) = node.material_index {
-                output.push(material_index);
+            if let (Some(material_index), Some(material_bounds)) =
+                (node.material_index, node.material_bounds)
+            {
+                if spatial_bounds_intersect(material_bounds, query) {
+                    output.push(material_index);
+                }
             }
             if let Some(left) = node.left {
                 stack.push(left);
