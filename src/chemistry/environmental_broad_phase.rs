@@ -950,6 +950,7 @@ pub(crate) struct IndexedSpatialCursor {
     tick: usize,
     cell_start_offset: usize,
     cells_visited: usize,
+    current_cell_limit: usize,
     target_slot: usize,
     target_slots_visited: usize,
     cell_loaded: bool,
@@ -1018,6 +1019,7 @@ impl IndexedSpatialCursor {
             tick,
             cell_start_offset: 0,
             cells_visited: 0,
+            current_cell_limit: usize::MAX,
             target_slot: 0,
             target_slots_visited: 0,
             cell_loaded: false,
@@ -1031,6 +1033,7 @@ impl IndexedSpatialCursor {
         field: &ActiveMaterialField,
         bounds: &[Option<MaterialSpatialBounds>],
         padding: f64,
+        target_cell_limit: usize,
         work_limit: usize,
         output_limit: usize,
     ) -> IndexedSpatialCursorPage {
@@ -1070,6 +1073,7 @@ impl IndexedSpatialCursor {
                 self.target_slot = 0;
                 self.target_slots_visited = 0;
                 self.cells_visited = 0;
+                self.current_cell_limit = target_cell_limit;
                 self.cell_loaded = false;
                 if let Some(range) = self.range {
                     let columns = range.max_col - range.min_col + 1;
@@ -1237,7 +1241,9 @@ impl IndexedSpatialCursor {
         self.cells_visited = self.cells_visited.saturating_add(1);
         let columns = range.max_col - range.min_col + 1;
         let total_cells = range.row_count.saturating_mul(columns);
-        if self.cells_visited >= total_cells {
+        if self.cells_visited >= total_cells
+            || self.cells_visited >= self.current_cell_limit
+        {
             self.row_offset = range.row_count;
             self.col = range.min_col;
         } else {
