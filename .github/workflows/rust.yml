@@ -10,7 +10,7 @@ on:
     branches: [main, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, resonance-energy-integration-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29, 'optimization/**']
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -23,33 +23,6 @@ jobs:
       - name: Check formatting
         timeout-minutes: 5
         run: cargo fmt --all -- --check
-      - name: Export rustfmt-normalized source for review
-        if: always()
-        run: |
-          cargo fmt --all
-          mkdir -p rustfmt-output
-          cp src/simulation/simulation.rs rustfmt-output/simulation.rs
-          cp src/chemistry/environmental_combine.rs rustfmt-output/environmental_combine.rs
-          cp src/chemistry/environmental_displacement.rs rustfmt-output/environmental_displacement.rs
-      - name: Commit rustfmt-normalized environmental handoff
-        if: always() && github.event_name == 'pull_request'
-        env:
-          BRANCH_NAME: ${{ github.head_ref }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add $(git diff --name-only origin/main...HEAD -- '*.rs')
-          if ! git diff --cached --quiet; then
-            git commit -m "Apply rustfmt to environmental reaction handoff"
-            git push origin "HEAD:${BRANCH_NAME}"
-          fi
-      - name: Upload rustfmt-normalized source
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: temporary-rustfmt-source
-          path: rustfmt-output/
-          if-no-files-found: error
       # Exercise the independent world inventory on live source, reaction, and tick paths
       # before the full suite, whose historical runtime can exceed the job timeout.
       - name: Repository architecture checks
