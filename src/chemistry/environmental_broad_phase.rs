@@ -2311,10 +2311,7 @@ mod tests {
                 if cell_b == anchor_cell && material_b == anchor_material {
                     continue;
                 }
-                expected.push((
-                    10,
-                    materials[material_b].environmental_identity,
-                ));
+                expected.push((10, materials[material_b].environmental_identity));
             }
         }
         assert!(page.complete);
