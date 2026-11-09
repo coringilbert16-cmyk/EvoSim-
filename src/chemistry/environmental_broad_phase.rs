@@ -988,6 +988,19 @@ pub(crate) struct IndexedSpatialCursor {
 }
 
 impl IndexedSpatialCursor {
+    pub(crate) fn target_cell_count(
+        field: &ActiveMaterialField,
+        bounds: MaterialSpatialBounds,
+        padding: f64,
+    ) -> Option<usize> {
+        let range = BoundsCellRange::new(field, bounds.expanded(padding)?)?;
+        Some(
+            range
+                .row_count
+                .saturating_mul(range.max_col.saturating_sub(range.min_col).saturating_add(1)),
+        )
+    }
+
     /// Reverse-only continuation for DISPLACEMENT after COMBINE has already
     /// inspected and retained this anchor's forward candidate directions.
     pub(crate) fn new_for_reverse_anchor(
