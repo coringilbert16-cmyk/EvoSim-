@@ -597,8 +597,6 @@ fn discover_environmental_bonds_from_snapshot(
     tick: u64,
     candidate_limit: usize,
 ) -> EnvironmentalBondDiscovery {
-    use crate::environmental_interaction::{ExistingBondRecord, MaterialRecord};
-
     let cell_count = snapshot.cell_visits as usize;
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
     let mut candidates = Vec::with_capacity(limit);
@@ -612,32 +610,6 @@ fn discover_environmental_bonds_from_snapshot(
             inspected_bonds: 0,
             checked_materials,
         };
-    }
-
-    let mut materials_by_cell: std::collections::BTreeMap<usize, Vec<&MaterialRecord>> =
-        std::collections::BTreeMap::new();
-    for material in &snapshot.materials {
-        materials_by_cell
-            .entry(material.locator.cell_index)
-            .or_default()
-            .push(material);
-    }
-    for materials in materials_by_cell.values_mut() {
-        materials.sort_by_key(|material| material.locator.material_index);
-    }
-
-    let mut bonds_by_material: std::collections::BTreeMap<
-        crate::environmental_interaction::MaterialIdentity,
-        Vec<&ExistingBondRecord>,
-    > = std::collections::BTreeMap::new();
-    for bond in &snapshot.existing_bonds {
-        bonds_by_material
-            .entry(bond.material)
-            .or_default()
-            .push(bond);
-    }
-    for bonds in bonds_by_material.values_mut() {
-        bonds.sort_by_key(|bond| bond.bond_index);
     }
 
     let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
@@ -656,10 +628,10 @@ fn discover_environmental_bonds_from_snapshot(
         scan_steps_remaining -= 1;
         inspected_cells = inspected_cells.saturating_add(1);
         let cell_index = (cell_start + cell_offset) % cell_count;
-        let Some(materials) = materials_by_cell.get(&cell_index) else {
+        let Some(material_indices) = snapshot.material_indices_by_cell.get(cell_index) else {
             continue;
         };
-        let material_count = materials.len();
+        let material_count = material_indices.len();
         if material_count == 0 {
             continue;
         }
@@ -670,15 +642,17 @@ fn discover_environmental_bonds_from_snapshot(
             }
             scan_steps_remaining -= 1;
             inspected_materials = inspected_materials.saturating_add(1);
-            let material = materials[(material_start + material_offset) % material_count];
-            let bonds = bonds_by_material
+            let material_index = material_indices[(material_start + material_offset) % material_count];
+            let material = &snapshot.materials[material_index];
+            let bond_indices = snapshot
+                .bond_indices_by_material
                 .get(&material.identity)
                 .map_or(&[][..], Vec::as_slice);
-            checked_materials.push((material.identity.0, bonds.len()));
+            checked_materials.push((material.identity.0, bond_indices.len()));
             if bonds.is_empty() {
                 continue;
             }
-            let bond_count = bonds.len();
+            let bond_count = bond_indices.len();
             let bond_start = tick as usize % bond_count;
             for bond_offset in 0..bond_count {
                 if scan_steps_remaining == 0 {
@@ -686,11 +660,11 @@ fn discover_environmental_bonds_from_snapshot(
                 }
                 scan_steps_remaining -= 1;
                 inspected_bonds = inspected_bonds.saturating_add(1);
-                let bond = bonds[(bond_start + bond_offset) % bond_count];
+                let bond_index = bond_indices[(bond_start + bond_offset) % bond_count];
                 candidates.push((
                     material.locator.cell_index,
                     material.locator.material_index,
-                    bond.bond_index,
+                    bond_index,
                 ));
                 if candidates.len() >= limit {
                     break 'discovery;

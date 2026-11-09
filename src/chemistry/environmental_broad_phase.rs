@@ -34,6 +34,9 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) field_revision: u64,
     pub(crate) materials: Vec<MaterialRecord>,
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
+    /// Snapshot-owned indexes reused by all reaction projections.
+    pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
+    pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
     pub(crate) unassigned_materials: u64,
@@ -423,6 +426,21 @@ impl EnvironmentalMaterialSnapshot {
         }
         snapshot.materials.sort_by_key(|material| material.identity);
         snapshot.existing_bonds.sort_by_key(|bond| bond.reference());
+        snapshot.material_indices_by_cell.resize(field.cells.len(), Vec::new());
+        for (material_index, material) in snapshot.materials.iter().enumerate() {
+            if let Some(indices) = snapshot.material_indices_by_cell.get_mut(material.locator.cell_index) {
+                indices.push(material_index);
+            }
+        }
+        for bond in &snapshot.existing_bonds {
+            snapshot.bond_indices_by_material.entry(bond.material).or_default().push(bond.bond_index);
+        }
+        for indices in &mut snapshot.material_indices_by_cell {
+            indices.sort_by_key(|&index| snapshot.materials[index].locator.material_index);
+        }
+        for indices in snapshot.bond_indices_by_material.values_mut() {
+            indices.sort_unstable();
+        }
         snapshot
     }
 
@@ -1183,6 +1201,10 @@ impl IndexedSpatialCursor {
             } else {
                 self.target_slot = (target_slot + 1) % target_count;
             }
+            // Every inspected target slot consumes work, including self-pairs
+            // and locator-order rejections. Candidate output is not a work proxy.
+            page.visited_work = page.visited_work.saturating_add(1);
+            page.visited_material_checks = page.visited_material_checks.saturating_add(1);
             let anchor = &snapshot.materials[anchor_index];
             if self.orientation == PairOrientation::ForwardOrdered
                 && (cell_index, target_slot)
@@ -1190,8 +1212,6 @@ impl IndexedSpatialCursor {
             {
                 continue;
             }
-            page.visited_work = page.visited_work.saturating_add(1);
-            page.visited_material_checks = page.visited_material_checks.saturating_add(1);
 
             let physical = &cell.physical_materials[target_slot];
             if physical.environmental_identity == 0 {
