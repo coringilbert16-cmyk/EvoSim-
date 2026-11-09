@@ -591,6 +591,65 @@ pub(crate) fn accumulate_environmental(
     )
 }
 
+struct EnvironmentalMaterialProgressIndex<'a> {
+    by_material: std::collections::BTreeMap<u64, Vec<(usize, &'a str)>>,
+}
+
+impl<'a> EnvironmentalMaterialProgressIndex<'a> {
+    fn new(accumulation: &'a std::collections::BTreeMap<String, f64>) -> Self {
+        let mut by_material: std::collections::BTreeMap<u64, Vec<(usize, &'a str)>> =
+            std::collections::BTreeMap::new();
+
+        for key in accumulation.keys() {
+            let Some(suffix) = key.strip_prefix("environment|environment:") else {
+                continue;
+            };
+            let mut parts = suffix.splitn(2, ':');
+            let Some(identity_text) = parts.next() else {
+                continue;
+            };
+            let Some(index_and_tail) = parts.next() else {
+                continue;
+            };
+            let Ok(identity) = identity_text.parse::<u64>() else {
+                continue;
+            };
+            // The original prefix is formatted from the numeric identity.
+            // Preserve that exact match rather than accepting alternate spellings.
+            if identity == 0 || identity_text != identity.to_string() {
+                continue;
+            }
+            let Some(index_text) = index_and_tail.split(':').next() else {
+                continue;
+            };
+            let Ok(bond_index) = index_text.parse::<usize>() else {
+                continue;
+            };
+
+            by_material
+                .entry(identity)
+                .or_default()
+                .push((bond_index, key.as_str()));
+        }
+
+        Self { by_material }
+    }
+
+    fn material_keys_missing_bonds(
+        &self,
+        identity: u64,
+        bond_count: usize,
+    ) -> impl Iterator<Item = &'a str> + '_ {
+        self.by_material
+            .get(&identity)
+            .into_iter()
+            .flatten()
+            .filter_map(move |(existing_index, key)| {
+                (*existing_index >= bond_count).then_some(*key)
+            })
+    }
+}
+
 fn accumulation_keys_with_prefix<'a>(
     accumulation: &'a std::collections::BTreeMap<String, f64>,
     prefix: &'a str,
@@ -624,21 +683,11 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
-    for (identity, bond_count) in checked_materials {
-        if identity == 0 {
-            continue;
-        }
-        let material_prefix = format!("environment|environment:{identity}:");
-        for key in accumulation_keys_with_prefix(accumulation, &material_prefix) {
-            let Some(existing_index) = key
-                .strip_prefix(&material_prefix)
-                .and_then(|suffix| suffix.split(':').next())
-                .and_then(|index| index.parse::<usize>().ok())
-            else {
-                continue;
-            };
-            if existing_index >= bond_count {
-                checked_keys.insert(key.clone());
+    {
+        let material_progress_index = EnvironmentalMaterialProgressIndex::new(accumulation);
+        for (identity, bond_count) in checked_materials {
+            for key in material_progress_index.material_keys_missing_bonds(identity, bond_count) {
+                checked_keys.insert(key.to_owned());
                 diagnostics.stale_progress_invalidated =
                     diagnostics.stale_progress_invalidated.saturating_add(1);
             }
@@ -1265,6 +1314,58 @@ mod material_identity_tests {
             catalog,
         )
         .expect("test composite should be physically realizable")
+    }
+
+    #[test]
+    fn environmental_material_progress_index_matches_exhaustive_prefix_checks() {
+        let accumulation = std::collections::BTreeMap::from([
+            ("environment|environment:41:0:bond-a".to_string(), 0.1),
+            ("environment|environment:41:1:bond-b".to_string(), 0.2),
+            ("environment|environment:41:2:bond-c".to_string(), 0.3),
+            ("environment|environment:41:2:legacy-tail".to_string(), 0.4),
+            (
+                "environment|environment:41:02:leading-zero-index".to_string(),
+                0.5,
+            ),
+            ("environment|environment:41:2".to_string(), 0.6),
+            (
+                "environment|environment:42:2:other-material".to_string(),
+                0.7,
+            ),
+            (
+                "environment|environment:041:2:noncanonical-identity".to_string(),
+                0.8,
+            ),
+            (
+                "environment|environment:0:2:unassigned-material".to_string(),
+                0.9,
+            ),
+            ("other|environment:41:2:not-environmental".to_string(), 1.0),
+            (
+                "environment|environment:41:not-an-index:malformed".to_string(),
+                1.1,
+            ),
+        ]);
+        let index = EnvironmentalMaterialProgressIndex::new(&accumulation);
+
+        for (identity, bond_count) in [(41_u64, 2_usize), (41, 3), (42, 3), (999, 0)] {
+            let prefix = format!("environment|environment:{identity}:");
+            let expected: Vec<String> = accumulation
+                .keys()
+                .filter_map(|key| {
+                    let existing_index = key
+                        .strip_prefix(&prefix)
+                        .and_then(|suffix| suffix.split(':').next())
+                        .and_then(|value| value.parse::<usize>().ok())?;
+                    (existing_index >= bond_count).then(|| key.clone())
+                })
+                .collect();
+            let actual: Vec<String> = index
+                .material_keys_missing_bonds(identity, bond_count)
+                .map(str::to_owned)
+                .collect();
+            assert_eq!(actual, expected);
+        }
     }
 
     #[test]
