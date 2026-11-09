@@ -3001,9 +3001,10 @@ mod tests {
         assert_eq!(operations, legacy_operations);
         assert_eq!(accumulation, legacy_accumulation);
         assert_eq!(discovery_work, legacy_work);
-        assert_eq!(
-            discovery_diagnostics.anchor_materials_inspected,
-            legacy_diagnostics.anchor_materials_inspected
+        assert!(
+            discovery_diagnostics.anchor_materials_inspected
+                < legacy_diagnostics.anchor_materials_inspected,
+            "shared snapshot discovery should inspect only bonded displacement anchors"
         );
         assert_eq!(
             discovery_diagnostics.bonds_inspected,
