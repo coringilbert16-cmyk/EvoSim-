@@ -934,7 +934,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     accumulation: &mut BTreeMap<String, f64>,
     chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
     tick: u64,
-    remaining_discovery_work: &mut usize,
+    remaining_evaluation_work: &mut usize,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
     snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
     shared_bounds: &mut Vec<Option<crate::environmental_broad_phase::MaterialSpatialBounds>>,
@@ -956,7 +956,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             accumulation,
             chemistry_library,
             tick,
-            remaining_discovery_work,
+            remaining_evaluation_work,
             diagnostics,
         );
     }
@@ -967,15 +967,17 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     let (initial_entries, initial_value) = environmental_accumulation_totals(accumulation);
     diagnostics.accumulation_entries_before_search = initial_entries;
     diagnostics.accumulation_value_before_search = initial_value;
-    if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
-        diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+    if environment.field.cells.is_empty() {
+        diagnostics.budget_exhausted = *remaining_evaluation_work == 0;
         record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
         return Vec::new();
     }
 
-    // Prepare only the current anchor's geometry. This avoids the previous
-    // full-field, unbudgeted bounds pass and lets each anchor share its restored
-    // source structure with every target pair found around it.
+    // Prepare each anchor once, then exhaust its local spatial neighborhood.
+    // Discovery is not charged against the COMBINE evaluation allowance: every
+    // tick-start material gets a broad-phase check, while only local neighbors
+    // are considered. The allowance below applies only to constituent/contact
+    // evaluation after the shared pair has been recorded.
     let mut operations = Vec::new();
     let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
     let mut updated_keys = BTreeSet::new();
@@ -1014,9 +1016,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     });
 
     for anchor_index in anchor_order {
-        if *remaining_discovery_work == 0 {
-            break;
-        }
         let Some(record_a) = snapshot.materials.get(anchor_index) else {
             continue;
         };
@@ -1030,15 +1029,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         else {
             continue;
         };
-        // Charge anchor restoration by constituent count. Large anchors that
-        // do not fit this tick's remaining budget are deferred to a later,
-        // tick-rotated pass rather than forcing an unbounded preparation scan.
-        let anchor_preparation_work = record_a.constituent_count.max(1);
-        if anchor_preparation_work > *remaining_discovery_work {
-            continue;
-        }
-        *remaining_discovery_work =
-            (*remaining_discovery_work).saturating_sub(anchor_preparation_work);
         let Some((source_structure, indices_a)) = restored_source(&source_a, environment) else {
             continue;
         };
@@ -1054,13 +1044,13 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 min_y: body.min_y,
                 max_y: body.max_y,
             });
-        let target_cell_limit = FIELD_TARGET_CELL_INSPECTION_LIMIT.min(*remaining_discovery_work);
         let target_cell_count =
             crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count(
                 &environment.field,
                 shared_bounds[anchor_index].expect("anchor bounds were just populated"),
                 BOUNDS_PADDING,
             );
+        let target_cell_limit = target_cell_count.unwrap_or(0);
         // COMBINE needs only forward pairs. Bonded anchors additionally
         // emit the reverse role into the same shared stream for DISPLACEMENT;
         // unbonded anchors avoid that unnecessary second orientation.
@@ -1085,9 +1075,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
             continue;
         };
 
-        while *remaining_discovery_work > 0 {
-            // Single-work-unit pages preserve the exact target-cell/material
-            // continuation while leaving budget for constituent evaluation.
+        loop {
+            // Single-work-unit pages keep memory and per-call work bounded,
+            // but the cursor is drained completely before moving to the next
+            // anchor. Discovery itself cannot silently drop a neighbor.
             let page = cursor.next_page(
                 snapshot,
                 &environment.field,
@@ -1097,8 +1088,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 1,
                 1,
             );
-            *remaining_discovery_work =
-                (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
             diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
             diagnostics.target_cells_inspected += page.visited_cell_checks as usize;
             diagnostics.target_materials_inspected += page.visited_material_checks as usize;
@@ -1134,6 +1123,16 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 }
                 let source_b = source_b.clone();
                 diagnostics.forward_ordered_target_material_pair_inspections += 1;
+                if *remaining_evaluation_work == 0 {
+                    journal.record_deferred_count(
+                        tick,
+                        crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                        crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+                        "combine_evaluation_budget_exhausted",
+                        1,
+                    );
+                    continue;
+                }
                 if record_a.locator.cell_index == record_b.locator.cell_index {
                     diagnostics.same_cell_source_pair_inspections += 1;
                 }
@@ -1162,7 +1161,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 diagnostics.target_material_pairs_restored += 1;
 
                 let mut component_work =
-                    (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
+                    (*remaining_evaluation_work).min(FIELD_COMPONENT_PAIR_LIMIT);
                 let component_work_initial = component_work;
                 let pair_count = indices_a.len().saturating_mul(indices_b.len());
                 diagnostics.constituent_pairs_available += pair_count;
@@ -1189,8 +1188,8 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                     Some(&mut *diagnostics),
                 );
                 let component_work_used = component_work_initial.saturating_sub(component_work);
-                *remaining_discovery_work =
-                    (*remaining_discovery_work).saturating_sub(component_work_used);
+                *remaining_evaluation_work =
+                    (*remaining_evaluation_work).saturating_sub(component_work_used);
                 if pair_count > 0 {
                     for offset in 0..component_work_used {
                         let pair_index = pair_start.wrapping_add(offset) % pair_count;
@@ -1231,9 +1230,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 }
             }
             if page.complete {
-                completed_anchors[anchor_index] = target_cell_count
-                    .filter(|&count| target_cell_limit >= count)
-                    .map(|_| target_cell_limit);
+                completed_anchors[anchor_index] = target_cell_count.map(|_| target_cell_limit);
                 break;
             }
         }
@@ -1245,7 +1242,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         &updated_keys,
         diagnostics,
     );
-    diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+    diagnostics.budget_exhausted = *remaining_evaluation_work == 0;
     let material_count = snapshot.materials.len();
     diagnostics.global_realized_material_pairs =
         material_count.saturating_mul(material_count.saturating_sub(1)) / 2;
