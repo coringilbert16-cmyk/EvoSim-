@@ -323,3 +323,16 @@ This stage changes same-tick visibility intentionally: no reaction can consume a
 - A diagnostic-enabled comparison on the same architecture recorded 124 committed environmental reactions versus 121 on baseline (+2.5%), with the reaction mix changing under the new exclusivity/priority rules. That coverage difference is useful, but it does not cancel the measured runtime regression.
 - The intended gains at this stage are semantic and architectural: one immutable snapshot per tick, no same-tick reaction cascades, and at most one selected reaction per source material per tick. Do not describe this as a proven runtime optimization.
 - No production cutover or merge is authorized by this milestone.
+
+
+## Stage 6 — Production shared-discovery ownership
+
+The production tick now treats the tick-start material snapshot as the common discovery source:
+
+- BREAK consumes the snapshot-owned existing-bond inventory. It does not rebuild its candidate list by walking live field ownership.
+- The COMBINE broad-phase cursor emits directed material-pair records for every anchor, not just bonded anchors. The shared pair stream is retained before COMBINE applies its forward-locator filter.
+- COMBINE evaluates only the forward locator ordering from that stream. DISPLACEMENT groups the same directed records by anchor and derives both anchor/displaced bond orientations from them.
+- DISPLACEMENT's anchor ordering and bond lookup come from the snapshot material and bond indexes. Its production path no longer launches a reverse-only spatial cursor or falls back to a second target-cell/material scan when shared coverage is partial.
+- Partial shared coverage is authoritative for the current tick. Unvisited relationships remain deferred to the next rotated shared pass; they are not reclassified as chemically invalid.
+
+The shared pair stream remains bounded by the existing per-tick discovery work and is retained only for the current tick. This is the first production ownership cutover; the next validation must confirm parity, no lost deferred work, and the runtime impact before considering removal of compatibility-only legacy paths.
