@@ -2386,6 +2386,77 @@ mod tests {
         }
         actual.sort_unstable();
         assert_eq!(actual, vec![(20, 10), (20, 15)]);
+
+        let target_cell_count =
+            IndexedSpatialCursor::target_cell_count(&field, bounds[anchor_index].unwrap(), 0.0)
+                .unwrap();
+        let mut forward = IndexedSpatialCursor::new_for_anchor(
+            &snapshot,
+            &field,
+            PairOrientation::ForwardOrdered,
+            17,
+            anchor_index,
+        )
+        .unwrap();
+        let forward_page = forward.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(forward_page.complete);
+
+        let mut reverse =
+            IndexedSpatialCursor::new_for_reverse_anchor(&snapshot, &field, 17, anchor_index)
+                .unwrap();
+        let reverse_page = reverse.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(reverse_page.complete);
+
+        let mut directed =
+            IndexedSpatialCursor::new_for_anchor(
+                &snapshot,
+                &field,
+                PairOrientation::Directed,
+                17,
+                anchor_index,
+            )
+            .unwrap();
+        let directed_page = directed.next_page(
+            &snapshot,
+            &field,
+            &bounds,
+            0.0,
+            target_cell_count,
+            usize::MAX,
+            usize::MAX,
+        );
+        assert!(directed_page.complete);
+
+        let mut shared_pairs = forward_page
+            .pairs
+            .iter()
+            .chain(&reverse_page.pairs)
+            .map(|pair| (pair.identity_left.0, pair.identity_right.0))
+            .collect::<Vec<_>>();
+        let mut directed_pairs = directed_page
+            .pairs
+            .iter()
+            .map(|pair| (pair.identity_left.0, pair.identity_right.0))
+            .collect::<Vec<_>>();
+        shared_pairs.sort_unstable();
+        directed_pairs.sort_unstable();
+        assert_eq!(shared_pairs, directed_pairs);
     }
 
     #[test]
