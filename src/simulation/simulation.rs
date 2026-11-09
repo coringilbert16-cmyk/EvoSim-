@@ -917,7 +917,7 @@ impl Simulation {
         let break_operations_ready_for_scheduling = environmental_break_operations.len();
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
-        let environmental_break_operations =
+        let mut environmental_break_operations =
             crate::chemical_reaction::schedule_environmental_operations(
                 environmental_break_operations,
                 self.tick,
@@ -938,8 +938,165 @@ impl Simulation {
             );
         self.environmental_chemistry_diagnostics.break_scheduled =
             environmental_break_operations.len();
+        // All three discovery layers read one immutable tick-start snapshot.
+        // Reserve each source material at most once, in BREAK -> COMBINE ->
+        // DISPLACEMENT precedence order. Identity zero is only used by legacy
+        // direct callers, so its captured locator is the fallback key.
+        let mut environmental_claimed_materials =
+            std::collections::HashSet::<(u64, usize, usize)>::new();
+        let material_claim = |identity: u64, cell: usize, material: usize| {
+            if identity == 0 { (0, cell, material) } else { (identity, 0, 0) }
+        };
+        environmental_break_operations.retain(|operation| {
+            let key = material_claim(
+                operation.source_material.environmental_identity,
+                operation.cell_index,
+                operation.material_index,
+            );
+            if environmental_claimed_materials.insert(key) {
+                true
+            } else {
+                self.chemical_reaction_accumulation
+                    .entry(operation.accumulation_key.clone())
+                    .and_modify(|value| *value = (*value).max(operation.accumulated_reaction))
+                    .or_insert(operation.accumulated_reaction);
+                false
+            }
+        });
+
         self.environmental_chemistry_diagnostics
             .break_realization_work_remaining = environmental_break_work_remaining;
+
+
+        // Split the field-owned discovery share between COMBINE and the new
+        // coupled displacement path; BREAK retains its independent quarter.
+        let mut environmental_combine_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
+        self.environmental_chemistry_diagnostics.combine_search =
+            crate::state::EnvironmentalCombineSearchDiagnostics::default();
+        let environmental_combine_operations =
+            crate::environmental_combine::accumulate_environmental_with_shared_snapshot_and_candidates(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_combine_discovery_remaining,
+                &mut self.environmental_chemistry_diagnostics.combine_search,
+                &environmental_shared_snapshot,
+                &mut environmental_shared_bounds,
+                &mut environmental_shared_candidate_pairs,
+                &mut environmental_combine_completed_anchors,
+            );
+        self.environmental_chemistry_diagnostics
+            .combine_ready_candidates = environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics
+            .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
+
+        // Environmental COMBINE receives its own bounded share of the field's
+        // work budget. It consumes the same shared reaction ledger and preserves
+        // progress if a source snapshot became stale before commit.
+        let mut environmental_combine_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
+        let mut environmental_combine_operations =
+            crate::environmental_combine::schedule_environmental_operations(
+                environmental_combine_operations,
+                self.tick,
+                &mut environmental_combine_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        self.environmental_chemistry_diagnostics.combine_scheduled =
+            environmental_combine_operations.len();
+        environmental_combine_operations.retain(|operation| {
+            let a = material_claim(operation.source_a.environmental_identity, operation.cell_a, operation.material_a);
+            let b = material_claim(operation.source_b.environmental_identity, operation.cell_b, operation.material_b);
+            if a != b
+                && !environmental_claimed_materials.contains(&a)
+                && !environmental_claimed_materials.contains(&b)
+            {
+                environmental_claimed_materials.insert(a);
+                environmental_claimed_materials.insert(b);
+                true
+            } else {
+                self.chemical_reaction_accumulation
+                    .entry(operation.accumulation_key.clone())
+                    .and_modify(|value| *value = (*value).max(operation.accumulated_reaction))
+                    .or_insert(operation.accumulated_reaction);
+                false
+            }
+        });
+
+        self.environmental_chemistry_diagnostics
+            .combine_realization_work_remaining = environmental_combine_work_remaining;
+
+
+        let mut environmental_displacement_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
+        let mut displacement_discovery =
+            crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
+        let environmental_displacement_operations =
+            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot_and_candidates(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                self.tick,
+                &mut environmental_displacement_discovery_remaining,
+                &mut displacement_discovery,
+                &environmental_shared_snapshot,
+                &mut environmental_shared_bounds,
+                &environmental_shared_candidate_pairs,
+                &environmental_combine_completed_anchors,
+            );
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery = displacement_discovery;
+        self.environmental_chemistry_diagnostics
+            .displacement_ready_candidates = environmental_displacement_operations.len();
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery_work_remaining = environmental_displacement_discovery_remaining;
+
+        let displacement_ready_for_scheduling = environmental_displacement_operations.len();
+        let mut environmental_displacement_work_remaining =
+            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
+        let mut environmental_displacement_operations =
+            crate::environmental_displacement::schedule_environmental_operations(
+                environmental_displacement_operations,
+                self.tick,
+                &mut environmental_displacement_work_remaining,
+                &mut self.chemical_reaction_accumulation,
+            );
+        self.environmental_chemistry_diagnostics
+            .displacement_discovery
+            .evaluation_outcomes
+            .deferred = self
+            .environmental_chemistry_diagnostics
+            .displacement_discovery
+            .evaluation_outcomes
+            .deferred
+            .saturating_add(
+                displacement_ready_for_scheduling
+                    .saturating_sub(environmental_displacement_operations.len()),
+            );
+        self.environmental_chemistry_diagnostics
+            .displacement_scheduled = environmental_displacement_operations.len();
+        environmental_displacement_operations.retain(|operation| {
+            let a = material_claim(operation.source_a.environmental_identity, operation.cell_a, operation.material_a);
+            let b = material_claim(operation.source_b.environmental_identity, operation.cell_b, operation.material_b);
+            if a != b
+                && !environmental_claimed_materials.contains(&a)
+                && !environmental_claimed_materials.contains(&b)
+            {
+                environmental_claimed_materials.insert(a);
+                environmental_claimed_materials.insert(b);
+                true
+            } else {
+                self.chemical_reaction_accumulation
+                    .entry(operation.accumulation_key.clone())
+                    .and_modify(|value| *value = (*value).max(operation.accumulated_reaction))
+                    .or_insert(operation.accumulated_reaction);
+                false
+            }
+        });
+
+
+        // Commit only after all three layers have completed discovery.
         for operation in environmental_break_operations {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
@@ -1013,60 +1170,6 @@ impl Simulation {
                 });
         }
 
-        // Split the field-owned discovery share between COMBINE and the new
-        // coupled displacement path; BREAK retains its independent quarter.
-        let mut environmental_combine_discovery_remaining =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
-        self.environmental_chemistry_diagnostics.combine_search =
-            crate::state::EnvironmentalCombineSearchDiagnostics::default();
-        // Reuse the pass inventory when BREAK made no field mutation. A
-        // successful BREAK invalidates every locator/bond projection, so only
-        // then pay for a fresh snapshot before COMBINE.
-        if environmental_shared_snapshot.field_revision != self.environment.field.revision {
-            environmental_shared_snapshot =
-                crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                    &self.environment.field,
-                    self.tick,
-                );
-            environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
-            environmental_shared_candidate_pairs.clear();
-            environmental_combine_completed_anchors =
-                vec![None; environmental_shared_snapshot.materials.len()];
-        }
-        let environmental_combine_operations =
-            crate::environmental_combine::accumulate_environmental_with_shared_snapshot_and_candidates(
-                &self.environment,
-                &mut self.chemical_reaction_accumulation,
-                &mut self.chemistry_library,
-                self.tick,
-                &mut environmental_combine_discovery_remaining,
-                &mut self.environmental_chemistry_diagnostics.combine_search,
-                &environmental_shared_snapshot,
-                &mut environmental_shared_bounds,
-                &mut environmental_shared_candidate_pairs,
-                &mut environmental_combine_completed_anchors,
-            );
-        self.environmental_chemistry_diagnostics
-            .combine_ready_candidates = environmental_combine_operations.len();
-        self.environmental_chemistry_diagnostics
-            .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
-
-        // Environmental COMBINE receives its own bounded share of the field's
-        // work budget. It consumes the same shared reaction ledger and preserves
-        // progress if a source snapshot became stale before commit.
-        let mut environmental_combine_work_remaining =
-            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
-        let environmental_combine_operations =
-            crate::environmental_combine::schedule_environmental_operations(
-                environmental_combine_operations,
-                self.tick,
-                &mut environmental_combine_work_remaining,
-                &mut self.chemical_reaction_accumulation,
-            );
-        self.environmental_chemistry_diagnostics.combine_scheduled =
-            environmental_combine_operations.len();
-        self.environmental_chemistry_diagnostics
-            .combine_realization_work_remaining = environmental_combine_work_remaining;
         for operation in environmental_combine_operations {
             let source_cells = vec![operation.cell_a, operation.cell_b];
             let source_material_indices = vec![operation.material_a, operation.material_b];
@@ -1137,68 +1240,6 @@ impl Simulation {
             );
         }
 
-        // Likewise, preserve the COMBINE snapshot for DISPLACEMENT when no
-        // COMBINE operation committed. Refresh only after an actual mutation.
-        if environmental_shared_snapshot.field_revision != self.environment.field.revision {
-            environmental_shared_snapshot =
-                crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                    &self.environment.field,
-                    self.tick,
-                );
-            environmental_shared_bounds = vec![None; environmental_shared_snapshot.materials.len()];
-            environmental_shared_candidate_pairs.clear();
-            environmental_combine_completed_anchors =
-                vec![None; environmental_shared_snapshot.materials.len()];
-        }
-        let mut environmental_displacement_discovery_remaining =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
-        let mut displacement_discovery =
-            crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
-        let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental_with_shared_snapshot_and_candidates(
-                &self.environment,
-                &mut self.chemical_reaction_accumulation,
-                self.tick,
-                &mut environmental_displacement_discovery_remaining,
-                &mut displacement_discovery,
-                &environmental_shared_snapshot,
-                &mut environmental_shared_bounds,
-                &environmental_shared_candidate_pairs,
-                &environmental_combine_completed_anchors,
-            );
-        self.environmental_chemistry_diagnostics
-            .displacement_discovery = displacement_discovery;
-        self.environmental_chemistry_diagnostics
-            .displacement_ready_candidates = environmental_displacement_operations.len();
-        self.environmental_chemistry_diagnostics
-            .displacement_discovery_work_remaining = environmental_displacement_discovery_remaining;
-
-        let displacement_ready_for_scheduling = environmental_displacement_operations.len();
-        let mut environmental_displacement_work_remaining =
-            crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
-        let environmental_displacement_operations =
-            crate::environmental_displacement::schedule_environmental_operations(
-                environmental_displacement_operations,
-                self.tick,
-                &mut environmental_displacement_work_remaining,
-                &mut self.chemical_reaction_accumulation,
-            );
-        self.environmental_chemistry_diagnostics
-            .displacement_discovery
-            .evaluation_outcomes
-            .deferred = self
-            .environmental_chemistry_diagnostics
-            .displacement_discovery
-            .evaluation_outcomes
-            .deferred
-            .saturating_add(
-                displacement_ready_for_scheduling
-                    .saturating_sub(environmental_displacement_operations.len()),
-            );
-        self.environmental_chemistry_diagnostics
-            .displacement_scheduled = environmental_displacement_operations.len();
-        self.environmental_chemistry_diagnostics
-            .displacement_realization_work_remaining = environmental_displacement_work_remaining;
         for operation in environmental_displacement_operations {
             let source_cells = vec![operation.cell_a, operation.cell_b];
             let source_material_indices = vec![operation.material_a, operation.material_b];
@@ -1271,6 +1312,11 @@ impl Simulation {
                     post_commit_source_cell_materials,
                 });
         }
+
+
+        self.environmental_chemistry_diagnostics
+            .displacement_realization_work_remaining = environmental_displacement_work_remaining;
+
 
         let mut carried_chemistry_work = 0;
         let mut carried_chemistry_discovery_work = 0;
