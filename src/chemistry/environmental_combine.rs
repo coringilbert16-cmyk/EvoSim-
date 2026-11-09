@@ -896,6 +896,285 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         .collect()
 }
 
+
+/// Production COMBINE entry point backed by the tick's shared environmental
+/// snapshot. The spatial cursor supplies material-pair discovery; the existing
+/// COMBINE endpoint, chemistry, activation, and energy evaluators remain native.
+pub(crate) fn accumulate_environmental_with_shared_snapshot(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    chemistry_library: &mut crate::chemistry_library::ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
+    snapshot: &crate::environmental_broad_phase::EnvironmentalMaterialSnapshot,
+) -> Vec<EnvironmentalCombineOperation> {
+    if snapshot.unassigned_materials != 0 {
+        return accumulate_environmental_with_diagnostics(
+            environment,
+            accumulation,
+            chemistry_library,
+            tick,
+            remaining_discovery_work,
+            diagnostics,
+        );
+    }
+
+    accumulation.retain(|key, _| is_current_combine_accumulation_key(key));
+    let (initial_entries, initial_value) = environmental_accumulation_totals(accumulation);
+    diagnostics.accumulation_entries_before_search = initial_entries;
+    diagnostics.accumulation_value_before_search = initial_value;
+    if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
+        diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+        record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
+        return Vec::new();
+    }
+
+    // Bounds are shared discovery metadata for COMBINE and DISPLACEMENT. The
+    // cursor validates every constituent against the immutable snapshot before
+    // any spatial pair page is consumed.
+    let mut bounds_cursor =
+        crate::environmental_broad_phase::MaterialBoundsCursor::new(
+            snapshot,
+            &environment.catalog,
+        );
+    let bounds = loop {
+        let page = bounds_cursor.next_page(
+            snapshot,
+            &environment.field,
+            &environment.catalog,
+            usize::MAX,
+        );
+        if let Some(bounds) = page.bounds {
+            break bounds;
+        }
+        if page.complete || page.visited_work == 0 {
+            diagnostics.budget_exhausted = true;
+            record_unupdated_accumulations(accumulation, &BTreeSet::new(), diagnostics);
+            return Vec::new();
+        }
+    };
+
+    let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new(
+        snapshot,
+        &environment.field,
+        crate::environmental_broad_phase::PairOrientation::Unordered,
+    );
+    let mut operations = Vec::new();
+    let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
+    let mut updated_keys = BTreeSet::new();
+    let mut checked_prefixes = BTreeSet::new();
+    let mut cache = ConnectionCompatibilityCache::new();
+
+    while *remaining_discovery_work > 0 {
+        // Single-work-unit pages make the shared cursor resumable at the exact
+        // material/cell slot while leaving the remaining budget for COMBINE's
+        // constituent-interface evaluation.
+        let page = cursor.next_page(
+            snapshot,
+            &environment.field,
+            &bounds,
+            BOUNDS_PADDING,
+            1,
+            1,
+        );
+        *remaining_discovery_work =
+            (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
+        if page.visited_work == 0 && page.pairs.is_empty() {
+            break;
+        }
+
+        for pair in page.pairs {
+            let Some(record_a) = snapshot.materials.get(pair.left) else {
+                continue;
+            };
+            let Some(record_b) = snapshot.materials.get(pair.right) else {
+                continue;
+            };
+            let Some(source_a) = environment
+                .field
+                .cells
+                .get(record_a.locator.cell_index)
+                .and_then(|cell| cell.physical_materials.get(record_a.locator.material_index))
+                .filter(|material| material.environmental_identity == pair.identity_left.0)
+                .cloned()
+            else {
+                continue;
+            };
+            let Some(source_b) = environment
+                .field
+                .cells
+                .get(record_b.locator.cell_index)
+                .and_then(|cell| cell.physical_materials.get(record_b.locator.material_index))
+                .filter(|material| material.environmental_identity == pair.identity_right.0)
+                .cloned()
+            else {
+                continue;
+            };
+            diagnostics.target_materials_inspected += 1;
+            diagnostics.forward_ordered_target_material_pair_inspections += 1;
+            if record_a.locator.cell_index == record_b.locator.cell_index {
+                diagnostics.same_cell_source_pair_inspections += 1;
+            }
+
+            let Some((source_structure, indices_a)) = restored_source(&source_a, environment)
+            else {
+                continue;
+            };
+            let Some(body) =
+                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
+                    &source_structure,
+                )
+            else {
+                continue;
+            };
+            let Some(indices_b) = {
+                let mut trial = source_structure.clone();
+                crate::material_restoration::restore_material(
+                    &mut trial,
+                    &source_b,
+                    origin(),
+                    &environment.catalog,
+                )
+                .filter(|indices| {
+                    !indices.iter().any(|index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &trial,
+                            &trial.units[*index],
+                            indices,
+                            &environment.catalog,
+                        )
+                    })
+                })
+            } else {
+                diagnostics.target_material_pairs_restore_failed += 1;
+                continue;
+            };
+
+            let mut trial_structure = source_structure.clone();
+            let Some(indices_b) = crate::material_restoration::restore_material(
+                &mut trial_structure,
+                &source_b,
+                origin(),
+                &environment.catalog,
+            ) else {
+                diagnostics.target_material_pairs_restore_failed += 1;
+                continue;
+            };
+            if indices_b.iter().any(|index| {
+                crate::construction_runtime::placed_unit_overlaps(
+                    &trial_structure,
+                    &trial_structure.units[*index],
+                    &indices_b,
+                    &environment.catalog,
+                )
+            }) {
+                diagnostics.target_material_pairs_rejected_for_overlap += 1;
+                continue;
+            }
+            diagnostics.target_material_pairs_restored += 1;
+
+            let mut component_work =
+                (*remaining_discovery_work).min(FIELD_COMPONENT_PAIR_LIMIT);
+            let component_work_initial = component_work;
+            let pair_count = indices_a.len().saturating_mul(indices_b.len());
+            diagnostics.constituent_pairs_available += pair_count;
+            diagnostics.constituent_pairs_uninspected_by_window +=
+                pair_count.saturating_sub(component_work_initial);
+            diagnostics.constituent_pair_windows_truncated +=
+                usize::from(component_work_initial < pair_count);
+            journal.record_deferred_count(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                crate::environmental_evaluation::EvaluationStage::CandidateValidation,
+                "bounded_constituent_pair_window_exhausted",
+                pair_count.saturating_sub(component_work_initial),
+            );
+            let pair_start = component_pair_start(tick, pair_count);
+            let selected = select_best_contact_from_offset(
+                &trial_structure,
+                &indices_a,
+                &indices_b,
+                &environment.catalog,
+                &mut cache,
+                pair_start,
+                &mut component_work,
+                Some(&mut *diagnostics),
+            );
+            let component_work_used = component_work_initial.saturating_sub(component_work);
+            *remaining_discovery_work =
+                (*remaining_discovery_work).saturating_sub(component_work_used);
+            if pair_count > 0 {
+                for offset in 0..component_work_used {
+                    let pair_index = pair_start.wrapping_add(offset) % pair_count;
+                    let unit_a = indices_a[pair_index / indices_b.len()];
+                    let unit_b = indices_b[pair_index % indices_b.len()];
+                    checked_prefixes.insert(source_pair_accumulation_prefix(
+                        record_a.locator.cell_index,
+                        record_a.locator.material_index,
+                        &source_a,
+                        record_b.locator.cell_index,
+                        record_b.locator.material_index,
+                        &source_b,
+                        unit_a,
+                        unit_b,
+                    ));
+                }
+            }
+            for selected in selected {
+                chemical_step(
+                    environment,
+                    chemistry_library,
+                    &trial_structure,
+                    selected,
+                    &indices_a,
+                    &indices_b,
+                    &source_a,
+                    &source_b,
+                    record_a.locator.cell_index,
+                    record_a.locator.material_index,
+                    record_b.locator.cell_index,
+                    record_b.locator.material_index,
+                    accumulation,
+                    &mut updated_keys,
+                    &mut operations,
+                    tick,
+                    &mut journal,
+                );
+            }
+        }
+    }
+
+    invalidate_unupdated_constituent_accumulations(
+        accumulation,
+        &checked_prefixes,
+        &updated_keys,
+        diagnostics,
+    );
+    diagnostics.budget_exhausted = *remaining_discovery_work == 0;
+    let material_count = snapshot.materials.len();
+    diagnostics.global_realized_material_pairs =
+        material_count.saturating_mul(material_count.saturating_sub(1)) / 2;
+    diagnostics.global_realized_material_pairs_unvisited = diagnostics
+        .global_realized_material_pairs
+        .saturating_sub(diagnostics.forward_ordered_target_material_pair_inspections);
+    diagnostics.accumulation_keys_updated = updated_keys.len();
+    diagnostics.evaluation_outcomes = journal.counts();
+    record_unupdated_accumulations(accumulation, &updated_keys, diagnostics);
+
+    operations
+        .into_iter()
+        .filter_map(|operation| {
+            crate::environmental_evaluation::EnvironmentalReactionEvaluation::ready(
+                tick,
+                crate::environmental_evaluation::EnvironmentalReactionKind::Combine,
+                operation,
+            )
+            .into_ready()
+        })
+        .collect()
+}
+
 pub(crate) fn schedule_environmental_operations(
     mut operations: Vec<EnvironmentalCombineOperation>,
     tick: u64,
