@@ -36,6 +36,8 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     /// Snapshot-owned indexes reused by all reaction projections.
     pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
+    /// O(1) locator-to-snapshot lookup for hot per-cell target traversal.
+    pub(crate) material_index_by_cell_slot: Vec<Vec<Option<usize>>>,
     pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
@@ -474,12 +476,24 @@ impl EnvironmentalMaterialSnapshot {
         snapshot
             .material_indices_by_cell
             .resize(field.cells.len(), Vec::new());
+        snapshot.material_index_by_cell_slot = field
+            .cells
+            .iter()
+            .map(|cell| vec![None; cell.physical_materials.len()])
+            .collect();
         for (material_index, material) in snapshot.materials.iter().enumerate() {
             if let Some(indices) = snapshot
                 .material_indices_by_cell
                 .get_mut(material.locator.cell_index)
             {
                 indices.push(material_index);
+            }
+            if let Some(slot_map) = snapshot
+                .material_index_by_cell_slot
+                .get_mut(material.locator.cell_index)
+                .and_then(|slots| slots.get_mut(material.locator.material_index))
+            {
+                *slot_map = Some(material_index);
             }
         }
         for bond in &snapshot.existing_bonds {
@@ -1386,15 +1400,18 @@ impl IndexedSpatialCursor {
             if physical.environmental_identity == 0 {
                 continue;
             }
-            let identity = MaterialIdentity(physical.environmental_identity);
-            let Ok(target_index) = snapshot
-                .materials
-                .binary_search_by_key(&identity, |record| record.identity)
+            let Some(target_index) = snapshot
+                .material_index_by_cell_slot
+                .get(cell_index)
+                .and_then(|slots| slots.get(target_slot))
+                .copied()
+                .flatten()
             else {
                 continue;
             };
             let target_record = &snapshot.materials[target_index];
-            if target_record.locator.cell_index != cell_index
+            if target_record.identity.0 != physical.environmental_identity
+                || target_record.locator.cell_index != cell_index
                 || target_record.locator.material_index != target_slot
                 || target_index == anchor_index
             {
