@@ -1037,7 +1037,6 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
 
-
         // Environmental COMBINE receives its own bounded share of the field's
         // work budget. It consumes the same shared reaction ledger and preserves
         // progress if a source snapshot became stale before commit.
