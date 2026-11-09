@@ -909,35 +909,6 @@ impl Simulation {
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics
             .break_discovery_work_remaining = environmental_break_discovery_remaining;
-        // Split the field-owned discovery share between COMBINE and the new
-        // coupled displacement path; BREAK retains its independent quarter.
-        let mut environmental_combine_discovery_remaining =
-            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
-        self.environmental_chemistry_diagnostics.combine_search =
-            crate::state::EnvironmentalCombineSearchDiagnostics::default();
-        // BREAK commits may change ownership, topology, and field revision.
-        // Rebuild the shared snapshot before COMBINE so no pre-BREAK locator
-        // or bond context can leak across the mutation boundary.
-        let environmental_combine_snapshot =
-            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
-                &self.environment.field,
-                self.tick,
-            );
-        let environmental_combine_operations =
-            crate::environmental_combine::accumulate_environmental_with_shared_snapshot(
-                &self.environment,
-                &mut self.chemical_reaction_accumulation,
-                &mut self.chemistry_library,
-                self.tick,
-                &mut environmental_combine_discovery_remaining,
-                &mut self.environmental_chemistry_diagnostics.combine_search,
-                &environmental_combine_snapshot,
-            );
-        self.environmental_chemistry_diagnostics
-            .combine_ready_candidates = environmental_combine_operations.len();
-        self.environmental_chemistry_diagnostics
-            .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
-
         let break_operations_ready_for_scheduling = environmental_break_operations.len();
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -1036,6 +1007,36 @@ impl Simulation {
                     post_commit_source_cell_materials,
                 });
         }
+
+        // Split the field-owned discovery share between COMBINE and the new
+        // coupled displacement path; BREAK retains its independent quarter.
+        let mut environmental_combine_discovery_remaining =
+            crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
+        self.environmental_chemistry_diagnostics.combine_search =
+            crate::state::EnvironmentalCombineSearchDiagnostics::default();
+        // BREAK commits may change ownership, topology, and field revision.
+        // Rebuild the shared snapshot before COMBINE so no pre-BREAK locator
+        // or bond context can leak across the mutation boundary.
+        let environmental_combine_snapshot =
+            crate::environmental_broad_phase::EnvironmentalMaterialSnapshot::from_field(
+                &self.environment.field,
+                self.tick,
+            );
+        let environmental_combine_operations =
+            crate::environmental_combine::accumulate_environmental_with_shared_snapshot(
+                &self.environment,
+                &mut self.chemical_reaction_accumulation,
+                &mut self.chemistry_library,
+                self.tick,
+                &mut environmental_combine_discovery_remaining,
+                &mut self.environmental_chemistry_diagnostics.combine_search,
+                &environmental_combine_snapshot,
+            );
+        self.environmental_chemistry_diagnostics
+            .combine_ready_candidates = environmental_combine_operations.len();
+        self.environmental_chemistry_diagnostics
+            .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
+
 
         // Environmental COMBINE receives its own bounded share of the field's
         // work budget. It consumes the same shared reaction ledger and preserves
