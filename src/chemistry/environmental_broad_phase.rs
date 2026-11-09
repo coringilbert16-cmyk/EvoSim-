@@ -1303,15 +1303,6 @@ impl IndexedSpatialCursor {
         Self::cell_range_count(field, bounds.expanded(padding)?)
     }
 
-    pub(crate) fn target_cell_count_with_index(
-        field: &ActiveMaterialField,
-        bounds: MaterialSpatialBounds,
-        padding: f64,
-        spatial_index: &MaterialSpatialIndex,
-    ) -> Option<usize> {
-        Self::cell_range_count(field, spatial_index.query_bounds(bounds, padding)?)
-    }
-
     fn cell_range_count(
         field: &ActiveMaterialField,
         bounds: MaterialSpatialBounds,
