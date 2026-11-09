@@ -953,10 +953,11 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         }
     };
 
-    let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new(
+    let mut cursor = crate::environmental_broad_phase::IndexedSpatialCursor::new_rotated(
         snapshot,
         &environment.field,
         crate::environmental_broad_phase::PairOrientation::Unordered,
+        tick as usize,
     );
     let mut operations = Vec::new();
     let mut journal = crate::environmental_evaluation::EvaluationJournal::default();
