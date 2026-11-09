@@ -2317,6 +2317,46 @@ mod tests {
     }
 
     #[test]
+    fn reverse_anchor_cursor_yields_only_preceding_locator_candidates() {
+        let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
+        field.cells[0].physical_materials.push(physical(10, "Carbon"));
+        field.cells[1].physical_materials.push(physical(15, "Carbon"));
+        field.cells[1].physical_materials.push(physical(20, "Carbon"));
+        field.cells[1].physical_materials.push(physical(25, "Carbon"));
+        field.cells[2].physical_materials.push(physical(30, "Carbon"));
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 17);
+        let anchor_index = snapshot
+            .materials
+            .binary_search_by_key(&MaterialIdentity(20), |record| record.identity)
+            .unwrap();
+        let mut bounds = vec![None; snapshot.materials.len()];
+        bounds[anchor_index] = Some(MaterialSpatialBounds {
+            min_x: 0.0,
+            max_x: 40.0,
+            min_y: 0.0,
+            max_y: 20.0,
+        });
+        let mut cursor =
+            IndexedSpatialCursor::new_for_reverse_anchor(&snapshot, &field, 17, anchor_index)
+                .unwrap();
+        let mut actual = Vec::new();
+        for _ in 0..64 {
+            let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, usize::MAX, 1, 1);
+            actual.extend(
+                page.pairs
+                    .iter()
+                    .map(|pair| (pair.identity_left.0, pair.identity_right.0)),
+            );
+            if page.complete {
+                break;
+            }
+            assert!(page.visited_work > 0);
+        }
+        actual.sort_unstable();
+        assert_eq!(actual, vec![(20, 10), (20, 15)]);
+    }
+
+    #[test]
     fn single_anchor_directed_cursor_matches_legacy_target_cell_order() {
         let mut field = ActiveMaterialField::new(40.0, 20.0, 10.0);
         for (cell_index, identities) in [
