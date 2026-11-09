@@ -1558,7 +1558,7 @@ impl IndexedSpatialCursor {
                         page.visited_work = page.visited_work.saturating_add(node_visits);
                         page.visited_cell_checks = page
                             .visited_cell_checks
-                            .saturating_add(node_visits as usize);
+                            .saturating_add(node_visits);
                     }
                     let candidate_count = self.candidate_targets.len();
                     self.candidate_targets_visited = 0;
@@ -1674,11 +1674,7 @@ impl IndexedSpatialCursor {
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_anchor_initializations =
                     page.visited_anchor_initializations.saturating_add(1);
-                let expanded = if let Some(index) = spatial_index {
-                    bounds[anchor_index].and_then(|value| index.query_bounds(value, padding))
-                } else {
-                    bounds[anchor_index].and_then(|value| value.expanded(padding))
-                };
+                let expanded = bounds[anchor_index].and_then(|value| value.expanded(padding));
                 self.range = expanded.and_then(|value| BoundsCellRange::new(field, value));
                 self.anchor_initialized = true;
                 self.target_slot = 0;
@@ -1734,15 +1730,10 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                     continue;
                 }
-                let target_count = spatial_index.map_or_else(
-                    || {
-                        field
-                            .cells
-                            .get(cell_index)
-                            .map_or(0, |cell| cell.physical_materials.len())
-                    },
-                    |index| index.materials_in_cell(cell_index).len(),
-                );
+                let target_count = field
+                    .cells
+                    .get(cell_index)
+                    .map_or(0, |cell| cell.physical_materials.len());
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                 if target_count == 0 {
@@ -1771,12 +1762,11 @@ impl IndexedSpatialCursor {
                             % target_count
                     };
                     let same_cell = cell_index == anchor.locator.cell_index;
-                    self.target_slots_to_visit = if spatial_index.is_none()
-                        && same_cell
+                    self.target_slots_to_visit = if same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
                     {
                         target_count.saturating_sub(anchor.locator.material_index.saturating_add(1))
-                    } else if spatial_index.is_none() && same_cell && self.reverse_only {
+                    } else if same_cell && self.reverse_only {
                         anchor.locator.material_index.min(target_count)
                     } else {
                         target_count
@@ -1787,8 +1777,7 @@ impl IndexedSpatialCursor {
                     }
                     self.cell_loaded = true;
                     self.target_slots_visited = 0;
-                    self.target_slot = if spatial_index.is_none()
-                        && same_cell
+                    self.target_slot = if same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
                     {
                         if rotated_start > anchor.locator.material_index {
@@ -1796,7 +1785,7 @@ impl IndexedSpatialCursor {
                         } else {
                             anchor.locator.material_index + 1
                         }
-                    } else if spatial_index.is_none() && same_cell && self.reverse_only {
+                    } else if same_cell && self.reverse_only {
                         if rotated_start < anchor.locator.material_index {
                             rotated_start
                         } else {
@@ -1834,23 +1823,14 @@ impl IndexedSpatialCursor {
             // bounds share more than one cell.
             page.visited_work = page.visited_work.saturating_add(1);
             page.visited_material_checks = page.visited_material_checks.saturating_add(1);
-            let target_index = if let Some(index) = spatial_index {
-                let Some(target_index) = index.materials_in_cell(cell_index).get(target_offset)
-                else {
-                    continue;
-                };
-                *target_index
-            } else {
-                let Some(target_index) = snapshot
-                    .material_index_by_cell_slot
-                    .get(cell_index)
-                    .and_then(|slots| slots.get(target_offset))
-                    .copied()
-                    .flatten()
-                else {
-                    continue;
-                };
-                target_index
+            let Some(target_index) = snapshot
+                .material_index_by_cell_slot
+                .get(cell_index)
+                .and_then(|slots| slots.get(target_offset))
+                .copied()
+                .flatten()
+            else {
+                continue;
             };
             let Some(target_record) = snapshot.materials.get(target_index) else {
                 continue;
