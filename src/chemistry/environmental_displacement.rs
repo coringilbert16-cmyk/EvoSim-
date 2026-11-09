@@ -73,14 +73,12 @@ impl DisplacementTargetScan {
                             anchor_index,
                         ),
                     ) {
-                        *bounds = Some(
-                            crate::environmental_broad_phase::MaterialSpatialBounds {
-                                min_x: body.min_x,
-                                max_x: body.max_x,
-                                min_y: body.min_y,
-                                max_y: body.max_y,
-                            },
-                        );
+                        *bounds = Some(crate::environmental_broad_phase::MaterialSpatialBounds {
+                            min_x: body.min_x,
+                            max_x: body.max_x,
+                            min_y: body.min_y,
+                            max_y: body.max_y,
+                        });
                         return Self::Shared {
                             cursor,
                             initialized: false,
