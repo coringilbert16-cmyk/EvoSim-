@@ -620,7 +620,9 @@ fn discover_environmental_bonds_from_snapshot(
         let cell_offset = if cell_count == 0 {
             0
         } else {
-            record.locator.cell_index
+            record
+                .locator
+                .cell_index
                 .wrapping_add(cell_count)
                 .wrapping_sub(tick as usize % cell_count)
                 % cell_count
