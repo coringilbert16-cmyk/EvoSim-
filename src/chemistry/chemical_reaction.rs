@@ -1274,13 +1274,28 @@ mod material_identity_tests {
             ("environment|environment:41:1:bond-b".to_string(), 0.2),
             ("environment|environment:41:2:bond-c".to_string(), 0.3),
             ("environment|environment:41:2:legacy-tail".to_string(), 0.4),
-            ("environment|environment:41:02:leading-zero-index".to_string(), 0.5),
+            (
+                "environment|environment:41:02:leading-zero-index".to_string(),
+                0.5,
+            ),
             ("environment|environment:41:2".to_string(), 0.6),
-            ("environment|environment:42:2:other-material".to_string(), 0.7),
-            ("environment|environment:041:2:noncanonical-identity".to_string(), 0.8),
-            ("environment|environment:0:2:unassigned-material".to_string(), 0.9),
+            (
+                "environment|environment:42:2:other-material".to_string(),
+                0.7,
+            ),
+            (
+                "environment|environment:041:2:noncanonical-identity".to_string(),
+                0.8,
+            ),
+            (
+                "environment|environment:0:2:unassigned-material".to_string(),
+                0.9,
+            ),
             ("other|environment:41:2:not-environmental".to_string(), 1.0),
-            ("environment|environment:41:not-an-index:malformed".to_string(), 1.1),
+            (
+                "environment|environment:41:not-an-index:malformed".to_string(),
+                1.1,
+            ),
         ]);
 
         for (identity, bond_count) in [(41_u64, 2_usize), (41, 3), (42, 3), (999, 0)] {
