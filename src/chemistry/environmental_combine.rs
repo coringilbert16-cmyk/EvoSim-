@@ -1069,14 +1069,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
         };
         let mut restored_anchor = None;
         let mut anchor_restore_attempted = false;
-        let target_cell_count =
-            crate::environmental_broad_phase::IndexedSpatialCursor::target_cell_count_with_index(
-                &environment.field,
-                anchor_bounds,
-                BOUNDS_PADDING,
-                &shared_spatial_index,
-            );
-        let target_cell_limit = target_cell_count.unwrap_or(0);
+        let target_cell_limit = usize::MAX;
         // COMBINE needs only forward pairs. Bonded anchors additionally
         // emit the reverse role into the same shared stream for DISPLACEMENT;
         // unbonded anchors avoid that unnecessary second orientation.
@@ -1112,7 +1105,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 &shared_spatial_index,
                 BOUNDS_PADDING,
                 target_cell_limit,
-                64,
+                usize::MAX,
                 64,
             );
             diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
@@ -1284,7 +1277,7 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 }
             }
             if page.complete {
-                completed_anchors[anchor_index] = target_cell_count.map(|_| target_cell_limit);
+                completed_anchors[anchor_index] = Some(0);
                 break;
             }
         }
