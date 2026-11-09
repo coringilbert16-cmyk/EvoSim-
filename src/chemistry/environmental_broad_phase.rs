@@ -1537,6 +1537,134 @@ impl IndexedSpatialCursor {
             }
 
             let anchor_index = self.anchor_order[self.anchor_index];
+            if let Some(index) = spatial_index {
+                if !self.anchor_initialized {
+                    page.visited_work = page.visited_work.saturating_add(1);
+                    page.visited_anchor_initializations =
+                        page.visited_anchor_initializations.saturating_add(1);
+                    self.candidate_targets.clear();
+                    if let Some(anchor_bounds) = bounds[anchor_index] {
+                        let node_visits = index.query_candidates(
+                            anchor_bounds,
+                            padding,
+                            &mut self.candidate_targets,
+                            &mut self.query_stack,
+                        );
+                        page.visited_work = page.visited_work.saturating_add(node_visits);
+                        page.visited_cell_checks = page
+                            .visited_cell_checks
+                            .saturating_add(node_visits as usize);
+                    }
+                    let candidate_count = self.candidate_targets.len();
+                    self.candidate_targets_visited = 0;
+                    self.candidate_position = if candidate_count == 0 {
+                        0
+                    } else {
+                        self.tick
+                            .wrapping_add(snapshot.materials[anchor_index].locator.cell_index)
+                            .wrapping_add(snapshot.materials[anchor_index].locator.material_index)
+                            % candidate_count
+                    };
+                    self.anchor_initialized = true;
+                    continue;
+                }
+
+                if self.candidate_targets_visited >= self.candidate_targets.len() {
+                    self.advance_anchor(snapshot.materials.len());
+                    continue;
+                }
+
+                let target_index = self.candidate_targets[self.candidate_position];
+                self.candidate_position =
+                    (self.candidate_position + 1) % self.candidate_targets.len();
+                self.candidate_targets_visited =
+                    self.candidate_targets_visited.saturating_add(1);
+                page.visited_work = page.visited_work.saturating_add(1);
+                page.visited_material_checks = page.visited_material_checks.saturating_add(1);
+
+                let Some(target_record) = snapshot.materials.get(target_index) else {
+                    continue;
+                };
+                let anchor = &snapshot.materials[anchor_index];
+                let target_locator = (
+                    target_record.locator.cell_index,
+                    target_record.locator.material_index,
+                );
+                let anchor_locator = (anchor.locator.cell_index, anchor.locator.material_index);
+                if (self.orientation == PairOrientation::ForwardOrdered
+                    && target_locator <= anchor_locator)
+                    || (self.reverse_only && target_locator >= anchor_locator)
+                    || target_index == anchor_index
+                {
+                    continue;
+                }
+                let Some(physical) = field
+                    .cells
+                    .get(target_record.locator.cell_index)
+                    .and_then(|target_cell| {
+                        target_cell
+                            .physical_materials
+                            .get(target_record.locator.material_index)
+                    })
+                else {
+                    continue;
+                };
+                if target_record.identity.0 == 0
+                    || target_record.identity.0 != physical.environmental_identity
+                {
+                    continue;
+                }
+                if let (Some(anchor_bounds), Some(target_bounds)) =
+                    (bounds[anchor_index], bounds[target_index])
+                {
+                    if !anchor_bounds.overlaps_with_padding(
+                        target_bounds,
+                        padding,
+                        index.vertical_period,
+                    ) {
+                        page.target_materials_rejected_by_bounds =
+                            page.target_materials_rejected_by_bounds.saturating_add(1);
+                        continue;
+                    }
+                }
+
+                match self.orientation {
+                    PairOrientation::Directed | PairOrientation::ForwardOrdered => {
+                        page.pairs.push(MaterialPairRecord {
+                            left: anchor_index,
+                            right: target_index,
+                            identity_left: anchor.identity,
+                            identity_right: target_record.identity,
+                        });
+                    }
+                    PairOrientation::Unordered => {
+                        let (left, right) = if anchor_index < target_index {
+                            (anchor_index, target_index)
+                        } else {
+                            (target_index, anchor_index)
+                        };
+                        let lower_anchor_reaches_higher = bounds[left]
+                            .and_then(|value| value.expanded(padding))
+                            .is_some_and(|value| {
+                                bounds_include_cell(
+                                    field,
+                                    value,
+                                    snapshot.materials[right].locator.cell_index,
+                                )
+                            });
+                        if anchor_index < target_index || !lower_anchor_reaches_higher {
+                            page.pairs.push(MaterialPairRecord {
+                                left,
+                                right,
+                                identity_left: snapshot.materials[left].identity,
+                                identity_right: snapshot.materials[right].identity,
+                            });
+                        }
+                    }
+                }
+                continue;
+            }
+
             if !self.anchor_initialized {
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_anchor_initializations =
