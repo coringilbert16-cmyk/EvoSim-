@@ -1061,11 +1061,24 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 shared_bounds[anchor_index].expect("anchor bounds were just populated"),
                 BOUNDS_PADDING,
             );
+        // A bonded anchor needs both target directions: COMBINE consumes
+        // the forward half, while DISPLACEMENT consumes the complete directed
+        // set from this same cursor. Unbonded anchors retain the cheaper
+        // forward-only traversal.
+        let anchor_has_bonds = snapshot
+            .bond_indices_by_material
+            .get(&record_a.identity)
+            .is_some_and(|indices| !indices.is_empty());
+        let cursor_orientation = if anchor_has_bonds {
+            crate::environmental_broad_phase::PairOrientation::Directed
+        } else {
+            crate::environmental_broad_phase::PairOrientation::ForwardOrdered
+        };
         let Some(mut cursor) =
             crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
                 &environment.field,
-                crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
+                cursor_orientation,
                 tick as usize,
                 anchor_index,
             )
@@ -1108,12 +1121,24 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 else {
                     continue;
                 };
-                if snapshot
-                    .bond_indices_by_material
-                    .get(&record_a.identity)
-                    .is_some_and(|indices| !indices.is_empty())
-                {
+                // Retain every directed candidate for bonded anchors so
+                // DISPLACEMENT can consume both roles without a second
+                // reverse-only spatial traversal.
+                if anchor_has_bonds {
                     shared_candidate_pairs.push(pair);
+                }
+                let source_locator = (
+                    record_a.locator.cell_index,
+                    record_a.locator.material_index,
+                );
+                let target_locator = (
+                    record_b.locator.cell_index,
+                    record_b.locator.material_index,
+                );
+                // The reverse half belongs to DISPLACEMENT only. COMBINE
+                // preserves its existing forward locator ordering.
+                if target_locator <= source_locator {
+                    continue;
                 }
                 diagnostics.forward_ordered_target_material_pair_inspections += 1;
                 if record_a.locator.cell_index == record_b.locator.cell_index {
