@@ -1100,6 +1100,11 @@ impl MaterialSpatialIndex {
         let vertical_period = field.height_cells as f64 * field.cell_size;
         let mut entries = Vec::new();
         let mut unbounded_materials = Vec::new();
+        let locators = snapshot
+            .materials
+            .iter()
+            .map(|record| (record.locator.cell_index, record.locator.material_index))
+            .collect::<Vec<_>>();
         for (material_index, _) in snapshot.materials.iter().enumerate() {
             let Some(value) = bounds.get(material_index).copied().flatten() else {
                 unbounded_materials.push(material_index);
@@ -1233,7 +1238,7 @@ pub(crate) struct IndexedSpatialCursorPage {
 /// expanded bounds, then inspects the physical materials actually stored in
 /// those cells. It preserves the existing field query semantics (X clamped,
 /// Y wrapped) and resumes at the exact cell/material slot across pages.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct IndexedSpatialCursor {
     pass_id: u64,
     field_revision: u64,
