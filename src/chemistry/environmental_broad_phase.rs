@@ -1440,7 +1440,8 @@ impl IndexedSpatialCursor {
                 } else {
                     let anchor = &snapshot.materials[anchor_index];
                     let rotated_start = if let Some(index) = spatial_index {
-                        let physical_count = field.cells[cell_index].physical_materials.len().max(1);
+                        let physical_count =
+                            field.cells[cell_index].physical_materials.len().max(1);
                         let physical_start = self
                             .tick
                             .wrapping_add(cell_index)
