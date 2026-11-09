@@ -2055,6 +2055,7 @@ mod tests {
                             &field,
                             &bounds,
                             2.1,
+                            usize::MAX,
                             work_limit,
                             output_limit,
                         );
@@ -2113,7 +2114,7 @@ mod tests {
             let mut visited_work = 0;
             let mut pages = 0;
             loop {
-                let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, 7, 4);
+                let page = cursor.next_page(&snapshot, &field, &bounds, 0.0, usize::MAX, 7, 4);
                 assert!(page.visited_work <= 7);
                 visited_work += page.visited_work;
                 pages += 1;
@@ -2137,20 +2138,20 @@ mod tests {
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 812);
         let bounds = vec![None; 3];
         let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, PairOrientation::Directed);
-        let first = cursor.next_page(&snapshot, &field, &bounds, 0.0, 1, 8);
+        let first = cursor.next_page(&snapshot, &field, &bounds, 0.0, usize::MAX, 1, 8);
         assert!(first.pairs.is_empty());
         assert!(!first.complete);
         assert_eq!(first.visited_work, 1);
 
         let refreshed = EnvironmentalMaterialSnapshot::from_field(&field, 813);
-        let stale = cursor.next_page(&refreshed, &field, &bounds, 0.0, 8, 8);
+        let stale = cursor.next_page(&refreshed, &field, &bounds, 0.0, usize::MAX, 8, 8);
         assert!(stale.pairs.is_empty());
         assert!(!stale.complete);
         assert_eq!(stale.visited_work, 0);
 
         let mut changed_field = field.clone();
         changed_field.mark_changed_at_index(0);
-        let stale_field = cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, 8, 8);
+        let stale_field = cursor.next_page(&snapshot, &changed_field, &bounds, 0.0, usize::MAX, 8, 8);
         assert!(stale_field.pairs.is_empty());
         assert!(!stale_field.complete);
         assert_eq!(stale_field.visited_work, 0);
