@@ -2286,46 +2286,65 @@ mod tests {
         };
         let mut bounds = vec![None; snapshot.materials.len()];
         bounds[anchor_index] = Some(body);
-        let mut cursor = IndexedSpatialCursor::new_for_anchor(
-            &snapshot,
-            &field,
-            PairOrientation::Directed,
-            tick,
-            anchor_index,
-        )
-        .unwrap();
-        let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 64, usize::MAX, usize::MAX);
-        let actual = page
-            .pairs
-            .iter()
-            .map(|pair| (pair.identity_left.0, pair.identity_right.0))
-            .collect::<Vec<_>>();
-
-        let target_cells = field.cells_intersecting_bounds_limited(
-            body.min_x - 2.1,
-            body.max_x + 2.1,
-            body.min_y - 2.1,
-            body.max_y + 2.1,
-            64,
-            tick + anchor_cell + anchor_material,
-        );
-        let mut expected = Vec::new();
-        for cell_b in target_cells {
-            let materials = &field.cells[cell_b].physical_materials;
-            if materials.is_empty() {
-                continue;
+        for target_cell_limit in [3, 64] {
+            let mut cursor = IndexedSpatialCursor::new_for_anchor(
+                &snapshot,
+                &field,
+                PairOrientation::Directed,
+                tick,
+                anchor_index,
+            )
+            .unwrap();
+            let mut actual = Vec::new();
+            let mut complete = false;
+            for _ in 0..256 {
+                let page = cursor.next_page(
+                    &snapshot,
+                    &field,
+                    &bounds,
+                    2.1,
+                    target_cell_limit,
+                    1,
+                    1,
+                );
+                actual.extend(
+                    page.pairs
+                        .iter()
+                        .map(|pair| (pair.identity_left.0, pair.identity_right.0)),
+                );
+                if page.complete {
+                    complete = true;
+                    break;
+                }
+                assert!(page.visited_work > 0);
             }
-            let target_start = (tick + cell_b + anchor_material) % materials.len();
-            for offset in 0..materials.len() {
-                let material_b = (target_start + offset) % materials.len();
-                if cell_b == anchor_cell && material_b == anchor_material {
+
+            let target_cells = field.cells_intersecting_bounds_limited(
+                body.min_x - 2.1,
+                body.max_x + 2.1,
+                body.min_y - 2.1,
+                body.max_y + 2.1,
+                target_cell_limit,
+                tick + anchor_cell + anchor_material,
+            );
+            let mut expected = Vec::new();
+            for cell_b in target_cells {
+                let materials = &field.cells[cell_b].physical_materials;
+                if materials.is_empty() {
                     continue;
                 }
-                expected.push((10, materials[material_b].environmental_identity));
+                let target_start = (tick + cell_b + anchor_material) % materials.len();
+                for offset in 0..materials.len() {
+                    let material_b = (target_start + offset) % materials.len();
+                    if cell_b == anchor_cell && material_b == anchor_material {
+                        continue;
+                    }
+                    expected.push((10, materials[material_b].environmental_identity));
+                }
             }
+            assert!(complete);
+            assert_eq!(actual, expected);
         }
-        assert!(page.complete);
-        assert_eq!(actual, expected);
     }
 
     #[test]
