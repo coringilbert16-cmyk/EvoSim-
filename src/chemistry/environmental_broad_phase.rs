@@ -36,8 +36,7 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     /// Snapshot-owned indexes reused by all reaction projections.
     pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
-    pub(crate) bond_indices_by_material:
-        std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
+    pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
     pub(crate) unassigned_materials: u64,
