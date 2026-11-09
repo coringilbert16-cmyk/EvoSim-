@@ -3497,4 +3497,176 @@ mod tests {
             }
         }
     }
+
+
+    #[test]
+    fn shared_target_handoff_matches_directed_discovery_without_duplicates() {
+        use crate::environment::ActiveMaterialField;
+        use crate::environmental_broad_phase::{
+            EnvironmentalMaterialSnapshot, IndexedSpatialCursor, MaterialSpatialBounds,
+            PairOrientation,
+        };
+        use crate::physical_material::PhysicalMaterial;
+        use crate::resources::Material;
+
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        let physical = |identity| PhysicalMaterial {
+            material: Material::free_base("Carbon".to_owned(), 1.0),
+            environmental_identity: identity,
+            placements: None,
+            internal_connections: None,
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
+        for (cell_index, identities) in [
+            (0, vec![70, 10]),
+            (1, vec![60]),
+            (4, vec![20, 50]),
+            (7, vec![30]),
+            (11, vec![40]),
+            (17, vec![80]),
+            (23, vec![90]),
+        ] {
+            for identity in identities {
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(identity));
+            }
+        }
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 992);
+        let bounds = snapshot
+            .materials
+            .iter()
+            .map(|record| {
+                let (x, y) = field.cell_center(record.locator.cell_index);
+                let radius = match record.identity.0 % 5 {
+                    0 => 0.25,
+                    1 => 3.0,
+                    2 => 8.0,
+                    3 => 14.0,
+                    _ => 19.0,
+                };
+                Some(MaterialSpatialBounds {
+                    min_x: x - radius,
+                    max_x: x + radius,
+                    min_y: y - radius,
+                    max_y: y + radius,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for tick in 0..9 {
+            for anchor_index in 0..snapshot.materials.len() {
+                let anchor = &snapshot.materials[anchor_index];
+                let target_cell_count = IndexedSpatialCursor::target_cell_count(
+                    &field,
+                    bounds[anchor_index].expect("fixture material has bounds"),
+                    2.1,
+                )
+                .expect("fixture bounds intersect the field");
+
+                let mut forward = IndexedSpatialCursor::new_for_anchor(
+                    &snapshot,
+                    &field,
+                    PairOrientation::ForwardOrdered,
+                    tick,
+                    anchor_index,
+                )
+                .expect("anchor index is valid");
+                let mut shared_targets = Vec::new();
+                loop {
+                    let page = forward.next_page(
+                        &snapshot,
+                        &field,
+                        &bounds,
+                        2.1,
+                        target_cell_count,
+                        1,
+                        1,
+                    );
+                    shared_targets.extend(page.pairs.into_iter().map(|pair| {
+                        let target = &snapshot.materials[pair.right];
+                        (target.locator.cell_index, target.locator.material_index)
+                    }));
+                    if page.complete {
+                        break;
+                    }
+                }
+
+                let mut directed = IndexedSpatialCursor::new_for_anchor(
+                    &snapshot,
+                    &field,
+                    PairOrientation::Directed,
+                    tick,
+                    anchor_index,
+                )
+                .expect("anchor index is valid");
+                let mut expected = Vec::new();
+                loop {
+                    let page = directed.next_page(
+                        &snapshot,
+                        &field,
+                        &bounds,
+                        2.1,
+                        target_cell_count,
+                        1,
+                        1,
+                    );
+                    expected.extend(page.pairs.into_iter().map(|pair| {
+                        let target = &snapshot.materials[pair.right];
+                        (target.locator.cell_index, target.locator.material_index)
+                    }));
+                    if page.complete {
+                        break;
+                    }
+                }
+
+                let mut shared_bounds = bounds.clone();
+                let mut scan = DisplacementTargetScan::new(
+                    Some(&snapshot),
+                    &field,
+                    None,
+                    &mut shared_bounds,
+                    anchor.locator.cell_index,
+                    anchor.locator.material_index,
+                    tick,
+                    target_cell_count,
+                    anchor.identity.0,
+                    Some(shared_targets),
+                );
+                let mut actual = Vec::new();
+                let mut steps = 0;
+                loop {
+                    match scan.next(Some(&snapshot), &field, &shared_bounds) {
+                        DisplacementTargetStep::AnchorInitialized
+                        | DisplacementTargetStep::CellInspected
+                        | DisplacementTargetStep::MaterialInspected(None)
+                        | DisplacementTargetStep::SharedCandidate(None) => {}
+                        DisplacementTargetStep::MaterialInspected(Some(target))
+                        | DisplacementTargetStep::SharedCandidate(Some(target)) => {
+                            actual.push(target);
+                        }
+                        DisplacementTargetStep::Complete => break,
+                    }
+                    steps += 1;
+                    assert!(steps < 10_000, "shared target scan failed to complete");
+                }
+
+                expected.sort_unstable();
+                actual.sort_unstable();
+                assert_eq!(
+                    actual,
+                    expected,
+                    "tick={tick}, anchor={anchor_index}"
+                );
+                actual.dedup();
+                assert_eq!(
+                    actual.len(),
+                    expected.len(),
+                    "shared target handoff duplicated a target: tick={tick}, anchor={anchor_index}"
+                );
+            }
+        }
+    }
 }
