@@ -970,6 +970,12 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
     if shared_bounds.len() != snapshot.materials.len() {
         *shared_bounds = vec![None; snapshot.materials.len()];
     }
+    shared_candidate_pairs.clear();
+    if completed_anchors.len() != snapshot.materials.len() {
+        *completed_anchors = vec![false; snapshot.materials.len()];
+    } else {
+        completed_anchors.fill(false);
+    }
     if snapshot.unassigned_materials != 0 {
         return accumulate_environmental_with_diagnostics(
             environment,
@@ -1075,9 +1081,10 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 max_y: body.max_y,
             });
         let Some(mut cursor) =
-            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_shared_reactions(
+            crate::environmental_broad_phase::IndexedSpatialCursor::new_for_anchor(
                 snapshot,
                 &environment.field,
+                crate::environmental_broad_phase::PairOrientation::ForwardOrdered,
                 tick as usize,
                 anchor_index,
             )
@@ -1113,11 +1120,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot_and_candidates(
                 let Some(record_b) = snapshot.materials.get(pair.right) else {
                     continue;
                 };
-                if (record_a.locator.cell_index, record_a.locator.material_index)
-                    >= (record_b.locator.cell_index, record_b.locator.material_index)
-                {
-                    continue;
-                }
                 let Some(source_b) = environment
                     .field
                     .cells
