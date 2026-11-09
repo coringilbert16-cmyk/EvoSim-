@@ -1375,6 +1375,7 @@ impl IndexedSpatialCursor {
                 self.cells_visited = 0;
                 self.current_cell_limit = target_cell_limit;
                 self.cell_loaded = false;
+                self.seen_targets.clear();
                 if let Some(range) = self.range {
                     let columns = range.max_col - range.min_col + 1;
                     let total_cells = range.row_count.saturating_mul(columns);
@@ -1420,10 +1421,15 @@ impl IndexedSpatialCursor {
                     self.advance_cell(range);
                     continue;
                 }
-                let target_count = field
-                    .cells
-                    .get(cell_index)
-                    .map_or(0, |cell| cell.physical_materials.len());
+                let target_count = spatial_index.map_or_else(
+                    || {
+                        field
+                            .cells
+                            .get(cell_index)
+                            .map_or(0, |cell| cell.physical_materials.len())
+                    },
+                    |index| index.materials_in_cell(cell_index).len(),
+                );
                 page.visited_work = page.visited_work.saturating_add(1);
                 page.visited_cell_checks = page.visited_cell_checks.saturating_add(1);
                 if target_count == 0 {
@@ -1436,11 +1442,12 @@ impl IndexedSpatialCursor {
                         .wrapping_add(anchor.locator.material_index)
                         % target_count;
                     let same_cell = cell_index == anchor.locator.cell_index;
-                    self.target_slots_to_visit = if same_cell
+                    self.target_slots_to_visit = if spatial_index.is_none()
+                        && same_cell
                         && self.orientation == PairOrientation::ForwardOrdered
                     {
                         target_count.saturating_sub(anchor.locator.material_index.saturating_add(1))
-                    } else if same_cell && self.reverse_only {
+                    } else if spatial_index.is_none() && same_cell && self.reverse_only {
                         anchor.locator.material_index.min(target_count)
                     } else {
                         target_count
@@ -1451,22 +1458,24 @@ impl IndexedSpatialCursor {
                     }
                     self.cell_loaded = true;
                     self.target_slots_visited = 0;
-                    self.target_slot =
-                        if same_cell && self.orientation == PairOrientation::ForwardOrdered {
-                            if rotated_start > anchor.locator.material_index {
-                                rotated_start
-                            } else {
-                                anchor.locator.material_index + 1
-                            }
-                        } else if same_cell && self.reverse_only {
-                            if rotated_start < anchor.locator.material_index {
-                                rotated_start
-                            } else {
-                                0
-                            }
-                        } else {
+                    self.target_slot = if spatial_index.is_none()
+                        && same_cell
+                        && self.orientation == PairOrientation::ForwardOrdered
+                    {
+                        if rotated_start > anchor.locator.material_index {
                             rotated_start
-                        };
+                        } else {
+                            anchor.locator.material_index + 1
+                        }
+                    } else if spatial_index.is_none() && same_cell && self.reverse_only {
+                        if rotated_start < anchor.locator.material_index {
+                            rotated_start
+                        } else {
+                            0
+                        }
+                    } else {
+                        rotated_start
+                    };
                 }
                 continue;
             }
