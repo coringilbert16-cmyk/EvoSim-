@@ -1088,7 +1088,6 @@ pub(crate) struct MaterialSpatialIndex {
     nodes: Vec<SpatialTreeNode>,
     root: Option<usize>,
     unbounded_materials: Vec<usize>,
-    locators: Vec<(usize, usize)>,
 }
 
 impl MaterialSpatialIndex {
@@ -1100,12 +1099,6 @@ impl MaterialSpatialIndex {
         let vertical_period = field.height_cells as f64 * field.cell_size;
         let mut entries = Vec::new();
         let mut unbounded_materials = Vec::new();
-        let locators = snapshot
-            .materials
-            .iter()
-            .map(|record| (record.locator.cell_index, record.locator.material_index))
-            .collect::<Vec<_>>();
-
         for (material_index, _) in snapshot.materials.iter().enumerate() {
             let Some(value) = bounds.get(material_index).copied().flatten() else {
                 unbounded_materials.push(material_index);
@@ -1149,7 +1142,6 @@ impl MaterialSpatialIndex {
             nodes,
             root,
             unbounded_materials,
-            locators,
         }
     }
 
@@ -1162,7 +1154,6 @@ impl MaterialSpatialIndex {
             && self.field_revision == snapshot.field_revision
             && field.revision == self.field_revision
             && self.material_count == snapshot.materials.len()
-            && self.locators.len() == snapshot.materials.len()
     }
 
     fn query_candidates(
@@ -1210,7 +1201,8 @@ impl MaterialSpatialIndex {
             }
         }
         output.extend(self.unbounded_materials.iter().copied());
-        output.sort_unstable_by_key(|&material_index| self.locators[material_index]);
+        // Snapshot material indices already follow physical locator order.
+        output.sort_unstable();
         output.dedup();
         visited_nodes
     }
@@ -2458,11 +2450,36 @@ mod tests {
         }
         let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 918);
         let bounds = vec![
-            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 1.0, max_y: 4.0 }),
-            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 96.0, max_y: 99.0 }),
-            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: 48.0, max_y: 52.0 }),
-            Some(MaterialSpatialBounds { min_x: 1.0, max_x: 4.0, min_y: -2.0, max_y: 2.0 }),
-            Some(MaterialSpatialBounds { min_x: 70.0, max_x: 74.0, min_y: 70.0, max_y: 74.0 }),
+            Some(MaterialSpatialBounds {
+                min_x: 1.0,
+                max_x: 4.0,
+                min_y: 1.0,
+                max_y: 4.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 1.0,
+                max_x: 4.0,
+                min_y: 96.0,
+                max_y: 99.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 1.0,
+                max_x: 4.0,
+                min_y: 48.0,
+                max_y: 52.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 1.0,
+                max_x: 4.0,
+                min_y: -2.0,
+                max_y: 2.0,
+            }),
+            Some(MaterialSpatialBounds {
+                min_x: 70.0,
+                max_x: 74.0,
+                min_y: 70.0,
+                max_y: 74.0,
+            }),
         ];
         let index = MaterialSpatialIndex::new(&snapshot, &field, &bounds);
 
@@ -2471,14 +2488,8 @@ mod tests {
             PairOrientation::Directed,
             PairOrientation::ForwardOrdered,
         ] {
-            let (reference, _) = snapshot.spatial_pair_window(
-                &field,
-                &bounds,
-                1.0,
-                0,
-                usize::MAX,
-                orientation,
-            );
+            let (reference, _) =
+                snapshot.spatial_pair_window(&field, &bounds, 1.0, 0, usize::MAX, orientation);
             let mut expected = reference
                 .into_iter()
                 .map(|pair| (pair.identity_left, pair.identity_right))
