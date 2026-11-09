@@ -972,6 +972,9 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
         let page = cursor.next_page(snapshot, &environment.field, &bounds, BOUNDS_PADDING, 1, 1);
         *remaining_discovery_work =
             (*remaining_discovery_work).saturating_sub(page.visited_work as usize);
+        diagnostics.anchor_materials_inspected += page.visited_anchor_initializations as usize;
+        diagnostics.target_cells_inspected += page.visited_cell_checks as usize;
+        diagnostics.target_materials_inspected += page.visited_material_checks as usize;
         if page.visited_work == 0 && page.pairs.is_empty() {
             break;
         }
@@ -1003,7 +1006,6 @@ pub(crate) fn accumulate_environmental_with_shared_snapshot(
             else {
                 continue;
             };
-            diagnostics.target_materials_inspected += 1;
             diagnostics.forward_ordered_target_material_pair_inspections += 1;
             if record_a.locator.cell_index == record_b.locator.cell_index {
                 diagnostics.same_cell_source_pair_inspections += 1;
