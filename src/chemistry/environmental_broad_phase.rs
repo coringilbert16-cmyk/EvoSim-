@@ -946,7 +946,11 @@ pub(crate) struct IndexedSpatialCursor {
     range: Option<BoundsCellRange>,
     row_offset: usize,
     col: usize,
+    tick: usize,
+    cell_start_offset: usize,
+    cells_visited: usize,
     target_slot: usize,
+    target_slots_visited: usize,
     cell_loaded: bool,
     complete: bool,
 }
@@ -957,7 +961,7 @@ impl IndexedSpatialCursor {
         field: &ActiveMaterialField,
         orientation: PairOrientation,
     ) -> Self {
-        Self::new_rotated(snapshot, field, orientation, 0)
+        Self::new_rotated(snapshot, field, orientation, 0, 0)
     }
 
     pub(crate) fn new_rotated(
@@ -965,6 +969,7 @@ impl IndexedSpatialCursor {
         field: &ActiveMaterialField,
         orientation: PairOrientation,
         start_index: usize,
+        tick: usize,
     ) -> Self {
         let material_count = snapshot.materials.len();
         Self {
@@ -985,7 +990,11 @@ impl IndexedSpatialCursor {
             range: None,
             row_offset: 0,
             col: 0,
+            tick,
+            cell_start_offset: 0,
+            cells_visited: 0,
             target_slot: 0,
+            target_slots_visited: 0,
             cell_loaded: false,
             complete: material_count == 0,
         }
