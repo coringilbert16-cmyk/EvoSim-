@@ -1143,6 +1143,10 @@ fn accumulate_environmental_internal(
                                 .push((record.locator.cell_index, record.locator.material_index));
                         }
                     }
+                    for anchor_targets in &mut targets {
+                        anchor_targets.sort_unstable();
+                        anchor_targets.dedup();
+                    }
                     targets
                 })
         });
