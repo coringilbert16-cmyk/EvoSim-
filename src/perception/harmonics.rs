@@ -2984,7 +2984,7 @@ mod tests {
     }
 
     #[test]
-    fn local_resonance_density_respects_occlusion_and_source_distance() {
+    fn local_resonance_density_ignores_occlusion_but_respects_source_distance() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
             crate::physical_material::PhysicalMaterial::realized(
@@ -3012,12 +3012,12 @@ mod tests {
         };
 
         let clear = density_sum(&[nearby_source.clone(), receiver.clone()]);
-        let shadowed = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
+        let intervened = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
         let farther = density_sum(&[distant_source, receiver]);
         assert!(clear > 0.0);
         assert!(
-            shadowed < clear,
-            "an intervening material should reduce received local density"
+            (intervened - clear).abs() <= 1e-9 * clear.max(1.0),
+            "third-party materials must not occlude chemistry-scale resonance"
         );
         assert!(
             farther < clear,
