@@ -1606,7 +1606,7 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
     Some(fields)
 }
 
-/// Single-point compatibility wrapper for continuous boundary reception.
+/// Single-point compatibility wrapper for unoccluded chemistry-scale reception.
 #[allow(dead_code)] // Direct query retained for focused geometry tests and callers.
 pub(crate) fn material_resonance_spectrum_at_boundary_point(
     materials: &[crate::physical_material::PhysicalMaterial],
@@ -2836,15 +2836,18 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("a valid but non-boundary point should produce an empty field");
-        assert!(outside.components.is_empty());
+        .expect("any finite chemistry endpoint should be queryable");
+        assert!(
+            !outside.components.is_empty(),
+            "chemistry-scale resonance is not restricted to a material boundary"
+        );
 
         let blocked_materials = vec![
             materials[0].clone(),
             materials[1].clone(),
             make_material("Nitrogen", 4.0, 0.0),
         ];
-        let blocked = material_resonance_spectrum_at_boundary_point(
+        let unoccluded = material_resonance_spectrum_at_boundary_point(
             &blocked_materials,
             &[0],
             1,
@@ -2852,10 +2855,10 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("valid occluded geometry should be queryable");
-        assert!(
-            blocked.components.is_empty(),
-            "a source hidden behind a physical blocker must not contribute at this point"
+        .expect("third-party geometry must not be needed for chemistry-scale reception");
+        assert_eq!(
+            unoccluded, first,
+            "small chemistry materials do not cast resonance shadows"
         );
     }
 
