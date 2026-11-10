@@ -2403,12 +2403,8 @@ mod tests {
             1.0,
         );
         assert_eq!(spectrum.components.len(), 2);
-        assert!(spectrum.components.iter().any(|item| {
-            (item.frequency_cycles_per_day - 440.0).abs() < 1e-9
-        }));
-        assert!(spectrum.components.iter().any(|item| {
-            (item.frequency_cycles_per_day - 880.0).abs() < 1e-9
-        }));
+        assert!((spectrum.components[0].frequency_cycles_per_day - 440.0).abs() < 1e-9);
+        assert!((spectrum.components[1].frequency_cycles_per_day - 880.0).abs() < 1e-9);
     }
 
     #[test]
@@ -2432,14 +2428,7 @@ mod tests {
         let blocker = make_material("Nitrogen", 4.0, 0.0);
 
         let density_sum = |materials: &[crate::physical_material::PhysicalMaterial]| {
-            material_resonance_density_on_receiver(
-                materials,
-                &[0],
-                1,
-                &catalog,
-                0,
-                1.0,
-            )
+            material_resonance_density_on_receiver(materials, &[0], 1, &catalog, 0, 1.0)
             .expect("valid physical arrangement should be sampled")
             .iter()
             .map(|sample| sample.density)
