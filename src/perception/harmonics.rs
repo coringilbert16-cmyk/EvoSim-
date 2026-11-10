@@ -2369,6 +2369,77 @@ mod tests {
     }
 
     #[test]
+    fn resonance_density_phasors_reinforce_cancel_and_keep_frequencies_separate() {
+        let component = |frequency_cycles_per_day, amplitude, phase_radians| ToneComponent {
+            frequency_cycles_per_day,
+            amplitude,
+            phase_radians,
+        };
+        let reinforced = combine_component(component(440.0, 0.5, 0.0), component(440.0, 0.5, 0.0));
+        assert!((reinforced.amplitude - 1.0).abs() < 1e-12);
+
+        let cancelled = combine_component(
+            component(440.0, 0.5, 0.0),
+            component(440.0, 0.5, std::f64::consts::PI),
+        );
+        assert!(cancelled.amplitude < 1e-12);
+
+        let mut spectrum = ToneSpectrum::empty();
+        add_spectrum(&mut spectrum, &ToneSpectrum {
+            components: vec![component(440.0, 0.5, 0.0)],
+        }, 1.0);
+        add_spectrum(&mut spectrum, &ToneSpectrum {
+            components: vec![component(880.0, 0.5, 0.0)],
+        }, 1.0);
+        assert_eq!(spectrum.components.len(), 2);
+        assert!(spectrum.components.iter().any(|item| (item.frequency_cycles_per_day - 440.0).abs() < 1e-9));
+        assert!(spectrum.components.iter().any(|item| (item.frequency_cycles_per_day - 880.0).abs() < 1e-9));
+    }
+
+    #[test]
+    fn local_resonance_density_respects_occlusion_and_source_distance() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let nearby_source = make_material("Carbon", 0.0, 0.0);
+        let distant_source = make_material("Carbon", -12.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.0);
+
+        let density_sum = |materials: &[crate::physical_material::PhysicalMaterial]| {
+            material_resonance_density_on_receiver(
+                materials,
+                &[0],
+                1,
+                &catalog,
+                0,
+                1.0,
+            )
+            .expect("valid physical arrangement should be sampled")
+            .iter()
+            .map(|sample| sample.density)
+            .sum::<f64>()
+        };
+
+        let clear = density_sum(&[nearby_source.clone(), receiver.clone()]);
+        let shadowed = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
+        let farther = density_sum(&[distant_source, receiver]);
+        assert!(clear > 0.0);
+        assert!(shadowed < clear, "an intervening material should reduce received local density");
+        assert!(farther < clear, "moving the source farther away should reduce received local density");
+    }
+
+    #[test]
     fn local_resonance_density_is_frequency_resolved_and_spatially_attributed() {
         let catalog = crate::resources::default_catalog();
         let make_material = |x| {
