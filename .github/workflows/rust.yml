@@ -7,7 +7,7 @@ on:
     branches: [main]
   pull_request:
     # Also validate stacked fix branches against their parent fix branch.
-    branches: [main, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, resonance-energy-integration-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29, 'optimization/**']
+    branches: [main, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29, 'optimization/**']
 
 permissions:
   contents: read
@@ -108,7 +108,7 @@ jobs:
           run_check cargo test --locked transformed_secondary_signal_never_exceeds_budget_after_rounding
           run_check cargo test --locked live_world_tone_capture_settles_and_reconciles_world_energy
           run_check cargo test --locked world_energy_inventory_reconciles_world_tone_and_structural_break_together
-          run_check cargo test --locked zero_incident_world_tone_cannot_create_energy_within_tolerance
+          run_check cargo test --locked zero_external_input_cannot_credit_holder_within_balance_tolerance
           run_check cargo test --locked live_geometry_key_distinguishes_chemical_positions_and_canonicalizes_them
           run_check cargo test --locked nonempty_cache_reopens_with_matching_derived_fingerprint
           run_check cargo test --locked checked_in_manifest_fingerprint_matches_default_catalog
@@ -193,8 +193,8 @@ jobs:
             if [ "$status" -ne 0 ]; then failures=$((failures + 1)); fi
           }
           run_check cargo test --locked append_graph_
-          run_check cargo test --locked subgraph_
-          run_check cargo test --locked replacing_subgraph_
+          run_check cargo test --locked subgraph
+          run_check cargo test --locked replacing_subgraph
           run_check cargo test --locked division_partition_
           run_check cargo test --locked realized_state_rejects_non_finite_owner_relative_origin
           run_check cargo test --locked owner_anchor_storage_rejects_non_finite_anchor_without_mutating_inventory
@@ -231,3 +231,32 @@ jobs:
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
+  pr335-performance:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 335
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify PR #335 is isolated from production reaction execution
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/verify_pr335_performance.sh --isolation-only
+      - name: Run seven paired 60-second baseline comparisons
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/verify_pr335_performance.sh
+      - name: Upload paired performance results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr335-paired-performance-results
+          path: |
+            pr335-performance-results.txt
+            pr335-performance-results.tsv
+          if-no-files-found: warn
+          retention-days: 14
