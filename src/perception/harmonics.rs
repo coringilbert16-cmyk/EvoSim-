@@ -1455,7 +1455,9 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
     tick: u64,
 ) -> Option<Vec<ToneSpectrum>> {
     if points.is_empty()
-        || points.iter().any(|point| !point.0.is_finite() || !point.1.is_finite())
+        || points
+            .iter()
+            .any(|point| !point.0.is_finite() || !point.1.is_finite())
     {
         return None;
     }
@@ -1500,8 +1502,7 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
             {
                 return None;
             }
-            let directional_projection =
-                ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
+            let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
             if !directional_projection.is_finite() {
                 return None;
             }
