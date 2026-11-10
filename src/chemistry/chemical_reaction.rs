@@ -29,6 +29,7 @@ pub(crate) struct EnvironmentalChemicalBreakOperation {
     pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_cycles_per_day: f64,
+    pub(crate) local_resonance_similarity: f64,
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
 }
@@ -845,6 +846,26 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
         // The field is sampled at both actual bond endpoints. Its normalized
         // spectral match increases local reaction accumulation; it is not
         // converted into energy or credited to either energy reservoir.
@@ -899,26 +920,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
-        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
-        if !frequency_a.is_finite()
-            || frequency_a <= 0.0
-            || !frequency_b.is_finite()
-            || frequency_b <= 0.0
-        {
-            diagnostics.candidate_chemistry_rejections =
-                diagnostics.candidate_chemistry_rejections.saturating_add(1);
-            continue;
-        }
-        let reaction_frequency_cycles_per_day =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        if !reaction_frequency_cycles_per_day.is_finite()
-            || reaction_frequency_cycles_per_day <= 0.0
-        {
-            diagnostics.candidate_chemistry_rejections =
-                diagnostics.candidate_chemistry_rejections.saturating_add(1);
-            continue;
-        }
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
