@@ -370,6 +370,14 @@ def main() -> int:
         print("chemistry analyzer: initial inventory does not contain all seven resources",
               file=sys.stderr)
         return 1
+    lifecycle_errors = report["molecular_history"]["validation_errors"]
+    if lifecycle_errors:
+        print(
+            "chemistry analyzer: invalid molecular lifecycle: "
+            + "; ".join(lifecycle_errors[:10]),
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
