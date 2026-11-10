@@ -1015,8 +1015,17 @@ impl Simulation {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
-            let parent_materials = vec![operation.source_material.clone()];
-            let previous_identities = environmental_material_identity_set(&self.environment);
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_material.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.disruption_cost;
             let reaction_frequency_hz =
                 Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
@@ -1031,15 +1040,12 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             let committed = resolution.is_ok();
-            if committed {
-                self.environment.field.assign_missing_material_identities();
-            }
-            let product_materials = if committed {
+            let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
             } else {
                 Vec::new()
             };
-            let molecular_lifecycle = if committed {
+            let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
                     format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
@@ -1115,8 +1121,17 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
-            let parent_materials = vec![operation.source_a.clone(), operation.source_b.clone()];
-            let previous_identities = environmental_material_identity_set(&self.environment);
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_a.clone(), operation.source_b.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.investment;
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
@@ -1130,7 +1145,6 @@ impl Simulation {
                 );
             if committed {
                 self.environmental_chemistry_diagnostics.combine_committed += 1;
-                self.environment.field.assign_missing_material_identities();
             } else {
                 self.environmental_chemistry_diagnostics.combine_rejected += 1;
             }
@@ -1143,12 +1157,12 @@ impl Simulation {
             } else {
                 None
             };
-            let product_materials = if committed {
+            let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
             } else {
                 Vec::new()
             };
-            let molecular_lifecycle = if committed {
+            let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
                     format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
@@ -1237,8 +1251,17 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
-            let parent_materials = vec![operation.source_a.clone(), operation.source_b.clone()];
-            let previous_identities = environmental_material_identity_set(&self.environment);
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_a.clone(), operation.source_b.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.work_required;
             let reaction_frequency_hz =
                 Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
@@ -1253,15 +1276,12 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             let committed = resolution.is_ok();
-            if committed {
-                self.environment.field.assign_missing_material_identities();
-            }
-            let product_materials = if committed {
+            let product_materials = if committed && molecular_history_enabled {
                 environmental_new_materials(&self.environment, &previous_identities)
             } else {
                 Vec::new()
             };
-            let molecular_lifecycle = if committed {
+            let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
                     format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
