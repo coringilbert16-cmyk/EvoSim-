@@ -279,7 +279,6 @@ fn directed_spatial_discovery_preserves_both_displacement_participant_roles() {
 
 #[test]
 fn snapshot_break_bond_inventory_matches_every_live_physical_bond() {
-    use crate::physical_material::PhysicalMaterialBond;
     use crate::resources::InternalBond;
 
     let catalog = crate::resources::default_catalog();
@@ -330,5 +329,4 @@ fn snapshot_break_bond_inventory_matches_every_live_physical_bond() {
         assert_eq!(record.bond_energy, connection.bond_energy);
         assert!(snapshot.bond_reference_is_current(record.reference()));
     }
-    let _: Option<PhysicalMaterialBond> = None;
 }
