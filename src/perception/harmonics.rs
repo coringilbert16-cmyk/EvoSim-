@@ -1450,7 +1450,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
 /// reaction endpoints. Points that are not on a visible boundary interval
 /// contribute nothing; ambiguous or invalid geometry fails closed.
 #[allow(dead_code)] // First continuous query for reaction-geometry validation.
-fn material_resonance_spectrum_at_boundary_point(
+pub(crate) fn material_resonance_spectrum_at_boundary_point(
     materials: &[crate::physical_material::PhysicalMaterial],
     source_indices: &[usize],
     receiver_index: usize,
