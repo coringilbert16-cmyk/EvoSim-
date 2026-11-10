@@ -1310,19 +1310,14 @@ pub(crate) fn material_aura_receptions_with_occluders(
     if std::ptr::eq(source, receiver) {
         return Some(Vec::new());
     }
-    let (source_x, source_y, source_extent, emitted) =
-        environmental_material_resonance(source, catalog, tick)?;
     let receiver_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
-    if source_geometry.parts.is_empty() {
-        return None;
-    }
 
-    // Keep the receiver as the only target while every other body remains
-    // in the visibility set as a possible occluder. The source itself is
-    // deliberately excluded: its aura originates inside that body's geometry.
+    // Keep the receiver first as the only target. Other bodies remain exact
+    // occluders; the source itself is excluded because its aura originates
+    // inside its own geometry.
     let mut receiver_bodies = Vec::with_capacity(1 + occluders.len());
     receiver_bodies.push(receiver_geometry);
     for occluder in occluders {
@@ -1335,15 +1330,46 @@ pub(crate) fn material_aura_receptions_with_occluders(
             )?,
         );
     }
+
+    material_aura_receptions_with_geometry(
+        source,
+        receiver,
+        &source_geometry,
+        &receiver_bodies,
+        catalog,
+        tick,
+    )
+}
+
+/// Evaluate one source against prebuilt world geometry. The receiver must be
+/// the first body in `receiver_bodies`; all remaining bodies are occluders.
+fn material_aura_receptions_with_geometry(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    if source.owner_relative_origin.is_some()
+        || receiver.owner_relative_origin.is_some()
+        || receiver_bodies.is_empty()
+        || source_geometry.parts.is_empty()
+    {
+        return None;
+    }
+    let (source_x, source_y, source_extent, emitted) =
+        environmental_material_resonance(source, catalog, tick)?;
+
     let target_body_indices = [0];
     let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
         (source_x, source_y),
-        &receiver_bodies,
+        receiver_bodies,
         &target_body_indices,
     )?;
     let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
         (source_x, source_y),
-        &receiver_bodies,
+        receiver_bodies,
         &target_body_indices,
     )?;
 
@@ -1469,11 +1495,63 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         return None;
     }
 
+    // Realize world geometry once for this field query, not once per source.
+    // This preserves the same physical shapes while avoiding repeated
+    // material-to-geometry conversion for every possible emitter.
+    let geometries: Vec<_> = materials
+        .iter()
+        .map(|material| {
+            if material.owner_relative_origin.is_some() {
+                return None;
+            }
+            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                material, catalog,
+            )
+        })
+        .collect::<Option<_>>()?;
+    let receiver_geometry = geometries.get(receiver_index)?;
     let mut fields = vec![ToneSpectrum::empty(); points.len()];
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let receptions =
-            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        let source_geometry = geometries.get(source_index)?;
+        if source_geometry.parts.is_empty() {
+            return None;
+        }
+        let (source_x, source_y, _, _) =
+            environmental_material_resonance(source, catalog, tick)?;
+
+        // Any straight segment from the source point to the receiver boundary
+        // lies inside this axis-aligned rectangle. A body's bounds outside it
+        // cannot occlude any such segment, so this is a conservative broad
+        // phase: exact visibility is still evaluated for every retained body.
+        let min_x = source_x.min(receiver_geometry.min_x);
+        let max_x = source_x.max(receiver_geometry.max_x);
+        let min_y = source_y.min(receiver_geometry.min_y);
+        let max_y = source_y.max(receiver_geometry.max_y);
+        let mut receiver_bodies = Vec::new();
+        receiver_bodies.push(receiver_geometry.clone());
+        for (candidate_index, geometry) in geometries.iter().enumerate() {
+            if candidate_index == source_index || candidate_index == receiver_index {
+                continue;
+            }
+            if geometry.max_x < min_x
+                || geometry.min_x > max_x
+                || geometry.max_y < min_y
+                || geometry.min_y > max_y
+            {
+                continue;
+            }
+            receiver_bodies.push(geometry.clone());
+        }
+
+        let receptions = material_aura_receptions_with_geometry(
+            source,
+            receiver,
+            source_geometry,
+            &receiver_bodies,
+            catalog,
+            tick,
+        )?;
         for (point_index, point) in points.iter().enumerate() {
             let mut matched = None;
             for reception in &receptions {
