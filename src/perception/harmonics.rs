@@ -215,15 +215,15 @@ impl MaterialAuraBoundary {
                 if !length_squared.is_finite() || length_squared <= 1e-24 {
                     return None;
                 }
-                let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy)
-                    / length_squared;
+                let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared;
                 if !t.is_finite() || !(-TOLERANCE..=1.0 + TOLERANCE).contains(&t) {
                     return None;
                 }
-                let closest = (start.0 + t.clamp(0.0, 1.0) * dx,
-                    start.1 + t.clamp(0.0, 1.0) * dy);
-                ((point.0 - closest.0).hypot(point.1 - closest.1) <= TOLERANCE)
-                    .then_some(normal)
+                let closest = (
+                    start.0 + t.clamp(0.0, 1.0) * dx,
+                    start.1 + t.clamp(0.0, 1.0) * dy,
+                );
+                ((point.0 - closest.0).hypot(point.1 - closest.1) <= TOLERANCE).then_some(normal)
             }
             Self::Arc(arc) => {
                 if !arc.center_x.is_finite()
@@ -244,8 +244,7 @@ impl MaterialAuraBoundary {
                 }
                 let angle = dy.atan2(dx);
                 let offset = (angle - arc.start_angle_radians).rem_euclid(std::f64::consts::TAU);
-                (offset <= arc.sweep_radians + TOLERANCE)
-                    .then_some((dx / radius, dy / radius))
+                (offset <= arc.sweep_radians + TOLERANCE).then_some((dx / radius, dy / radius))
             }
         }
     }
@@ -1338,13 +1337,12 @@ pub(crate) fn material_aura_receptions_with_occluders(
     }
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
-    let mut receive_at =
-        |receiver_x: f64,
-         receiver_y: f64,
-         normal_x: f64,
-         normal_y: f64,
-         projected_extent: f64,
-         boundary: MaterialAuraBoundary| {
+    let mut receive_at = |receiver_x: f64,
+                          receiver_y: f64,
+                          normal_x: f64,
+                          normal_y: f64,
+                          projected_extent: f64,
+                          boundary: MaterialAuraBoundary| {
             if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
                 return Some(());
             }
@@ -1359,8 +1357,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
             let mut incident = ToneSpectrum::empty();
             add_spectrum(&mut incident, &emitted, attenuation);
             incident.retain_strongest();
-            let mut received =
-                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
             received.retain_strongest();
             let magnitude = spectrum_magnitude(&received);
             // Geometric reception is independent of whether this material can
@@ -1495,8 +1492,7 @@ fn material_resonance_spectrum_at_boundary_point(
         // The interval reception carries sqrt(projected_extent) and midpoint
         // distance attenuation. Remove those interval terms, then evaluate
         // the exact local projection and distance at the requested point.
-        let local_scale = directional_projection.sqrt()
-            * (1.0 + midpoint_distance)
+        let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
             / ((1.0 + distance) * reception.projected_extent.sqrt());
         if !local_scale.is_finite() || local_scale < 0.0 {
             return None;
@@ -2562,24 +2558,12 @@ mod tests {
             .expect("at least one exposed boundary sample should exist");
         let point = (reception.receiver_x, reception.receiver_y);
 
-        let first = material_resonance_spectrum_at_boundary_point(
-            &materials,
-            &[0],
-            1,
-            point,
-            &catalog,
-            0,
-        )
-        .expect("valid exposed reaction point should be queryable");
-        let repeated = material_resonance_spectrum_at_boundary_point(
-            &materials,
-            &[0],
-            1,
-            point,
-            &catalog,
-            0,
-        )
-        .expect("the continuous query should be deterministic");
+        let first =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("valid exposed reaction point should be queryable");
+        let repeated =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("the continuous query should be deterministic");
         assert_eq!(first, repeated);
         assert!(
             !first.components.is_empty(),
