@@ -66,7 +66,7 @@ def _molecule_signature(molecule: Any) -> str:
             ):
                 normalized_bonds.append(tuple(sorted((part_a, part_b))))
     return json.dumps(
-        {"composition": sorted(parts), "bonds": sorted(normalized_bonds)},
+        {"composition": parts, "bonds": sorted(normalized_bonds)},
         sort_keys=True, separators=(",", ":"),
     )
 
@@ -272,7 +272,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "interpretation_limits": [
             "Structural-family recurrence excludes single-resource unbonded identities so abundant independent atoms/materials do not masquerade as organized compounds.",
-            "A structural family is an exact normalized composition plus part-index bond-connectivity signature; geometric endpoint angles and placements are intentionally ignored.",
+            "A structural family is an exact part-ordered composition plus normalized part-index bond-connectivity signature; geometric endpoint angles and placements are intentionally ignored.",
             "Family matching is not graph-isomorphism or proof of chemical equivalence.",
             "Active molecule lifetimes are right-censored at the final observed tick.",
             "Material totals count each created identity once, so lineage generations may count the same conserved constituents more than once.",
