@@ -617,8 +617,11 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     // Full local boundary reception evaluates every resonant emitter against
     // one receiver. Rotate one candidate per tick to bound this geometric work
     // while ensuring the field can influence every candidate over time.
-    let local_resonance_candidate_index =
-        (!candidates.is_empty()).then_some(tick as usize % candidates.len());
+    let local_resonance_candidate_index = if candidates.is_empty() {
+        None
+    } else {
+        Some(tick as usize % candidates.len())
+    };
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
