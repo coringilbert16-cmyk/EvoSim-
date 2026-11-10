@@ -209,7 +209,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     compound_ids = [
         molecule_id for molecule_id, row in molecule_rows.items() if row["is_compound"]
     ]
-        for resource, amount in composition.items():
+    for row in molecule_rows.values():
+        for resource, amount in row["composition"].items():
             resource_units[resource] += amount
             molecules_by_resource[resource] += 1
 
