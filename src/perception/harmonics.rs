@@ -358,18 +358,16 @@ pub(crate) fn material_resonance_density_on_receiver(
             if !distance.is_finite() || distance <= f64::EPSILON {
                 return None;
             }
-            let directional_projection = ((reception.receiver_normal_x * dx
-                + reception.receiver_normal_y * dy)
-                / distance)
-                .max(0.0);
+            let directional_projection =
+                ((reception.receiver_normal_x * dx + reception.receiver_normal_y * dy) / distance)
+                    .max(0.0);
             if !directional_projection.is_finite() {
                 return None;
             }
             if directional_projection <= f64::EPSILON {
                 continue;
             }
-            let local_scale =
-                directional_projection.sqrt() / reception.projected_extent.sqrt();
+            let local_scale = directional_projection.sqrt() / reception.projected_extent.sqrt();
             if !local_scale.is_finite() || local_scale < 0.0 {
                 return None;
             }
@@ -2678,24 +2676,12 @@ mod tests {
             .find(|sample| sample.receiver_normal_x < -0.5)
             .expect("the receiver should have a visible boundary facing the source");
         let point = (reception.receiver_x, reception.receiver_y);
-        let continuous = material_resonance_spectrum_at_boundary_point(
-            &materials,
-            &[0],
-            1,
-            point,
-            &catalog,
-            0,
-        )
-        .expect("the exact midpoint should be a valid continuous sample");
-        let heatmap = material_resonance_density_on_receiver(
-            &materials,
-            &[0],
-            1,
-            &catalog,
-            0,
-            0.01,
-        )
-        .expect("valid receiver geometry should produce heat-map samples");
+        let continuous =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("the exact midpoint should be a valid continuous sample");
+        let heatmap =
+            material_resonance_density_on_receiver(&materials, &[0], 1, &catalog, 0, 0.01)
+                .expect("valid receiver geometry should produce heat-map samples");
         let cell_x = (point.0 / 0.01).floor() as i64;
         let cell_y = (point.1 / 0.01).floor() as i64;
         let cell = heatmap
