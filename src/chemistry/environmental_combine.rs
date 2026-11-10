@@ -872,12 +872,23 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     // Only spatially overlapping constituent bounds are candidates.
                     // Exact endpoint positions, normals, and orientation are checked
                     // by the live contact evaluator before chemistry is activated.
+                    let candidate_generation_started = std::time::Instant::now();
                     let candidate_pairs = current_geometry_candidate_pairs(
                         &trial_structure,
                         &indices_a,
                         &indices_b,
                         &environment.catalog,
                     );
+                    diagnostics.spatial_candidate_generation_nanoseconds = diagnostics
+                        .spatial_candidate_generation_nanoseconds
+                        .saturating_add(
+                            candidate_generation_started
+                                .elapsed()
+                                .as_nanos()
+                                .min(u64::MAX as u128) as u64,
+                        );
+                    diagnostics.spatial_candidate_generation_calls =
+                        diagnostics.spatial_candidate_generation_calls.saturating_add(1);
                     let candidate_pair_count = candidate_pairs.len();
                     diagnostics.constituent_pairs_available += candidate_pair_count;
                     diagnostics.constituent_pairs_uninspected_by_window +=
