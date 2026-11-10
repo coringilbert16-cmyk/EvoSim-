@@ -3221,6 +3221,45 @@ mod tests {
             pairs
         }
 
+        fn exhaustive_directed(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            field: &ActiveMaterialField,
+            bounds: &[Option<MaterialSpatialBounds>],
+            padding: f64,
+        ) -> std::collections::BTreeSet<(MaterialIdentity, MaterialIdentity)> {
+            let reached = bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .and_then(|value| value.expanded(padding))
+                        .map(|value| {
+                            field.cells_intersecting_bounds(
+                                value.min_x,
+                                value.max_x,
+                                value.min_y,
+                                value.max_y,
+                            )
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let mut pairs = std::collections::BTreeSet::new();
+            for anchor in 0..snapshot.materials.len() {
+                for target in 0..snapshot.materials.len() {
+                    if anchor == target {
+                        continue;
+                    }
+                    if reached[anchor].contains(&snapshot.materials[target].locator.cell_index) {
+                        pairs.insert((
+                            snapshot.materials[anchor].identity,
+                            snapshot.materials[target].identity,
+                        ));
+                    }
+                }
+            }
+            pairs
+        }
+
         fn vector_bytes_lower_bound(
             snapshot: &EnvironmentalMaterialSnapshot,
             bounds: &[Option<MaterialSpatialBounds>],
@@ -3246,8 +3285,9 @@ mod tests {
                 + bounds.len() * size_of::<Option<MaterialSpatialBounds>>()
         }
 
+
         println!(
-            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
+            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
         );
         for count in [128usize, 320, 640, 1280, 2560, 5120] {
             for clustered in [false, true] {
@@ -3263,8 +3303,13 @@ mod tests {
                 let mut exhaustive_times = Vec::new();
                 let mut spatial_times = Vec::new();
                 let mut cursor_times = Vec::new();
+                let mut directed_exhaustive_times = Vec::new();
+                let mut directed_spatial_times = Vec::new();
+                let mut directed_cursor_times = Vec::new();
                 let mut spatial_count = 0usize;
+                let mut directed_count = 0usize;
                 let mut cursor_checks = 0u64;
+                let mut directed_cursor_checks = 0u64;
                 let mut memory_lower_bound = 0usize;
                 let mut parity_ok = true;
 
@@ -3279,7 +3324,7 @@ mod tests {
 
                     let start = Instant::now();
                     let mut bounds_cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
-                    let cursor_bounds = loop {
+                    let bounds = loop {
                         let page = bounds_cursor.next_page(&snapshot, &field, &catalog, 64);
                         assert!(page.visited_work <= 64);
                         if page.complete {
@@ -3287,8 +3332,7 @@ mod tests {
                         }
                     };
                     bounds_cursor_times.push(start.elapsed().as_micros());
-                    parity_ok &= cursor_bounds == restored_bounds;
-                    let bounds = cursor_bounds;
+                    parity_ok &= bounds == restored_bounds;
                     memory_lower_bound = vector_bytes_lower_bound(&snapshot, &bounds);
 
                     let start = Instant::now();
@@ -3329,23 +3373,81 @@ mod tests {
                     cursor_checks = run_cursor_checks;
                     cursor_times.push(start.elapsed().as_micros());
                     parity_ok &= cursor_pairs == expected.len();
-                    black_box((&snapshot, &bounds, &actual));
+
+                    let start = Instant::now();
+                    let expected_directed =
+                        exhaustive_directed(&snapshot, &field, &bounds, 2.0);
+                    directed_exhaustive_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let (directed_pairs, directed_coverage) = snapshot.spatial_pair_window(
+                        &field,
+                        &bounds,
+                        2.0,
+                        0,
+                        usize::MAX,
+                        PairOrientation::Directed,
+                    );
+                    directed_spatial_times.push(start.elapsed().as_micros());
+                    let actual_directed = directed_pairs
+                        .iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right))
+                        .collect::<std::collections::BTreeSet<_>>();
+                    directed_count = directed_pairs.len();
+                    parity_ok &= actual_directed == expected_directed
+                        && directed_coverage.known_pairs == expected_directed.len() as u64;
+
+                    let start = Instant::now();
+                    let mut directed_cursor =
+                        SpatialPairCursor::new(&snapshot, PairOrientation::Directed);
+                    let mut directed_cursor_pairs = 0usize;
+                    let mut run_directed_cursor_checks = 0u64;
+                    loop {
+                        let page = directed_cursor.next_page(
+                            &snapshot,
+                            &field,
+                            &bounds,
+                            2.0,
+                            4096,
+                            4096,
+                        );
+                        run_directed_cursor_checks = run_directed_cursor_checks
+                            .saturating_add(page.visited_pair_checks);
+                        directed_cursor_pairs += page.pairs.len();
+                        if page.complete {
+                            break;
+                        }
+                    }
+                    directed_cursor_checks = run_directed_cursor_checks;
+                    directed_cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= directed_cursor_pairs == expected_directed.len();
+                    black_box((&snapshot, &bounds, &actual, &actual_directed));
                 }
 
-                let all_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
-                let reduction = if all_pairs == 0 {
+                let unordered_pairs =
+                    (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+                let directed_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64);
+                let unordered_reduction = if unordered_pairs == 0 {
                     0.0
                 } else {
-                    (1.0 - spatial_count as f64 / all_pairs as f64) * 100.0
+                    (1.0 - spatial_count as f64 / unordered_pairs as f64) * 100.0
+                };
+                let directed_reduction = if directed_pairs == 0 {
+                    0.0
+                } else {
+                    (1.0 - directed_count as f64 / directed_pairs as f64) * 100.0
                 };
                 println!(
-                    "{count},{layout},625,{},{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
+                    "{count},{layout},625,{},{},{},{},{},{},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{},{},{},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
                     median(&mut bounds_restore_times),
                     median(&mut bounds_cursor_times),
                     median(&mut exhaustive_times),
                     median(&mut spatial_times),
                     median(&mut cursor_times),
+                    median(&mut directed_exhaustive_times),
+                    median(&mut directed_spatial_times),
+                    median(&mut directed_cursor_times),
                     if parity_ok { "PASS" } else { "FAIL" },
                 );
                 assert!(
