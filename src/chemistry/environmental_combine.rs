@@ -2168,6 +2168,7 @@ mod tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "compound-compound-four-part-round-trip-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -3202,6 +3203,7 @@ mod tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "environmental-combine-round-trip-break".into(),
             accumulated_reaction: 1.0,
         };
