@@ -219,6 +219,156 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) magnitude: f64,
 }
 
+/// One spatial sample of the material-origin resonance-density field.
+///
+/// Samples are taken on the realized boundary of a selected receiver material.
+/// Density is the phase-combined, frequency-resolved incident signal intensity
+/// at that location, normalized by projected boundary extent. It is a signal
+/// diagnostic, not stored or spendable energy.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MaterialResonanceDensitySample {
+    pub(crate) cell_x: i64,
+    pub(crate) cell_y: i64,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) components: Vec<ToneComponent>,
+    pub(crate) density: f64,
+}
+
+/// Build a local resonance-density heat map over one realized receiver.
+///
+/// Every other supplied material is considered as a possible emitter and all
+/// supplied materials remain in the occlusion set. The caller must provide
+/// world-resolved physical materials; stored owner-relative materials are
+/// rejected by the existing reception API. The spatial grid is diagnostic
+/// sampling only: reaction code must use continuous physical samples, never
+/// make eligibility depend on this grid.
+pub(crate) fn material_resonance_density_on_receiver(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    receiver_index: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    cell_size: f64,
+) -> Option<Vec<MaterialResonanceDensitySample>> {
+    if !cell_size.is_finite() || cell_size <= f64::EPSILON {
+        return None;
+    }
+    let receiver = materials.get(receiver_index)?;
+
+    // First average repeated boundary patches from each source within a map
+    // cell. This prevents a finely segmented receiver boundary from counting
+    // the same source field multiple times merely because it has more patches.
+    let mut source_cells = std::collections::HashMap::<
+        (i64, i64, usize),
+        Vec<(ToneComponent, usize)>,
+    >::new();
+
+    for (source_index, source) in materials.iter().enumerate() {
+        if source_index == receiver_index {
+            continue;
+        }
+        let receptions = material_aura_receptions_with_occluders(
+            source, receiver, materials, catalog, tick,
+        )?;
+        for reception in receptions {
+            if !reception.receiver_x.is_finite()
+                || !reception.receiver_y.is_finite()
+                || !reception.projected_extent.is_finite()
+                || reception.projected_extent <= f64::EPSILON
+            {
+                return None;
+            }
+            let cell_x_f = (reception.receiver_x / cell_size).floor();
+            let cell_y_f = (reception.receiver_y / cell_size).floor();
+            if !cell_x_f.is_finite()
+                || !cell_y_f.is_finite()
+                || cell_x_f < i64::MIN as f64
+                || cell_x_f > i64::MAX as f64
+                || cell_y_f < i64::MIN as f64
+                || cell_y_f > i64::MAX as f64
+            {
+                return None;
+            }
+            let key = (cell_x_f as i64, cell_y_f as i64, source_index);
+            let samples = source_cells.entry(key).or_default();
+            let extent_scale = reception.projected_extent.sqrt();
+            for component in &reception.incident_spectrum.components {
+                let local = ToneComponent {
+                    frequency_cycles_per_day: component.frequency_cycles_per_day,
+                    amplitude: component.amplitude / extent_scale,
+                    phase_radians: component.phase_radians,
+                };
+                if !local.frequency_cycles_per_day.is_finite()
+                    || local.frequency_cycles_per_day <= 0.0
+                    || !local.amplitude.is_finite()
+                    || local.amplitude < 0.0
+                    || !local.phase_radians.is_finite()
+                {
+                    return None;
+                }
+                if let Some((existing, count)) = samples.iter_mut().find(|(existing, _)| {
+                    (existing.frequency_cycles_per_day - local.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                }) {
+                    *existing = combine_component(*existing, local);
+                    *count += 1;
+                } else {
+                    samples.push((local, 1));
+                }
+            }
+        }
+    }
+
+    let mut cells = std::collections::HashMap::<(i64, i64), Vec<ToneComponent>>::new();
+    for ((cell_x, cell_y, _source_index), source_components) in source_cells {
+        let target = cells.entry((cell_x, cell_y)).or_default();
+        for (component, sample_count) in source_components {
+            let averaged = ToneComponent {
+                amplitude: component.amplitude / sample_count as f64,
+                ..component
+            };
+            if let Some(existing) = target.iter_mut().find(|existing| {
+                (existing.frequency_cycles_per_day - averaged.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                *existing = combine_component(*existing, averaged);
+            } else {
+                target.push(averaged);
+            }
+        }
+    }
+
+    let mut output = Vec::with_capacity(cells.len());
+    for ((cell_x, cell_y), mut components) in cells {
+        components.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let density = components
+            .iter()
+            .map(|component| component.amplitude * component.amplitude)
+            .sum::<f64>();
+        if !density.is_finite() {
+            return None;
+        }
+        output.push(MaterialResonanceDensitySample {
+            cell_x,
+            cell_y,
+            x: (cell_x as f64 + 0.5) * cell_size,
+            y: (cell_y as f64 + 0.5) * cell_size,
+            components,
+            density,
+        });
+    }
+    output.sort_by(|a, b| {
+        a.cell_y
+            .cmp(&b.cell_y)
+            .then_with(|| a.cell_x.cmp(&b.cell_x))
+    });
+    Some(output)
+}
+
 /// One signed frequency contribution to a material pair's interaction
 /// potential. Signed energy is required so PR 4 can settle attractive and
 /// repulsive work against the matching retained-resonance frequency.
