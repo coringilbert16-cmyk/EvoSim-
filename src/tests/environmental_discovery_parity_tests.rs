@@ -19,10 +19,10 @@ fn eligible_combine_contacts(
     for pair in pairs {
         let left = &snapshot.materials[pair.left];
         let right = &snapshot.materials[pair.right];
-        let source_a = &field.cells[left.locator.cell_index].physical_materials
-            [left.locator.material_index];
-        let source_b = &field.cells[right.locator.cell_index].physical_materials
-            [right.locator.material_index];
+        let source_a =
+            &field.cells[left.locator.cell_index].physical_materials[left.locator.material_index];
+        let source_b =
+            &field.cells[right.locator.cell_index].physical_materials[right.locator.material_index];
 
         let mut structure = OrganismStructure::new();
         let Some(indices_a) = crate::material_restoration::restore_material(
