@@ -1,8 +1,3 @@
-#![expect(
-    dead_code,
-    reason = "Bounded snapshot cursor is a tested discovery foundation, not yet wired into production"
-)]
-
 //! Resumable construction of the environmental material/bond snapshot.
 //! Every cell, material, and bond inspection, plus each finalized record, consumes one unit.
 
