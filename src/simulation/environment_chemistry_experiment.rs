@@ -372,7 +372,10 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
 
     // Establish stable IDs for the complete tick-zero inventory before any
     // diagnostics or reaction can observe the environment.
-    simulation.environment.field.assign_missing_material_identities();
+    simulation
+        .environment
+        .field
+        .assign_missing_material_identities();
 
     // The default constructor's organism is deliberately removed. Rebase the
     // ledger on the actual environment-only tick-zero inventory so no organism
@@ -568,8 +571,7 @@ mod tests {
         }
 
         assert_eq!(
-            recorded.environment.field.cells,
-            unrecorded.environment.field.cells,
+            recorded.environment.field.cells, unrecorded.environment.field.cells,
             "recording must not alter physical inventory, identities, or geometry"
         );
         assert_eq!(recorded.energy_ledger, unrecorded.energy_ledger);
