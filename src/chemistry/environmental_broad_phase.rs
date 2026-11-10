@@ -241,7 +241,11 @@ impl MaterialBoundsCursor {
                                 .as_ref()
                                 .is_none_or(|shapes| shapes.len() == record.constituent_count)
                     });
-                self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                if record.constituent_count == 0 {
+                    page.completed_materials = page.completed_materials.saturating_add(1);
+                } else {
+                    self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                }
                 continue;
             }
 
@@ -2913,6 +2917,193 @@ mod tests {
                 assert!(pages < 16);
             }
             assert_eq!(actual, expected, "indexed cursor {orientation:?}");
+        }
+    }
+
+
+    #[test]
+    fn material_bounds_cursor_completes_empty_material_without_fake_constituent_work() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
+        let mut empty = physical(1, "Carbon");
+        empty.material.parts.clear();
+        field.cells[0].physical_materials.push(empty);
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 103);
+        assert_eq!(snapshot.materials.len(), 1);
+        assert_eq!(snapshot.materials[0].constituent_count, 0);
+
+        let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let page = cursor.next_page(&snapshot, &field, &catalog, 1);
+
+        assert!(page.complete);
+        assert_eq!(page.visited_work, 1);
+        assert_eq!(page.material_headers_inspected, 1);
+        assert_eq!(page.constituent_inspections, 0);
+        assert_eq!(page.deferred_work, 0);
+        assert_eq!(page.completed_materials, 1);
+        assert_eq!(page.bounds, Some(vec![None]));
+    }
+
+    #[test]
+    fn reverse_only_cursor_matches_directed_candidates_for_asymmetric_bounds_and_page_sizes() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        for (cell_index, identities) in [
+            (0, vec![70, 10]),
+            (1, vec![60]),
+            (4, vec![20, 50]),
+            (7, vec![30]),
+            (11, vec![40]),
+            (17, vec![80]),
+            (23, vec![90]),
+        ] {
+            for identity in identities {
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(identity, "Carbon"));
+            }
+        }
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+        let bounds = snapshot
+            .materials
+            .iter()
+            .map(|record| {
+                let (x, y) = field.cell_center(record.locator.cell_index);
+                let radius = match record.identity.0 % 5 {
+                    0 => 0.25,
+                    1 => 3.0,
+                    2 => 8.0,
+                    3 => 14.0,
+                    _ => 19.0,
+                };
+                Some(MaterialSpatialBounds {
+                    min_x: x - radius,
+                    max_x: x + radius,
+                    min_y: y - radius,
+                    max_y: y + radius,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for tick in 0..9 {
+            for anchor_index in 0..snapshot.materials.len() {
+                let target_cell_count = IndexedSpatialCursor::target_cell_count(
+                    &field,
+                    bounds[anchor_index].expect("every fixture material has bounds"),
+                    2.1,
+                )
+                .expect("fixture bounds intersect the field");
+
+                for work_limit in 1..=4 {
+                    for output_limit in 1..=2 {
+                        let mut directed = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::Directed,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut expected = Vec::new();
+                        let mut pages = 0;
+                        loop {
+                            let page = directed.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            expected.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "directed cursor failed to make progress");
+                        }
+
+                        let mut reverse = IndexedSpatialCursor::new_for_reverse_anchor(
+                            &snapshot,
+                            &field,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut actual = Vec::new();
+                        pages = 0;
+                        loop {
+                            let page = reverse.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "reverse cursor failed to make progress");
+                        }
+
+                        let mut forward = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::ForwardOrdered,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        pages = 0;
+                        loop {
+                            let page = forward.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "forward cursor failed to make progress");
+                        }
+
+                        expected.sort_unstable();
+                        actual.sort_unstable();
+                        assert_eq!(
+                            actual,
+                            expected,
+                            "tick={tick}, anchor={anchor_index}, work={work_limit}, output={output_limit}"
+                        );
+                    }
+                }
+            }
         }
     }
 
