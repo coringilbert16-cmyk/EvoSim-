@@ -326,11 +326,14 @@ def render_markdown(report: dict[str, Any]) -> str:
         composition = ", ".join(
             f"{name}:{amount:g}" for name, amount in sorted(family["composition"].items())
         )
+        product_lifetime = family["mean_reaction_created_lifetime_ticks"]
+        product_lifetime_text = (
+            f"{product_lifetime:.2f}" if product_lifetime is not None else "n/a"
+        )
         lines.append(
             f"| {family['reaction_created_occurrences']} | {family['initial_seed_occurrences']} | "
             f"{family['reaction_created_active_at_end']} | "
-            f"{(family['mean_reaction_created_lifetime_ticks'] or 0.0):.2f} | "
-            f"{composition or '(empty)'} |"
+            f"{product_lifetime_text} | {composition or '(empty)'} |"
         )
     lines += ["", "## Molecule creations by reaction", "",
               "| Reaction | Created identities |", "|---|---:|"]
