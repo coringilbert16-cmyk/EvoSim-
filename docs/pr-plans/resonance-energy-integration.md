@@ -96,3 +96,20 @@ Pair-potential settlement and mechanical approach work are separate terms. The s
 The existing organism and environmental BREAK paths already stage `withdraw_compatible` resonance energy and record disruption work. The shared preparation path previously failed to debit `EnergyLedger.total_resonant_energy_held`, leaving that counter stale after a successful reservoir withdrawal. This branch now subtracts the staged withdrawal in the prepared ledger, rejects a debit that exceeds the recorded resonance inventory, and commits the ledger and physical/reservoir changes atomically. Regressions verify that the retained-resonance counter matches the committed reservoir after organism BREAK and that an overdrawn ledger is rejected without mutation.
 
 COMBINE reaction eligibility remains chemistry-driven. The future physical approach-work migration must instead use the resonance-derived interaction and fund its mechanical work from compatible resonance storage, recording that work once in `work_expended`. Intrinsic bond potential remains a separate structural-energy term. The current locomotion heat charge is not silently reclassified as COMBINE approach work.
+
+## Spatial resonance-density interpretation
+
+Use a heat-map-like spatial view to reason about where material resonance is locally concentrated, but treat that map as a derived view of the existing material-aura model—not as a second field, an energy reservoir, or a new source of reaction energy.
+
+The underlying representation remains frequency-resolved and phase-aware:
+
+- Each realized material contributes its existing emitted aura, with the current material response, distance attenuation, and realized-geometry occlusion.
+- Contributions at the same frequency combine as phasors, so phase alignment can reinforce a region and phase opposition can weaken it. Different frequencies remain separate spectral components; they must not be collapsed into one scalar before compatibility is evaluated.
+- The local density at a reaction site is evaluated from the contributions that physically reach that location. A rasterized heat map may be generated for diagnostics or display, but reaction eligibility and settlement must use the underlying continuous spatial calculation so grid resolution cannot change chemistry.
+- A high-density region indicates strong local resonance interaction, not automatically available usable energy. Activation remains a kinetic gate; any energy used for physical work must have a traced source, be transferred/debited exactly once, and reconcile attenuation, dissipation, and escaped signal.
+- Nonliving materials do not autonomously retain a reserve or choose when to spend energy. Their propagation can influence nearby interactions, while any retained energy must follow an explicitly permitted physical receiver/holder rule.
+- Do not use the shared environmental resonance reservoir to let a distant reaction spend energy absorbed elsewhere. Local influence must remain spatially local and frequency-compatible.
+
+For the first chemistry integration, use the local spectral interaction at the candidate reaction geometry to influence the already-defined reaction-energy/funding path. Do not add a new scalar “density threshold,” grant energy because a heat-map cell is bright, or change bond/activation thresholds. Keep the heat-map representation observational until the continuous local calculation and its energy provenance are independently verified.
+
+Acceptance tests should compare otherwise identical reaction candidates at high- and low-density locations; vary frequency compatibility and phase interference; insert an occluder; move the source to verify locality; and reconcile source debit, received interaction, dissipation, and escaped energy. A diagnostic heat map must agree with point samples from the underlying field within its stated sampling tolerance.
