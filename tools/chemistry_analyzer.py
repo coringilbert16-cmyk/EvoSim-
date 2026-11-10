@@ -52,15 +52,21 @@ def _structural_signature(molecule: Any) -> str:
         if isinstance(part, (list, tuple)) and len(part) == 2
     ) if isinstance(parts, list) else []
     raw_edges = molecule.get("internal_connections", [])
-    edges = [edge for edge in raw_edges if isinstance(edge, dict)] if isinstance(raw_edges, list) else []
+    edges = (
+        [edge for edge in raw_edges if isinstance(edge, dict)]
+        if isinstance(raw_edges, list)
+        else []
+    )
     normalized_edges = sorted(
-        (json.dumps(edge, sort_keys=True, separators=(",", ":")) for edge in edges)
+        json.dumps(edge, sort_keys=True, separators=(",", ":")) for edge in edges
     )
     return json.dumps(
         {"composition": normalized_parts, "bonds": normalized_edges},
         sort_keys=True,
         separators=(",", ":"),
     )
+
+
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     headers = [r for r in records if r.get("event") == "environmental_chemistry_header"]
     snapshots = [r for r in records if r.get("event") == "environmental_chemistry_snapshot"]
