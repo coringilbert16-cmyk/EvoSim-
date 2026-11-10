@@ -630,6 +630,20 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) progress_preserved_unsearched: u64,
     /// Checked but unupdated progress entries that dissipated.
     pub(crate) progress_dissipated_checked: u64,
+    /// Number of environmental BREAK candidates selected for local resonance sampling.
+    pub(crate) local_resonance_sample_attempts: u64,
+    /// Successful local endpoint-spectrum samples, including zero similarity.
+    pub(crate) local_resonance_samples: u64,
+    /// Selected candidates for which local endpoint sampling was unavailable.
+    pub(crate) local_resonance_unavailable: u64,
+    /// Sum of successful dimensionless endpoint spectral similarities.
+    pub(crate) local_resonance_similarity_sum: f64,
+    /// Maximum successful dimensionless endpoint spectral similarity.
+    pub(crate) local_resonance_similarity_max: f64,
+    /// Time spent evaluating local endpoint spectra, in nanoseconds.
+    pub(crate) local_resonance_sample_nanoseconds: u64,
+    /// Time spent constructing the tick-local world material snapshot, in nanoseconds.
+    pub(crate) local_resonance_snapshot_build_nanoseconds: u64,
     /// Largest incoming bond activation accumulation observed.
     pub(crate) max_accumulated_reaction: f64,
 }
@@ -690,6 +704,17 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.progress_dissipated_checked = self
             .progress_dissipated_checked
             .saturating_add(tick.progress_dissipated_checked);
+        self.local_resonance_sample_attempts = self.local_resonance_sample_attempts.saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self.local_resonance_unavailable.saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() {
+            self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
+        }
+        if tick.local_resonance_similarity_max.is_finite() {
+            self.local_resonance_similarity_max = self.local_resonance_similarity_max.max(tick.local_resonance_similarity_max);
+        }
+        self.local_resonance_sample_nanoseconds = self.local_resonance_sample_nanoseconds.saturating_add(tick.local_resonance_sample_nanoseconds);
+        self.local_resonance_snapshot_build_nanoseconds = self.local_resonance_snapshot_build_nanoseconds.saturating_add(tick.local_resonance_snapshot_build_nanoseconds);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
