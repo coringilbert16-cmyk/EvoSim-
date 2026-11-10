@@ -193,6 +193,64 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// Exact visible boundary geometry associated with a reception interval.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum MaterialAuraBoundary {
+    Straight {
+        start: (f64, f64),
+        end: (f64, f64),
+        normal: (f64, f64),
+    },
+    Arc(crate::capillary_geometry::CircularArcBoundary),
+}
+
+impl MaterialAuraBoundary {
+    fn normal_at(self, point: (f64, f64)) -> Option<(f64, f64)> {
+        const TOLERANCE: f64 = 1e-7;
+        match self {
+            Self::Straight { start, end, normal } => {
+                let dx = end.0 - start.0;
+                let dy = end.1 - start.1;
+                let length_squared = dx * dx + dy * dy;
+                if !length_squared.is_finite() || length_squared <= 1e-24 {
+                    return None;
+                }
+                let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy)
+                    / length_squared;
+                if !t.is_finite() || !(-TOLERANCE..=1.0 + TOLERANCE).contains(&t) {
+                    return None;
+                }
+                let closest = (start.0 + t.clamp(0.0, 1.0) * dx,
+                    start.1 + t.clamp(0.0, 1.0) * dy);
+                ((point.0 - closest.0).hypot(point.1 - closest.1) <= TOLERANCE)
+                    .then_some(normal)
+            }
+            Self::Arc(arc) => {
+                if !arc.center_x.is_finite()
+                    || !arc.center_y.is_finite()
+                    || !arc.radius.is_finite()
+                    || arc.radius <= f64::EPSILON
+                    || !arc.start_angle_radians.is_finite()
+                    || !arc.sweep_radians.is_finite()
+                    || arc.sweep_radians <= 0.0
+                {
+                    return None;
+                }
+                let dx = point.0 - arc.center_x;
+                let dy = point.1 - arc.center_y;
+                let radius = dx.hypot(dy);
+                if !radius.is_finite() || (radius - arc.radius).abs() > TOLERANCE {
+                    return None;
+                }
+                let angle = dy.atan2(dx);
+                let offset = (angle - arc.start_angle_radians).rem_euclid(std::f64::consts::TAU);
+                (offset <= arc.sweep_radians + TOLERANCE)
+                    .then_some((dx / radius, dy / radius))
+            }
+        }
+    }
+}
+
 /// One material's existing resonance aura as received at a realized
 /// boundary point on another physical material.
 ///
@@ -210,6 +268,7 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    boundary: MaterialAuraBoundary,
     /// Incident field before the receiver's oscillator response. Pair
     /// interference compares this with the receiver's own emitted field;
     /// using the responded spectrum here would apply the receiver phase lag twice.
@@ -1280,7 +1339,12 @@ pub(crate) fn material_aura_receptions_with_occluders(
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
     let mut receive_at =
-        |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
+        |receiver_x: f64,
+         receiver_y: f64,
+         normal_x: f64,
+         normal_y: f64,
+         projected_extent: f64,
+         boundary: MaterialAuraBoundary| {
             if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
                 return Some(());
             }
@@ -1313,6 +1377,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
                     receiver_normal_x: normal_x,
                     receiver_normal_y: normal_y,
                     projected_extent,
+                    boundary,
                     incident_spectrum: incident,
                     spectrum: received,
                     magnitude,
@@ -1332,6 +1397,11 @@ pub(crate) fn material_aura_receptions_with_occluders(
             interval.outward_normal.0,
             interval.outward_normal.1,
             projected_extent,
+            MaterialAuraBoundary::Straight {
+                start: interval.start,
+                end: interval.end,
+                normal: interval.outward_normal,
+            },
         )?;
     }
 
@@ -1344,10 +1414,97 @@ pub(crate) fn material_aura_receptions_with_occluders(
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
-        receive_at(receiver_x, receiver_y, normal_x, normal_y, projected_extent)?;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            normal_x,
+            normal_y,
+            projected_extent,
+            MaterialAuraBoundary::Arc(interval.arc),
+        )?;
     }
 
     Some(receptions)
+}
+
+/// Evaluate the frequency-resolved incident field at an exact point on a
+/// receiver's currently exposed physical boundary. Unlike the heat-map sampler,
+/// this query has no raster or cell-size parameter and can be used at actual
+/// reaction endpoints. Points that are not on a visible boundary interval
+/// contribute nothing; ambiguous or invalid geometry fails closed.
+#[allow(dead_code)] // First continuous query for reaction-geometry validation.
+fn material_resonance_spectrum_at_boundary_point(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    point: (f64, f64),
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<ToneSpectrum> {
+    if !point.0.is_finite() || !point.1.is_finite() {
+        return None;
+    }
+    let receiver = materials.get(receiver_index)?;
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices.iter().any(|index| {
+        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
+    }) {
+        return None;
+    }
+
+    let mut field = ToneSpectrum::empty();
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
+        let receptions =
+            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        let mut matched = None;
+        for reception in receptions {
+            if let Some(normal) = reception.boundary.normal_at(point) {
+                if matched.is_some() {
+                    // A corner shared by multiple exposed intervals has no
+                    // unique local normal; do not choose one arbitrarily.
+                    return None;
+                }
+                matched = Some((reception, normal));
+            }
+        }
+        let Some((reception, normal)) = matched else {
+            continue;
+        };
+
+        let dx = reception.source_x - point.0;
+        let dy = reception.source_y - point.1;
+        let distance = dx.hypot(dy);
+        let midpoint_distance = (reception.source_x - reception.receiver_x)
+            .hypot(reception.source_y - reception.receiver_y);
+        if !distance.is_finite()
+            || distance <= f64::EPSILON
+            || !midpoint_distance.is_finite()
+            || reception.projected_extent <= f64::EPSILON
+        {
+            return None;
+        }
+        let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
+        if !directional_projection.is_finite() {
+            return None;
+        }
+        if directional_projection <= f64::EPSILON {
+            continue;
+        }
+
+        // The interval reception carries sqrt(projected_extent) and midpoint
+        // distance attenuation. Remove those interval terms, then evaluate
+        // the exact local projection and distance at the requested point.
+        let local_scale = directional_projection.sqrt()
+            * (1.0 + midpoint_distance)
+            / ((1.0 + distance) * reception.projected_extent.sqrt());
+        if !local_scale.is_finite() || local_scale < 0.0 {
+            return None;
+        }
+        add_spectrum(&mut field, &reception.incident_spectrum, local_scale);
+    }
+    field.retain_strongest();
+    Some(field)
 }
 
 /// Integrate the interference between an incoming aura and the receiver's
