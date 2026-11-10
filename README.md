@@ -148,11 +148,11 @@ At 1,280 materials:
 
 | Operation | Indexed method | Exhaustive reference | Result |
 |---|---:|---:|---|
-| Unordered candidate discovery | 363–540 µs | 2,190–2,254 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
-| Directed candidate discovery | 302–312 µs | 2,505–2,647 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
-| Incremental material-bounds preparation | 69–85 µs | Eager restoration: 710–777 µs | Exact bounds parity |
+| Unordered candidate discovery | 275–406 µs | 1,270–1,364 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
+| Directed candidate discovery | 220–233 µs | 1,395–1,502 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
+| Incremental material-bounds preparation | 32–34 µs | Eager restoration: 353–363 µs | Exact bounds parity |
 
-At 5,120 materials, one-shot spatial discovery took 4.7–6.4 ms unordered and 1.9–2.9 ms directed, versus approximately 35–36 ms for exhaustive discovery. Candidate reduction was about 99.86%.
+At 5,120 materials, one-shot spatial discovery took 3.2–4.3 ms unordered and 1.3–2.2 ms directed, versus approximately 19.9–20.0 ms unordered and 20.7–21.7 ms directed for exhaustive discovery. Candidate reduction was about 99.86%.
 
 The estimated snapshot/index/bounds vector payload was about 210–220 KB at 1,280 materials and 752–758 KB at 5,120 materials. This estimate excludes BTreeMap node overhead and the live field.
 
@@ -182,7 +182,7 @@ The AABB-tree implementation failed unordered-pair parity in addition to being s
 
 #### Full-universe SpatialPairCursor
 
-The cursor checked every possible material pair rather than narrowing work to nearby spatial candidates. At 1,280 materials this meant 818,560 unordered pair checks or 1,637,120 directed checks. It took roughly 43–50 ms, compared with roughly 0.36–0.54 ms for the one-shot unordered spatial window and 0.30–0.31 ms for directed discovery.
+The cursor checked every possible material pair rather than narrowing work to nearby spatial candidates. At 1,280 materials this meant 818,560 unordered pair checks or 1,637,120 directed checks. It took roughly 33–38 ms, compared with roughly 0.28–0.41 ms for the one-shot unordered spatial window and 0.22–0.23 ms for directed discovery.
 
 **Decision:** reject as a production discovery strategy. It remains only as a test negative control and is compiled only in test builds.
 
@@ -190,7 +190,7 @@ The cursor checked every possible material pair rather than narrowing work to ne
 
 The current spatial_pair_window implementation builds the full candidate collection before applying its start/limit arguments. Repeated 128-pair pages therefore rebuild the same candidate set.
 
-At 1,280 materials, repeated paging took 2.0–7.9 ms unordered and 3.0–8.9 ms directed, around or slower than exhaustive discovery. At 5,120 materials, the repeated-page cost reached 0.64–0.80 seconds.
+At 1,280 materials, repeated paging took 1.4–5.9 ms unordered and 1.9–5.9 ms directed, around or slower than exhaustive discovery. At 5,120 materials, repeated-page cost was 0.47–0.61 seconds unordered and 0.35–0.58 seconds directed.
 
 **Decision:** reject repeated full-window rebuilding as a bounded-work strategy. A future implementation must advance through cell queries incrementally and must demonstrate bounded work per page without reconstructing the complete candidate set.
 
@@ -205,4 +205,4 @@ At 1,280 materials, repeated paging took 2.0–7.9 ms unordered and 3.0–8.9 ms
 
 ### Validation record
 
-The exact #335 head before this scope cleanup passed both CI jobs: formatting, repository architecture checks, default environmental chemistry baseline, focused energy/chemistry/transaction/geometry/organism tests, full Rust suite, Clippy, production-isolation verification, and the isolated release benchmark. The full suite reported 988 passed, 0 failed, and 1 intentionally ignored (the opt-in benchmark, run separately in the dedicated job). Re-run exact-head CI after this cleanup before treating the revised PR as merge-ready.
+The cleaned #335 head passed both CI jobs in [workflow run #42824408058](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/42824408058): formatting, repository architecture checks, default environmental chemistry baseline, focused energy/chemistry/transaction/geometry/organism tests, full Rust suite (**984 passed, 0 failed, 1 intentionally ignored**), Clippy, production-isolation verification, and the isolated release benchmark (**1 passed, 0 failed**).
