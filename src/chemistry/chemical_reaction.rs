@@ -587,6 +587,7 @@ pub(crate) fn accumulate_environmental(
         chemistry_library,
         tick,
         remaining_discovery_work,
+        None,
         &mut diagnostics,
     )
 }
@@ -597,6 +598,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     chemistry_library: &mut ChemistryLibrary,
     tick: u64,
     remaining_discovery_work: &mut usize,
+    local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
     diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
     // Environmental progress belongs to the field, not to the organism
@@ -843,11 +845,35 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
+        // The field is sampled at both actual bond endpoints. Its normalized
+        // spectral match increases local reaction accumulation; it is not
+        // converted into energy or credited to either energy reservoir.
+        let local_resonance_similarity = local_resonance_world
+            .and_then(|world| {
+                let point_a = crate::contact::endpoint_world_point(
+                    connection.endpoint_a,
+                    &hypothetical.units[unit_a],
+                    &environment.catalog,
+                )?;
+                let point_b = crate::contact::endpoint_world_point(
+                    connection.endpoint_b,
+                    &hypothetical.units[unit_b],
+                    &environment.catalog,
+                )?;
+                world.reaction_similarity(
+                    instance.environmental_identity,
+                    &[(point_a.x, point_a.y), (point_b.x, point_b.y)],
+                    reaction_frequency_cycles_per_day,
+                    &environment.catalog,
+                    tick,
+                )
+            })
+            .unwrap_or(0.0);
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
         diagnostics.max_accumulated_reaction = diagnostics.max_accumulated_reaction.max(previous);
         let Some(next) = crate::chemistry::accumulate_reaction(
             previous,
-            potential,
+            potential * (1.0 + local_resonance_similarity),
             contact_factor,
             engagement,
             crate::chemistry::CHEMICAL_DISSIPATION,
@@ -916,6 +942,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 activation_signal,
                 disruption_cost,
                 reaction_frequency_cycles_per_day,
+                local_resonance_similarity,
                 accumulation_key: key,
                 accumulated_reaction: next,
             });
