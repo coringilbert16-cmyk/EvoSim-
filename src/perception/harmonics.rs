@@ -2553,9 +2553,9 @@ mod tests {
                 sample
                     .boundary
                     .normal_at((sample.receiver_x, sample.receiver_y))
-                    .is_some()
+                    .is_some_and(|normal| normal.0 < -0.5)
             })
-            .expect("at least one exposed boundary sample should exist");
+            .expect("an exposed boundary facing the source should exist");
         let point = (reception.receiver_x, reception.receiver_y);
 
         let first =
