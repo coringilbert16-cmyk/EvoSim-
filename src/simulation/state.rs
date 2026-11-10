@@ -707,8 +707,9 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.local_resonance_sample_attempts = self
             .local_resonance_sample_attempts
             .saturating_add(tick.local_resonance_sample_attempts);
-        self.local_resonance_samples =
-            self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
+        self.local_resonance_samples = self
+            .local_resonance_samples
+            .saturating_add(tick.local_resonance_samples);
         self.local_resonance_unavailable = self
             .local_resonance_unavailable
             .saturating_add(tick.local_resonance_unavailable);
