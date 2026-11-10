@@ -2640,6 +2640,16 @@ mod tests {
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
                 .expect("the continuous query should be deterministic");
         assert_eq!(first, repeated);
+        let paired = material_resonance_spectra_at_boundary_points(
+            &materials,
+            &[0],
+            1,
+            &[point, point],
+            &catalog,
+            0,
+        )
+        .expect("paired endpoint sampling should accept valid boundary points");
+        assert_eq!(paired, vec![first.clone(), first.clone()]);
         assert!(
             !first.components.is_empty(),
             "visible reaction geometry should receive the source field"
