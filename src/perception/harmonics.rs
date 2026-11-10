@@ -352,11 +352,31 @@ pub(crate) fn material_resonance_density_on_receiver(
             }
             let key = (cell_x_f as i64, cell_y_f as i64, source_index);
             let samples = source_cells.entry(key).or_default();
-            let extent_scale = reception.projected_extent.sqrt();
+            let dx = reception.source_x - reception.receiver_x;
+            let dy = reception.source_y - reception.receiver_y;
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return None;
+            }
+            let directional_projection = ((reception.receiver_normal_x * dx
+                + reception.receiver_normal_y * dy)
+                / distance)
+                .max(0.0);
+            if !directional_projection.is_finite() {
+                return None;
+            }
+            if directional_projection <= f64::EPSILON {
+                continue;
+            }
+            let local_scale =
+                directional_projection.sqrt() / reception.projected_extent.sqrt();
+            if !local_scale.is_finite() || local_scale < 0.0 {
+                return None;
+            }
             for component in &reception.incident_spectrum.components {
                 let local = ToneComponent {
                     frequency_cycles_per_day: component.frequency_cycles_per_day,
-                    amplitude: component.amplitude / extent_scale,
+                    amplitude: component.amplitude * local_scale,
                     phase_radians: component.phase_radians,
                 };
                 if !local.frequency_cycles_per_day.is_finite()
@@ -2627,6 +2647,80 @@ mod tests {
             blocked.components.is_empty(),
             "a source hidden behind a physical blocker must not contribute at this point"
         );
+    }
+
+    #[test]
+    fn resonance_density_heatmap_matches_continuous_midpoint_sample() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let materials = vec![make_material(0.0), make_material(8.0)];
+        let receptions = material_aura_receptions_with_occluders(
+            &materials[0],
+            &materials[1],
+            &materials,
+            &catalog,
+            0,
+        )
+        .expect("valid physical arrangement should produce boundary receptions");
+        let reception = receptions
+            .iter()
+            .find(|sample| sample.receiver_normal_x < -0.5)
+            .expect("the receiver should have a visible boundary facing the source");
+        let point = (reception.receiver_x, reception.receiver_y);
+        let continuous = material_resonance_spectrum_at_boundary_point(
+            &materials,
+            &[0],
+            1,
+            point,
+            &catalog,
+            0,
+        )
+        .expect("the exact midpoint should be a valid continuous sample");
+        let heatmap = material_resonance_density_on_receiver(
+            &materials,
+            &[0],
+            1,
+            &catalog,
+            0,
+            0.01,
+        )
+        .expect("valid receiver geometry should produce heat-map samples");
+        let cell_x = (point.0 / 0.01).floor() as i64;
+        let cell_y = (point.1 / 0.01).floor() as i64;
+        let cell = heatmap
+            .iter()
+            .find(|sample| sample.cell_x == cell_x && sample.cell_y == cell_y)
+            .expect("the selected boundary midpoint should have a heat-map cell");
+        assert_eq!(cell.components.len(), continuous.components.len());
+        for expected in &continuous.components {
+            let actual = cell
+                .components
+                .iter()
+                .find(|component| {
+                    (component.frequency_cycles_per_day - expected.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                })
+                .expect("heat-map and continuous samples should preserve each frequency");
+            assert!(
+                (actual.amplitude - expected.amplitude).abs() <= 1e-10,
+                "heat-map amplitude should match the continuous midpoint sample"
+            );
+            assert!(
+                (actual.phase_radians - expected.phase_radians).abs() <= 1e-10,
+                "heat-map phase should match the continuous midpoint sample"
+            );
+        }
     }
 
     #[test]
