@@ -29,4 +29,4 @@ Single-resource unbonded materials are excluded from compound-family recurrence 
 
 Lifetimes of molecules still active at the final record are right-censored. Resource amounts are summed once per created identity, so the same conserved constituents may be counted again in later lineage generations.
 
-Recurrence and persistence are evidence to investigate, not proof of self-maintaining organization or life. Compare independent seeds before drawing conclusions.
+Recurrence and persistence are evidence to investigate, not proof of self-maintaining organization or life. Compare independent seeds before drawing conclusions. The CI report runs the same analyzer on two independent standard-seed experiments to expose seed-sensitive patterns.
