@@ -292,6 +292,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Recurrent families (2+ identities): {org['recurrent_families']}",
         f"- Families still active at end: {org['families_active_at_end']}",
         f"- Multi-resource or bonded identities: {org['molecules_with_multi_resource_or_bonded_structure']}",
+        f"- Independent single-resource identities excluded from family recurrence: {org['single_resource_unbonded_identities_excluded']}",
         f"- Mean observed lifetime: {persistence['mean_observed_lifetime_ticks']} ticks",
         f"- Median observed lifetime: {persistence['median_observed_lifetime_ticks']} ticks",
         f"- Lifecycle validation errors: {len(report['scope']['lifecycle_validation_errors'])}",
