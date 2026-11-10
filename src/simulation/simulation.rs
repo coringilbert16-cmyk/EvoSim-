@@ -265,6 +265,7 @@ fn environmental_break_local_resonance_sample(
         "material_identity": operation.source_material.environmental_identity,
         "bond_index": operation.bond_index,
         "reaction_frequency_cycles_per_day": operation.reaction_frequency_cycles_per_day,
+        "local_resonance_similarity": operation.local_resonance_similarity,
         "activation_signal": operation.activation_signal,
         "disruption_cost": operation.disruption_cost,
         "stored_bond_energy": operation.bond.bond_energy,
@@ -1071,6 +1072,10 @@ impl Simulation {
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+        // Build the material-origin field once per tick and share it across
+        // bounded environmental BREAK candidates.
+        let local_resonance_world =
+            crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self);
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
@@ -1078,6 +1083,7 @@ impl Simulation {
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_break_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
