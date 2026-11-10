@@ -10,13 +10,8 @@ on:
         required: false
         default: false
         type: boolean
-      run_extended_focused_suites:
-        description: "Run the broader chemistry, energy, ownership, geometry, and organism focused suites."
-        required: false
-        default: false
-        type: boolean
   push:
-    branches: [main, 'chemistry/local-resonance-reaction-coupling']
+    branches: [main]
   pull_request:
     # Also validate stacked fix branches against their parent fix branch.
     branches: [main, integration/unified-source-and-catalogue, 'fix/**', resonance-time-phase-2026-10-31, resonance-driven-response-2026-10-31, resonance-attraction-repulsion-2026-10-31, resonance-energy-integration-2026-10-31, chemistry-compound-base-matrix-2026-10-29, chemistry-compound-compound-matrix-2026-10-29, chemistry-compound-compound-transaction-2026-10-29, chemistry-molecular-characterization-2026-10-29, chemistry-multimolecule-break-roundtrip-2026-10-29, chemistry-heterogeneous-molecule-interface-2026-10-29, chemistry-heterogeneous-reaction-interface-2026-10-29, chemistry-component-contact-round-robin-2026-10-29, chemistry-molecular-layout-stability-2026-10-29, 'optimization/**']
@@ -45,10 +40,6 @@ jobs:
       - name: Test offline chemistry analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
-      - name: Resonance field (focused tests)
-        if: success()
-        timeout-minutes: 5
-        run: cargo test --locked harmonics::tests::
       - name: Run default environmental chemistry baseline
         if: success()
         timeout-minutes: 3
@@ -108,7 +99,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -141,7 +132,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Chemistry and reactions (focused tests)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -185,7 +176,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Transactions and ownership (focused tests)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -238,7 +229,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Geometry and persistence (focused tests)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -261,7 +252,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Organism and seed acceptance (focused tests)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
