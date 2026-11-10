@@ -589,8 +589,7 @@ mod tests {
                 .chemical_reaction_accumulation
                 .get(key)
                 .expect("both runs should retain the same reaction-accumulation keys");
-            let tolerance =
-                1e-12 * recorded_value.abs().max(unrecorded_value.abs()).max(1.0);
+            let tolerance = 1e-12 * recorded_value.abs().max(unrecorded_value.abs()).max(1.0);
             assert!(
                 (recorded_value - unrecorded_value).abs() <= tolerance,
                 "history recording must not materially change reaction accumulation for {key}: recorded={recorded_value}, unrecorded={unrecorded_value}"
