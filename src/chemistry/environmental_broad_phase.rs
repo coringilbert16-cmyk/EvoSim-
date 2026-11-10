@@ -3395,8 +3395,7 @@ mod tests {
                     parity_ok &= cursor_pairs == expected.len();
 
                     let start = Instant::now();
-                    let expected_directed =
-                        exhaustive_directed(&snapshot, &field, &bounds, 2.0);
+                    let expected_directed = exhaustive_directed(&snapshot, &field, &bounds, 2.0);
                     directed_exhaustive_times.push(start.elapsed().as_micros());
 
                     let start = Instant::now();
@@ -3441,16 +3440,10 @@ mod tests {
                     let mut directed_cursor_pairs = 0usize;
                     let mut run_directed_cursor_checks = 0u64;
                     loop {
-                        let page = directed_cursor.next_page(
-                            &snapshot,
-                            &field,
-                            &bounds,
-                            2.0,
-                            4096,
-                            4096,
-                        );
-                        run_directed_cursor_checks = run_directed_cursor_checks
-                            .saturating_add(page.visited_pair_checks);
+                        let page =
+                            directed_cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        run_directed_cursor_checks =
+                            run_directed_cursor_checks.saturating_add(page.visited_pair_checks);
                         directed_cursor_pairs += page.pairs.len();
                         if page.complete {
                             break;
