@@ -246,6 +246,7 @@ pub(crate) struct MaterialResonanceDensitySample {
 #[allow(dead_code)] // Diagnostic field sampler; reaction integration follows energy-provenance validation.
 pub(crate) fn material_resonance_density_on_receiver(
     materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
     receiver_index: usize,
     catalog: &[crate::resources::BaseResource],
     tick: u64,
@@ -255,6 +256,12 @@ pub(crate) fn material_resonance_density_on_receiver(
         return None;
     }
     let receiver = materials.get(receiver_index)?;
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices.iter().any(|index| {
+        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
+    }) {
+        return None;
+    }
 
     // First average repeated boundary patches from each source within a map
     // cell. This prevents a finely segmented receiver boundary from counting
@@ -264,10 +271,8 @@ pub(crate) fn material_resonance_density_on_receiver(
         Vec<(ToneComponent, usize)>,
     >::new();
 
-    for (source_index, source) in materials.iter().enumerate() {
-        if source_index == receiver_index {
-            continue;
-        }
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
         let receptions = material_aura_receptions_with_occluders(
             source, receiver, materials, catalog, tick,
         )?;
@@ -2382,7 +2387,7 @@ mod tests {
             .expect("carbon should have a valid realized physical shape")
         };
         let materials = vec![make_material(0.0), make_material(4.0), make_material(8.0)];
-        let density = material_resonance_density_on_receiver(&materials, 1, &catalog, 0, 1.0)
+        let density = material_resonance_density_on_receiver(&materials, &[0, 2], 1, &catalog, 0, 1.0)
             .expect("valid realized materials should produce a local density sample");
 
         assert!(!density.is_empty());
@@ -2417,9 +2422,9 @@ mod tests {
             &catalog,
         )
         .expect("carbon should have a valid realized physical shape");
-        assert!(material_resonance_density_on_receiver(&[material.clone()], 0, &catalog, 0, 0.0)
+        assert!(material_resonance_density_on_receiver(&[material.clone()], &[], 0, &catalog, 0, 0.0)
             .is_none());
-        assert!(material_resonance_density_on_receiver(&[material], 1, &catalog, 0, 1.0)
+        assert!(material_resonance_density_on_receiver(&[material], &[], 1, &catalog, 0, 1.0)
             .is_none());
     }
 
