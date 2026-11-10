@@ -762,6 +762,69 @@ fn body_from_owner_relative_material(
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
 type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>);
 
+/// Tick-local material-origin resonance view shared by environmental reaction
+/// candidates. Build the physical world inventory once, then query each bond
+/// against the same emitters and occluders.
+pub(crate) struct LocalResonanceWorldSnapshot {
+    bodies: Vec<PhysicalMaterial>,
+    resonant_indices: Vec<usize>,
+}
+
+impl LocalResonanceWorldSnapshot {
+    pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
+        let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
+        Some(Self { bodies, resonant_indices })
+    }
+
+    /// Return the mean endpoint spectral match to a reaction's natural
+    /// frequency. This is a dimensionless activation influence, not energy.
+    pub(crate) fn reaction_similarity(
+        &self,
+        receiver_identity: u64,
+        points: &[(f64, f64)],
+        reaction_frequency_cycles_per_day: f64,
+        catalog: &[BaseResource],
+        tick: u64,
+    ) -> Option<f64> {
+        if receiver_identity == 0
+            || !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+            || points.is_empty()
+        {
+            return None;
+        }
+        let mut matches = self.bodies.iter().enumerate()
+            .filter(|(_, body)| body.environmental_identity == receiver_identity)
+            .map(|(index, _)| index);
+        let receiver_index = matches.next()?;
+        if matches.next().is_some() || !self.resonant_indices.contains(&receiver_index) {
+            return None;
+        }
+        let source_indices: Vec<_> = self.resonant_indices.iter().copied()
+            .filter(|index| *index != receiver_index)
+            .collect();
+        let spectra = crate::harmonics::material_resonance_spectra_at_boundary_points(
+            &self.bodies,
+            &source_indices,
+            receiver_index,
+            points,
+            catalog,
+            tick,
+        )?;
+        let target = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_cycles_per_day: reaction_frequency_cycles_per_day,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let similarity = spectra.iter()
+            .map(|spectrum| crate::harmonics::spectral_similarity(spectrum, &target))
+            .sum::<f64>() / spectra.len() as f64;
+        (similarity.is_finite()).then_some(similarity.clamp(0.0, 1.0))
+    }
+}
+
 fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,
 ) -> Option<PairPotentialWorldMaterials> {
