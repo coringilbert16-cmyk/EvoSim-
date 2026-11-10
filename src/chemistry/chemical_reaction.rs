@@ -874,9 +874,11 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         // The field is sampled at both actual bond endpoints. Its normalized
         // spectral match increases local reaction accumulation; it is not
         // converted into energy or credited to either energy reservoir.
-        let local_resonance_similarity = if Some(candidate_index) == local_resonance_candidate_index {
-            diagnostics.local_resonance_sample_attempts =
-                diagnostics.local_resonance_sample_attempts.saturating_add(1);
+        let local_resonance_similarity = if Some(candidate_index) == local_resonance_candidate_index
+        {
+            diagnostics.local_resonance_sample_attempts = diagnostics
+                .local_resonance_sample_attempts
+                .saturating_add(1);
             let sample_started = std::time::Instant::now();
             let sampled_similarity = local_resonance_world.and_then(|world| {
                 let point_a = crate::contact::endpoint_world_point(
