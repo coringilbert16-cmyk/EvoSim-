@@ -1540,9 +1540,8 @@ fn material_aura_receptions_with_geometry(
 }
 
 /// Evaluate the frequency-resolved incident field at one or more exact points
-/// on a receiver's currently exposed physical boundary. Receptions are built
-/// once per source and then evaluated at every requested point, keeping paired
-/// reaction-endpoint sampling from rebuilding the same geometry twice.
+/// in the receiver's local environment. Chemistry-scale reception is
+/// unoccluded and independent of receiver boundary geometry.
 pub(crate) fn material_resonance_spectra_at_boundary_points(
     materials: &[crate::physical_material::PhysicalMaterial],
     source_indices: &[usize],
@@ -2769,7 +2768,7 @@ mod tests {
     }
 
     #[test]
-    fn continuous_resonance_query_is_grid_free_and_respects_visible_boundary_geometry() {
+    fn chemistry_scale_resonance_query_is_grid_free_and_unoccluded() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
             crate::physical_material::PhysicalMaterial::realized(
@@ -2807,7 +2806,7 @@ mod tests {
 
         let first =
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
-                .expect("valid exposed reaction point should be queryable");
+                .expect("a finite reaction endpoint should be queryable");
         let repeated =
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
                 .expect("the continuous query should be deterministic");
@@ -2820,11 +2819,11 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("paired endpoint sampling should accept valid boundary points");
+        .expect("paired endpoint sampling should accept finite reaction points");
         assert_eq!(paired, vec![first.clone(), first.clone()]);
         assert!(
             !first.components.is_empty(),
-            "visible reaction geometry should receive the source field"
+            "the local resonance field should reach the reaction endpoint"
         );
 
         let off_boundary = (point.0 + 0.25, point.1 + 0.25);
