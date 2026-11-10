@@ -40,7 +40,7 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         records = [
             lifecycle("created", 1, 0, molecule([["Carbon", 1.0], ["Oxygen", 1.0]])),
             lifecycle("destroyed", 1, 10),
-            lifecycle("created", 2, 5, molecule([["Oxygen", 1.0], ["Carbon", 1.0]])),
+            lifecycle("created", 2, 5, molecule([["Carbon", 1.0], ["Oxygen", 1.0]])),
             {"event": "environmental_chemistry_tick", "tick": 20},
         ]
         report = analyzer.analyze(records)
@@ -71,7 +71,7 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
               "endpoint_a": {"angle": 0.1}}],
         )
         second = molecule(
-            [["Sulfur", 1.0], ["Hydrogen", 1.0]],
+            [["Hydrogen", 1.0], ["Sulfur", 1.0]],
             [{"part_a": 1, "part_b": 0, "bond_energy": 0.25,
               "endpoint_a": {"angle": 2.4}}],
         )
