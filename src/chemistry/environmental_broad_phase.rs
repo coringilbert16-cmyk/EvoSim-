@@ -3158,12 +3158,12 @@ mod tests {
             count: usize,
             clustered: bool,
         ) -> (ActiveMaterialField, Vec<Option<MaterialSpatialBounds>>) {
-            let mut field = ActiveMaterialField::new(1000.0, 1000.0, 10.0);
+            let mut field = ActiveMaterialField::new(250.0, 250.0, 10.0);
             for index in 0..count {
                 let cell_index = if clustered {
                     (index / 4) % field.cells.len()
                 } else {
-                    (index * 7919) % field.cells.len()
+                    (index * 251) % field.cells.len()
                 };
                 field.cells[cell_index]
                     .physical_materials
@@ -3175,8 +3175,8 @@ mod tests {
                 .iter()
                 .map(|record| {
                     let cell = record.locator.cell_index;
-                    let x = (cell % 100) as f64 * 10.0 + 5.0;
-                    let y = (cell / 100) as f64 * 10.0 + 5.0;
+                    let x = (cell % 25) as f64 * 10.0 + 5.0;
+                    let y = (cell / 25) as f64 * 10.0 + 5.0;
                     Some(MaterialSpatialBounds {
                         min_x: x - 1.0,
                         max_x: x + 1.0,
@@ -3252,14 +3252,14 @@ mod tests {
         }
 
         println!(
-            "count,layout,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
+            "count,layout,field_cells,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
         );
         for count in [128usize, 320, 640, 1280, 2560, 5120] {
             for clustered in [false, true] {
                 let layout = if clustered {
                     "clustered_4_per_cell"
                 } else {
-                    "uniform_sparse"
+                    "uniform_occupancy"
                 };
                 let (field, _) = fixture(count, clustered);
                 let mut snapshot_times = Vec::new();
@@ -3283,8 +3283,8 @@ mod tests {
                         .iter()
                         .map(|record| {
                             let cell = record.locator.cell_index;
-                            let x = (cell % 100) as f64 * 10.0 + 5.0;
-                            let y = (cell / 100) as f64 * 10.0 + 5.0;
+                            let x = (cell % 25) as f64 * 10.0 + 5.0;
+                            let y = (cell / 25) as f64 * 10.0 + 5.0;
                             Some(MaterialSpatialBounds {
                                 min_x: x - 1.0,
                                 max_x: x + 1.0,
@@ -3345,7 +3345,7 @@ mod tests {
                     (1.0 - spatial_count as f64 / all_pairs as f64) * 100.0
                 };
                 println!(
-                    "{count},{layout},{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
+                    "{count},{layout},625,{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
                     median(&mut bounds_times),
                     median(&mut exhaustive_times),
