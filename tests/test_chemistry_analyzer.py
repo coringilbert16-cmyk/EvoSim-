@@ -129,9 +129,11 @@ class ChemistryAnalyzerTests(unittest.TestCase):
              "tick": 6, "molecule_id": 301},
             {"event": "molecular_lifecycle", "action": "destroyed",
              "tick": 7, "molecule_id": 999},
+            {"event": "molecular_lifecycle", "action": "created",
+             "tick": 8, "molecule_id": 302, "parent_ids": [999]},
         ])
         errors = analyze(records)["molecular_history"]["validation_errors"]
-        self.assertEqual(len(errors), 2)
+        self.assertEqual(len(errors), 3)
 
 
 if __name__ == "__main__":
