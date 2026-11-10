@@ -23,20 +23,6 @@ jobs:
       - name: Check formatting
         timeout-minutes: 5
         run: cargo fmt --all -- --check
-      - name: Export rustfmt output for parity test sources
-        if: always()
-        run: |
-          cargo fmt --all
-          mkdir -p /tmp/pr335-rustfmt
-          cp src/main.rs /tmp/pr335-rustfmt/main.rs
-          cp src/tests/environmental_discovery_parity_tests.rs /tmp/pr335-rustfmt/environmental_discovery_parity_tests.rs
-      - name: Upload rustfmt output
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr335-rustfmt-output
-          path: /tmp/pr335-rustfmt/
-          retention-days: 2
       # Exercise the independent world inventory on live source, reaction, and tick paths
       # before the full suite, whose historical runtime can exceed the job timeout.
       - name: Repository architecture checks
