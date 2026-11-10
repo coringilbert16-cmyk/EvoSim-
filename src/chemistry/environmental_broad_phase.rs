@@ -3284,8 +3284,6 @@ mod tests {
                 + slot_index_bytes
                 + bounds.len() * size_of::<Option<MaterialSpatialBounds>>()
         }
-
-
         println!(
             "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_paged128_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_paged128_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
         );
