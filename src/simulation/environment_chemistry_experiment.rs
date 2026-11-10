@@ -369,6 +369,10 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         true,
     );
 
+    // Establish stable IDs for the complete tick-zero inventory before any
+    // diagnostics or reaction can observe the environment.
+    simulation.environment.field.assign_missing_material_identities();
+
     // The default constructor's organism is deliberately removed. Rebase the
     // ledger on the actual environment-only tick-zero inventory so no organism
     // energy or structure can act as a hidden environmental source.
