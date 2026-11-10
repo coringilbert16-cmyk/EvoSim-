@@ -991,6 +991,36 @@ pub(crate) fn world_pair_potential_inventory_components(
     )
 }
 
+/// Build the diagnostic local resonance-density heat map for one world body.
+///
+/// The authoritative world-body inventory supplies all physical occluders,
+/// while its resonant-participant list prevents stored material from becoming
+/// an emitter before release. This is an observational sampler and is not
+/// called from the tick loop or reaction settlement.
+#[allow(dead_code)] // Diagnostic entry point; chemistry consumes the continuous field only after energy validation.
+pub(crate) fn world_material_resonance_density_on_body(
+    simulation: &Simulation,
+    receiver_body_index: usize,
+    cell_size: f64,
+) -> Option<Vec<crate::harmonics::MaterialResonanceDensitySample>> {
+    let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
+    if !resonant_indices.contains(&receiver_body_index) {
+        return None;
+    }
+    let source_indices: Vec<_> = resonant_indices
+        .into_iter()
+        .filter(|index| *index != receiver_body_index)
+        .collect();
+    crate::harmonics::material_resonance_density_on_receiver(
+        &bodies,
+        &source_indices,
+        receiver_body_index,
+        &simulation.environment.catalog,
+        simulation.tick,
+        cell_size,
+    )
+}
+
 /// Translate one already world-resolved physical body without changing its
 /// material identity or shape. Stored/attached bodies are included because
 /// their positions can alter the visibility of other resonant pairs.
