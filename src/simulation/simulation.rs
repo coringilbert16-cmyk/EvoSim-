@@ -1080,8 +1080,8 @@ impl Simulation {
         break_discovery.local_resonance_snapshot_build_nanoseconds =
             local_resonance_snapshot_started
                 .elapsed()
-            .as_nanos()
-            .min(u64::MAX as u128) as u64;
+                .as_nanos()
+                .min(u64::MAX as u128) as u64;
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
