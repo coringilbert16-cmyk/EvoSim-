@@ -3134,4 +3134,146 @@ mod tests {
             }
         }
     }
+
+    /// Opt-in release benchmark for the isolated discovery update. It is
+    /// deliberately ignored in ordinary CI: run with
+    /// `cargo test --release environmental_discovery_scaling_benchmark -- --ignored --nocapture`.
+    ///
+    /// Fixtures are deterministic and compare the complete spatial candidate
+    /// set against an exhaustive pair oracle. Timings include snapshot creation
+    /// and synthetic conservative-bounds preparation as separately reported
+    /// phases; no production reaction path is called.
+    #[test]
+    #[ignore = "explicit isolated discovery benchmark"]
+    fn environmental_discovery_scaling_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        fn median(values: &mut [u128]) -> u128 {
+            values.sort_unstable();
+            values[values.len() / 2]
+        }
+
+        fn fixture(count: usize, clustered: bool) -> (ActiveMaterialField, Vec<Option<MaterialSpatialBounds>>) {
+            let mut field = ActiveMaterialField::new(1000.0, 1000.0, 10.0);
+            for index in 0..count {
+                let cell_index = if clustered {
+                    (index / 4) % field.cells.len()
+                } else {
+                    (index * 7919) % field.cells.len()
+                };
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(index as u64 + 1, "Carbon"));
+            }
+            let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+            let bounds = snapshot.materials.iter().map(|record| {
+                let cell = record.locator.cell_index;
+                let columns = 100usize;
+                let x = (cell % columns) as f64 * 10.0 + 5.0;
+                let y = (cell / columns) as f64 * 10.0 + 5.0;
+                Some(MaterialSpatialBounds {
+                    min_x: x - 1.0,
+                    max_x: x + 1.0,
+                    min_y: y - 1.0,
+                    max_y: y + 1.0,
+                })
+            }).collect();
+            (field, bounds)
+        }
+
+        fn exhaustive(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            field: &ActiveMaterialField,
+            bounds: &[Option<MaterialSpatialBounds>],
+            padding: f64,
+        ) -> std::collections::BTreeSet<(MaterialIdentity, MaterialIdentity)> {
+            let reached = bounds.iter().map(|bound| {
+                bound.and_then(|value| value.expanded(padding)).map(|value| {
+                    field.cells_intersecting_bounds(value.min_x, value.max_x, value.min_y, value.max_y)
+                }).unwrap_or_default()
+            }).collect::<Vec<_>>();
+            let mut pairs = std::collections::BTreeSet::new();
+            for left in 0..snapshot.materials.len() {
+                for right in left + 1..snapshot.materials.len() {
+                    let a = &snapshot.materials[left];
+                    let b = &snapshot.materials[right];
+                    if reached[left].contains(&b.locator.cell_index)
+                        || reached[right].contains(&a.locator.cell_index)
+                    {
+                        pairs.insert((a.identity, b.identity));
+                    }
+                }
+            }
+            pairs
+        }
+
+        println!("count,layout,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,cursor_pair_checks,parity");
+        for count in [128usize, 320, 640, 1280, 2560, 5120] {
+            for clustered in [false, true] {
+                let layout = if clustered { "clustered_4_per_cell" } else { "uniform_sparse" };
+                let (field, _) = fixture(count, clustered);
+                let mut snapshot_times = Vec::new();
+                let mut bounds_times = Vec::new();
+                let mut exhaustive_times = Vec::new();
+                let mut spatial_times = Vec::new();
+                let mut cursor_times = Vec::new();
+                let mut spatial_count = 0usize;
+                let mut cursor_checks = 0u64;
+                let mut parity_ok = true;
+                for _ in 0..7 {
+                    let start = Instant::now();
+                    let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+                    snapshot_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let bounds = snapshot.materials.iter().map(|record| {
+                        let cell = record.locator.cell_index;
+                        let x = (cell % 100) as f64 * 10.0 + 5.0;
+                        let y = (cell / 100) as f64 * 10.0 + 5.0;
+                        Some(MaterialSpatialBounds { min_x: x - 1.0, max_x: x + 1.0, min_y: y - 1.0, max_y: y + 1.0 })
+                    }).collect::<Vec<_>>();
+                    bounds_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let expected = exhaustive(&snapshot, &field, &bounds, 2.0);
+                    exhaustive_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let (pairs, coverage) = snapshot.spatial_pair_window(
+                        &field, &bounds, 2.0, 0, usize::MAX, PairOrientation::Unordered,
+                    );
+                    spatial_times.push(start.elapsed().as_micros());
+                    let actual = pairs.iter().map(|pair| (pair.identity_left, pair.identity_right)).collect::<std::collections::BTreeSet<_>>();
+                    spatial_count = pairs.len();
+                    parity_ok &= actual == expected && coverage.known_pairs == expected.len() as u64;
+
+                    let start = Instant::now();
+                    let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Unordered);
+                    let mut cursor_pairs = 0usize;
+                    loop {
+                        let page = cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        cursor_checks = page.visited_pair_checks;
+                        cursor_pairs += page.pairs.len();
+                        if page.complete { break; }
+                    }
+                    cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= cursor_pairs == expected.len();
+                    black_box((&snapshot, &bounds, &actual));
+                }
+                let all_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+                println!(
+                    "{count},{layout},{},{},{},{},{},{all_pairs},{spatial_count},{cursor_checks},{}",
+                    median(&mut snapshot_times),
+                    median(&mut bounds_times),
+                    median(&mut exhaustive_times),
+                    median(&mut spatial_times),
+                    median(&mut cursor_times),
+                    if parity_ok { "PASS" } else { "FAIL" },
+                );
+                assert!(parity_ok, "spatial discovery diverged from exhaustive oracle at {count} ({layout})");
+            }
+        }
+    }
+
 }
