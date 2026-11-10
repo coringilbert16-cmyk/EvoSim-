@@ -1578,6 +1578,42 @@ pub(crate) fn material_resonance_emitters_at_tick(
 
 /// Evaluate prepared emitters at exact points around one receiver. Chemistry
 /// reception remains unoccluded and independent of receiver boundary geometry.
+/// Apply the receiver response directly to a scaled prepared emitter.
+///
+/// The scaled incident spectrum has the same component ordering as the emitted
+/// spectrum, so it is unnecessary to allocate an intermediate ToneSpectrum
+/// merely to multiply every amplitude before applying the response.
+fn material_response_spectrum_from_scaled_emitter(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    emitted: &ToneSpectrum,
+    scale: f64,
+) -> Option<ToneSpectrum> {
+    if !scale.is_finite() || scale <= f64::EPSILON {
+        return None;
+    }
+    let incoming_energy = spectrum_energy(emitted)? * scale * scale;
+    if !incoming_energy.is_finite() {
+        return None;
+    }
+    let mut transformed = ToneSpectrum::empty();
+    for component in &emitted.components {
+        if component.amplitude <= f64::EPSILON {
+            continue;
+        }
+        let response = material_response_to_drive(
+            properties,
+            baselines,
+            component.frequency_cycles_per_day,
+            component.amplitude * scale,
+            component.phase_radians,
+        );
+        transformed.merge_from(&response, 1.0);
+    }
+    bound_spectrum_energy(&mut transformed, incoming_energy);
+    Some(transformed)
+}
+
 pub(crate) fn material_resonance_spectra_from_emitters(
     emitters: &[MaterialResonanceEmitter],
     receiver: &crate::physical_material::PhysicalMaterial,
@@ -1610,11 +1646,12 @@ pub(crate) fn material_resonance_spectra_from_emitters(
             if !attenuation.is_finite() || attenuation <= f64::EPSILON {
                 continue;
             }
-            let mut incident = ToneSpectrum::empty();
-            add_spectrum(&mut incident, &emitter.emitted, attenuation);
-            incident.retain_strongest();
-            let mut received =
-                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            let mut received = material_response_spectrum_from_scaled_emitter(
+                receiver_properties,
+                baselines,
+                &emitter.emitted,
+                attenuation,
+            )?;
             received.retain_strongest();
             add_spectrum(&mut fields[point_index], &received, 1.0);
         }
