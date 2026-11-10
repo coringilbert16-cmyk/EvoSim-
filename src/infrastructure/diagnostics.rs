@@ -648,6 +648,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
 
     pub(crate) fn observe(&mut self, simulation: &Simulation) -> std::io::Result<()> {
         for event in &simulation.environmental_chemistry_events {
+            for lifecycle in &event.molecular_lifecycle {
+                self.write_event(json!(lifecycle))?;
+            }
             if event.reaction == "BREAK" {
                 if let Some(reason) = &event.failure_reason {
                     *self
