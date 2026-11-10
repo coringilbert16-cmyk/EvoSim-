@@ -10,7 +10,9 @@ assert SPEC and SPEC.loader
 SPEC.loader.exec_module(analyzer)
 
 
-def lifecycle(action, molecule_id, tick, molecule=None, parents=None, reaction="INITIAL"):
+def lifecycle(
+    action, molecule_id, tick, molecule=None, parents=None, reaction="INITIAL", reaction_id=None
+):
     return {
         "event": "molecular_lifecycle",
         "action": action,
@@ -18,6 +20,7 @@ def lifecycle(action, molecule_id, tick, molecule=None, parents=None, reaction="
         "tick": tick,
         "molecule": molecule or {},
         "parent_ids": parents or [],
+        "reaction_id": reaction_id or f"reaction-{molecule_id}",
         "reaction": reaction,
     }
 
@@ -63,6 +66,24 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         family = report["organization"]["top_families"][0]
         self.assertEqual(family["initial_seed_occurrences"], 2)
         self.assertEqual(family["reaction_created_occurrences"], 1)
+        self.assertFalse(family["recurrent_from_reactions"])
+        self.assertEqual(report["organization"]["recurrent_families"], 0)
+
+    def test_sibling_products_from_one_reaction_do_not_count_as_recurrence(self):
+        compound = molecule(
+            [["Carbon", 1.0], ["Oxygen", 1.0]],
+            [{"part_a": 0, "part_b": 1}],
+        )
+        records = [
+            lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
+            lifecycle("created", 2, 5, compound, [1], "COMBINE", "tick-5-reaction-0"),
+            lifecycle("created", 3, 5, compound, [1], "COMBINE", "tick-5-reaction-0"),
+            {"event": "environmental_chemistry_tick", "tick": 10},
+        ]
+        report = analyzer.analyze(records)
+        family = report["organization"]["top_families"][0]
+        self.assertEqual(family["reaction_created_occurrences"], 2)
+        self.assertEqual(family["reaction_created_reaction_events"], 1)
         self.assertFalse(family["recurrent_from_reactions"])
         self.assertEqual(report["organization"]["recurrent_families"], 0)
 
