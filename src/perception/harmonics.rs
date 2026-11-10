@@ -1566,102 +1566,38 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         return None;
     }
 
-    // Realize world geometry once for this field query, not once per source.
-    // This preserves the same physical shapes while avoiding repeated
-    // material-to-geometry conversion for every possible emitter.
-    let geometries: Vec<_> = materials
-        .iter()
-        .map(|material| {
-            if material.owner_relative_origin.is_some() {
-                return None;
-            }
-            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                material, catalog,
-            )
-        })
-        .collect::<Option<_>>()?;
-    let receiver_geometry = geometries.get(receiver_index)?;
+    // Chemistry-scale resonance is an unoccluded material-origin field.
+    // Atoms and molecules contribute directly; no body geometry, shadows,
+    // boundary visibility, or occluder search is needed at this stage.
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_properties = receiver.material.weighted_properties(catalog);
     let mut fields = vec![ToneSpectrum::empty(); points.len()];
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let source_geometry = geometries.get(source_index)?;
-        if source_geometry.parts.is_empty() {
-            return None;
-        }
-        let (source_x, source_y, _, _) = environmental_material_resonance(source, catalog, tick)?;
-
-        // Every straight segment from the source point to a sampled endpoint
-        // lies inside this axis-aligned rectangle. A body's bounds outside it
-        // cannot occlude any sampled path, so this is a conservative broad
-        // phase: exact visibility is still evaluated for every retained body.
-        let mut receiver_bodies = Vec::new();
-        receiver_bodies.push(receiver_geometry.clone());
-        for (candidate_index, geometry) in geometries.iter().enumerate() {
-            if candidate_index == source_index || candidate_index == receiver_index {
-                continue;
-            }
-            if !geometry_bounds_may_occlude_source_points((source_x, source_y), points, geometry) {
-                continue;
-            }
-            receiver_bodies.push(geometry.clone());
+        let (source_x, source_y, _, emitted) =
+            environmental_material_resonance(source, catalog, tick)?;
+        let source_mass_scale =
+            environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+        if source_mass_scale <= f64::EPSILON {
+            continue;
         }
 
-        let receptions = material_aura_receptions_with_geometry(
-            source,
-            receiver,
-            source_geometry,
-            &receiver_bodies,
-            catalog,
-            tick,
-        )?;
         for (point_index, point) in points.iter().enumerate() {
-            let mut matched = None;
-            for reception in &receptions {
-                if let Some(normal) = reception.boundary.normal_at(*point) {
-                    if matched.is_some() {
-                        // A corner shared by multiple exposed intervals has no
-                        // unique local normal; do not choose one arbitrarily.
-                        return None;
-                    }
-                    matched = Some((reception, normal));
-                }
-            }
-            let Some((reception, normal)) = matched else {
-                continue;
-            };
-
-            let dx = reception.source_x - point.0;
-            let dy = reception.source_y - point.1;
-            let distance = dx.hypot(dy);
-            let midpoint_distance = (reception.source_x - reception.receiver_x)
-                .hypot(reception.source_y - reception.receiver_y);
-            if !distance.is_finite()
-                || distance <= f64::EPSILON
-                || !midpoint_distance.is_finite()
-                || reception.projected_extent <= f64::EPSILON
-            {
+            let distance = (source_x - point.0).hypot(source_y - point.1);
+            if !distance.is_finite() {
                 return None;
             }
-            let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
-            if !directional_projection.is_finite() {
-                return None;
-            }
-            if directional_projection <= f64::EPSILON {
+            let attenuation = source_mass_scale / (1.0 + distance);
+            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
                 continue;
             }
-
-            // Remove interval midpoint attenuation and projected-boundary
-            // scaling, then recalculate both at the exact requested point.
-            let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
-                / ((1.0 + distance) * reception.projected_extent.sqrt());
-            if !local_scale.is_finite() || local_scale < 0.0 {
-                return None;
-            }
-            add_spectrum(
-                &mut fields[point_index],
-                &reception.incident_spectrum,
-                local_scale,
-            );
+            let mut incident = ToneSpectrum::empty();
+            add_spectrum(&mut incident, &emitted, attenuation);
+            incident.retain_strongest();
+            let mut received =
+                material_response_spectrum(receiver_properties, baselines, &incident)?;
+            received.retain_strongest();
+            add_spectrum(&mut fields[point_index], &received, 1.0);
         }
     }
     for field in &mut fields {
