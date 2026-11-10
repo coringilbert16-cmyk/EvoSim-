@@ -830,7 +830,7 @@ impl LocalResonanceWorldSnapshot {
         };
         let similarity = spectra
             .iter()
-            .map(|spectrum| crate::harmonics::spectral_similarity(spectrum, &target))
+            .map(|spectrum| crate::harmonics::spectral_activation_influence(spectrum, &target))
             .sum::<f64>()
             / spectra.len() as f64;
         (similarity.is_finite()).then_some(similarity.clamp(0.0, 1.0))
