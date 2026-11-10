@@ -1,0 +1,68 @@
+name: Chemical organization analysis
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/chemistry_organization_analyzer.py"
+      - "tests/test_chemistry_organization_analyzer.py"
+      - ".github/workflows/chemistry-organization.yml"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  organization-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test offline organization analyzer
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
+      - name: Run standard 60-second experiment (seed 42)
+        run: |
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics organization-seed-42.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze seed 42 organization
+        run: |
+          python3 tools/chemistry_organization_analyzer.py organization-seed-42.jsonl \
+            --json-out organization-seed-42.json \
+            --markdown-out organization-seed-42.md
+      - name: Run standard 60-second experiment (seed 43)
+        run: |
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 43 \
+            --diagnostics organization-seed-43.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze seed 43 organization
+        run: |
+          python3 tools/chemistry_organization_analyzer.py organization-seed-43.jsonl \
+            --json-out organization-seed-43.json \
+            --markdown-out organization-seed-43.md
+      - name: Upload organization analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chemical-organization-analysis
+          path: |
+            organization-seed-42.jsonl
+            organization-seed-42.json
+            organization-seed-42.md
+            organization-seed-43.jsonl
+            organization-seed-43.json
+            organization-seed-43.md
+          if-no-files-found: error
+          retention-days: 14
