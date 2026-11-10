@@ -146,9 +146,20 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         signature = _molecule_signature(data["molecule"])
         composition = _composition(data["molecule"])
         end_tick = destroyed.get(molecule_id, last_tick)
+        molecule_snapshot = data["molecule"] if isinstance(data["molecule"], dict) else {}
+        material_snapshot = molecule_snapshot.get("material")
+        material_snapshot = material_snapshot if isinstance(material_snapshot, dict) else {}
+        connections = molecule_snapshot.get("internal_connections")
+        internal_bonds = material_snapshot.get("internal_bonds")
+        is_compound = (
+            len(composition) > 1
+            or (isinstance(connections, list) and bool(connections))
+            or (isinstance(internal_bonds, list) and bool(internal_bonds))
+        )
         row = {
             "molecule_id": molecule_id,
             "family_signature": signature,
+            "is_compound": is_compound,
             "composition": composition,
             "created_tick": data["tick"],
             "destroyed_tick": destroyed.get(molecule_id),
@@ -158,7 +169,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "parent_ids": data["parents"],
         }
         molecule_rows[molecule_id] = row
-        family_members[signature].append(molecule_id)
+        if is_compound:
+            family_members[signature].append(molecule_id)
 
     family_by_id = {
         molecule_id: row["family_signature"] for molecule_id, row in molecule_rows.items()
@@ -194,14 +206,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     resource_units: Counter[str] = Counter()
     molecules_by_resource: Counter[str] = Counter()
-    compound_ids = []
-    for molecule_id, row in molecule_rows.items():
-        composition = row["composition"]
-        molecule = created[molecule_id]["molecule"]
-        connections = molecule.get("internal_connections", []) if isinstance(molecule, dict) else []
-        has_structure = len(composition) > 1 or (isinstance(connections, list) and bool(connections))
-        if has_structure:
-            compound_ids.append(molecule_id)
+    compound_ids = [
+        molecule_id for molecule_id, row in molecule_rows.items() if row["is_compound"]
+    ]
         for resource, amount in composition.items():
             resource_units[resource] += amount
             molecules_by_resource[resource] += 1
@@ -220,6 +227,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         "organization": {
             "unique_exact_structural_families": len(families),
             "recurrent_families": len(recurrent),
+            "single_resource_unbonded_identities_excluded": len(molecule_rows) - len(compound_ids),
             "families_active_at_end": len(active_families),
             "molecules_with_multi_resource_or_bonded_structure": len(compound_ids),
             "recurrence_fraction": len(recurrent) / len(families) if families else 0.0,
@@ -253,6 +261,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             ],
         },
         "interpretation_limits": [
+            "Structural-family recurrence excludes single-resource unbonded identities so abundant independent atoms/materials do not masquerade as organized compounds.",
             "A structural family is an exact normalized serialized composition and connection signature, not graph-isomorphism or proof of chemical equivalence.",
             "Active molecule lifetimes are right-censored at the final observed tick.",
             "Material totals count each created identity once, so lineage generations may count the same conserved constituents more than once.",
