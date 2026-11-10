@@ -1380,7 +1380,8 @@ pub(crate) fn material_aura_receptions_with_occluders(
                 magnitude,
             });
         }
-        Some(())    };
+        Some(())
+    };
 
     for interval in straight_intervals {
         let projected_extent =
