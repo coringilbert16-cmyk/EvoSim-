@@ -86,7 +86,7 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
               "endpoint_a": {"angle": 0.1}}],
         )
         second = molecule(
-            [["Hydrogen", 1.0], ["Sulfur", 1.0]],
+            [["Sulfur", 1.0], ["Hydrogen", 1.0]],
             [{"part_a": 1, "part_b": 0, "bond_energy": 0.25,
               "endpoint_a": {"angle": 2.4}}],
         )
