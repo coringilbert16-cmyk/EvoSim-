@@ -205,6 +205,7 @@ enum MaterialAuraBoundary {
 }
 
 impl MaterialAuraBoundary {
+    #[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
     fn normal_at(self, point: (f64, f64)) -> Option<(f64, f64)> {
         const TOLERANCE: f64 = 1e-7;
         match self {
@@ -356,9 +357,7 @@ pub(crate) fn material_resonance_density_on_receiver(
                 catalog,
                 tick,
             )?;
-            let Some(spectrum) = spectra.first() else {
-                return None;
-            };
+            let spectrum = spectra.first()?;
             let samples = source_cells.entry(key).or_default();
             for component in &spectrum.components {
                 if !component.frequency_cycles_per_day.is_finite()
@@ -1328,6 +1327,7 @@ pub(crate) fn material_aura_receptions_with_occluders(
 /// Conservative AABB broad phase for possible occluders between a point
 /// source and the sampled receiver endpoints. Every source-to-endpoint segment
 /// lies inside the envelope of the source and requested points.
+#[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
 fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
     points: &[(f64, f64)],
