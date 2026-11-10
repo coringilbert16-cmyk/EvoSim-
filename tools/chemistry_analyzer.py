@@ -130,6 +130,87 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
                 ) for key in keys
             }
 
+    # Optional persistent molecule lifecycle records are emitted by Layer B.
+    # Older Layer A logs remain valid and simply report no lifecycle coverage.
+    lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
+    created: dict[int, dict[str, Any]] = {}
+    destroyed: dict[int, int] = {}
+    lineage_edges: list[dict[str, Any]] = []
+    lifecycle_errors: list[str] = []
+    last_tick = max(
+        (int(r.get("tick", 0)) for r in records
+         if isinstance(r.get("tick"), (int, float))),
+        default=0,
+    )
+    for index, event in enumerate(lifecycle):
+        action = event.get("action")
+        molecule_id = event.get("molecule_id")
+        tick = event.get("tick")
+        if not isinstance(molecule_id, int) or isinstance(molecule_id, bool) or molecule_id <= 0:
+            lifecycle_errors.append(f"record {index}: molecule_id must be a positive integer")
+            continue
+        if not isinstance(tick, int) or isinstance(tick, bool) or tick < 0:
+            lifecycle_errors.append(f"record {index}: tick must be a nonnegative integer")
+            continue
+        if action == "created":
+            if molecule_id in created:
+                lifecycle_errors.append(f"record {index}: duplicate creation for molecule {molecule_id}")
+                continue
+            parents = event.get("parent_ids", [])
+            if not isinstance(parents, list) or any(
+                not isinstance(parent, int) or isinstance(parent, bool) or parent <= 0
+                for parent in parents
+            ):
+                lifecycle_errors.append(f"record {index}: parent_ids must contain positive integers")
+                continue
+            for parent in parents:
+                lineage_edges.append({
+                    "parent_id": parent,
+                    "child_id": molecule_id,
+                    "reaction_id": event.get("reaction_id"),
+                    "reaction": event.get("reaction"),
+                    "tick": tick,
+                })
+            created[molecule_id] = {
+                "created_tick": tick,
+                "parent_ids": parents,
+                "reaction_id": event.get("reaction_id"),
+                "reaction": event.get("reaction"),
+                "molecule": event.get("molecule", {}),
+            }
+        elif action == "destroyed":
+            if molecule_id not in created:
+                lifecycle_errors.append(f"record {index}: destruction before creation for molecule {molecule_id}")
+                continue
+            if molecule_id in destroyed:
+                lifecycle_errors.append(f"record {index}: duplicate destruction for molecule {molecule_id}")
+                continue
+            if tick < created[molecule_id]["created_tick"]:
+                lifecycle_errors.append(f"record {index}: destruction precedes creation for molecule {molecule_id}")
+                continue
+            destroyed[molecule_id] = tick
+        else:
+            lifecycle_errors.append(f"record {index}: unsupported lifecycle action {action!r}")
+
+    molecule_lifetimes = []
+    for molecule_id, data in sorted(created.items()):
+        end_tick = destroyed.get(molecule_id, last_tick)
+        molecule_lifetimes.append({
+            "molecule_id": molecule_id,
+            "created_tick": data["created_tick"],
+            "destroyed_tick": destroyed.get(molecule_id),
+            "observed_lifetime_ticks": end_tick - data["created_tick"],
+            "right_censored": molecule_id not in destroyed,
+            "parent_ids": data["parent_ids"],
+            "reaction_id": data["reaction_id"],
+            "reaction": data["reaction"],
+            "molecule": data["molecule"],
+        })
+    lifetime_values = [row["observed_lifetime_ticks"] for row in molecule_lifetimes]
+    reaction_pathways = Counter(
+        str(edge["reaction"]) for edge in lineage_edges if edge["reaction"] is not None
+    )
+
     energy_residuals = [
         _number((snap.get("energy") or {}).get("balance_residual"))
         for snap in snapshots
@@ -169,6 +250,20 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "outcome_counts": dict(sorted(outcome_counts.items())),
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "diagnostic_totals": reaction_totals,
+        },
+        "molecular_history": {
+            "lifecycle_record_count": len(lifecycle),
+            "molecule_creation_count": len(created),
+            "molecule_destruction_count": len(destroyed),
+            "active_at_end_count": sum(molecule_id not in destroyed for molecule_id in created),
+            "mean_observed_lifetime_ticks": (
+                sum(lifetime_values) / len(lifetime_values) if lifetime_values else None
+            ),
+            "maximum_observed_lifetime_ticks": max(lifetime_values, default=None),
+            "molecules": molecule_lifetimes,
+            "lineage_edges": lineage_edges,
+            "lineage_reaction_counts": dict(sorted(reaction_pathways.items())),
+            "validation_errors": lifecycle_errors,
         },
         "energy": {
             "first_balance_residual": energy_residuals[0] if energy_residuals else None,
@@ -223,10 +318,20 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Final snapshot residual: {report['energy']['last_balance_residual']}",
         f"- Maximum absolute snapshot residual: {report['energy']['maximum_absolute_snapshot_residual']}",
         "",
+        "## Molecular history",
+        "",
+        f"- Lifecycle records: {report['molecular_history']['lifecycle_record_count']}",
+        f"- Molecules created: {report['molecular_history']['molecule_creation_count']}",
+        f"- Molecules destroyed: {report['molecular_history']['molecule_destruction_count']}",
+        f"- Molecules active at end: {report['molecular_history']['active_at_end_count']}",
+        f"- Mean observed lifetime (ticks): {report['molecular_history']['mean_observed_lifetime_ticks']}",
+        f"- Lineage edges: {len(report['molecular_history']['lineage_edges'])}",
+        f"- Lifecycle validation errors: {len(report['molecular_history']['validation_errors'])}",
+        "",
         "## Interpretation limits",
         "",
-        "- This report describes recorded inventory and reaction diagnostics; it does not infer molecular lifetimes or reaction pathways.",
-        "- The current recorder does not provide a complete persistent molecular identity/lineage history.",
+        "- Lifetime values for molecules still active at the final record are right-censored observations, not completed lifetimes.",
+        "- Lineage is reported only when explicit molecular_lifecycle records are present; it is never inferred from cell indices or compositions.",
         "- Resource coverage is checked against all seven canonical resource names; none is excluded based on reaction likelihood.",
         "",
     ]
