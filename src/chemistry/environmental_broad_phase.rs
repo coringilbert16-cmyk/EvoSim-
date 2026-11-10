@@ -36,9 +36,13 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     /// Snapshot-owned indexes reused by all reaction projections.
     pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
+    /// O(1) mapping from a live cell/material slot to its snapshot record.
+    pub(crate) material_index_by_cell_slot: Vec<Vec<Option<usize>>>,
     pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
+    /// Raw live bond records, including invalid endpoint records.
+    pub(crate) bond_record_count: u64,
     pub(crate) unassigned_materials: u64,
 }
 
@@ -382,6 +386,12 @@ impl EnvironmentalMaterialSnapshot {
         for (cell_index, cell) in field.cells.iter().enumerate() {
             for (material_index, physical) in cell.physical_materials.iter().enumerate() {
                 snapshot.material_visits = snapshot.material_visits.saturating_add(1);
+                snapshot.bond_record_count = snapshot.bond_record_count.saturating_add(
+                    physical
+                        .internal_connections
+                        .as_ref()
+                        .map_or(0, |connections| connections.len() as u64),
+                );
                 let identity = MaterialIdentity(physical.environmental_identity);
                 if identity.0 == 0 {
                     snapshot.unassigned_materials = snapshot.unassigned_materials.saturating_add(1);
@@ -433,12 +443,24 @@ impl EnvironmentalMaterialSnapshot {
         snapshot
             .material_indices_by_cell
             .resize(field.cells.len(), Vec::new());
+        snapshot.material_index_by_cell_slot = field
+            .cells
+            .iter()
+            .map(|cell| vec![None; cell.physical_materials.len()])
+            .collect();
         for (material_index, material) in snapshot.materials.iter().enumerate() {
             if let Some(indices) = snapshot
                 .material_indices_by_cell
                 .get_mut(material.locator.cell_index)
             {
                 indices.push(material_index);
+            }
+            if let Some(slot) = snapshot
+                .material_index_by_cell_slot
+                .get_mut(material.locator.cell_index)
+                .and_then(|slots| slots.get_mut(material.locator.material_index))
+            {
+                *slot = Some(material_index);
             }
         }
         for bond in &snapshot.existing_bonds {
@@ -3106,5 +3128,4 @@ mod tests {
             }
         }
     }
-
 }
