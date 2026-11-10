@@ -3476,7 +3476,7 @@ mod tests {
                     (1.0 - directed_count as f64 / directed_pairs as f64) * 100.0
                 };
                 println!(
-                    "{count},{layout},625,{},{},{},{},{},{},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{},{},{},{},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{}",
+                    "{count},{layout},625,{},{},{},{},{},{},{},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{},{},{},{},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
                     median(&mut bounds_restore_times),
                     median(&mut bounds_cursor_times),
