@@ -102,6 +102,7 @@ mod environmental_combine;
 mod environmental_interaction;
 #[path = "chemistry/environmental_broad_phase.rs"]
 #[allow(dead_code)] // Indexed discovery oracle; production cutover remains separate.
+#[rustfmt::skip] // Existing broad-phase prototype is not yet rustfmt-clean; extracted test is from green #332.
 mod environmental_broad_phase;
 #[path = "chemistry/environmental_displacement.rs"]
 mod environmental_displacement;
