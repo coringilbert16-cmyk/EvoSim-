@@ -2198,17 +2198,12 @@ mod tests {
         let mut incident = ToneSpectrum::empty();
         add_spectrum(&mut incident, &emitted, scale);
         incident.retain_strongest();
-        let mut expected =
-            material_response_spectrum(properties, baselines, &incident).unwrap();
+        let mut expected = material_response_spectrum(properties, baselines, &incident).unwrap();
         expected.retain_strongest();
 
-        let mut actual = material_response_spectrum_from_scaled_emitter(
-            properties,
-            baselines,
-            &emitted,
-            scale,
-        )
-        .unwrap();
+        let mut actual =
+            material_response_spectrum_from_scaled_emitter(properties, baselines, &emitted, scale)
+                .unwrap();
         actual.retain_strongest();
 
         assert_eq!(actual.components.len(), expected.components.len());
