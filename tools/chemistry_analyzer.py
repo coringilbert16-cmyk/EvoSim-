@@ -369,6 +369,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Molecules active at end: {report['molecular_history']['active_at_end_count']}",
         f"- Mean observed lifetime (ticks): {report['molecular_history']['mean_observed_lifetime_ticks']}",
         f"- Lineage edges: {len(report['molecular_history']['lineage_edges'])}",
+        f"- Structural families: {len(report['molecular_history']['structural_families'])}",
         f"- Lifecycle validation errors: {len(report['molecular_history']['validation_errors'])}",
         "",
         "## Interpretation limits",
