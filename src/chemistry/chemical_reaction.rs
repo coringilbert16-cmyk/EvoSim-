@@ -614,6 +614,11 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.bond_candidates_inspected = candidates.len() as u64;
     let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
+    // Full local boundary reception evaluates every resonant emitter against
+    // one receiver. Rotate one candidate per tick to bound this geometric work
+    // while ensuring the field can influence every candidate over time.
+    let local_resonance_candidate_index =
+        (!candidates.is_empty()).then_some(tick as usize % candidates.len());
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
@@ -869,27 +874,31 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         // The field is sampled at both actual bond endpoints. Its normalized
         // spectral match increases local reaction accumulation; it is not
         // converted into energy or credited to either energy reservoir.
-        let local_resonance_similarity = local_resonance_world
-            .and_then(|world| {
-                let point_a = crate::contact::endpoint_world_point(
-                    connection.endpoint_a,
-                    &hypothetical.units[unit_a],
-                    &environment.catalog,
-                )?;
-                let point_b = crate::contact::endpoint_world_point(
-                    connection.endpoint_b,
-                    &hypothetical.units[unit_b],
-                    &environment.catalog,
-                )?;
-                world.reaction_similarity(
-                    instance.environmental_identity,
-                    &[(point_a.x, point_a.y), (point_b.x, point_b.y)],
-                    reaction_frequency_cycles_per_day,
-                    &environment.catalog,
-                    tick,
-                )
-            })
-            .unwrap_or(0.0);
+        let local_resonance_similarity = if Some(candidate_index) == local_resonance_candidate_index {
+            local_resonance_world
+                .and_then(|world| {
+                    let point_a = crate::contact::endpoint_world_point(
+                        connection.endpoint_a,
+                        &hypothetical.units[unit_a],
+                        &environment.catalog,
+                    )?;
+                    let point_b = crate::contact::endpoint_world_point(
+                        connection.endpoint_b,
+                        &hypothetical.units[unit_b],
+                        &environment.catalog,
+                    )?;
+                    world.reaction_similarity(
+                        instance.environmental_identity,
+                        &[(point_a.x, point_a.y), (point_b.x, point_b.y)],
+                        reaction_frequency_cycles_per_day,
+                        &environment.catalog,
+                        tick,
+                    )
+                })
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
         diagnostics.max_accumulated_reaction = diagnostics.max_accumulated_reaction.max(previous);
         let Some(next) = crate::chemistry::accumulate_reaction(
