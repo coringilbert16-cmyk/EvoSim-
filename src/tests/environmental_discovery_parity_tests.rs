@@ -276,7 +276,6 @@ fn directed_spatial_discovery_preserves_both_displacement_participant_roles() {
     );
 }
 
-
 #[test]
 fn snapshot_break_bond_inventory_matches_every_live_physical_bond() {
     use crate::resources::InternalBond;
