@@ -38,9 +38,9 @@ def molecule(parts, connections=None):
 class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
     def test_groups_recurrent_structures_and_reports_active_family(self):
         records = [
-            lifecycle("created", 1, 0, molecule([["Carbon", 1.0], ["Oxygen", 1.0]])),
+            lifecycle("created", 1, 0, molecule([["Carbon", 1.0], ["Oxygen", 1.0]]), reaction="COMBINE"),
             lifecycle("destroyed", 1, 10),
-            lifecycle("created", 2, 5, molecule([["Carbon", 1.0], ["Oxygen", 1.0]])),
+            lifecycle("created", 2, 5, molecule([["Carbon", 1.0], ["Oxygen", 1.0]]), reaction="COMBINE"),
             {"event": "environmental_chemistry_tick", "tick": 20},
         ]
         report = analyzer.analyze(records)
@@ -91,8 +91,8 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
               "endpoint_a": {"angle": 2.4}}],
         )
         records = [
-            lifecycle("created", 1, 0, first),
-            lifecycle("created", 2, 1, second),
+            lifecycle("created", 1, 0, first, reaction="COMBINE"),
+            lifecycle("created", 2, 1, second, reaction="COMBINE"),
             {"event": "environmental_chemistry_tick", "tick": 3},
         ]
         report = analyzer.analyze(records)
