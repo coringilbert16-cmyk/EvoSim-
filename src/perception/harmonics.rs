@@ -2072,7 +2072,11 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 /// at one. This remains a dimensionless signal influence, never usable energy.
 pub(crate) fn spectral_activation_influence(received: &ToneSpectrum, target: &ToneSpectrum) -> f64 {
     let frequency_match = spectral_similarity(received, target);
-    let signal_strength = spectrum_magnitude(received).clamp(0.0, 1.0);
+    // The chemistry field sums contributions from many materials, so its
+    // magnitude can legitimately exceed one. A smooth bounded response keeps
+    // stronger signals more influential without allowing unbounded activation.
+    let magnitude = spectrum_magnitude(received);
+    let signal_strength = magnitude / (1.0 + magnitude);
     (frequency_match * signal_strength).clamp(0.0, 1.0)
 }
 
@@ -2097,14 +2101,16 @@ mod tests {
             }],
         };
 
-        let full = spectral_activation_influence(&received(1.0), &target);
+        let unit = spectral_activation_influence(&received(1.0), &target);
         let weak = spectral_activation_influence(&received(0.1), &target);
         let distant = spectral_activation_influence(&received(0.01), &target);
+        let strong = spectral_activation_influence(&received(5.0), &target);
 
-        assert!((full - 1.0).abs() < 1e-12);
-        assert!((weak - 0.1).abs() < 1e-12);
-        assert!((distant - 0.01).abs() < 1e-12);
-        assert!(full > weak && weak > distant);
+        assert!((unit - 0.5).abs() < 1e-12);
+        assert!((weak - (0.1_f64 / 1.1)).abs() < 1e-12);
+        assert!((distant - (0.01_f64 / 1.01)).abs() < 1e-12);
+        assert!((strong - (5.0_f64 / 6.0)).abs() < 1e-12);
+        assert!(strong > unit && unit > weak && weak > distant);
     }
 
     #[test]
