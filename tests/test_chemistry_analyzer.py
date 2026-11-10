@@ -1,0 +1,88 @@
+import unittest
+
+from tools.chemistry_analyzer import CANONICAL_RESOURCES, analyze, render_markdown
+
+
+def fixture_records():
+    inventory = {name: 10.0 for name in CANONICAL_RESOURCES}
+    return [
+        {
+            "event": "environmental_chemistry_header",
+            "version": 2,
+            "seed": 42,
+            "requested_duration_seconds": 60,
+            "planned_ticks": 600,
+            "initial_physical_material_count": 1280,
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80,
+            "initial_material_inventory": inventory,
+            "diagnostic_interval": 100,
+        },
+        {
+            "event": "environmental_chemistry_snapshot",
+            "label": "initial",
+            "tick": 0,
+            "physical_material_count": 1280,
+            "constituent_count": 1360,
+            "internal_bond_count": 80,
+            "material_inventory": inventory,
+            "energy": {"balance_residual": 0.0},
+        },
+        {
+            "event": "environmental_reaction",
+            "reaction": {
+                "reaction": "BREAK",
+                "outcome": "committed",
+                "failure_reason": None,
+            },
+        },
+        {
+            "event": "environmental_chemistry_summary",
+            "break_ready_candidates": 4,
+            "break_scheduled": 2,
+            "break_committed": 1,
+            "break_rejected": 1,
+            "combine_ready_candidates": 3,
+            "combine_scheduled": 2,
+            "combine_committed": 2,
+            "combine_rejected": 0,
+            "displacement_ready_candidates": 0,
+            "displacement_scheduled": 0,
+            "displacement_committed": 0,
+            "displacement_rejected": 0,
+            "displacement_failure_reasons": {},
+            "displacement_participant_sets": {},
+            "displacement_discovery": {},
+            "displacement_discovery_budget_exhausted_ticks": 0,
+        },
+    ]
+
+
+class ChemistryAnalyzerTests(unittest.TestCase):
+    def test_checks_all_seven_resources_without_reaction_bias(self):
+        report = analyze(fixture_records())
+        self.assertEqual(report["resource_coverage"]["canonical_resources"],
+                         list(CANONICAL_RESOURCES))
+        self.assertTrue(report["resource_coverage"]["all_seven_present_at_start"])
+        self.assertEqual(len(report["resource_coverage"]["initial_inventory"]), 7)
+
+    def test_reports_missing_resource_instead_of_silently_ignoring_it(self):
+        records = fixture_records()
+        del records[0]["initial_material_inventory"]["Oxygen"]
+        report = analyze(records)
+        self.assertFalse(report["resource_coverage"]["all_seven_present_at_start"])
+        self.assertEqual(report["resource_coverage"]["missing_at_start"], ["Oxygen"])
+
+    def test_uses_summary_totals_and_reaction_events(self):
+        report = analyze(fixture_records())
+        self.assertEqual(report["reactions"]["diagnostic_totals"]["BREAK"]["committed"], 1)
+        self.assertEqual(report["reactions"]["event_counts"]["BREAK"], 1)
+
+    def test_markdown_explicitly_lists_all_resources(self):
+        markdown = render_markdown(analyze(fixture_records()))
+        for name in CANONICAL_RESOURCES:
+            self.assertIn(f"| {name} |", markdown)
+
+
+if __name__ == "__main__":
+    unittest.main()
