@@ -99,6 +99,22 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["organization"]["unique_exact_structural_families"], 1)
         self.assertEqual(report["organization"]["recurrent_families"], 1)
 
+    def test_family_signature_distinguishes_different_bond_connectivity(self):
+        first = molecule(
+            [["Hydrogen", 1.0], ["Sulfur", 1.0], ["Carbon", 1.0]],
+            [{"part_a": 0, "part_b": 1}],
+        )
+        second = molecule(
+            [["Hydrogen", 1.0], ["Sulfur", 1.0], ["Carbon", 1.0]],
+            [{"part_a": 0, "part_b": 2}],
+        )
+        report = analyzer.analyze([
+            lifecycle("created", 1, 0, first),
+            lifecycle("created", 2, 1, second),
+            {"event": "environmental_chemistry_tick", "tick": 2},
+        ])
+        self.assertEqual(report["organization"]["unique_exact_structural_families"], 2)
+
     def test_lineage_records_reaction_family_transition(self):
         parent = molecule([["Carbon", 1.0]])
         child = molecule([["Carbon", 1.0], ["Oxygen", 1.0]], [{"from": 0, "to": 1}])
