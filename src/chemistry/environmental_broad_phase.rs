@@ -3154,7 +3154,10 @@ mod tests {
             values[values.len() / 2]
         }
 
-        fn fixture(count: usize, clustered: bool) -> (ActiveMaterialField, Vec<Option<MaterialSpatialBounds>>) {
+        fn fixture(
+            count: usize,
+            clustered: bool,
+        ) -> (ActiveMaterialField, Vec<Option<MaterialSpatialBounds>>) {
             let mut field = ActiveMaterialField::new(1000.0, 1000.0, 10.0);
             for index in 0..count {
                 let cell_index = if clustered {
@@ -3167,18 +3170,21 @@ mod tests {
                     .push(physical(index as u64 + 1, "Carbon"));
             }
             let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
-            let bounds = snapshot.materials.iter().map(|record| {
-                let cell = record.locator.cell_index;
-                let columns = 100usize;
-                let x = (cell % columns) as f64 * 10.0 + 5.0;
-                let y = (cell / columns) as f64 * 10.0 + 5.0;
-                Some(MaterialSpatialBounds {
-                    min_x: x - 1.0,
-                    max_x: x + 1.0,
-                    min_y: y - 1.0,
-                    max_y: y + 1.0,
+            let bounds = snapshot
+                .materials
+                .iter()
+                .map(|record| {
+                    let cell = record.locator.cell_index;
+                    let x = (cell % 100) as f64 * 10.0 + 5.0;
+                    let y = (cell / 100) as f64 * 10.0 + 5.0;
+                    Some(MaterialSpatialBounds {
+                        min_x: x - 1.0,
+                        max_x: x + 1.0,
+                        min_y: y - 1.0,
+                        max_y: y + 1.0,
+                    })
                 })
-            }).collect();
+                .collect();
             (field, bounds)
         }
 
@@ -3188,11 +3194,22 @@ mod tests {
             bounds: &[Option<MaterialSpatialBounds>],
             padding: f64,
         ) -> std::collections::BTreeSet<(MaterialIdentity, MaterialIdentity)> {
-            let reached = bounds.iter().map(|bound| {
-                bound.and_then(|value| value.expanded(padding)).map(|value| {
-                    field.cells_intersecting_bounds(value.min_x, value.max_x, value.min_y, value.max_y)
-                }).unwrap_or_default()
-            }).collect::<Vec<_>>();
+            let reached = bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .and_then(|value| value.expanded(padding))
+                        .map(|value| {
+                            field.cells_intersecting_bounds(
+                                value.min_x,
+                                value.max_x,
+                                value.min_y,
+                                value.max_y,
+                            )
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
             let mut pairs = std::collections::BTreeSet::new();
             for left in 0..snapshot.materials.len() {
                 for right in left + 1..snapshot.materials.len() {
@@ -3208,10 +3225,42 @@ mod tests {
             pairs
         }
 
-        println!("count,layout,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,cursor_pair_checks,parity");
+        fn vector_bytes_lower_bound(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            bounds: &[Option<MaterialSpatialBounds>],
+        ) -> usize {
+            use std::mem::size_of;
+
+            let cell_index_bytes = snapshot
+                .material_indices_by_cell
+                .iter()
+                .map(|indices| indices.capacity() * size_of::<usize>())
+                .sum::<usize>();
+            let slot_index_bytes = snapshot
+                .material_index_by_cell_slot
+                .iter()
+                .map(|slots| slots.capacity() * size_of::<Option<usize>>())
+                .sum::<usize>();
+            snapshot.materials.capacity() * size_of::<MaterialRecord>()
+                + snapshot.existing_bonds.capacity() * size_of::<ExistingBondRecord>()
+                + snapshot.material_indices_by_cell.capacity() * size_of::<Vec<usize>>()
+                + cell_index_bytes
+                + snapshot.material_index_by_cell_slot.capacity()
+                    * size_of::<Vec<Option<usize>>>()
+                + slot_index_bytes
+                + bounds.capacity() * size_of::<Option<MaterialSpatialBounds>>()
+        }
+
+        println!(
+            "count,layout,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
+        );
         for count in [128usize, 320, 640, 1280, 2560, 5120] {
             for clustered in [false, true] {
-                let layout = if clustered { "clustered_4_per_cell" } else { "uniform_sparse" };
+                let layout = if clustered {
+                    "clustered_4_per_cell"
+                } else {
+                    "uniform_sparse"
+                };
                 let (field, _) = fixture(count, clustered);
                 let mut snapshot_times = Vec::new();
                 let mut bounds_times = Vec::new();
@@ -3220,20 +3269,32 @@ mod tests {
                 let mut cursor_times = Vec::new();
                 let mut spatial_count = 0usize;
                 let mut cursor_checks = 0u64;
+                let mut memory_lower_bound = 0usize;
                 let mut parity_ok = true;
+
                 for _ in 0..7 {
                     let start = Instant::now();
                     let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
                     snapshot_times.push(start.elapsed().as_micros());
 
                     let start = Instant::now();
-                    let bounds = snapshot.materials.iter().map(|record| {
-                        let cell = record.locator.cell_index;
-                        let x = (cell % 100) as f64 * 10.0 + 5.0;
-                        let y = (cell / 100) as f64 * 10.0 + 5.0;
-                        Some(MaterialSpatialBounds { min_x: x - 1.0, max_x: x + 1.0, min_y: y - 1.0, max_y: y + 1.0 })
-                    }).collect::<Vec<_>>();
+                    let bounds = snapshot
+                        .materials
+                        .iter()
+                        .map(|record| {
+                            let cell = record.locator.cell_index;
+                            let x = (cell % 100) as f64 * 10.0 + 5.0;
+                            let y = (cell / 100) as f64 * 10.0 + 5.0;
+                            Some(MaterialSpatialBounds {
+                                min_x: x - 1.0,
+                                max_x: x + 1.0,
+                                min_y: y - 1.0,
+                                max_y: y + 1.0,
+                            })
+                        })
+                        .collect::<Vec<_>>();
                     bounds_times.push(start.elapsed().as_micros());
+                    memory_lower_bound = vector_bytes_lower_bound(&snapshot, &bounds);
 
                     let start = Instant::now();
                     let expected = exhaustive(&snapshot, &field, &bounds, 2.0);
@@ -3241,29 +3302,50 @@ mod tests {
 
                     let start = Instant::now();
                     let (pairs, coverage) = snapshot.spatial_pair_window(
-                        &field, &bounds, 2.0, 0, usize::MAX, PairOrientation::Unordered,
+                        &field,
+                        &bounds,
+                        2.0,
+                        0,
+                        usize::MAX,
+                        PairOrientation::Unordered,
                     );
                     spatial_times.push(start.elapsed().as_micros());
-                    let actual = pairs.iter().map(|pair| (pair.identity_left, pair.identity_right)).collect::<std::collections::BTreeSet<_>>();
+                    let actual = pairs
+                        .iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right))
+                        .collect::<std::collections::BTreeSet<_>>();
                     spatial_count = pairs.len();
                     parity_ok &= actual == expected && coverage.known_pairs == expected.len() as u64;
 
                     let start = Instant::now();
                     let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Unordered);
                     let mut cursor_pairs = 0usize;
+                    let mut run_cursor_checks = 0u64;
                     loop {
-                        let page = cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
-                        cursor_checks = page.visited_pair_checks;
+                        let page =
+                            cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        run_cursor_checks =
+                            run_cursor_checks.saturating_add(page.visited_pair_checks);
                         cursor_pairs += page.pairs.len();
-                        if page.complete { break; }
+                        if page.complete {
+                            break;
+                        }
                     }
+                    cursor_checks = run_cursor_checks;
                     cursor_times.push(start.elapsed().as_micros());
                     parity_ok &= cursor_pairs == expected.len();
                     black_box((&snapshot, &bounds, &actual));
                 }
-                let all_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+
+                let all_pairs =
+                    (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+                let reduction = if all_pairs == 0 {
+                    0.0
+                } else {
+                    (1.0 - spatial_count as f64 / all_pairs as f64) * 100.0
+                };
                 println!(
-                    "{count},{layout},{},{},{},{},{},{all_pairs},{spatial_count},{cursor_checks},{}",
+                    "{count},{layout},{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
                     median(&mut bounds_times),
                     median(&mut exhaustive_times),
@@ -3271,7 +3353,10 @@ mod tests {
                     median(&mut cursor_times),
                     if parity_ok { "PASS" } else { "FAIL" },
                 );
-                assert!(parity_ok, "spatial discovery diverged from exhaustive oracle at {count} ({layout})");
+                assert!(
+                    parity_ok,
+                    "spatial discovery diverged from exhaustive oracle at {count} ({layout})"
+                );
             }
         }
     }
