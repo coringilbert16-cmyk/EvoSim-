@@ -99,12 +99,12 @@ mod energy_ledger;
 mod environmental_broad_phase;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
+#[path = "chemistry/environmental_displacement.rs"]
+mod environmental_displacement;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
 #[path = "chemistry/environmental_snapshot_cursor.rs"]
 mod environmental_snapshot_cursor;
-#[path = "chemistry/environmental_displacement.rs"]
-mod environmental_displacement;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
