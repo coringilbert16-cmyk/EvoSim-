@@ -2942,7 +2942,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn material_bounds_cursor_completes_empty_material_without_fake_constituent_work() {
         let catalog = crate::resources::default_catalog();
