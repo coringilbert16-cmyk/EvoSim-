@@ -768,15 +768,23 @@ type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Optio
 pub(crate) struct LocalResonanceWorldSnapshot {
     bodies: Vec<PhysicalMaterial>,
     resonant_indices: Vec<usize>,
+    emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
 }
 
 impl LocalResonanceWorldSnapshot {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
         let (bodies, resonant_indices, _) =
             world_physical_materials_for_pair_potential(simulation)?;
+        let emitters = crate::harmonics::material_resonance_emitters_at_tick(
+            &bodies,
+            &resonant_indices,
+            &simulation.environment.catalog,
+            simulation.tick,
+        )?;
         Some(Self {
             bodies,
             resonant_indices,
+            emitters,
         })
     }
 
@@ -807,19 +815,12 @@ impl LocalResonanceWorldSnapshot {
         if matches.next().is_some() || !self.resonant_indices.contains(&receiver_index) {
             return None;
         }
-        let source_indices: Vec<_> = self
-            .resonant_indices
-            .iter()
-            .copied()
-            .filter(|index| *index != receiver_index)
-            .collect();
-        let spectra = crate::harmonics::material_resonance_spectra_at_boundary_points(
-            &self.bodies,
-            &source_indices,
+        let spectra = crate::harmonics::material_resonance_spectra_from_emitters(
+            &self.emitters,
+            &self.bodies[receiver_index],
             receiver_index,
             points,
             catalog,
-            tick,
         )?;
         let target = crate::harmonics::ToneSpectrum {
             components: vec![crate::harmonics::ToneComponent {
