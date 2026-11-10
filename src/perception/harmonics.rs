@@ -2375,7 +2375,10 @@ mod tests {
             amplitude,
             phase_radians,
         };
-        let reinforced = combine_component(component(440.0, 0.5, 0.0), component(440.0, 0.5, 0.0));
+        let reinforced = combine_component(
+            component(440.0, 0.5, 0.0),
+            component(440.0, 0.5, 0.0),
+        );
         assert!((reinforced.amplitude - 1.0).abs() < 1e-12);
 
         let cancelled = combine_component(
@@ -2385,15 +2388,27 @@ mod tests {
         assert!(cancelled.amplitude < 1e-12);
 
         let mut spectrum = ToneSpectrum::empty();
-        add_spectrum(&mut spectrum, &ToneSpectrum {
-            components: vec![component(440.0, 0.5, 0.0)],
-        }, 1.0);
-        add_spectrum(&mut spectrum, &ToneSpectrum {
-            components: vec![component(880.0, 0.5, 0.0)],
-        }, 1.0);
+        add_spectrum(
+            &mut spectrum,
+            &ToneSpectrum {
+                components: vec![component(440.0, 0.5, 0.0)],
+            },
+            1.0,
+        );
+        add_spectrum(
+            &mut spectrum,
+            &ToneSpectrum {
+                components: vec![component(880.0, 0.5, 0.0)],
+            },
+            1.0,
+        );
         assert_eq!(spectrum.components.len(), 2);
-        assert!(spectrum.components.iter().any(|item| (item.frequency_cycles_per_day - 440.0).abs() < 1e-9));
-        assert!(spectrum.components.iter().any(|item| (item.frequency_cycles_per_day - 880.0).abs() < 1e-9));
+        assert!(spectrum.components.iter().any(|item| {
+            (item.frequency_cycles_per_day - 440.0).abs() < 1e-9
+        }));
+        assert!(spectrum.components.iter().any(|item| {
+            (item.frequency_cycles_per_day - 880.0).abs() < 1e-9
+        }));
     }
 
     #[test]
@@ -2435,8 +2450,14 @@ mod tests {
         let shadowed = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
         let farther = density_sum(&[distant_source, receiver]);
         assert!(clear > 0.0);
-        assert!(shadowed < clear, "an intervening material should reduce received local density");
-        assert!(farther < clear, "moving the source farther away should reduce received local density");
+        assert!(
+            shadowed < clear,
+            "an intervening material should reduce received local density"
+        );
+        assert!(
+            farther < clear,
+            "moving the source farther away should reduce received local density"
+        );
     }
 
     #[test]
