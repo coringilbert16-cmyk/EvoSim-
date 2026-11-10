@@ -1344,15 +1344,21 @@ pub(crate) fn material_aura_receptions_with_occluders(
 /// Conservative AABB broad phase for possible occluders between a point
 /// source and any point on the receiver boundary. Every source-to-boundary
 /// segment lies inside the source/receiver bounds envelope.
-fn geometry_bounds_may_occlude_source_receiver(
+fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
-    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+    points: &[(f64, f64)],
     candidate: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
-    let min_x = source.0.min(receiver.min_x);
-    let max_x = source.0.max(receiver.max_x);
-    let min_y = source.1.min(receiver.min_y);
-    let max_y = source.1.max(receiver.max_y);
+    let mut min_x = source.0;
+    let mut max_x = source.0;
+    let mut min_y = source.1;
+    let mut max_y = source.1;
+    for &(x, y) in points {
+        min_x = min_x.min(x);
+        max_x = max_x.max(x);
+        min_y = min_y.min(y);
+        max_y = max_y.max(y);
+    }
     !(candidate.max_x < min_x
         || candidate.min_x > max_x
         || candidate.max_y < min_y
@@ -1547,9 +1553,9 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
             if candidate_index == source_index || candidate_index == receiver_index {
                 continue;
             }
-            if !geometry_bounds_may_occlude_source_receiver(
+            if !geometry_bounds_may_occlude_source_points(
                 (source_x, source_y),
-                receiver_geometry,
+                points,
                 geometry,
             ) {
                 continue;
@@ -2100,20 +2106,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resonance_occluder_broad_phase_keeps_intersecting_bounds_and_discards_disjoint_bounds() {
-        let receiver = crate::organism_geometry::OrganismBodyGeometry {
-            parts: Vec::new(),
-            min_x: 4.0,
-            max_x: 6.0,
-            min_y: -1.0,
-            max_y: 1.0,
-        };
+    fn resonance_occluder_broad_phase_keeps_endpoint_path_bounds_and_discards_disjoint_bounds() {
+        let endpoint_points = [(4.0, 0.0), (4.0, 1.0)];
         let crossing = crate::organism_geometry::OrganismBodyGeometry {
             parts: Vec::new(),
             min_x: 2.0,
             max_x: 3.0,
-            min_y: -0.25,
-            max_y: 0.25,
+            min_y: 0.25,
+            max_y: 0.75,
         };
         let outside_y = crate::organism_geometry::OrganismBodyGeometry {
             parts: Vec::new(),
@@ -2124,25 +2124,25 @@ mod tests {
         };
         let outside_x = crate::organism_geometry::OrganismBodyGeometry {
             parts: Vec::new(),
-            min_x: 7.0,
-            max_x: 8.0,
-            min_y: -0.5,
-            max_y: 0.5,
+            min_x: 5.0,
+            max_x: 6.0,
+            min_y: 0.25,
+            max_y: 0.75,
         };
 
-        assert!(geometry_bounds_may_occlude_source_receiver(
+        assert!(geometry_bounds_may_occlude_source_points(
             (0.0, 0.0),
-            &receiver,
+            &endpoint_points,
             &crossing,
         ));
-        assert!(!geometry_bounds_may_occlude_source_receiver(
+        assert!(!geometry_bounds_may_occlude_source_points(
             (0.0, 0.0),
-            &receiver,
+            &endpoint_points,
             &outside_y,
         ));
-        assert!(!geometry_bounds_may_occlude_source_receiver(
+        assert!(!geometry_bounds_may_occlude_source_points(
             (0.0, 0.0),
-            &receiver,
+            &endpoint_points,
             &outside_x,
         ));
     }
