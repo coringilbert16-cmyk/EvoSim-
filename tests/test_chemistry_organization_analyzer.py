@@ -45,6 +45,19 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         self.assertEqual(organization["top_families"][0]["occurrences"], 2)
         self.assertEqual(organization["top_families"][0]["active_at_end"], 1)
 
+    def test_single_resource_unbonded_materials_do_not_count_as_organized_families(self):
+        records = [
+            lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
+            lifecycle("created", 2, 0, molecule([["Carbon", 1.0]])),
+            {"event": "environmental_chemistry_tick", "tick": 5},
+        ]
+        report = analyzer.analyze(records)
+        self.assertEqual(report["organization"]["unique_exact_structural_families"], 0)
+        self.assertEqual(report["organization"]["recurrent_families"], 0)
+        self.assertEqual(
+            report["organization"]["single_resource_unbonded_identities_excluded"], 2
+        )
+
     def test_lineage_records_reaction_family_transition(self):
         parent = molecule([["Carbon", 1.0]])
         child = molecule([["Carbon", 1.0], ["Oxygen", 1.0]], [{"from": 0, "to": 1}])
