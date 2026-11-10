@@ -919,6 +919,18 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalMoleculeLifecycleEvent {
+    pub(crate) event: String,
+    pub(crate) action: String,
+    pub(crate) tick: u64,
+    pub(crate) molecule_id: u64,
+    pub(crate) parent_ids: Vec<u64>,
+    pub(crate) reaction_id: String,
+    pub(crate) reaction: String,
+    pub(crate) molecule: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) tick: u64,
     pub(crate) reaction: String,
@@ -937,6 +949,7 @@ pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) product_material: Option<Vec<(String, f64)>>,
     pub(crate) product_internal_bond_count: Option<usize>,
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
+    pub(crate) molecular_lifecycle: Vec<EnvironmentalMoleculeLifecycleEvent>,
 }
 
 #[derive(Clone)]
