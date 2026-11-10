@@ -796,7 +796,7 @@ impl LocalResonanceWorldSnapshot {
         points: &[(f64, f64)],
         reaction_frequency_cycles_per_day: f64,
         catalog: &[BaseResource],
-        tick: u64,
+        _tick: u64,
     ) -> Option<f64> {
         if receiver_identity == 0
             || !reaction_frequency_cycles_per_day.is_finite()
