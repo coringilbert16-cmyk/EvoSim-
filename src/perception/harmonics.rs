@@ -1523,59 +1523,93 @@ fn material_aura_receptions_with_geometry(
     Some(receptions)
 }
 
-/// Evaluate the frequency-resolved incident field at one or more exact points
-/// in the receiver's local environment. Chemistry-scale reception is
-/// unoccluded and independent of receiver boundary geometry.
-pub(crate) fn material_resonance_spectra_at_boundary_points(
+/// One tick-local emitter prepared for repeated chemistry-field queries.
+/// Source position, mass scaling, and emitted spectrum are shared by every
+/// candidate sample during the tick instead of being rebuilt per reaction.
+#[derive(Clone, Debug)]
+pub(crate) struct MaterialResonanceEmitter {
+    source_index: usize,
+    source_x: f64,
+    source_y: f64,
+    mass_scale: f64,
+    emitted: ToneSpectrum,
+}
+
+/// Prepare the unoccluded material-origin emitters once for a simulation tick.
+pub(crate) fn material_resonance_emitters_at_tick(
     materials: &[crate::physical_material::PhysicalMaterial],
     source_indices: &[usize],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialResonanceEmitter>> {
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices
+        .iter()
+        .any(|index| *index >= materials.len() || !seen_sources.insert(*index))
+    {
+        return None;
+    }
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mut emitters = Vec::with_capacity(source_indices.len());
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
+        let (source_x, source_y, _, emitted) =
+            environmental_material_resonance(source, catalog, tick)?;
+        let mass_scale =
+            environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+        if !source_x.is_finite()
+            || !source_y.is_finite()
+            || !mass_scale.is_finite()
+            || mass_scale < 0.0
+        {
+            return None;
+        }
+        if mass_scale > f64::EPSILON {
+            emitters.push(MaterialResonanceEmitter {
+                source_index,
+                source_x,
+                source_y,
+                mass_scale,
+                emitted,
+            });
+        }
+    }
+    Some(emitters)
+}
+
+/// Evaluate prepared emitters at exact points around one receiver. Chemistry
+/// reception remains unoccluded and independent of receiver boundary geometry.
+pub(crate) fn material_resonance_spectra_from_emitters(
+    emitters: &[MaterialResonanceEmitter],
+    receiver: &crate::physical_material::PhysicalMaterial,
     receiver_index: usize,
     points: &[(f64, f64)],
     catalog: &[crate::resources::BaseResource],
-    tick: u64,
 ) -> Option<Vec<ToneSpectrum>> {
     if points.is_empty()
         || points
             .iter()
             .any(|point| !point.0.is_finite() || !point.1.is_finite())
+        || !receiver.material.is_valid()
+        || receiver.material.is_empty()
     {
         return None;
     }
-    let receiver = materials.get(receiver_index)?;
-    let mut seen_sources = std::collections::BTreeSet::new();
-    if source_indices.iter().any(|index| {
-        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
-    }) {
-        return None;
-    }
-
-    // Chemistry-scale resonance is an unoccluded material-origin field.
-    // Atoms and molecules contribute directly; no body geometry, shadows,
-    // boundary visibility, or occluder search is needed at this stage.
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
     let mut fields = vec![ToneSpectrum::empty(); points.len()];
-    for &source_index in source_indices {
-        let source = materials.get(source_index)?;
-        let (source_x, source_y, _, emitted) =
-            environmental_material_resonance(source, catalog, tick)?;
-        let source_mass_scale =
-            environmental_mass_scale(source.material.mass(catalog), baselines.mass);
-        if source_mass_scale <= f64::EPSILON {
-            continue;
-        }
-
+    for emitter in emitters.iter().filter(|emitter| emitter.source_index != receiver_index) {
         for (point_index, point) in points.iter().enumerate() {
-            let distance = (source_x - point.0).hypot(source_y - point.1);
+            let distance = (emitter.source_x - point.0).hypot(emitter.source_y - point.1);
             if !distance.is_finite() {
                 return None;
             }
-            let attenuation = source_mass_scale / (1.0 + distance);
+            let attenuation = emitter.mass_scale / (1.0 + distance);
             if !attenuation.is_finite() || attenuation <= f64::EPSILON {
                 continue;
             }
             let mut incident = ToneSpectrum::empty();
-            add_spectrum(&mut incident, &emitted, attenuation);
+            add_spectrum(&mut incident, &emitter.emitted, attenuation);
             incident.retain_strongest();
             let mut received =
                 material_response_spectrum(receiver_properties, baselines, &incident)?;
@@ -1587,6 +1621,31 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         field.retain_strongest();
     }
     Some(fields)
+}
+
+/// Compatibility entry point for callers that need a one-off field query.
+/// Repeated reaction queries should prepare emitters once and reuse them.
+pub(crate) fn material_resonance_spectra_at_boundary_points(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    points: &[(f64, f64)],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ToneSpectrum>> {
+    let receiver = materials.get(receiver_index)?;
+    if source_indices.contains(&receiver_index) {
+        return None;
+    }
+    let emitters =
+        material_resonance_emitters_at_tick(materials, source_indices, catalog, tick)?;
+    material_resonance_spectra_from_emitters(
+        &emitters,
+        receiver,
+        receiver_index,
+        points,
+        catalog,
+    )
 }
 
 /// Single-point compatibility wrapper for unoccluded chemistry-scale reception.
