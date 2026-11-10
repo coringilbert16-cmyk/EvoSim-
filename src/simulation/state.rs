@@ -985,6 +985,9 @@ pub(crate) struct Simulation {
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
+    /// Enables full molecular graph/lifecycle snapshots for chemistry experiments.
+    /// Identity assignment remains part of successful reaction commits either way.
+    pub(crate) record_environmental_molecular_history: bool,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;
