@@ -230,8 +230,7 @@ fn environmental_break_local_resonance_sample(
         operation.disruption_cost,
     );
     let required_usable_energy = operation.bond.bond_energy
-        + (operation.disruption_cost
-            - resonance_withdrawal_preview.min(operation.disruption_cost));
+        + (operation.disruption_cost - resonance_withdrawal_preview.min(operation.disruption_cost));
     let usable_energy = simulation.environment.chemistry_usable_energy;
     let usable_energy_shortfall = (required_usable_energy - usable_energy).max(0.0);
 
