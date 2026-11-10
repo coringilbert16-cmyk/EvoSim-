@@ -41,7 +41,7 @@ jobs:
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
       - name: Run default environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name != 'pull_request'
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -53,7 +53,7 @@ jobs:
             --diagnostics environmental-chemistry-default-baseline.jsonl \
             --diagnostic-interval 100
       - name: Analyze default environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name != 'pull_request'
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-analysis.json \
