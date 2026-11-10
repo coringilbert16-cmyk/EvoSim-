@@ -275,3 +275,60 @@ fn directed_spatial_discovery_preserves_both_displacement_participant_roles() {
             .collect()
     );
 }
+
+
+#[test]
+fn snapshot_break_bond_inventory_matches_every_live_physical_bond() {
+    use crate::physical_material::PhysicalMaterialBond;
+    use crate::resources::InternalBond;
+
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(30.0, 20.0, 10.0);
+    let mut physical = PhysicalMaterial::realized(
+        Material {
+            parts: vec![
+                ("Carbon".to_owned(), 1.0),
+                ("Hydrogen".to_owned(), 1.0),
+            ],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
+        },
+        vec![
+            Placement {
+                x: 9.5,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 11.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            },
+        ],
+        &catalog,
+    )
+    .expect("bonded fixture must be physically realizable");
+    physical.environmental_identity = 404;
+    let expected = physical
+        .internal_connections
+        .as_ref()
+        .expect("realized bond must have physical endpoints")
+        .clone();
+    let cell = field.index_for_position(9.5, 10.0).unwrap();
+    field.cells[cell].physical_materials.push(physical);
+
+    let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 337);
+    assert_eq!(snapshot.existing_bonds.len(), expected.len());
+    for (record, connection) in snapshot.existing_bonds.iter().zip(expected.iter()) {
+        assert_eq!(record.material.0, 404);
+        assert_eq!(record.constituent_a.local_index, connection.part_a);
+        assert_eq!(record.endpoint_a, connection.endpoint_a);
+        assert_eq!(record.constituent_b.local_index, connection.part_b);
+        assert_eq!(record.endpoint_b, connection.endpoint_b);
+        assert_eq!(record.bond_energy, connection.bond_energy);
+        assert!(snapshot.bond_reference_is_current(record.reference()));
+    }
+    let _: Option<PhysicalMaterialBond> = None;
+}
