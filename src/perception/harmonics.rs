@@ -1341,6 +1341,24 @@ pub(crate) fn material_aura_receptions_with_occluders(
     )
 }
 
+/// Conservative AABB broad phase for possible occluders between a point
+/// source and any point on the receiver boundary. Every source-to-boundary
+/// segment lies inside the source/receiver bounds envelope.
+fn geometry_bounds_may_occlude_source_receiver(
+    source: (f64, f64),
+    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+    candidate: &crate::organism_geometry::OrganismBodyGeometry,
+) -> bool {
+    let min_x = source.0.min(receiver.min_x);
+    let max_x = source.0.max(receiver.max_x);
+    let min_y = source.1.min(receiver.min_y);
+    let max_y = source.1.max(receiver.max_y);
+    !(candidate.max_x < min_x
+        || candidate.min_x > max_x
+        || candidate.max_y < min_y
+        || candidate.min_y > max_y)
+}
+
 /// Evaluate one source against prebuilt world geometry. The receiver must be
 /// the first body in `receiver_bodies`; all remaining bodies are occluders.
 fn material_aura_receptions_with_geometry(
@@ -1523,21 +1541,17 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         // lies inside this axis-aligned rectangle. A body's bounds outside it
         // cannot occlude any such segment, so this is a conservative broad
         // phase: exact visibility is still evaluated for every retained body.
-        let min_x = source_x.min(receiver_geometry.min_x);
-        let max_x = source_x.max(receiver_geometry.max_x);
-        let min_y = source_y.min(receiver_geometry.min_y);
-        let max_y = source_y.max(receiver_geometry.max_y);
         let mut receiver_bodies = Vec::new();
         receiver_bodies.push(receiver_geometry.clone());
         for (candidate_index, geometry) in geometries.iter().enumerate() {
             if candidate_index == source_index || candidate_index == receiver_index {
                 continue;
             }
-            if geometry.max_x < min_x
-                || geometry.min_x > max_x
-                || geometry.max_y < min_y
-                || geometry.min_y > max_y
-            {
+            if !geometry_bounds_may_occlude_source_receiver(
+                (source_x, source_y),
+                receiver_geometry,
+                geometry,
+            ) {
                 continue;
             }
             receiver_bodies.push(geometry.clone());
@@ -2084,6 +2098,54 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resonance_occluder_broad_phase_keeps_intersecting_bounds_and_discards_disjoint_bounds() {
+        let receiver = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let crossing = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 2.0,
+            max_x: 3.0,
+            min_y: -0.25,
+            max_y: 0.25,
+        };
+        let outside_y = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 1.0,
+            max_x: 3.0,
+            min_y: 2.0,
+            max_y: 3.0,
+        };
+        let outside_x = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 7.0,
+            max_x: 8.0,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+
+        assert!(geometry_bounds_may_occlude_source_receiver(
+            (0.0, 0.0),
+            &receiver,
+            &crossing,
+        ));
+        assert!(!geometry_bounds_may_occlude_source_receiver(
+            (0.0, 0.0),
+            &receiver,
+            &outside_y,
+        ));
+        assert!(!geometry_bounds_may_occlude_source_receiver(
+            (0.0, 0.0),
+            &receiver,
+            &outside_x,
+        ));
+    }
 
     #[test]
     fn phase_clock_starts_at_peak_and_advances_reference_tone_by_6_point_6_degrees_per_tick() {
