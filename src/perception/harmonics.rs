@@ -295,12 +295,11 @@ pub(crate) struct MaterialResonanceDensitySample {
 
 /// Build a local resonance-density heat map over one realized receiver.
 ///
-/// Every other supplied material is considered as a possible emitter and all
-/// supplied materials remain in the occlusion set. The caller must provide
-/// world-resolved physical materials; stored owner-relative materials are
-/// rejected by the existing reception API. The spatial grid is diagnostic
-/// sampling only: reaction code must use continuous physical samples, never
-/// make eligibility depend on this grid.
+/// Every other supplied material is considered as a possible emitter. Other
+/// materials do not occlude chemistry-scale resonance; receiver geometry is
+/// used only to choose spatially meaningful boundary sample locations. The
+/// spatial grid is diagnostic sampling only: reaction code must use continuous
+/// physical samples, never make eligibility depend on this grid.
 #[allow(dead_code)] // Diagnostic field sampler; reaction integration follows energy-provenance validation.
 pub(crate) fn material_resonance_density_on_receiver(
     materials: &[crate::physical_material::PhysicalMaterial],
@@ -329,14 +328,12 @@ pub(crate) fn material_resonance_density_on_receiver(
 
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let receptions =
-            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        // Receiver geometry supplies useful map coordinates, but chemistry
+        // resonance itself is sampled through the unoccluded point-field API.
+        // In particular, no third material can hide a source from this map.
+        let receptions = material_aura_receptions(source, receiver, catalog, tick)?;
         for reception in receptions {
-            if !reception.receiver_x.is_finite()
-                || !reception.receiver_y.is_finite()
-                || !reception.projected_extent.is_finite()
-                || reception.projected_extent <= f64::EPSILON
-            {
+            if !reception.receiver_x.is_finite() || !reception.receiver_y.is_finite() {
                 return None;
             }
             let cell_x_f = (reception.receiver_x / cell_size).floor();
@@ -351,48 +348,35 @@ pub(crate) fn material_resonance_density_on_receiver(
                 return None;
             }
             let key = (cell_x_f as i64, cell_y_f as i64, source_index);
+            let spectra = material_resonance_spectra_at_boundary_points(
+                materials,
+                &[source_index],
+                receiver_index,
+                &[(reception.receiver_x, reception.receiver_y)],
+                catalog,
+                tick,
+            )?;
+            let Some(spectrum) = spectra.first() else {
+                return None;
+            };
             let samples = source_cells.entry(key).or_default();
-            let dx = reception.source_x - reception.receiver_x;
-            let dy = reception.source_y - reception.receiver_y;
-            let distance = dx.hypot(dy);
-            if !distance.is_finite() || distance <= f64::EPSILON {
-                return None;
-            }
-            let directional_projection =
-                ((reception.receiver_normal_x * dx + reception.receiver_normal_y * dy) / distance)
-                    .max(0.0);
-            if !directional_projection.is_finite() {
-                return None;
-            }
-            if directional_projection <= f64::EPSILON {
-                continue;
-            }
-            let local_scale = directional_projection.sqrt() / reception.projected_extent.sqrt();
-            if !local_scale.is_finite() || local_scale < 0.0 {
-                return None;
-            }
-            for component in &reception.incident_spectrum.components {
-                let local = ToneComponent {
-                    frequency_cycles_per_day: component.frequency_cycles_per_day,
-                    amplitude: component.amplitude * local_scale,
-                    phase_radians: component.phase_radians,
-                };
-                if !local.frequency_cycles_per_day.is_finite()
-                    || local.frequency_cycles_per_day <= 0.0
-                    || !local.amplitude.is_finite()
-                    || local.amplitude < 0.0
-                    || !local.phase_radians.is_finite()
+            for component in &spectrum.components {
+                if !component.frequency_cycles_per_day.is_finite()
+                    || component.frequency_cycles_per_day <= 0.0
+                    || !component.amplitude.is_finite()
+                    || component.amplitude < 0.0
+                    || !component.phase_radians.is_finite()
                 {
                     return None;
                 }
                 if let Some((existing, count)) = samples.iter_mut().find(|(existing, _)| {
-                    (existing.frequency_cycles_per_day - local.frequency_cycles_per_day).abs()
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
                         <= 1e-9
                 }) {
-                    *existing = combine_component(*existing, local);
+                    *existing = combine_component(*existing, *component);
                     *count += 1;
                 } else {
-                    samples.push((local, 1));
+                    samples.push((*component, 1));
                 }
             }
         }
