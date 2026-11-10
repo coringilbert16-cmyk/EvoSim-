@@ -62,6 +62,35 @@ jobs:
             environmental-chemistry-analysis.md
           if-no-files-found: error
           retention-days: 14
+      - name: Run second environmental chemistry baseline (seed 43)
+        if: always()
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 43 \
+            --diagnostics environmental-chemistry-seed-43.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze second environmental chemistry baseline
+        if: success()
+        run: |
+          python3 tools/chemistry_analyzer.py environmental-chemistry-seed-43.jsonl \
+            --json-out environmental-chemistry-seed-43-analysis.json \
+            --markdown-out environmental-chemistry-seed-43-analysis.md
+      - name: Upload second environmental chemistry baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-chemistry-seed-43
+          path: |
+            environmental-chemistry-seed-43.jsonl
+            environmental-chemistry-seed-43-analysis.json
+            environmental-chemistry-seed-43-analysis.md
+          if-no-files-found: error
+          retention-days: 14
       - name: Energy accounting (focused tests)
         if: always()
         timeout-minutes: 30
