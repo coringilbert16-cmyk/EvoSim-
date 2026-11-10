@@ -70,7 +70,7 @@ jobs:
             "$binary" --headless --environment-chemistry-experiment --seconds 60 --seed 42 \
               --diagnostics "$diag" --diagnostic-interval 100 > "$log"
             grep 'ENVIRONMENTAL CHEMISTRY END:' "$log" | sed "s/^/$label /" | tee -a "$GITHUB_WORKSPACE/break-index-benchmark.txt"
-            python3 - "$diag" "$label" <<'PY'
+            python3 - "$diag" "$label" <<'PY' | tee -a "$GITHUB_WORKSPACE/break-index-benchmark.txt"
           import json, sys
           path, label = sys.argv[1:]
           with open(path, encoding="utf-8") as stream:
