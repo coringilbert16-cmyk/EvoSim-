@@ -1048,7 +1048,11 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
                     "BREAK",
                     &parent_materials,
                     &product_materials,
@@ -1165,7 +1169,11 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
                     "COMBINE",
                     &parent_materials,
                     &product_materials,
@@ -1284,7 +1292,11 @@ impl Simulation {
             let molecular_lifecycle = if committed && molecular_history_enabled {
                 environmental_lifecycle_records(
                     self.tick,
-                    format!("{}-{}", self.tick, self.environmental_chemistry_events.len()),
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
                     "DISPLACEMENT",
                     &parent_materials,
                     &product_materials,
