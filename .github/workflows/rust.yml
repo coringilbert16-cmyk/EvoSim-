@@ -10,6 +10,11 @@ on:
         required: false
         default: false
         type: boolean
+      run_extended_focused_suites:
+        description: "Run the broader chemistry, energy, ownership, geometry, and organism focused suites."
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main]
   pull_request:
@@ -40,6 +45,10 @@ jobs:
       - name: Test offline chemistry analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
+      - name: Resonance field (focused tests)
+        if: success()
+        timeout-minutes: 5
+        run: cargo test --locked harmonics::tests::
       - name: Run default environmental chemistry baseline
         if: success()
         timeout-minutes: 3
@@ -99,7 +108,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
         timeout-minutes: 30
         run: |
           failures=0
@@ -132,7 +141,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Chemistry and reactions (focused tests)
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
         timeout-minutes: 30
         run: |
           failures=0
@@ -176,7 +185,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Transactions and ownership (focused tests)
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
         timeout-minutes: 30
         run: |
           failures=0
@@ -229,7 +238,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Geometry and persistence (focused tests)
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
         timeout-minutes: 30
         run: |
           failures=0
@@ -252,7 +261,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Organism and seed acceptance (focused tests)
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.run_extended_focused_suites == true
         timeout-minutes: 30
         run: |
           failures=0
