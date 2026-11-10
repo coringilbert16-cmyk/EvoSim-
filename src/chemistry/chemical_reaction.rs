@@ -2317,7 +2317,6 @@ mod material_identity_tests {
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -2363,7 +2362,6 @@ mod material_identity_tests {
             activation_signal: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.5,
         };
@@ -2403,7 +2401,6 @@ mod material_identity_tests {
             activation_signal: 0.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.0,
         };
@@ -2450,7 +2447,6 @@ mod material_identity_tests {
             activation_signal: disruption_cost,
             disruption_cost,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: disruption_cost,
         };
@@ -2493,7 +2489,6 @@ mod material_identity_tests {
             activation_signal: 1_000_000.0,
             disruption_cost: bond.bond_energy + 1.0,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 1_000_000.0,
         };
@@ -2535,7 +2530,6 @@ mod material_identity_tests {
             activation_signal: 1_000.0,
             disruption_cost: 0.0,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -2588,7 +2582,6 @@ mod material_identity_tests {
             activation_signal: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 0.5,
         };
@@ -2630,7 +2623,6 @@ mod material_identity_tests {
             activation_signal: 1_000.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: 2.5,
         };
@@ -2693,7 +2685,6 @@ mod material_identity_tests {
             activation_signal,
             disruption_cost,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: "test|rev:0|bond".into(),
             accumulated_reaction: activation_signal,
         };
@@ -2834,7 +2825,6 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
             accumulated_reaction: 1.0,
         };
@@ -2886,7 +2876,6 @@ mod material_identity_tests {
                 activation_signal: 1.0,
                 disruption_cost: 0.5,
                 reaction_frequency_cycles_per_day: 440.0,
-                local_resonance_similarity: 0.0,
                 accumulation_key: format!("graph|candidate-{index:02}"),
                 accumulated_reaction: 1.0 + index as f64,
             })
@@ -2958,7 +2947,6 @@ mod material_identity_tests {
             activation_signal: progress,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
-            local_resonance_similarity: 0.0,
             accumulation_key: key.into(),
             accumulated_reaction: progress,
         };
