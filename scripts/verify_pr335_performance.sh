@@ -41,17 +41,16 @@ fi
 matches="$(find "$ROOT/src" -type f -name '*.rs' \
   ! -path "$ROOT/src/chemistry/environmental_broad_phase.rs" \
   ! -path "$ROOT/src/chemistry/environmental_interaction.rs" \
-  ! -path "$ROOT/src/chemistry/environmental_snapshot_cursor.rs" \
   ! -path "$ROOT/src/main.rs" \
   ! -path "$ROOT/src/tests/*" \
-  -exec grep -nHE 'environmental_(broad_phase|interaction|snapshot_cursor)::' {} + || true)"
+  -exec grep -nHE 'environmental_(broad_phase|interaction)::' {} + || true)"
 if [[ -n "$matches" ]]; then
   echo "A source file outside the extracted modules references the new discovery modules:"
   echo "$matches"
   exit 1
 fi
 
-for module in environmental_broad_phase environmental_interaction environmental_snapshot_cursor; do
+for module in environmental_broad_phase environmental_interaction; do
   grep -q "mod $module;" "$ROOT/src/main.rs" || {
     echo "Module $module is not registered in src/main.rs; its tests may not execute."
     exit 1
