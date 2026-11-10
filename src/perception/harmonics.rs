@@ -266,16 +266,13 @@ pub(crate) fn material_resonance_density_on_receiver(
     // First average repeated boundary patches from each source within a map
     // cell. This prevents a finely segmented receiver boundary from counting
     // the same source field multiple times merely because it has more patches.
-    let mut source_cells = std::collections::BTreeMap::<
-        (i64, i64, usize),
-        Vec<(ToneComponent, usize)>,
-    >::new();
+    let mut source_cells =
+        std::collections::BTreeMap::<(i64, i64, usize), Vec<(ToneComponent, usize)>>::new();
 
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let receptions = material_aura_receptions_with_occluders(
-            source, receiver, materials, catalog, tick,
-        )?;
+        let receptions =
+            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
         for reception in receptions {
             if !reception.receiver_x.is_finite()
                 || !reception.receiver_y.is_finite()
@@ -2387,8 +2384,9 @@ mod tests {
             .expect("carbon should have a valid realized physical shape")
         };
         let materials = vec![make_material(0.0), make_material(4.0), make_material(8.0)];
-        let density = material_resonance_density_on_receiver(&materials, &[0, 2], 1, &catalog, 0, 1.0)
-            .expect("valid realized materials should produce a local density sample");
+        let density =
+            material_resonance_density_on_receiver(&materials, &[0, 2], 1, &catalog, 0, 1.0)
+                .expect("valid realized materials should produce a local density sample");
 
         assert!(!density.is_empty());
         assert!(density.iter().all(|sample| {
@@ -2404,9 +2402,9 @@ mod tests {
                         && component.phase_radians.is_finite()
                 })
         }));
-        assert!(density.windows(2).all(|pair| {
-            (pair[0].cell_y, pair[0].cell_x) <= (pair[1].cell_y, pair[1].cell_x)
-        }));
+        assert!(density
+            .windows(2)
+            .all(|pair| { (pair[0].cell_y, pair[0].cell_x) <= (pair[1].cell_y, pair[1].cell_x) }));
     }
 
     #[test]
@@ -2422,10 +2420,18 @@ mod tests {
             &catalog,
         )
         .expect("carbon should have a valid realized physical shape");
-        assert!(material_resonance_density_on_receiver(&[material.clone()], &[], 0, &catalog, 0, 0.0)
-            .is_none());
-        assert!(material_resonance_density_on_receiver(&[material], &[], 1, &catalog, 0, 1.0)
-            .is_none());
+        assert!(material_resonance_density_on_receiver(
+            std::slice::from_ref(&material),
+            &[],
+            0,
+            &catalog,
+            0,
+            0.0
+        )
+        .is_none());
+        assert!(
+            material_resonance_density_on_receiver(&[material], &[], 1, &catalog, 0, 1.0).is_none()
+        );
     }
 
     #[test]
