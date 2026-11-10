@@ -231,3 +231,28 @@ jobs:
         if: always()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
+  pr335-discovery-benchmark:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 335
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify extracted modules remain isolated from production reaction execution
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/verify_pr335_performance.sh --isolation-only
+      - name: Run isolated discovery scaling benchmark
+        run: |
+          set -euo pipefail
+          cargo test --release --locked environmental_discovery_scaling_benchmark -- --ignored --nocapture | tee pr335-discovery-benchmark.csv
+      - name: Upload isolated discovery benchmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr335-isolated-discovery-benchmark
+          path: pr335-discovery-benchmark.csv
+          if-no-files-found: error
+          retention-days: 30

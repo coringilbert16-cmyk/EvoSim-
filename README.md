@@ -135,3 +135,74 @@ The full test suite is currently **not green**. A maintenance change is acceptab
 ## Specification authority
 
 The project's design authority is **Master Technical Specification v2.4** (`EVOSIM-MASTER-2.4`, recall phrase “Master Spec 2.4”). This README is the repository's current implementation map and status record; it must reflect the specification and explicit later decisions, while dated handoffs remain historical evidence. If an implementation checkpoint and a design decision conflict, resolve the conflict explicitly rather than silently treating old notes as current.
+
+## Environmental discovery experiments — PR #335
+
+This section records the measured outcomes of the isolated environmental-discovery research extracted from PR #321. These experiments did not change production reaction execution. BREAK, COMBINE, and DISPLACEMENT remain on their original sequential paths.
+
+### Confirmed isolated improvements
+
+The release-mode benchmark used deterministic realized Carbon materials in the 250 × 250 world (625 cells), uniform and four-per-cell clustered layouts, 7 repetitions per size, and sizes from 128 to 5,120 materials. Candidate sets were compared against exhaustive unordered and directed reference traversals.
+
+At 1,280 materials:
+
+| Operation | Indexed method | Exhaustive reference | Result |
+|---|---:|---:|---|
+| Unordered candidate discovery | 275–406 µs | 1,270–1,364 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
+| Directed candidate discovery | 220–233 µs | 1,395–1,502 µs | Exact candidate-set parity; 99.77–99.92% fewer candidates |
+| Incremental material-bounds preparation | 32–34 µs | Eager restoration: 353–363 µs | Exact bounds parity |
+
+At 5,120 materials, one-shot spatial discovery took 3.2–4.3 ms unordered and 1.3–2.2 ms directed, versus approximately 19.9–20.0 ms unordered and 20.7–21.7 ms directed for exhaustive discovery. Candidate reduction was about 99.86%.
+
+The estimated snapshot/index/bounds vector payload was about 210–220 KB at 1,280 materials and 752–758 KB at 5,120 materials. This estimate excludes BTreeMap node overhead and the live field.
+
+**Decision:** retain the stable material identity/reference contracts, indexed cell lookup, one-shot spatial pair window, and incremental material-bounds cursor as validated isolated discovery improvements. This is not evidence of increased production simulation throughput or reaction counts: these modules remain disconnected from production reaction execution. Any future production integration requires exact reaction-parity checks and an end-to-end before/after benchmark.
+
+### Failed experiments — do not reintroduce as optimizations
+
+#### Shared immutable tick-start snapshot and deferred reaction execution
+
+The #321 architecture attempted to share a tick-start snapshot across reaction paths and defer commits/reservations.
+
+| Method | Median benchmark time | Relative to original | Final physical resources |
+|---|---:|---:|---:|
+| Original sequential baseline | 20.251 s | Reference | 1,288 |
+| Shared cell index / immutable snapshot | 27.780 s | **37.2% slower** | 1,270 |
+| Shared AABB index / immutable snapshot | 28.310 s | **39.8% slower** | 1,266 |
+
+The shared approaches also produced different inventories from the original path. The full #321 Rust suite at the latest tested revision had 998 passed and 1 failed; the failing AABB parity case exposed reversed participant ordering for an unordered pair (11,14) versus (14,11).
+
+**Decision:** reject the shared tick-start/deferred-execution architecture. Do not change reaction semantics, ordering, or commit timing merely to share a broad-phase architecture.
+
+#### AABB-tree broad phase
+
+The AABB-tree implementation failed unordered-pair parity in addition to being slower in the paired benchmark above (28.310 s versus 20.251 s baseline, +39.8%).
+
+**Decision:** reject this AABB-tree path. The spatial-cell query is the measured path to retain; do not revive the tree without a new design and a corrected exhaustive-oracle proof.
+
+#### Full-universe SpatialPairCursor
+
+The cursor checked every possible material pair rather than narrowing work to nearby spatial candidates. At 1,280 materials this meant 818,560 unordered pair checks or 1,637,120 directed checks. It took roughly 33–38 ms, compared with roughly 0.28–0.41 ms for the one-shot unordered spatial window and 0.22–0.23 ms for directed discovery.
+
+**Decision:** reject as a production discovery strategy. It remains only as a test negative control and is compiled only in test builds.
+
+#### Repeated 128-pair pagination by rebuilding the spatial window
+
+The current spatial_pair_window implementation builds the full candidate collection before applying its start/limit arguments. Repeated 128-pair pages therefore rebuild the same candidate set.
+
+At 1,280 materials, repeated paging took 1.4–5.9 ms unordered and 1.9–5.9 ms directed, around or slower than exhaustive discovery. At 5,120 materials, repeated-page cost was 0.47–0.61 seconds unordered and 0.35–0.58 seconds directed.
+
+**Decision:** reject repeated full-window rebuilding as a bounded-work strategy. A future implementation must advance through cell queries incrementally and must demonstrate bounded work per page without reconstructing the complete candidate set.
+
+### Deferred research — deliberately excluded from the merge-ready change
+
+- **Resumable snapshot-construction cursor:** it has tests proving per-page work limits, invalidation behavior, and exact equivalence with eager snapshot construction, but no benchmark yet demonstrates a meaningful total-cost or throughput advantage. It has been moved to a separate draft research PR stacked on the isolated discovery foundation; it is not part of the merge-ready #335 change.
+- **Evaluation-journal abstraction:** not implemented in the retained branch. Defer until a concrete production consumer and measured benefit exist; it must not alter reaction ordering or commit semantics by assumption.
+- **Restoration/spatial-window cache architecture:** excluded from the retained branch. Defer until profiling shows repeated preparation is a material end-to-end cost and invalidation can be proven correct.
+- **Genuinely incremental cell-query pagination:** future experiment required before any bounded production discovery path is considered. It must avoid full candidate-set rebuilds and pass exact unordered/directed parity at every page boundary.
+- **Shared BREAK/COMBINE/DISPLACEMENT execution or candidate handoff:** not promoted. The isolated tests establish specific discovery/inventory parity, not equivalence of shared reaction scheduling, eligibility, activation, energy funding, ordering, or commits. No measured end-to-end benefit exists. Keep the original production paths separate until every reaction path has an exact semantic oracle and a paired throughput test.
+- **Runtime diagnostic counters:** excluded from production. They add work to the hot path without themselves improving discovery; use test-only counters or external profiling when a specific measurement question justifies them, and measure instrumentation overhead before retaining any runtime counter.
+
+### Validation record
+
+The cleaned #335 head passed both CI jobs in [workflow run #42824408058](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/42824408058): formatting, repository architecture checks, default environmental chemistry baseline, focused energy/chemistry/transaction/geometry/organism tests, full Rust suite (**984 passed, 0 failed, 1 intentionally ignored**), Clippy, production-isolation verification, and the isolated release benchmark (**1 passed, 0 failed**).

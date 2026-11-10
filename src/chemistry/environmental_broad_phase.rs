@@ -36,9 +36,13 @@ pub(crate) struct EnvironmentalMaterialSnapshot {
     pub(crate) existing_bonds: Vec<ExistingBondRecord>,
     /// Snapshot-owned indexes reused by all reaction projections.
     pub(crate) material_indices_by_cell: Vec<Vec<usize>>,
+    /// O(1) mapping from a live cell/material slot to its snapshot record.
+    pub(crate) material_index_by_cell_slot: Vec<Vec<Option<usize>>>,
     pub(crate) bond_indices_by_material: std::collections::BTreeMap<MaterialIdentity, Vec<usize>>,
     pub(crate) cell_visits: u64,
     pub(crate) material_visits: u64,
+    /// Raw live bond records, including invalid endpoint records.
+    pub(crate) bond_record_count: u64,
     pub(crate) unassigned_materials: u64,
 }
 
@@ -241,7 +245,11 @@ impl MaterialBoundsCursor {
                                 .as_ref()
                                 .is_none_or(|shapes| shapes.len() == record.constituent_count)
                     });
-                self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                if record.constituent_count == 0 {
+                    page.completed_materials = page.completed_materials.saturating_add(1);
+                } else {
+                    self.current = Some(MaterialBoundsProgress::new(material_index, valid));
+                }
                 continue;
             }
 
@@ -378,6 +386,12 @@ impl EnvironmentalMaterialSnapshot {
         for (cell_index, cell) in field.cells.iter().enumerate() {
             for (material_index, physical) in cell.physical_materials.iter().enumerate() {
                 snapshot.material_visits = snapshot.material_visits.saturating_add(1);
+                snapshot.bond_record_count = snapshot.bond_record_count.saturating_add(
+                    physical
+                        .internal_connections
+                        .as_ref()
+                        .map_or(0, |connections| connections.len() as u64),
+                );
                 let identity = MaterialIdentity(physical.environmental_identity);
                 if identity.0 == 0 {
                     snapshot.unassigned_materials = snapshot.unassigned_materials.saturating_add(1);
@@ -429,12 +443,24 @@ impl EnvironmentalMaterialSnapshot {
         snapshot
             .material_indices_by_cell
             .resize(field.cells.len(), Vec::new());
+        snapshot.material_index_by_cell_slot = field
+            .cells
+            .iter()
+            .map(|cell| vec![None; cell.physical_materials.len()])
+            .collect();
         for (material_index, material) in snapshot.materials.iter().enumerate() {
             if let Some(indices) = snapshot
                 .material_indices_by_cell
                 .get_mut(material.locator.cell_index)
             {
                 indices.push(material_index);
+            }
+            if let Some(slot) = snapshot
+                .material_index_by_cell_slot
+                .get_mut(material.locator.cell_index)
+                .and_then(|slots| slots.get_mut(material.locator.material_index))
+            {
+                *slot = Some(material_index);
             }
         }
         for bond in &snapshot.existing_bonds {
@@ -738,6 +764,7 @@ impl EnvironmentalMaterialSnapshot {
 /// `spatial_pair_window`, this never constructs the complete candidate set.
 /// Bounds are supplied by a separately prepared snapshot phase; this cursor
 /// accounts for every pair predicate it evaluates.
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SpatialPairCursor {
     pass_id: u64,
@@ -749,6 +776,7 @@ pub(crate) struct SpatialPairCursor {
     complete: bool,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SpatialCursorPage {
     pub(crate) pairs: Vec<MaterialPairRecord>,
@@ -758,6 +786,7 @@ pub(crate) struct SpatialCursorPage {
     pub(crate) complete: bool,
 }
 
+#[cfg(test)]
 impl SpatialPairCursor {
     pub(crate) fn new(
         snapshot: &EnvironmentalMaterialSnapshot,
@@ -2799,5 +2828,675 @@ mod tests {
         assert_eq!(snapshot.unassigned_materials, 1);
         assert!(snapshot.materials.is_empty());
         assert_eq!(snapshot.known_pair_count(), 0);
+    }
+
+    #[test]
+    fn indexed_cursor_oracle_covers_vertical_wrap_bonded_and_unbonded_materials() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(40.0, 40.0, 10.0);
+        let bonded = realized_physical(
+            20,
+            Material {
+                parts: vec![("Carbon".to_owned(), 1.0), ("Carbon".to_owned(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.5,
+                    y: 0.0,
+                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                },
+            ],
+            &catalog,
+        );
+        let unbonded = realized_physical(
+            10,
+            Material::free_base("Oxygen", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        );
+        // Put the bonded source in the bottom row and the free source in the
+        // top row. Their expanded bounds must discover one another through
+        // the field's vertical wrap.
+        field.cells[12].physical_materials.push(bonded);
+        field.cells[0].physical_materials.push(unbonded);
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 901);
+        assert_eq!(snapshot.materials.len(), 2);
+        assert_eq!(snapshot.existing_bonds.len(), 1);
+        assert_eq!(snapshot.existing_bonds[0].material, MaterialIdentity(20));
+
+        let mut bounds = vec![None; snapshot.materials.len()];
+        for (index, material) in snapshot.materials.iter().enumerate() {
+            bounds[index] = Some(if material.identity == MaterialIdentity(20) {
+                MaterialSpatialBounds {
+                    min_x: 0.0,
+                    max_x: 2.0,
+                    min_y: 38.0,
+                    max_y: 40.0,
+                }
+            } else {
+                MaterialSpatialBounds {
+                    min_x: 0.0,
+                    max_x: 2.0,
+                    min_y: 0.0,
+                    max_y: 2.0,
+                }
+            });
+        }
+
+        let target_cell_limit = bounds
+            .iter()
+            .flatten()
+            .filter_map(|value| IndexedSpatialCursor::target_cell_count(&field, *value, 2.1))
+            .max()
+            .unwrap_or(1);
+        let expected_by_orientation = [
+            (
+                PairOrientation::Unordered,
+                std::collections::BTreeSet::from([(10, 20)]),
+            ),
+            (
+                PairOrientation::Directed,
+                std::collections::BTreeSet::from([(10, 20), (20, 10)]),
+            ),
+            (
+                PairOrientation::ForwardOrdered,
+                std::collections::BTreeSet::from([(10, 20)]),
+            ),
+        ];
+
+        for (orientation, expected) in expected_by_orientation {
+            let (reference, coverage) =
+                snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
+            let reference_pairs = reference
+                .into_iter()
+                .map(|pair| (pair.identity_left.0, pair.identity_right.0))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(reference_pairs, expected, "reference {orientation:?}");
+            assert_eq!(coverage.known_pairs as usize, expected.len());
+
+            let mut cursor = IndexedSpatialCursor::new(&snapshot, &field, orientation);
+            let mut actual = std::collections::BTreeSet::new();
+            let mut pages = 0;
+            loop {
+                let page =
+                    cursor.next_page(&snapshot, &field, &bounds, 2.1, target_cell_limit, 1, 1);
+                assert!(page.visited_work <= 1);
+                assert!(page.pairs.len() <= 1);
+                actual.extend(
+                    page.pairs
+                        .into_iter()
+                        .map(|pair| (pair.identity_left.0, pair.identity_right.0)),
+                );
+                pages += 1;
+                if page.complete {
+                    break;
+                }
+                assert!(page.visited_work > 0);
+                assert!(pages < 16);
+            }
+            assert_eq!(actual, expected, "indexed cursor {orientation:?}");
+        }
+    }
+
+    #[test]
+    fn material_bounds_cursor_completes_empty_material_without_fake_constituent_work() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(20.0, 10.0, 10.0);
+        let mut empty = physical(1, "Carbon");
+        empty.material.parts.clear();
+        field.cells[0].physical_materials.push(empty);
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 103);
+        assert_eq!(snapshot.materials.len(), 1);
+        assert_eq!(snapshot.materials[0].constituent_count, 0);
+
+        let mut cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+        let page = cursor.next_page(&snapshot, &field, &catalog, 1);
+
+        assert!(page.complete);
+        assert_eq!(page.visited_work, 1);
+        assert_eq!(page.material_headers_inspected, 1);
+        assert_eq!(page.constituent_inspections, 0);
+        assert_eq!(page.deferred_work, 0);
+        assert_eq!(page.completed_materials, 1);
+        assert_eq!(page.bounds, Some(vec![None]));
+    }
+
+    #[test]
+    fn reverse_only_cursor_matches_directed_candidates_for_asymmetric_bounds_and_page_sizes() {
+        let mut field = ActiveMaterialField::new(60.0, 40.0, 10.0);
+        for (cell_index, identities) in [
+            (0, vec![70, 10]),
+            (1, vec![60]),
+            (4, vec![20, 50]),
+            (7, vec![30]),
+            (11, vec![40]),
+            (17, vec![80]),
+            (23, vec![90]),
+        ] {
+            for identity in identities {
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(physical(identity, "Carbon"));
+            }
+        }
+
+        let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+        let bounds = snapshot
+            .materials
+            .iter()
+            .map(|record| {
+                let (x, y) = field.cell_center(record.locator.cell_index);
+                let radius = match record.identity.0 % 5 {
+                    0 => 0.25,
+                    1 => 3.0,
+                    2 => 8.0,
+                    3 => 14.0,
+                    _ => 19.0,
+                };
+                Some(MaterialSpatialBounds {
+                    min_x: x - radius,
+                    max_x: x + radius,
+                    min_y: y - radius,
+                    max_y: y + radius,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for tick in 0..9 {
+            for anchor_index in 0..snapshot.materials.len() {
+                let target_cell_count = IndexedSpatialCursor::target_cell_count(
+                    &field,
+                    bounds[anchor_index].expect("every fixture material has bounds"),
+                    2.1,
+                )
+                .expect("fixture bounds intersect the field");
+
+                for work_limit in 1..=4 {
+                    for output_limit in 1..=2 {
+                        let mut directed = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::Directed,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut expected = Vec::new();
+                        let mut pages = 0;
+                        loop {
+                            let page = directed.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            expected.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "directed cursor failed to make progress");
+                        }
+
+                        let mut reverse = IndexedSpatialCursor::new_for_reverse_anchor(
+                            &snapshot,
+                            &field,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        let mut actual = Vec::new();
+                        pages = 0;
+                        loop {
+                            let page = reverse.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "reverse cursor failed to make progress");
+                        }
+
+                        let mut forward = IndexedSpatialCursor::new_for_anchor(
+                            &snapshot,
+                            &field,
+                            PairOrientation::ForwardOrdered,
+                            tick,
+                            anchor_index,
+                        )
+                        .expect("anchor index is valid");
+                        pages = 0;
+                        loop {
+                            let page = forward.next_page(
+                                &snapshot,
+                                &field,
+                                &bounds,
+                                2.1,
+                                target_cell_count,
+                                work_limit,
+                                output_limit,
+                            );
+                            assert!(page.visited_work <= work_limit as u64);
+                            actual.extend(
+                                page.pairs
+                                    .into_iter()
+                                    .map(|pair| (pair.identity_left, pair.identity_right)),
+                            );
+                            pages += 1;
+                            if page.complete {
+                                break;
+                            }
+                            assert!(pages < 2_000, "forward cursor failed to make progress");
+                        }
+
+                        expected.sort_unstable();
+                        actual.sort_unstable();
+                        assert_eq!(
+                            actual,
+                            expected,
+                            "tick={tick}, anchor={anchor_index}, work={work_limit}, output={output_limit}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// Opt-in release benchmark for the isolated discovery update. It is
+    /// deliberately ignored in ordinary CI: run with
+    /// `cargo test --release environmental_discovery_scaling_benchmark -- --ignored --nocapture`.
+    ///
+    /// Fixtures are deterministic and compare the complete spatial candidate
+    /// set against an exhaustive pair oracle. Timings include snapshot creation
+    /// and synthetic conservative-bounds preparation as separately reported
+    /// phases; no production reaction path is called.
+    #[test]
+    #[ignore = "explicit isolated discovery benchmark"]
+    fn environmental_discovery_scaling_benchmark() {
+        use std::hint::black_box;
+        use std::time::Instant;
+
+        fn median(values: &mut [u128]) -> u128 {
+            values.sort_unstable();
+            values[values.len() / 2]
+        }
+
+        fn fixture(
+            count: usize,
+            clustered: bool,
+        ) -> (ActiveMaterialField, Vec<crate::resources::BaseResource>) {
+            let catalog = crate::resources::default_catalog();
+            let mut field = ActiveMaterialField::new(250.0, 250.0, 10.0);
+            for index in 0..count {
+                let cell_index = if clustered {
+                    (index / 4) % field.cells.len()
+                } else {
+                    (index * 251) % field.cells.len()
+                };
+                let x = (cell_index % 25) as f64 * 10.0 + 5.0;
+                let y = (cell_index / 25) as f64 * 10.0 + 5.0;
+                field.cells[cell_index]
+                    .physical_materials
+                    .push(realized_physical(
+                        index as u64 + 1,
+                        Material::free_base("Carbon", 1.0),
+                        vec![crate::structure::Placement {
+                            x,
+                            y,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    ));
+            }
+            (field, catalog)
+        }
+
+        fn exhaustive(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            field: &ActiveMaterialField,
+            bounds: &[Option<MaterialSpatialBounds>],
+            padding: f64,
+        ) -> std::collections::BTreeSet<(MaterialIdentity, MaterialIdentity)> {
+            let reached = bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .and_then(|value| value.expanded(padding))
+                        .map(|value| {
+                            field.cells_intersecting_bounds(
+                                value.min_x,
+                                value.max_x,
+                                value.min_y,
+                                value.max_y,
+                            )
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let mut pairs = std::collections::BTreeSet::new();
+            for left in 0..snapshot.materials.len() {
+                for right in left + 1..snapshot.materials.len() {
+                    let a = &snapshot.materials[left];
+                    let b = &snapshot.materials[right];
+                    if reached[left].contains(&b.locator.cell_index)
+                        || reached[right].contains(&a.locator.cell_index)
+                    {
+                        pairs.insert((a.identity, b.identity));
+                    }
+                }
+            }
+            pairs
+        }
+
+        fn exhaustive_directed(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            field: &ActiveMaterialField,
+            bounds: &[Option<MaterialSpatialBounds>],
+            padding: f64,
+        ) -> std::collections::BTreeSet<(MaterialIdentity, MaterialIdentity)> {
+            let reached = bounds
+                .iter()
+                .map(|bound| {
+                    bound
+                        .and_then(|value| value.expanded(padding))
+                        .map(|value| {
+                            field.cells_intersecting_bounds(
+                                value.min_x,
+                                value.max_x,
+                                value.min_y,
+                                value.max_y,
+                            )
+                        })
+                        .unwrap_or_default()
+                })
+                .collect::<Vec<_>>();
+            let mut pairs = std::collections::BTreeSet::new();
+            for (anchor, (anchor_material, anchor_cells)) in
+                snapshot.materials.iter().zip(reached.iter()).enumerate()
+            {
+                for (target, target_material) in snapshot.materials.iter().enumerate() {
+                    if anchor == target {
+                        continue;
+                    }
+                    if anchor_cells.contains(&target_material.locator.cell_index) {
+                        pairs.insert((anchor_material.identity, target_material.identity));
+                    }
+                }
+            }
+            pairs
+        }
+
+        fn vector_bytes_lower_bound(
+            snapshot: &EnvironmentalMaterialSnapshot,
+            bounds: &[Option<MaterialSpatialBounds>],
+        ) -> usize {
+            use std::mem::size_of;
+
+            let cell_index_bytes = snapshot
+                .material_indices_by_cell
+                .iter()
+                .map(|indices| indices.capacity() * size_of::<usize>())
+                .sum::<usize>();
+            let slot_index_bytes = snapshot
+                .material_index_by_cell_slot
+                .iter()
+                .map(|slots| slots.capacity() * size_of::<Option<usize>>())
+                .sum::<usize>();
+            snapshot.materials.capacity() * size_of::<MaterialRecord>()
+                + snapshot.existing_bonds.capacity() * size_of::<ExistingBondRecord>()
+                + snapshot.material_indices_by_cell.capacity() * size_of::<Vec<usize>>()
+                + cell_index_bytes
+                + snapshot.material_index_by_cell_slot.capacity() * size_of::<Vec<Option<usize>>>()
+                + slot_index_bytes
+                + std::mem::size_of_val(bounds)
+        }
+        println!(
+            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_paged128_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_paged128_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
+        );
+        for count in [128usize, 320, 640, 1280, 2560, 5120] {
+            for clustered in [false, true] {
+                let layout = if clustered {
+                    "clustered_4_per_cell"
+                } else {
+                    "uniform_occupancy"
+                };
+                let (field, catalog) = fixture(count, clustered);
+                let mut snapshot_times = Vec::new();
+                let mut bounds_restore_times = Vec::new();
+                let mut bounds_cursor_times = Vec::new();
+                let mut exhaustive_times = Vec::new();
+                let mut spatial_times = Vec::new();
+                let mut cursor_times = Vec::new();
+                let mut paged_spatial_times = Vec::new();
+                let mut directed_paged_spatial_times = Vec::new();
+                let mut directed_exhaustive_times = Vec::new();
+                let mut directed_spatial_times = Vec::new();
+                let mut directed_cursor_times = Vec::new();
+                let mut spatial_count = 0usize;
+                let mut directed_count = 0usize;
+                let mut cursor_checks = 0u64;
+                let mut directed_cursor_checks = 0u64;
+                let mut memory_lower_bound = 0usize;
+                let mut parity_ok = true;
+
+                for _ in 0..7 {
+                    let start = Instant::now();
+                    let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
+                    snapshot_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let restored_bounds = snapshot.spatial_bounds_from_field(&field, &catalog);
+                    bounds_restore_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let mut bounds_cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+                    let bounds = loop {
+                        let page = bounds_cursor.next_page(&snapshot, &field, &catalog, 64);
+                        assert!(page.visited_work <= 64);
+                        if page.complete {
+                            break page.bounds.expect("completed bounds cursor returns bounds");
+                        }
+                    };
+                    bounds_cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= bounds == restored_bounds;
+                    memory_lower_bound = vector_bytes_lower_bound(&snapshot, &bounds);
+
+                    let start = Instant::now();
+                    let expected = exhaustive(&snapshot, &field, &bounds, 2.0);
+                    exhaustive_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let (pairs, coverage) = snapshot.spatial_pair_window(
+                        &field,
+                        &bounds,
+                        2.0,
+                        0,
+                        usize::MAX,
+                        PairOrientation::Unordered,
+                    );
+                    spatial_times.push(start.elapsed().as_micros());
+                    let actual = pairs
+                        .iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right))
+                        .collect::<std::collections::BTreeSet<_>>();
+                    spatial_count = pairs.len();
+                    parity_ok &=
+                        actual == expected && coverage.known_pairs == expected.len() as u64;
+
+                    let start = Instant::now();
+                    let mut paged_start = 0u64;
+                    let mut paged_count = 0usize;
+                    while paged_start < coverage.known_pairs {
+                        let (page, page_coverage) = snapshot.spatial_pair_window(
+                            &field,
+                            &bounds,
+                            2.0,
+                            paged_start,
+                            128,
+                            PairOrientation::Unordered,
+                        );
+                        paged_count += page.len();
+                        paged_start += page_coverage.visited_pairs;
+                    }
+                    paged_spatial_times.push(start.elapsed().as_micros());
+                    parity_ok &= paged_count == expected.len();
+
+                    let start = Instant::now();
+                    let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Unordered);
+                    let mut cursor_pairs = 0usize;
+                    let mut run_cursor_checks = 0u64;
+                    loop {
+                        let page = cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        run_cursor_checks =
+                            run_cursor_checks.saturating_add(page.visited_pair_checks);
+                        cursor_pairs += page.pairs.len();
+                        if page.complete {
+                            break;
+                        }
+                    }
+                    cursor_checks = run_cursor_checks;
+                    cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= cursor_pairs == expected.len();
+
+                    let start = Instant::now();
+                    let expected_directed = exhaustive_directed(&snapshot, &field, &bounds, 2.0);
+                    directed_exhaustive_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let (directed_pairs, directed_coverage) = snapshot.spatial_pair_window(
+                        &field,
+                        &bounds,
+                        2.0,
+                        0,
+                        usize::MAX,
+                        PairOrientation::Directed,
+                    );
+                    directed_spatial_times.push(start.elapsed().as_micros());
+                    let actual_directed = directed_pairs
+                        .iter()
+                        .map(|pair| (pair.identity_left, pair.identity_right))
+                        .collect::<std::collections::BTreeSet<_>>();
+                    directed_count = directed_pairs.len();
+                    parity_ok &= actual_directed == expected_directed
+                        && directed_coverage.known_pairs == expected_directed.len() as u64;
+
+                    let start = Instant::now();
+                    let mut directed_paged_start = 0u64;
+                    let mut directed_paged_count = 0usize;
+                    while directed_paged_start < directed_coverage.known_pairs {
+                        let (page, page_coverage) = snapshot.spatial_pair_window(
+                            &field,
+                            &bounds,
+                            2.0,
+                            directed_paged_start,
+                            128,
+                            PairOrientation::Directed,
+                        );
+                        directed_paged_count += page.len();
+                        directed_paged_start += page_coverage.visited_pairs;
+                    }
+                    directed_paged_spatial_times.push(start.elapsed().as_micros());
+                    parity_ok &= directed_paged_count == expected_directed.len();
+
+                    let start = Instant::now();
+                    let mut directed_cursor =
+                        SpatialPairCursor::new(&snapshot, PairOrientation::Directed);
+                    let mut directed_cursor_pairs = 0usize;
+                    let mut run_directed_cursor_checks = 0u64;
+                    loop {
+                        let page =
+                            directed_cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        run_directed_cursor_checks =
+                            run_directed_cursor_checks.saturating_add(page.visited_pair_checks);
+                        directed_cursor_pairs += page.pairs.len();
+                        if page.complete {
+                            break;
+                        }
+                    }
+                    directed_cursor_checks = run_directed_cursor_checks;
+                    directed_cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= directed_cursor_pairs == expected_directed.len();
+                    black_box((&snapshot, &bounds, &actual, &actual_directed));
+                }
+
+                let unordered_pairs =
+                    (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+                let directed_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64);
+                let unordered_reduction = if unordered_pairs == 0 {
+                    0.0
+                } else {
+                    (1.0 - spatial_count as f64 / unordered_pairs as f64) * 100.0
+                };
+                let directed_reduction = if directed_pairs == 0 {
+                    0.0
+                } else {
+                    (1.0 - directed_count as f64 / directed_pairs as f64) * 100.0
+                };
+                println!(
+                    "{count},{layout},625,{snapshot_us},{bounds_restore_us},{bounds_cursor_us},{unordered_exhaustive_us},{unordered_spatial_us},{unordered_paged128_us},{unordered_cursor_us},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{directed_exhaustive_us},{directed_spatial_us},{directed_paged128_us},{directed_cursor_us},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{parity}",
+                    snapshot_us = median(&mut snapshot_times),
+                    bounds_restore_us = median(&mut bounds_restore_times),
+                    bounds_cursor_us = median(&mut bounds_cursor_times),
+                    unordered_exhaustive_us = median(&mut exhaustive_times),
+                    unordered_spatial_us = median(&mut spatial_times),
+                    unordered_paged128_us = median(&mut paged_spatial_times),
+                    unordered_cursor_us = median(&mut cursor_times),
+                    directed_exhaustive_us = median(&mut directed_exhaustive_times),
+                    directed_spatial_us = median(&mut directed_spatial_times),
+                    directed_paged128_us = median(&mut directed_paged_spatial_times),
+                    directed_cursor_us = median(&mut directed_cursor_times),
+                    unordered_pairs = unordered_pairs,
+                    spatial_count = spatial_count,
+                    unordered_reduction = unordered_reduction,
+                    cursor_checks = cursor_checks,
+                    directed_pairs = directed_pairs,
+                    directed_count = directed_count,
+                    directed_reduction = directed_reduction,
+                    directed_cursor_checks = directed_cursor_checks,
+                    memory_lower_bound = memory_lower_bound,
+                    parity = if parity_ok { "PASS" } else { "FAIL" },
+                );
+                assert!(
+                    parity_ok,
+                    "spatial discovery diverged from exhaustive oracle at {count} ({layout})"
+                );
+            }
+        }
     }
 }

@@ -95,10 +95,14 @@ mod decomposition;
 mod diagnostics;
 #[path = "chemistry/energy_ledger.rs"]
 mod energy_ledger;
+#[path = "chemistry/environmental_broad_phase.rs"]
+mod environmental_broad_phase;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
 #[path = "chemistry/environmental_displacement.rs"]
 mod environmental_displacement;
+#[path = "chemistry/environmental_interaction.rs"]
+mod environmental_interaction;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
@@ -157,6 +161,9 @@ mod blueprint_spatial_target_tests;
 #[cfg(test)]
 #[path = "tests/bond_driven_contract_tests.rs"]
 mod bond_driven_contract_tests;
+#[cfg(test)]
+#[path = "tests/environmental_discovery_parity_tests.rs"]
+mod environmental_discovery_parity_tests;
 #[cfg(test)]
 #[path = "tests/observation_contract_tests.rs"]
 mod observation_contract_tests;
