@@ -34,6 +34,9 @@ jobs:
       - name: Test offline chemistry analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
+      - name: Test offline chemical organization analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
       - name: Run default environmental chemistry baseline
         if: always()
         timeout-minutes: 3
@@ -52,6 +55,12 @@ jobs:
           python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-analysis.json \
             --markdown-out environmental-chemistry-analysis.md
+      - name: Analyze default baseline chemical organization
+        if: success()
+        run: |
+          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default-baseline.jsonl \
+            --json-out environmental-chemistry-organization.json \
+            --markdown-out environmental-chemistry-organization.md
       - name: Upload default environmental chemistry baseline
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,6 +70,8 @@ jobs:
             environmental-chemistry-default-baseline.jsonl
             environmental-chemistry-analysis.json
             environmental-chemistry-analysis.md
+            environmental-chemistry-organization.json
+            environmental-chemistry-organization.md
           if-no-files-found: error
           retention-days: 14
       - name: Run second environmental chemistry baseline (seed 43)
@@ -81,6 +92,12 @@ jobs:
           python3 tools/chemistry_analyzer.py environmental-chemistry-seed-43.jsonl \
             --json-out environmental-chemistry-seed-43-analysis.json \
             --markdown-out environmental-chemistry-seed-43-analysis.md
+      - name: Analyze seed 43 chemical organization
+        if: success()
+        run: |
+          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-seed-43.jsonl \
+            --json-out environmental-chemistry-seed-43-organization.json \
+            --markdown-out environmental-chemistry-seed-43-organization.md
       - name: Upload second environmental chemistry baseline
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,6 +107,8 @@ jobs:
             environmental-chemistry-seed-43.jsonl
             environmental-chemistry-seed-43-analysis.json
             environmental-chemistry-seed-43-analysis.md
+            environmental-chemistry-seed-43-organization.json
+            environmental-chemistry-seed-43-organization.md
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
