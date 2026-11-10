@@ -637,7 +637,10 @@ impl ActiveMaterialField {
         }
 
         let mut staged = Vec::with_capacity(pieces.len());
-        for piece in pieces {
+        for mut piece in pieces {
+            // A split is a lineage transition: every child receives a new
+            // identity at commit rather than inheriting the retired parent ID.
+            piece.environmental_identity = 0;
             if !piece.is_realized()
                 || piece.material.is_empty()
                 || !piece.material.is_valid_for_catalog(catalog)
