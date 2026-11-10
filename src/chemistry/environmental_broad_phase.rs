@@ -3287,7 +3287,7 @@ mod tests {
 
 
         println!(
-            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
+            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_paged128_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_paged128_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
         );
         for count in [128usize, 320, 640, 1280, 2560, 5120] {
             for clustered in [false, true] {
@@ -3303,6 +3303,8 @@ mod tests {
                 let mut exhaustive_times = Vec::new();
                 let mut spatial_times = Vec::new();
                 let mut cursor_times = Vec::new();
+                let mut paged_spatial_times = Vec::new();
+                let mut directed_paged_spatial_times = Vec::new();
                 let mut directed_exhaustive_times = Vec::new();
                 let mut directed_spatial_times = Vec::new();
                 let mut directed_cursor_times = Vec::new();
@@ -3358,6 +3360,24 @@ mod tests {
                         actual == expected && coverage.known_pairs == expected.len() as u64;
 
                     let start = Instant::now();
+                    let mut paged_start = 0u64;
+                    let mut paged_count = 0usize;
+                    while paged_start < coverage.known_pairs {
+                        let (page, page_coverage) = snapshot.spatial_pair_window(
+                            &field,
+                            &bounds,
+                            2.0,
+                            paged_start,
+                            128,
+                            PairOrientation::Unordered,
+                        );
+                        paged_count += page.len();
+                        paged_start += page_coverage.visited_pairs;
+                    }
+                    paged_spatial_times.push(start.elapsed().as_micros());
+                    parity_ok &= paged_count == expected.len();
+
+                    let start = Instant::now();
                     let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Unordered);
                     let mut cursor_pairs = 0usize;
                     let mut run_cursor_checks = 0u64;
@@ -3396,6 +3416,24 @@ mod tests {
                     directed_count = directed_pairs.len();
                     parity_ok &= actual_directed == expected_directed
                         && directed_coverage.known_pairs == expected_directed.len() as u64;
+
+                    let start = Instant::now();
+                    let mut directed_paged_start = 0u64;
+                    let mut directed_paged_count = 0usize;
+                    while directed_paged_start < directed_coverage.known_pairs {
+                        let (page, page_coverage) = snapshot.spatial_pair_window(
+                            &field,
+                            &bounds,
+                            2.0,
+                            directed_paged_start,
+                            128,
+                            PairOrientation::Directed,
+                        );
+                        directed_paged_count += page.len();
+                        directed_paged_start += page_coverage.visited_pairs;
+                    }
+                    directed_paged_spatial_times.push(start.elapsed().as_micros());
+                    parity_ok &= directed_paged_count == expected_directed.len();
 
                     let start = Instant::now();
                     let mut directed_cursor =
@@ -3438,15 +3476,17 @@ mod tests {
                     (1.0 - directed_count as f64 / directed_pairs as f64) * 100.0
                 };
                 println!(
-                    "{count},{layout},625,{},{},{},{},{},{},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{},{},{},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{}",
+                    "{count},{layout},625,{},{},{},{},{},{},{unordered_pairs},{spatial_count},{unordered_reduction:.4},{cursor_checks},{},{},{},{},{directed_pairs},{directed_count},{directed_reduction:.4},{directed_cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
                     median(&mut bounds_restore_times),
                     median(&mut bounds_cursor_times),
                     median(&mut exhaustive_times),
                     median(&mut spatial_times),
+                    median(&mut paged_spatial_times),
                     median(&mut cursor_times),
                     median(&mut directed_exhaustive_times),
                     median(&mut directed_spatial_times),
+                    median(&mut directed_paged_spatial_times),
                     median(&mut directed_cursor_times),
                     if parity_ok { "PASS" } else { "FAIL" },
                 );
