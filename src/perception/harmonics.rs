@@ -1342,8 +1342,8 @@ pub(crate) fn material_aura_receptions_with_occluders(
 }
 
 /// Conservative AABB broad phase for possible occluders between a point
-/// source and any point on the receiver boundary. Every source-to-boundary
-/// segment lies inside the source/receiver bounds envelope.
+/// source and the sampled receiver endpoints. Every source-to-endpoint segment
+/// lies inside the envelope of the source and requested points.
 fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
     points: &[(f64, f64)],
@@ -1543,9 +1543,9 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         }
         let (source_x, source_y, _, _) = environmental_material_resonance(source, catalog, tick)?;
 
-        // Any straight segment from the source point to the receiver boundary
+        // Every straight segment from the source point to a sampled endpoint
         // lies inside this axis-aligned rectangle. A body's bounds outside it
-        // cannot occlude any such segment, so this is a conservative broad
+        // cannot occlude any sampled path, so this is a conservative broad
         // phase: exact visibility is still evaluated for every retained body.
         let mut receiver_bodies = Vec::new();
         receiver_bodies.push(receiver_geometry.clone());
