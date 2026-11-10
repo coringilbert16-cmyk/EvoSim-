@@ -265,7 +265,12 @@ fn constituent_bounds(
         return None;
     }
     let padding = 1e-8;
-    Some((x - radius - padding, x + radius + padding, y - radius - padding, y + radius + padding))
+    Some((
+        x - radius - padding,
+        x + radius + padding,
+        y - radius - padding,
+        y + radius + padding,
+    ))
 }
 
 fn constituent_bucket_keys(bounds: (f64, f64, f64, f64)) -> Option<Vec<(i64, i64)>> {
@@ -277,7 +282,8 @@ fn constituent_bucket_keys(bounds: (f64, f64, f64, f64)) -> Option<Vec<(i64, i64
     let y1 = (max_y / cell).floor() as i64;
     let width = i128::from(x1) - i128::from(x0) + 1;
     let height = i128::from(y1) - i128::from(y0) + 1;
-    if width <= 0 || height <= 0 || width.saturating_mul(height) > MAX_CONSTITUENT_BUCKETS_PER_UNIT {
+    if width <= 0 || height <= 0 || width.saturating_mul(height) > MAX_CONSTITUENT_BUCKETS_PER_UNIT
+    {
         return None;
     }
     let mut keys = Vec::with_capacity((width * height) as usize);
@@ -286,10 +292,14 @@ fn constituent_bucket_keys(bounds: (f64, f64, f64, f64)) -> Option<Vec<(i64, i64
         let mut y = y0;
         loop {
             keys.push((x, y));
-            if y == y1 { break; }
+            if y == y1 {
+                break;
+            }
             y += 1;
         }
-        if x == x1 { break; }
+        if x == x1 {
+            break;
+        }
         x += 1;
     }
     Some(keys)
@@ -309,7 +319,12 @@ fn current_geometry_candidate_pairs(
     let mut overflow_b = Vec::new();
     let bounds_b: Vec<_> = indices_b
         .iter()
-        .map(|&index| structure.units.get(index).and_then(|unit| constituent_bounds(unit, catalog)))
+        .map(|&index| {
+            structure
+                .units
+                .get(index)
+                .and_then(|unit| constituent_bounds(unit, catalog))
+        })
         .collect();
 
     for (slot, bounds) in bounds_b.iter().copied().enumerate() {
@@ -325,8 +340,13 @@ fn current_geometry_candidate_pairs(
 
     let mut pairs = BTreeSet::new();
     for &unit_a in indices_a {
-        let Some(bounds_a) = structure.units.get(unit_a)
-            .and_then(|unit| constituent_bounds(unit, catalog)) else { continue };
+        let Some(bounds_a) = structure
+            .units
+            .get(unit_a)
+            .and_then(|unit| constituent_bounds(unit, catalog))
+        else {
+            continue;
+        };
         let mut possible_b = BTreeSet::new();
         if let Some(keys) = constituent_bucket_keys(bounds_a) {
             for key in keys {
@@ -340,7 +360,9 @@ fn current_geometry_candidate_pairs(
         possible_b.extend(overflow_b.iter().copied());
 
         for slot_b in possible_b {
-            let Some(bounds_b) = bounds_b.get(slot_b).copied().flatten() else { continue };
+            let Some(bounds_b) = bounds_b.get(slot_b).copied().flatten() else {
+                continue;
+            };
             let overlaps = bounds_a.0 <= bounds_b.1
                 && bounds_b.0 <= bounds_a.1
                 && bounds_a.2 <= bounds_b.3
@@ -363,9 +385,9 @@ fn select_best_contact(
     remaining_work: &mut usize,
 ) -> Option<SelectedContact> {
     let pairs = current_geometry_candidate_pairs(structure, indices_a, indices_b, catalog);
-    select_best_contact_from_pairs(
-        structure, &pairs, catalog, cache, remaining_work, None,
-    ).into_iter().next()
+    select_best_contact_from_pairs(structure, &pairs, catalog, cache, remaining_work, None)
+        .into_iter()
+        .next()
 }
 
 fn select_best_contact_from_pairs(
@@ -385,13 +407,24 @@ fn select_best_contact_from_pairs(
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.constituent_pairs_inspected += 1;
         }
-        let chemical_potential = structure.units.get(unit_a)
+        let chemical_potential = structure
+            .units
+            .get(unit_a)
             .and_then(|unit| constituent_chemical_position(unit, catalog))
-            .zip(structure.units.get(unit_b)
-                .and_then(|unit| constituent_chemical_position(unit, catalog)))
-            .and_then(|(position_a, position_b)| crate::chemistry::interaction_potential(
-                position_a, position_b, crate::chemistry::CHEMICAL_K, crate::chemistry::CHEMICAL_D_MAX,
-            ));
+            .zip(
+                structure
+                    .units
+                    .get(unit_b)
+                    .and_then(|unit| constituent_chemical_position(unit, catalog)),
+            )
+            .and_then(|(position_a, position_b)| {
+                crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                )
+            });
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
@@ -400,10 +433,17 @@ fn select_best_contact_from_pairs(
             let Some((evaluation, _work, investment, required_energy)) =
                 crate::combine_runtime::selected_candidate_evaluation(
                     structure, unit_a, unit_b, candidate, catalog,
-                ) else { continue };
+                )
+            else {
+                continue;
+            };
             pair_valid_interfaces += 1;
             selected_contacts.push(SelectedContact {
-                unit_a, unit_b, candidate: evaluation.candidate, investment, required_energy,
+                unit_a,
+                unit_b,
+                candidate: evaluation.candidate,
+                investment,
+                required_energy,
             });
             if let Some(diagnostics) = diagnostics.as_deref_mut() {
                 diagnostics.interfaces_sent_to_chemistry += 1;
@@ -420,15 +460,23 @@ fn select_best_contact_from_pairs(
         }
     }
     if let Some(diagnostics) = diagnostics {
-        diagnostics.constituent_pairs_with_valid_interfaces += constituent_pairs_with_valid_interfaces;
+        diagnostics.constituent_pairs_with_valid_interfaces +=
+            constituent_pairs_with_valid_interfaces;
     }
     selected_contacts.sort_by(|left, right| {
-        left.required_energy.partial_cmp(&right.required_energy)
+        left.required_energy
+            .partial_cmp(&right.required_energy)
             .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| left.candidate.distance.partial_cmp(&right.candidate.distance)
-                .unwrap_or(std::cmp::Ordering::Equal))
-            .then_with(|| format!("{:?}|{:?}", left.candidate.endpoint_a, left.candidate.endpoint_b)
-                .cmp(&format!("{:?}|{:?}", right.candidate.endpoint_a, right.candidate.endpoint_b)))
+            .then_with(|| {
+                left.candidate
+                    .distance
+                    .partial_cmp(&right.candidate.distance)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| {
+                format!("{:?}|{:?}", left.candidate.endpoint_a, left.candidate.endpoint_b)
+                    .cmp(&format!("{:?}|{:?}", right.candidate.endpoint_a, right.candidate.endpoint_b))
+            })
     });
     selected_contacts
 }
@@ -802,7 +850,10 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                     // Exact endpoint positions, normals, and orientation are checked
                     // by the live contact evaluator before chemistry is activated.
                     let candidate_pairs = current_geometry_candidate_pairs(
-                        &trial_structure, &indices_a, &indices_b, &environment.catalog,
+                        &trial_structure,
+                        &indices_a,
+                        &indices_b,
+                        &environment.catalog,
                     );
                     let candidate_pair_count = candidate_pairs.len();
                     diagnostics.constituent_pairs_available += candidate_pair_count;
@@ -823,8 +874,8 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         (*remaining_discovery_work).saturating_sub(component_work_used);
                     for &(unit_a, unit_b) in candidate_pairs.iter().take(component_work_used) {
                         checked_prefixes.insert(source_pair_accumulation_prefix(
-                            cell_a, material_a, &source_a, cell_b, material_b, &source_b,
-                            unit_a, unit_b,
+                            cell_a, material_a, &source_a, cell_b, material_b, &source_b, unit_a,
+                            unit_b,
                         ));
                     }
                     for selected in selected {
@@ -3338,8 +3389,7 @@ mod tests {
         );
         assert_eq!(diagnostics.constituent_pairs_inspected, pairs.len());
         assert_eq!(
-            diagnostics.interfaces_sent_to_chemistry,
-            diagnostics.physically_evaluable_interfaces,
+            diagnostics.interfaces_sent_to_chemistry, diagnostics.physically_evaluable_interfaces,
             "every physically evaluable interface must reach its chemistry step"
         );
     }
