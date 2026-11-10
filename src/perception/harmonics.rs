@@ -2063,9 +2063,53 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
     ((directional(a, b) + directional(b, a)) * 0.5).clamp(0.0, 1.0)
 }
 
+/// Convert a received local spectrum into a reaction activation influence.
+///
+/// Frequency similarity alone is scale-invariant and would let an arbitrarily
+/// weak distant signal activate a reaction as strongly as a nearby one. Keep
+/// frequency matching separate from field strength: the received RMS amplitude
+/// is measured against the model's unit-amplitude reference drive and saturates
+/// at one. This remains a dimensionless signal influence, never usable energy.
+pub(crate) fn spectral_activation_influence(
+    received: &ToneSpectrum,
+    target: &ToneSpectrum,
+) -> f64 {
+    let frequency_match = spectral_similarity(received, target);
+    let signal_strength = spectrum_magnitude(received).clamp(0.0, 1.0);
+    (frequency_match * signal_strength).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn reaction_activation_influence_preserves_received_signal_strength() {
+        let target = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let received = |amplitude| ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude,
+                phase_radians: 0.0,
+            }],
+        };
+
+        let full = spectral_activation_influence(&received(1.0), &target);
+        let weak = spectral_activation_influence(&received(0.1), &target);
+        let distant = spectral_activation_influence(&received(0.01), &target);
+
+        assert!((full - 1.0).abs() < 1e-12);
+        assert!((weak - 0.1).abs() < 1e-12);
+        assert!((distant - 0.01).abs() < 1e-12);
+        assert!(full > weak && weak > distant);
+    }
 
     #[test]
     fn resonance_occluder_broad_phase_keeps_endpoint_path_bounds_and_discards_disjoint_bounds() {
