@@ -3241,8 +3241,7 @@ mod tests {
                 + snapshot.existing_bonds.capacity() * size_of::<ExistingBondRecord>()
                 + snapshot.material_indices_by_cell.capacity() * size_of::<Vec<usize>>()
                 + cell_index_bytes
-                + snapshot.material_index_by_cell_slot.capacity()
-                    * size_of::<Vec<Option<usize>>>()
+                + snapshot.material_index_by_cell_slot.capacity() * size_of::<Vec<Option<usize>>>()
                 + slot_index_bytes
                 + bounds.len() * size_of::<Option<MaterialSpatialBounds>>()
         }
@@ -3311,15 +3310,15 @@ mod tests {
                         .map(|pair| (pair.identity_left, pair.identity_right))
                         .collect::<std::collections::BTreeSet<_>>();
                     spatial_count = pairs.len();
-                    parity_ok &= actual == expected && coverage.known_pairs == expected.len() as u64;
+                    parity_ok &=
+                        actual == expected && coverage.known_pairs == expected.len() as u64;
 
                     let start = Instant::now();
                     let mut cursor = SpatialPairCursor::new(&snapshot, PairOrientation::Unordered);
                     let mut cursor_pairs = 0usize;
                     let mut run_cursor_checks = 0u64;
                     loop {
-                        let page =
-                            cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
+                        let page = cursor.next_page(&snapshot, &field, &bounds, 2.0, 4096, 4096);
                         run_cursor_checks =
                             run_cursor_checks.saturating_add(page.visited_pair_checks);
                         cursor_pairs += page.pairs.len();
@@ -3333,8 +3332,7 @@ mod tests {
                     black_box((&snapshot, &bounds, &actual));
                 }
 
-                let all_pairs =
-                    (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
+                let all_pairs = (count as u64).saturating_mul(count.saturating_sub(1) as u64) / 2;
                 let reduction = if all_pairs == 0 {
                     0.0
                 } else {
@@ -3357,5 +3355,4 @@ mod tests {
             }
         }
     }
-
 }
