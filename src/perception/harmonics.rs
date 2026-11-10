@@ -1553,11 +1553,7 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
             if candidate_index == source_index || candidate_index == receiver_index {
                 continue;
             }
-            if !geometry_bounds_may_occlude_source_points(
-                (source_x, source_y),
-                points,
-                geometry,
-            ) {
+            if !geometry_bounds_may_occlude_source_points((source_x, source_y), points, geometry) {
                 continue;
             }
             receiver_bodies.push(geometry.clone());
