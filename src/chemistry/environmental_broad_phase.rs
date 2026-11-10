@@ -764,6 +764,7 @@ impl EnvironmentalMaterialSnapshot {
 /// `spatial_pair_window`, this never constructs the complete candidate set.
 /// Bounds are supplied by a separately prepared snapshot phase; this cursor
 /// accounts for every pair predicate it evaluates.
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct SpatialPairCursor {
     pass_id: u64,
@@ -775,6 +776,7 @@ pub(crate) struct SpatialPairCursor {
     complete: bool,
 }
 
+#[cfg(test)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct SpatialCursorPage {
     pub(crate) pairs: Vec<MaterialPairRecord>,
@@ -784,6 +786,7 @@ pub(crate) struct SpatialCursorPage {
     pub(crate) complete: bool,
 }
 
+#[cfg(test)]
 impl SpatialPairCursor {
     pub(crate) fn new(
         snapshot: &EnvironmentalMaterialSnapshot,
