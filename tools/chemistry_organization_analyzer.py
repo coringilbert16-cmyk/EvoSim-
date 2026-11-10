@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Offline analysis of recurring molecular organization in EvoSim JSONL logs.
 
-This analyzer is observational only. Structural families use exact normalized
-serialized composition/topology, not graph-isomorphism or chemical equivalence.
+This analyzer is observational only. Small structures use canonical labeling
+of composition and undirected bond topology; larger structures retain part
+order. Structural matching does not establish chemical equivalence.
 """
 from __future__ import annotations
 
@@ -159,6 +160,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "tick": tick,
                 "parents": parents,
                 "reaction": str(event.get("reaction", "UNKNOWN")),
+                "reaction_id": event.get("reaction_id"),
                 "molecule": event.get("molecule", {}),
             }
         elif action == "destroyed":
@@ -199,6 +201,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "observed_lifetime_ticks": max(0, end_tick - data["tick"]),
             "right_censored": molecule_id not in destroyed,
             "reaction": data["reaction"],
+            "reaction_id": data["reaction_id"],
             "parent_ids": data["parents"],
         }
         molecule_rows[molecule_id] = row
@@ -220,12 +223,19 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         reaction_lifetimes = [
             molecule_rows[molecule_id]["observed_lifetime_ticks"] for molecule_id in reaction_ids
         ]
+        reaction_event_ids = {
+            molecule_rows[molecule_id]["reaction_id"]
+            for molecule_id in reaction_ids
+            if isinstance(molecule_rows[molecule_id]["reaction_id"], str)
+            and molecule_rows[molecule_id]["reaction_id"]
+        }
         composition = rows[0]["composition"]
         families.append({
             "signature": signature,
             "occurrences": len(ids),
             "initial_seed_occurrences": len(initial_ids),
             "reaction_created_occurrences": len(reaction_ids),
+            "reaction_created_reaction_events": len(reaction_event_ids),
             "reaction_created_active_at_end": sum(
                 molecule_id not in destroyed for molecule_id in reaction_ids
             ),
@@ -240,7 +250,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "completed_lifetimes": sum(not row["right_censored"] for row in rows),
             "right_censored_lifetimes": sum(row["right_censored"] for row in rows),
             "recurrent": len(ids) >= 2,
-            "recurrent_from_reactions": len(reaction_ids) >= 2,
+            # Multiple sibling products from one reaction are one event, not
+            # independent recurrence. Require distinct reaction IDs.
+            "recurrent_from_reactions": len(reaction_event_ids) >= 2,
         })
     families.sort(key=lambda row: (
         -row["reaction_created_occurrences"], -row["active_at_end"], row["signature"]
@@ -362,8 +374,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Median observed lifetime: {persistence['median_observed_lifetime_ticks']} ticks",
         f"- Lifecycle validation errors: {len(report['scope']['lifecycle_validation_errors'])}",
         "", "## Most recurrent structural families", "",
-        "| Reaction-created | Initial seeds | Active | Mean product lifetime (ticks) | Composition |",
-        "|---:|---:|---:|---:|---|",
+        "| Reaction-created products | Distinct product reactions | Initial seeds | Active | Mean product lifetime (ticks) | Composition |",
+        "|---:|---:|---:|---:|---:|---|",
     ]
     for family in org["top_families"][:15]:
         composition = ", ".join(
@@ -374,8 +386,8 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"{product_lifetime:.2f}" if product_lifetime is not None else "n/a"
         )
         lines.append(
-            f"| {family['reaction_created_occurrences']} | {family['initial_seed_occurrences']} | "
-            f"{family['reaction_created_active_at_end']} | "
+            f"| {family['reaction_created_occurrences']} | {family['reaction_created_reaction_events']} | "
+            f"{family['initial_seed_occurrences']} | {family['reaction_created_active_at_end']} | "
             f"{product_lifetime_text} | {composition or '(empty)'} |"
         )
     lines += [
