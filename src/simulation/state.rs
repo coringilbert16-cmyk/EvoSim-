@@ -949,6 +949,7 @@ pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) product_material: Option<Vec<(String, f64)>>,
     pub(crate) product_internal_bond_count: Option<usize>,
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
+    #[serde(default)]
     pub(crate) molecular_lifecycle: Vec<EnvironmentalMoleculeLifecycleEvent>,
 }
 
