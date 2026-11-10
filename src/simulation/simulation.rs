@@ -177,6 +177,111 @@ fn restore_failed_transformation_material(
     true
 }
 
+fn environmental_break_local_resonance_sample(
+    simulation: &Simulation,
+    operation: &crate::chemical_reaction::EnvironmentalChemicalBreakOperation,
+) -> serde_json::Value {
+    let mut restored = crate::structure::OrganismStructure::new();
+    let origin = Placement {
+        x: 0.0,
+        y: 0.0,
+        rotation_radians: 0.0,
+    };
+    let endpoint_points = crate::material_restoration::restore_material(
+        &mut restored,
+        &operation.source_material,
+        origin,
+        &simulation.environment.catalog,
+    )
+    .and_then(|indices| {
+        let unit_a = restored.units.get(*indices.get(operation.bond.part_a)?)?;
+        let unit_b = restored.units.get(*indices.get(operation.bond.part_b)?)?;
+        let point_a = crate::contact::endpoint_world_point(
+            operation.bond.endpoint_a,
+            unit_a,
+            &simulation.environment.catalog,
+        )?;
+        let point_b = crate::contact::endpoint_world_point(
+            operation.bond.endpoint_b,
+            unit_b,
+            &simulation.environment.catalog,
+        )?;
+        Some([(point_a.x, point_a.y), (point_b.x, point_b.y)])
+    });
+
+    let local_spectra = endpoint_points.as_ref().and_then(|points| {
+        crate::world_tone_snapshot::world_material_resonance_spectra_at_boundary_points(
+            simulation,
+            operation.source_material.environmental_identity,
+            points,
+        )
+    });
+
+    // This is a read-only preview of the exact compatible-resonance withdrawal
+    // used by settlement. It is deliberately distinct from instantaneous local
+    // signal reception and does not mutate the live reservoir.
+    let compatible_resonance_available = simulation
+        .environment
+        .resonant_energy
+        .compatible_energy(operation.reaction_frequency_cycles_per_day);
+    let mut staged_reservoir = simulation.environment.resonant_energy.clone();
+    let resonance_withdrawal_preview = staged_reservoir.withdraw_compatible(
+        operation.reaction_frequency_cycles_per_day,
+        operation.disruption_cost,
+    );
+    let required_usable_energy = operation.bond.bond_energy
+        + (operation.disruption_cost
+            - resonance_withdrawal_preview.min(operation.disruption_cost));
+    let usable_energy = simulation.environment.chemistry_usable_energy;
+    let usable_energy_shortfall = (required_usable_energy - usable_energy).max(0.0);
+
+    let endpoint_samples = match (endpoint_points, local_spectra) {
+        (Some(points), Some(spectra)) if points.len() == spectra.len() => Some(
+            points
+                .iter()
+                .zip(spectra.iter())
+                .enumerate()
+                .map(|(index, (point, spectrum))| {
+                    let signal_intensity = spectrum
+                        .components
+                        .iter()
+                        .map(|component| component.amplitude * component.amplitude)
+                        .sum::<f64>();
+                    serde_json::json!({
+                        "endpoint": if index == 0 { "a" } else { "b" },
+                        "point": [point.0, point.1],
+                        "source_component_count": spectrum.components.len(),
+                        "signal_intensity": signal_intensity,
+                        "components": spectrum.components
+                    })
+                })
+                .collect::<Vec<_>>(),
+        ),
+        _ => None,
+    };
+
+    serde_json::json!({
+        "event": "environmental_local_resonance_sample",
+        "tick": simulation.tick,
+        "material_identity": operation.source_material.environmental_identity,
+        "bond_index": operation.bond_index,
+        "reaction_frequency_cycles_per_day": operation.reaction_frequency_cycles_per_day,
+        "activation_signal": operation.activation_signal,
+        "disruption_cost": operation.disruption_cost,
+        "stored_bond_energy": operation.bond.bond_energy,
+        "chemistry_usable_energy_before": usable_energy,
+        "environment_resonant_energy_before": simulation.environment.resonant_energy.total_energy(),
+        "compatible_resonance_available": compatible_resonance_available,
+        "compatible_resonance_withdrawal_preview": resonance_withdrawal_preview,
+        "required_usable_energy_after_resonance": required_usable_energy,
+        "usable_energy_shortfall": usable_energy_shortfall,
+        "funding_sufficient_before_attempt": usable_energy_shortfall <= 1e-9,
+        "endpoint_geometry_available": endpoint_points.is_some(),
+        "local_spectrum_available": endpoint_samples.is_some(),
+        "endpoint_samples": endpoint_samples
+    })
+}
+
 impl Simulation {
     /// Configure or disable the rotating source. Invalid values are rejected.
     #[cfg_attr(
@@ -282,6 +387,8 @@ impl Simulation {
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
+            environmental_local_resonance_samples: Vec::new(),
+            record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: false,
         }
     }
@@ -835,6 +942,7 @@ impl Simulation {
                 ..Default::default()
             };
         self.environmental_chemistry_events.clear();
+        self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
@@ -1012,6 +1120,16 @@ impl Simulation {
         self.environmental_chemistry_diagnostics
             .break_realization_work_remaining = environmental_break_work_remaining;
         for operation in environmental_break_operations {
+            // A bounded sample every 50 ticks captures actual scheduled BREAK
+            // locations without placing the full-world geometric sampler on
+            // the ordinary tick path or multiplying its cost by candidate count.
+            if self.record_local_resonance_diagnostics
+                && self.tick % 50 == 0
+                && self.environmental_local_resonance_samples.is_empty()
+            {
+                self.environmental_local_resonance_samples
+                    .push(environmental_break_local_resonance_sample(self, &operation));
+            }
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
