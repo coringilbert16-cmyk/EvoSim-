@@ -2375,10 +2375,7 @@ mod tests {
             amplitude,
             phase_radians,
         };
-        let reinforced = combine_component(
-            component(440.0, 0.5, 0.0),
-            component(440.0, 0.5, 0.0),
-        );
+        let reinforced = combine_component(component(440.0, 0.5, 0.0), component(440.0, 0.5, 0.0));
         assert!((reinforced.amplitude - 1.0).abs() < 1e-12);
 
         let cancelled = combine_component(
@@ -2429,10 +2426,10 @@ mod tests {
 
         let density_sum = |materials: &[crate::physical_material::PhysicalMaterial]| {
             material_resonance_density_on_receiver(materials, &[0], 1, &catalog, 0, 1.0)
-            .expect("valid physical arrangement should be sampled")
-            .iter()
-            .map(|sample| sample.density)
-            .sum::<f64>()
+                .expect("valid physical arrangement should be sampled")
+                .iter()
+                .map(|sample| sample.density)
+                .sum::<f64>()
         };
 
         let clear = density_sum(&[nearby_source.clone(), receiver.clone()]);
