@@ -1021,6 +1021,44 @@ pub(crate) fn world_material_resonance_density_on_body(
     )
 }
 
+/// Sample the incoming material-origin spectrum at exact points on one
+/// environmental material's exposed boundary. Identity lookup uses the same
+/// authoritative world-body inventory as the pair-potential oracle; all other
+/// resonant participants remain emitters and every physical body remains an
+/// occluder. This is diagnostic only and never funds a reaction.
+#[allow(dead_code)] // Used by the opt-in local BREAK resonance investigation.
+pub(crate) fn world_material_resonance_spectra_at_boundary_points(
+    simulation: &Simulation,
+    receiver_identity: u64,
+    points: &[(f64, f64)],
+) -> Option<Vec<crate::harmonics::ToneSpectrum>> {
+    if receiver_identity == 0 || points.is_empty() {
+        return None;
+    }
+    let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
+    let mut matches = bodies
+        .iter()
+        .enumerate()
+        .filter(|(_, body)| body.environmental_identity == receiver_identity)
+        .map(|(index, _)| index);
+    let receiver_index = matches.next()?;
+    if matches.next().is_some() || !resonant_indices.contains(&receiver_index) {
+        return None;
+    }
+    let source_indices: Vec<_> = resonant_indices
+        .into_iter()
+        .filter(|index| *index != receiver_index)
+        .collect();
+    crate::harmonics::material_resonance_spectra_at_boundary_points(
+        &bodies,
+        &source_indices,
+        receiver_index,
+        points,
+        &simulation.environment.catalog,
+        simulation.tick,
+    )
+}
+
 /// Translate one already world-resolved physical body without changing its
 /// material identity or shape. Stored/attached bodies are included because
 /// their positions can alter the visibility of other resonant pairs.

@@ -1442,21 +1442,23 @@ pub(crate) fn material_aura_receptions_with_occluders(
     Some(receptions)
 }
 
-/// Evaluate the frequency-resolved incident field at an exact point on a
-/// receiver's currently exposed physical boundary. Unlike the heat-map sampler,
-/// this query has no raster or cell-size parameter and can be used at actual
-/// reaction endpoints. Points that are not on a visible boundary interval
-/// contribute nothing; ambiguous or invalid geometry fails closed.
-#[allow(dead_code)] // First continuous query for reaction-geometry validation.
-pub(crate) fn material_resonance_spectrum_at_boundary_point(
+/// Evaluate the frequency-resolved incident field at one or more exact points
+/// on a receiver's currently exposed physical boundary. Receptions are built
+/// once per source and then evaluated at every requested point, keeping paired
+/// reaction-endpoint sampling from rebuilding the same geometry twice.
+pub(crate) fn material_resonance_spectra_at_boundary_points(
     materials: &[crate::physical_material::PhysicalMaterial],
     source_indices: &[usize],
     receiver_index: usize,
-    point: (f64, f64),
+    points: &[(f64, f64)],
     catalog: &[crate::resources::BaseResource],
     tick: u64,
-) -> Option<ToneSpectrum> {
-    if !point.0.is_finite() || !point.1.is_finite() {
+) -> Option<Vec<ToneSpectrum>> {
+    if points.is_empty()
+        || points
+            .iter()
+            .any(|point| !point.0.is_finite() || !point.1.is_finite())
+    {
         return None;
     }
     let receiver = materials.get(receiver_index)?;
@@ -1467,58 +1469,87 @@ pub(crate) fn material_resonance_spectrum_at_boundary_point(
         return None;
     }
 
-    let mut field = ToneSpectrum::empty();
+    let mut fields = vec![ToneSpectrum::empty(); points.len()];
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
         let receptions =
             material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
-        let mut matched = None;
-        for reception in receptions {
-            if let Some(normal) = reception.boundary.normal_at(point) {
-                if matched.is_some() {
-                    // A corner shared by multiple exposed intervals has no
-                    // unique local normal; do not choose one arbitrarily.
-                    return None;
+        for (point_index, point) in points.iter().enumerate() {
+            let mut matched = None;
+            for reception in &receptions {
+                if let Some(normal) = reception.boundary.normal_at(*point) {
+                    if matched.is_some() {
+                        // A corner shared by multiple exposed intervals has no
+                        // unique local normal; do not choose one arbitrarily.
+                        return None;
+                    }
+                    matched = Some((reception, normal));
                 }
-                matched = Some((reception, normal));
             }
-        }
-        let Some((reception, normal)) = matched else {
-            continue;
-        };
+            let Some((reception, normal)) = matched else {
+                continue;
+            };
 
-        let dx = reception.source_x - point.0;
-        let dy = reception.source_y - point.1;
-        let distance = dx.hypot(dy);
-        let midpoint_distance = (reception.source_x - reception.receiver_x)
-            .hypot(reception.source_y - reception.receiver_y);
-        if !distance.is_finite()
-            || distance <= f64::EPSILON
-            || !midpoint_distance.is_finite()
-            || reception.projected_extent <= f64::EPSILON
-        {
-            return None;
-        }
-        let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
-        if !directional_projection.is_finite() {
-            return None;
-        }
-        if directional_projection <= f64::EPSILON {
-            continue;
-        }
+            let dx = reception.source_x - point.0;
+            let dy = reception.source_y - point.1;
+            let distance = dx.hypot(dy);
+            let midpoint_distance = (reception.source_x - reception.receiver_x)
+                .hypot(reception.source_y - reception.receiver_y);
+            if !distance.is_finite()
+                || distance <= f64::EPSILON
+                || !midpoint_distance.is_finite()
+                || reception.projected_extent <= f64::EPSILON
+            {
+                return None;
+            }
+            let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
+            if !directional_projection.is_finite() {
+                return None;
+            }
+            if directional_projection <= f64::EPSILON {
+                continue;
+            }
 
-        // The interval reception carries sqrt(projected_extent) and midpoint
-        // distance attenuation. Remove those interval terms, then evaluate
-        // the exact local projection and distance at the requested point.
-        let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
-            / ((1.0 + distance) * reception.projected_extent.sqrt());
-        if !local_scale.is_finite() || local_scale < 0.0 {
-            return None;
+            // Remove interval midpoint attenuation and projected-boundary
+            // scaling, then recalculate both at the exact requested point.
+            let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
+                / ((1.0 + distance) * reception.projected_extent.sqrt());
+            if !local_scale.is_finite() || local_scale < 0.0 {
+                return None;
+            }
+            add_spectrum(
+                &mut fields[point_index],
+                &reception.incident_spectrum,
+                local_scale,
+            );
         }
-        add_spectrum(&mut field, &reception.incident_spectrum, local_scale);
     }
-    field.retain_strongest();
-    Some(field)
+    for field in &mut fields {
+        field.retain_strongest();
+    }
+    Some(fields)
+}
+
+/// Single-point compatibility wrapper for continuous boundary reception.
+#[allow(dead_code)] // Direct query retained for focused geometry tests and callers.
+pub(crate) fn material_resonance_spectrum_at_boundary_point(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    point: (f64, f64),
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<ToneSpectrum> {
+    material_resonance_spectra_at_boundary_points(
+        materials,
+        source_indices,
+        receiver_index,
+        &[point],
+        catalog,
+        tick,
+    )?
+    .into_iter()
+    .next()
 }
 
 /// Integrate the interference between an incoming aura and the receiver's
@@ -2610,6 +2641,16 @@ mod tests {
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
                 .expect("the continuous query should be deterministic");
         assert_eq!(first, repeated);
+        let paired = material_resonance_spectra_at_boundary_points(
+            &materials,
+            &[0],
+            1,
+            &[point, point],
+            &catalog,
+            0,
+        )
+        .expect("paired endpoint sampling should accept valid boundary points");
+        assert_eq!(paired, vec![first.clone(), first.clone()]);
         assert!(
             !first.components.is_empty(),
             "visible reaction geometry should receive the source field"

@@ -205,6 +205,7 @@ fn run_environment_chemistry_experiment(
 ) {
     let fixture = crate::environment_chemistry_experiment::build(seed);
     let mut simulation = fixture.simulation;
+    simulation.record_local_resonance_diagnostics = true;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
     let mut diagnostics = crate::diagnostics::EnvironmentalChemistryDiagnosticsRecorder::new(
         diagnostics_path,
