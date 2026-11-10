@@ -2176,6 +2176,53 @@ mod tests {
     use super::*;
 
     #[test]
+    fn scaled_emitter_response_matches_the_existing_scaled_spectrum_path() {
+        let emitted = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.8,
+                    phase_radians: 0.3,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 880.0,
+                    amplitude: 0.2,
+                    phase_radians: 0.6,
+                },
+            ],
+        };
+        let scale = 0.37;
+        let properties = properties(1.0, 4.0, 1.0);
+        let baselines = baselines();
+
+        let mut incident = ToneSpectrum::empty();
+        add_spectrum(&mut incident, &emitted, scale);
+        incident.retain_strongest();
+        let mut expected =
+            material_response_spectrum(properties, baselines, &incident).unwrap();
+        expected.retain_strongest();
+
+        let mut actual = material_response_spectrum_from_scaled_emitter(
+            properties,
+            baselines,
+            &emitted,
+            scale,
+        )
+        .unwrap();
+        actual.retain_strongest();
+
+        assert_eq!(actual.components.len(), expected.components.len());
+        for (actual, expected) in actual.components.iter().zip(&expected.components) {
+            assert!(
+                (actual.frequency_cycles_per_day - expected.frequency_cycles_per_day).abs()
+                    <= 1e-12
+            );
+            assert!((actual.amplitude - expected.amplitude).abs() <= 1e-12);
+            assert!((actual.phase_radians - expected.phase_radians).abs() <= 1e-12);
+        }
+    }
+
+    #[test]
     fn reaction_activation_influence_preserves_received_signal_strength() {
         let target = ToneSpectrum {
             components: vec![ToneComponent {
