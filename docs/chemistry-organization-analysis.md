@@ -10,7 +10,7 @@ python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default
   --markdown-out environmental-chemistry-organization.md
 ```
 
-The input must contain `molecular_lifecycle` records. Use the environmental chemistry experiment with molecular history enabled; the standard CI baseline already does this for seeds 42 and 43.
+The input must contain `molecular_lifecycle` records. Use the environmental chemistry experiment with molecular history enabled. The workflow runs one 60-second baseline on pushes to `main` and manual dispatch; a second seed is run only when an explicit side-by-side comparison is requested. Pull-request validation runs the analyzer's unit tests without launching long experiments.
 
 ## What it measures
 
