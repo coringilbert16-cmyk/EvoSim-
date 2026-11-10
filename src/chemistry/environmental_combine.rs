@@ -1116,6 +1116,9 @@ pub(crate) fn resolve_environmental(
         environment.field.mark_changed_at_index(operation.cell_a);
         environment.field.mark_changed_at_index(operation.cell_b);
     }
+    // The merged physical product receives its new identity before any later
+    // environmental reaction can discover or reference it.
+    environment.field.assign_missing_material_identities();
     environment.chemistry_usable_energy = staged_usable_energy;
     *ledger = staged_ledger;
     true

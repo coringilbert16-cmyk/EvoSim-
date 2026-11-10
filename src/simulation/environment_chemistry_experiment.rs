@@ -347,6 +347,7 @@ pub(crate) struct EnvironmentalChemistryFixture {
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
+    simulation.record_environmental_molecular_history = true;
     simulation.organisms.clear();
     simulation.active_transformations.clear();
     simulation.decomposing_bodies.clear();
@@ -368,6 +369,13 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         true,
     );
+
+    // Establish stable IDs for the complete tick-zero inventory before any
+    // diagnostics or reaction can observe the environment.
+    simulation
+        .environment
+        .field
+        .assign_missing_material_identities();
 
     // The default constructor's organism is deliberately removed. Rebase the
     // ledger on the actual environment-only tick-zero inventory so no organism
@@ -544,6 +552,42 @@ fn randomized_pile_centers(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn molecular_history_recording_does_not_change_chemistry_or_energy() {
+        let fixture = build(42);
+        let mut recorded = fixture.simulation;
+        let mut unrecorded = recorded.clone();
+        unrecorded.record_environmental_molecular_history = false;
+        let mut observed_lifecycle_event = false;
+
+        for _ in 0..120 {
+            recorded.step();
+            unrecorded.step();
+            observed_lifecycle_event |= recorded
+                .environmental_chemistry_events
+                .iter()
+                .any(|event| !event.molecular_lifecycle.is_empty());
+        }
+
+        assert_eq!(
+            recorded.environment.field.cells, unrecorded.environment.field.cells,
+            "recording must not alter physical inventory, identities, or geometry"
+        );
+        assert_eq!(recorded.energy_ledger, unrecorded.energy_ledger);
+        assert_eq!(
+            recorded.environment.chemistry_usable_energy,
+            unrecorded.environment.chemistry_usable_energy
+        );
+        assert_eq!(
+            recorded.chemical_reaction_accumulation,
+            unrecorded.chemical_reaction_accumulation
+        );
+        assert!(
+            observed_lifecycle_event,
+            "the controlled 120-tick fixture should exercise committed lifecycle recording"
+        );
+    }
 
     #[test]
     fn default_simulation_keeps_1280_individual_base_resources() {

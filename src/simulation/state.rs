@@ -919,6 +919,18 @@ pub(crate) struct EnvironmentalChemistryTickDiagnostics {
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalMoleculeLifecycleEvent {
+    pub(crate) event: String,
+    pub(crate) action: String,
+    pub(crate) tick: u64,
+    pub(crate) molecule_id: u64,
+    pub(crate) parent_ids: Vec<u64>,
+    pub(crate) reaction_id: String,
+    pub(crate) reaction: String,
+    pub(crate) molecule: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) tick: u64,
     pub(crate) reaction: String,
@@ -937,6 +949,8 @@ pub(crate) struct EnvironmentalChemistryEvent {
     pub(crate) product_material: Option<Vec<(String, f64)>>,
     pub(crate) product_internal_bond_count: Option<usize>,
     pub(crate) post_commit_source_cell_materials: Vec<Vec<(String, f64)>>,
+    #[serde(default)]
+    pub(crate) molecular_lifecycle: Vec<EnvironmentalMoleculeLifecycleEvent>,
 }
 
 #[derive(Clone)]
@@ -971,6 +985,9 @@ pub(crate) struct Simulation {
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
+    /// Enables full molecular graph/lifecycle snapshots for chemistry experiments.
+    /// Identity assignment remains part of successful reaction commits either way.
+    pub(crate) record_environmental_molecular_history: bool,
 }
 pub(crate) const DESIRABILITY_AMOUNT_HALF_SATURATION: f64 = 100.0;
 pub(crate) const DESIRABILITY_MAX: f64 = 1.0;

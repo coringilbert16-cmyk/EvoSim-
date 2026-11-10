@@ -29,6 +29,84 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
+fn environmental_material_identity_set(environment: &Environment) -> HashSet<u64> {
+    environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.environmental_identity)
+        .filter(|identity| *identity != 0)
+        .collect()
+}
+
+fn environmental_new_materials(
+    environment: &Environment,
+    previous_identities: &HashSet<u64>,
+) -> Vec<crate::physical_material::PhysicalMaterial> {
+    environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .filter(|material| {
+            material.environmental_identity != 0
+                && !previous_identities.contains(&material.environmental_identity)
+        })
+        .cloned()
+        .collect()
+}
+
+fn environmental_lifecycle_records(
+    tick: u64,
+    reaction_id: String,
+    reaction: &str,
+    parents: &[crate::physical_material::PhysicalMaterial],
+    products: &[crate::physical_material::PhysicalMaterial],
+) -> Vec<crate::state::EnvironmentalMoleculeLifecycleEvent> {
+    let parent_ids: Vec<u64> = parents
+        .iter()
+        .map(|material| material.environmental_identity)
+        .filter(|identity| *identity != 0)
+        .collect();
+    let mut records = Vec::with_capacity(parent_ids.len() + products.len());
+
+    // Emit product creation before parent retirement. The reaction is atomic,
+    // but this ordering lets the analyzer validate that every lineage parent
+    // was alive when its child was recorded, including same-tick reactions.
+    for product in products {
+        if product.environmental_identity == 0 {
+            continue;
+        }
+        records.push(crate::state::EnvironmentalMoleculeLifecycleEvent {
+            event: "molecular_lifecycle".to_string(),
+            action: "created".to_string(),
+            tick,
+            molecule_id: product.environmental_identity,
+            parent_ids: parent_ids.clone(),
+            reaction_id: reaction_id.clone(),
+            reaction: reaction.to_string(),
+            molecule: Some(serde_json::to_value(product).unwrap_or(serde_json::Value::Null)),
+        });
+    }
+    for parent in parents {
+        if parent.environmental_identity == 0 {
+            continue;
+        }
+        records.push(crate::state::EnvironmentalMoleculeLifecycleEvent {
+            event: "molecular_lifecycle".to_string(),
+            action: "destroyed".to_string(),
+            tick,
+            molecule_id: parent.environmental_identity,
+            parent_ids: Vec::new(),
+            reaction_id: reaction_id.clone(),
+            reaction: reaction.to_string(),
+            molecule: Some(serde_json::to_value(parent).unwrap_or(serde_json::Value::Null)),
+        });
+    }
+    records
+}
+
 fn restore_failed_transformation_material(
     transformation: &crate::state::ActiveTransformation,
     mut organism: Option<&mut Organism>,
@@ -204,6 +282,7 @@ impl Simulation {
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
+            record_environmental_molecular_history: false,
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -936,6 +1015,17 @@ impl Simulation {
             let source_cell = operation.cell_index;
             let source_material_index = operation.material_index;
             let source_materials = vec![operation.source_material.material.parts.clone()];
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_material.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.disruption_cost;
             let reaction_frequency_hz =
                 Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
@@ -950,6 +1040,26 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             let committed = resolution.is_ok();
+            let product_materials = if committed && molecular_history_enabled {
+                environmental_new_materials(&self.environment, &previous_identities)
+            } else {
+                Vec::new()
+            };
+            let molecular_lifecycle = if committed && molecular_history_enabled {
+                environmental_lifecycle_records(
+                    self.tick,
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
+                    "BREAK",
+                    &parent_materials,
+                    &product_materials,
+                )
+            } else {
+                Vec::new()
+            };
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
                 self.environmental_chemistry_diagnostics.break_committed += 1;
@@ -988,6 +1098,7 @@ impl Simulation {
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
+                    molecular_lifecycle,
                 });
         }
 
@@ -1014,6 +1125,17 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_a.clone(), operation.source_b.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.investment;
             let accumulated_reaction = Some(operation.accumulated_reaction);
             let product_cell = operation.cell_a;
@@ -1038,6 +1160,26 @@ impl Simulation {
                     .and_then(|cell| cell.physical_materials.get(product_material_index))
             } else {
                 None
+            };
+            let product_materials = if committed && molecular_history_enabled {
+                environmental_new_materials(&self.environment, &previous_identities)
+            } else {
+                Vec::new()
+            };
+            let molecular_lifecycle = if committed && molecular_history_enabled {
+                environmental_lifecycle_records(
+                    self.tick,
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
+                    "COMBINE",
+                    &parent_materials,
+                    &product_materials,
+                )
+            } else {
+                Vec::new()
             };
             let product_material = product.map(|material| material.material.parts.clone());
             let product_internal_bond_count =
@@ -1073,6 +1215,7 @@ impl Simulation {
                     product_material,
                     product_internal_bond_count,
                     post_commit_source_cell_materials,
+                    molecular_lifecycle,
                 },
             );
         }
@@ -1116,6 +1259,17 @@ impl Simulation {
                 operation.source_a.material.parts.clone(),
                 operation.source_b.material.parts.clone(),
             ];
+            let molecular_history_enabled = self.record_environmental_molecular_history;
+            let parent_materials = if molecular_history_enabled {
+                vec![operation.source_a.clone(), operation.source_b.clone()]
+            } else {
+                Vec::new()
+            };
+            let previous_identities = if molecular_history_enabled {
+                environmental_material_identity_set(&self.environment)
+            } else {
+                HashSet::new()
+            };
             let work_required = operation.work_required;
             let reaction_frequency_hz =
                 Some(operation.reaction_frequency_cycles_per_day / 86_400.0);
@@ -1130,6 +1284,26 @@ impl Simulation {
                     &mut self.chemical_reaction_accumulation,
                 );
             let committed = resolution.is_ok();
+            let product_materials = if committed && molecular_history_enabled {
+                environmental_new_materials(&self.environment, &previous_identities)
+            } else {
+                Vec::new()
+            };
+            let molecular_lifecycle = if committed && molecular_history_enabled {
+                environmental_lifecycle_records(
+                    self.tick,
+                    format!(
+                        "{}-{}",
+                        self.tick,
+                        self.environmental_chemistry_events.len()
+                    ),
+                    "DISPLACEMENT",
+                    &parent_materials,
+                    &product_materials,
+                )
+            } else {
+                Vec::new()
+            };
             let failure_reason = resolution.err().map(str::to_string);
             if committed {
                 self.environmental_chemistry_diagnostics
@@ -1167,6 +1341,7 @@ impl Simulation {
                     product_material: None,
                     product_internal_bond_count: None,
                     post_commit_source_cell_materials,
+                    molecular_lifecycle,
                 });
         }
 
