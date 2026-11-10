@@ -474,8 +474,14 @@ fn select_best_contact_from_pairs(
                     .unwrap_or(std::cmp::Ordering::Equal)
             })
             .then_with(|| {
-                format!("{:?}|{:?}", left.candidate.endpoint_a, left.candidate.endpoint_b)
-                    .cmp(&format!("{:?}|{:?}", right.candidate.endpoint_a, right.candidate.endpoint_b))
+                format!(
+                    "{:?}|{:?}",
+                    left.candidate.endpoint_a, left.candidate.endpoint_b
+                )
+                .cmp(&format!(
+                    "{:?}|{:?}",
+                    right.candidate.endpoint_a, right.candidate.endpoint_b
+                ))
             })
     });
     selected_contacts
