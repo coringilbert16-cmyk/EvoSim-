@@ -83,6 +83,56 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         for name in CANONICAL_RESOURCES:
             self.assertIn(f"| {name} |", markdown)
 
+    def test_molecular_lifecycle_reports_lifetimes_and_lineage(self):
+        records = fixture_records()
+        records.extend([
+            {"event": "molecular_lifecycle", "action": "created", "tick": 10,
+             "molecule_id": 101, "parent_ids": [], "reaction_id": 1,
+             "reaction": "SEED",
+             "molecule": {"composition": [["Carbon", 1.0]], "bonds": []}},
+            {"event": "molecular_lifecycle", "action": "created", "tick": 20,
+             "molecule_id": 102, "parent_ids": [101], "reaction_id": 2,
+             "reaction": "BREAK",
+             "molecule": {"composition": [["Carbon", 1.0]], "bonds": []}},
+            {"event": "molecular_lifecycle", "action": "destroyed", "tick": 20,
+             "molecule_id": 101, "reaction_id": 2, "reaction": "BREAK"},
+            {"event": "molecular_lifecycle", "action": "destroyed", "tick": 30,
+             "molecule_id": 102, "reaction_id": 3, "reaction": "COMBINE"},
+        ])
+        history = analyze(records)["molecular_history"]
+        self.assertEqual(history["molecule_creation_count"], 2)
+        self.assertEqual(history["molecule_destruction_count"], 2)
+        self.assertEqual(history["mean_observed_lifetime_ticks"], 10.0)
+        self.assertEqual(history["lineage_edges"][0]["parent_id"], 101)
+        self.assertEqual(history["lineage_edges"][0]["child_id"], 102)
+        self.assertEqual(history["validation_errors"], [])
+
+    def test_active_molecules_are_right_censored_not_treated_as_destroyed(self):
+        records = fixture_records()
+        records.append({
+            "event": "molecular_lifecycle", "action": "created",
+            "tick": 5, "molecule_id": 201, "parent_ids": [],
+        })
+        history = analyze(records)["molecular_history"]
+        self.assertEqual(history["active_at_end_count"], 1)
+        self.assertTrue(history["molecules"][0]["right_censored"])
+        self.assertIsNone(history["molecules"][0]["destroyed_tick"])
+
+    def test_molecular_lifecycle_rejects_duplicate_or_unknown_destruction(self):
+        records = fixture_records()
+        records.extend([
+            {"event": "molecular_lifecycle", "action": "created",
+             "tick": 4, "molecule_id": 301, "parent_ids": []},
+            {"event": "molecular_lifecycle", "action": "destroyed",
+             "tick": 5, "molecule_id": 301},
+            {"event": "molecular_lifecycle", "action": "destroyed",
+             "tick": 6, "molecule_id": 301},
+            {"event": "molecular_lifecycle", "action": "destroyed",
+             "tick": 7, "molecule_id": 999},
+        ])
+        errors = analyze(records)["molecular_history"]["validation_errors"]
+        self.assertEqual(len(errors), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
