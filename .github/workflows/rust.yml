@@ -4,6 +4,12 @@ name: Rust
 
 on:
   workflow_dispatch:
+    inputs:
+      compare_seeds:
+        description: "Run a second 60-second baseline only for an explicit side-by-side seed comparison."
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main]
   pull_request:
@@ -38,7 +44,7 @@ jobs:
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
       - name: Run default environmental chemistry baseline
-        if: always()
+        if: success() && github.event_name != 'pull_request'
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -50,19 +56,19 @@ jobs:
             --diagnostics environmental-chemistry-default-baseline.jsonl \
             --diagnostic-interval 100
       - name: Analyze default environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name != 'pull_request'
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-analysis.json \
             --markdown-out environmental-chemistry-analysis.md
       - name: Analyze default baseline chemical organization
-        if: success()
+        if: success() && github.event_name != 'pull_request'
         run: |
           python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-organization.json \
             --markdown-out environmental-chemistry-organization.md
       - name: Upload default environmental chemistry baseline
-        if: always()
+        if: always() && hashFiles('environmental-chemistry-default-baseline.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: environmental-chemistry-default-baseline
@@ -75,7 +81,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Run second environmental chemistry baseline (seed 43)
-        if: always()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -87,19 +93,19 @@ jobs:
             --diagnostics environmental-chemistry-seed-43.jsonl \
             --diagnostic-interval 100
       - name: Analyze second environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-seed-43.jsonl \
             --json-out environmental-chemistry-seed-43-analysis.json \
             --markdown-out environmental-chemistry-seed-43-analysis.md
       - name: Analyze seed 43 chemical organization
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
         run: |
           python3 tools/chemistry_organization_analyzer.py environmental-chemistry-seed-43.jsonl \
             --json-out environmental-chemistry-seed-43-organization.json \
             --markdown-out environmental-chemistry-seed-43-organization.md
       - name: Upload second environmental chemistry baseline
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true && hashFiles('environmental-chemistry-seed-43.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: environmental-chemistry-seed-43
@@ -112,7 +118,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -145,7 +151,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Chemistry and reactions (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -189,7 +195,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Transactions and ownership (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -242,7 +248,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Geometry and persistence (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -265,7 +271,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Organism and seed acceptance (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -283,7 +289,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Run Rust tests
-        if: always()
+        if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
@@ -291,7 +297,7 @@ jobs:
         if: always()
         run: |
           cargo fmt --all
-          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs > rustfmt-corrections.patch
+          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs src/perception/harmonics.rs > rustfmt-corrections.patch
           cat rustfmt-corrections.patch
       - name: Upload rustfmt correction patch
         if: always()
@@ -303,7 +309,7 @@ jobs:
           retention-days: 7
       - name: Run Clippy
         timeout-minutes: 5
-        if: always()
+        if: success()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
   pr335-discovery-benchmark:
@@ -333,52 +339,3 @@ jobs:
           retention-days: 30
 
 # Re-trigger CI for the molecular lineage observability pull request.
-
-  chemistry-sample-expansion:
-    name: 5-minute chemistry sample (seed ${{ matrix.seed }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      max-parallel: 10
-      matrix:
-        seed: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run 5-minute environmental chemistry experiment
-        timeout-minutes: 12
-        run: |
-          set -euo pipefail
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 300 \
-            --seed ${{ matrix.seed }} \
-            --diagnostics environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
-            --diagnostic-interval 100
-      - name: Analyze environmental chemistry
-        if: success()
-        run: |
-          python3 tools/chemistry_analyzer.py environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
-            --json-out environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.json \
-            --markdown-out environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.md
-      - name: Analyze chemical organization
-        if: success()
-        run: |
-          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
-            --json-out environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.json \
-            --markdown-out environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.md
-      - name: Upload experiment and analysis artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: chemistry-5min-seed-${{ matrix.seed }}
-          path: |
-            environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl
-            environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.json
-            environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.md
-            environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.json
-            environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.md
-          if-no-files-found: error
-          retention-days: 30
