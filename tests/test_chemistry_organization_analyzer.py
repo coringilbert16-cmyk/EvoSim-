@@ -157,6 +157,26 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         ]
         self.assertEqual(reaction_compounds, {})
 
+    def test_reports_resource_units_in_reaction_created_compounds(self):
+        records = [
+            lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
+            lifecycle(
+                "created", 2, 4,
+                molecule(
+                    [["Carbon", 1.0], ["Oxygen", 1.0]],
+                    [{"part_a": 0, "part_b": 1}],
+                ),
+                [1],
+                "COMBINE",
+            ),
+            {"event": "environmental_chemistry_tick", "tick": 8},
+        ]
+        report = analyzer.analyze(records)
+        self.assertEqual(
+            report["material_distribution"]["reaction_created_compound_constituent_amount_by_resource"],
+            {"Carbon": 1.0, "Oxygen": 1.0},
+        )
+
     def test_rejects_duplicate_creation_and_invalid_destruction(self):
         records = [
             lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
