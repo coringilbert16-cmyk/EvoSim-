@@ -97,6 +97,12 @@ mod diagnostics;
 mod energy_ledger;
 #[path = "chemistry/environmental_combine.rs"]
 mod environmental_combine;
+#[path = "chemistry/environmental_interaction.rs"]
+#[allow(dead_code)] // Stable environmental identity and record contract; no reaction semantics changed.
+mod environmental_interaction;
+#[path = "chemistry/environmental_broad_phase.rs"]
+#[allow(dead_code)] // Indexed discovery oracle; production cutover remains separate.
+mod environmental_broad_phase;
 #[path = "chemistry/environmental_displacement.rs"]
 mod environmental_displacement;
 
