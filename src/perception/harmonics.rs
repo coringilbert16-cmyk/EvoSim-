@@ -2526,6 +2526,99 @@ mod tests {
     }
 
     #[test]
+    fn continuous_resonance_query_is_grid_free_and_respects_visible_boundary_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let materials = vec![source, receiver];
+        let receptions = material_aura_receptions_with_occluders(
+            &materials[0],
+            &materials[1],
+            &materials,
+            &catalog,
+            0,
+        )
+        .expect("valid physical arrangement should produce boundary receptions");
+        let reception = receptions
+            .iter()
+            .find(|sample| {
+                sample
+                    .boundary
+                    .normal_at((sample.receiver_x, sample.receiver_y))
+                    .is_some()
+            })
+            .expect("at least one exposed boundary sample should exist");
+        let point = (reception.receiver_x, reception.receiver_y);
+
+        let first = material_resonance_spectrum_at_boundary_point(
+            &materials,
+            &[0],
+            1,
+            point,
+            &catalog,
+            0,
+        )
+        .expect("valid exposed reaction point should be queryable");
+        let repeated = material_resonance_spectrum_at_boundary_point(
+            &materials,
+            &[0],
+            1,
+            point,
+            &catalog,
+            0,
+        )
+        .expect("the continuous query should be deterministic");
+        assert_eq!(first, repeated);
+        assert!(
+            !first.components.is_empty(),
+            "visible reaction geometry should receive the source field"
+        );
+
+        let off_boundary = (point.0 + 0.25, point.1 + 0.25);
+        let outside = material_resonance_spectrum_at_boundary_point(
+            &materials,
+            &[0],
+            1,
+            off_boundary,
+            &catalog,
+            0,
+        )
+        .expect("a valid but non-boundary point should produce an empty field");
+        assert!(outside.components.is_empty());
+
+        let blocked_materials = vec![
+            materials[0].clone(),
+            materials[1].clone(),
+            make_material("Nitrogen", 4.0, 0.0),
+        ];
+        let blocked = material_resonance_spectrum_at_boundary_point(
+            &blocked_materials,
+            &[0],
+            1,
+            point,
+            &catalog,
+            0,
+        )
+        .expect("valid occluded geometry should be queryable");
+        assert!(
+            blocked.components.is_empty(),
+            "a source hidden behind a physical blocker must not contribute at this point"
+        );
+    }
+
+    #[test]
     fn resonance_density_phasors_reinforce_cancel_and_keep_frequencies_separate() {
         let component = |frequency_cycles_per_day, amplitude, phase_radians| ToneComponent {
             frequency_cycles_per_day,
