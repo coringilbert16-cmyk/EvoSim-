@@ -679,6 +679,9 @@ impl ActiveMaterialField {
                 self.mark_changed_at_index(index);
             }
         }
+        // Child identities are allocated as part of the successful split
+        // transaction, never deferred to a later tick or cleanup pass.
+        self.assign_missing_material_identities();
         true
     }
 
