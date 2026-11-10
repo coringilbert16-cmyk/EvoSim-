@@ -3157,7 +3157,8 @@ mod tests {
         fn fixture(
             count: usize,
             clustered: bool,
-        ) -> (ActiveMaterialField, Vec<Option<MaterialSpatialBounds>>) {
+        ) -> (ActiveMaterialField, Vec<crate::resources::BaseResource>) {
+            let catalog = crate::resources::default_catalog();
             let mut field = ActiveMaterialField::new(250.0, 250.0, 10.0);
             for index in 0..count {
                 let cell_index = if clustered {
@@ -3165,27 +3166,22 @@ mod tests {
                 } else {
                     (index * 251) % field.cells.len()
                 };
+                let x = (cell_index % 25) as f64 * 10.0 + 5.0;
+                let y = (cell_index / 25) as f64 * 10.0 + 5.0;
                 field.cells[cell_index]
                     .physical_materials
-                    .push(physical(index as u64 + 1, "Carbon"));
+                    .push(realized_physical(
+                        index as u64 + 1,
+                        Material::free_base("Carbon", 1.0),
+                        vec![crate::structure::Placement {
+                            x,
+                            y,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    ));
             }
-            let snapshot = EnvironmentalMaterialSnapshot::from_field(&field, 991);
-            let bounds = snapshot
-                .materials
-                .iter()
-                .map(|record| {
-                    let cell = record.locator.cell_index;
-                    let x = (cell % 25) as f64 * 10.0 + 5.0;
-                    let y = (cell / 25) as f64 * 10.0 + 5.0;
-                    Some(MaterialSpatialBounds {
-                        min_x: x - 1.0,
-                        max_x: x + 1.0,
-                        min_y: y - 1.0,
-                        max_y: y + 1.0,
-                    })
-                })
-                .collect();
-            (field, bounds)
+            (field, catalog)
         }
 
         fn exhaustive(
