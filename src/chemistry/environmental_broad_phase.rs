@@ -3248,7 +3248,7 @@ mod tests {
                 + snapshot.material_index_by_cell_slot.capacity()
                     * size_of::<Vec<Option<usize>>>()
                 + slot_index_bytes
-                + bounds.capacity() * size_of::<Option<MaterialSpatialBounds>>()
+                + bounds.len() * size_of::<Option<MaterialSpatialBounds>>()
         }
 
         println!(
