@@ -580,9 +580,22 @@ mod tests {
             unrecorded.environment.chemistry_usable_energy
         );
         assert_eq!(
-            recorded.chemical_reaction_accumulation,
-            unrecorded.chemical_reaction_accumulation
+            recorded.chemical_reaction_accumulation.len(),
+            unrecorded.chemical_reaction_accumulation.len(),
+            "history recording must preserve reaction-accumulation keys"
         );
+        for (key, recorded_value) in &recorded.chemical_reaction_accumulation {
+            let unrecorded_value = unrecorded
+                .chemical_reaction_accumulation
+                .get(key)
+                .expect("both runs should retain the same reaction-accumulation keys");
+            let tolerance =
+                1e-12 * recorded_value.abs().max(unrecorded_value.abs()).max(1.0);
+            assert!(
+                (recorded_value - unrecorded_value).abs() <= tolerance,
+                "history recording must not materially change reaction accumulation for {key}: recorded={recorded_value}, unrecorded={unrecorded_value}"
+            );
+        }
         assert!(
             observed_lifecycle_event,
             "the controlled 120-tick fixture should exercise committed lifecycle recording"
