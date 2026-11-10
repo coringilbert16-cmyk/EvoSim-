@@ -39,6 +39,28 @@ def _number(value: Any) -> float | int | None:
     return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _structural_signature(molecule: Any) -> str:
+    if not isinstance(molecule, dict):
+        return "{}"
+    material = molecule.get("material", {})
+    if not isinstance(material, dict):
+        material = {}
+    parts = material.get("parts", [])
+    normalized_parts = sorted(
+        (str(part[0]), float(part[1]))
+        for part in parts
+        if isinstance(part, (list, tuple)) and len(part) == 2
+    ) if isinstance(parts, list) else []
+    raw_edges = molecule.get("internal_connections", [])
+    edges = [edge for edge in raw_edges if isinstance(edge, dict)] if isinstance(raw_edges, list) else []
+    normalized_edges = sorted(
+        (json.dumps(edge, sort_keys=True, separators=(",", ":")) for edge in edges)
+    )
+    return json.dumps(
+        {"composition": normalized_parts, "bonds": normalized_edges},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     headers = [r for r in records if r.get("event") == "environmental_chemistry_header"]
     snapshots = [r for r in records if r.get("event") == "environmental_chemistry_snapshot"]
@@ -217,6 +239,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "molecule": data["molecule"],
         })
     lifetime_values = [row["observed_lifetime_ticks"] for row in molecule_lifetimes]
+    structural_families: dict[str, list[int]] = {}
+    for molecule in molecule_lifetimes:
+        signature = _structural_signature(molecule["molecule"])
+        molecule["structural_signature"] = signature
+        structural_families.setdefault(signature, []).append(molecule["molecule_id"])
     reaction_pathways = Counter(
         str(edge["reaction"]) for edge in lineage_edges if edge["reaction"] is not None
     )
@@ -271,6 +298,12 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             ),
             "maximum_observed_lifetime_ticks": max(lifetime_values, default=None),
             "molecules": molecule_lifetimes,
+            "structural_families": [
+                {"signature": signature, "molecule_ids": ids, "count": len(ids)}
+                for signature, ids in sorted(
+                    structural_families.items(), key=lambda item: (-len(item[1]), item[0])
+                )
+            ],
             "lineage_edges": lineage_edges,
             "lineage_reaction_counts": dict(sorted(reaction_pathways.items())),
             "validation_errors": lifecycle_errors,
