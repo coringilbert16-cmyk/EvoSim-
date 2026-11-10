@@ -468,7 +468,7 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
 
     let simulation = Simulation::new(774, 10.0);
     let catalog = &simulation.environment.catalog;
-    let source = PhysicalMaterial::realized(
+    let mut source = PhysicalMaterial::realized(
         make_structured(2.0),
         vec![
             Placement {
@@ -485,6 +485,7 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
         catalog,
     )
     .expect("test composite should be physically realizable");
+    source.environmental_identity = 77;
     let carbon = PhysicalMaterial::realized(
         Material::free_base("Carbon", 1.0),
         vec![Placement {
@@ -542,6 +543,16 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
         2
     );
     assert!(field.revision > before_revision);
+    field.assign_missing_material_identities();
+    let child_ids: Vec<u64> = field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .map(|material| material.environmental_identity)
+        .collect();
+    assert_eq!(child_ids.len(), 2);
+    assert!(child_ids.iter().all(|identity| *identity != 0 && *identity != 77));
+    assert_ne!(child_ids[0], child_ids[1]);
 }
 
 #[test]
