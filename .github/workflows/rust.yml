@@ -278,7 +278,7 @@ jobs:
         if: always()
         run: |
           cargo fmt --all
-          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs > rustfmt-corrections.patch
+          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs src/perception/harmonics.rs > rustfmt-corrections.patch
           cat rustfmt-corrections.patch
       - name: Upload rustfmt correction patch
         if: always()
