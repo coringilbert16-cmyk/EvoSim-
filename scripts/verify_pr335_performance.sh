@@ -38,19 +38,16 @@ fi
 
 # The newly registered modules may depend on one another, but no existing
 # production source may call into them. This is the causal-isolation check.
-if rg -n 'environmental_(broad_phase|interaction|snapshot_cursor)::' "$ROOT/src" \
-  --glob '!**/chemistry/environmental_broad_phase.rs' \
-  --glob '!**/chemistry/environmental_interaction.rs' \
-  --glob '!**/chemistry/environmental_snapshot_cursor.rs' \
-  --glob '!**/main.rs'; then
-  echo "A source file outside the extracted modules references the new discovery modules."
+matches="$(find "$ROOT/src" -type f -name '*.rs' \
+  ! -path "$ROOT/src/chemistry/environmental_broad_phase.rs" \
+  ! -path "$ROOT/src/chemistry/environmental_interaction.rs" \
+  ! -path "$ROOT/src/chemistry/environmental_snapshot_cursor.rs" \
+  ! -path "$ROOT/src/main.rs" \
+  -exec grep -nHE 'environmental_(broad_phase|interaction|snapshot_cursor)::' {} + || true)"
+if [[ -n "$matches" ]]; then
+  echo "A source file outside the extracted modules references the new discovery modules:"
+  echo "$matches"
   exit 1
-else
-  rg_status=$?
-  if [[ "$rg_status" -ne 1 ]]; then
-    echo "Could not complete the production call-site scan (rg exit $rg_status)."
-    exit "$rg_status"
-  fi
 fi
 
 for module in environmental_broad_phase environmental_interaction environmental_snapshot_cursor; do
@@ -136,7 +133,6 @@ for pair in 1 2 3 4 5 6 7; do
 done
 
 python3 - "$SUMMARY_TSV" "$SUMMARY_TXT" <<'PY'
-import csv
 import math
 import random
 import re
