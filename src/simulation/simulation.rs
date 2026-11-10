@@ -70,21 +70,10 @@ fn environmental_lifecycle_records(
         .filter(|identity| *identity != 0)
         .collect();
     let mut records = Vec::with_capacity(parent_ids.len() + products.len());
-    for parent in parents {
-        if parent.environmental_identity == 0 {
-            continue;
-        }
-        records.push(crate::state::EnvironmentalMoleculeLifecycleEvent {
-            event: "molecular_lifecycle".to_string(),
-            action: "destroyed".to_string(),
-            tick,
-            molecule_id: parent.environmental_identity,
-            parent_ids: Vec::new(),
-            reaction_id: reaction_id.clone(),
-            reaction: reaction.to_string(),
-            molecule: Some(serde_json::to_value(parent).unwrap_or(serde_json::Value::Null)),
-        });
-    }
+
+    // Emit product creation before parent retirement. The reaction is atomic,
+    // but this ordering lets the analyzer validate that every lineage parent
+    // was alive when its child was recorded, including same-tick reactions.
     for product in products {
         if product.environmental_identity == 0 {
             continue;
@@ -98,6 +87,21 @@ fn environmental_lifecycle_records(
             reaction_id: reaction_id.clone(),
             reaction: reaction.to_string(),
             molecule: Some(serde_json::to_value(product).unwrap_or(serde_json::Value::Null)),
+        });
+    }
+    for parent in parents {
+        if parent.environmental_identity == 0 {
+            continue;
+        }
+        records.push(crate::state::EnvironmentalMoleculeLifecycleEvent {
+            event: "molecular_lifecycle".to_string(),
+            action: "destroyed".to_string(),
+            tick,
+            molecule_id: parent.environmental_identity,
+            parent_ids: Vec::new(),
+            reaction_id: reaction_id.clone(),
+            reaction: reaction.to_string(),
+            molecule: Some(serde_json::to_value(parent).unwrap_or(serde_json::Value::Null)),
         });
     }
     records
