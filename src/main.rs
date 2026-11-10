@@ -165,6 +165,9 @@ mod blueprint_spatial_target_tests;
 #[path = "tests/bond_driven_contract_tests.rs"]
 mod bond_driven_contract_tests;
 #[cfg(test)]
+#[path = "tests/environmental_discovery_parity_tests.rs"]
+mod environmental_discovery_parity_tests;
+#[cfg(test)]
 #[path = "tests/observation_contract_tests.rs"]
 mod observation_contract_tests;
 #[cfg(test)]
@@ -176,9 +179,6 @@ mod phase2_structure_contract_tests;
 #[cfg(test)]
 #[path = "tests/phase3_authority_contract_tests.rs"]
 mod phase3_authority_contract_tests;
-#[cfg(test)]
-#[path = "tests/environmental_discovery_parity_tests.rs"]
-mod environmental_discovery_parity_tests;
 #[cfg(test)]
 #[path = "tests/simulation_tests.rs"]
 mod simulation_tests;
