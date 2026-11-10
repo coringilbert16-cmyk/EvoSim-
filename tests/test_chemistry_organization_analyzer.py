@@ -51,6 +51,21 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         self.assertEqual(organization["top_families"][0]["occurrences"], 2)
         self.assertEqual(organization["top_families"][0]["active_at_end"], 1)
 
+    def test_initial_seed_recurrence_is_not_mistaken_for_emergent_recurrence(self):
+        compound = molecule([["Hydrogen", 1.0], ["Sulfur", 1.0]])
+        records = [
+            lifecycle("created", 1, 0, compound, reaction="INITIAL"),
+            lifecycle("created", 2, 0, compound, reaction="INITIAL"),
+            lifecycle("created", 3, 5, compound, [1], "COMBINE"),
+            {"event": "environmental_chemistry_tick", "tick": 10},
+        ]
+        report = analyzer.analyze(records)
+        family = report["organization"]["top_families"][0]
+        self.assertEqual(family["initial_seed_occurrences"], 2)
+        self.assertEqual(family["reaction_created_occurrences"], 1)
+        self.assertFalse(family["recurrent_from_reactions"])
+        self.assertEqual(report["organization"]["recurrent_families"], 0)
+
     def test_single_resource_unbonded_materials_do_not_count_as_organized_families(self):
         records = [
             lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
