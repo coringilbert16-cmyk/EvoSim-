@@ -268,3 +268,5 @@ jobs:
           path: pr335-discovery-benchmark.csv
           if-no-files-found: error
           retention-days: 30
+
+# Re-trigger CI for the molecular lineage observability pull request.
