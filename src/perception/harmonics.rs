@@ -1365,6 +1365,46 @@ fn geometry_bounds_may_occlude_source_points(
         || candidate.min_y > max_y)
 }
 
+fn receiver_has_straight_boundary(
+    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+) -> bool {
+    receiver
+        .parts
+        .iter()
+        .any(|part| part.form.polygon_vertices().is_some())
+}
+
+fn receiver_has_curved_boundary(
+    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+) -> bool {
+    receiver.parts.iter().any(|part| match &part.form {
+        crate::resources::Form::Circle { .. } => true,
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: Some(_),
+            ..
+        } => true,
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: Some(multi),
+            ..
+        } => multi.pieces.iter().any(|piece| {
+            matches!(
+                piece,
+                crate::capillary_geometry::FluidBoundaryPiece::FreeArc(_)
+            )
+        }),
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: None,
+            ..
+        } => true,
+        _ => false,
+    })
+}
+
 /// Evaluate one source against prebuilt world geometry. The receiver must be
 /// the first body in `receiver_bodies`; all remaining bodies are occluders.
 fn material_aura_receptions_with_geometry(
@@ -1386,16 +1426,25 @@ fn material_aura_receptions_with_geometry(
         environmental_material_resonance(source, catalog, tick)?;
 
     let target_body_indices = [0];
-    let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
-        (source_x, source_y),
-        receiver_bodies,
-        &target_body_indices,
-    )?;
-    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
-        (source_x, source_y),
-        receiver_bodies,
-        &target_body_indices,
-    )?;
+    let receiver_geometry = receiver_bodies.first()?;
+    let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
+        crate::source_exposure::visible_polygonal_intervals_for_targets(
+            (source_x, source_y),
+            receiver_bodies,
+            &target_body_indices,
+        )?
+    } else {
+        Vec::new()
+    };
+    let curved_intervals = if receiver_has_curved_boundary(receiver_geometry) {
+        crate::source_exposure::visible_circular_arc_intervals_for_targets(
+            (source_x, source_y),
+            receiver_bodies,
+            &target_body_indices,
+        )?
+    } else {
+        Vec::new()
+    };
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -2141,6 +2190,59 @@ mod tests {
             &endpoint_points,
             &outside_x,
         ));
+    }
+
+    #[test]
+    fn resonance_visibility_runs_only_for_boundary_types_present_on_receiver() {
+        let polygon = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Rectangle {
+                    width: 1.0,
+                    height: 1.0,
+                },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let circle = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Circle { radius: 0.5 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let line = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Line { length: 1.0 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+
+        assert!(receiver_has_straight_boundary(&polygon));
+        assert!(!receiver_has_curved_boundary(&polygon));
+        assert!(!receiver_has_straight_boundary(&circle));
+        assert!(receiver_has_curved_boundary(&circle));
+        assert!(!receiver_has_straight_boundary(&line));
+        assert!(!receiver_has_curved_boundary(&line));
     }
 
     #[test]
