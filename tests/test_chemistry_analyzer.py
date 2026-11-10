@@ -105,6 +105,8 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(history["mean_observed_lifetime_ticks"], 10.0)
         self.assertEqual(history["lineage_edges"][0]["parent_id"], 101)
         self.assertEqual(history["lineage_edges"][0]["child_id"], 102)
+        self.assertEqual(len(history["structural_families"]), 1)
+        self.assertEqual(history["structural_families"][0]["molecule_ids"], [101, 102])
         self.assertEqual(history["validation_errors"], [])
 
     def test_active_molecules_are_right_censored_not_treated_as_destroyed(self):
