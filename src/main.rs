@@ -104,6 +104,10 @@ mod environmental_displacement;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
 
+#[path = "chemistry/research/environmental_snapshot_cursor.rs"]
+#[allow(dead_code)] // Deferred, isolated snapshot-construction research.
+mod environmental_snapshot_cursor;
+
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
 mod decision;
