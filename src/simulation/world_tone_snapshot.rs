@@ -772,8 +772,12 @@ pub(crate) struct LocalResonanceWorldSnapshot {
 
 impl LocalResonanceWorldSnapshot {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
-        let (bodies, resonant_indices, _) = world_physical_materials_for_pair_potential(simulation)?;
-        Some(Self { bodies, resonant_indices })
+        let (bodies, resonant_indices, _) =
+            world_physical_materials_for_pair_potential(simulation)?;
+        Some(Self {
+            bodies,
+            resonant_indices,
+        })
     }
 
     /// Return the mean endpoint spectral match to a reaction's natural
@@ -793,14 +797,20 @@ impl LocalResonanceWorldSnapshot {
         {
             return None;
         }
-        let mut matches = self.bodies.iter().enumerate()
+        let mut matches = self
+            .bodies
+            .iter()
+            .enumerate()
             .filter(|(_, body)| body.environmental_identity == receiver_identity)
             .map(|(index, _)| index);
         let receiver_index = matches.next()?;
         if matches.next().is_some() || !self.resonant_indices.contains(&receiver_index) {
             return None;
         }
-        let source_indices: Vec<_> = self.resonant_indices.iter().copied()
+        let source_indices: Vec<_> = self
+            .resonant_indices
+            .iter()
+            .copied()
             .filter(|index| *index != receiver_index)
             .collect();
         let spectra = crate::harmonics::material_resonance_spectra_at_boundary_points(
@@ -818,9 +828,11 @@ impl LocalResonanceWorldSnapshot {
                 phase_radians: 0.0,
             }],
         };
-        let similarity = spectra.iter()
+        let similarity = spectra
+            .iter()
             .map(|spectrum| crate::harmonics::spectral_similarity(spectrum, &target))
-            .sum::<f64>() / spectra.len() as f64;
+            .sum::<f64>()
+            / spectra.len() as f64;
         (similarity.is_finite()).then_some(similarity.clamp(0.0, 1.0))
     }
 }
