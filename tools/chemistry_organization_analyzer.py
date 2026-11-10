@@ -233,6 +233,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     resource_units: Counter[str] = Counter()
     molecules_by_resource: Counter[str] = Counter()
+    compound_resource_units: Counter[str] = Counter()
+    reaction_product_compound_resource_units: Counter[str] = Counter()
+    compounds_by_resource: Counter[str] = Counter()
     compound_ids = [
         molecule_id for molecule_id, row in molecule_rows.items() if row["is_compound"]
     ]
@@ -240,6 +243,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         for resource, amount in row["composition"].items():
             resource_units[resource] += amount
             molecules_by_resource[resource] += 1
+            if row["is_compound"]:
+                compound_resource_units[resource] += amount
+                compounds_by_resource[resource] += 1
+                if row["reaction"] != "INITIAL":
+                    reaction_product_compound_resource_units[resource] += amount
 
     recurrent = [family for family in families if family["recurrent_from_reactions"]]
     recurrent_including_initial = [family for family in families if family["recurrent"]]
@@ -286,6 +294,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         "material_distribution": {
             "constituent_amount_by_resource": dict(sorted(resource_units.items())),
             "molecules_containing_resource": dict(sorted(molecules_by_resource.items())),
+            "compound_constituent_amount_by_resource": dict(sorted(compound_resource_units.items())),
+            "compounds_containing_resource": dict(sorted(compounds_by_resource.items())),
+            "reaction_created_compound_constituent_amount_by_resource": dict(
+                sorted(reaction_product_compound_resource_units.items())
+            ),
             "note": "Amounts are summed once per created molecule identity; lineage generations can therefore count transferred material more than once.",
         },
         "reaction_network": {
