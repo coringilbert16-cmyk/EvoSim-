@@ -244,6 +244,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     recurrent = [family for family in families if family["recurrent_from_reactions"]]
     recurrent_including_initial = [family for family in families if family["recurrent"]]
     active_families = [family for family in families if family["active_at_end"] > 0]
+    families_with_products = [
+        family for family in families if family["reaction_created_occurrences"] > 0
+    ]
     return {
         "schema_version": 1,
         "scope": {
@@ -258,10 +261,13 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "recurrent_families": len(recurrent),
             "recurrent_families_including_initial_seeds": len(recurrent_including_initial),
             "families_recurrent_from_reaction_products": len(recurrent),
+            "families_with_reaction_created_products": len(families_with_products),
             "single_resource_unbonded_identities_excluded": len(molecule_rows) - len(compound_ids),
             "families_active_at_end": len(active_families),
             "molecules_with_multi_resource_or_bonded_structure": len(compound_ids),
-            "recurrence_fraction": len(recurrent) / len(families) if families else 0.0,
+            "recurrence_fraction": (
+                len(recurrent) / len(families_with_products) if families_with_products else 0.0
+            ),
             "top_families": families[:25],
             "families": families,
         },
