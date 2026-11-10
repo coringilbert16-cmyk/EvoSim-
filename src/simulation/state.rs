@@ -704,17 +704,28 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.progress_dissipated_checked = self
             .progress_dissipated_checked
             .saturating_add(tick.progress_dissipated_checked);
-        self.local_resonance_sample_attempts = self.local_resonance_sample_attempts.saturating_add(tick.local_resonance_sample_attempts);
-        self.local_resonance_samples = self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
-        self.local_resonance_unavailable = self.local_resonance_unavailable.saturating_add(tick.local_resonance_unavailable);
+        self.local_resonance_sample_attempts = self
+            .local_resonance_sample_attempts
+            .saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples =
+            self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self
+            .local_resonance_unavailable
+            .saturating_add(tick.local_resonance_unavailable);
         if tick.local_resonance_similarity_sum.is_finite() {
             self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
         }
         if tick.local_resonance_similarity_max.is_finite() {
-            self.local_resonance_similarity_max = self.local_resonance_similarity_max.max(tick.local_resonance_similarity_max);
+            self.local_resonance_similarity_max = self
+                .local_resonance_similarity_max
+                .max(tick.local_resonance_similarity_max);
         }
-        self.local_resonance_sample_nanoseconds = self.local_resonance_sample_nanoseconds.saturating_add(tick.local_resonance_sample_nanoseconds);
-        self.local_resonance_snapshot_build_nanoseconds = self.local_resonance_snapshot_build_nanoseconds.saturating_add(tick.local_resonance_snapshot_build_nanoseconds);
+        self.local_resonance_sample_nanoseconds = self
+            .local_resonance_sample_nanoseconds
+            .saturating_add(tick.local_resonance_sample_nanoseconds);
+        self.local_resonance_snapshot_build_nanoseconds = self
+            .local_resonance_snapshot_build_nanoseconds
+            .saturating_add(tick.local_resonance_snapshot_build_nanoseconds);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
