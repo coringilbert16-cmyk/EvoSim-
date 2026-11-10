@@ -42,7 +42,6 @@ def _number(value: Any) -> float | int | None:
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     headers = [r for r in records if r.get("event") == "environmental_chemistry_header"]
     snapshots = [r for r in records if r.get("event") == "environmental_chemistry_snapshot"]
-    ticks = [r for r for r in []]  # replaced below to keep parsing explicit
     ticks = [r for r in records if r.get("event") == "environmental_chemistry_tick"]
     reactions = [r.get("reaction", {}) for r in records if r.get("event") == "environmental_reaction"]
     summaries = [r for r in records if r.get("event") == "environmental_chemistry_summary"]
