@@ -268,11 +268,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Preview rustfmt changes for isolated benchmark
-        run: |
-          set -euo pipefail
-          cargo fmt --all
-          git diff -- src/chemistry/environmental_broad_phase.rs
       - name: Run isolated discovery scaling benchmark
         run: |
           set -euo pipefail
