@@ -238,6 +238,20 @@ jobs:
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
+      - name: Capture rustfmt correction patch
+        if: always()
+        run: |
+          cargo fmt --all
+          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs > rustfmt-corrections.patch
+          cat rustfmt-corrections.patch
+      - name: Upload rustfmt correction patch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustfmt-corrections
+          path: rustfmt-corrections.patch
+          if-no-files-found: error
+          retention-days: 7
       - name: Run Clippy
         timeout-minutes: 5
         if: always()
