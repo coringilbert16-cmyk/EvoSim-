@@ -103,9 +103,6 @@ mod environmental_combine;
 mod environmental_displacement;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
-#[path = "chemistry/environmental_snapshot_cursor.rs"]
-#[allow(dead_code)] // Snapshot cursor is retained as a tested, not-yet-wired discovery primitive.
-mod environmental_snapshot_cursor;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]
