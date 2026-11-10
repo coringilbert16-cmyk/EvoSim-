@@ -91,6 +91,19 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         report = analyzer.analyze(records)
         self.assertEqual(len(report["scope"]["lifecycle_validation_errors"]), 2)
 
+    def test_rejects_lineage_to_missing_or_already_destroyed_parent(self):
+        records = [
+            lifecycle("created", 1, 0, molecule([["Carbon", 1.0]])),
+            lifecycle("destroyed", 1, 2),
+            lifecycle("created", 2, 3, molecule([["Carbon", 1.0], ["Oxygen", 1.0]]), [1], "COMBINE"),
+            lifecycle("created", 3, 4, molecule([["Sulfur", 1.0]]), [99], "BREAK"),
+            {"event": "environmental_chemistry_tick", "tick": 5},
+        ]
+        report = analyzer.analyze(records)
+        errors = report["scope"]["lifecycle_validation_errors"]
+        self.assertTrue(any("already destroyed" in error for error in errors))
+        self.assertTrue(any("no prior creation" in error for error in errors))
+
     def test_requires_molecular_history(self):
         with self.assertRaisesRegex(ValueError, "no molecular_lifecycle"):
             analyzer.analyze([{"event": "environmental_chemistry_tick", "tick": 1}])
