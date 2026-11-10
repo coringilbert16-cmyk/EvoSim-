@@ -882,6 +882,10 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) target_material_pairs_restore_failed: usize,
     pub(crate) target_material_pairs_rejected_for_overlap: usize,
     pub(crate) constituent_pairs_available: usize,
+    /// Time spent generating conservative current-geometry constituent candidates.
+    pub(crate) spatial_candidate_generation_nanoseconds: u64,
+    /// Number of source-material pairs for which spatial candidates were generated.
+    pub(crate) spatial_candidate_generation_calls: usize,
     pub(crate) constituent_pairs_inspected: usize,
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,
