@@ -282,6 +282,7 @@ impl Simulation {
             hotspot,
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
+            record_environmental_molecular_history: false,
         }
     }
     fn create_environment(seed: u64) -> Environment {
@@ -956,10 +957,6 @@ impl Simulation {
                 &mut self.energy_ledger,
             ));
         }
-        // Assign stable IDs before discovery so every environmental reaction
-        // can record exact reactant identities and atomically identify new products.
-        self.environment.field.assign_missing_material_identities();
-
         // Environmental chemistry is a first-class owner and must run
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
