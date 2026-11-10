@@ -50,14 +50,23 @@ def _molecule_signature(molecule: Any) -> str:
             except (TypeError, ValueError):
                 continue
             parts.append((str(part[0]), amount))
-    raw_edges = molecule.get("internal_connections", [])
-    edges = raw_edges if isinstance(raw_edges, list) else []
-    normalized_edges = sorted(
-        json.dumps(edge, sort_keys=True, separators=(",", ":"))
-        for edge in edges if isinstance(edge, dict)
-    )
+    raw_bonds = material.get("internal_bonds", [])
+    if not isinstance(raw_bonds, list) or not raw_bonds:
+        raw_bonds = molecule.get("internal_connections", [])
+    normalized_bonds = []
+    if isinstance(raw_bonds, list):
+        for bond in raw_bonds:
+            if not isinstance(bond, dict):
+                continue
+            part_a = bond.get("part_a")
+            part_b = bond.get("part_b")
+            if (
+                isinstance(part_a, int) and not isinstance(part_a, bool)
+                and isinstance(part_b, int) and not isinstance(part_b, bool)
+            ):
+                normalized_bonds.append(tuple(sorted((part_a, part_b))))
     return json.dumps(
-        {"composition": sorted(parts), "connections": normalized_edges},
+        {"composition": sorted(parts), "bonds": sorted(normalized_bonds)},
         sort_keys=True, separators=(",", ":"),
     )
 
@@ -263,7 +272,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "interpretation_limits": [
             "Structural-family recurrence excludes single-resource unbonded identities so abundant independent atoms/materials do not masquerade as organized compounds.",
-            "A structural family is an exact normalized serialized composition and connection signature, not graph-isomorphism or proof of chemical equivalence.",
+            "A structural family is an exact normalized composition plus part-index bond-connectivity signature; geometric endpoint angles and placements are intentionally ignored.",
+            "Family matching is not graph-isomorphism or proof of chemical equivalence.",
             "Active molecule lifetimes are right-censored at the final observed tick.",
             "Material totals count each created identity once, so lineage generations may count the same conserved constituents more than once.",
             "Recurrence and persistence are descriptive evidence, not proof of self-maintaining chemical organization.",
