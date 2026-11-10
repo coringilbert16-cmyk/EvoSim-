@@ -985,6 +985,10 @@ pub(crate) struct Simulation {
     pub(crate) environmental_chemistry_diagnostics: EnvironmentalChemistryTickDiagnostics,
     /// Committed/rejected environmental reaction attempts from the last tick.
     pub(crate) environmental_chemistry_events: Vec<EnvironmentalChemistryEvent>,
+    /// Opt-in, bounded local resonance samples collected alongside environmental
+    /// BREAK attempts. These are diagnostic signals, never spendable energy.
+    pub(crate) environmental_local_resonance_samples: Vec<serde_json::Value>,
+    pub(crate) record_local_resonance_diagnostics: bool,
     /// Enables full molecular graph/lifecycle snapshots for chemistry experiments.
     /// Identity assignment remains part of successful reaction commits either way.
     pub(crate) record_environmental_molecular_history: bool,
