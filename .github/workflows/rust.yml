@@ -3,6 +3,7 @@ name: Rust
 # CI trigger: validate main pushes and every pull request targeting main.
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
