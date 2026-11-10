@@ -2522,6 +2522,33 @@ mod tests {
     }
 
     #[test]
+    fn continuous_boundary_geometry_resolves_straight_and_curved_normals() {
+        let straight = MaterialAuraBoundary::Straight {
+            start: (0.0, 0.0),
+            end: (2.0, 0.0),
+            normal: (0.0, 1.0),
+        };
+        assert_eq!(straight.normal_at((1.0, 0.0)), Some((0.0, 1.0)));
+        assert_eq!(straight.normal_at((1.0, 0.1)), None);
+
+        let arc = MaterialAuraBoundary::Arc(crate::capillary_geometry::CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 0.0,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+        });
+        let diagonal = 2.0_f64.sqrt();
+        let normal = arc
+            .normal_at((diagonal, diagonal))
+            .expect("point on the exposed arc should have a normal");
+        assert!((normal.0 - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-12);
+        assert!((normal.1 - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-12);
+        assert_eq!(arc.normal_at((0.0, 2.1)), None);
+        assert_eq!(arc.normal_at((-2.0, 0.0)), None);
+    }
+
+    #[test]
     fn continuous_resonance_query_is_grid_free_and_respects_visible_boundary_geometry() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
