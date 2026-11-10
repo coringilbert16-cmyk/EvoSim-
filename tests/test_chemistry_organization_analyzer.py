@@ -23,9 +23,15 @@ def lifecycle(action, molecule_id, tick, molecule=None, parents=None, reaction="
 
 
 def molecule(parts, connections=None):
+    connections = connections or []
+    bonds = [
+        {"part_a": edge["part_a"], "part_b": edge["part_b"]}
+        for edge in connections
+        if isinstance(edge, dict) and "part_a" in edge and "part_b" in edge
+    ]
     return {
-        "material": {"parts": parts},
-        "internal_connections": connections or [],
+        "material": {"parts": parts, "internal_bonds": bonds},
+        "internal_connections": connections,
     }
 
 
@@ -57,6 +63,26 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         self.assertEqual(
             report["organization"]["single_resource_unbonded_identities_excluded"], 2
         )
+
+    def test_family_signature_ignores_geometry_but_preserves_bond_connectivity(self):
+        first = molecule(
+            [["Hydrogen", 1.0], ["Sulfur", 1.0]],
+            [{"part_a": 0, "part_b": 1, "bond_energy": 0.15,
+              "endpoint_a": {"angle": 0.1}}],
+        )
+        second = molecule(
+            [["Sulfur", 1.0], ["Hydrogen", 1.0]],
+            [{"part_a": 1, "part_b": 0, "bond_energy": 0.25,
+              "endpoint_a": {"angle": 2.4}}],
+        )
+        records = [
+            lifecycle("created", 1, 0, first),
+            lifecycle("created", 2, 1, second),
+            {"event": "environmental_chemistry_tick", "tick": 3},
+        ]
+        report = analyzer.analyze(records)
+        self.assertEqual(report["organization"]["unique_exact_structural_families"], 1)
+        self.assertEqual(report["organization"]["recurrent_families"], 1)
 
     def test_lineage_records_reaction_family_transition(self):
         parent = molecule([["Carbon", 1.0]])
