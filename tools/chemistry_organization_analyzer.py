@@ -11,6 +11,7 @@ import json
 import statistics
 import sys
 from collections import Counter, defaultdict
+from itertools import permutations
 from pathlib import Path
 from typing import Any
 
@@ -65,8 +66,31 @@ def _molecule_signature(molecule: Any) -> str:
                 and isinstance(part_b, int) and not isinstance(part_b, bool)
             ):
                 normalized_bonds.append(tuple(sorted((part_a, part_b))))
+    bond_pairs = sorted(normalized_bonds)
+    part_count = len(parts)
+    if part_count <= 7 and all(
+        0 <= endpoint_a < part_count and 0 <= endpoint_b < part_count
+        for endpoint_a, endpoint_b in bond_pairs
+    ):
+        candidates = []
+        for order in permutations(range(part_count)):
+            old_to_new = {old_index: new_index for new_index, old_index in enumerate(order)}
+            remapped_bonds = sorted(
+                tuple(sorted((old_to_new[a], old_to_new[b]))) for a, b in bond_pairs
+            )
+            candidates.append(json.dumps(
+                {
+                    "composition": [parts[index] for index in order],
+                    "bonds": remapped_bonds,
+                },
+                sort_keys=True, separators=(",", ":"),
+            ))
+        return min(candidates) if candidates else json.dumps(
+            {"composition": parts, "bonds": bond_pairs},
+            sort_keys=True, separators=(",", ":"),
+        )
     return json.dumps(
-        {"composition": parts, "bonds": sorted(normalized_bonds)},
+        {"composition": parts, "bonds": bond_pairs},
         sort_keys=True, separators=(",", ":"),
     )
 
@@ -312,8 +336,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "interpretation_limits": [
             "Structural-family recurrence excludes single-resource unbonded identities so abundant independent atoms/materials do not masquerade as organized compounds.",
-            "A structural family is an exact part-ordered composition plus normalized part-index bond-connectivity signature; geometric endpoint angles and placements are intentionally ignored.",
-            "Family matching is not graph-isomorphism or proof of chemical equivalence.",
+            "For molecules with up to seven parts, structural families use exact canonical labeling of composition plus undirected part-index bond connectivity; larger molecules use a conservative part-ordered signature.",
+            "Bond energy, endpoint geometry, and placements are not part of the family signature, so matching is structural rather than proof of chemical equivalence.",
             "Active molecule lifetimes are right-censored at the final observed tick.",
             "Material totals count each created identity once, so lineage generations may count the same conserved constituents more than once.",
             "Recurrence and persistence are descriptive evidence, not proof of self-maintaining chemical organization.",
