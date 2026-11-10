@@ -1711,6 +1711,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost,
             reaction_frequency_cycles_per_day,
+            local_resonance_similarity: 0.0,
             accumulation_key: "sunlight-powered-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -2225,6 +2226,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: f64::NAN,
+            local_resonance_similarity: 0.0,
             accumulation_key: "invalid-environmental-frequency".into(),
             accumulated_reaction: 1.0,
         };
