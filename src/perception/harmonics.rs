@@ -1517,8 +1517,7 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
         if source_geometry.parts.is_empty() {
             return None;
         }
-        let (source_x, source_y, _, _) =
-            environmental_material_resonance(source, catalog, tick)?;
+        let (source_x, source_y, _, _) = environmental_material_resonance(source, catalog, tick)?;
 
         // Any straight segment from the source point to the receiver boundary
         // lies inside this axis-aligned rectangle. A body's bounds outside it
