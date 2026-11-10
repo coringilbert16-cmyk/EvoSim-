@@ -1343,45 +1343,44 @@ pub(crate) fn material_aura_receptions_with_occluders(
                           normal_y: f64,
                           projected_extent: f64,
                           boundary: MaterialAuraBoundary| {
-            if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
-                return Some(());
-            }
-            let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
-            if !distance.is_finite() || distance <= f64::EPSILON {
-                return Some(());
-            }
-            let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
-            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
-                return Some(());
-            }
-            let mut incident = ToneSpectrum::empty();
-            add_spectrum(&mut incident, &emitted, attenuation);
-            incident.retain_strongest();
-            let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
-            received.retain_strongest();
-            let magnitude = spectrum_magnitude(&received);
-            // Geometric reception is independent of whether this material can
-            // respond to the incident field. Preserve the raw incident sample
-            // for pair interaction even when (for example) cohesion is zero
-            // and the receiver's own response spectrum is empty.
-            if spectrum_magnitude(&incident) > f64::EPSILON {
-                receptions.push(MaterialAuraReception {
-                    source_x,
-                    source_y,
-                    source_extent,
-                    receiver_x,
-                    receiver_y,
-                    receiver_normal_x: normal_x,
-                    receiver_normal_y: normal_y,
-                    projected_extent,
-                    boundary,
-                    incident_spectrum: incident,
-                    spectrum: received,
-                    magnitude,
-                });
-            }
-            Some(())
-        };
+        if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+            return Some(());
+        }
+        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+        if !distance.is_finite() || distance <= f64::EPSILON {
+            return Some(());
+        }
+        let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
+        if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+            return Some(());
+        }
+        let mut incident = ToneSpectrum::empty();
+        add_spectrum(&mut incident, &emitted, attenuation);
+        incident.retain_strongest();
+        let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+        received.retain_strongest();
+        let magnitude = spectrum_magnitude(&received);
+        // Geometric reception is independent of whether this material can
+        // respond to the incident field. Preserve the raw incident sample
+        // for pair interaction even when (for example) cohesion is zero
+        // and the receiver's own response spectrum is empty.
+        if spectrum_magnitude(&incident) > f64::EPSILON {
+            receptions.push(MaterialAuraReception {
+                source_x,
+                source_y,
+                source_extent,
+                receiver_x,
+                receiver_y,
+                receiver_normal_x: normal_x,
+                receiver_normal_y: normal_y,
+                projected_extent,
+                boundary,
+                incident_spectrum: incident,
+                spectrum: received,
+                magnitude,
+            });
+        }
+        Some(())    };
 
     for interval in straight_intervals {
         let projected_extent =
