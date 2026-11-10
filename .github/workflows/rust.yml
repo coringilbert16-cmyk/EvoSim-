@@ -4,6 +4,12 @@ name: Rust
 
 on:
   workflow_dispatch:
+    inputs:
+      compare_seeds:
+        description: "Run a second 60-second baseline only for an explicit side-by-side seed comparison."
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main]
   pull_request:
@@ -35,7 +41,7 @@ jobs:
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
       - name: Run default environmental chemistry baseline
-        if: always()
+        if: success() && github.event_name != 'pull_request'
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -47,13 +53,13 @@ jobs:
             --diagnostics environmental-chemistry-default-baseline.jsonl \
             --diagnostic-interval 100
       - name: Analyze default environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name != 'pull_request'
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-analysis.json \
             --markdown-out environmental-chemistry-analysis.md
       - name: Upload default environmental chemistry baseline
-        if: always()
+        if: always() && hashFiles('environmental-chemistry-default-baseline.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: environmental-chemistry-default-baseline
@@ -64,7 +70,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Run second environmental chemistry baseline (seed 43)
-        if: always()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -76,13 +82,13 @@ jobs:
             --diagnostics environmental-chemistry-seed-43.jsonl \
             --diagnostic-interval 100
       - name: Analyze second environmental chemistry baseline
-        if: success()
+        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-seed-43.jsonl \
             --json-out environmental-chemistry-seed-43-analysis.json \
             --markdown-out environmental-chemistry-seed-43-analysis.md
       - name: Upload second environmental chemistry baseline
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true && hashFiles('environmental-chemistry-seed-43.jsonl') != ''
         uses: actions/upload-artifact@v4
         with:
           name: environmental-chemistry-seed-43
@@ -93,7 +99,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -126,7 +132,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Chemistry and reactions (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -170,7 +176,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Transactions and ownership (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -223,7 +229,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Geometry and persistence (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -246,7 +252,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Organism and seed acceptance (focused tests)
-        if: always()
+        if: success()
         timeout-minutes: 30
         run: |
           failures=0
@@ -264,7 +270,7 @@ jobs:
           echo "Focused checks failed: $failures"
           test "$failures" -eq 0
       - name: Run Rust tests
-        if: always()
+        if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
@@ -272,7 +278,7 @@ jobs:
         if: always()
         run: |
           cargo fmt --all
-          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs > rustfmt-corrections.patch
+          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs src/perception/harmonics.rs > rustfmt-corrections.patch
           cat rustfmt-corrections.patch
       - name: Upload rustfmt correction patch
         if: always()
@@ -284,7 +290,7 @@ jobs:
           retention-days: 7
       - name: Run Clippy
         timeout-minutes: 5
-        if: always()
+        if: success()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
 
   pr335-discovery-benchmark:

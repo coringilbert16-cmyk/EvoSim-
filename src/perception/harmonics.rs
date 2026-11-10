@@ -193,6 +193,63 @@ pub(crate) struct ToneSpectrum {
     pub(crate) components: Vec<ToneComponent>,
 }
 
+/// Exact visible boundary geometry associated with a reception interval.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum MaterialAuraBoundary {
+    Straight {
+        start: (f64, f64),
+        end: (f64, f64),
+        normal: (f64, f64),
+    },
+    Arc(crate::capillary_geometry::CircularArcBoundary),
+}
+
+impl MaterialAuraBoundary {
+    fn normal_at(self, point: (f64, f64)) -> Option<(f64, f64)> {
+        const TOLERANCE: f64 = 1e-7;
+        match self {
+            Self::Straight { start, end, normal } => {
+                let dx = end.0 - start.0;
+                let dy = end.1 - start.1;
+                let length_squared = dx * dx + dy * dy;
+                if !length_squared.is_finite() || length_squared <= 1e-24 {
+                    return None;
+                }
+                let t = ((point.0 - start.0) * dx + (point.1 - start.1) * dy) / length_squared;
+                if !t.is_finite() || !(-TOLERANCE..=1.0 + TOLERANCE).contains(&t) {
+                    return None;
+                }
+                let closest = (
+                    start.0 + t.clamp(0.0, 1.0) * dx,
+                    start.1 + t.clamp(0.0, 1.0) * dy,
+                );
+                ((point.0 - closest.0).hypot(point.1 - closest.1) <= TOLERANCE).then_some(normal)
+            }
+            Self::Arc(arc) => {
+                if !arc.center_x.is_finite()
+                    || !arc.center_y.is_finite()
+                    || !arc.radius.is_finite()
+                    || arc.radius <= f64::EPSILON
+                    || !arc.start_angle_radians.is_finite()
+                    || !arc.sweep_radians.is_finite()
+                    || arc.sweep_radians <= 0.0
+                {
+                    return None;
+                }
+                let dx = point.0 - arc.center_x;
+                let dy = point.1 - arc.center_y;
+                let radius = dx.hypot(dy);
+                if !radius.is_finite() || (radius - arc.radius).abs() > TOLERANCE {
+                    return None;
+                }
+                let angle = dy.atan2(dx);
+                let offset = (angle - arc.start_angle_radians).rem_euclid(std::f64::consts::TAU);
+                (offset <= arc.sweep_radians + TOLERANCE).then_some((dx / radius, dy / radius))
+            }
+        }
+    }
+}
+
 /// One material's existing resonance aura as received at a realized
 /// boundary point on another physical material.
 ///
@@ -210,6 +267,7 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    boundary: MaterialAuraBoundary,
     /// Incident field before the receiver's oscillator response. Pair
     /// interference compares this with the receiver's own emitted field;
     /// using the responded spectrum here would apply the receiver phase lag twice.
@@ -217,6 +275,177 @@ pub(crate) struct MaterialAuraReception {
     /// Receiver response retained for perception/diagnostics.
     pub(crate) spectrum: ToneSpectrum,
     pub(crate) magnitude: f64,
+}
+
+/// One spatial sample of the material-origin resonance-density field.
+///
+/// Samples are taken on the realized boundary of a selected receiver material.
+/// Density is the phase-combined, frequency-resolved incident signal intensity
+/// at that location, normalized by projected boundary extent. It is a signal
+/// diagnostic, not stored or spendable energy.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MaterialResonanceDensitySample {
+    pub(crate) cell_x: i64,
+    pub(crate) cell_y: i64,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) components: Vec<ToneComponent>,
+    pub(crate) density: f64,
+}
+
+/// Build a local resonance-density heat map over one realized receiver.
+///
+/// Every other supplied material is considered as a possible emitter and all
+/// supplied materials remain in the occlusion set. The caller must provide
+/// world-resolved physical materials; stored owner-relative materials are
+/// rejected by the existing reception API. The spatial grid is diagnostic
+/// sampling only: reaction code must use continuous physical samples, never
+/// make eligibility depend on this grid.
+#[allow(dead_code)] // Diagnostic field sampler; reaction integration follows energy-provenance validation.
+pub(crate) fn material_resonance_density_on_receiver(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    cell_size: f64,
+) -> Option<Vec<MaterialResonanceDensitySample>> {
+    if !cell_size.is_finite() || cell_size <= f64::EPSILON {
+        return None;
+    }
+    let receiver = materials.get(receiver_index)?;
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices.iter().any(|index| {
+        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
+    }) {
+        return None;
+    }
+
+    // First average repeated boundary patches from each source within a map
+    // cell. This prevents a finely segmented receiver boundary from counting
+    // the same source field multiple times merely because it has more patches.
+    let mut source_cells =
+        std::collections::BTreeMap::<(i64, i64, usize), Vec<(ToneComponent, usize)>>::new();
+
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
+        let receptions =
+            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        for reception in receptions {
+            if !reception.receiver_x.is_finite()
+                || !reception.receiver_y.is_finite()
+                || !reception.projected_extent.is_finite()
+                || reception.projected_extent <= f64::EPSILON
+            {
+                return None;
+            }
+            let cell_x_f = (reception.receiver_x / cell_size).floor();
+            let cell_y_f = (reception.receiver_y / cell_size).floor();
+            if !cell_x_f.is_finite()
+                || !cell_y_f.is_finite()
+                || cell_x_f < i64::MIN as f64
+                || cell_x_f > i64::MAX as f64
+                || cell_y_f < i64::MIN as f64
+                || cell_y_f > i64::MAX as f64
+            {
+                return None;
+            }
+            let key = (cell_x_f as i64, cell_y_f as i64, source_index);
+            let samples = source_cells.entry(key).or_default();
+            let dx = reception.source_x - reception.receiver_x;
+            let dy = reception.source_y - reception.receiver_y;
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() || distance <= f64::EPSILON {
+                return None;
+            }
+            let directional_projection =
+                ((reception.receiver_normal_x * dx + reception.receiver_normal_y * dy) / distance)
+                    .max(0.0);
+            if !directional_projection.is_finite() {
+                return None;
+            }
+            if directional_projection <= f64::EPSILON {
+                continue;
+            }
+            let local_scale = directional_projection.sqrt() / reception.projected_extent.sqrt();
+            if !local_scale.is_finite() || local_scale < 0.0 {
+                return None;
+            }
+            for component in &reception.incident_spectrum.components {
+                let local = ToneComponent {
+                    frequency_cycles_per_day: component.frequency_cycles_per_day,
+                    amplitude: component.amplitude * local_scale,
+                    phase_radians: component.phase_radians,
+                };
+                if !local.frequency_cycles_per_day.is_finite()
+                    || local.frequency_cycles_per_day <= 0.0
+                    || !local.amplitude.is_finite()
+                    || local.amplitude < 0.0
+                    || !local.phase_radians.is_finite()
+                {
+                    return None;
+                }
+                if let Some((existing, count)) = samples.iter_mut().find(|(existing, _)| {
+                    (existing.frequency_cycles_per_day - local.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                }) {
+                    *existing = combine_component(*existing, local);
+                    *count += 1;
+                } else {
+                    samples.push((local, 1));
+                }
+            }
+        }
+    }
+
+    let mut cells = std::collections::BTreeMap::<(i64, i64), Vec<ToneComponent>>::new();
+    for ((cell_x, cell_y, _source_index), source_components) in source_cells {
+        let target = cells.entry((cell_x, cell_y)).or_default();
+        for (component, sample_count) in source_components {
+            let averaged = ToneComponent {
+                amplitude: component.amplitude / sample_count as f64,
+                ..component
+            };
+            if let Some(existing) = target.iter_mut().find(|existing| {
+                (existing.frequency_cycles_per_day - averaged.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                *existing = combine_component(*existing, averaged);
+            } else {
+                target.push(averaged);
+            }
+        }
+    }
+
+    let mut output = Vec::with_capacity(cells.len());
+    for ((cell_x, cell_y), mut components) in cells {
+        components.sort_by(|a, b| {
+            a.frequency_cycles_per_day
+                .partial_cmp(&b.frequency_cycles_per_day)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        let density = components
+            .iter()
+            .map(|component| component.amplitude * component.amplitude)
+            .sum::<f64>();
+        if !density.is_finite() {
+            return None;
+        }
+        output.push(MaterialResonanceDensitySample {
+            cell_x,
+            cell_y,
+            x: (cell_x as f64 + 0.5) * cell_size,
+            y: (cell_y as f64 + 0.5) * cell_size,
+            components,
+            density,
+        });
+    }
+    output.sort_by(|a, b| {
+        a.cell_y
+            .cmp(&b.cell_y)
+            .then_with(|| a.cell_x.cmp(&b.cell_x))
+    });
+    Some(output)
 }
 
 /// One signed frequency contribution to a material pair's interaction
@@ -1126,47 +1355,51 @@ pub(crate) fn material_aura_receptions_with_occluders(
     }
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
-    let mut receive_at =
-        |receiver_x: f64, receiver_y: f64, normal_x: f64, normal_y: f64, projected_extent: f64| {
-            if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
-                return Some(());
-            }
-            let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
-            if !distance.is_finite() || distance <= f64::EPSILON {
-                return Some(());
-            }
-            let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
-            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
-                return Some(());
-            }
-            let mut incident = ToneSpectrum::empty();
-            add_spectrum(&mut incident, &emitted, attenuation);
-            incident.retain_strongest();
-            let mut received =
-                material_response_spectrum(receiver_properties, baselines, &incident)?;
-            received.retain_strongest();
-            let magnitude = spectrum_magnitude(&received);
-            // Geometric reception is independent of whether this material can
-            // respond to the incident field. Preserve the raw incident sample
-            // for pair interaction even when (for example) cohesion is zero
-            // and the receiver's own response spectrum is empty.
-            if spectrum_magnitude(&incident) > f64::EPSILON {
-                receptions.push(MaterialAuraReception {
-                    source_x,
-                    source_y,
-                    source_extent,
-                    receiver_x,
-                    receiver_y,
-                    receiver_normal_x: normal_x,
-                    receiver_normal_y: normal_y,
-                    projected_extent,
-                    incident_spectrum: incident,
-                    spectrum: received,
-                    magnitude,
-                });
-            }
-            Some(())
-        };
+    let mut receive_at = |receiver_x: f64,
+                          receiver_y: f64,
+                          normal_x: f64,
+                          normal_y: f64,
+                          projected_extent: f64,
+                          boundary: MaterialAuraBoundary| {
+        if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
+            return Some(());
+        }
+        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+        if !distance.is_finite() || distance <= f64::EPSILON {
+            return Some(());
+        }
+        let attenuation = source_mass_scale * projected_extent.sqrt() / (1.0 + distance);
+        if !attenuation.is_finite() || attenuation <= f64::EPSILON {
+            return Some(());
+        }
+        let mut incident = ToneSpectrum::empty();
+        add_spectrum(&mut incident, &emitted, attenuation);
+        incident.retain_strongest();
+        let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+        received.retain_strongest();
+        let magnitude = spectrum_magnitude(&received);
+        // Geometric reception is independent of whether this material can
+        // respond to the incident field. Preserve the raw incident sample
+        // for pair interaction even when (for example) cohesion is zero
+        // and the receiver's own response spectrum is empty.
+        if spectrum_magnitude(&incident) > f64::EPSILON {
+            receptions.push(MaterialAuraReception {
+                source_x,
+                source_y,
+                source_extent,
+                receiver_x,
+                receiver_y,
+                receiver_normal_x: normal_x,
+                receiver_normal_y: normal_y,
+                projected_extent,
+                boundary,
+                incident_spectrum: incident,
+                spectrum: received,
+                magnitude,
+            });
+        }
+        Some(())
+    };
 
     for interval in straight_intervals {
         let projected_extent =
@@ -1179,6 +1412,11 @@ pub(crate) fn material_aura_receptions_with_occluders(
             interval.outward_normal.0,
             interval.outward_normal.1,
             projected_extent,
+            MaterialAuraBoundary::Straight {
+                start: interval.start,
+                end: interval.end,
+                normal: interval.outward_normal,
+            },
         )?;
     }
 
@@ -1191,10 +1429,96 @@ pub(crate) fn material_aura_receptions_with_occluders(
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
-        receive_at(receiver_x, receiver_y, normal_x, normal_y, projected_extent)?;
+        receive_at(
+            receiver_x,
+            receiver_y,
+            normal_x,
+            normal_y,
+            projected_extent,
+            MaterialAuraBoundary::Arc(interval.arc),
+        )?;
     }
 
     Some(receptions)
+}
+
+/// Evaluate the frequency-resolved incident field at an exact point on a
+/// receiver's currently exposed physical boundary. Unlike the heat-map sampler,
+/// this query has no raster or cell-size parameter and can be used at actual
+/// reaction endpoints. Points that are not on a visible boundary interval
+/// contribute nothing; ambiguous or invalid geometry fails closed.
+#[allow(dead_code)] // First continuous query for reaction-geometry validation.
+pub(crate) fn material_resonance_spectrum_at_boundary_point(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    point: (f64, f64),
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<ToneSpectrum> {
+    if !point.0.is_finite() || !point.1.is_finite() {
+        return None;
+    }
+    let receiver = materials.get(receiver_index)?;
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices.iter().any(|index| {
+        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
+    }) {
+        return None;
+    }
+
+    let mut field = ToneSpectrum::empty();
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
+        let receptions =
+            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        let mut matched = None;
+        for reception in receptions {
+            if let Some(normal) = reception.boundary.normal_at(point) {
+                if matched.is_some() {
+                    // A corner shared by multiple exposed intervals has no
+                    // unique local normal; do not choose one arbitrarily.
+                    return None;
+                }
+                matched = Some((reception, normal));
+            }
+        }
+        let Some((reception, normal)) = matched else {
+            continue;
+        };
+
+        let dx = reception.source_x - point.0;
+        let dy = reception.source_y - point.1;
+        let distance = dx.hypot(dy);
+        let midpoint_distance = (reception.source_x - reception.receiver_x)
+            .hypot(reception.source_y - reception.receiver_y);
+        if !distance.is_finite()
+            || distance <= f64::EPSILON
+            || !midpoint_distance.is_finite()
+            || reception.projected_extent <= f64::EPSILON
+        {
+            return None;
+        }
+        let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
+        if !directional_projection.is_finite() {
+            return None;
+        }
+        if directional_projection <= f64::EPSILON {
+            continue;
+        }
+
+        // The interval reception carries sqrt(projected_extent) and midpoint
+        // distance attenuation. Remove those interval terms, then evaluate
+        // the exact local projection and distance at the requested point.
+        let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
+            / ((1.0 + distance) * reception.projected_extent.sqrt());
+        if !local_scale.is_finite() || local_scale < 0.0 {
+            return None;
+        }
+        add_spectrum(&mut field, &reception.incident_spectrum, local_scale);
+    }
+    field.retain_strongest();
+    Some(field)
 }
 
 /// Integrate the interference between an incoming aura and the receiver's
@@ -2213,6 +2537,320 @@ mod tests {
         assert!(material_aura_receptions(&left, &left, &catalog, 0)
             .expect("self reception is a valid empty result")
             .is_empty());
+    }
+
+    #[test]
+    fn continuous_boundary_geometry_resolves_straight_and_curved_normals() {
+        let straight = MaterialAuraBoundary::Straight {
+            start: (0.0, 0.0),
+            end: (2.0, 0.0),
+            normal: (0.0, 1.0),
+        };
+        assert_eq!(straight.normal_at((1.0, 0.0)), Some((0.0, 1.0)));
+        assert_eq!(straight.normal_at((1.0, 0.1)), None);
+
+        let arc = MaterialAuraBoundary::Arc(crate::capillary_geometry::CircularArcBoundary {
+            center_x: 0.0,
+            center_y: 0.0,
+            radius: 2.0,
+            start_angle_radians: 0.0,
+            sweep_radians: std::f64::consts::FRAC_PI_2,
+        });
+        let diagonal = 2.0_f64.sqrt();
+        let normal = arc
+            .normal_at((diagonal, diagonal))
+            .expect("point on the exposed arc should have a normal");
+        assert!((normal.0 - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-12);
+        assert!((normal.1 - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-12);
+        assert_eq!(arc.normal_at((0.0, 2.1)), None);
+        assert_eq!(arc.normal_at((-2.0, 0.0)), None);
+    }
+
+    #[test]
+    fn continuous_resonance_query_is_grid_free_and_respects_visible_boundary_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let materials = vec![source, receiver];
+        let receptions = material_aura_receptions_with_occluders(
+            &materials[0],
+            &materials[1],
+            &materials,
+            &catalog,
+            0,
+        )
+        .expect("valid physical arrangement should produce boundary receptions");
+        let reception = receptions
+            .iter()
+            .find(|sample| {
+                sample
+                    .boundary
+                    .normal_at((sample.receiver_x, sample.receiver_y))
+                    .is_some_and(|normal| normal.0 < -0.5)
+            })
+            .expect("an exposed boundary facing the source should exist");
+        let point = (reception.receiver_x, reception.receiver_y);
+
+        let first =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("valid exposed reaction point should be queryable");
+        let repeated =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("the continuous query should be deterministic");
+        assert_eq!(first, repeated);
+        assert!(
+            !first.components.is_empty(),
+            "visible reaction geometry should receive the source field"
+        );
+
+        let off_boundary = (point.0 + 0.25, point.1 + 0.25);
+        let outside = material_resonance_spectrum_at_boundary_point(
+            &materials,
+            &[0],
+            1,
+            off_boundary,
+            &catalog,
+            0,
+        )
+        .expect("a valid but non-boundary point should produce an empty field");
+        assert!(outside.components.is_empty());
+
+        let blocked_materials = vec![
+            materials[0].clone(),
+            materials[1].clone(),
+            make_material("Nitrogen", 4.0, 0.0),
+        ];
+        let blocked = material_resonance_spectrum_at_boundary_point(
+            &blocked_materials,
+            &[0],
+            1,
+            point,
+            &catalog,
+            0,
+        )
+        .expect("valid occluded geometry should be queryable");
+        assert!(
+            blocked.components.is_empty(),
+            "a source hidden behind a physical blocker must not contribute at this point"
+        );
+    }
+
+    #[test]
+    fn resonance_density_heatmap_matches_continuous_midpoint_sample() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let materials = vec![make_material(0.0), make_material(8.0)];
+        let receptions = material_aura_receptions_with_occluders(
+            &materials[0],
+            &materials[1],
+            &materials,
+            &catalog,
+            0,
+        )
+        .expect("valid physical arrangement should produce boundary receptions");
+        let reception = receptions
+            .iter()
+            .find(|sample| sample.receiver_normal_x < -0.5)
+            .expect("the receiver should have a visible boundary facing the source");
+        let point = (reception.receiver_x, reception.receiver_y);
+        let continuous =
+            material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
+                .expect("the exact midpoint should be a valid continuous sample");
+        let heatmap =
+            material_resonance_density_on_receiver(&materials, &[0], 1, &catalog, 0, 0.01)
+                .expect("valid receiver geometry should produce heat-map samples");
+        let cell_x = (point.0 / 0.01).floor() as i64;
+        let cell_y = (point.1 / 0.01).floor() as i64;
+        let cell = heatmap
+            .iter()
+            .find(|sample| sample.cell_x == cell_x && sample.cell_y == cell_y)
+            .expect("the selected boundary midpoint should have a heat-map cell");
+        assert_eq!(cell.components.len(), continuous.components.len());
+        for expected in &continuous.components {
+            let actual = cell
+                .components
+                .iter()
+                .find(|component| {
+                    (component.frequency_cycles_per_day - expected.frequency_cycles_per_day).abs()
+                        <= 1e-9
+                })
+                .expect("heat-map and continuous samples should preserve each frequency");
+            assert!(
+                (actual.amplitude - expected.amplitude).abs() <= 1e-10,
+                "heat-map amplitude should match the continuous midpoint sample"
+            );
+            assert!(
+                (actual.phase_radians - expected.phase_radians).abs() <= 1e-10,
+                "heat-map phase should match the continuous midpoint sample"
+            );
+        }
+    }
+
+    #[test]
+    fn resonance_density_phasors_reinforce_cancel_and_keep_frequencies_separate() {
+        let component = |frequency_cycles_per_day, amplitude, phase_radians| ToneComponent {
+            frequency_cycles_per_day,
+            amplitude,
+            phase_radians,
+        };
+        let reinforced = combine_component(component(440.0, 0.5, 0.0), component(440.0, 0.5, 0.0));
+        assert!((reinforced.amplitude - 1.0).abs() < 1e-12);
+
+        let cancelled = combine_component(
+            component(440.0, 0.5, 0.0),
+            component(440.0, 0.5, std::f64::consts::PI),
+        );
+        assert!(cancelled.amplitude < 1e-12);
+
+        let mut spectrum = ToneSpectrum::empty();
+        add_spectrum(
+            &mut spectrum,
+            &ToneSpectrum {
+                components: vec![component(440.0, 0.5, 0.0)],
+            },
+            1.0,
+        );
+        add_spectrum(
+            &mut spectrum,
+            &ToneSpectrum {
+                components: vec![component(880.0, 0.5, 0.0)],
+            },
+            1.0,
+        );
+        assert_eq!(spectrum.components.len(), 2);
+        assert!((spectrum.components[0].frequency_cycles_per_day - 440.0).abs() < 1e-9);
+        assert!((spectrum.components[1].frequency_cycles_per_day - 880.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn local_resonance_density_respects_occlusion_and_source_distance() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let nearby_source = make_material("Carbon", 0.0, 0.0);
+        let distant_source = make_material("Carbon", -12.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.0);
+
+        let density_sum = |materials: &[crate::physical_material::PhysicalMaterial]| {
+            material_resonance_density_on_receiver(materials, &[0], 1, &catalog, 0, 1.0)
+                .expect("valid physical arrangement should be sampled")
+                .iter()
+                .map(|sample| sample.density)
+                .sum::<f64>()
+        };
+
+        let clear = density_sum(&[nearby_source.clone(), receiver.clone()]);
+        let shadowed = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
+        let farther = density_sum(&[distant_source, receiver]);
+        assert!(clear > 0.0);
+        assert!(
+            shadowed < clear,
+            "an intervening material should reduce received local density"
+        );
+        assert!(
+            farther < clear,
+            "moving the source farther away should reduce received local density"
+        );
+    }
+
+    #[test]
+    fn local_resonance_density_is_frequency_resolved_and_spatially_attributed() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let materials = vec![make_material(0.0), make_material(4.0), make_material(8.0)];
+        let density =
+            material_resonance_density_on_receiver(&materials, &[0, 2], 1, &catalog, 0, 1.0)
+                .expect("valid realized materials should produce a local density sample");
+
+        assert!(!density.is_empty());
+        assert!(density.iter().all(|sample| {
+            sample.x.is_finite()
+                && sample.y.is_finite()
+                && sample.density.is_finite()
+                && sample.density > 0.0
+                && !sample.components.is_empty()
+                && sample.components.iter().all(|component| {
+                    component.frequency_cycles_per_day.is_finite()
+                        && component.frequency_cycles_per_day > 0.0
+                        && component.amplitude.is_finite()
+                        && component.phase_radians.is_finite()
+                })
+        }));
+        assert!(density
+            .windows(2)
+            .all(|pair| { (pair[0].cell_y, pair[0].cell_x) <= (pair[1].cell_y, pair[1].cell_x) }));
+    }
+
+    #[test]
+    fn local_resonance_density_rejects_invalid_grid_and_unresolved_materials() {
+        let catalog = crate::resources::default_catalog();
+        let material = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        assert!(material_resonance_density_on_receiver(
+            std::slice::from_ref(&material),
+            &[],
+            0,
+            &catalog,
+            0,
+            0.0
+        )
+        .is_none());
+        assert!(
+            material_resonance_density_on_receiver(&[material], &[], 1, &catalog, 0, 1.0).is_none()
+        );
     }
 
     #[test]
