@@ -315,18 +315,41 @@ fn current_geometry_candidate_pairs(
     indices_b: &[usize],
     catalog: &[BaseResource],
 ) -> Vec<(usize, usize)> {
-    let mut buckets: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-    let mut overflow_b = Vec::new();
+    // Restored environmental molecules are usually small. For these pairs,
+    // building a hash grid and ordered deduplication sets costs more than
+    // directly checking the conservative bounds. Keep the grid for larger
+    // structures where it can prune a meaningful Cartesian search.
+    const LINEAR_PAIR_LIMIT: usize = 256;
+    let pair_count = indices_a.len().saturating_mul(indices_b.len());
+    let bounds_a: Vec<_> = indices_a
+        .iter()
+        .map(|&index| structure.units.get(index).and_then(|unit| constituent_bounds(unit, catalog)))
+        .collect();
     let bounds_b: Vec<_> = indices_b
         .iter()
-        .map(|&index| {
-            structure
-                .units
-                .get(index)
-                .and_then(|unit| constituent_bounds(unit, catalog))
-        })
+        .map(|&index| structure.units.get(index).and_then(|unit| constituent_bounds(unit, catalog)))
         .collect();
 
+    if pair_count <= LINEAR_PAIR_LIMIT {
+        let mut pairs = Vec::new();
+        for (slot_a, bounds_a) in bounds_a.iter().copied().enumerate() {
+            let Some(bounds_a) = bounds_a else { continue };
+            for (slot_b, bounds_b) in bounds_b.iter().copied().enumerate() {
+                let Some(bounds_b) = bounds_b else { continue };
+                if bounds_a.0 <= bounds_b.1
+                    && bounds_b.0 <= bounds_a.1
+                    && bounds_a.2 <= bounds_b.3
+                    && bounds_b.2 <= bounds_a.3
+                {
+                    pairs.push((indices_a[slot_a], indices_b[slot_b]));
+                }
+            }
+        }
+        return pairs;
+    }
+
+    let mut buckets: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    let mut overflow_b = Vec::new();
     for (slot, bounds) in bounds_b.iter().copied().enumerate() {
         let Some(bounds) = bounds else { continue };
         if let Some(keys) = constituent_bucket_keys(bounds) {
@@ -339,14 +362,8 @@ fn current_geometry_candidate_pairs(
     }
 
     let mut pairs = BTreeSet::new();
-    for &unit_a in indices_a {
-        let Some(bounds_a) = structure
-            .units
-            .get(unit_a)
-            .and_then(|unit| constituent_bounds(unit, catalog))
-        else {
-            continue;
-        };
+    for (slot_a, bounds_a) in bounds_a.iter().copied().enumerate() {
+        let Some(bounds_a) = bounds_a else { continue };
         let mut possible_b = BTreeSet::new();
         if let Some(keys) = constituent_bucket_keys(bounds_a) {
             for key in keys {
@@ -363,12 +380,12 @@ fn current_geometry_candidate_pairs(
             let Some(bounds_b) = bounds_b.get(slot_b).copied().flatten() else {
                 continue;
             };
-            let overlaps = bounds_a.0 <= bounds_b.1
+            if bounds_a.0 <= bounds_b.1
                 && bounds_b.0 <= bounds_a.1
                 && bounds_a.2 <= bounds_b.3
-                && bounds_b.2 <= bounds_a.3;
-            if overlaps {
-                pairs.insert((unit_a, indices_b[slot_b]));
+                && bounds_b.2 <= bounds_a.3
+            {
+                pairs.insert((indices_a[slot_a], indices_b[slot_b]));
             }
         }
     }
