@@ -551,7 +551,9 @@ fn physical_split_replaces_source_only_after_every_piece_destination_is_valid() 
         .map(|material| material.environmental_identity)
         .collect();
     assert_eq!(child_ids.len(), 2);
-    assert!(child_ids.iter().all(|identity| *identity != 0 && *identity != 77));
+    assert!(child_ids
+        .iter()
+        .all(|identity| *identity != 0 && *identity != 77));
     assert_ne!(child_ids[0], child_ids[1]);
 }
 
