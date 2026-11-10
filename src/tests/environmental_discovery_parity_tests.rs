@@ -64,19 +64,11 @@ fn eligible_combine_contacts(
         for &unit_a in &indices_a {
             for &unit_b in &indices_b {
                 let candidates = crate::contact::connection_pair_candidates_cached(
-                    &structure,
-                    unit_a,
-                    unit_b,
-                    catalog,
-                    &mut cache,
+                    &structure, unit_a, unit_b, catalog, &mut cache,
                 );
                 for candidate in candidates {
                     if crate::combine_runtime::selected_candidate_evaluation(
-                        &structure,
-                        unit_a,
-                        unit_b,
-                        candidate,
-                        catalog,
+                        &structure, unit_a, unit_b, candidate, catalog,
                     )
                     .is_none()
                     {
@@ -168,10 +160,8 @@ fn spatial_broad_phase_preserves_exhaustive_eligible_combine_contacts() {
     );
     assert_eq!(spatial_coverage.visited_pairs, spatial_coverage.known_pairs);
 
-    let exhaustive_contacts =
-        eligible_combine_contacts(&field, &snapshot, &all_pairs, &catalog);
-    let spatial_contacts =
-        eligible_combine_contacts(&field, &snapshot, &spatial_pairs, &catalog);
+    let exhaustive_contacts = eligible_combine_contacts(&field, &snapshot, &all_pairs, &catalog);
+    let spatial_contacts = eligible_combine_contacts(&field, &snapshot, &spatial_pairs, &catalog);
     assert!(
         !exhaustive_contacts.is_empty(),
         "fixture must exercise at least one genuinely eligible live contact"
@@ -284,10 +274,7 @@ fn snapshot_break_bond_inventory_matches_every_live_physical_bond() {
     let mut field = ActiveMaterialField::new(30.0, 20.0, 10.0);
     let mut physical = PhysicalMaterial::realized(
         Material {
-            parts: vec![
-                ("Carbon".to_owned(), 1.0),
-                ("Hydrogen".to_owned(), 1.0),
-            ],
+            parts: vec![("Carbon".to_owned(), 1.0), ("Hydrogen".to_owned(), 1.0)],
             internal_bonds: vec![InternalBond {
                 part_a: 0,
                 part_b: 1,
