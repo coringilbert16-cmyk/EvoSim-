@@ -1077,8 +1077,9 @@ impl Simulation {
         let local_resonance_snapshot_started = std::time::Instant::now();
         let local_resonance_world =
             crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self);
-        break_discovery.local_resonance_snapshot_build_nanoseconds = local_resonance_snapshot_started
-            .elapsed()
+        break_discovery.local_resonance_snapshot_build_nanoseconds =
+            local_resonance_snapshot_started
+                .elapsed()
             .as_nanos()
             .min(u64::MAX as u128) as u64;
         let environmental_break_operations =
