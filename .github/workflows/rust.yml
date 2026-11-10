@@ -30,6 +30,9 @@ jobs:
         run: |
           bash scripts/check_large_files.sh
           bash scripts/check_combine_architecture.sh
+      - name: Test offline chemistry analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
       - name: Run default environmental chemistry baseline
         if: always()
         timeout-minutes: 3
@@ -42,12 +45,21 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-default-baseline.jsonl \
             --diagnostic-interval 100
+      - name: Analyze default environmental chemistry baseline
+        if: success()
+        run: |
+          python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
+            --json-out environmental-chemistry-analysis.json \
+            --markdown-out environmental-chemistry-analysis.md
       - name: Upload default environmental chemistry baseline
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: environmental-chemistry-default-baseline
-          path: environmental-chemistry-default-baseline.jsonl
+          path: |
+            environmental-chemistry-default-baseline.jsonl
+            environmental-chemistry-analysis.json
+            environmental-chemistry-analysis.md
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
