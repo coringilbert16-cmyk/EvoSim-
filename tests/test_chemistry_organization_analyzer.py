@@ -150,6 +150,12 @@ class ChemicalOrganizationAnalyzerTests(unittest.TestCase):
         report = analyzer.analyze(records)
         amounts = report["material_distribution"]["constituent_amount_by_resource"]
         self.assertEqual(amounts, {"Carbon": 2.0, "Oxygen": 2.0})
+        compound_amounts = report["material_distribution"]["compound_constituent_amount_by_resource"]
+        self.assertEqual(compound_amounts, {"Carbon": 1.0, "Oxygen": 2.0})
+        reaction_compounds = report["material_distribution"][
+            "reaction_created_compound_constituent_amount_by_resource"
+        ]
+        self.assertEqual(reaction_compounds, {})
 
     def test_rejects_duplicate_creation_and_invalid_destruction(self):
         records = [
