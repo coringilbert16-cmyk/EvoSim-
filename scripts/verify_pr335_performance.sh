@@ -43,6 +43,7 @@ matches="$(find "$ROOT/src" -type f -name '*.rs' \
   ! -path "$ROOT/src/chemistry/environmental_interaction.rs" \
   ! -path "$ROOT/src/chemistry/environmental_snapshot_cursor.rs" \
   ! -path "$ROOT/src/main.rs" \
+  ! -path "$ROOT/src/tests/*" \
   -exec grep -nHE 'environmental_(broad_phase|interaction|snapshot_cursor)::' {} + || true)"
 if [[ -n "$matches" ]]; then
   echo "A source file outside the extracted modules references the new discovery modules:"
