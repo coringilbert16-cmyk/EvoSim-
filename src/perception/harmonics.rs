@@ -1555,8 +1555,7 @@ pub(crate) fn material_resonance_emitters_at_tick(
         let source = materials.get(source_index)?;
         let (source_x, source_y, _, emitted) =
             environmental_material_resonance(source, catalog, tick)?;
-        let mass_scale =
-            environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+        let mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
         if !source_x.is_finite()
             || !source_y.is_finite()
             || !mass_scale.is_finite()
@@ -1598,7 +1597,10 @@ pub(crate) fn material_resonance_spectra_from_emitters(
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
     let mut fields = vec![ToneSpectrum::empty(); points.len()];
-    for emitter in emitters.iter().filter(|emitter| emitter.source_index != receiver_index) {
+    for emitter in emitters
+        .iter()
+        .filter(|emitter| emitter.source_index != receiver_index)
+    {
         for (point_index, point) in points.iter().enumerate() {
             let distance = (emitter.source_x - point.0).hypot(emitter.source_y - point.1);
             if !distance.is_finite() {
@@ -1637,15 +1639,8 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
     if source_indices.contains(&receiver_index) {
         return None;
     }
-    let emitters =
-        material_resonance_emitters_at_tick(materials, source_indices, catalog, tick)?;
-    material_resonance_spectra_from_emitters(
-        &emitters,
-        receiver,
-        receiver_index,
-        points,
-        catalog,
-    )
+    let emitters = material_resonance_emitters_at_tick(materials, source_indices, catalog, tick)?;
+    material_resonance_spectra_from_emitters(&emitters, receiver, receiver_index, points, catalog)
 }
 
 /// Single-point compatibility wrapper for unoccluded chemistry-scale reception.
