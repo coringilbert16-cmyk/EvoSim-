@@ -354,6 +354,14 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"{family['reaction_created_active_at_end']} | "
             f"{product_lifetime_text} | {composition or '(empty)'} |"
         )
+    lines += [
+        "", "## Resource incorporation in reaction-created compounds", "",
+        "| Resource | Constituent amount |", "|---|---:|",
+    ]
+    for resource, amount in report["material_distribution"][
+        "reaction_created_compound_constituent_amount_by_resource"
+    ].items():
+        lines.append(f"| {resource} | {amount:g} |")
     lines += ["", "## Molecule creations by reaction", "",
               "| Reaction | Created identities |", "|---|---:|"]
     for reaction, count in report["reaction_network"]["molecule_creations_by_reaction"].items():
