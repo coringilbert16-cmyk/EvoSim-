@@ -3244,12 +3244,12 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let mut pairs = std::collections::BTreeSet::new();
-            for anchor in 0..snapshot.materials.len() {
+            for (anchor, anchor_cells) in reached.iter().enumerate() {
                 for target in 0..snapshot.materials.len() {
                     if anchor == target {
                         continue;
                     }
-                    if reached[anchor].contains(&snapshot.materials[target].locator.cell_index) {
+                    if anchor_cells.contains(&snapshot.materials[target].locator.cell_index) {
                         pairs.insert((
                             snapshot.materials[anchor].identity,
                             snapshot.materials[target].identity,
@@ -3282,7 +3282,7 @@ mod tests {
                 + cell_index_bytes
                 + snapshot.material_index_by_cell_slot.capacity() * size_of::<Vec<Option<usize>>>()
                 + slot_index_bytes
-                + bounds.len() * size_of::<Option<MaterialSpatialBounds>>()
+                + std::mem::size_of_val(bounds)
         }
         println!(
             "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,unordered_exhaustive_us,unordered_spatial_us,unordered_paged128_us,unordered_cursor_us,unordered_pairs,unordered_candidates,unordered_reduction_pct,unordered_cursor_checks,directed_exhaustive_us,directed_spatial_us,directed_paged128_us,directed_cursor_us,directed_pairs,directed_candidates,directed_reduction_pct,directed_cursor_checks,snapshot_index_bytes_lower_bound,parity"
