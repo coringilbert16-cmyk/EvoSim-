@@ -333,3 +333,52 @@ jobs:
           retention-days: 30
 
 # Re-trigger CI for the molecular lineage observability pull request.
+
+  chemistry-sample-expansion:
+    name: 5-minute chemistry sample (seed ${{ matrix.seed }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        seed: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run 5-minute environmental chemistry experiment
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 300 \
+            --seed ${{ matrix.seed }} \
+            --diagnostics environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze environmental chemistry
+        if: success()
+        run: |
+          python3 tools/chemistry_analyzer.py environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
+            --json-out environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.json \
+            --markdown-out environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.md
+      - name: Analyze chemical organization
+        if: success()
+        run: |
+          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl \
+            --json-out environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.json \
+            --markdown-out environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.md
+      - name: Upload experiment and analysis artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: chemistry-5min-seed-${{ matrix.seed }}
+          path: |
+            environmental-chemistry-seed-${{ matrix.seed }}-300s.jsonl
+            environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.json
+            environmental-chemistry-seed-${{ matrix.seed }}-300s-analysis.md
+            environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.json
+            environmental-chemistry-seed-${{ matrix.seed }}-300s-organization.md
+          if-no-files-found: error
+          retention-days: 30
