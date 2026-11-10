@@ -3244,16 +3244,15 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let mut pairs = std::collections::BTreeSet::new();
-            for (anchor, anchor_cells) in reached.iter().enumerate() {
-                for target in 0..snapshot.materials.len() {
+            for (anchor, (anchor_material, anchor_cells)) in
+                snapshot.materials.iter().zip(reached.iter()).enumerate()
+            {
+                for (target, target_material) in snapshot.materials.iter().enumerate() {
                     if anchor == target {
                         continue;
                     }
-                    if anchor_cells.contains(&snapshot.materials[target].locator.cell_index) {
-                        pairs.insert((
-                            snapshot.materials[anchor].identity,
-                            snapshot.materials[target].identity,
-                        ));
+                    if anchor_cells.contains(&target_material.locator.cell_index) {
+                        pairs.insert((anchor_material.identity, target_material.identity));
                     }
                 }
             }
