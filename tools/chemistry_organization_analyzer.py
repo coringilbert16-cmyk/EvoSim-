@@ -117,6 +117,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             ):
                 errors.append(f"record {index}: invalid parent_ids for {molecule_id}")
                 continue
+            for parent_id in parents:
+                if parent_id not in created:
+                    errors.append(f"record {index}: lineage parent {parent_id} has no prior creation")
+                elif parent_id in destroyed and destroyed[parent_id] <= tick:
+                    errors.append(f"record {index}: lineage parent {parent_id} was already destroyed")
             created[molecule_id] = {
                 "tick": tick,
                 "parents": parents,
