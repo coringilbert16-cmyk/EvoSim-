@@ -2800,28 +2800,47 @@ mod tests {
         assert!(snapshot.materials.is_empty());
         assert_eq!(snapshot.known_pair_count(), 0);
     }
+
     #[test]
     fn indexed_cursor_oracle_covers_vertical_wrap_bonded_and_unbonded_materials() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(40.0, 40.0, 10.0);
         let bonded = realized_physical(
             20,
-            crate::resources::Material {
+            Material {
                 parts: vec![("Carbon".to_owned(), 1.0), ("Carbon".to_owned(), 1.0)],
-                internal_bonds: vec![crate::resources::InternalBond { part_a: 0, part_b: 1 }],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
             },
             vec![
-                crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                crate::structure::Placement { x: 0.5, y: 0.0, rotation_radians: std::f64::consts::FRAC_PI_2 },
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 0.5,
+                    y: 0.0,
+                    rotation_radians: std::f64::consts::FRAC_PI_2,
+                },
             ],
             &catalog,
         );
         let unbonded = realized_physical(
             10,
-            crate::resources::Material::free_base("Oxygen".to_owned(), 1.0),
-            vec![crate::structure::Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            Material::free_base("Oxygen", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
         );
+        // Put the bonded source in the bottom row and the free source in the
+        // top row. Their expanded bounds must discover one another through
+        // the field's vertical wrap.
         field.cells[12].physical_materials.push(bonded);
         field.cells[0].physical_materials.push(unbonded);
 
@@ -2833,19 +2852,42 @@ mod tests {
         let mut bounds = vec![None; snapshot.materials.len()];
         for (index, material) in snapshot.materials.iter().enumerate() {
             bounds[index] = Some(if material.identity == MaterialIdentity(20) {
-                MaterialSpatialBounds { min_x: 0.0, max_x: 2.0, min_y: 38.0, max_y: 40.0 }
+                MaterialSpatialBounds {
+                    min_x: 0.0,
+                    max_x: 2.0,
+                    min_y: 38.0,
+                    max_y: 40.0,
+                }
             } else {
-                MaterialSpatialBounds { min_x: 0.0, max_x: 2.0, min_y: 0.0, max_y: 2.0 }
+                MaterialSpatialBounds {
+                    min_x: 0.0,
+                    max_x: 2.0,
+                    min_y: 0.0,
+                    max_y: 2.0,
+                }
             });
         }
+
         let expected_by_orientation = [
-            (PairOrientation::Unordered, std::collections::BTreeSet::from([(10, 20)])),
-            (PairOrientation::Directed, std::collections::BTreeSet::from([(10, 20), (20, 10)])),
-            (PairOrientation::ForwardOrdered, std::collections::BTreeSet::from([(10, 20)])),
+            (
+                PairOrientation::Unordered,
+                std::collections::BTreeSet::from([(10, 20)]),
+            ),
+            (
+                PairOrientation::Directed,
+                std::collections::BTreeSet::from([(10, 20), (20, 10)]),
+            ),
+            (
+                PairOrientation::ForwardOrdered,
+                std::collections::BTreeSet::from([(10, 20)]),
+            ),
         ];
+
         for (orientation, expected) in expected_by_orientation {
-            let (reference, coverage) = snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
-            let reference_pairs = reference.into_iter()
+            let (reference, coverage) =
+                snapshot.spatial_pair_window(&field, &bounds, 2.1, 0, usize::MAX, orientation);
+            let reference_pairs = reference
+                .into_iter()
                 .map(|pair| (pair.identity_left.0, pair.identity_right.0))
                 .collect::<std::collections::BTreeSet<_>>();
             assert_eq!(reference_pairs, expected, "reference {orientation:?}");
@@ -2858,9 +2900,15 @@ mod tests {
                 let page = cursor.next_page(&snapshot, &field, &bounds, 2.1, 1, 1, 1);
                 assert!(page.visited_work <= 1);
                 assert!(page.pairs.len() <= 1);
-                actual.extend(page.pairs.into_iter().map(|pair| (pair.identity_left.0, pair.identity_right.0)));
+                actual.extend(
+                    page.pairs
+                        .into_iter()
+                        .map(|pair| (pair.identity_left.0, pair.identity_right.0)),
+                );
                 pages += 1;
-                if page.complete { break; }
+                if page.complete {
+                    break;
+                }
                 assert!(page.visited_work > 0);
                 assert!(pages < 16);
             }
