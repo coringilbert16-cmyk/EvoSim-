@@ -23,7 +23,7 @@ The input must contain `molecular_lifecycle` records. Use the environmental chem
 
 ## Interpretation limits
 
-Structural families are deliberately conservative exact signatures. Part order and bond connectivity are preserved; geometric endpoint angles and placements are ignored. This is not graph-isomorphism, and it does not establish chemical equivalence.
+For molecules with up to seven parts, structural families use exact canonical labeling of composition plus undirected bond connectivity, so atom-part ordering does not split the same labeled graph. Larger molecules use a conservative part-ordered signature. Bond energy, geometric endpoint angles, and placements are ignored. This is structural matching, not proof of chemical equivalence.
 
 Single-resource unbonded materials are excluded from compound-family recurrence so the many independent resource particles do not dominate the organization metrics. They remain included in the general material accounting.
 
