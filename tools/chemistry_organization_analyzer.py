@@ -194,7 +194,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         composition = row["composition"]
         molecule = created[molecule_id]["molecule"]
         connections = molecule.get("internal_connections", []) if isinstance(molecule, dict) else []
-        has_structure = len(composition) > 1 or bool(connections)
+        has_structure = len(composition) > 1 or (isinstance(connections, list) and bool(connections))
         if has_structure:
             compound_ids.append(molecule_id)
         for resource, amount in composition.items():
