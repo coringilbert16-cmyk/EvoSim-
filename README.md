@@ -200,6 +200,8 @@ At 1,280 materials, repeated paging took 2.0–7.9 ms unordered and 3.0–8.9 ms
 - **Evaluation-journal abstraction:** not implemented in the retained branch. Defer until a concrete production consumer and measured benefit exist; it must not alter reaction ordering or commit semantics by assumption.
 - **Restoration/spatial-window cache architecture:** excluded from the retained branch. Defer until profiling shows repeated preparation is a material end-to-end cost and invalidation can be proven correct.
 - **Genuinely incremental cell-query pagination:** future experiment required before any bounded production discovery path is considered. It must avoid full candidate-set rebuilds and pass exact unordered/directed parity at every page boundary.
+- **Shared BREAK/COMBINE/DISPLACEMENT execution or candidate handoff:** not promoted. The isolated tests establish specific discovery/inventory parity, not equivalence of shared reaction scheduling, eligibility, activation, energy funding, ordering, or commits. No measured end-to-end benefit exists. Keep the original production paths separate until every reaction path has an exact semantic oracle and a paired throughput test.
+- **Runtime diagnostic counters:** excluded from production. They add work to the hot path without themselves improving discovery; use test-only counters or external profiling when a specific measurement question justifies them, and measure instrumentation overhead before retaining any runtime counter.
 
 ### Validation record
 
