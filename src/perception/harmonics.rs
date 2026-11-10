@@ -1374,9 +1374,7 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
-fn receiver_has_curved_boundary(
-    receiver: &crate::organism_geometry::OrganismBodyGeometry,
-) -> bool {
+fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
         crate::resources::Form::Fluid {
