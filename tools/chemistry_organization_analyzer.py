@@ -1,0 +1,435 @@
+#!/usr/bin/env python3
+"""Offline analysis of recurring molecular organization in EvoSim JSONL logs.
+
+This analyzer is observational only. Small structures use canonical labeling
+of composition and undirected bond topology; larger structures retain part
+order. Structural matching does not establish chemical equivalence.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import statistics
+import sys
+from collections import Counter, defaultdict
+from itertools import permutations
+from pathlib import Path
+from typing import Any
+
+
+def load_records(path: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    with path.open(encoding="utf-8") as stream:
+        for line_number, line in enumerate(stream, 1):
+            if not line.strip():
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"{path}:{line_number}: invalid JSON: {exc}") from exc
+            if not isinstance(value, dict):
+                raise ValueError(f"{path}:{line_number}: expected a JSON object")
+            records.append(value)
+    if not records:
+        raise ValueError(f"{path}: no diagnostic records found")
+    return records
+
+
+def _molecule_signature(molecule: Any) -> str:
+    if not isinstance(molecule, dict):
+        molecule = {}
+    material = molecule.get("material")
+    if not isinstance(material, dict):
+        material = {}
+    raw_parts = material.get("parts", [])
+    parts: list[tuple[str, float]] = []
+    if isinstance(raw_parts, list):
+        for part in raw_parts:
+            if not isinstance(part, (list, tuple)) or len(part) != 2:
+                continue
+            try:
+                amount = float(part[1])
+            except (TypeError, ValueError):
+                continue
+            parts.append((str(part[0]), amount))
+    raw_bonds = material.get("internal_bonds", [])
+    if not isinstance(raw_bonds, list) or not raw_bonds:
+        raw_bonds = molecule.get("internal_connections", [])
+    normalized_bonds = []
+    if isinstance(raw_bonds, list):
+        for bond in raw_bonds:
+            if not isinstance(bond, dict):
+                continue
+            part_a = bond.get("part_a")
+            part_b = bond.get("part_b")
+            if (
+                isinstance(part_a, int) and not isinstance(part_a, bool)
+                and isinstance(part_b, int) and not isinstance(part_b, bool)
+            ):
+                normalized_bonds.append(tuple(sorted((part_a, part_b))))
+    bond_pairs = sorted(normalized_bonds)
+    part_count = len(parts)
+    if part_count <= 7 and all(
+        0 <= endpoint_a < part_count and 0 <= endpoint_b < part_count
+        for endpoint_a, endpoint_b in bond_pairs
+    ):
+        candidates = []
+        for order in permutations(range(part_count)):
+            old_to_new = {old_index: new_index for new_index, old_index in enumerate(order)}
+            remapped_bonds = sorted(
+                tuple(sorted((old_to_new[a], old_to_new[b]))) for a, b in bond_pairs
+            )
+            candidates.append(json.dumps(
+                {
+                    "composition": [parts[index] for index in order],
+                    "bonds": remapped_bonds,
+                },
+                sort_keys=True, separators=(",", ":"),
+            ))
+        return min(candidates) if candidates else json.dumps(
+            {"composition": parts, "bonds": bond_pairs},
+            sort_keys=True, separators=(",", ":"),
+        )
+    return json.dumps(
+        {"composition": parts, "bonds": bond_pairs},
+        sort_keys=True, separators=(",", ":"),
+    )
+
+
+def _composition(molecule: Any) -> dict[str, float]:
+    if not isinstance(molecule, dict):
+        return {}
+    material = molecule.get("material")
+    if not isinstance(material, dict):
+        return {}
+    parts = material.get("parts", [])
+    result: dict[str, float] = defaultdict(float)
+    if isinstance(parts, list):
+        for part in parts:
+            if isinstance(part, (list, tuple)) and len(part) == 2:
+                try:
+                    amount = float(part[1])
+                except (TypeError, ValueError):
+                    continue
+                if amount > 0:
+                    result[str(part[0])] += amount
+    return dict(result)
+
+
+def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
+    lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
+    if not lifecycle:
+        raise ValueError("no molecular_lifecycle records; run with molecular history enabled")
+
+    last_tick = max(
+        (int(r["tick"]) for r in records
+         if isinstance(r.get("tick"), int) and not isinstance(r.get("tick"), bool)),
+        default=0,
+    )
+    created: dict[int, dict[str, Any]] = {}
+    destroyed: dict[int, int] = {}
+    errors: list[str] = []
+
+    for index, event in enumerate(lifecycle):
+        action = event.get("action")
+        molecule_id = event.get("molecule_id")
+        tick = event.get("tick")
+        if not isinstance(molecule_id, int) or isinstance(molecule_id, bool) or molecule_id <= 0:
+            errors.append(f"record {index}: invalid molecule_id")
+            continue
+        if not isinstance(tick, int) or isinstance(tick, bool) or tick < 0:
+            errors.append(f"record {index}: invalid tick")
+            continue
+        if action == "created":
+            if molecule_id in created:
+                errors.append(f"record {index}: duplicate creation for {molecule_id}")
+                continue
+            parents = event.get("parent_ids", [])
+            if not isinstance(parents, list) or any(
+                not isinstance(parent, int) or isinstance(parent, bool) or parent <= 0
+                for parent in parents
+            ):
+                errors.append(f"record {index}: invalid parent_ids for {molecule_id}")
+                continue
+            for parent_id in parents:
+                if parent_id not in created:
+                    errors.append(f"record {index}: lineage parent {parent_id} has no prior creation")
+                elif parent_id in destroyed and destroyed[parent_id] <= tick:
+                    errors.append(f"record {index}: lineage parent {parent_id} was already destroyed")
+            created[molecule_id] = {
+                "tick": tick,
+                "parents": parents,
+                "reaction": str(event.get("reaction", "UNKNOWN")),
+                "reaction_id": event.get("reaction_id"),
+                "molecule": event.get("molecule", {}),
+            }
+        elif action == "destroyed":
+            if molecule_id not in created:
+                errors.append(f"record {index}: destruction before creation for {molecule_id}")
+            elif molecule_id in destroyed:
+                errors.append(f"record {index}: duplicate destruction for {molecule_id}")
+            elif tick < created[molecule_id]["tick"]:
+                errors.append(f"record {index}: destruction precedes creation for {molecule_id}")
+            else:
+                destroyed[molecule_id] = tick
+        else:
+            errors.append(f"record {index}: unsupported action {action!r}")
+
+    family_members: dict[str, list[int]] = defaultdict(list)
+    molecule_rows: dict[int, dict[str, Any]] = {}
+    for molecule_id, data in created.items():
+        signature = _molecule_signature(data["molecule"])
+        composition = _composition(data["molecule"])
+        end_tick = destroyed.get(molecule_id, last_tick)
+        molecule_snapshot = data["molecule"] if isinstance(data["molecule"], dict) else {}
+        material_snapshot = molecule_snapshot.get("material")
+        material_snapshot = material_snapshot if isinstance(material_snapshot, dict) else {}
+        connections = molecule_snapshot.get("internal_connections")
+        internal_bonds = material_snapshot.get("internal_bonds")
+        is_compound = (
+            len(composition) > 1
+            or (isinstance(connections, list) and bool(connections))
+            or (isinstance(internal_bonds, list) and bool(internal_bonds))
+        )
+        row = {
+            "molecule_id": molecule_id,
+            "family_signature": signature,
+            "is_compound": is_compound,
+            "composition": composition,
+            "created_tick": data["tick"],
+            "destroyed_tick": destroyed.get(molecule_id),
+            "observed_lifetime_ticks": max(0, end_tick - data["tick"]),
+            "right_censored": molecule_id not in destroyed,
+            "reaction": data["reaction"],
+            "reaction_id": data["reaction_id"],
+            "parent_ids": data["parents"],
+        }
+        molecule_rows[molecule_id] = row
+        if is_compound:
+            family_members[signature].append(molecule_id)
+
+    family_by_id = {
+        molecule_id: row["family_signature"] for molecule_id, row in molecule_rows.items()
+    }
+    families = []
+    for signature, ids in family_members.items():
+        rows = [molecule_rows[molecule_id] for molecule_id in ids]
+        lifetimes = [row["observed_lifetime_ticks"] for row in rows]
+        active_ids = [molecule_id for molecule_id in ids if molecule_id not in destroyed]
+        initial_ids = [molecule_id for molecule_id in ids
+                       if molecule_rows[molecule_id]["reaction"] == "INITIAL"]
+        reaction_ids = [molecule_id for molecule_id in ids
+                        if molecule_rows[molecule_id]["reaction"] != "INITIAL"]
+        reaction_lifetimes = [
+            molecule_rows[molecule_id]["observed_lifetime_ticks"] for molecule_id in reaction_ids
+        ]
+        reaction_event_ids = {
+            molecule_rows[molecule_id]["reaction_id"]
+            for molecule_id in reaction_ids
+            if isinstance(molecule_rows[molecule_id]["reaction_id"], str)
+            and molecule_rows[molecule_id]["reaction_id"]
+        }
+        composition = rows[0]["composition"]
+        families.append({
+            "signature": signature,
+            "occurrences": len(ids),
+            "initial_seed_occurrences": len(initial_ids),
+            "reaction_created_occurrences": len(reaction_ids),
+            "reaction_created_reaction_events": len(reaction_event_ids),
+            "reaction_created_active_at_end": sum(
+                molecule_id not in destroyed for molecule_id in reaction_ids
+            ),
+            "active_at_end": len(active_ids),
+            "molecule_ids": sorted(ids),
+            "composition": composition,
+            "mean_observed_lifetime_ticks": statistics.fmean(lifetimes) if lifetimes else None,
+            "median_observed_lifetime_ticks": statistics.median(lifetimes) if lifetimes else None,
+            "mean_reaction_created_lifetime_ticks": (
+                statistics.fmean(reaction_lifetimes) if reaction_lifetimes else None
+            ),
+            "completed_lifetimes": sum(not row["right_censored"] for row in rows),
+            "right_censored_lifetimes": sum(row["right_censored"] for row in rows),
+            "recurrent": len(ids) >= 2,
+            # Multiple sibling products from one reaction are one event, not
+            # independent recurrence. Require distinct reaction IDs.
+            "recurrent_from_reactions": len(reaction_event_ids) >= 2,
+        })
+    families.sort(key=lambda row: (
+        -row["reaction_created_occurrences"], -row["active_at_end"], row["signature"]
+    ))
+
+    reaction_counts = Counter(row["reaction"] for row in molecule_rows.values())
+    family_pathways: Counter[tuple[str, str, str]] = Counter()
+    for molecule_id, data in created.items():
+        child_family = family_by_id.get(molecule_id)
+        for parent_id in data["parents"]:
+            parent_family = family_by_id.get(parent_id)
+            if parent_family is not None and child_family is not None:
+                family_pathways[(data["reaction"], parent_family, child_family)] += 1
+
+    resource_units: Counter[str] = Counter()
+    molecules_by_resource: Counter[str] = Counter()
+    compound_resource_units: Counter[str] = Counter()
+    reaction_product_compound_resource_units: Counter[str] = Counter()
+    compounds_by_resource: Counter[str] = Counter()
+    compound_ids = [
+        molecule_id for molecule_id, row in molecule_rows.items() if row["is_compound"]
+    ]
+    for row in molecule_rows.values():
+        for resource, amount in row["composition"].items():
+            resource_units[resource] += amount
+            molecules_by_resource[resource] += 1
+            if row["is_compound"]:
+                compound_resource_units[resource] += amount
+                compounds_by_resource[resource] += 1
+                if row["reaction"] != "INITIAL":
+                    reaction_product_compound_resource_units[resource] += amount
+
+    recurrent = [family for family in families if family["recurrent_from_reactions"]]
+    recurrent_including_initial = [family for family in families if family["recurrent"]]
+    active_families = [family for family in families if family["active_at_end"] > 0]
+    families_with_products = [
+        family for family in families if family["reaction_created_occurrences"] > 0
+    ]
+    return {
+        "schema_version": 1,
+        "scope": {
+            "molecule_creation_records": len(created),
+            "molecule_destruction_records": len(destroyed),
+            "active_molecules_at_end": sum(row["right_censored"] for row in molecule_rows.values()),
+            "observation_end_tick": last_tick,
+            "lifecycle_validation_errors": errors,
+        },
+        "organization": {
+            "unique_exact_structural_families": len(families),
+            "recurrent_families": len(recurrent),
+            "recurrent_families_including_initial_seeds": len(recurrent_including_initial),
+            "families_recurrent_from_reaction_products": len(recurrent),
+            "families_with_reaction_created_products": len(families_with_products),
+            "single_resource_unbonded_identities_excluded": len(molecule_rows) - len(compound_ids),
+            "families_active_at_end": len(active_families),
+            "molecules_with_multi_resource_or_bonded_structure": len(compound_ids),
+            "recurrence_fraction": (
+                len(recurrent) / len(families_with_products) if families_with_products else 0.0
+            ),
+            "top_families": families[:25],
+            "families": families,
+        },
+        "persistence": {
+            "completed_lifetime_count": sum(not row["right_censored"] for row in molecule_rows.values()),
+            "right_censored_count": sum(row["right_censored"] for row in molecule_rows.values()),
+            "mean_observed_lifetime_ticks": (
+                statistics.fmean(row["observed_lifetime_ticks"] for row in molecule_rows.values())
+                if molecule_rows else None
+            ),
+            "median_observed_lifetime_ticks": (
+                statistics.median(row["observed_lifetime_ticks"] for row in molecule_rows.values())
+                if molecule_rows else None
+            ),
+        },
+        "material_distribution": {
+            "constituent_amount_by_resource": dict(sorted(resource_units.items())),
+            "molecules_containing_resource": dict(sorted(molecules_by_resource.items())),
+            "compound_constituent_amount_by_resource": dict(sorted(compound_resource_units.items())),
+            "compounds_containing_resource": dict(sorted(compounds_by_resource.items())),
+            "reaction_created_compound_constituent_amount_by_resource": dict(
+                sorted(reaction_product_compound_resource_units.items())
+            ),
+            "note": "Amounts are summed once per created molecule identity; lineage generations can therefore count transferred material more than once.",
+        },
+        "reaction_network": {
+            "molecule_creations_by_reaction": dict(sorted(reaction_counts.items())),
+            "family_to_family_transitions": [
+                {"reaction": reaction, "parent_family": parent, "child_family": child, "count": count}
+                for (reaction, parent, child), count in sorted(
+                    family_pathways.items(), key=lambda item: (-item[1], item[0])
+                )
+            ],
+        },
+        "interpretation_limits": [
+            "Structural-family recurrence excludes single-resource unbonded identities so abundant independent atoms/materials do not masquerade as organized compounds.",
+            "For molecules with up to seven parts, structural families use exact canonical labeling of composition plus undirected part-index bond connectivity; larger molecules use a conservative part-ordered signature.",
+            "Bond energy, endpoint geometry, and placements are not part of the family signature, so matching is structural rather than proof of chemical equivalence.",
+            "Active molecule lifetimes are right-censored at the final observed tick.",
+            "Material totals count each created identity once, so lineage generations may count the same conserved constituents more than once.",
+            "Recurrence and persistence are descriptive evidence, not proof of self-maintaining chemical organization.",
+        ],
+    }
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    org = report["organization"]
+    persistence = report["persistence"]
+    lines = [
+        "# EvoSim chemical organization analysis", "",
+        f"- Molecule identities created: {report['scope']['molecule_creation_records']}",
+        f"- Molecules active at end: {report['scope']['active_molecules_at_end']}",
+        f"- Exact structural families: {org['unique_exact_structural_families']}",
+        f"- Families recurrent among reaction-created products (2+): {org['recurrent_families']}",
+        f"- Families recurrent including initial seeds: {org['recurrent_families_including_initial_seeds']}",
+        f"- Families still active at end: {org['families_active_at_end']}",
+        f"- Multi-resource or bonded identities: {org['molecules_with_multi_resource_or_bonded_structure']}",
+        f"- Independent single-resource identities excluded from family recurrence: {org['single_resource_unbonded_identities_excluded']}",
+        f"- Mean observed lifetime: {persistence['mean_observed_lifetime_ticks']} ticks",
+        f"- Median observed lifetime: {persistence['median_observed_lifetime_ticks']} ticks",
+        f"- Lifecycle validation errors: {len(report['scope']['lifecycle_validation_errors'])}",
+        "", "## Most recurrent structural families", "",
+        "| Reaction-created products | Distinct product reactions | Initial seeds | Active | Mean product lifetime (ticks) | Composition |",
+        "|---:|---:|---:|---:|---:|---|",
+    ]
+    for family in org["top_families"][:15]:
+        composition = ", ".join(
+            f"{name}:{amount:g}" for name, amount in sorted(family["composition"].items())
+        )
+        product_lifetime = family["mean_reaction_created_lifetime_ticks"]
+        product_lifetime_text = (
+            f"{product_lifetime:.2f}" if product_lifetime is not None else "n/a"
+        )
+        lines.append(
+            f"| {family['reaction_created_occurrences']} | {family['reaction_created_reaction_events']} | "
+            f"{family['initial_seed_occurrences']} | {family['reaction_created_active_at_end']} | "
+            f"{product_lifetime_text} | {composition or '(empty)'} |"
+        )
+    lines += [
+        "", "## Resource incorporation in reaction-created compounds", "",
+        "| Resource | Constituent amount |", "|---|---:|",
+    ]
+    for resource, amount in report["material_distribution"][
+        "reaction_created_compound_constituent_amount_by_resource"
+    ].items():
+        lines.append(f"| {resource} | {amount:g} |")
+    lines += ["", "## Molecule creations by reaction", "",
+              "| Reaction | Created identities |", "|---|---:|"]
+    for reaction, count in report["reaction_network"]["molecule_creations_by_reaction"].items():
+        lines.append(f"| {reaction} | {count} |")
+    lines += ["", "## Interpretation limits", ""]
+    lines.extend(f"- {item}" for item in report["interpretation_limits"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", type=Path, help="environmental chemistry JSONL diagnostics")
+    parser.add_argument("--json-out", type=Path, help="write machine-readable analysis JSON")
+    parser.add_argument("--markdown-out", type=Path, help="write Markdown analysis report")
+    args = parser.parse_args()
+    try:
+        report = analyze(load_records(args.input))
+    except (OSError, ValueError) as exc:
+        print(f"chemistry organization analyzer: {exc}", file=sys.stderr)
+        return 2
+    if args.json_out:
+        args.json_out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if args.markdown_out:
+        args.markdown_out.write_text(render_markdown(report), encoding="utf-8")
+    if not args.json_out and not args.markdown_out:
+        print(render_markdown(report), end="")
+    if report["scope"]["lifecycle_validation_errors"]:
+        print("chemistry organization analyzer: lifecycle validation failed", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
