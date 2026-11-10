@@ -2070,10 +2070,7 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
 /// frequency matching separate from field strength: the received RMS amplitude
 /// is measured against the model's unit-amplitude reference drive and saturates
 /// at one. This remains a dimensionless signal influence, never usable energy.
-pub(crate) fn spectral_activation_influence(
-    received: &ToneSpectrum,
-    target: &ToneSpectrum,
-) -> f64 {
+pub(crate) fn spectral_activation_influence(received: &ToneSpectrum, target: &ToneSpectrum) -> f64 {
     let frequency_match = spectral_similarity(received, target);
     let signal_strength = spectrum_magnitude(received).clamp(0.0, 1.0);
     (frequency_match * signal_strength).clamp(0.0, 1.0)
@@ -2082,7 +2079,6 @@ pub(crate) fn spectral_activation_influence(
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn reaction_activation_influence_preserves_received_signal_strength() {
