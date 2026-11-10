@@ -189,20 +189,38 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         rows = [molecule_rows[molecule_id] for molecule_id in ids]
         lifetimes = [row["observed_lifetime_ticks"] for row in rows]
         active_ids = [molecule_id for molecule_id in ids if molecule_id not in destroyed]
+        initial_ids = [molecule_id for molecule_id in ids
+                       if molecule_rows[molecule_id]["reaction"] == "INITIAL"]
+        reaction_ids = [molecule_id for molecule_id in ids
+                        if molecule_rows[molecule_id]["reaction"] != "INITIAL"]
+        reaction_lifetimes = [
+            molecule_rows[molecule_id]["observed_lifetime_ticks"] for molecule_id in reaction_ids
+        ]
         composition = rows[0]["composition"]
         families.append({
             "signature": signature,
             "occurrences": len(ids),
+            "initial_seed_occurrences": len(initial_ids),
+            "reaction_created_occurrences": len(reaction_ids),
+            "reaction_created_active_at_end": sum(
+                molecule_id not in destroyed for molecule_id in reaction_ids
+            ),
             "active_at_end": len(active_ids),
             "molecule_ids": sorted(ids),
             "composition": composition,
             "mean_observed_lifetime_ticks": statistics.fmean(lifetimes) if lifetimes else None,
             "median_observed_lifetime_ticks": statistics.median(lifetimes) if lifetimes else None,
+            "mean_reaction_created_lifetime_ticks": (
+                statistics.fmean(reaction_lifetimes) if reaction_lifetimes else None
+            ),
             "completed_lifetimes": sum(not row["right_censored"] for row in rows),
             "right_censored_lifetimes": sum(row["right_censored"] for row in rows),
             "recurrent": len(ids) >= 2,
+            "recurrent_from_reactions": len(reaction_ids) >= 2,
         })
-    families.sort(key=lambda row: (-row["occurrences"], -row["active_at_end"], row["signature"]))
+    families.sort(key=lambda row: (
+        -row["reaction_created_occurrences"], -row["active_at_end"], row["signature"]
+    ))
 
     reaction_counts = Counter(row["reaction"] for row in molecule_rows.values())
     family_pathways: Counter[tuple[str, str, str]] = Counter()
@@ -223,7 +241,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             resource_units[resource] += amount
             molecules_by_resource[resource] += 1
 
-    recurrent = [family for family in families if family["recurrent"]]
+    recurrent = [family for family in families if family["recurrent_from_reactions"]]
+    recurrent_including_initial = [family for family in families if family["recurrent"]]
     active_families = [family for family in families if family["active_at_end"] > 0]
     return {
         "schema_version": 1,
@@ -237,6 +256,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         "organization": {
             "unique_exact_structural_families": len(families),
             "recurrent_families": len(recurrent),
+            "recurrent_families_including_initial_seeds": len(recurrent_including_initial),
+            "families_recurrent_from_reaction_products": len(recurrent),
             "single_resource_unbonded_identities_excluded": len(molecule_rows) - len(compound_ids),
             "families_active_at_end": len(active_families),
             "molecules_with_multi_resource_or_bonded_structure": len(compound_ids),
@@ -289,7 +310,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Molecule identities created: {report['scope']['molecule_creation_records']}",
         f"- Molecules active at end: {report['scope']['active_molecules_at_end']}",
         f"- Exact structural families: {org['unique_exact_structural_families']}",
-        f"- Recurrent families (2+ identities): {org['recurrent_families']}",
+        f"- Families recurrent among reaction-created products (2+): {org['recurrent_families']}",
+        f"- Families recurrent including initial seeds: {org['recurrent_families_including_initial_seeds']}",
         f"- Families still active at end: {org['families_active_at_end']}",
         f"- Multi-resource or bonded identities: {org['molecules_with_multi_resource_or_bonded_structure']}",
         f"- Independent single-resource identities excluded from family recurrence: {org['single_resource_unbonded_identities_excluded']}",
@@ -297,16 +319,18 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Median observed lifetime: {persistence['median_observed_lifetime_ticks']} ticks",
         f"- Lifecycle validation errors: {len(report['scope']['lifecycle_validation_errors'])}",
         "", "## Most recurrent structural families", "",
-        "| Occurrences | Active | Mean observed lifetime (ticks) | Composition |",
-        "|---:|---:|---:|---|",
+        "| Reaction-created | Initial seeds | Active | Mean product lifetime (ticks) | Composition |",
+        "|---:|---:|---:|---:|---|",
     ]
     for family in org["top_families"][:15]:
         composition = ", ".join(
             f"{name}:{amount:g}" for name, amount in sorted(family["composition"].items())
         )
         lines.append(
-            f"| {family['occurrences']} | {family['active_at_end']} | "
-            f"{family['mean_observed_lifetime_ticks']:.2f} | {composition or '(empty)'} |"
+            f"| {family['reaction_created_occurrences']} | {family['initial_seed_occurrences']} | "
+            f"{family['reaction_created_active_at_end']} | "
+            f"{(family['mean_reaction_created_lifetime_ticks'] or 0.0):.2f} | "
+            f"{composition or '(empty)'} |"
         )
     lines += ["", "## Molecule creations by reaction", "",
               "| Reaction | Created identities |", "|---|---:|"]
