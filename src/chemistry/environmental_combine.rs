@@ -332,7 +332,12 @@ fn current_geometry_candidate_pairs(
         .collect();
     let bounds_b: Vec<_> = indices_b
         .iter()
-        .map(|&index| structure.units.get(index).and_then(|unit| constituent_bounds(unit, catalog)))
+        .map(|&index| {
+            structure
+                .units
+                .get(index)
+                .and_then(|unit| constituent_bounds(unit, catalog))
+        })
         .collect();
 
     if pair_count <= LINEAR_PAIR_LIMIT {
