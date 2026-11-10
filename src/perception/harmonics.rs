@@ -243,6 +243,7 @@ pub(crate) struct MaterialResonanceDensitySample {
 /// rejected by the existing reception API. The spatial grid is diagnostic
 /// sampling only: reaction code must use continuous physical samples, never
 /// make eligibility depend on this grid.
+#[allow(dead_code)] // Diagnostic field sampler; reaction integration follows energy-provenance validation.
 pub(crate) fn material_resonance_density_on_receiver(
     materials: &[crate::physical_material::PhysicalMaterial],
     receiver_index: usize,
@@ -258,7 +259,7 @@ pub(crate) fn material_resonance_density_on_receiver(
     // First average repeated boundary patches from each source within a map
     // cell. This prevents a finely segmented receiver boundary from counting
     // the same source field multiple times merely because it has more patches.
-    let mut source_cells = std::collections::HashMap::<
+    let mut source_cells = std::collections::BTreeMap::<
         (i64, i64, usize),
         Vec<(ToneComponent, usize)>,
     >::new();
@@ -319,7 +320,7 @@ pub(crate) fn material_resonance_density_on_receiver(
         }
     }
 
-    let mut cells = std::collections::HashMap::<(i64, i64), Vec<ToneComponent>>::new();
+    let mut cells = std::collections::BTreeMap::<(i64, i64), Vec<ToneComponent>>::new();
     for ((cell_x, cell_y, _source_index), source_components) in source_cells {
         let target = cells.entry((cell_x, cell_y)).or_default();
         for (component, sample_count) in source_components {
@@ -2363,6 +2364,63 @@ mod tests {
         assert!(material_aura_receptions(&left, &left, &catalog, 0)
             .expect("self reception is a valid empty result")
             .is_empty());
+    }
+
+    #[test]
+    fn local_resonance_density_is_frequency_resolved_and_spatially_attributed() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let materials = vec![make_material(0.0), make_material(4.0), make_material(8.0)];
+        let density = material_resonance_density_on_receiver(&materials, 1, &catalog, 0, 1.0)
+            .expect("valid realized materials should produce a local density sample");
+
+        assert!(!density.is_empty());
+        assert!(density.iter().all(|sample| {
+            sample.x.is_finite()
+                && sample.y.is_finite()
+                && sample.density.is_finite()
+                && sample.density > 0.0
+                && !sample.components.is_empty()
+                && sample.components.iter().all(|component| {
+                    component.frequency_cycles_per_day.is_finite()
+                        && component.frequency_cycles_per_day > 0.0
+                        && component.amplitude.is_finite()
+                        && component.phase_radians.is_finite()
+                })
+        }));
+        assert!(density.windows(2).all(|pair| {
+            (pair[0].cell_y, pair[0].cell_x) <= (pair[1].cell_y, pair[1].cell_x)
+        }));
+    }
+
+    #[test]
+    fn local_resonance_density_rejects_invalid_grid_and_unresolved_materials() {
+        let catalog = crate::resources::default_catalog();
+        let material = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should have a valid realized physical shape");
+        assert!(material_resonance_density_on_receiver(&[material.clone()], 0, &catalog, 0, 0.0)
+            .is_none());
+        assert!(material_resonance_density_on_receiver(&[material], 1, &catalog, 0, 1.0)
+            .is_none());
     }
 
     #[test]
