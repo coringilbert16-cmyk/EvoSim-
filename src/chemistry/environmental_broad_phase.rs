@@ -2929,15 +2929,8 @@ mod tests {
             let mut actual = std::collections::BTreeSet::new();
             let mut pages = 0;
             loop {
-                let page = cursor.next_page(
-                    &snapshot,
-                    &field,
-                    &bounds,
-                    2.1,
-                    target_cell_limit,
-                    1,
-                    1,
-                );
+                let page =
+                    cursor.next_page(&snapshot, &field, &bounds, 2.1, target_cell_limit, 1, 1);
                 assert!(page.visited_work <= 1);
                 assert!(page.pairs.len() <= 1);
                 actual.extend(
