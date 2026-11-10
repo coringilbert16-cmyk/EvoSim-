@@ -164,6 +164,16 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
                 lifecycle_errors.append(f"record {index}: parent_ids must contain positive integers")
                 continue
             for parent in parents:
+                if parent not in created:
+                    lifecycle_errors.append(
+                        f"record {index}: lineage parent {parent} has no prior creation"
+                    )
+                    continue
+                if parent in destroyed and destroyed[parent] <= tick:
+                    lifecycle_errors.append(
+                        f"record {index}: lineage parent {parent} was already destroyed"
+                    )
+                    continue
                 lineage_edges.append({
                     "parent_id": parent,
                     "child_id": molecule_id,
