@@ -1074,8 +1074,13 @@ impl Simulation {
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
         // Build the material-origin field once per tick and share it across
         // bounded environmental BREAK candidates.
+        let local_resonance_snapshot_started = std::time::Instant::now();
         let local_resonance_world =
             crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self);
+        break_discovery.local_resonance_snapshot_build_nanoseconds = local_resonance_snapshot_started
+            .elapsed()
+            .as_nanos()
+            .min(u64::MAX as u128) as u64;
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
