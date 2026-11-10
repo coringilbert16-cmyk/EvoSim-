@@ -252,7 +252,7 @@ fn environmental_break_local_resonance_sample(
                         "point": [point.0, point.1],
                         "source_component_count": spectrum.components.len(),
                         "signal_intensity": signal_intensity,
-                        "components": spectrum.components
+                        "components": &spectrum.components
                     })
                 })
                 .collect::<Vec<_>>(),
