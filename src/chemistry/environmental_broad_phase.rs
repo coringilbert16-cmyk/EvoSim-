@@ -3248,7 +3248,7 @@ mod tests {
         }
 
         println!(
-            "count,layout,field_cells,snapshot_us,bounds_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
+            "count,layout,field_cells,snapshot_us,bounds_restore_us,bounds_cursor_us,exhaustive_us,spatial_window_us,spatial_cursor_us,all_pairs,spatial_candidates,candidate_reduction_pct,cursor_pair_checks,snapshot_index_bytes_lower_bound,parity"
         );
         for count in [128usize, 320, 640, 1280, 2560, 5120] {
             for clustered in [false, true] {
@@ -3257,9 +3257,10 @@ mod tests {
                 } else {
                     "uniform_occupancy"
                 };
-                let (field, _) = fixture(count, clustered);
+                let (field, catalog) = fixture(count, clustered);
                 let mut snapshot_times = Vec::new();
-                let mut bounds_times = Vec::new();
+                let mut bounds_restore_times = Vec::new();
+                let mut bounds_cursor_times = Vec::new();
                 let mut exhaustive_times = Vec::new();
                 let mut spatial_times = Vec::new();
                 let mut cursor_times = Vec::new();
@@ -3274,22 +3275,21 @@ mod tests {
                     snapshot_times.push(start.elapsed().as_micros());
 
                     let start = Instant::now();
-                    let bounds = snapshot
-                        .materials
-                        .iter()
-                        .map(|record| {
-                            let cell = record.locator.cell_index;
-                            let x = (cell % 25) as f64 * 10.0 + 5.0;
-                            let y = (cell / 25) as f64 * 10.0 + 5.0;
-                            Some(MaterialSpatialBounds {
-                                min_x: x - 1.0,
-                                max_x: x + 1.0,
-                                min_y: y - 1.0,
-                                max_y: y + 1.0,
-                            })
-                        })
-                        .collect::<Vec<_>>();
-                    bounds_times.push(start.elapsed().as_micros());
+                    let restored_bounds = snapshot.spatial_bounds_from_field(&field, &catalog);
+                    bounds_restore_times.push(start.elapsed().as_micros());
+
+                    let start = Instant::now();
+                    let mut bounds_cursor = MaterialBoundsCursor::new(&snapshot, &catalog);
+                    let cursor_bounds = loop {
+                        let page = bounds_cursor.next_page(&snapshot, &field, &catalog, 64);
+                        assert!(page.visited_work <= 64);
+                        if page.complete {
+                            break page.bounds.expect("completed bounds cursor returns bounds");
+                        }
+                    };
+                    bounds_cursor_times.push(start.elapsed().as_micros());
+                    parity_ok &= cursor_bounds == restored_bounds;
+                    let bounds = cursor_bounds;
                     memory_lower_bound = vector_bytes_lower_bound(&snapshot, &bounds);
 
                     let start = Instant::now();
@@ -3341,9 +3341,10 @@ mod tests {
                     (1.0 - spatial_count as f64 / all_pairs as f64) * 100.0
                 };
                 println!(
-                    "{count},{layout},625,{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
+                    "{count},{layout},625,{},{},{},{},{},{},{all_pairs},{spatial_count},{reduction:.4},{cursor_checks},{memory_lower_bound},{}",
                     median(&mut snapshot_times),
-                    median(&mut bounds_times),
+                    median(&mut bounds_restore_times),
+                    median(&mut bounds_cursor_times),
                     median(&mut exhaustive_times),
                     median(&mut spatial_times),
                     median(&mut cursor_times),
