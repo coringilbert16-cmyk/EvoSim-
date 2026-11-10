@@ -323,7 +323,12 @@ fn current_geometry_candidate_pairs(
     let pair_count = indices_a.len().saturating_mul(indices_b.len());
     let bounds_a: Vec<_> = indices_a
         .iter()
-        .map(|&index| structure.units.get(index).and_then(|unit| constituent_bounds(unit, catalog)))
+        .map(|&index| {
+            structure
+                .units
+                .get(index)
+                .and_then(|unit| constituent_bounds(unit, catalog))
+        })
         .collect();
     let bounds_b: Vec<_> = indices_b
         .iter()
@@ -887,8 +892,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                                 .as_nanos()
                                 .min(u64::MAX as u128) as u64,
                         );
-                    diagnostics.spatial_candidate_generation_calls =
-                        diagnostics.spatial_candidate_generation_calls.saturating_add(1);
+                    diagnostics.spatial_candidate_generation_calls = diagnostics
+                        .spatial_candidate_generation_calls
+                        .saturating_add(1);
                     let candidate_pair_count = candidate_pairs.len();
                     diagnostics.constituent_pairs_available += candidate_pair_count;
                     diagnostics.constituent_pairs_uninspected_by_window +=
