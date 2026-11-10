@@ -641,6 +641,29 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "diagnostic_interval": recorder.interval,
             "experiment_goal": "validate chemistry building blocks; no organism emergence criterion"
         }))?;
+        for material in simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+        {
+            if material.environmental_identity == 0 {
+                return Err(std::io::Error::other(
+                    "tick-zero environmental material is missing a stable identity",
+                ));
+            }
+            recorder.write_event(json!({
+                "event": "molecular_lifecycle",
+                "action": "created",
+                "tick": 0,
+                "molecule_id": material.environmental_identity,
+                "parent_ids": [],
+                "reaction_id": "initial",
+                "reaction": "INITIAL",
+                "molecule": material
+            }))?;
+        }
         recorder.write_snapshot(simulation, "initial")?;
         recorder.writer.flush()?;
         Ok(recorder)
