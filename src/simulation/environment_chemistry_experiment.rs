@@ -347,6 +347,7 @@ pub(crate) struct EnvironmentalChemistryFixture {
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
+    simulation.record_environmental_molecular_history = true;
     simulation.organisms.clear();
     simulation.active_transformations.clear();
     simulation.decomposing_bodies.clear();
