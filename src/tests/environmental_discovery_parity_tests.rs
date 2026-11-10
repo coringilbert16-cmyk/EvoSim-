@@ -261,14 +261,14 @@ fn directed_spatial_discovery_preserves_both_displacement_participant_roles() {
                     .iter()
                     .position(|material| material.identity.0 == *incoming)
                     .unwrap();
-                let expanded = bounds[anchor_index].unwrap().expanded(2.1).unwrap();
+                let anchor_bounds = bounds[anchor_index].unwrap();
                 let incoming_cell = snapshot.materials[incoming_index].locator.cell_index;
                 field
                     .cells_intersecting_bounds(
-                        expanded.min_x,
-                        expanded.max_x,
-                        expanded.min_y,
-                        expanded.max_y,
+                        anchor_bounds.min_x - 2.1,
+                        anchor_bounds.max_x + 2.1,
+                        anchor_bounds.min_y - 2.1,
+                        anchor_bounds.max_y + 2.1,
                     )
                     .contains(&incoming_cell)
             })
