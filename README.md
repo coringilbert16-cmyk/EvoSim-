@@ -43,6 +43,26 @@ The ignored benchmark test completed successfully: **1 passed, 0 failed**, in **
 
 **Next optimization target:** per-material movement evaluation. The preceding transport profile (PR [#304](https://github.com/coringilbert16-cmyk/EvoSim-/pull/304)) measured this stage at **50.903 seconds / 85.2%** of a 60-second transport-only profile; snapshot/identity assignment was 3.1%, obstacle construction 4.1%, obstacle-bin construction 4.4%, and movement commit 3.3%. The next experiment should profile and optimize work *inside* this dominant per-material evaluation stage, retaining exact candidate coverage and the existing movement equations. Do not spend effort optimizing obstacle-bin construction based on the current evidence.
 
+### Closed movement diagnostics and rejected angular-hoist experiment — PRs #304, #307, #308
+
+**PR #304 — transport stage profile (diagnostic completed; closed without merging).** The 60-second seed-42 transport-only profile measured 5,334 ticks (88.89 ticks/s) while preserving all 1,280 objects and 1,360 constituents. Per-material movement evaluation consumed 50.903 s (85.2%); snapshot/identity assignment 1.843 s (3.1%); obstacle construction 2.420 s (4.1%); obstacle-bin construction 2.607 s (4.4%); and movement commit 1.955 s (3.3%). This established where deeper profiling should focus; the test-only timing instrumentation is not a production optimization.
+
+**PR #308 — movement sub-operation profile (diagnostic completed; closed without merging).** On the seed-42 fixture (1,280 objects, 1,280 obstacles, 80 compounds), the isolated profile reported:
+- Background velocity evaluation: 4,072,906.5 evaluations/s (0.246 µs each).
+- Obstacle scan: 1,228,751.1 evaluations/s (0.814 µs each), averaging 33.23 candidates per evaluation.
+- Velocity evaluation with obstacles: 955,632.2 evaluations/s (1.046 µs each).
+- Compound angular evaluation: 279,094.2 evaluations/s (3.583 µs each), processing 1,116,480 constituents.
+- Catalog lookup: 18,122,444.7 lookups/s (55.2 ns each).
+- Translation/rotation transform: 1,339,926.5 evaluations/s (0.746 µs each).
+- Profile counts: 45,197 obstacle candidates from 1,360 queries; 4,298 proximity adjustments and 4,922 wake adjustments.
+The dedicated diagnostic passed (1 passed, 0 failed). These are isolated component rates, not full-tick throughput or proof that changing any one component improves the complete simulation.
+
+**PR #307 — precomputed obstacle influence dimensions (rejected as an unproven optimization; closed without merging).** The focused 10-second compound-angular profile measured 1,926,000 evaluations (192,595.7/s; 5.192 µs/evaluation). Three sequential 30-second full-simulation candidate runs against the stored 19.798 ticks/s baseline produced:
+- Repeat 1: 20.714 ticks/s (+4.627%).
+- Repeat 2: 16.388 ticks/s (-17.222%).
+- Repeat 3: 20.738 ticks/s (+4.750%).
+The spread is too large to establish a repeatable improvement; the one negative run is substantial. All three runs preserved 1,360 constituents, but object counts ended at 1,267–1,268 rather than 1,280. The Rust CI job also failed Clippy: `filter_map_bool_then` and `unnecessary_lazy_evaluations` at `src/simulation/environment_flow.rs:1355–1357`. Do not retain or reintroduce this optimization without a corrected implementation and repeatable end-to-end evidence.
+
 ## Closed obstacle-bin resolution experiment — PR #309
 
 **Outcome: failed as a performance optimization; PR #309 was closed without merging.** The experiment compared 5.0, 2.5, and 1.25 world-unit obstacle bins using the same seed-42 fixture. The benchmark included obstacle-index construction in its timed throughput, so it measured the end-to-end trade-off rather than candidate scanning alone.
