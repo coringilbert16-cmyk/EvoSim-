@@ -1416,7 +1416,10 @@ mod tests {
     #[test]
     fn controlled_physical_pair_matrix_classifies_non_water_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
-        let catalog: Vec<_> = simulation.environment.catalog.iter()
+        let catalog: Vec<_> = simulation
+            .environment
+            .catalog
+            .iter()
             .filter(|resource| resource.name != "Water")
             .cloned()
             .collect();
