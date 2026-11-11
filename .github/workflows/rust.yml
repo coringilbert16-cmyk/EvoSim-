@@ -371,7 +371,7 @@ jobs:
 # Re-trigger CI for the molecular lineage observability pull request.
 
   pr344-five-seed-resonance-observation:
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 344
+    if: (github.event_name == 'pull_request' && github.event.pull_request.number == 344) || (github.event_name == 'push' && github.event.head_commit.message == 'Run five-seed resonance experiment [run-five-seed-resonance]')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -435,7 +435,7 @@ jobs:
           retention-days: 30
 
   pr344-five-seed-resonance-aggregate:
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 344
+    if: (github.event_name == 'pull_request' && github.event.pull_request.number == 344) || (github.event_name == 'push' && github.event.head_commit.message == 'Run five-seed resonance experiment [run-five-seed-resonance]')
     needs: [pr344-five-seed-resonance-observation]
     runs-on: ubuntu-latest
     steps:
