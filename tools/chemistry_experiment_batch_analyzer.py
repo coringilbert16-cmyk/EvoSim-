@@ -187,6 +187,18 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     element_pairs = list(ELEMENTAL_BOND_PAIRS)
     elemental_bond_pairs = {
         "element_pairs": element_pairs,
+        "committed_events_with_graph_deltas": sum(
+            int(row["committed_events_with_graph_deltas"] or 0)
+            for row in bond_pair_coverage_by_seed.values()
+        ),
+        "committed_events_missing_graph_deltas": sum(
+            int(row["committed_events_missing_graph_deltas"] or 0)
+            for row in bond_pair_coverage_by_seed.values()
+        ),
+        "malformed_bond_records": sum(
+            int(row["malformed_bond_records"] or 0)
+            for row in bond_pair_coverage_by_seed.values()
+        ),
         "formed_total": sum(formed_bonds.values()),
         "broken_total": sum(broken_bonds.values()),
         "formed": dict(sorted(formed_bonds.items())),
@@ -315,6 +327,9 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "## Exact elemental bond-pair changes",
         "",
+        f"- Committed events with graph deltas: {report['elemental_bond_pairs']['committed_events_with_graph_deltas']}",
+        f"- Committed events missing graph deltas: {report['elemental_bond_pairs']['committed_events_missing_graph_deltas']}",
+        f"- Malformed bond records: {report['elemental_bond_pairs']['malformed_bond_records']}",
         f"- Formed bonds: {report['elemental_bond_pairs']['formed_total']}",
         f"- Broken bonds: {report['elemental_bond_pairs']['broken_total']}",
         "",
@@ -325,6 +340,18 @@ def render_markdown(report: dict[str, Any]) -> str:
         formed = report["elemental_bond_pairs"]["formed"].get(pair, 0)
         broken = report["elemental_bond_pairs"]["broken"].get(pair, 0)
         lines.append(f"| {pair} | {formed} | {broken} |")
+    for reaction, values in report["elemental_bond_pairs"]["by_reaction"].items():
+        lines += [
+            "",
+            f"### {reaction} bond-pair changes",
+            "",
+            "| Element pair | Formed | Broken |",
+            "|---|---:|---:|",
+        ]
+        for pair in report["elemental_bond_pairs"]["element_pairs"]:
+            formed = values["formed"].get(pair, 0)
+            broken = values["broken"].get(pair, 0)
+            lines.append(f"| {pair} | {formed} | {broken} |")
     lines += [
         "",
         "## Energy and displacement",
