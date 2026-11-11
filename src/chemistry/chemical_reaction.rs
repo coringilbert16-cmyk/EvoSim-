@@ -1744,6 +1744,7 @@ mod material_identity_tests {
             source_material: source.clone(),
             bond,
             activation_signal: 1.0,
+            activation_barrier: disruption_cost,
             disruption_cost,
             reaction_frequency_cycles_per_day,
             local_resonance_similarity: 0.0,
@@ -2491,6 +2492,7 @@ mod material_identity_tests {
             // Activation crosses the full barrier, but neither the bond nor
             // an energy holder can fund the disruption work.
             activation_signal: disruption_cost,
+            activation_barrier: disruption_cost,
             disruption_cost,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
