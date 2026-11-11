@@ -818,8 +818,14 @@ mod tests {
             *molecule_type_counts.entry(elements).or_insert(0_usize) += 1;
         }
         assert_eq!(molecule_type_counts.len(), KNOWN_TWO_UNIT_MOLECULES.len());
-        assert_eq!(molecule_type_counts.values().filter(|count| **count == 72).count(), 2);
-        assert_eq!(molecule_type_counts.values().filter(|count| **count == 71).count(), 16);
+        assert_eq!(
+            molecule_type_counts.values().filter(|count| **count == 72).count(),
+            2
+        );
+        assert_eq!(
+            molecule_type_counts.values().filter(|count| **count == 71).count(),
+            16
+        );
         let hs = materials
             .iter()
             .filter(|m| {
