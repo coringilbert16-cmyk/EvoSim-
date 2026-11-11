@@ -1474,6 +1474,8 @@ pub(crate) fn resolve_environmental_diagnosed(
         .energy
         .physical_work
         .min(trial.energy.required_external_input);
+    let compatible_resonance_before = staged_resonance
+        .compatible_energy(operation.reaction_frequency_cycles_per_day);
     let resonant_work = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         resonance_work_budget,
@@ -1522,6 +1524,18 @@ pub(crate) fn resolve_environmental_diagnosed(
     funded_energy.required_external_input =
         (trial.energy.required_external_input - resonant_work).max(0.0);
     if funded_energy.required_external_input > environment.chemistry_usable_energy {
+        #[cfg(test)]
+        eprintln!(
+            "[displacement-funding] initial_deficit={:?} resonance_budget={:?} compatible_before={:?} withdrawn={:?} remaining_work={:?} recomputed_deficit={:?} remaining_deficit={:?} holder={:?}",
+            trial.energy.required_external_input,
+            resonance_work_budget,
+            compatible_resonance_before,
+            resonant_work,
+            remaining_physical_work,
+            funded_energy.product_energy - funded_energy.reactant_energy + funded_energy.physical_work + funded_energy.dissipated_heat,
+            funded_energy.required_external_input,
+            environment.chemistry_usable_energy,
+        );
         return Err("insufficient_usable_energy");
     }
     let Some(transaction) =
