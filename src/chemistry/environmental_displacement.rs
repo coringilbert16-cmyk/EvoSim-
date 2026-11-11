@@ -1511,7 +1511,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     }
 
     let remaining_physical_work = trial.energy.physical_work - resonant_work;
-    let Some(funded_energy) = ReactionEnergyBalance::calculate_conservative(
+    let Some(mut funded_energy) = ReactionEnergyBalance::calculate_conservative(
         trial.energy.reactant_energy,
         trial.energy.product_energy,
         remaining_physical_work,
@@ -1519,6 +1519,8 @@ pub(crate) fn resolve_environmental_diagnosed(
     ) else {
         return Err("reaction_energy_balance_invalid");
     };
+    funded_energy.required_external_input =
+        (trial.energy.required_external_input - resonant_work).max(0.0);
     if funded_energy.required_external_input > environment.chemistry_usable_energy {
         return Err("insufficient_usable_energy");
     }
@@ -2401,11 +2403,12 @@ mod tests {
             .resonant_energy
             .total_energy()
             .expect("valid staged resonance");
-        assert!(resolve_environmental(
+        let committed = resolve_environmental_diagnosed(
             operation,
             &mut simulation.environment,
             &mut simulation.energy_ledger,
-        ));
+        );
+        assert_eq!(committed, Ok(()), "environmental displacement commit failed");
 
         let products = &simulation.environment.field.cells[field_cell].physical_materials;
         assert_eq!(products.len(), 2);
@@ -2491,9 +2494,9 @@ mod tests {
         assert_eq!(products.len(), 2);
         assert!(usable_energy.is_finite() && usable_energy >= 0.0);
         assert!(usable_energy < available_energy);
-        assert_eq!(
-            ledger.total_structural_energy_held,
-            -source.bonds[0].bond_energy
+        assert!(
+            (ledger.total_structural_energy_held + source.bonds[0].bond_energy).abs() <= 1e-12,
+            "ledger structural energy should match the committed graph within floating-point tolerance"
         );
     }
 

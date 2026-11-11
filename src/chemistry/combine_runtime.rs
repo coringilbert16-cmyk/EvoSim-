@@ -73,6 +73,24 @@ fn energy_requirement(
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<f64> {
+    energy_requirement_with_rounding(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        false,
+    )
+}
+
+fn energy_requirement_with_rounding(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<f64> {
     if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
@@ -82,13 +100,22 @@ fn energy_requirement(
     } else {
         product_structural_energy
     };
-    crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
-        reactant_structural_energy,
-        product_energy,
-        work,
-        0.0,
-    )
-    .map(|balance| balance.required_external_input)
+    let balance = if conservative_deficit {
+        crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    } else {
+        crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    }?;
+    Some(balance.required_external_input)
 }
 
 fn combine_energy_transaction(
@@ -98,6 +125,24 @@ fn combine_energy_transaction(
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<EnergyTransaction> {
+    combine_energy_transaction_with_rounding(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        false,
+    )
+}
+
+fn combine_energy_transaction_with_rounding(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<EnergyTransaction> {
     if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
@@ -106,14 +151,23 @@ fn combine_energy_transaction(
         // only actual physical work is debited from usable energy.
         return EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, work, 0.0);
     }
-    // The same pre/post-state balance drives both affordability and settlement.
-    crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
-        reactant_structural_energy,
-        product_structural_energy,
-        work,
-        0.0,
-    )?
-    .settlement_transaction_conservative(EnergyReason::Combine)
+    if conservative_deficit {
+        crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_structural_energy,
+            work,
+            0.0,
+        )?
+        .settlement_transaction_conservative(EnergyReason::Combine)
+    } else {
+        crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_structural_energy,
+            product_structural_energy,
+            work,
+            0.0,
+        )?
+        .settlement_transaction(EnergyReason::Combine)
+    }
 }
 
 /// Resolve the adhesion at the actual structural-unit interface.
@@ -238,12 +292,13 @@ fn evaluate_candidate(
     } else {
         reactant_structural_energy - bond_energy
     };
-    let required = energy_requirement(
+    let required = energy_requirement_with_rounding(
         bond_energy,
         work,
         transient_fluid_bond,
         reactant_structural_energy,
         product_structural_energy,
+        pair_potential.is_some(),
     )?;
     Some((evaluation, work, investment, required))
 }
@@ -591,12 +646,13 @@ fn form_bond_from_candidate_diagnostic(
         .ok_or("COMBINE reactant structural energy is invalid")?;
     let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
-    let transaction = combine_energy_transaction(
+    let transaction = combine_energy_transaction_with_rounding(
         bond_energy,
         work,
         fluid_pair,
         reactant_structural_energy,
         product_structural_energy,
+        pair_potential.is_some(),
     )
     .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
