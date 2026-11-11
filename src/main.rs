@@ -91,6 +91,8 @@ mod combine;
 mod combine_runtime;
 #[path = "chemistry/decomposition.rs"]
 mod decomposition;
+#[path = "chemistry/emergent_cohesion.rs"]
+mod emergent_cohesion;
 #[path = "infrastructure/diagnostics.rs"]
 mod diagnostics;
 #[path = "chemistry/energy_ledger.rs"]
