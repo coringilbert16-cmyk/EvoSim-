@@ -2542,16 +2542,16 @@ mod tests {
                 if anchor_index == displaced_index {
                     continue;
                 }
-                let anchor = Material::free_base(resources[anchor_index].name.clone(), 1.0)
+                let anchor = crate::resources::Material::free_base(resources[anchor_index].name.clone(), 1.0)
                     .weighted_properties(&catalog);
-                let displaced = Material::free_base(resources[displaced_index].name.clone(), 1.0)
+                let displaced = crate::resources::Material::free_base(resources[displaced_index].name.clone(), 1.0)
                     .weighted_properties(&catalog);
                 let old_strength = crate::combine::bond_strength(anchor, displaced);
                 for incoming_index in 0..resources.len() {
                     if incoming_index == anchor_index || incoming_index == displaced_index {
                         continue;
                     }
-                    let incoming = Material::free_base(resources[incoming_index].name.clone(), 1.0)
+                    let incoming = crate::resources::Material::free_base(resources[incoming_index].name.clone(), 1.0)
                         .weighted_properties(&catalog);
                     let preflight = evaluate_displacement_preflight(
                         anchor,
