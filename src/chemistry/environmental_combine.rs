@@ -772,8 +772,7 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalCombineOperation> {
-    // This budget is per invocation/tick; diagnostics accumulate across the run.
-    let mut local_resonance_sampled_this_tick = false;
+    // Diagnostics accumulate across the run; sampling budget is local to the active tick.
     let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
     accumulate_environmental_with_diagnostics(
         environment,
@@ -795,6 +794,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) -> Vec<EnvironmentalCombineOperation> {
+    let mut local_resonance_sampled_this_tick = false;
     // Retire placement/index-based COMBINE histories once. They cannot be
     // mapped safely onto stable physical identities, so carrying them forward
     // would leak unreachable progress and diagnostics indefinitely.
