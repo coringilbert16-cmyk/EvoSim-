@@ -1449,7 +1449,13 @@ mod tests {
                 )
                 .expect("each canonical resource must realize as a physical object");
 
-                let mut fixture = None;
+                let mut fixture: Option<(
+                    PhysicalMaterial,
+                    OrganismStructure,
+                    Vec<usize>,
+                    Vec<usize>,
+                    SelectedContact,
+                )> = None;
                 for step in 1..=80 {
                     let distance = step as f64 * 0.05;
                     for rotation_step in 0..12 {
