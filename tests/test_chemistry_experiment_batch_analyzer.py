@@ -45,6 +45,23 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "event_counts": {"COMBINE": 1},
             "outcome_counts": {"COMBINE:committed": 1},
             "failure_reasons": {},
+            "elemental_bond_pairs": {
+                "element_pairs": ["Carbon-Hydrogen"],
+                "committed_events_with_graph_deltas": 1,
+                "committed_events_missing_graph_deltas": 0,
+                "formed_total": 1,
+                "broken_total": 0,
+                "formed": {"Carbon-Hydrogen": 1},
+                "broken": {"Carbon-Hydrogen": 0},
+                "by_reaction": {
+                    "COMBINE": {
+                        "formed": {"Carbon-Hydrogen": 1},
+                        "broken": {"Carbon-Hydrogen": 0},
+                        "formed_total": 1,
+                        "broken_total": 0,
+                    }
+                },
+            },
         },
         "energy": {
             "last_balance_residual": 0.0,
@@ -90,6 +107,10 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["reaction_totals"]["COMBINE"]["committed"], 2)
         self.assertEqual(report["molecular_development"]["reaction_created_products_reused_as_parents"], 2)
         self.assertEqual(report["organization"]["cross_seed_recurrent_product_families"][0]["seed_count"], 2)
+        self.assertEqual(report["elemental_bond_pairs"]["formed_total"], 2)
+        self.assertEqual(report["elemental_bond_pairs"]["formed"]["Carbon-Hydrogen"], 2)
+        self.assertEqual(report["elemental_bond_pairs"]["by_reaction"]["COMBINE"]["formed_total"], 2)
+        self.assertEqual(len(report["elemental_bond_pairs"]["element_pairs"]), 21)
         self.assertTrue(report["validation"]["all_runs_pass_inventory_and_lifecycle_checks"])
 
     def test_rejects_water_in_the_active_chemistry_inventory(self):
