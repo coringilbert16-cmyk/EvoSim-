@@ -1318,15 +1318,6 @@ pub(crate) fn schedule_environmental_operations(
     ready
 }
 
-#[cfg(test)]
-pub(crate) fn resolve_environmental(
-    operation: EnvironmentalDisplacementOperation,
-    environment: &mut Environment,
-    ledger: &mut EnergyLedger,
-) -> bool {
-    resolve_environmental_diagnosed(operation, environment, ledger).is_ok()
-}
-
 pub(crate) fn resolve_environmental_diagnosed(
     operation: EnvironmentalDisplacementOperation,
     environment: &mut Environment,
@@ -1472,8 +1463,6 @@ pub(crate) fn resolve_environmental_diagnosed(
         return Err("invalid_resonance_state");
     };
     let resonance_funding_budget = trial.energy.required_external_input;
-    let compatible_resonance_before =
-        staged_resonance.compatible_energy(operation.reaction_frequency_cycles_per_day);
     let resonant_funding = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         resonance_funding_budget,
