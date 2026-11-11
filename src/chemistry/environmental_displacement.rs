@@ -1474,8 +1474,8 @@ pub(crate) fn resolve_environmental_diagnosed(
         .energy
         .physical_work
         .min(trial.energy.required_external_input);
-    let compatible_resonance_before = staged_resonance
-        .compatible_energy(operation.reaction_frequency_cycles_per_day);
+    let compatible_resonance_before =
+        staged_resonance.compatible_energy(operation.reaction_frequency_cycles_per_day);
     let resonant_work = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         resonance_work_budget,
