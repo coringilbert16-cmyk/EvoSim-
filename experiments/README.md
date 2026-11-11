@@ -30,9 +30,9 @@ nonnegative seeds, 30–3,600 seconds per seed, and a diagnostic interval of
 
 - Starting inventory: 1,280 intact two-constituent molecules (2,560 total
   constituents), with no free elemental resources.
-- The starting catalog contains the 16 distinct two-unit molecular structures
-  identified in the preceding five-seed experiment, distributed as evenly as
-  possible (80 molecules per type).
+- The starting catalog contains all 18 distinct two-unit molecular structures
+  identified across the preceding five-seed experiment, distributed as evenly
+  as possible (71 or 72 molecules per type).
 - Active elements: Carbon, Hydrogen, Nitrogen, Oxygen, Phosphorus, and Sulfur.
 - Water is excluded from the active inventory.
 - Ordinary reaction discovery and energy rules remain enabled and unchanged.
