@@ -1022,8 +1022,10 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     candidate,
                                 );
                                 let previous = accumulation.get(&key).copied().unwrap_or(0.0);
-                                let local_resonance_similarity = if let Some(world) =
-                                    local_resonance_world
+                                // Keep the expensive endpoint-spectrum query bounded to one actual
+                                // replacement contact per tick. Discovery rotates its field anchors.
+                                let local_resonance_similarity = if let Some(world) = local_resonance_world
+                                    .filter(|_| diagnostics.local_resonance_sample_attempts == 0)
                                 {
                                     diagnostics.local_resonance_sample_attempts = diagnostics
                                         .local_resonance_sample_attempts
