@@ -78,6 +78,45 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["reactions"]["diagnostic_totals"]["BREAK"]["committed"], 1)
         self.assertEqual(report["reactions"]["event_counts"]["BREAK"], 1)
 
+    def test_reports_local_resonance_sampling_for_all_three_reactions(self):
+        records = fixture_records()
+        records.append({
+            "event": "environmental_chemistry_tick",
+            "tick": 10,
+            "reaction_work": {
+                "break_discovery": {
+                    "local_resonance_sample_attempts": 2,
+                    "local_resonance_samples": 2,
+                    "local_resonance_unavailable": 0,
+                    "local_resonance_similarity_sum": 0.5,
+                    "local_resonance_similarity_max": 0.4,
+                },
+                "combine_search": {
+                    "local_resonance_sample_attempts": 1,
+                    "local_resonance_samples": 1,
+                    "local_resonance_unavailable": 0,
+                    "local_resonance_similarity_sum": 0.25,
+                    "local_resonance_similarity_max": 0.25,
+                },
+                "displacement_discovery": {
+                    "local_resonance_sample_attempts": 1,
+                    "local_resonance_samples": 0,
+                    "local_resonance_unavailable": 1,
+                    "local_resonance_similarity_sum": 0.0,
+                    "local_resonance_similarity_max": 0.0,
+                },
+            },
+        })
+        totals = analyze(records)["reactions"]["diagnostic_totals"]
+        self.assertEqual(totals["BREAK"]["local_resonance"]["successful_samples"], 2)
+        self.assertEqual(totals["BREAK"]["local_resonance"]["mean_similarity"], 0.25)
+        self.assertEqual(totals["COMBINE"]["local_resonance"]["mean_activation_multiplier"], 1.25)
+        self.assertEqual(totals["DISPLACEMENT"]["local_resonance"]["sample_attempts"], 1)
+        self.assertEqual(totals["DISPLACEMENT"]["local_resonance"]["successful_samples"], 0)
+        self.assertEqual(totals["DISPLACEMENT"]["local_resonance"]["unavailable_samples"], 1)
+        markdown = render_markdown(analyze(records))
+        self.assertIn("Local resonance activation sampling", markdown)
+
     def test_markdown_explicitly_lists_all_resources(self):
         markdown = render_markdown(analyze(fixture_records()))
         for name in CANONICAL_RESOURCES:
