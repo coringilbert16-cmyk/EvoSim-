@@ -79,6 +79,40 @@ pub(crate) struct PreparedChemicalBreakEnergy {
     pub(crate) heat_dissipated: f64,
 }
 
+/// Stored-material action BREAK is not a reaction-activated chemical event.
+/// It pays only the recorded structural dissociation potential, so it must
+/// not pass through the positive activation-signal gate used by chemistry.
+fn prepare_stored_bond_break_energy(
+    usable_energy: f64,
+    ledger: &EnergyLedger,
+    bond_energy: f64,
+) -> Option<PreparedChemicalBreakEnergy> {
+    if !usable_energy.is_finite()
+        || usable_energy < 0.0
+        || !bond_energy.is_finite()
+        || bond_energy < 0.0
+    {
+        return None;
+    }
+    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
+        0.0,
+        bond_energy,
+        0.0,
+        0.0,
+    )?
+    .settlement_transaction(EnergyReason::Break)?;
+    let mut prepared_ledger = *ledger;
+    let mut prepared_usable_energy = usable_energy;
+    if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
+        return None;
+    }
+    Some(PreparedChemicalBreakEnergy {
+        usable_energy: prepared_usable_energy,
+        ledger: prepared_ledger,
+        heat_dissipated: 0.0,
+    })
+}
+
 /// Validate and stage chemical BREAK energy without mutating the organism or ledger.
 ///
 /// This is intentionally independent of the physical source mutation so the same
@@ -917,17 +951,7 @@ impl Simulation {
         }
 
         let before_energy = organism.usable_energy;
-        if prepare_chemical_break_energy_with_structural_potentials(
-            before_energy,
-            ledger,
-            target.bond_energy,
-            0.0,
-            target.bond_energy,
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        )
+        if prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy)
         .is_none()
         {
             organism.active_transformation_id = None;
@@ -1281,17 +1305,7 @@ pub(crate) fn resolve_transformation(
         return;
     }
     let before_energy = organism.usable_energy;
-    let Some(prepared_break_energy) = prepare_chemical_break_energy_with_structural_potentials(
-        before_energy,
-        ledger,
-        target.bond_energy,
-        0.0,
-        target.bond_energy,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-    ) else {
+    let Some(prepared_break_energy) = prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
