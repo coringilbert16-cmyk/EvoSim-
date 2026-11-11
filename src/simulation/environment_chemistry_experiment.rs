@@ -11,8 +11,29 @@ use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
-const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 1_200;
-const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
+const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
+
+// Two-constituent structures previously observed as reaction-created products.
+// Every type receives an equal starting share; the final remainder is assigned
+// deterministically after shuffling so no molecule type is privileged.
+const KNOWN_TWO_UNIT_MOLECULES: [(&str, &str); 16] = [
+    ("Hydrogen", "Sulfur"),
+    ("Hydrogen", "Oxygen"),
+    ("Carbon", "Hydrogen"),
+    ("Oxygen", "Phosphorus"),
+    ("Carbon", "Oxygen"),
+    ("Phosphorus", "Sulfur"),
+    ("Nitrogen", "Oxygen"),
+    ("Sulfur", "Sulfur"),
+    ("Carbon", "Sulfur"),
+    ("Hydrogen", "Nitrogen"),
+    ("Carbon", "Phosphorus"),
+    ("Carbon", "Carbon"),
+    ("Oxygen", "Sulfur"),
+    ("Carbon", "Nitrogen"),
+    ("Nitrogen", "Sulfur"),
+    ("Phosphorus", "Phosphorus"),
+];
 
 /// Build the seeded molecule using the same eligibility and bond-energy path as
 /// an ordinary COMBINE operation, so environmental BREAK sees realistic bonds.
@@ -251,30 +272,26 @@ fn seed_randomized_molecular_resources(
         "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
-    let mut identities = resource_names.clone();
-    let single_resource_count = if include_molecules {
-        ENVIRONMENT_SINGLE_RESOURCE_COUNT
+    let objects: Vec<(Vec<String>, bool)> = if include_molecules {
+        let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
+        let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
+        let remainder = ENVIRONMENT_MOLECULE_COUNT % KNOWN_TWO_UNIT_MOLECULES.len();
+        for (index, (left, right)) in KNOWN_TWO_UNIT_MOLECULES.iter().enumerate() {
+            let count = base_share + usize::from(index < remainder);
+            molecules.extend(
+                std::iter::repeat_n((vec![(*left).into(), (*right).into()], true), count),
+            );
+        }
+        molecules.shuffle(&mut rng);
+        molecules
     } else {
-        ENVIRONMENT_OBJECT_COUNT
+        let mut identities = resource_names.clone();
+        while identities.len() < ENVIRONMENT_OBJECT_COUNT {
+            identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+        }
+        identities.shuffle(&mut rng);
+        identities.into_iter().map(|name| (vec![name], false)).collect()
     };
-    let molecule_count = if include_molecules {
-        ENVIRONMENT_MOLECULE_COUNT
-    } else {
-        0
-    };
-    while identities.len() < single_resource_count {
-        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
-    }
-    identities.shuffle(&mut rng);
-    let mut objects: Vec<(Vec<String>, bool)> = identities
-        .into_iter()
-        .map(|name| (vec![name], false))
-        .collect();
-    for _ in 0..(molecule_count / 2) {
-        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
-        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
-    }
-    objects.shuffle(&mut rng);
 
     let pile_count = rng.gen_range(3..=10);
     let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
