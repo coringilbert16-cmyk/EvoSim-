@@ -158,6 +158,42 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
                 ) for key in keys
             }
 
+    def local_resonance_totals(path: str) -> dict[str, Any]:
+        attempts = samples = unavailable = 0
+        similarity_sum = 0.0
+        similarity_max = 0.0
+        for tick_record in ticks:
+            work = tick_record.get("reaction_work") or {}
+            section = work.get(path) or {}
+            attempts += int(section.get("local_resonance_sample_attempts", 0) or 0)
+            samples += int(section.get("local_resonance_samples", 0) or 0)
+            unavailable += int(section.get("local_resonance_unavailable", 0) or 0)
+            value_sum = _number(section.get("local_resonance_similarity_sum"))
+            value_max = _number(section.get("local_resonance_similarity_max"))
+            if value_sum is not None:
+                similarity_sum += float(value_sum)
+            if value_max is not None:
+                similarity_max = max(similarity_max, float(value_max))
+        mean_similarity = similarity_sum / samples if samples else None
+        return {
+            "sample_attempts": attempts,
+            "successful_samples": samples,
+            "unavailable_samples": unavailable,
+            "similarity_sum": similarity_sum,
+            "mean_similarity": mean_similarity,
+            "maximum_similarity": similarity_max if samples else None,
+            "mean_activation_multiplier": 1.0 + mean_similarity
+                if mean_similarity is not None else None,
+        }
+
+    local_resonance = {
+        "BREAK": local_resonance_totals("break_discovery"),
+        "COMBINE": local_resonance_totals("combine_search"),
+        "DISPLACEMENT": local_resonance_totals("displacement_discovery"),
+    }
+    for kind in ("BREAK", "COMBINE", "DISPLACEMENT"):
+        reaction_totals.setdefault(kind, {})["local_resonance"] = local_resonance[kind]
+
     # Optional persistent molecule lifecycle records are emitted by Layer B.
     # Older Layer A logs remain valid and simply report no lifecycle coverage.
     lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
@@ -361,6 +397,20 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- {key}: {value}")
         lines.append("")
     lines += [
+        "## Local resonance activation sampling",
+        "",
+        "| Reaction | Attempts | Successful | Unavailable | Mean similarity | Max similarity | Mean multiplier |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name in ("BREAK", "COMBINE", "DISPLACEMENT"):
+        sample = report["reactions"]["diagnostic_totals"][name]["local_resonance"]
+        lines.append(
+            f"| {name} | {sample['sample_attempts']} | {sample['successful_samples']} | "
+            f"{sample['unavailable_samples']} | {sample['mean_similarity']} | "
+            f"{sample['maximum_similarity']} | {sample['mean_activation_multiplier']} |"
+        )
+    lines += [
+        "",
         "## Energy accounting",
         "",
         f"- First snapshot residual: {report['energy']['first_balance_residual']}",
