@@ -1756,9 +1756,9 @@ mod tests {
             / catalog.len() as f64
     }
 
-    /// Exhaustive preflight census for every ordered anchor/displaced/incoming
-    /// triple among the six active resources. This separates energy feasibility
-    /// from the production trial builder's stronger-replacement restriction.
+    /// Exhaustive legacy-preflight census for every ordered anchor/displaced/incoming
+    /// triple among the six active resources. Runtime displacement uses recorded
+    /// bond allocations and settles the signed change on the complete trial graph.
     #[test]
     fn non_water_displacement_preflight_matrix_classifies_all_ordered_triples() {
         let catalog = default_catalog()
@@ -1795,7 +1795,7 @@ mod tests {
                             weaker_funded_replacements += 1;
                         }
                         println!(
-                            "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=true|activated={}|old_energy={:.9}|replacement_energy={:.9}|external_input={:.9}|production_stronger_gate={}",
+                            "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=true|activated={}|old_energy={:.9}|replacement_energy={:.9}|external_input={:.9}|replacement_stronger_than_old={}",
                             anchor_resource.name, displaced_resource.name, incoming_resource.name,
                             preflight.is_activated(),
                             preflight.old_bond_energy,
@@ -1821,7 +1821,7 @@ mod tests {
         assert!(stronger_replacements > 0);
         assert!(
             weaker_funded_replacements > 0,
-            "the preflight model should expose energy-funded weaker replacements even though the production trial gate rejects them"
+            "the preflight model should expose weaker replacements that require legitimate external energy"
         );
     }
 
