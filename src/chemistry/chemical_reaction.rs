@@ -2728,6 +2728,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal,
+            activation_barrier: disruption_cost,
             disruption_cost,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
