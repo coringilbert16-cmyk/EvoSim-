@@ -126,11 +126,15 @@ fn obstacle_for(
     catalog: &[BaseResource],
     height: f64,
 ) -> Option<Obstacle> {
+    if !height.is_finite() || height <= 0.0 {
+        return None;
+    }
     let placements = material.placements.as_ref()?;
     let mut rigid_parts = Vec::new();
     let mut total_rigid_weight = 0.0;
     let mut weighted_x = 0.0;
-    let mut weighted_y = 0.0;
+    let mut weighted_y_sin = 0.0;
+    let mut weighted_y_cos = 0.0;
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         if resource.physical_state != PhysicalState::Rigid {
@@ -141,15 +145,18 @@ fn obstacle_for(
         }
         let placement = placements.get(index)?;
         total_rigid_weight += *amount;
+        let y_angle = std::f64::consts::TAU * placement.y / height;
         weighted_x += placement.x * *amount;
-        weighted_y += placement.y * *amount;
+        weighted_y_sin += y_angle.sin() * *amount;
+        weighted_y_cos += y_angle.cos() * *amount;
         rigid_parts.push((placement, &resource.shape.form));
     }
     if !total_rigid_weight.is_finite() || total_rigid_weight <= 0.0 {
         return None;
     }
     let x = weighted_x / total_rigid_weight;
-    let y = weighted_y / total_rigid_weight;
+    let y_angle = weighted_y_sin.atan2(weighted_y_cos).rem_euclid(std::f64::consts::TAU);
+    let y = y_angle * height / std::f64::consts::TAU;
     let mut radius: f64 = 0.5;
     for (placement, form) in rigid_parts {
         radius = radius.max(
@@ -847,6 +854,39 @@ mod tests {
         assert!(
             obstacle_for(0, 0, &fluid_carbon, &fluid_catalog, 100.0).is_none(),
             "fluid-state material should not become a rigid flow obstacle"
+        );
+
+        fluid_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Oxygen")
+            .expect("oxygen catalog entry")
+            .physical_state = PhysicalState::Fluid;
+        let mixed_material = PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Oxygen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 100.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &fluid_catalog,
+        )
+        .expect("mixed rigid/fluid geometry should realize");
+        let mixed_obstacle = obstacle_for(0, 0, &mixed_material, &fluid_catalog, 100.0)
+            .expect("rigid constituent should remain an obstacle");
+        assert!((mixed_obstacle.x - 10.0).abs() < 1e-9);
+        assert!(
+            mixed_obstacle.radius < 10.0,
+            "distant fluid constituents must not inflate the rigid obstacle footprint"
         );
     }
 
