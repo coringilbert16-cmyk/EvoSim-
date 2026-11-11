@@ -28,9 +28,15 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             "--dispersion" => {
                 dispersion = match args.next().as_deref() {
-                    Some("randomized") => crate::environment_chemistry_experiment::DispersionMode::Randomized,
-                    Some("uniform") => crate::environment_chemistry_experiment::DispersionMode::Uniform,
-                    Some("clustered") => crate::environment_chemistry_experiment::DispersionMode::Clustered,
+                    Some("randomized") => {
+                        crate::environment_chemistry_experiment::DispersionMode::Randomized
+                    }
+                    Some("uniform") => {
+                        crate::environment_chemistry_experiment::DispersionMode::Uniform
+                    }
+                    Some("clustered") => {
+                        crate::environment_chemistry_experiment::DispersionMode::Clustered
+                    }
                     Some(value) => panic!("unsupported chemistry dispersion: {value}"),
                     None => panic!("--dispersion requires randomized, uniform, or clustered"),
                 };
