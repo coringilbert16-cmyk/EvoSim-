@@ -546,6 +546,7 @@ fn chemical_step(
     updated_keys: &mut BTreeSet<String>,
     operations: &mut Vec<EnvironmentalCombineOperation>,
     local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
+    local_resonance_sampled_this_tick: &mut bool,
     tick: u64,
     diagnostics: &mut crate::state::EnvironmentalCombineSearchDiagnostics,
 ) {
@@ -1020,6 +1021,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                             &mut updated_keys,
                             &mut operations,
                             local_resonance_world,
+                            &mut local_resonance_sampled_this_tick,
                             tick,
                             diagnostics,
                         );
@@ -1538,6 +1540,7 @@ mod tests {
                         &mut updated,
                         &mut operations,
                         None,
+                        &mut false,
                         simulation.tick,
                         &mut resonance_diagnostics,
                     );
@@ -1709,6 +1712,7 @@ mod tests {
                     &mut updated,
                     &mut operations,
                     None,
+                    &mut false,
                     0,
                     &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                 );
@@ -2216,6 +2220,7 @@ mod tests {
                         &mut updated,
                         &mut operations,
                         None,
+                        &mut false,
                         0,
                         &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                     );
@@ -3169,6 +3174,7 @@ mod tests {
             &mut direct_updated,
             &mut direct_operations,
             None,
+            &mut false,
             0,
             &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
         );
