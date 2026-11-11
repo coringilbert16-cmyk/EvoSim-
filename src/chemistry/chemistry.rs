@@ -317,8 +317,8 @@ mod tests {
             }
         }
         assert_eq!(
-            pair_count, 28,
-            "seven resources yield 28 unordered pairs including self-pairs"
+            pair_count, 21,
+            "six active resources yield 21 unordered pairs including self-pairs"
         );
     }
 
