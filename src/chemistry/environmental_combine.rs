@@ -642,11 +642,11 @@ fn chemical_step(
     // Bound full endpoint-spectrum evaluation to one actual contact per tick.
     // The environmental scan itself rotates its anchors and materials each tick.
     let local_resonance_similarity =
-        if let Some(world) = local_resonance_world.filter(|_| !local_resonance_sampled_this_tick) {
+        if let Some(world) = local_resonance_world.filter(|_| !*local_resonance_sampled_this_tick) {
             diagnostics.local_resonance_sample_attempts = diagnostics
                 .local_resonance_sample_attempts
                 .saturating_add(1);
-            local_resonance_sampled_this_tick = true;
+            *local_resonance_sampled_this_tick = true;
             let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
                 a,
                 crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
