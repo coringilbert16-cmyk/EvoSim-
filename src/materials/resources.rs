@@ -672,26 +672,6 @@ pub fn combine_materials(inputs: &[Material]) -> Material {
     result
 }
 
-/// Convert cohesion into boundary permeability using Water and Carbon as the
-/// physical endpoints. Water is fully permeable; Carbon is a hard wall.
-pub fn permeability_from_cohesion(cohesion: f64, catalog: &[BaseResource]) -> f64 {
-    let water = catalog
-        .iter()
-        .find(|resource| resource.name == "Water")
-        .map(|resource| resource.properties.cohesion);
-    let carbon = catalog
-        .iter()
-        .find(|resource| resource.name == "Carbon")
-        .map(|resource| resource.properties.cohesion);
-    let (Some(water), Some(carbon)) = (water, carbon) else {
-        return 0.0;
-    };
-    if !cohesion.is_finite() || !water.is_finite() || !carbon.is_finite() || carbon <= water {
-        return 0.0;
-    }
-    ((carbon - cohesion) / (carbon - water)).clamp(0.0, 1.0)
-}
-
 pub fn property_ranges(catalog: &[BaseResource]) -> ResourceProperties {
     if catalog.is_empty() {
         return ResourceProperties {
@@ -1009,14 +989,6 @@ mod shape_tests {
         assert_eq!(find("Hydrogen").physical_state, PhysicalState::Rigid);
     }
 
-    #[test]
-    fn cohesion_permeability_uses_water_and_carbon_as_endpoints() {
-        let catalog = default_catalog();
-        assert!((permeability_from_cohesion(0.0, &catalog) - 1.0).abs() < 1e-12);
-        assert!((permeability_from_cohesion(0.95, &catalog) - 0.0).abs() < 1e-12);
-        assert!((permeability_from_cohesion(0.475, &catalog) - 0.5).abs() < 1e-12);
-        assert_eq!(permeability_from_cohesion(f64::NAN, &catalog), 0.0);
-    }
 
     #[test]
     fn resource_edge_lengths_follow_the_shared_connection_scale() {
