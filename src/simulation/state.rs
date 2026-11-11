@@ -689,11 +689,23 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.activation_updates = self
             .activation_updates
             .saturating_add(tick.activation_updates);
-        self.local_resonance_sample_attempts = self.local_resonance_sample_attempts.saturating_add(tick.local_resonance_sample_attempts);
-        self.local_resonance_samples = self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
-        self.local_resonance_unavailable = self.local_resonance_unavailable.saturating_add(tick.local_resonance_unavailable);
-        if tick.local_resonance_similarity_sum.is_finite() { self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum; }
-        if tick.local_resonance_similarity_max.is_finite() { self.local_resonance_similarity_max = self.local_resonance_similarity_max.max(tick.local_resonance_similarity_max); }
+        self.local_resonance_sample_attempts = self
+            .local_resonance_sample_attempts
+            .saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self
+            .local_resonance_samples
+            .saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self
+            .local_resonance_unavailable
+            .saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() {
+            self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
+        }
+        if tick.local_resonance_similarity_max.is_finite() {
+            self.local_resonance_similarity_max = self
+                .local_resonance_similarity_max
+                .max(tick.local_resonance_similarity_max);
+        }
         self.activation_below_threshold = self
             .activation_below_threshold
             .saturating_add(tick.activation_below_threshold);
