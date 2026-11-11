@@ -11,7 +11,6 @@ use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
-const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 0;
 const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
 
 // Two-constituent structures previously observed as reaction-created products.
@@ -831,7 +830,7 @@ mod tests {
             .sum::<f64>();
         assert!(
             (total_material
-                - (ENVIRONMENT_SINGLE_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT) as f64)
+                - (2 * ENVIRONMENT_MOLECULE_COUNT) as f64)
                 .abs()
                 < 1e-6
         );
