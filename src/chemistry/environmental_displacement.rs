@@ -2561,8 +2561,7 @@ mod tests {
                         0.0,
                     )
                     .expect("every non-Water unlike replacement must have finite preflight");
-                    let is_stronger =
-                        preflight.replacement_bond_energy > preflight.old_bond_energy;
+                    let is_stronger = preflight.replacement_bond_energy > preflight.old_bond_energy;
                     let funded = preflight.can_commit(preflight.energy.required_external_input);
                     assert!(preflight.is_activated());
                     assert!(funded);
