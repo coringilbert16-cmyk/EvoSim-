@@ -2637,8 +2637,13 @@ mod tests {
     fn break_activation_uses_realized_integrity_and_endpoint_reactivity() {
         let simulation = crate::state::Simulation::new(923, 10.0);
         let organism = &simulation.organisms[0];
-        let bond = *organism.structure.bonds.first().expect("seed structure has bonds");
-        let baselines = crate::resources::ResourceBaselines::from_catalog(&simulation.environment.catalog);
+        let bond = *organism
+            .structure
+            .bonds
+            .first()
+            .expect("seed structure has bonds");
+        let baselines =
+            crate::resources::ResourceBaselines::from_catalog(&simulation.environment.catalog);
         let barrier = bond_activation_barrier(
             bond,
             &organism.structure,
@@ -2646,10 +2651,20 @@ mod tests {
             baselines.reactivity,
         )
         .expect("valid realized endpoints should produce a BREAK barrier");
-        let unit_a = organism.structure.unit_index(bond.endpoint_a.constituent_id).unwrap();
-        let unit_b = organism.structure.unit_index(bond.endpoint_b.constituent_id).unwrap();
-        let a = organism.structure.units[unit_a].properties(&simulation.environment.catalog).unwrap();
-        let b = organism.structure.units[unit_b].properties(&simulation.environment.catalog).unwrap();
+        let unit_a = organism
+            .structure
+            .unit_index(bond.endpoint_a.constituent_id)
+            .unwrap();
+        let unit_b = organism
+            .structure
+            .unit_index(bond.endpoint_b.constituent_id)
+            .unwrap();
+        let a = organism.structure.units[unit_a]
+            .properties(&simulation.environment.catalog)
+            .unwrap();
+        let b = organism.structure.units[unit_b]
+            .properties(&simulation.environment.catalog)
+            .unwrap();
         let expected = crate::chemistry::activation_barrier_from_bond_properties(
             bond.strength,
             a.reactivity,
