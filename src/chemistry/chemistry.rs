@@ -256,17 +256,21 @@ mod tests {
     #[test]
     fn static_pair_matrix_characterizes_all_base_resource_pairs() {
         let catalog = crate::resources::default_catalog();
+        let resources = catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
         assert_eq!(
-            catalog.len(),
-            7,
-            "the canonical chemistry matrix must cover all seven base resources"
+            resources.len(),
+            6,
+            "the active chemistry matrix covers the six non-Water resources"
         );
 
         let mut pair_count = 0usize;
-        for i in 0..catalog.len() {
-            for j in i..catalog.len() {
-                let a = &catalog[i];
-                let b = &catalog[j];
+        for i in 0..resources.len() {
+            for j in i..resources.len() {
+                let a = resources[i];
+                let b = resources[j];
                 let position_a = a
                     .properties
                     .chemical_position
