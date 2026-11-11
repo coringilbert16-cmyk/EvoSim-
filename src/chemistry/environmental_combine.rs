@@ -1594,8 +1594,11 @@ mod tests {
                         crate::resources::ResourceBaselines::from_catalog(&catalog).reactivity,
                     )
                     .unwrap_or(f64::NAN);
-                    let bond_energy =
-                        crate::combine::intrinsic_bond_potential(properties_a, properties_b, strength);
+                    let bond_energy = crate::combine::intrinsic_bond_potential(
+                        properties_a,
+                        properties_b,
+                        strength,
+                    );
                     println!(
                         "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|activation_ticks={:?}|outcome={}|bond_strength={:.9}|break_barrier={:.9}|bond_energy={:.9}",
                         resource_a.name,
