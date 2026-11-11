@@ -4,12 +4,6 @@ name: Rust
 
 on:
   workflow_dispatch:
-    inputs:
-      compare_seeds:
-        description: "Run a second 60-second baseline only for an explicit side-by-side seed comparison."
-        required: false
-        default: false
-        type: boolean
   push:
     branches: [main]
   pull_request:
@@ -78,28 +72,6 @@ jobs:
           python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-organization.json \
             --markdown-out environmental-chemistry-organization.md
-      - name: Run matched environmental chemistry control (local activation disabled)
-        if: success() && github.event_name == 'pull_request' && github.event.pull_request.number == 344
-        timeout-minutes: 3
-        env:
-          EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION: "1"
-        run: |
-          set -euo pipefail
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 60 \
-            --seed 42 \
-            --diagnostics environmental-chemistry-local-resonance-disabled.jsonl \
-            --diagnostic-interval 100
-      - name: Upload matched environmental chemistry control
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 344 && hashFiles('environmental-chemistry-local-resonance-disabled.jsonl') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: environmental-chemistry-local-resonance-disabled
-          path: environmental-chemistry-local-resonance-disabled.jsonl
-          if-no-files-found: error
-          retention-days: 14
       - name: Upload default environmental chemistry baseline
         if: always() && hashFiles('environmental-chemistry-default-baseline.jsonl') != ''
         uses: actions/upload-artifact@v4
@@ -111,43 +83,6 @@ jobs:
             environmental-chemistry-analysis.md
             environmental-chemistry-organization.json
             environmental-chemistry-organization.md
-          if-no-files-found: error
-          retention-days: 14
-      - name: Run second environmental chemistry baseline (seed 43)
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
-        timeout-minutes: 3
-        run: |
-          set -euo pipefail
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 60 \
-            --seed 43 \
-            --diagnostics environmental-chemistry-seed-43.jsonl \
-            --diagnostic-interval 100
-      - name: Analyze second environmental chemistry baseline
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
-        run: |
-          python3 tools/chemistry_analyzer.py environmental-chemistry-seed-43.jsonl \
-            --json-out environmental-chemistry-seed-43-analysis.json \
-            --markdown-out environmental-chemistry-seed-43-analysis.md
-      - name: Analyze seed 43 chemical organization
-        if: success() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true
-        run: |
-          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-seed-43.jsonl \
-            --json-out environmental-chemistry-seed-43-organization.json \
-            --markdown-out environmental-chemistry-seed-43-organization.md
-      - name: Upload second environmental chemistry baseline
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.compare_seeds == true && hashFiles('environmental-chemistry-seed-43.jsonl') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: environmental-chemistry-seed-43
-          path: |
-            environmental-chemistry-seed-43.jsonl
-            environmental-chemistry-seed-43-analysis.json
-            environmental-chemistry-seed-43-analysis.md
-            environmental-chemistry-seed-43-organization.json
-            environmental-chemistry-seed-43-organization.md
           if-no-files-found: error
           retention-days: 14
       - name: Energy accounting (focused tests)
