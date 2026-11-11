@@ -641,11 +641,12 @@ fn chemical_step(
     // Bound full endpoint-spectrum evaluation to one actual contact per tick.
     // The environmental scan itself rotates its anchors and materials each tick.
     let local_resonance_similarity = if let Some(world) =
-        local_resonance_world.filter(|_| diagnostics.local_resonance_sample_attempts == 0)
+        local_resonance_world.filter(|_| !local_resonance_sampled_this_tick)
     {
         diagnostics.local_resonance_sample_attempts = diagnostics
             .local_resonance_sample_attempts
             .saturating_add(1);
+        local_resonance_sampled_this_tick = true;
         let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
             a,
             crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
@@ -772,6 +773,8 @@ pub(crate) fn accumulate_environmental(
     tick: u64,
     remaining_discovery_work: &mut usize,
 ) -> Vec<EnvironmentalCombineOperation> {
+    // This budget is per invocation/tick; diagnostics accumulate across the run.
+    let mut local_resonance_sampled_this_tick = false;
     let mut diagnostics = crate::state::EnvironmentalCombineSearchDiagnostics::default();
     accumulate_environmental_with_diagnostics(
         environment,
