@@ -155,13 +155,13 @@ fn obstacle_for(
         return None;
     }
     let x = weighted_x / total_rigid_weight;
-    let y_angle = weighted_y_sin.atan2(weighted_y_cos).rem_euclid(std::f64::consts::TAU);
+    let y_angle = weighted_y_sin
+        .atan2(weighted_y_cos)
+        .rem_euclid(std::f64::consts::TAU);
     let y = y_angle * height / std::f64::consts::TAU;
     let mut radius: f64 = 0.5;
     for (placement, form) in rigid_parts {
-        radius = radius.max(
-            (placement.x - x).hypot(placement.y - y) + shape_radius(form),
-        );
+        radius = radius.max((placement.x - x).hypot(placement.y - y) + shape_radius(form));
     }
     Some(Obstacle {
         source_cell,
