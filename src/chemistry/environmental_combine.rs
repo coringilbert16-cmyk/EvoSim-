@@ -1706,6 +1706,9 @@ mod tests {
                     &mut accumulation,
                     &mut updated,
                     &mut operations,
+                    None,
+                    0,
+                    &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                 );
                 if !accumulation.is_empty() || !operations.is_empty() {
                     chemical_progress += 1;
@@ -2210,6 +2213,9 @@ mod tests {
                         &mut accumulation,
                         &mut updated,
                         &mut operations,
+                        None,
+                        0,
+                        &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                     );
                     if !accumulation.is_empty() || !operations.is_empty() {
                         fixture = Some((base, resource.name.clone(), original_b_energy));
@@ -2702,6 +2708,9 @@ mod tests {
                     &mut accumulation,
                     &mut updated,
                     &mut operations,
+                    None,
+                    0,
+                    &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                 );
                 let outcome = if !operations.is_empty() {
                     chemical_progress += 1;
@@ -3811,6 +3820,9 @@ mod tests {
             &mut accumulation,
             &mut updated_keys,
             &mut operations,
+            None,
+            0,
+            &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
         );
         assert_eq!(
             chemistry_library.len(),
