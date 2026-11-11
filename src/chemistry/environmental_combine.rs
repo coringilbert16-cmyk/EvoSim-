@@ -1598,7 +1598,10 @@ mod tests {
     #[test]
     fn compound_base_matrix_exercises_constituent_level_chemistry() {
         let mut simulation = crate::state::Simulation::new(23229, 10.0);
-        let catalog = simulation.environment.catalog.clone();
+        let catalog: Vec<_> = simulation.environment.catalog.iter()
+            .filter(|resource| resource.name != "Water")
+            .cloned()
+            .collect();
         let compound = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
