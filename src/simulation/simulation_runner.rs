@@ -44,11 +44,19 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             "--starting-mixture" => {
                 starting_mixture = match args.next().as_deref() {
-                    Some("baseline") => crate::environment_chemistry_experiment::StartingMixture::Baseline,
-                    Some("high-bonded") => crate::environment_chemistry_experiment::StartingMixture::HighBonded,
-                    Some("mixed-stability") => crate::environment_chemistry_experiment::StartingMixture::MixedStability,
+                    Some("baseline") => {
+                        crate::environment_chemistry_experiment::StartingMixture::Baseline
+                    }
+                    Some("high-bonded") => {
+                        crate::environment_chemistry_experiment::StartingMixture::HighBonded
+                    }
+                    Some("mixed-stability") => {
+                        crate::environment_chemistry_experiment::StartingMixture::MixedStability
+                    }
                     Some(value) => panic!("unsupported chemistry starting mixture: {value}"),
-                    None => panic!("--starting-mixture requires baseline, high-bonded, or mixed-stability"),
+                    None => panic!(
+                        "--starting-mixture requires baseline, high-bonded, or mixed-stability"
+                    ),
                 };
             }
             "--seed" => {
@@ -234,7 +242,9 @@ fn run_environment_chemistry_experiment(
     diagnostic_interval: u64,
 ) {
     let fixture = crate::environment_chemistry_experiment::build_with_dispersion_and_mixture(
-        seed, dispersion, starting_mixture,
+        seed,
+        dispersion,
+        starting_mixture,
     );
     let mut simulation = fixture.simulation;
     simulation.record_local_resonance_diagnostics = true;
