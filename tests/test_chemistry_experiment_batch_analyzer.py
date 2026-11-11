@@ -13,8 +13,9 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "requested_duration_seconds": 300,
             "planned_ticks": 3000,
             "initial_physical_material_count": 1280,
-            "initial_independent_resource_count": 1200,
-            "initial_molecule_count": 80,
+            "initial_independent_resource_count": 0,
+            "initial_molecule_count": 1280,
+            "initial_constituent_count": 2560,
         },
         "resource_coverage": {
             "excluded_resources": ["Water"] if water_excluded else [],
