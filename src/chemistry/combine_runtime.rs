@@ -292,14 +292,24 @@ fn evaluate_candidate(
     } else {
         reactant_structural_energy - bond_energy
     };
-    let required = energy_requirement_with_rounding(
-        bond_energy,
-        work,
-        transient_fluid_bond,
-        reactant_structural_energy,
-        product_structural_energy,
-        pair_potential.is_some(),
-    )?;
+    let required = if pair_potential.is_some() {
+        energy_requirement_with_rounding(
+            bond_energy,
+            work,
+            transient_fluid_bond,
+            reactant_structural_energy,
+            product_structural_energy,
+            true,
+        )?
+    } else {
+        energy_requirement(
+            bond_energy,
+            work,
+            transient_fluid_bond,
+            reactant_structural_energy,
+            product_structural_energy,
+        )?
+    };
     Some((evaluation, work, investment, required))
 }
 
@@ -646,14 +656,24 @@ fn form_bond_from_candidate_diagnostic(
         .ok_or("COMBINE reactant structural energy is invalid")?;
     let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
-    let transaction = combine_energy_transaction_with_rounding(
-        bond_energy,
-        work,
-        fluid_pair,
-        reactant_structural_energy,
-        product_structural_energy,
-        pair_potential.is_some(),
-    )
+    let transaction = if pair_potential.is_some() {
+        combine_energy_transaction_with_rounding(
+            bond_energy,
+            work,
+            fluid_pair,
+            reactant_structural_energy,
+            product_structural_energy,
+            true,
+        )
+    } else {
+        combine_energy_transaction(
+            bond_energy,
+            work,
+            fluid_pair,
+            reactant_structural_energy,
+            product_structural_energy,
+        )
+    }
     .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         #[cfg(test)]
