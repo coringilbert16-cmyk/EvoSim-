@@ -1517,6 +1517,8 @@ mod tests {
                     let mut accumulation = BTreeMap::new();
                     let mut updated = BTreeSet::new();
                     let mut operations = Vec::new();
+                    let mut resonance_diagnostics =
+                        crate::state::EnvironmentalCombineSearchDiagnostics::default();
                     chemical_step(
                         &simulation.environment,
                         &mut simulation.chemistry_library,
@@ -1533,6 +1535,9 @@ mod tests {
                         &mut accumulation,
                         &mut updated,
                         &mut operations,
+                        None,
+                        simulation.tick,
+                        &mut resonance_diagnostics,
                     );
                     let outcome = if !operations.is_empty() {
                         "activated"
