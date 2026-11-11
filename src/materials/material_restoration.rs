@@ -157,10 +157,9 @@ pub(crate) fn restore_material(
         let id_b = trial.physical_id(unit_b)?;
         let a = trial.units[unit_a].properties(catalog)?;
         let b = trial.units[unit_b].properties(catalog)?;
-        let strength = crate::combine::bond_strength(a, b);
-        if !strength.is_finite() {
+        let Some(strength) = crate::combine::bond_integrity(a, b) else {
             reject!();
-        }
+        };
         let bond = Bond {
             endpoint_a: BondEndpoint::new(id_a, connection.endpoint_a),
             endpoint_b: BondEndpoint::new(id_b, connection.endpoint_b),
