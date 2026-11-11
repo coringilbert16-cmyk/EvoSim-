@@ -176,11 +176,7 @@ pub fn experimental_bond_strength(surplus: f64) -> f64 {
 /// Reactivity is deliberately excluded and is applied only when deriving an
 /// activation barrier for a particular BREAK event.
 pub fn bond_integrity(a: ResourceProperties, b: ResourceProperties) -> Option<f64> {
-    if !a.cohesion.is_finite()
-        || !b.cohesion.is_finite()
-        || a.cohesion < 0.0
-        || b.cohesion < 0.0
-    {
+    if !a.cohesion.is_finite() || !b.cohesion.is_finite() || a.cohesion < 0.0 || b.cohesion < 0.0 {
         return None;
     }
     Some((a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt())
