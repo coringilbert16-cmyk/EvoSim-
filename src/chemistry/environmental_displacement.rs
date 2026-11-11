@@ -1241,11 +1241,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                             .saturating_add(1);
                                     }
                                 }
-                                if let (
-                                    Some(stored),
-                                    Some(expected),
-                                    Some(abs_error),
-                                ) = (
+                                if let (Some(stored), Some(expected), Some(abs_error)) = (
                                     trial_diagnostic.old_bond_energy_stored,
                                     trial_diagnostic.old_bond_energy_expected,
                                     trial_diagnostic.old_bond_energy_abs_error,
