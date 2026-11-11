@@ -239,8 +239,8 @@ fn seed_randomized_molecular_resources(
     width: f64,
     height: f64,
     include_molecules: bool,
-,
-    dispersion: DispersionMode) -> Vec<usize> {
+    dispersion: DispersionMode,
+) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
         .iter()
