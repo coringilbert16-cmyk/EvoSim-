@@ -1420,6 +1420,10 @@ mod tests {
             .environment
             .catalog
             .retain(|resource| resource.name != "Water");
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let catalog = simulation.environment.catalog.clone();
         // Preserve Water's catalog and historical implementation, but do not
         // include it in current pair-feasibility experiments.
