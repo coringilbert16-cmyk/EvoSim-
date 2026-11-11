@@ -347,7 +347,7 @@ fn build_displacement_trial_with_activation_status(
     };
     let disruption_work = preflight.disruption_work;
     let total_work = formation_work + disruption_work;
-    let Some(energy) = ReactionEnergyBalance::calculate(
+    let Some(energy) = ReactionEnergyBalance::calculate_conservative(
         reactant_structural,
         product_structural,
         total_work,
@@ -405,7 +405,7 @@ pub(crate) fn commit_displacement_trial(
         return None;
     }
 
-    let transaction = trial.energy.settlement_transaction(EnergyReason::Combine)?;
+    let transaction = trial.energy.settlement_transaction_conservative(EnergyReason::Combine)?;
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = *usable_energy;
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
@@ -492,7 +492,7 @@ pub(crate) fn evaluate_displacement_preflight(
     }
     // Structural potential is negative for a retained stable bond. Replacing
     // one bond with another is evaluated as one complete pre/post-state change.
-    let energy = ReactionEnergyBalance::calculate(
+    let energy = ReactionEnergyBalance::calculate_conservative(
         -old_bond_energy,
         -replacement_bond_energy,
         total_work,
@@ -1509,7 +1509,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     }
 
     let remaining_physical_work = trial.energy.physical_work - resonant_work;
-    let Some(funded_energy) = ReactionEnergyBalance::calculate(
+    let Some(funded_energy) = ReactionEnergyBalance::calculate_conservative(
         trial.energy.reactant_energy,
         trial.energy.product_energy,
         remaining_physical_work,
@@ -1520,7 +1520,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     if funded_energy.required_external_input > environment.chemistry_usable_energy {
         return Err("insufficient_usable_energy");
     }
-    let Some(transaction) = funded_energy.settlement_transaction(EnergyReason::Combine) else {
+    let Some(transaction) = funded_energy.settlement_transaction_conservative(EnergyReason::Combine) else {
         return Err("energy_settlement_transaction_invalid");
     };
 

@@ -292,6 +292,41 @@ impl ReactionEnergyBalance {
         physical_work: f64,
         dissipated_heat: f64,
     ) -> Option<Self> {
+        Self::calculate_with_deficit_rounding(
+            reactant_energy,
+            product_energy,
+            physical_work,
+            dissipated_heat,
+            false,
+        )
+    }
+
+    /// Calculate a reaction budget with the positive external deficit rounded
+    /// upward by one representable float. Use this only for the migrated
+    /// COMBINE/DISPLACEMENT settlement path, where affordability and holder
+    /// debit must use the same conservative amount.
+    pub(crate) fn calculate_conservative(
+        reactant_energy: f64,
+        product_energy: f64,
+        physical_work: f64,
+        dissipated_heat: f64,
+    ) -> Option<Self> {
+        Self::calculate_with_deficit_rounding(
+            reactant_energy,
+            product_energy,
+            physical_work,
+            dissipated_heat,
+            true,
+        )
+    }
+
+    fn calculate_with_deficit_rounding(
+        reactant_energy: f64,
+        product_energy: f64,
+        physical_work: f64,
+        dissipated_heat: f64,
+        round_positive_deficit_up: bool,
+    ) -> Option<Self> {
         if !reactant_energy.is_finite()
             || !product_energy.is_finite()
             || !physical_work.is_finite()
@@ -307,11 +342,15 @@ impl ReactionEnergyBalance {
             return None;
         }
         let required_external_input = if net_budget_change > 0.0 {
-            let rounded_up = f64::from_bits(net_budget_change.to_bits() + 1);
-            if !rounded_up.is_finite() {
-                return None;
+            if round_positive_deficit_up {
+                let rounded_up = f64::from_bits(net_budget_change.to_bits() + 1);
+                if !rounded_up.is_finite() {
+                    return None;
+                }
+                rounded_up
+            } else {
+                net_budget_change
             }
-            rounded_up
         } else {
             0.0
         };
@@ -335,17 +374,26 @@ impl ReactionEnergyBalance {
 
     /// Build the ledger transaction from the same pre/post-state balance
     /// used to decide whether the reaction is favorable or needs energy input.
+    /// Build the legacy reaction transaction using the original signed energy
+    /// arithmetic. Existing BREAK callers retain this exact settlement path.
     pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
-        let mut transaction = EnergyTransaction::reaction(
+        EnergyTransaction::reaction(
             reason,
             self.net_reaction_change,
             self.physical_work,
             self.dissipated_heat,
-        )?;
+        )
+    }
+
+    /// Build a transaction whose usable-energy debit matches the conservative
+    /// positive deficit used by the migrated COMBINE/DISPLACEMENT affordability
+    /// checks. This is deliberately opt-in so legacy BREAK is not over-debited.
+    pub(crate) fn settlement_transaction_conservative(
+        self,
+        reason: EnergyReason,
+    ) -> Option<EnergyTransaction> {
+        let mut transaction = self.settlement_transaction(reason)?;
         if self.required_external_input > 0.0 {
-            // Match the conservative, upward-rounded deficit used by
-            // affordability checks. This prevents a zero-holder settlement
-            // from being rejected for a one-ULP positive residual.
             transaction.usable_delta = -self.required_external_input;
         }
         Some(transaction)
@@ -1787,6 +1835,25 @@ mod tests {
         assert_eq!(balance.required_external_input, 3.0);
         assert_eq!(balance.released_surplus, 0.0);
         assert_eq!(balance.residual(3.0), Some(0.0));
+    }
+
+    #[test]
+    fn conservative_deficit_rounding_is_opt_in_and_does_not_change_legacy_break() {
+        let legacy = ReactionEnergyBalance::calculate(0.0, 0.1, 0.4, 0.0).unwrap();
+        let legacy_transaction = legacy.settlement_transaction(EnergyReason::Break).unwrap();
+        assert_eq!(legacy.required_external_input, 0.5);
+        assert_eq!(legacy_transaction.usable_delta, -0.5);
+
+        let conservative =
+            ReactionEnergyBalance::calculate_conservative(0.0, 0.1, 0.4, 0.0).unwrap();
+        let conservative_transaction = conservative
+            .settlement_transaction_conservative(EnergyReason::Combine)
+            .unwrap();
+        let rounded_up = f64::from_bits(0.5_f64.to_bits() + 1);
+        assert_eq!(conservative.required_external_input, rounded_up);
+        assert_eq!(conservative_transaction.usable_delta, -rounded_up);
+        assert!(!conservative.can_commit_with(0.5));
+        assert!(conservative.can_commit_with(rounded_up));
     }
 
     #[test]

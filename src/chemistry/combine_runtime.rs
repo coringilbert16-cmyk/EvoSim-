@@ -82,7 +82,7 @@ fn energy_requirement(
     } else {
         product_structural_energy
     };
-    crate::energy_ledger::ReactionEnergyBalance::calculate(
+    crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
         reactant_structural_energy,
         product_energy,
         work,
@@ -107,13 +107,13 @@ fn combine_energy_transaction(
         return EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, work, 0.0);
     }
     // The same pre/post-state balance drives both affordability and settlement.
-    crate::energy_ledger::ReactionEnergyBalance::calculate(
+    crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
         reactant_structural_energy,
         product_structural_energy,
         work,
         0.0,
     )?
-    .settlement_transaction(EnergyReason::Combine)
+    .settlement_transaction_conservative(EnergyReason::Combine)
 }
 
 /// Resolve the adhesion at the actual structural-unit interface.
