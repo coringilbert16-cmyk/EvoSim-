@@ -305,7 +305,7 @@ fn seed_randomized_molecular_resources(
             panic!("starting mixture {:?} exceeds total inventory for {name}", starting_mixture)
         });
         assert!(free > 0, "every canonical resource must remain independently available");
-        identities.extend(std::iter::repeat_n(name.clone(), free));
+        identities.extend(std::iter::repeat(name.clone()).take(free));
     }
     assert_eq!(identities.len(), single_resource_count);
     identities.shuffle(&mut rng);
@@ -912,14 +912,16 @@ mod tests {
                         ("Hydrogen-Sulfur", 40),
                     ]
                     .into_iter()
-                    .collect(),
+                    .map(|(name, count)| (name.to_string(), count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
                     StartingMixture::HighBonded => [
                         ("Carbon-Sulfur", 27),
                         ("Nitrogen-Sulfur", 26),
                         ("Phosphorus-Sulfur", 27),
                     ]
                     .into_iter()
-                    .collect(),
+                    .map(|(name, count)| (name.to_string(), count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
                     StartingMixture::MixedStability => [
                         ("Carbon-Oxygen", 20),
                         ("Carbon-Sulfur", 20),
@@ -927,7 +929,8 @@ mod tests {
                         ("Phosphorus-Sulfur", 20),
                     ]
                     .into_iter()
-                    .collect(),
+                    .map(|(name, count)| (name.to_string(), count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
                 };
                 assert_eq!(molecules, expected_molecules);
                 assert_eq!(
