@@ -4,6 +4,8 @@
 //! no spatial shape and is not an occluder. The live tick uses the resulting frame
 //! to settle direct sunlight into each living organism's existing energy holder.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::StoredMaterial;
 use crate::organism_geometry::OrganismBodyGeometry;
@@ -12,7 +14,6 @@ use crate::resources::{BaseResource, ResourceProperties};
 use crate::state::{Organism, Simulation};
 use crate::structure::Placement;
 use crate::world_tone::{WorldToneCaptureFrame, WorldToneSample};
-use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub(crate) struct WorldToneOccluderSnapshot {
