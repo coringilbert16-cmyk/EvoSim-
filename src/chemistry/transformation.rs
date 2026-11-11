@@ -2349,7 +2349,10 @@ mod tests {
                 ledger.total_structural_energy_delta,
                 before_ledger.total_structural_energy_delta
             );
-            assert_eq!(transformation.prepared_energy, Some((before_energy, 0.0, 0.0)));
+            assert_eq!(
+                transformation.prepared_energy,
+                Some((before_energy, 0.0, 0.0))
+            );
             assert_eq!(transformation.prepared_usable_energy, None);
 
             resolve_transformation(
