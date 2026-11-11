@@ -376,7 +376,7 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
     let b = structure.units[unit_b].properties(catalog)?;
     let pair_potential =
         active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
-    let strength = bond_strength(a, b);
+    let strength = bond_integrity(a, b)?;
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
         .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
