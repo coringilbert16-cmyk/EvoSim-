@@ -77,7 +77,6 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         records = fixture_records()
         records[0]["excluded_resources"] = ["Water"]
         del records[0]["initial_material_inventory"]["Water"]
-        del records[1]["material_inventory"]["Water"]
 
         report = analyze(records)
         coverage = report["resource_coverage"]
