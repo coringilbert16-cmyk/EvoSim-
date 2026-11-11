@@ -1,5 +1,7 @@
 # Environmental PR — S-shaped Water Flow and Obstacle-Aware Transport
 
+> **Superseded status (2026-11-11):** The cohesion-derived permeability design described below has been retired. Do not restore `permeability_from_cohesion` or cohesion-based penetration/flow rules. Organism movement now uses physical collision and pushing; environmental flow derives rigid obstruction from constituent geometry and `PhysicalState`. Water remains in the canonical resource catalog and historical work, but is excluded from current chemistry experiments.
+
 ## Purpose
 
 Replace the old environment concept for the experiment with a continuous blue water field and a deterministic, spatially varying current. This PR owns environmental flow and physical transport only. It must not implement or refactor chemistry reactions; PR #225 remains responsible for proving the live COMBINE → BREAK cycle after this transport foundation is ready.
