@@ -855,6 +855,90 @@ mod tests {
     }
 
     #[test]
+    fn starting_mixtures_preserve_the_same_total_resource_inventory() {
+        let mixtures = [
+            StartingMixture::Baseline,
+            StartingMixture::HighBonded,
+            StartingMixture::MixedStability,
+        ];
+        for seed in [42, 43, 44, 45, 46] {
+            let mut expected = None;
+            for mixture in mixtures {
+                let fixture = build_with_dispersion_and_mixture(
+                    seed,
+                    DispersionMode::Randomized,
+                    mixture,
+                );
+                let materials = fixture
+                    .simulation
+                    .environment
+                    .field
+                    .cells
+                    .iter()
+                    .flat_map(|cell| cell.physical_materials.iter());
+                let mut inventory = std::collections::BTreeMap::<String, usize>::new();
+                let mut molecules = std::collections::BTreeMap::<String, usize>::new();
+                let mut object_count = 0;
+                let mut independent_count = 0;
+                for material in materials {
+                    object_count += 1;
+                    if material.material.parts.len() == 1 {
+                        independent_count += 1;
+                    } else {
+                        let mut names = material
+                            .material
+                            .parts
+                            .iter()
+                            .map(|part| part.0.clone())
+                            .collect::<Vec<_>>();
+                        names.sort();
+                        *molecules.entry(names.join("-")).or_default() += 1;
+                    }
+                    for (name, _) in &material.material.parts {
+                        *inventory.entry(name.clone()).or_default() += 1;
+                    }
+                }
+                assert_eq!(object_count, ENVIRONMENT_OBJECT_COUNT);
+                assert_eq!(independent_count, ENVIRONMENT_SINGLE_RESOURCE_COUNT);
+                assert_eq!(molecules.values().sum::<usize>(), ENVIRONMENT_MOLECULE_COUNT);
+                if let Some(expected_inventory) = &expected {
+                    assert_eq!(&inventory, expected_inventory, "seed {seed}, mixture {mixture:?}");
+                } else {
+                    expected = Some(inventory);
+                }
+                let expected_molecules = match mixture {
+                    StartingMixture::Baseline => [
+                        ("Carbon-Hydrogen", 40),
+                        ("Hydrogen-Sulfur", 40),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    StartingMixture::HighBonded => [
+                        ("Carbon-Sulfur", 27),
+                        ("Nitrogen-Sulfur", 26),
+                        ("Phosphorus-Sulfur", 27),
+                    ]
+                    .into_iter()
+                    .collect(),
+                    StartingMixture::MixedStability => [
+                        ("Carbon-Oxygen", 20),
+                        ("Carbon-Sulfur", 20),
+                        ("Nitrogen-Sulfur", 20),
+                        ("Phosphorus-Sulfur", 20),
+                    ]
+                    .into_iter()
+                    .collect(),
+                };
+                assert_eq!(molecules, expected_molecules);
+                assert_eq!(
+                    fixture.simulation.energy_inventory_snapshot().residual(),
+                    Some(0.0)
+                );
+            }
+        }
+    }
+
+    #[test]
     fn fixture_has_1280_objects_with_80_intact_molecules_and_no_organisms() {
         let first = build(42);
         let second = build(42);
