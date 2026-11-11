@@ -458,8 +458,10 @@ impl StartingMixture {
         };
         match self {
             Self::Baseline => {
-                add(40, "Hydrogen", "Sulfur");
-                add(40, "Carbon", "Hydrogen");
+                for _ in 0..40 {
+                    molecules.push(vec!["Hydrogen".into(), "Sulfur".into()]);
+                    molecules.push(vec!["Carbon".into(), "Hydrogen".into()]);
+                }
             }
             Self::HighBonded => {
                 add(27, "Carbon", "Sulfur");
