@@ -142,8 +142,9 @@ fn obstacle_for(
         let placement = placements.get(index)?;
         let anchor_y = *rigid_anchor_y.get_or_insert(placement.y);
         weighted_x += placement.x * *amount;
-        weighted_y_offset +=
-            (placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        weighted_y_offset += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
+            - height * 0.5)
+            * *amount;
         rigid_amount += *amount;
     }
     if !rigid_amount.is_finite()
@@ -842,6 +843,30 @@ mod tests {
             .expect("rigid geometry should create an obstacle");
         assert_eq!(obstacle.solidity, 1.0);
         assert!(obstacle.radius > 0.5);
+    }
+
+    #[test]
+    fn fluid_state_does_not_create_a_flow_obstacle() {
+        let mut catalog = crate::resources::default_catalog();
+        let carbon = catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("Carbon catalog entry");
+        carbon.physical_state = PhysicalState::Fluid;
+        let fluid_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("fluid-state catalog material should realize");
+        assert!(
+            obstacle_for(0, 0, &fluid_material, &catalog, 100.0).is_none(),
+            "fluid constituents must not create rigid flow obstacles"
+        );
     }
 
     #[test]
