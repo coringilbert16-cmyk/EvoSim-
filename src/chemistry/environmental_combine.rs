@@ -3812,31 +3812,31 @@ mod tests {
                     {
                         continue;
                     }
-                    let Some(external_position) = catalog
+                    let Some(external_resource) = catalog
                         .iter()
                         .find(|candidate| candidate.name == resource.name)
-                        .and_then(|candidate| candidate.properties.chemical_position)
                     else {
                         continue;
                     };
-                    let mut interface_potentials = indices_a.iter().filter_map(|index| {
-                        let position =
-                            constituent_chemical_position(&structure.units[*index], &catalog)?;
-                        crate::chemistry::interaction_potential(
-                            position,
-                            external_position,
-                            crate::chemistry::CHEMICAL_K,
-                            crate::chemistry::CHEMICAL_D_MAX,
+                    let mut interface_adhesions = indices_a.iter().filter_map(|index| {
+                        let [(name, _)] = structure.units[*index].material.parts.as_slice() else {
+                            return None;
+                        };
+                        let constituent = catalog.iter().find(|candidate| candidate.name == *name)?;
+                        crate::resources::pair_adhesion(
+                            constituent.adhesion,
+                            external_resource.adhesion,
                         )
+                        .map(|adhesion| adhesion.net)
                     });
-                    let (Some(first_potential), Some(second_potential)) =
-                        (interface_potentials.next(), interface_potentials.next())
+                    let (Some(first_adhesion), Some(second_adhesion)) =
+                        (interface_adhesions.next(), interface_adhesions.next())
                     else {
                         continue;
                     };
-                    if first_potential <= 0.0
-                        || second_potential <= 0.0
-                        || (first_potential - second_potential).abs() <= f64::EPSILON
+                    if first_adhesion <= 0.0
+                        || second_adhesion <= 0.0
+                        || (first_adhesion - second_adhesion).abs() <= f64::EPSILON
                     {
                         continue;
                     }
@@ -3884,32 +3884,33 @@ mod tests {
         let external_name = structure.units[selected.unit_b].material.parts[0]
             .0
             .as_str();
-        let external_position = catalog
+        let external_resource = catalog
             .iter()
             .find(|resource| resource.name == external_name)
-            .and_then(|resource| resource.properties.chemical_position)
-            .expect("external contact constituent must have a chemical position");
-        let interface_potentials: Vec<_> = compound_indices
+            .expect("external contact constituent must exist in the catalog");
+        let interface_adhesions: Vec<_> = compound_indices
             .iter()
             .filter_map(|index| {
                 let unit = &structure.units[*index];
-                let position = constituent_chemical_position(unit, &catalog)?;
-                crate::chemistry::interaction_potential(
-                    position,
-                    external_position,
-                    crate::chemistry::CHEMICAL_K,
-                    crate::chemistry::CHEMICAL_D_MAX,
+                let [(name, _)] = unit.material.parts.as_slice() else {
+                    return None;
+                };
+                let constituent = catalog.iter().find(|resource| resource.name == *name)?;
+                crate::resources::pair_adhesion(
+                    constituent.adhesion,
+                    external_resource.adhesion,
                 )
+                .map(|adhesion| adhesion.net)
             })
             .collect();
         assert_eq!(
-            interface_potentials.len(),
+            interface_adhesions.len(),
             2,
-            "both bonded constituents must independently expose chemistry identities"
+            "both bonded constituents must retain distinct pair-adhesion identities"
         );
         assert_ne!(
-            interface_potentials[0], interface_potentials[1],
-            "different constituent interfaces must produce distinct interaction potentials against the same external material"
+            interface_adhesions[0], interface_adhesions[1],
+            "different constituent interfaces must produce distinct pair-adhesion scores against the same external material"
         );
 
         // Exercise the actual environmental chemistry path, not just the
@@ -3952,8 +3953,8 @@ mod tests {
         );
         assert_eq!(
             chemistry_library.len(),
-            1,
-            "the live chemistry step must cache one canonical static-potential pair"
+            0,
+            "active six-element interfaces must use pair adhesion directly, not the legacy chemical-position cache"
         );
         assert!(
             !accumulation.is_empty() || !operations.is_empty(),
@@ -3972,30 +3973,24 @@ mod tests {
             !interface.signature.is_empty(),
             "live geometry identity must resolve independently of the static-potential cache"
         );
-        let selected_position = constituent_chemical_position(selected_unit, &catalog)
-            .expect("selected constituent must retain its chemical position");
-        let external_position =
-            constituent_chemical_position(&structure.units[selected.unit_b], &catalog)
-                .expect("external constituent must retain its chemical position");
-        let chemistry_key = chemistry_library.key_from_chemical_pair(
-            selected_name,
-            external_name,
-            selected_position,
-            external_position,
-        );
-        let cached = chemistry_library
-            .get(&chemistry_key)
-            .expect("chemical step must reuse the canonical static-potential cache key");
-        let expected_potential = crate::chemistry::interaction_potential(
-            selected_position,
-            external_position,
-            crate::chemistry::CHEMICAL_K,
-            crate::chemistry::CHEMICAL_D_MAX,
+        let actual_potential = constituent_pair_static_potential(
+            selected_unit,
+            &structure.units[selected.unit_b],
+            &catalog,
         )
-        .expect("catalog positions must produce a valid interaction potential");
+        .expect("the live active-element interface must resolve pair adhesion");
+        let selected_resource = catalog
+            .iter()
+            .find(|resource| resource.name == *selected_name)
+            .expect("selected constituent must exist in the catalog");
+        let expected_adhesion = crate::resources::pair_adhesion(
+            selected_resource.adhesion,
+            external_resource.adhesion,
+        )
+        .expect("catalog descriptors must produce a valid symmetric interaction");
         assert!(
-            (cached.static_potential - expected_potential).abs() <= 1e-12,
-            "cached chemistry must use the contacting constituent's position, not an aggregate value"
+            (actual_potential - expected_adhesion.net).abs() <= 1e-12,
+            "live activation must use the same pair-adhesion score as the formation evaluator"
         );
         let _ = std::fs::remove_dir_all(temporary_store);
     }
