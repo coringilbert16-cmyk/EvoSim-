@@ -132,8 +132,8 @@ fn obstacle_for(
     let placements = material.placements.as_ref()?;
     let mut total_rigid_weight = 0.0;
     let mut weighted_x = 0.0;
-    let mut weighted_y_sin = 0.0;
-    let mut weighted_y_cos = 0.0;
+    let mut weighted_y_offset = 0.0;
+    let mut rigid_anchor_y = None;
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         if resource.physical_state != PhysicalState::Rigid {
@@ -143,20 +143,18 @@ fn obstacle_for(
             return None;
         }
         let placement = placements.get(index)?;
+        let anchor_y = *rigid_anchor_y.get_or_insert(placement.y);
+        let y_offset = (placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5;
         total_rigid_weight += *amount;
-        let y_angle = std::f64::consts::TAU * placement.y / height;
         weighted_x += placement.x * *amount;
-        weighted_y_sin += y_angle.sin() * *amount;
-        weighted_y_cos += y_angle.cos() * *amount;
+        weighted_y_offset += y_offset * *amount;
     }
     if !total_rigid_weight.is_finite() || total_rigid_weight <= 0.0 {
         return None;
     }
+    let anchor_y = rigid_anchor_y?;
     let x = weighted_x / total_rigid_weight;
-    let y_angle = weighted_y_sin
-        .atan2(weighted_y_cos)
-        .rem_euclid(std::f64::consts::TAU);
-    let y = y_angle * height / std::f64::consts::TAU;
+    let y = (anchor_y + weighted_y_offset / total_rigid_weight).rem_euclid(height);
     let mut radius: f64 = 0.5;
     for (index, (name, _amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
@@ -164,8 +162,10 @@ fn obstacle_for(
             continue;
         }
         let placement = placements.get(index)?;
+        let wrapped_dy =
+            (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
         radius = radius
-            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
+            .max((placement.x - x).hypot(wrapped_dy) + shape_radius(&resource.shape.form));
     }
     Some(Obstacle {
         source_cell,
