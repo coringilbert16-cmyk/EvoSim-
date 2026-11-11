@@ -125,10 +125,10 @@ def build_report(root: Path) -> dict[str, Any]:
         for mixture in MIXTURES
     }
     # Match each seed's total elemental inventory across all three mixtures.
-    for seed in SEEDS:
+    for seed_index, seed in enumerate(SEEDS):
         inventories = {
-            mixture: runs[mixture][index]["chemistry"]["input"]["initial_material_inventory"]
-            for index, mixture in enumerate(MIXTURES)
+            mixture: runs[mixture][seed_index]["chemistry"]["input"]["initial_material_inventory"]
+            for mixture in MIXTURES
         }
         reference = inventories["baseline"]
         for mixture, inventory in inventories.items():
