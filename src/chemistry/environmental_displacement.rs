@@ -1027,71 +1027,71 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 let previous = accumulation.get(&key).copied().unwrap_or(0.0);
                                 // Keep the expensive endpoint-spectrum query bounded to one actual
                                 // replacement contact per tick. Discovery rotates its field anchors.
-                                let local_resonance_similarity =
-                                    if let Some(world) = local_resonance_world
+                                let local_resonance_similarity = if let Some(world) =
+                                    local_resonance_world
                                         .filter(|_| !local_resonance_sampled_this_tick)
-                                    {
-                                        diagnostics.local_resonance_sample_attempts = diagnostics
-                                            .local_resonance_sample_attempts
-                                            .saturating_add(1);
-                                        local_resonance_sampled_this_tick = true;
-                                        let incoming_frequency = displacement_reaction_frequency(
-                                            &combined.units[anchor_unit],
-                                            &combined.units[incoming_unit],
+                                {
+                                    diagnostics.local_resonance_sample_attempts = diagnostics
+                                        .local_resonance_sample_attempts
+                                        .saturating_add(1);
+                                    local_resonance_sampled_this_tick = true;
+                                    let incoming_frequency = displacement_reaction_frequency(
+                                        &combined.units[anchor_unit],
+                                        &combined.units[incoming_unit],
+                                        &environment.catalog,
+                                    )
+                                    .unwrap_or(frequency);
+                                    let sampled = crate::contact::endpoint_world_point(
+                                        candidate.endpoint_a,
+                                        &combined.units[anchor_unit],
+                                        &environment.catalog,
+                                    )
+                                    .zip(crate::contact::endpoint_world_point(
+                                        candidate.endpoint_b,
+                                        &combined.units[incoming_unit],
+                                        &environment.catalog,
+                                    ))
+                                    .and_then(|(point_a, point_b)| {
+                                        let a = world.reaction_similarity(
+                                            source_a.environmental_identity,
+                                            &[(point_a.x, point_a.y)],
+                                            incoming_frequency,
                                             &environment.catalog,
-                                        )
-                                        .unwrap_or(frequency);
-                                        let sampled = crate::contact::endpoint_world_point(
-                                            candidate.endpoint_a,
-                                            &combined.units[anchor_unit],
+                                            tick,
+                                        )?;
+                                        let b = world.reaction_similarity(
+                                            source_b.environmental_identity,
+                                            &[(point_b.x, point_b.y)],
+                                            incoming_frequency,
                                             &environment.catalog,
-                                        )
-                                        .zip(crate::contact::endpoint_world_point(
-                                            candidate.endpoint_b,
-                                            &combined.units[incoming_unit],
-                                            &environment.catalog,
-                                        ))
-                                        .and_then(|(point_a, point_b)| {
-                                            let a = world.reaction_similarity(
-                                                source_a.environmental_identity,
-                                                &[(point_a.x, point_a.y)],
-                                                incoming_frequency,
-                                                &environment.catalog,
-                                                tick,
-                                            )?;
-                                            let b = world.reaction_similarity(
-                                                source_b.environmental_identity,
-                                                &[(point_b.x, point_b.y)],
-                                                incoming_frequency,
-                                                &environment.catalog,
-                                                tick,
-                                            )?;
-                                            Some(0.5 * (a + b))
-                                        })
-                                        .filter(|value| value.is_finite())
-                                        .map(|value| value.clamp(0.0, 1.0));
-                                        match sampled {
-                                            Some(value) => {
-                                                diagnostics.local_resonance_samples = diagnostics
-                                                    .local_resonance_samples
-                                                    .saturating_add(1);
-                                                diagnostics.local_resonance_similarity_sum += value;
-                                                diagnostics.local_resonance_similarity_max =
-                                                    diagnostics
-                                                        .local_resonance_similarity_max
-                                                        .max(value);
-                                                value
-                                            }
-                                            None => {
-                                                diagnostics.local_resonance_unavailable = diagnostics
-                                                    .local_resonance_unavailable
-                                                    .saturating_add(1);
-                                                0.0
-                                            }
+                                            tick,
+                                        )?;
+                                        Some(0.5 * (a + b))
+                                    })
+                                    .filter(|value| value.is_finite())
+                                    .map(|value| value.clamp(0.0, 1.0));
+                                    match sampled {
+                                        Some(value) => {
+                                            diagnostics.local_resonance_samples = diagnostics
+                                                .local_resonance_samples
+                                                .saturating_add(1);
+                                            diagnostics.local_resonance_similarity_sum += value;
+                                            diagnostics.local_resonance_similarity_max =
+                                                diagnostics
+                                                    .local_resonance_similarity_max
+                                                    .max(value);
+                                            value
                                         }
-                                    } else {
-                                        0.0
-                                    };
+                                        None => {
+                                            diagnostics.local_resonance_unavailable = diagnostics
+                                                .local_resonance_unavailable
+                                                .saturating_add(1);
+                                            0.0
+                                        }
+                                    }
+                                } else {
+                                    0.0
+                                };
                                 let Some(next) = accumulate_incoming_activation_with_resonance(
                                     &combined.units[anchor_unit],
                                     &combined.units[incoming_unit],
