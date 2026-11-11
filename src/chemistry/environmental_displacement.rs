@@ -1720,9 +1720,7 @@ mod tests {
                     } else {
                         println!(
                             "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=false",
-                            anchor_resource.name,
-                            displaced_resource.name,
-                            incoming_resource.name,
+                            anchor_resource.name, displaced_resource.name, incoming_resource.name,
                         );
                     }
                     triples += 1;
