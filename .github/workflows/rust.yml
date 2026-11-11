@@ -67,6 +67,28 @@ jobs:
           python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-organization.json \
             --markdown-out environmental-chemistry-organization.md
+      - name: Run matched environmental chemistry control (local activation disabled)
+        if: success() && github.event_name == 'pull_request' && github.event.pull_request.number == 344
+        timeout-minutes: 3
+        env:
+          EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION: "1"
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics environmental-chemistry-local-resonance-disabled.jsonl \
+            --diagnostic-interval 100
+      - name: Upload matched environmental chemistry control
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 344 && hashFiles('environmental-chemistry-local-resonance-disabled.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-chemistry-local-resonance-disabled
+          path: environmental-chemistry-local-resonance-disabled.jsonl
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload default environmental chemistry baseline
         if: always() && hashFiles('environmental-chemistry-default-baseline.jsonl') != ''
         uses: actions/upload-artifact@v4
