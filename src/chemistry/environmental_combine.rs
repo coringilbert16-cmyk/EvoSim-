@@ -655,7 +655,11 @@ fn chemical_step(
     } else {
         0.0
     };
-    let local_resonance_similarity = if let Some(world) = local_resonance_world {
+    // Bound full endpoint-spectrum evaluation to one actual contact per tick.
+    // The environmental scan itself rotates its anchors and materials each tick.
+    let local_resonance_similarity = if let Some(world) =
+        local_resonance_world.filter(|_| diagnostics.local_resonance_sample_attempts == 0)
+    {
         diagnostics.local_resonance_sample_attempts = diagnostics
             .local_resonance_sample_attempts
             .saturating_add(1);
