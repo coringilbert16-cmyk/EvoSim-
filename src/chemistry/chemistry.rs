@@ -439,6 +439,23 @@ mod tests {
     }
 
     #[test]
+    fn reactivity_changes_activation_but_not_integrity_derived_work() {
+        let integrity = 0.8;
+        let low_reactivity =
+            activation_barrier_from_bond_properties(integrity, 0.0, 0.0, 2.0).unwrap();
+        let high_reactivity =
+            activation_barrier_from_bond_properties(integrity, 4.0, 4.0, 2.0).unwrap();
+        let physical_work = activation_barrier_from_bond_integrity(integrity).unwrap();
+
+        assert!(high_reactivity < low_reactivity);
+        assert_eq!(physical_work, integrity);
+        assert_eq!(
+            activation_barrier_from_bond_integrity(integrity),
+            Some(physical_work)
+        );
+    }
+
+    #[test]
     fn bond_property_barrier_scales_with_intrinsic_bond_strength() {
         let weak = activation_barrier_from_bond_properties(0.25, 1.0, 1.0, 2.0).unwrap();
         let strong = activation_barrier_from_bond_properties(0.75, 1.0, 1.0, 2.0).unwrap();
