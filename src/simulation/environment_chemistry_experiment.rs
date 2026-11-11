@@ -240,6 +240,7 @@ fn seed_randomized_molecular_resources(
     height: f64,
     include_molecules: bool,
     dispersion: DispersionMode,
+    starting_mixture: StartingMixture,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -252,7 +253,6 @@ fn seed_randomized_molecular_resources(
         "the environment requires seven canonical base resources"
     );
 
-    let mut identities = resource_names.clone();
     let single_resource_count = if include_molecules {
         ENVIRONMENT_SINGLE_RESOURCE_COUNT
     } else {
@@ -263,18 +263,62 @@ fn seed_randomized_molecular_resources(
     } else {
         0
     };
-    while identities.len() < single_resource_count {
-        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+    let mut baseline_identities = resource_names.clone();
+    while baseline_identities.len() < single_resource_count {
+        baseline_identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
+    baseline_identities.shuffle(&mut rng);
+
+    // Keep the complete per-resource inventory identical across starting
+    // mixtures. Only the allocation between bonded molecules and free
+    // resources changes.
+    let baseline_molecules = if include_molecules {
+        StartingMixture::Baseline.molecule_parts()
+    } else {
+        Vec::new()
+    };
+    let target_molecules = if include_molecules {
+        starting_mixture.molecule_parts()
+    } else {
+        Vec::new()
+    };
+    let mut total_inventory = std::collections::BTreeMap::<String, usize>::new();
+    for name in baseline_identities {
+        *total_inventory.entry(name).or_default() += 1;
+    }
+    for parts in &baseline_molecules {
+        for name in parts {
+            *total_inventory.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let mut target_inventory = std::collections::BTreeMap::<String, usize>::new();
+    for parts in &target_molecules {
+        for name in parts {
+            *target_inventory.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let mut identities = Vec::with_capacity(single_resource_count);
+    for name in &resource_names {
+        let total = total_inventory.get(name).copied().unwrap_or_default();
+        let bonded = target_inventory.get(name).copied().unwrap_or_default();
+        let free = total.checked_sub(bonded).unwrap_or_else(|| {
+            panic!("starting mixture {:?} exceeds total inventory for {name}", starting_mixture)
+        });
+        assert!(free > 0, "every canonical resource must remain independently available");
+        identities.extend(std::iter::repeat_n(name.clone(), free));
+    }
+    assert_eq!(identities.len(), single_resource_count);
     identities.shuffle(&mut rng);
+
     let mut objects: Vec<(Vec<String>, bool)> = identities
         .into_iter()
         .map(|name| (vec![name], false))
         .collect();
-    for _ in 0..(molecule_count / 2) {
-        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
-        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
+    for parts in target_molecules {
+        objects.push((parts, true));
     }
+    assert_eq!(objects.len(), ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(molecule_count, objects.iter().filter(|(_, bonded)| *bonded).count());
     objects.shuffle(&mut rng);
 
     let pile_sizes = match dispersion {
@@ -379,6 +423,51 @@ pub(crate) enum DispersionMode {
     Clustered,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StartingMixture {
+    Baseline,
+    HighBonded,
+    MixedStability,
+}
+
+impl StartingMixture {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Baseline => "baseline",
+            Self::HighBonded => "high-bonded",
+            Self::MixedStability => "mixed-stability",
+        }
+    }
+
+    fn molecule_parts(self) -> Vec<Vec<String>> {
+        let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
+        let mut add = |count: usize, a: &str, b: &str| {
+            molecules.extend(
+                (0..count).map(|_| vec![a.to_string(), b.to_string()]),
+            );
+        };
+        match self {
+            Self::Baseline => {
+                add(40, "Hydrogen", "Sulfur");
+                add(40, "Carbon", "Hydrogen");
+            }
+            Self::HighBonded => {
+                add(27, "Carbon", "Sulfur");
+                add(27, "Phosphorus", "Sulfur");
+                add(26, "Nitrogen", "Sulfur");
+            }
+            Self::MixedStability => {
+                add(20, "Carbon", "Sulfur");
+                add(20, "Phosphorus", "Sulfur");
+                add(20, "Nitrogen", "Sulfur");
+                add(20, "Carbon", "Oxygen");
+            }
+        }
+        assert_eq!(molecules.len(), ENVIRONMENT_MOLECULE_COUNT);
+        molecules
+    }
+}
+
 impl DispersionMode {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
@@ -401,6 +490,14 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
 pub(crate) fn build_with_dispersion(
     seed: u64,
     dispersion: DispersionMode,
+) -> EnvironmentalChemistryFixture {
+    build_with_dispersion_and_mixture(seed, dispersion, StartingMixture::Baseline)
+}
+
+pub(crate) fn build_with_dispersion_and_mixture(
+    seed: u64,
+    dispersion: DispersionMode,
+    starting_mixture: StartingMixture,
 ) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
     simulation.record_environmental_molecular_history = true;
@@ -425,6 +522,7 @@ pub(crate) fn build_with_dispersion(
         simulation.environment.height,
         true,
         dispersion,
+        starting_mixture,
     );
 
     // Establish stable IDs for the complete tick-zero inventory before any
