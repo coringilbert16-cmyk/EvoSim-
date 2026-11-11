@@ -137,6 +137,58 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         for name in CANONICAL_RESOURCES:
             self.assertIn(f"| {name} |", markdown)
 
+    def test_bond_pair_changes_reconcile_with_initial_and_final_live_inventories(self):
+        carbon = {
+            "material": {"parts": [["Carbon", 1.0]]},
+            "internal_connections": [],
+        }
+        hydrogen = {
+            "material": {"parts": [["Hydrogen", 1.0]]},
+            "internal_connections": [],
+        }
+        carbon_hydrogen = {
+            "material": {"parts": [["Carbon", 1.0], ["Hydrogen", 1.0]]},
+            "internal_connections": [{"part_a": 0, "part_b": 1}],
+        }
+        records = fixture_records()
+        records[2] = {
+            "event": "environmental_reaction",
+            "reaction": {
+                "reaction": "COMBINE",
+                "outcome": "committed",
+                "molecular_lifecycle": [
+                    {"action": "destroyed", "molecule": carbon},
+                    {"action": "destroyed", "molecule": hydrogen},
+                    {"action": "created", "molecule": carbon_hydrogen},
+                ],
+            },
+        }
+        records.extend([
+            {"event": "molecular_lifecycle", "action": "created", "tick": 0,
+             "molecule_id": 1, "parent_ids": [], "reaction": "INITIAL", "molecule": carbon},
+            {"event": "molecular_lifecycle", "action": "created", "tick": 0,
+             "molecule_id": 2, "parent_ids": [], "reaction": "INITIAL", "molecule": hydrogen},
+            {"event": "molecular_lifecycle", "action": "created", "tick": 1,
+             "molecule_id": 3, "parent_ids": [1, 2], "reaction": "COMBINE",
+             "molecule": carbon_hydrogen},
+            {"event": "molecular_lifecycle", "action": "destroyed", "tick": 1,
+             "molecule_id": 1, "reaction": "COMBINE", "molecule": carbon},
+            {"event": "molecular_lifecycle", "action": "destroyed", "tick": 1,
+             "molecule_id": 2, "reaction": "COMBINE", "molecule": hydrogen},
+        ])
+        attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
+        self.assertEqual(attribution["initial_bond_inventory"]["Carbon-Hydrogen"], 0)
+        self.assertEqual(attribution["final_bond_inventory"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["inventory_delta"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["reaction_delta"]["Carbon-Hydrogen"], 1)
+        self.assertTrue(attribution["inventory_reconciliation"]["matches"])
+        self.assertEqual(attribution["inventory_reconciliation"]["mismatches"], {})
+
+    def test_bond_pair_inventory_reconciliation_is_not_claimed_without_lifecycle_data(self):
+        attribution = analyze(fixture_records())["reactions"]["elemental_bond_pairs"]
+        self.assertFalse(attribution["inventory_reconciliation"]["matches"])
+        self.assertGreater(attribution["committed_events_missing_graph_deltas"], 0)
+
     def test_molecular_lifecycle_reports_lifetimes_and_lineage(self):
         records = fixture_records()
         records.extend([
