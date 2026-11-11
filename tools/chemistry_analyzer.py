@@ -166,12 +166,14 @@ def _bond_pair_attribution(
         reactants: Counter[str] = Counter()
         products: Counter[str] = Counter()
         reactant_molecules: list[Any] = []
-        has_reactant = has_product = False
+        has_reactant = has_product = graph_complete = False
+        graph_complete = True
         for record in lifecycle:
             if not isinstance(record, dict):
                 malformed += 1
                 continue
             molecule = record.get("molecule")
+            graph_complete &= _has_complete_molecule_graph(molecule)
             counts, invalid = _molecule_bond_pairs(molecule)
             malformed += invalid
             if record.get("action") == "destroyed":
@@ -181,26 +183,30 @@ def _bond_pair_attribution(
             elif record.get("action") == "created":
                 products.update(counts)
                 has_product |= isinstance(molecule, dict)
-        if not (has_reactant and has_product):
+        if not (has_reactant and has_product and graph_complete):
             missing += 1
             continue
         reaction = str(event.get("reaction", "UNKNOWN"))
         remaining_reactants = reactants.copy()
         explicitly_broken: Counter[str] = Counter()
         broken_index = event.get("broken_bond_index")
-        if (
-            reaction in ("BREAK", "DISPLACEMENT")
-            and isinstance(broken_index, int) and not isinstance(broken_index, bool)
-            and reactant_molecules
-        ):
+        if reaction in ("BREAK", "DISPLACEMENT"):
+            if (
+                not isinstance(broken_index, int)
+                or isinstance(broken_index, bool)
+                or not reactant_molecules
+            ):
+                missing += 1
+                continue
             selected_pair = _bond_pair_at_index(reactant_molecules[0], broken_index)
-            if selected_pair and remaining_reactants[selected_pair] > 0:
-                remaining_reactants[selected_pair] -= 1
-                if remaining_reactants[selected_pair] == 0:
-                    del remaining_reactants[selected_pair]
-                explicitly_broken[selected_pair] += 1
-            else:
+            if not selected_pair or remaining_reactants[selected_pair] <= 0:
                 malformed += 1
+                missing += 1
+                continue
+            remaining_reactants[selected_pair] -= 1
+            if remaining_reactants[selected_pair] == 0:
+                del remaining_reactants[selected_pair]
+            explicitly_broken[selected_pair] += 1
         formed = products - remaining_reactants
         broken = (remaining_reactants - products) + explicitly_broken
         formed_by_reaction.setdefault(reaction, Counter()).update(formed)
