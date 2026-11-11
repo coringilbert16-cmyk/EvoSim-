@@ -18,6 +18,10 @@ on:
         required: true
         default: 100
         type: number
+  push:
+    branches: [main]
+    paths:
+      - experiments/chemistry-run.json
 
 permissions:
   contents: read
@@ -26,11 +30,16 @@ jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
+      should_run: ${{ steps.parameters.outputs.should_run }}
       seeds: ${{ steps.parameters.outputs.seeds }}
+      duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
+      diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
     steps:
+      - uses: actions/checkout@v4
       - name: Validate experiment parameters
         id: parameters
         env:
+          EVENT_NAME: ${{ github.event_name }}
           SEEDS_INPUT: ${{ inputs.seeds }}
           DURATION_SECONDS: ${{ inputs.duration_seconds }}
           DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
@@ -40,28 +49,48 @@ jobs:
           import json
           import os
 
-          raw = os.environ["SEEDS_INPUT"]
-          parts = [part.strip() for part in raw.split(",") if part.strip()]
-          if not parts or len(parts) > 25:
-              raise SystemExit("Provide between 1 and 25 comma-separated seeds.")
-          if any(not part.isascii() or not part.isdecimal() for part in parts):
+          if os.environ["EVENT_NAME"] == "push":
+              with open("experiments/chemistry-run.json", encoding="utf-8") as source:
+                  config = json.load(source)
+              if config.get("run") is not True:
+                  with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+                      output.write("should_run=false" + chr(10))
+                  print("Experiment request is inactive; no simulations launched.")
+                  raise SystemExit(0)
+              seeds = config.get("seeds", [])
+              duration = int(config.get("duration_seconds", 300))
+              interval = int(config.get("diagnostic_interval", 100))
+          else:
+              raw = os.environ["SEEDS_INPUT"]
+              parts = [part.strip() for part in raw.split(",") if part.strip()]
+              if any(not part.isascii() or not part.isdecimal() for part in parts):
+                  raise SystemExit("Every seed must be a nonnegative integer.")
+              seeds = [int(part) for part in parts]
+              duration = int(os.environ["DURATION_SECONDS"])
+              interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
+
+          if not isinstance(seeds, list) or not seeds or len(seeds) > 25:
+              raise SystemExit("Provide between 1 and 25 independent seeds.")
+          if any(not isinstance(seed, int) or isinstance(seed, bool) or seed < 0 for seed in seeds):
               raise SystemExit("Every seed must be a nonnegative integer.")
-          seeds = [int(part) for part in parts]
           if len(seeds) != len(set(seeds)):
               raise SystemExit("Seeds must be unique.")
-          duration = int(os.environ["DURATION_SECONDS"])
-          interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
           if not 30 <= duration <= 3600:
               raise SystemExit("Duration must be between 30 and 3,600 seconds.")
           if not 1 <= interval <= 100000:
               raise SystemExit("Diagnostic interval must be between 1 and 100,000 ticks.")
+
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write("should_run=true" + chr(10))
               output.write("seeds=" + json.dumps(seeds) + chr(10))
+              output.write("duration_seconds=" + str(duration) + chr(10))
+              output.write("diagnostic_interval=" + str(interval) + chr(10))
           print(f"Validated {len(seeds)} seeds: {seeds}")
           print(f"Duration per seed: {duration}s; diagnostic interval: {interval} ticks")
           PY
 
   observe:
+    if: needs.prepare.outputs.should_run == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -77,8 +106,8 @@ jobs:
         timeout-minutes: 110
         env:
           SEED: ${{ matrix.seed }}
-          DURATION_SECONDS: ${{ inputs.duration_seconds }}
-          DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
+          DIAGNOSTIC_INTERVAL: ${{ needs.prepare.outputs.diagnostic_interval }}
         run: |
           set -euo pipefail
           mkdir -p observations
@@ -103,6 +132,7 @@ jobs:
           retention-days: 30
 
   aggregate:
+    if: needs.prepare.outputs.should_run == 'true'
     needs: [prepare, observe]
     runs-on: ubuntu-latest
     steps:
@@ -115,8 +145,8 @@ jobs:
           merge-multiple: true
       - name: Build pooled chemistry and molecular-development report
         env:
-          SEEDS: ${{ inputs.seeds }}
-          DURATION_SECONDS: ${{ inputs.duration_seconds }}
+          SEEDS: ${{ join(fromJSON(needs.prepare.outputs.seeds), ',') }}
+          DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
         run: |
           set -euo pipefail
           python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
