@@ -2412,7 +2412,7 @@ mod tests {
     }
 
     #[test]
-    fn live_environmental_displacement_commits_two_products_with_resonance_funding() {
+    fn live_displacement_replaces_zero_allocated_seed_bond_with_resonance_funding() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
         for cell in &mut simulation.environment.field.cells {
@@ -2421,6 +2421,9 @@ mod tests {
         }
 
         let (mut source, _old_bond, _candidate, _investment) = three_participant_fixture(&catalog);
+        // Match the seeded fixture's energy provenance: the old structural
+        // bond exists, but no energy was allocated to it.
+        source.bonds[0].bond_energy = 0.0;
         for unit in &mut source.units {
             unit.placement.x += 10.0;
             unit.placement.y += 10.0;
