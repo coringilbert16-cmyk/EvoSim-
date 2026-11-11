@@ -1550,26 +1550,64 @@ pub(crate) fn material_resonance_emitters_at_tick(
         return None;
     }
     let baselines = ResourceBaselines::from_catalog(catalog);
+    let phase = phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick);
+    // Environmental inventories contain many independent objects made from
+    // the same material composition. Their emitted spectrum and mass response
+    // are composition/tick dependent, not position dependent. Prepare that
+    // response once per distinct composition and reuse it across the objects.
+    let mut response_cache =
+        std::collections::HashMap::<Vec<(String, u64)>, (f64, ToneSpectrum)>::new();
     let mut emitters = Vec::with_capacity(source_indices.len());
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let (source_x, source_y, _, emitted) =
-            environmental_material_resonance(source, catalog, tick)?;
-        let mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
-        if !source_x.is_finite()
-            || !source_y.is_finite()
-            || !mass_scale.is_finite()
-            || mass_scale < 0.0
-        {
+        if !source.material.is_valid() || source.material.is_empty() {
             return None;
         }
-        if mass_scale > f64::EPSILON {
+        let placements = source.placements.as_ref()?;
+        if placements.len() != source.material.parts.len() || placements.is_empty() {
+            return None;
+        }
+        let mut source_x = 0.0;
+        let mut source_y = 0.0;
+        for placement in placements {
+            source_x += placement.x;
+            source_y += placement.y;
+        }
+        let count = placements.len() as f64;
+        source_x /= count;
+        source_y /= count;
+        if !source_x.is_finite() || !source_y.is_finite() {
+            return None;
+        }
+
+        let signature: Vec<_> = source
+            .material
+            .parts
+            .iter()
+            .map(|(name, amount)| (name.clone(), amount.to_bits()))
+            .collect();
+        let (mass_scale, emitted) = response_cache
+            .entry(signature)
+            .or_insert_with(|| {
+                let mass_scale =
+                    environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+                let emitted = material_response(
+                    source.material.weighted_properties(catalog),
+                    baselines,
+                    phase,
+                );
+                (mass_scale, emitted)
+            });
+        if !mass_scale.is_finite() || *mass_scale < 0.0 {
+            return None;
+        }
+        if *mass_scale > f64::EPSILON {
             emitters.push(MaterialResonanceEmitter {
                 source_index,
                 source_x,
                 source_y,
-                mass_scale,
-                emitted,
+                mass_scale: *mass_scale,
+                emitted: emitted.clone(),
             });
         }
     }
