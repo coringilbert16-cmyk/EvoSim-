@@ -787,7 +787,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
     vec![
         BaseResource {
             name: "Carbon".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.80, polarity: 0.00, donor: 0.25, acceptor: 0.25 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.80,
+                polarity: 0.00,
+                donor: 0.25,
+                acceptor: 0.25,
+            },
             properties: ResourceProperties {
                 mass: 1.00,
                 potential_energy: 1.0,
@@ -805,7 +810,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Oxygen".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.55, polarity: -0.80, donor: 0.10, acceptor: 0.95 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.55,
+                polarity: -0.80,
+                donor: 0.10,
+                acceptor: 0.95,
+            },
             properties: ResourceProperties {
                 mass: 0.75,
                 potential_energy: 20.0,
@@ -823,7 +833,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Hydrogen".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.25, polarity: 0.35, donor: 0.65, acceptor: 0.10 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.25,
+                polarity: 0.35,
+                donor: 0.65,
+                acceptor: 0.10,
+            },
             properties: ResourceProperties {
                 mass: 0.25,
                 potential_energy: 12.0,
@@ -843,7 +858,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Sulfur".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.90, polarity: -0.20, donor: 0.50, acceptor: 0.55 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.90,
+                polarity: -0.20,
+                donor: 0.50,
+                acceptor: 0.55,
+            },
             properties: ResourceProperties {
                 mass: 1.50,
                 potential_energy: 8.0,
@@ -867,7 +887,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Nitrogen".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.65, polarity: 0.15, donor: 0.75, acceptor: 0.70 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.65,
+                polarity: 0.15,
+                donor: 0.75,
+                acceptor: 0.70,
+            },
             properties: ResourceProperties {
                 mass: 1.25,
                 potential_energy: 0.75,
@@ -885,7 +910,12 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Phosphorus".into(),
-            adhesion: AdhesionDescriptors { dispersion: 0.85, polarity: 0.55, donor: 0.45, acceptor: 0.35 },
+            adhesion: AdhesionDescriptors {
+                dispersion: 0.85,
+                polarity: 0.55,
+                donor: 0.45,
+                acceptor: 0.35,
+            },
             properties: ResourceProperties {
                 mass: 1.75,
                 potential_energy: 1.50,
