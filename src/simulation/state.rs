@@ -801,6 +801,8 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) trial_rejections_formation_investment: u64,
     #[serde(default)]
     pub(crate) trial_rejections_physical_insertion: u64,
+    /// Largest difference between recorded allocation and descriptor-derived pair energy.
+    /// Informational only: the recorded allocation remains the energy authority.
     #[serde(default)]
     pub(crate) old_bond_energy_max_abs_error: f64,
     #[serde(default)]
