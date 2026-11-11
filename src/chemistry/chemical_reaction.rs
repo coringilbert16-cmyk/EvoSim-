@@ -30,7 +30,9 @@ pub(crate) struct EnvironmentalChemicalBreakOperation {
     pub(crate) source_material: crate::physical_material::PhysicalMaterial,
     pub(crate) bond: crate::physical_material::PhysicalMaterialBond,
     pub(crate) activation_signal: f64,
+    /// Reactivity-adjusted threshold for crossing BREAK activation.
     pub(crate) activation_barrier: f64,
+    /// Integrity-derived physical work; independent of reactivity.
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_cycles_per_day: f64,
     pub(crate) local_resonance_similarity: f64,
