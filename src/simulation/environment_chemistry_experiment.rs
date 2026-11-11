@@ -353,6 +353,13 @@ pub(crate) struct EnvironmentalChemistryFixture {
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
+    // Keep Water fully defined in the canonical catalog, but remove it from
+    // this experiment's active catalog so baselines and all reaction systems
+    // are calculated only from the six resources under study.
+    simulation
+        .environment
+        .catalog
+        .retain(|resource| resource.name != "Water");
     simulation.record_environmental_molecular_history = true;
     simulation.organisms.clear();
     simulation.active_transformations.clear();
