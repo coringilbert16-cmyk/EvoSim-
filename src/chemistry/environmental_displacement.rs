@@ -287,7 +287,6 @@ fn build_displacement_trial_with_activation_status(
 
     let anchor = source.units[anchor_unit].properties(catalog)?;
     let displaced = source.units[displaced_unit].properties(catalog)?;
-    let incoming = source.units[incoming_unit].properties(catalog)?;
     let old_strength = old_bond.strength;
     // The recorded value is the only energy actually allocated to this
     // existing bond. Historical/seeded composition bonds legitimately carry
