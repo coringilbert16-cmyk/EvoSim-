@@ -463,20 +463,20 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     funnel_labels = {
         "BREAK": "bonds inspected / checked",
-        "COMBINE": "pairs inspected / interfaces sent to chemistry",
+        "COMBINE": "target materials inspected / interfaces sent to chemistry",
         "DISPLACEMENT": "replacement contacts found / searches",
     }
     for name, stages in report["reactions"]["opportunity_funnels"].items():
         if name == "BREAK":
-            evidence = f'{stages["bond_records_inspected"]} / {stages["bond_candidates_checked"]}'
+            evidence = f'{stages["bond_records_inspected"]} / {stages["bond_candidates_checked"]} ({funnel_labels[name]})'
             updates = stages["activation_updates"]
             below = stages["activation_below_threshold"]
             met = stages["activation_threshold_met"]
         elif name == "COMBINE":
-            evidence = f'{stages["target_materials_inspected"]} / {stages["interfaces_sent_to_chemistry"]}'
+            evidence = f'{stages["target_materials_inspected"]} / {stages["interfaces_sent_to_chemistry"]} ({funnel_labels[name]})'
             updates = below = met = 0
         else:
-            evidence = f'{stages["replacement_contacts_found"]} / {stages["replacement_contact_searches"]}'
+            evidence = f'{stages["replacement_contacts_found"]} / {stages["replacement_contact_searches"]} ({funnel_labels[name]})'
             updates = stages["activation_updates"]
             below = stages["activation_below_threshold"]
             met = stages["activation_threshold_met"]
