@@ -67,7 +67,10 @@ the exact unordered element pair. For BREAK and DISPLACEMENT, the explicit
 `broken_bond_index` is accounted for separately before comparing remaining
 reactant edges with product edges; this ensures a same-element-pair replacement
 is counted as one broken and one formed bond rather than cancelling to zero.
-The report includes zero-count rows for all 21 active-element pairs and separate
-counts by reaction type. This is elemental-pair attribution, not endpoint-geometry
-or bond-energy calibration. Committed events without complete lifecycle graph
+The report includes zero-count rows for all 21 active-element pairs, separate
+counts by reaction type, and the initial/final live-molecule bond inventories.
+It reconciles the observed inventory change against formed-minus-broken reaction
+edges for every seed; missing lifecycle graphs or any mismatch are reported rather
+than silently treated as zero. This is elemental-pair attribution, not endpoint-
+geometry or bond-energy calibration. Committed events without complete lifecycle graph
 snapshots are reported as missing rather than inferred from composition.
