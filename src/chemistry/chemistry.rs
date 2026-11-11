@@ -414,9 +414,13 @@ mod tests {
     }
 
     #[test]
-    fn activation_barrier_is_existing_bond_strength() {
+    fn activation_barrier_uses_local_integrity_and_preserves_legacy_adapter() {
+        assert_eq!(activation_barrier_from_bond_integrity(0.75), Some(0.75));
+        assert_eq!(activation_barrier_from_bond_integrity(2.0), Some(1.0));
         assert_eq!(activation_barrier_from_bond_strength(0.75), Some(0.75));
         assert_eq!(activation_barrier_from_bond_strength(2.0), Some(1.0));
+        assert!(activation_barrier_from_bond_integrity(f64::NAN).is_none());
+        assert!(activation_barrier_from_bond_integrity(-0.1).is_none());
     }
 
     #[test]
