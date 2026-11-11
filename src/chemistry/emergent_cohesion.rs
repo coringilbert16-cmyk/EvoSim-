@@ -65,7 +65,7 @@ fn stoer_wagner_min_cut(mut weights: Vec<Vec<f64>>) -> f64 {
 
     while active.len() > 1 {
         let mut added = vec![false; count];
-        let mut connection_weight = vec![0.0; count];
+        let mut connection_weight = vec![0.0_f64; count];
         let mut previous = active[0];
 
         for phase_index in 0..active.len() {
