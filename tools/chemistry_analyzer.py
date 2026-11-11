@@ -356,6 +356,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         "input": {
             "seed": header.get("seed"),
             "dispersion": header.get("dispersion", "randomized"),
+            "starting_mixture": header.get("starting_mixture", "baseline"),
+            "initial_material_inventory": header.get("initial_material_inventory", {}),
             "requested_duration_seconds": header.get("requested_duration_seconds"),
             "planned_ticks": header.get("planned_ticks"),
             "initial_physical_material_count": header.get("initial_physical_material_count"),
