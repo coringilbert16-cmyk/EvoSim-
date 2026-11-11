@@ -7,7 +7,7 @@
 
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Form};
+use crate::resources::{BaseResource, Form, PhysicalState};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Velocity {
@@ -129,28 +129,34 @@ fn obstacle_for(
     let (x, y) = material_center(material, height)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
-    let mut weighted_cohesion = 0.0;
-    let mut total = 0.0;
+    let mut rigid_amount = 0.0;
+    let mut total_amount = 0.0;
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         let placement = placements.get(index)?;
         radius = radius
             .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
-        weighted_cohesion += resource.properties.cohesion * *amount;
-        total += *amount;
+        if resource.physical_state == PhysicalState::Rigid {
+            rigid_amount += *amount;
+        }
+        total_amount += *amount;
     }
-    if !weighted_cohesion.is_finite() || total <= 0.0 {
+    if !rigid_amount.is_finite() || !total_amount.is_finite() || total_amount <= 0.0 {
         return None;
     }
-    let cohesion = weighted_cohesion / total;
-    let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
+    // Flow obstruction follows realized rigid geometry. Fluid constituents
+    // contribute to the enclosing footprint but do not create a rigid wake.
+    let solidity = (rigid_amount / total_amount).clamp(0.0, 1.0);
+    if solidity <= 1e-6 {
+        return None;
+    }
     Some(Obstacle {
         source_cell,
         source_index,
         x,
         y,
         radius,
-        solidity: (1.0 - permeability).clamp(0.0, 1.0),
+        solidity,
     })
 }
 
@@ -798,34 +804,22 @@ mod tests {
     }
 
     #[test]
-    fn actual_material_cohesion_sets_obstacle_permeability() {
+    fn rigid_material_geometry_creates_flow_obstruction() {
         let catalog = crate::resources::default_catalog();
-        let make_material = |name: &str| {
-            PhysicalMaterial::realized(
-                crate::resources::Material::free_base(name, 1.0),
-                vec![crate::structure::Placement {
-                    x: 10.0,
-                    y: 10.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog,
-            )
-            .expect("catalog material should realize")
-        };
-        let water = make_material("Water");
-        let carbon = make_material("Carbon");
-        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
-        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
-
-        assert_eq!(water_obstacle.solidity, 0.0);
-        assert!(
-            carbon_obstacle.solidity > 0.9,
-            "dense carbon geometry should strongly disturb local flow"
-        );
-        assert!(
-            carbon_obstacle.radius > water_obstacle.radius,
-            "the obstacle footprint should come from the material's actual catalog shape"
-        );
+        let carbon = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog material should realize");
+        let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
+            .expect("rigid geometry should create an obstacle");
+        assert_eq!(obstacle.solidity, 1.0);
+        assert!(obstacle.radius > 0.5);
     }
 
     #[test]
