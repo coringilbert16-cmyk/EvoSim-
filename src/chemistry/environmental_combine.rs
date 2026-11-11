@@ -1416,6 +1416,10 @@ mod tests {
     #[test]
     fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
+        simulation
+            .environment
+            .catalog
+            .retain(|resource| resource.name != "Water");
         let catalog = simulation.environment.catalog.clone();
         // Preserve Water's catalog and historical implementation, but do not
         // include it in current pair-feasibility experiments.
