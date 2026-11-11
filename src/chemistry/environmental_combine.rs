@@ -2717,6 +2717,7 @@ mod tests {
                     &mut updated,
                     &mut operations,
                     None,
+                    &mut false,
                     0,
                     &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
                 );
@@ -3833,6 +3834,7 @@ mod tests {
             &mut updated_keys,
             &mut operations,
             None,
+            &mut false,
             0,
             &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
         );
