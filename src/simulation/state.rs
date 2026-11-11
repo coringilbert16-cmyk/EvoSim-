@@ -789,7 +789,7 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) activation_status_unavailable: u64,
     /// Trial graph builds attempted and rejected after contact activation was sufficient.
     pub(crate) trial_build_rejections_after_activation: u64,
-    /// Activated trials rejected because the stored A-B bond energy no longer matched its graph.
+    /// Activated trials rejected because the stored A-B bond energy was non-finite or negative.
     pub(crate) trial_rejections_old_bond_energy: u64,
     /// Activated trials rejected while removing the old bond from trial topology.
     pub(crate) trial_rejections_topology: u64,
