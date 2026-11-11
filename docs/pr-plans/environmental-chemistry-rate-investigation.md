@@ -49,7 +49,7 @@ The completed 600-second runs produced the following summary:
 | 42 (first baseline) | 8,410 | 71 | 4 | 2 | 2 | Not yet instrumented | 0 | -3.30e-5 |
 | 7 | 8,451 | 65 | 4 | 4 | 4 | Not yet instrumented | 0 | -2.69e-5 |
 | 101 | 7,059 | 61 | 3 | 0 | 0 | Not applicable | 0 | -2.37e-5 |
-| 42 (failure-stage follow-up) | 8,497 | 72 | 4 | 2 | 2 | Stored old-bond energy differed from the value recomputed from its endpoint properties and strength | 0 | -3.36e-5 |
+| 42 (failure-stage follow-up) | 8,497 | 72 | 4 | 2 | 2 | Incorrectly rejected zero-allocation seed bonds at an energy-parity gate (now removed) | 0 | -3.36e-5 |
 
 The failure-stage follow-up performed 44,248 replacement-contact searches and exhausted the displacement discovery share on all 8,497 ticks. It preserved the exact constituent inventory. Both activated candidates stopped at the old-bond energy consistency check. The fixture seeds 40 H-S and 40 C-H composition-only molecules whose bonds intentionally have `bond_energy = 0.0`: these are structural bonds, not allocated energy stores. The previous displacement gate incorrectly compared that recorded zero against a recomputed pair potential and rejected the trial. The correct transaction must preserve the recorded old-bond energy (including zero), calculate the replacement bond energy through the same pair-adhesion authority as COMBINE, and settle the complete signed structural-energy change plus physical work once. No energy may be inferred or created for the old seed bond. The discovery work budget is exhausted frequently, but the observed trial failures occurred after valid contacts and activation; budget exhaustion was not the immediate rejection cause.
 
