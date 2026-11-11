@@ -894,34 +894,41 @@ impl Simulation {
             organism.active_transformation_id = None;
             return false;
         };
-        // Stored environmental compounds retain their bond endpoints, but
-        // no energy was allocated when those pre-existing bonds were created.
-        // Breaking one therefore changes connectivity only; deriving a fresh
-        // energy credit from resource properties would create energy.
-        // Validate the exact bond before settling the transaction. The physical
-        // structure itself is not changed until the following tick.
+        // Validate the exact bond before staging energy. Historical bonds
+        // deserialize with zero bond energy and therefore remain connectivity-
+        // only; bonds formed under the current COMBINE model carry their actual
+        // dissociation energy and must be paid for when separated.
         if stored.break_internal_bond(target).is_none() {
             organism.active_transformation_id = None;
             return false;
         }
 
         let before_energy = organism.usable_energy;
-        let tx = EnergyTransaction {
-            reason: EnergyReason::Break,
-            potential_released: 0.0,
-            usable_delta: 0.0,
-            structural_delta: 0.0,
-            work_expended: 0.0,
-            heat_dissipated: 0.0,
-        };
-        if !ledger.settle_transaction(&mut organism.usable_energy, tx) {
+        let Some(prepared) = prepare_chemical_break_energy_with_structural_potentials(
+            before_energy,
+            ledger,
+            target.bond_energy,
+            0.0,
+            target.bond_energy,
+            0.0,
+            0.0,
+            0.0,
+        ) else {
             organism.active_transformation_id = None;
             return false;
-        }
+        };
 
-        // Preserve the usual completion marker without claiming that stored
-        // material released usable energy or heat.
-        transformation.prepared_energy = Some((before_energy, 0.0, 0.0));
+        // Stage the accounting alongside the exact source escrow. Do not debit
+        // the live holder until the physical split commits in resolve_transformation.
+        transformation.prepared_usable_energy = Some(prepared.usable_energy);
+        transformation.prepared_ledger = Some(prepared.ledger);
+        transformation.prepared_usable_energy_before = Some(before_energy);
+        transformation.prepared_ledger_before = Some(*ledger);
+        transformation.prepared_energy = Some((
+            before_energy,
+            prepared.usable_energy - before_energy,
+            prepared.heat_dissipated,
+        ));
         true
     }
 }
@@ -1306,6 +1313,17 @@ pub(crate) fn resolve_transformation(
             .stored_material
             .commit_prepared_physical_batch(prepared);
     }
+    let Some(prepared_usable_energy) = transformation.prepared_usable_energy else {
+        restore_failed_stored_break_source(transformation, organism, environment);
+        return;
+    };
+    let Some(prepared_ledger) = transformation.prepared_ledger.as_ref() else {
+        restore_failed_stored_break_source(transformation, organism, environment);
+        return;
+    };
+    organism.usable_energy = prepared_usable_energy;
+    *ledger = prepared_ledger.clone();
+
     let (_, usable, heat) = transformation.prepared_energy.unwrap();
     organism.add_transaction_stress(heat);
     organism.active_transformation_id = None;
