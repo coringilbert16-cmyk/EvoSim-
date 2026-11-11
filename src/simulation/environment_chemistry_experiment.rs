@@ -675,6 +675,61 @@ mod tests {
     }
 
     #[test]
+    fn dispersion_layouts_are_deterministic_and_preserve_the_complete_inventory() {
+        for dispersion in [
+            DispersionMode::Randomized,
+            DispersionMode::Uniform,
+            DispersionMode::Clustered,
+        ] {
+            let first = build_with_dispersion(42, dispersion);
+            let second = build_with_dispersion(42, dispersion);
+            assert_eq!(first.pile_sizes, second.pile_sizes);
+            assert_eq!(
+                first.simulation.environment.field.cells,
+                second.simulation.environment.field.cells,
+                "{dispersion:?} placement must be reproducible"
+            );
+            assert_eq!(first.pile_sizes.iter().sum::<usize>(), ENVIRONMENT_OBJECT_COUNT);
+            assert!(first.simulation.organisms.is_empty());
+            let materials = first.simulation.environment.field.cells.iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .collect::<Vec<_>>();
+            assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
+            assert_eq!(
+                materials.iter().filter(|material| material.material.parts.len() == 1).count(),
+                ENVIRONMENT_SINGLE_RESOURCE_COUNT
+            );
+            assert_eq!(
+                materials.iter().filter(|material| material.material.parts.len() == 2).count(),
+                ENVIRONMENT_MOLECULE_COUNT
+            );
+            let represented = materials.iter()
+                .flat_map(|material| material.material.parts.iter().map(|part| part.0.as_str()))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(represented.len(), 7);
+            assert_eq!(first.simulation.energy_inventory_snapshot().residual(), Some(0.0));
+
+            match dispersion {
+                DispersionMode::Randomized => {
+                    assert!((3..=10).contains(&first.pile_sizes.len()));
+                }
+                DispersionMode::Uniform => {
+                    assert_eq!(first.pile_sizes.len(), ENVIRONMENT_OBJECT_COUNT);
+                    assert!(first.pile_sizes.iter().all(|size| *size == 1));
+                    let xs = materials.iter().map(|material| material.placements[0].x);
+                    let min_x = xs.clone().fold(f64::INFINITY, f64::min);
+                    let max_x = xs.fold(f64::NEG_INFINITY, f64::max);
+                    assert!(min_x < 5.0 && max_x > 245.0);
+                }
+                DispersionMode::Clustered => {
+                    assert_eq!(first.pile_sizes.len(), 32);
+                    assert!(first.pile_sizes.iter().all(|size| *size == 40));
+                }
+            }
+        }
+    }
+
+    #[test]
     fn fixture_has_1280_objects_with_80_intact_molecules_and_no_organisms() {
         let first = build(42);
         let second = build(42);
