@@ -736,7 +736,11 @@ mod tests {
                 DispersionMode::Uniform => {
                     assert_eq!(first.pile_sizes.len(), ENVIRONMENT_OBJECT_COUNT);
                     assert!(first.pile_sizes.iter().all(|size| *size == 1));
-                    let xs = materials.iter().map(|material| material.placements[0].x);
+                    let xs = materials.iter().map(|material| {
+                        material.placements.as_ref().and_then(|placements| placements.first())
+                            .expect("uniformly placed material must retain its placement")
+                            .x
+                    });
                     let min_x = xs.clone().fold(f64::INFINITY, f64::min);
                     let max_x = xs.fold(f64::NEG_INFINITY, f64::max);
                     assert!(min_x < 5.0 && max_x > 245.0);
