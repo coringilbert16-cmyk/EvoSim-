@@ -358,9 +358,9 @@ pub(crate) fn resolve_resonance_overload_break(
     ) else {
         return false;
     };
-    let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_integrity(
-        target.strength,
-    ) else {
+    let Some(disruption_cost) =
+        crate::chemistry::activation_barrier_from_bond_integrity(target.strength)
+    else {
         return false;
     };
     let required_resonance = disruption_cost;
