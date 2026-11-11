@@ -162,10 +162,9 @@ fn obstacle_for(
             continue;
         }
         let placement = placements.get(index)?;
-        let wrapped_dy =
-            (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
-        radius = radius
-            .max((placement.x - x).hypot(wrapped_dy) + shape_radius(&resource.shape.form));
+        let wrapped_dy = (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
+        radius =
+            radius.max((placement.x - x).hypot(wrapped_dy) + shape_radius(&resource.shape.form));
     }
     Some(Obstacle {
         source_cell,
