@@ -107,11 +107,17 @@ pub fn interface_engagement(facing: f64) -> Option<f64> {
 /// A structural activation barrier expressed in the same normalized scale as
 /// accumulated reaction. The supplied value is local bond integrity, not
 /// adhesion or stored bond potential; no second arbitrary threshold is introduced.
-pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
-    if !bond_strength.is_finite() || bond_strength < 0.0 {
+pub fn activation_barrier_from_bond_integrity(bond_integrity: f64) -> Option<f64> {
+    if !bond_integrity.is_finite() || bond_integrity < 0.0 {
         return None;
     }
-    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
+    normalized_chemistry_to_energy(bond_integrity.clamp(0.0, 1.0))
+}
+
+/// Compatibility adapter for historical callers that still name local
+/// integrity as bond strength. New BREAK code should use the explicit API.
+pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
+    activation_barrier_from_bond_integrity(bond_strength)
 }
 
 /// Derive a bond's activation barrier from its local integrity and the two
@@ -153,7 +159,7 @@ pub fn activation_barrier_from_bond_properties(
     } else {
         reactivity_baseline / (reactivity_baseline + pair_reactivity)
     };
-    normalized_chemistry_to_energy(bond_integrity.clamp(0.0, 1.0) * response_factor)
+    activation_barrier_from_bond_integrity(bond_integrity.clamp(0.0, 1.0) * response_factor)
 }
 
 /// Convert the normalized accumulated chemistry quantity into physical energy.
