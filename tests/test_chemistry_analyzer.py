@@ -192,5 +192,65 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(len(errors), 3)
 
 
+
+    def test_attributes_exact_elemental_bond_pairs_from_reactant_and_product_graphs(self):
+        carbon_hydrogen = {
+            "material": {"parts": [["Carbon", 1.0], ["Hydrogen", 1.0]]},
+            "internal_connections": [{"part_a": 0, "part_b": 1}],
+        }
+        carbon_nitrogen = {
+            "material": {"parts": [["Carbon", 1.0], ["Nitrogen", 1.0]]},
+            "internal_connections": [{"part_a": 0, "part_b": 1}],
+        }
+        carbon = {
+            "material": {"parts": [["Carbon", 1.0]]},
+            "internal_connections": [],
+        }
+        hydrogen = {
+            "material": {"parts": [["Hydrogen", 1.0]]},
+            "internal_connections": [],
+        }
+        nitrogen = {
+            "material": {"parts": [["Nitrogen", 1.0]]},
+            "internal_connections": [],
+        }
+        records = fixture_records()
+        records[2] = {
+            "event": "environmental_reaction",
+            "reaction": {
+                "reaction": "COMBINE",
+                "outcome": "committed",
+                "molecular_lifecycle": [
+                    {"action": "destroyed", "molecule": carbon},
+                    {"action": "destroyed", "molecule": hydrogen},
+                    {"action": "created", "molecule": carbon_hydrogen},
+                ],
+            },
+        }
+        records.insert(3, {
+            "event": "environmental_reaction",
+            "reaction": {
+                "reaction": "DISPLACEMENT",
+                "outcome": "committed",
+                "molecular_lifecycle": [
+                    {"action": "destroyed", "molecule": carbon_hydrogen},
+                    {"action": "destroyed", "molecule": nitrogen},
+                    {"action": "created", "molecule": carbon_nitrogen},
+                    {"action": "created", "molecule": hydrogen},
+                ],
+            },
+        })
+        attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
+        self.assertEqual(attribution["committed_events_with_graph_deltas"], 2)
+        self.assertEqual(attribution["committed_events_missing_graph_deltas"], 0)
+        self.assertEqual(attribution["formed"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["broken"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["formed"]["Carbon-Nitrogen"], 1)
+        self.assertEqual(attribution["formed_total"], 2)
+        self.assertEqual(attribution["broken_total"], 1)
+        self.assertEqual(len(attribution["element_pairs"]), 21)
+        self.assertEqual(attribution["by_reaction"]["COMBINE"]["formed_total"], 1)
+        self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["broken_total"], 1)
+
 if __name__ == "__main__":
     unittest.main()
