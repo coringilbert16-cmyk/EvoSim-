@@ -498,11 +498,8 @@ pub(crate) fn evaluate_displacement_preflight(
     dissipated_heat: f64,
 ) -> Option<DisplacementPreflight> {
     let old_bond_energy = intrinsic_bond_potential(anchor, displaced, old_bond_strength);
-    let replacement_bond_energy = intrinsic_bond_potential(
-        anchor,
-        incoming,
-        bond_strength(anchor, incoming),
-    );
+    let replacement_bond_energy =
+        intrinsic_bond_potential(anchor, incoming, bond_strength(anchor, incoming));
     evaluate_displacement_preflight_with_bond_energies(
         anchor,
         displaced,
@@ -2241,6 +2238,47 @@ mod tests {
             resonance_influenced_activation > activation,
             "positive local spectral similarity must increase incoming-contact activation"
         );
+    }
+
+    #[test]
+    fn same_element_incoming_contact_can_activate_displacement() {
+        let catalog = default_catalog();
+        let mut structure = OrganismStructure::new();
+        for x in [0.0, 1.5] {
+            structure.add_unit(crate::structure::StructuralUnit::new(
+                "Carbon",
+                crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ));
+        }
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidate = crate::contact::connection_pair_candidates_cached(
+            &structure,
+            0,
+            1,
+            &catalog,
+            &mut cache,
+        )
+        .into_iter()
+        .find(|candidate| {
+            candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                && candidate.available_a
+                && candidate.available_b
+                && candidate.facing > 0.0
+        })
+        .expect("Carbon-Carbon pair should expose an eligible physical contact");
+        let activation = accumulate_incoming_activation(
+            &structure.units[0],
+            &structure.units[1],
+            candidate,
+            0.0,
+            &catalog,
+        )
+        .expect("positive Carbon self-adhesion should accumulate activation");
+        assert!(activation > 0.0);
     }
 
     #[test]
