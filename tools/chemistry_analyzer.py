@@ -650,11 +650,16 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Formed bonds: {bond_pairs['formed_total']}",
         f"- Broken bonds: {bond_pairs['broken_total']}",
         "",
-        "| Element pair | Formed | Broken |",
-        "|---|---:|---:|",
+        f"- Initial-to-final bond inventory reconciles with reaction deltas: {bond_pairs['inventory_reconciliation']['matches']}",
+        "| Element pair | Initial | Formed | Broken | Final |",
+        "|---|---:|---:|---:|---:|",
     ]
     for pair in bond_pairs["element_pairs"]:
-        lines.append(f"| {pair} | {bond_pairs['formed'][pair]} | {bond_pairs['broken'][pair]} |")
+        lines.append(
+            f"| {pair} | {bond_pairs['initial_bond_inventory'][pair]} | "
+            f"{bond_pairs['formed'][pair]} | {bond_pairs['broken'][pair]} | "
+            f"{bond_pairs['final_bond_inventory'][pair]} |"
+        )
     lines += [
         "",
         "## Energy accounting",
