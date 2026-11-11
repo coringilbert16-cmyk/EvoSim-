@@ -942,9 +942,13 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             accumulation.remove(&key);
             continue;
         }
-        let strength = crate::combine::bond_strength(a, b);
+        let Some(integrity) = crate::combine::bond_integrity(a, b) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
         let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
-            strength,
+            integrity,
             a.reactivity,
             b.reactivity,
             baselines.reactivity,
