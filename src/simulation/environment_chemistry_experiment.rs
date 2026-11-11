@@ -361,7 +361,10 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     );
     // Keep Water in the authoritative catalog and all historical data, but
     // omit it from active chemistry experiment inventories until revisited.
-    let catalog: Vec<_> = simulation.environment.catalog.iter()
+    let catalog: Vec<_> = simulation
+        .environment
+        .catalog
+        .iter()
         .filter(|resource| resource.name != "Water")
         .cloned()
         .collect();
