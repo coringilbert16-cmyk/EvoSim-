@@ -232,6 +232,7 @@ class ChemistryAnalyzerTests(unittest.TestCase):
             "reaction": {
                 "reaction": "DISPLACEMENT",
                 "outcome": "committed",
+                "broken_bond_index": 0,
                 "molecular_lifecycle": [
                     {"action": "destroyed", "molecule": carbon_hydrogen},
                     {"action": "destroyed", "molecule": nitrogen},
@@ -240,17 +241,32 @@ class ChemistryAnalyzerTests(unittest.TestCase):
                 ],
             },
         })
+        records.insert(4, {
+            "event": "environmental_reaction",
+            "reaction": {
+                "reaction": "DISPLACEMENT",
+                "outcome": "committed",
+                "broken_bond_index": 0,
+                "molecular_lifecycle": [
+                    {"action": "destroyed", "molecule": carbon_hydrogen},
+                    {"action": "destroyed", "molecule": hydrogen},
+                    {"action": "created", "molecule": carbon_hydrogen},
+                    {"action": "created", "molecule": hydrogen},
+                ],
+            },
+        })
         attribution = analyze(records)["reactions"]["elemental_bond_pairs"]
-        self.assertEqual(attribution["committed_events_with_graph_deltas"], 2)
+        self.assertEqual(attribution["committed_events_with_graph_deltas"], 3)
         self.assertEqual(attribution["committed_events_missing_graph_deltas"], 0)
-        self.assertEqual(attribution["formed"]["Carbon-Hydrogen"], 1)
-        self.assertEqual(attribution["broken"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["formed"]["Carbon-Hydrogen"], 2)
+        self.assertEqual(attribution["broken"]["Carbon-Hydrogen"], 2)
         self.assertEqual(attribution["formed"]["Carbon-Nitrogen"], 1)
-        self.assertEqual(attribution["formed_total"], 2)
-        self.assertEqual(attribution["broken_total"], 1)
+        self.assertEqual(attribution["formed_total"], 3)
+        self.assertEqual(attribution["broken_total"], 2)
         self.assertEqual(len(attribution["element_pairs"]), 21)
         self.assertEqual(attribution["by_reaction"]["COMBINE"]["formed_total"], 1)
-        self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["broken_total"], 1)
+        self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["broken_total"], 2)
+        self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["formed"]["Carbon-Hydrogen"], 1)
 
 if __name__ == "__main__":
     unittest.main()
