@@ -289,16 +289,33 @@ fn build_displacement_trial_with_activation_status(
     let displaced = source.units[displaced_unit].properties(catalog)?;
     let incoming = source.units[incoming_unit].properties(catalog)?;
     let old_strength = old_bond.strength;
-    let old_bond_energy = crate::combine_runtime::bond_energy_for_pair(
+    // The recorded value is the only energy actually allocated to this
+    // existing bond. Historical/seeded composition bonds legitimately carry
+    // zero; do not manufacture a stored-energy allocation from descriptors.
+    let old_bond_energy = old_bond.bond_energy;
+    let expected_old_bond_energy = crate::combine_runtime::bond_energy_for_pair(
         &source.units[anchor_unit],
         &source.units[displaced_unit],
         catalog,
-    )?;
+    )
+    .unwrap_or(old_bond_energy);
     let replacement_bond_energy = crate::combine_runtime::bond_energy_for_pair(
         &source.units[anchor_unit],
         &source.units[incoming_unit],
         catalog,
     )?;
+    let old_bond_energy_abs_error = (old_bond_energy - expected_old_bond_energy).abs();
+    if let Some(diagnostic) = diagnostic.as_mut() {
+        diagnostic.old_bond_energy_stored = Some(old_bond_energy);
+        diagnostic.old_bond_energy_expected = Some(expected_old_bond_energy);
+        diagnostic.old_bond_energy_abs_error = Some(old_bond_energy_abs_error);
+    }
+    if !old_bond_energy.is_finite() || old_bond_energy < 0.0 {
+        if let Some(diagnostic) = diagnostic.as_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
+        }
+        return None;
+    }
     let preflight = evaluate_displacement_preflight_with_bond_energies(
         anchor,
         displaced,
@@ -311,22 +328,12 @@ fn build_displacement_trial_with_activation_status(
         0.0,
         dissipated_heat,
     )?;
-    let old_bond_energy_abs_error = (old_bond.bond_energy - preflight.old_bond_energy).abs();
     if let Some(diagnostic) = diagnostic.as_mut() {
         diagnostic.activation_sufficient = Some(preflight.is_activated());
-        diagnostic.old_bond_energy_stored = Some(old_bond.bond_energy);
-        diagnostic.old_bond_energy_expected = Some(preflight.old_bond_energy);
-        diagnostic.old_bond_energy_abs_error = Some(old_bond_energy_abs_error);
     }
     if !preflight.is_activated() {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Activation;
-        }
-        return None;
-    }
-    if old_bond_energy_abs_error > 1e-9 {
-        if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
         }
         return None;
     }
