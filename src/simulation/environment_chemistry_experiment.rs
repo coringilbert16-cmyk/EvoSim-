@@ -281,8 +281,8 @@ fn seed_randomized_molecular_resources(
         Vec::new()
     };
     let mut total_inventory = std::collections::BTreeMap::<String, usize>::new();
-    for name in baseline_identities {
-        *total_inventory.entry(name).or_default() += 1;
+    for name in &baseline_identities {
+        *total_inventory.entry(name.clone()).or_default() += 1;
     }
     for parts in &baseline_molecules {
         for name in parts {
