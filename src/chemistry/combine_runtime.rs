@@ -3,7 +3,10 @@
 //! Physics is evaluated by `combine`; this module selects a physical
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
-use crate::combine::{bond_strength, conservative_pair_potential, eligible_candidates, formation_cost, FormationEvaluation, PairPotentialEvaluation};
+use crate::combine::{
+    bond_strength, conservative_pair_potential, eligible_candidates, formation_cost,
+    FormationEvaluation, PairPotentialEvaluation,
+};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
@@ -124,8 +127,14 @@ fn active_pair_potential(
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Result<Option<PairPotentialEvaluation>, &'static str> {
-    let unit_a = structure.units.get(unit_a).ok_or("missing interface constituent A")?;
-    let unit_b = structure.units.get(unit_b).ok_or("missing interface constituent B")?;
+    let unit_a = structure
+        .units
+        .get(unit_a)
+        .ok_or("missing interface constituent A")?;
+    let unit_b = structure
+        .units
+        .get(unit_b)
+        .ok_or("missing interface constituent B")?;
     let [(name_a, amount_a)] = unit_a.material.parts.as_slice() else {
         return Err("interface constituent A is not an individual resource");
     };
@@ -291,7 +300,8 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
 
     let a = structure.units[unit_a].properties(catalog)?;
     let b = structure.units[unit_b].properties(catalog)?;
-    let pair_potential = active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
+    let pair_potential =
+        active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
     let strength = bond_strength(a, b);
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
