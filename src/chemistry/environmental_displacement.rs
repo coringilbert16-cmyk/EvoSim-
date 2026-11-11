@@ -1917,7 +1917,12 @@ mod tests {
             endpoint_a: BondEndpoint::new(source.physical_id(0).unwrap(), old_candidate.endpoint_a),
             endpoint_b: BondEndpoint::new(source.physical_id(1).unwrap(), old_candidate.endpoint_b),
             strength,
-            bond_energy: intrinsic_bond_potential(anchor, displaced, strength),
+            bond_energy: crate::combine_runtime::bond_energy_for_pair(
+                &source.units[0],
+                &source.units[1],
+                catalog,
+            )
+            .expect("initial bond energy uses the COMBINE pair authority"),
         };
         crate::contact::try_add_bond(&mut source, old_bond, catalog)
             .expect("initial A-B bond should be physically valid");
@@ -2152,11 +2157,12 @@ mod tests {
             Some(&mut diagnostic),
         )
         .is_none());
-        let expected = intrinsic_bond_potential(
-            source.units[0].properties(&catalog).unwrap(),
-            source.units[1].properties(&catalog).unwrap(),
-            old_bond.strength,
-        );
+        let expected = crate::combine_runtime::bond_energy_for_pair(
+            &source.units[0],
+            &source.units[1],
+            &catalog,
+        )
+        .expect("expected energy uses the COMBINE pair authority");
         assert_eq!(diagnostic.activation_sufficient, Some(true));
         assert_eq!(
             diagnostic.failure_stage,
