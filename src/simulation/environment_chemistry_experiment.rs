@@ -267,8 +267,6 @@ fn seed_randomized_molecular_resources(
     while baseline_identities.len() < single_resource_count {
         baseline_identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
-    baseline_identities.shuffle(&mut rng);
-
     // Keep the complete per-resource inventory identical across starting
     // mixtures. Only the allocation between bonded molecules and free
     // resources changes.
@@ -297,22 +295,27 @@ fn seed_randomized_molecular_resources(
             *target_inventory.entry(name.clone()).or_default() += 1;
         }
     }
-    let mut identities = Vec::with_capacity(single_resource_count);
-    for name in &resource_names {
-        let total = total_inventory.get(name).copied().unwrap_or_default();
-        let bonded = target_inventory.get(name).copied().unwrap_or_default();
-        let free = total.checked_sub(bonded).unwrap_or_else(|| {
-            panic!(
-                "starting mixture {:?} exceeds total inventory for {name}",
-                starting_mixture
-            )
-        });
-        assert!(
-            free > 0,
-            "every canonical resource must remain independently available"
-        );
-        identities.extend(std::iter::repeat(name.clone()).take(free));
-    }
+    let mut identities = if starting_mixture == StartingMixture::Baseline {
+        baseline_identities
+    } else {
+        let mut adjusted = Vec::with_capacity(single_resource_count);
+        for name in &resource_names {
+            let total = total_inventory.get(name).copied().unwrap_or_default();
+            let bonded = target_inventory.get(name).copied().unwrap_or_default();
+            let free = total.checked_sub(bonded).unwrap_or_else(|| {
+                panic!(
+                    "starting mixture {:?} exceeds total inventory for {name}",
+                    starting_mixture
+                )
+            });
+            assert!(
+                free > 0,
+                "every canonical resource must remain independently available"
+            );
+            adjusted.extend(std::iter::repeat(name.clone()).take(free));
+        }
+        adjusted
+    };
     assert_eq!(identities.len(), single_resource_count);
     identities.shuffle(&mut rng);
 
