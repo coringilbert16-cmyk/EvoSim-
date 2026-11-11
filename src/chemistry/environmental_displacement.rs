@@ -1027,8 +1027,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 let local_resonance_similarity = if let Some(world) =
                                     local_resonance_world.filter(|_| {
                                         diagnostics.local_resonance_sample_attempts == 0
-                                    })
-                                {
+                                    }) {
                                     diagnostics.local_resonance_sample_attempts = diagnostics
                                         .local_resonance_sample_attempts
                                         .saturating_add(1);
