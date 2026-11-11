@@ -737,7 +737,10 @@ mod tests {
                     assert_eq!(first.pile_sizes.len(), ENVIRONMENT_OBJECT_COUNT);
                     assert!(first.pile_sizes.iter().all(|size| *size == 1));
                     let xs = materials.iter().map(|material| {
-                        material.placements.as_ref().and_then(|placements| placements.first())
+                        material
+                            .placements
+                            .as_ref()
+                            .and_then(|placements| placements.first())
                             .expect("uniformly placed material must retain its placement")
                             .x
                     });
