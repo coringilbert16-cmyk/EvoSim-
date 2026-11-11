@@ -345,6 +345,9 @@ impl ConnectionEndpoint {
 pub struct Bond {
     pub endpoint_a: BondEndpoint,
     pub endpoint_b: BondEndpoint,
+    /// Local bond integrity derived from endpoint intrinsic cohesion.
+    /// Kept under the serialized `strength` name for compatibility; this is
+    /// not pair adhesion, reactivity, or stored bond potential.
     pub strength: f64,
     #[serde(default)]
     pub bond_energy: f64,
