@@ -265,9 +265,11 @@ mod tests {
             "active chemistry diagnostics exclude Water until it is revisited"
         );
 
-        let reactivity_baseline = catalog.iter()
+        let reactivity_baseline = catalog
+            .iter()
             .map(|resource| resource.properties.reactivity)
-            .sum::<f64>() / catalog.len() as f64;
+            .sum::<f64>()
+            / catalog.len() as f64;
         let mut pair_count = 0usize;
         for i in 0..catalog.len() {
             for j in i..catalog.len() {
@@ -288,16 +290,14 @@ mod tests {
                     interaction_potential(position_b, position_a, CHEMICAL_K, CHEMICAL_D_MAX)
                         .expect("reversed canonical positions must produce a finite potential");
                 let separation = (position_a - position_b).abs();
-                let structural_strength = crate::combine::bond_strength(
-                    a.properties,
-                    b.properties,
-                );
+                let structural_strength = crate::combine::bond_strength(a.properties, b.properties);
                 let break_barrier = activation_barrier_from_bond_properties(
                     structural_strength,
                     a.properties.reactivity,
                     b.properties.reactivity,
                     reactivity_baseline,
-                ).expect("non-Water pair must have a finite BREAK barrier");
+                )
+                .expect("non-Water pair must have a finite BREAK barrier");
 
                 assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
                 assert!(structural_strength > 0.0);
