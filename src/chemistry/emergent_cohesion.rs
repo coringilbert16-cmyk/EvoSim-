@@ -17,10 +17,6 @@ use std::collections::HashMap;
 /// emergent cohesion.
 ///
 /// Uses the deterministic Stoer-Wagner global minimum-cut algorithm.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "Staged API awaits compound-stability integration"),
-)]
 pub fn emergent_cohesion(graph: &PhysicalConstituentGraph) -> Option<f64> {
     let count = graph.units.len();
     if count < 2 {
