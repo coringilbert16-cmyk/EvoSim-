@@ -920,10 +920,12 @@ mod tests {
                     expected = Some(inventory);
                 }
                 let expected_molecules = match mixture {
-                    StartingMixture::Baseline => [("Carbon-Hydrogen", 40_usize), ("Hydrogen-Sulfur", 40_usize)]
-                        .into_iter()
-                    .map(|(name, count)| (name.to_string(), count))
-                    .collect::<std::collections::BTreeMap<_, _>>(),
+                    StartingMixture::Baseline => {
+                        [("Carbon-Hydrogen", 40_usize), ("Hydrogen-Sulfur", 40_usize)]
+                            .into_iter()
+                            .map(|(name, count)| (name.to_string(), count))
+                            .collect::<std::collections::BTreeMap<_, _>>()
+                    }
                     StartingMixture::HighBonded => [
                         ("Carbon-Sulfur", 27_usize),
                         ("Nitrogen-Sulfur", 26_usize),
