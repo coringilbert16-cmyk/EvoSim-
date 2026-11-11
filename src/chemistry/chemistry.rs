@@ -265,6 +265,9 @@ mod tests {
             "active chemistry diagnostics exclude Water until it is revisited"
         );
 
+        let reactivity_baseline = catalog.iter()
+            .map(|resource| resource.properties.reactivity)
+            .sum::<f64>() / catalog.len() as f64;
         let mut pair_count = 0usize;
         for i in 0..catalog.len() {
             for j in i..catalog.len() {
@@ -285,8 +288,20 @@ mod tests {
                     interaction_potential(position_b, position_a, CHEMICAL_K, CHEMICAL_D_MAX)
                         .expect("reversed canonical positions must produce a finite potential");
                 let separation = (position_a - position_b).abs();
+                let structural_strength = crate::combine::bond_strength(
+                    a.properties,
+                    b.properties,
+                );
+                let break_barrier = activation_barrier_from_bond_properties(
+                    structural_strength,
+                    a.properties.reactivity,
+                    b.properties.reactivity,
+                    reactivity_baseline,
+                ).expect("non-Water pair must have a finite BREAK barrier");
 
                 assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
+                assert!(structural_strength > 0.0);
+                assert!(break_barrier > 0.0);
                 assert!((forward - reverse).abs() <= 1e-12);
                 if i == j {
                     assert_eq!(
@@ -297,13 +312,15 @@ mod tests {
                 }
 
                 println!(
-                    "PAIR_MATRIX|{}|{}|position_a={:.6}|position_b={:.6}|separation={:.6}|potential={:.9}|mass_a={:.6}|mass_b={:.6}|reactivity_a={:.6}|reactivity_b={:.6}|cohesion_a={:.6}|cohesion_b={:.6}|nonzero_static_potential={}",
+                    "PAIR_MATRIX|{}|{}|position_a={:.6}|position_b={:.6}|separation={:.6}|potential={:.9}|bond_strength={:.9}|break_barrier={:.9}|mass_a={:.6}|mass_b={:.6}|reactivity_a={:.6}|reactivity_b={:.6}|cohesion_a={:.6}|cohesion_b={:.6}|combine_affinity={}",
                     a.name,
                     b.name,
                     position_a,
                     position_b,
                     separation,
                     forward,
+                    structural_strength,
+                    break_barrier,
                     a.properties.mass,
                     b.properties.mass,
                     a.properties.reactivity,
