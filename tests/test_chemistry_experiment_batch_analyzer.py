@@ -33,7 +33,7 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
                 {"parent_id": 1, "child_id": 2, "reaction": "COMBINE"}
             ],
             "molecules": [
-                {"molecule_id": 1, "reaction": "INITIAL"},
+                {"molecule_id": 1, "reaction": "BREAK"},
                 {"molecule_id": 2, "reaction": "COMBINE"},
             ],
         },
