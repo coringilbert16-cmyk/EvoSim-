@@ -1,7 +1,3 @@
-#![expect(
-    dead_code,
-    reason = "Staged API retained for compound-stability integration"
-)]
 //! Compound-level cohesion derived from the topology of its realized bond graph.
 //!
 //! Local bond integrity is the weight of each edge. Emergent cohesion is the
