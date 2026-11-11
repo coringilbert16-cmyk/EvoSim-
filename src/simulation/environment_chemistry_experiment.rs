@@ -378,6 +378,13 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         true,
     );
 
+    assert!(
+        simulation.environment.field.cells.iter()
+            .flat_map(|cell| &cell.physical_materials)
+            .all(|material| material.material.parts.iter().all(|(name, _)| name != "Water")),
+        "active environmental chemistry experiments must not seed Water"
+    );
+
     // Establish stable IDs for the complete tick-zero inventory before any
     // diagnostics or reaction can observe the environment.
     simulation
