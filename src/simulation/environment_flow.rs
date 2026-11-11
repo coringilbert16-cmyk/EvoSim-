@@ -130,7 +130,6 @@ fn obstacle_for(
         return None;
     }
     let placements = material.placements.as_ref()?;
-    let mut rigid_parts = Vec::new();
     let mut total_rigid_weight = 0.0;
     let mut weighted_x = 0.0;
     let mut weighted_y_sin = 0.0;
@@ -149,7 +148,6 @@ fn obstacle_for(
         weighted_x += placement.x * *amount;
         weighted_y_sin += y_angle.sin() * *amount;
         weighted_y_cos += y_angle.cos() * *amount;
-        rigid_parts.push((placement, &resource.shape.form));
     }
     if !total_rigid_weight.is_finite() || total_rigid_weight <= 0.0 {
         return None;
@@ -160,8 +158,15 @@ fn obstacle_for(
         .rem_euclid(std::f64::consts::TAU);
     let y = y_angle * height / std::f64::consts::TAU;
     let mut radius: f64 = 0.5;
-    for (placement, form) in rigid_parts {
-        radius = radius.max((placement.x - x).hypot(placement.y - y) + shape_radius(form));
+    for (index, (name, _amount)) in material.material.parts.iter().enumerate() {
+        let resource = resource_for_part(name, catalog)?;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
+        }
+        let placement = placements.get(index)?;
+        radius = radius.max(
+            (placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form),
+        );
     }
     Some(Obstacle {
         source_cell,
