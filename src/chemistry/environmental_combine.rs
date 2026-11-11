@@ -3102,6 +3102,34 @@ mod tests {
     }
 
     #[test]
+    fn active_element_pair_activation_uses_the_same_adhesion_score_as_formation() {
+        let catalog = crate::resources::default_catalog();
+        for name in ["Carbon", "Nitrogen", "Phosphorus", "Sulfur"] {
+            let resource = catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .expect("active element");
+            let unit = crate::structure::StructuralUnit::new(
+                name,
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            );
+            let expected = crate::resources::pair_adhesion(resource.adhesion, resource.adhesion)
+                .expect("valid self-pair descriptors")
+                .net;
+            assert!(expected > 0.0, "{name} must have positive self-adhesion");
+            assert_eq!(
+                constituent_pair_static_potential(&unit, &unit, &catalog),
+                Some(expected),
+                "{name}-{name} activation must use its actual pair-adhesion score"
+            );
+        }
+    }
+
+    #[test]
     fn environmental_pair_combine_commits_a_realized_product() {
         let mut simulation = crate::state::Simulation::new(942, 10.0);
         let catalog = simulation.environment.catalog.clone();
@@ -3127,14 +3155,12 @@ mod tests {
                 if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
                     continue;
                 }
-                let chemistry_separation = match (
-                    resource_a.properties.chemical_position,
-                    resource_b.properties.chemical_position,
-                ) {
-                    (Some(a), Some(b)) => (a - b).abs(),
-                    _ => continue,
+                let Some(pair_adhesion) =
+                    crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
+                else {
+                    continue;
                 };
-                if chemistry_separation < 9.0 {
+                if pair_adhesion.net <= 0.0 {
                     continue;
                 }
                 for step in 1..=60 {
