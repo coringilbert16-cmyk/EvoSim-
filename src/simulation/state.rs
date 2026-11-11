@@ -620,12 +620,6 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) candidate_chemistry_rejections: u64,
     /// Candidates that produced a valid activation update.
     pub(crate) activation_updates: u64,
-    /// DISPLACEMENT local resonance endpoint sampling diagnostics.
-    pub(crate) local_resonance_sample_attempts: u64,
-    pub(crate) local_resonance_samples: u64,
-    pub(crate) local_resonance_unavailable: u64,
-    pub(crate) local_resonance_similarity_sum: f64,
-    pub(crate) local_resonance_similarity_max: f64,
     /// Valid activation updates that remained below the disruption barrier.
     pub(crate) activation_below_threshold: u64,
     /// Valid activation updates that reached the disruption barrier.
@@ -764,6 +758,12 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) replacement_contacts_found: u64,
     /// Valid incoming-contact activation accumulations updated.
     pub(crate) activation_updates: u64,
+    /// DISPLACEMENT local resonance endpoint sampling diagnostics.
+    pub(crate) local_resonance_sample_attempts: u64,
+    pub(crate) local_resonance_samples: u64,
+    pub(crate) local_resonance_unavailable: u64,
+    pub(crate) local_resonance_similarity_sum: f64,
+    pub(crate) local_resonance_similarity_max: f64,
     /// Activation checks that reached the existing bond's displacement barrier.
     pub(crate) activation_threshold_met: u64,
     /// Activation checks still below the existing bond's displacement barrier.
