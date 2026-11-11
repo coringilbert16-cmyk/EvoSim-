@@ -1006,7 +1006,6 @@ mod tests {
         state
     }
 
-
     #[test]
     fn movement_cost_scales_linearly_with_distance() {
         let costs = [1.0, 2.0, 4.0, 8.0].map(|distance| {
