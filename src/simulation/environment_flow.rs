@@ -873,7 +873,8 @@ mod tests {
             "fluid-state material should not become a rigid flow obstacle"
         );
 
-        fluid_catalog
+        let mut mixed_catalog = catalog.clone();
+        mixed_catalog
             .iter_mut()
             .find(|resource| resource.name == "Oxygen")
             .expect("oxygen catalog entry")
@@ -895,10 +896,10 @@ mod tests {
                     rotation_radians: 0.0,
                 },
             ],
-            &fluid_catalog,
+            &mixed_catalog,
         )
         .expect("mixed rigid/fluid geometry should realize");
-        let mixed_obstacle = obstacle_for(0, 0, &mixed_material, &fluid_catalog, 100.0)
+        let mixed_obstacle = obstacle_for(0, 0, &mixed_material, &mixed_catalog, 100.0)
             .expect("rigid constituent should remain an obstacle");
         assert!((mixed_obstacle.x - 10.0).abs() < 1e-9);
         assert!(
