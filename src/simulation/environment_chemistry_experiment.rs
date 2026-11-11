@@ -278,9 +278,10 @@ fn seed_randomized_molecular_resources(
         let remainder = ENVIRONMENT_MOLECULE_COUNT % KNOWN_TWO_UNIT_MOLECULES.len();
         for (index, (left, right)) in KNOWN_TWO_UNIT_MOLECULES.iter().enumerate() {
             let count = base_share + usize::from(index < remainder);
-            molecules.extend(
-                std::iter::repeat_n((vec![(*left).into(), (*right).into()], true), count),
-            );
+            molecules.extend(std::iter::repeat_n(
+                (vec![(*left).into(), (*right).into()], true),
+                count,
+            ));
         }
         molecules.shuffle(&mut rng);
         molecules
@@ -290,7 +291,10 @@ fn seed_randomized_molecular_resources(
             identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
         }
         identities.shuffle(&mut rng);
-        identities.into_iter().map(|name| (vec![name], false)).collect()
+        identities
+            .into_iter()
+            .map(|name| (vec![name], false))
+            .collect()
     };
 
     let pile_count = rng.gen_range(3..=10);
