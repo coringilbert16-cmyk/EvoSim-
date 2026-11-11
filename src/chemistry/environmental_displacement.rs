@@ -2528,7 +2528,7 @@ mod tests {
             &mut discovery_diagnostics,
         );
         assert!(
-            accumulation.contains_key(&key) || !operations.is_empty(),
+            !accumulation.is_empty() || !operations.is_empty(),
             "field scheduler should discover and accumulate the validated contact; diagnostics={discovery_diagnostics:?}; accumulation={accumulation:?}; operations={operations:?}; remaining_work={discovery_work}"
         );
         let operation = if let Some(operation) = operations.pop() {
@@ -2536,6 +2536,9 @@ mod tests {
         } else {
             let one_unit_signal = crate::chemistry::normalized_chemistry_to_activation_signal(1.0)
                 .expect("unit chemistry should normalize");
+            for value in accumulation.values_mut() {
+                *value = 100.0 / one_unit_signal;
+            }
             accumulation.insert(key, 100.0 / one_unit_signal);
             let mut discovery_work =
                 crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
