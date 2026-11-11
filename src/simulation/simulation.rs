@@ -1110,6 +1110,7 @@ impl Simulation {
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
         self.environmental_chemistry_diagnostics
@@ -1354,11 +1355,12 @@ impl Simulation {
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental(
+            crate::environmental_displacement::accumulate_environmental_with_resonance(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut displacement_discovery,
             );
         self.environmental_chemistry_diagnostics
