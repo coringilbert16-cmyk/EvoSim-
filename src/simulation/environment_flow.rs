@@ -225,7 +225,8 @@ fn obstacle_adjusted_velocity(
         let distance = dx.hypot(dy).max(1e-9);
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
-            let influence = obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
+            let influence =
+                obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
@@ -236,7 +237,8 @@ fn obstacle_adjusted_velocity(
         if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
-            let attenuation = (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+            let attenuation =
+                (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
             velocity = velocity.scale(1.0 - attenuation);
         }
     }
@@ -1148,7 +1150,8 @@ mod tests {
                 let distance = dx.hypot(dy).max(1e-9);
                 let radius = obstacle.radius.max(0.5);
                 if distance < radius * 2.5 {
-                    let influence = obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
+                    let influence =
+                        obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
                     let side = if dy >= 0.0 { 1.0 } else { -1.0 };
                     velocity = velocity.add(Velocity {
                         x: -dx.signum() * influence * 0.22,
@@ -1159,7 +1162,8 @@ mod tests {
                     let longitudinal = 1.0 - dx / (radius * 6.0);
                     let lateral = 1.0 - dy.abs() / (radius * 2.0);
                     let attenuation =
-                        (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                        (obstacle.obstruction_strength * longitudinal * lateral * 0.72)
+                            .clamp(0.0, 0.85);
                     velocity = velocity.scale(1.0 - attenuation);
                 }
             }
