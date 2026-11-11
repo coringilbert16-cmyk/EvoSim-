@@ -386,8 +386,14 @@ mod tests {
     #[test]
     fn conservative_pair_potential_uses_one_score_for_all_energy_terms() {
         let catalog = default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
-        let oxygen = catalog.iter().find(|resource| resource.name == "Oxygen").unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
         let contact = conservative_pair_potential(
             carbon.adhesion,
             oxygen.adhesion,
@@ -418,7 +424,10 @@ mod tests {
     #[test]
     fn conservative_pair_potential_keeps_repulsion_and_does_not_create_a_bond() {
         let catalog = default_catalog();
-        let oxygen = catalog.iter().find(|resource| resource.name == "Oxygen").unwrap();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
         let result = conservative_pair_potential(
             oxygen.adhesion,
             oxygen.adhesion,
@@ -463,10 +472,18 @@ mod tests {
     #[test]
     fn conservative_pair_potential_rejects_invalid_scales_and_separation() {
         let descriptor = AdhesionDescriptors::default();
-        assert!(conservative_pair_potential(descriptor, descriptor, -0.1, 1.0, 1.0).is_none());
-        assert!(conservative_pair_potential(descriptor, descriptor, f64::NAN, 1.0, 1.0).is_none());
-        assert!(conservative_pair_potential(descriptor, descriptor, 0.0, 0.0, 1.0).is_none());
-        assert!(conservative_pair_potential(descriptor, descriptor, 0.0, 1.0, f64::INFINITY).is_none());
+        assert!(
+            conservative_pair_potential(descriptor, descriptor, -0.1, 1.0, 1.0).is_none()
+        );
+        assert!(
+            conservative_pair_potential(descriptor, descriptor, f64::NAN, 1.0, 1.0).is_none()
+        );
+        assert!(
+            conservative_pair_potential(descriptor, descriptor, 0.0, 0.0, 1.0).is_none()
+        );
+        assert!(
+            conservative_pair_potential(descriptor, descriptor, 0.0, 1.0, f64::INFINITY).is_none()
+        );
     }
 
     #[test]
