@@ -312,7 +312,7 @@ fn seed_randomized_molecular_resources(
                 free > 0,
                 "every canonical resource must remain independently available"
             );
-            adjusted.extend(std::iter::repeat(name.clone()).take(free));
+            adjusted.extend(std::iter::repeat_n(name.clone(), free));
         }
         adjusted
     };
