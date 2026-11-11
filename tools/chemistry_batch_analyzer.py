@@ -358,7 +358,7 @@ def build_report(root: Path) -> dict[str, Any]:
             "condition_pairing": "same seed and environment; local resonance activation enabled versus disabled",
             "simulated_minutes_per_condition": 25,
             "total_simulated_minutes": 50,
-            "initial_environment": "standard environmental chemistry experiment; 1,280 physical materials, including 1,200 independent resources and 80 molecules",
+            "initial_environment": "standard environmental chemistry experiment; 1,280 physical materials, including 1,200 independent resources and 80 molecules; Water excluded from current runs",
             "discovery_and_reaction_rules": "unchanged; no forced reactions",
             "delta_convention": "enabled minus disabled",
         },
@@ -375,8 +375,8 @@ def build_report(root: Path) -> dict[str, Any]:
                 row[mode]["duration_seconds"] == 300
                 for row in seed_rows for mode in MODES
             ),
-            "all_runs_have_seven_initial_resources": all(
-                row[mode]["all_seven_resources_present"]
+            "all_runs_have_six_active_resources": all(
+                row[mode]["all_six_active_resources_present"]
                 for row in seed_rows for mode in MODES
             ),
             "no_snapshot_resource_gaps": all(
@@ -557,7 +557,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"- Ten matched runs present: {report['validation']['all_ten_runs_present']}",
         f"- Every run completed 300 seconds: {report['validation']['all_runs_300_seconds']}",
-        f"- All six active non-Water resources present initially in every run: {report['validation']['all_runs_have_seven_initial_resources']}",
+        f"- All six active non-Water resources present initially in every run: {report['validation']['all_runs_have_six_active_resources']}",
         f"- No snapshot resource gaps: {report['validation']['no_snapshot_resource_gaps']}",
         "",
         "## Interpretation limits",
