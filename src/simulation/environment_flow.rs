@@ -164,9 +164,8 @@ fn obstacle_for(
             continue;
         }
         let placement = placements.get(index)?;
-        radius = radius.max(
-            (placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form),
-        );
+        radius = radius
+            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
     }
     Some(Obstacle {
         source_cell,
