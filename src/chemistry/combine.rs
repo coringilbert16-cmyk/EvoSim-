@@ -394,27 +394,15 @@ mod tests {
             .iter()
             .find(|resource| resource.name == "Oxygen")
             .unwrap();
-        let contact = conservative_pair_potential(
-            carbon.adhesion,
-            oxygen.adhesion,
-            0.0,
-            1.0,
-            1.0,
-        )
-        .unwrap();
+        let contact =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 0.0, 1.0, 1.0).unwrap();
         assert!(contact.adhesion.net > 0.0);
         assert_eq!(contact.potential_energy, -contact.bond_energy);
         assert_eq!(contact.force, contact.adhesion.net);
         assert_eq!(contact.approach_work, 0.0);
 
-        let edge = conservative_pair_potential(
-            carbon.adhesion,
-            oxygen.adhesion,
-            1.0,
-            1.0,
-            1.0,
-        )
-        .unwrap();
+        let edge =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 1.0, 1.0, 1.0).unwrap();
         assert_eq!(edge.potential_energy, 0.0);
         assert_eq!(edge.force, 0.0);
         assert!((edge.approach_work - contact.bond_energy).abs() < 1e-12);
@@ -428,14 +416,8 @@ mod tests {
             .iter()
             .find(|resource| resource.name == "Oxygen")
             .unwrap();
-        let result = conservative_pair_potential(
-            oxygen.adhesion,
-            oxygen.adhesion,
-            0.5,
-            1.0,
-            1.0,
-        )
-        .unwrap();
+        let result =
+            conservative_pair_potential(oxygen.adhesion, oxygen.adhesion, 0.5, 1.0, 1.0).unwrap();
         assert!(result.adhesion.net < 0.0);
         assert!(result.force < 0.0);
         assert!(result.potential_energy > 0.0);
@@ -446,24 +428,18 @@ mod tests {
     #[test]
     fn conservative_pair_potential_is_symmetric_and_clamps_outside_range() {
         let catalog = default_catalog();
-        let carbon = catalog.iter().find(|resource| resource.name == "Carbon").unwrap();
-        let oxygen = catalog.iter().find(|resource| resource.name == "Oxygen").unwrap();
-        let ab = conservative_pair_potential(
-            carbon.adhesion,
-            oxygen.adhesion,
-            2.0,
-            1.0,
-            1.0,
-        )
-        .unwrap();
-        let ba = conservative_pair_potential(
-            oxygen.adhesion,
-            carbon.adhesion,
-            1.0,
-            1.0,
-            1.0,
-        )
-        .unwrap();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
+        let ab =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 2.0, 1.0, 1.0).unwrap();
+        let ba =
+            conservative_pair_potential(oxygen.adhesion, carbon.adhesion, 1.0, 1.0, 1.0).unwrap();
         assert_eq!(ab, ba);
         assert_eq!(ab.potential_energy, 0.0);
         assert_eq!(ab.force, 0.0);
@@ -472,15 +448,9 @@ mod tests {
     #[test]
     fn conservative_pair_potential_rejects_invalid_scales_and_separation() {
         let descriptor = AdhesionDescriptors::default();
-        assert!(
-            conservative_pair_potential(descriptor, descriptor, -0.1, 1.0, 1.0).is_none()
-        );
-        assert!(
-            conservative_pair_potential(descriptor, descriptor, f64::NAN, 1.0, 1.0).is_none()
-        );
-        assert!(
-            conservative_pair_potential(descriptor, descriptor, 0.0, 0.0, 1.0).is_none()
-        );
+        assert!(conservative_pair_potential(descriptor, descriptor, -0.1, 1.0, 1.0).is_none());
+        assert!(conservative_pair_potential(descriptor, descriptor, f64::NAN, 1.0, 1.0).is_none());
+        assert!(conservative_pair_potential(descriptor, descriptor, 0.0, 0.0, 1.0).is_none());
         assert!(
             conservative_pair_potential(descriptor, descriptor, 0.0, 1.0, f64::INFINITY).is_none()
         );
