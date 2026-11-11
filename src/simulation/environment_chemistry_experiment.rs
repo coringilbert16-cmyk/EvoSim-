@@ -11,6 +11,7 @@ use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
+const ENVIRONMENT_SINGLE_RESOURCE_COUNT: usize = 0;
 const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
 
 // Two-constituent structures previously observed as reaction-created products.
@@ -665,7 +666,7 @@ mod tests {
     }
 
     #[test]
-    fn fixture_has_1280_objects_with_80_intact_molecules_and_no_organisms() {
+    fn fixture_has_1280_known_two_unit_molecules_and_no_organisms() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
@@ -755,7 +756,7 @@ mod tests {
                 .iter()
                 .filter(|m| m.material.parts.len() == 1)
                 .count(),
-            ENVIRONMENT_SINGLE_RESOURCE_COUNT
+            0
         );
         assert_eq!(
             materials
@@ -764,6 +765,19 @@ mod tests {
                 .count(),
             ENVIRONMENT_MOLECULE_COUNT
         );
+        let mut molecule_type_counts = std::collections::BTreeMap::new();
+        for material in &materials {
+            let mut elements = material
+                .material
+                .parts
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>();
+            elements.sort_unstable();
+            *molecule_type_counts.entry(elements).or_insert(0_usize) += 1;
+        }
+        assert_eq!(molecule_type_counts.len(), KNOWN_TWO_UNIT_MOLECULES.len());
+        assert!(molecule_type_counts.values().all(|count| *count == 80));
         let hs = materials
             .iter()
             .filter(|m| {
@@ -778,8 +792,8 @@ mod tests {
                     && m.material.parts.iter().any(|p| p.0 == "Hydrogen")
             })
             .count();
-        assert_eq!(hs, 40);
-        assert_eq!(ch, 40);
+        assert_eq!(hs, 80);
+        assert_eq!(ch, 80);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
