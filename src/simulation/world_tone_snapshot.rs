@@ -12,6 +12,7 @@ use crate::resources::{BaseResource, ResourceProperties};
 use crate::state::{Organism, Simulation};
 use crate::structure::Placement;
 use crate::world_tone::{WorldToneCaptureFrame, WorldToneSample};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug)]
 pub(crate) struct WorldToneOccluderSnapshot {
@@ -768,6 +769,8 @@ type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Optio
 pub(crate) struct LocalResonanceWorldSnapshot {
     bodies: Vec<PhysicalMaterial>,
     resonant_indices: Vec<usize>,
+    resonant_index_set: HashSet<usize>,
+    receiver_indices: HashMap<u64, Option<usize>>,
     emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
 }
 
@@ -781,9 +784,30 @@ impl LocalResonanceWorldSnapshot {
             &simulation.environment.catalog,
             simulation.tick,
         )?;
+        // Resolve stable environmental identities once per tick. A duplicate
+        // identity remains ambiguous and fails closed, matching the former
+        // full scan's uniqueness check.
+        let mut receiver_indices = HashMap::with_capacity(bodies.len());
+        for (index, body) in bodies.iter().enumerate() {
+            let identity = body.environmental_identity;
+            if identity == 0 {
+                continue;
+            }
+            match receiver_indices.entry(identity) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(Some(index));
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    entry.insert(None);
+                }
+            }
+        }
+        let resonant_index_set = resonant_indices.iter().copied().collect();
         Some(Self {
             bodies,
             resonant_indices,
+            resonant_index_set,
+            receiver_indices,
             emitters,
         })
     }
@@ -805,14 +829,8 @@ impl LocalResonanceWorldSnapshot {
         {
             return None;
         }
-        let mut matches = self
-            .bodies
-            .iter()
-            .enumerate()
-            .filter(|(_, body)| body.environmental_identity == receiver_identity)
-            .map(|(index, _)| index);
-        let receiver_index = matches.next()?;
-        if matches.next().is_some() || !self.resonant_indices.contains(&receiver_index) {
+        let receiver_index = self.receiver_indices.get(&receiver_identity).copied().flatten()?;
+        if !self.resonant_index_set.contains(&receiver_index) {
             return None;
         }
         let spectra = crate::harmonics::material_resonance_spectra_from_emitters(
