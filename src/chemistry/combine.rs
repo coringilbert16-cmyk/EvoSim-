@@ -169,11 +169,27 @@ pub fn experimental_bond_strength(surplus: f64) -> f64 {
     let max_strength = EXPERIMENTAL_MAX_BOND_STRENGTH.max(0.0);
     max_strength * (1.0 - (-surplus / scale).exp())
 }
-pub fn bond_strength(a: ResourceProperties, b: ResourceProperties) -> f64 {
-    if !a.cohesion.is_finite() || !b.cohesion.is_finite() {
-        return 0.0;
+/// Calculate the intrinsic integrity assigned to a realized bond from its
+/// endpoint materials' intrinsic cohesion.
+///
+/// This is structural resistance, not pair adhesion or stored bond potential.
+/// Reactivity is deliberately excluded and is applied only when deriving an
+/// activation barrier for a particular BREAK event.
+pub fn bond_integrity(a: ResourceProperties, b: ResourceProperties) -> Option<f64> {
+    if !a.cohesion.is_finite()
+        || !b.cohesion.is_finite()
+        || a.cohesion < 0.0
+        || b.cohesion < 0.0
+    {
+        return None;
     }
-    (a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt()
+    Some((a.cohesion.clamp(0.0, 1.0) * b.cohesion.clamp(0.0, 1.0)).sqrt())
+}
+
+/// Compatibility adapter for callers that still expect an infallible strength.
+/// New BREAK and bond-formation code should use bond_integrity directly.
+pub fn bond_strength(a: ResourceProperties, b: ResourceProperties) -> f64 {
+    bond_integrity(a, b).unwrap_or(0.0)
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct MaterialIdentityKey {
