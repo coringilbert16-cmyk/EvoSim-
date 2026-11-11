@@ -771,10 +771,15 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     /// Valid incoming-contact activation accumulations updated.
     pub(crate) activation_updates: u64,
     /// DISPLACEMENT local resonance endpoint sampling diagnostics.
+    #[serde(default)]
     pub(crate) local_resonance_sample_attempts: u64,
+    #[serde(default)]
     pub(crate) local_resonance_samples: u64,
+    #[serde(default)]
     pub(crate) local_resonance_unavailable: u64,
+    #[serde(default)]
     pub(crate) local_resonance_similarity_sum: f64,
+    #[serde(default)]
     pub(crate) local_resonance_similarity_max: f64,
     /// Activation checks that reached the existing bond's displacement barrier.
     pub(crate) activation_threshold_met: u64,
