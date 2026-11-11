@@ -164,8 +164,8 @@ pub(crate) fn seed_randomized_resources(
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the environment requires seven canonical base resources"
+        6,
+        "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
     let mut identities = resource_names.clone();
@@ -359,7 +359,12 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         DEFAULT_CELL_SIZE,
     );
-    let catalog = simulation.environment.catalog.clone();
+    // Keep Water in the authoritative catalog and all historical data, but
+    // omit it from active chemistry experiment inventories until revisited.
+    let catalog: Vec<_> = simulation.environment.catalog.iter()
+        .filter(|resource| resource.name != "Water")
+        .cloned()
+        .collect();
 
     let pile_sizes = seed_randomized_molecular_resources(
         &mut simulation.environment.field,
