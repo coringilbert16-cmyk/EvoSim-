@@ -803,8 +803,7 @@ pub(crate) fn accumulate_environmental(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
-    // This budget is per invocation/tick; diagnostics accumulate across the run.
-    let mut local_resonance_sampled_this_tick = false;
+    // Diagnostics accumulate across the run; sampling budget is local to the active tick.
     accumulate_environmental_with_resonance(
         environment,
         accumulation,
@@ -823,6 +822,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
     local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
+    let mut local_resonance_sampled_this_tick = false;
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
