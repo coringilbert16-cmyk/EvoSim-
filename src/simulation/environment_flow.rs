@@ -7,7 +7,7 @@
 
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Form};
+use crate::resources::{BaseResource, Form, PhysicalState};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Velocity {
@@ -129,28 +129,27 @@ fn obstacle_for(
     let (x, y) = material_center(material, height)?;
     let placements = material.placements.as_ref()?;
     let mut radius: f64 = 0.5;
-    let mut weighted_cohesion = 0.0;
-    let mut total = 0.0;
-    for (index, (name, amount)) in material.material.parts.iter().enumerate() {
+    let mut rigid_constituents = 0usize;
+    for (index, (name, _amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
+        }
         let placement = placements.get(index)?;
         radius = radius
             .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
-        weighted_cohesion += resource.properties.cohesion * *amount;
-        total += *amount;
+        rigid_constituents += 1;
     }
-    if !weighted_cohesion.is_finite() || total <= 0.0 {
+    if rigid_constituents == 0 {
         return None;
     }
-    let cohesion = weighted_cohesion / total;
-    let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
     Some(Obstacle {
         source_cell,
         source_index,
         x,
         y,
         radius,
-        solidity: (1.0 - permeability).clamp(0.0, 1.0),
+        solidity: 1.0,
     })
 }
 
@@ -798,33 +797,38 @@ mod tests {
     }
 
     #[test]
-    fn actual_material_cohesion_sets_obstacle_permeability() {
+    fn rigid_geometry_obstructs_flow_independent_of_cohesion() {
         let catalog = crate::resources::default_catalog();
-        let make_material = |name: &str| {
-            PhysicalMaterial::realized(
-                crate::resources::Material::free_base(name, 1.0),
-                vec![crate::structure::Placement {
-                    x: 10.0,
-                    y: 10.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog,
-            )
-            .expect("catalog material should realize")
-        };
-        let water = make_material("Water");
-        let carbon = make_material("Carbon");
-        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
-        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
+        let carbon = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        ).expect("catalog carbon should realize");
+        let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
+            .expect("rigid constituent geometry should obstruct flow");
+        assert_eq!(obstacle.solidity, 1.0);
 
-        assert_eq!(water_obstacle.solidity, 0.0);
+        let mut fluid_catalog = catalog.clone();
+        fluid_catalog.iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("carbon catalog entry")
+            .physical_state = PhysicalState::Fluid;
+        let fluid_carbon = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &fluid_catalog,
+        ).expect("fluid-state carbon geometry should realize");
         assert!(
-            carbon_obstacle.solidity > 0.9,
-            "dense carbon geometry should strongly disturb local flow"
-        );
-        assert!(
-            carbon_obstacle.radius > water_obstacle.radius,
-            "the obstacle footprint should come from the material's actual catalog shape"
+            obstacle_for(0, 0, &fluid_carbon, &fluid_catalog, 100.0).is_none(),
+            "fluid-state material should not become a rigid flow obstacle"
         );
     }
 
