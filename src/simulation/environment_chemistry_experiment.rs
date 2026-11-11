@@ -16,7 +16,7 @@ const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
 // Two-constituent structures previously observed as reaction-created products.
 // Every type receives an equal starting share; the final remainder is assigned
 // deterministically after shuffling so no molecule type is privileged.
-const KNOWN_TWO_UNIT_MOLECULES: [(&str, &str); 16] = [
+const KNOWN_TWO_UNIT_MOLECULES: [(&str, &str); 18] = [
     ("Hydrogen", "Sulfur"),
     ("Hydrogen", "Oxygen"),
     ("Carbon", "Hydrogen"),
@@ -27,6 +27,8 @@ const KNOWN_TWO_UNIT_MOLECULES: [(&str, &str); 16] = [
     ("Sulfur", "Sulfur"),
     ("Carbon", "Sulfur"),
     ("Hydrogen", "Nitrogen"),
+    ("Hydrogen", "Phosphorus"),
+    ("Nitrogen", "Phosphorus"),
     ("Carbon", "Phosphorus"),
     ("Carbon", "Carbon"),
     ("Oxygen", "Sulfur"),
@@ -816,7 +818,8 @@ mod tests {
             *molecule_type_counts.entry(elements).or_insert(0_usize) += 1;
         }
         assert_eq!(molecule_type_counts.len(), KNOWN_TWO_UNIT_MOLECULES.len());
-        assert!(molecule_type_counts.values().all(|count| *count == 80));
+        assert_eq!(molecule_type_counts.values().filter(|count| **count == 72).count(), 2);
+        assert_eq!(molecule_type_counts.values().filter(|count| **count == 71).count(), 16);
         let hs = materials
             .iter()
             .filter(|m| {
@@ -831,8 +834,8 @@ mod tests {
                     && m.material.parts.iter().any(|p| p.0 == "Hydrogen")
             })
             .count();
-        assert_eq!(hs, 80);
-        assert_eq!(ch, 80);
+        assert_eq!(hs, 72);
+        assert_eq!(ch, 71);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
