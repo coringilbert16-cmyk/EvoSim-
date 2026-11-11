@@ -546,8 +546,9 @@ fn select_best_contact_from_pairs(
     selected_contacts
 }
 
-/// Resolve chemical identity from one realized physical constituent.
-/// Aggregate material properties intentionally have no single chemical position.
+/// Resolve a legacy chemical-position identity from one realized constituent.
+/// Active six-element reaction discovery now uses pair adhesion directly.
+#[cfg(test)]
 fn constituent_chemical_position(
     unit: &crate::structure::StructuralUnit,
     catalog: &[BaseResource],
