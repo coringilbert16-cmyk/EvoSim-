@@ -756,7 +756,8 @@ mod tests {
                 }
             }
         }
-        assert_eq!(represented_types.len(), 7);
+        assert_eq!(represented_types.len(), 6);
+        assert!(!represented_types.contains("Water"));
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
