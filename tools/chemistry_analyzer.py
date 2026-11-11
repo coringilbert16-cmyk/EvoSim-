@@ -132,7 +132,9 @@ def _bond_pair_at_index(molecule: Any, bond_index: int) -> str | None:
     return next(iter(counts))
 
 
-def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
+def _bond_pair_attribution(
+    reactions: list[dict[str, Any]], lifecycle_records: list[dict[str, Any]]
+) -> dict[str, Any]:
     """Attribute committed reaction bond changes from full reactant/product graphs."""
     formed_by_reaction: dict[str, Counter[str]] = {}
     broken_by_reaction: dict[str, Counter[str]] = {}
@@ -196,6 +198,46 @@ def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
     def complete(counter: Counter[str]) -> dict[str, int]:
         return {pair: int(counter.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS}
 
+    initial_inventory: Counter[str] = Counter()
+    active_molecules: dict[int, Any] = {}
+    inventory_malformed = 0
+    for record in lifecycle_records:
+        molecule_id = record.get("molecule_id")
+        action = record.get("action")
+        if not isinstance(molecule_id, int) or isinstance(molecule_id, bool):
+            continue
+        if action == "created":
+            molecule = record.get("molecule")
+            active_molecules[molecule_id] = molecule
+            if record.get("reaction") == "INITIAL":
+                counts, invalid = _molecule_bond_pairs(molecule)
+                initial_inventory.update(counts)
+                inventory_malformed += invalid
+        elif action == "destroyed":
+            active_molecules.pop(molecule_id, None)
+
+    final_inventory: Counter[str] = Counter()
+    for molecule in active_molecules.values():
+        counts, invalid = _molecule_bond_pairs(molecule)
+        final_inventory.update(counts)
+        inventory_malformed += invalid
+    inventory_delta = {
+        pair: final_inventory.get(pair, 0) - initial_inventory.get(pair, 0)
+        for pair in ELEMENTAL_BOND_PAIRS
+    }
+    reaction_delta = {
+        pair: formed_total.get(pair, 0) - broken_total.get(pair, 0)
+        for pair in ELEMENTAL_BOND_PAIRS
+    }
+    inventory_mismatches = {
+        pair: {
+            "inventory_delta": inventory_delta[pair],
+            "reaction_delta": reaction_delta[pair],
+        }
+        for pair in ELEMENTAL_BOND_PAIRS
+        if inventory_delta[pair] != reaction_delta[pair]
+    }
+
     by_reaction = {}
     for reaction in sorted(set(formed_by_reaction) | set(broken_by_reaction)):
         formed = formed_by_reaction.get(reaction, Counter())
@@ -215,6 +257,15 @@ def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
         "broken_total": sum(broken_total.values()),
         "formed": complete(formed_total),
         "broken": complete(broken_total),
+        "initial_bond_inventory": complete(initial_inventory),
+        "final_bond_inventory": complete(final_inventory),
+        "inventory_delta": inventory_delta,
+        "reaction_delta": reaction_delta,
+        "inventory_reconciliation": {
+            "matches": not inventory_mismatches,
+            "mismatches": inventory_mismatches,
+            "malformed_inventory_bond_records": inventory_malformed,
+        },
         "by_reaction": by_reaction,
         "method": (
             "For each committed reaction, compare the multiset of endpoint-element "
@@ -287,7 +338,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         reason = event.get("failure_reason")
         if reason:
             failure_reasons[f"{kind}:{reason}"] += 1
-    bond_pair_attribution = _bond_pair_attribution(reactions)
+    lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
+    bond_pair_attribution = _bond_pair_attribution(reactions, lifecycle)
 
 
     # Prefer the recorder's accumulated totals; tick records are a fallback.
@@ -369,7 +421,6 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     # Optional persistent molecule lifecycle records are emitted by Layer B.
     # Older Layer A logs remain valid and simply report no lifecycle coverage.
-    lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
     created: dict[int, dict[str, Any]] = {}
     destroyed: dict[int, int] = {}
     lineage_edges: list[dict[str, Any]] = []
