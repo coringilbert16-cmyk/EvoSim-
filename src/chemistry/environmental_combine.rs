@@ -1629,6 +1629,7 @@ mod tests {
                             &source_b,
                             selected.unit_a,
                             selected.unit_b,
+                            selected.candidate,
                         ))
                         .is_some_and(|value| *value > 0.0)
                     {
