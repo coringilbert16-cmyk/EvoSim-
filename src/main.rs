@@ -93,7 +93,10 @@ mod combine_runtime;
 mod decomposition;
 #[path = "infrastructure/diagnostics.rs"]
 mod diagnostics;
-#[allow(dead_code, reason = "Staged graph analysis API is integrated in a later chemistry stage")]
+#[allow(
+    dead_code,
+    reason = "Staged graph analysis API is integrated in a later chemistry stage"
+)]
 #[path = "chemistry/emergent_cohesion.rs"]
 mod emergent_cohesion;
 #[path = "chemistry/energy_ledger.rs"]
