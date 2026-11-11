@@ -1,6 +1,6 @@
 use crate::decision::ActionKind;
 use crate::decision_runtime::ActionCandidate;
-use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
+use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason};
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
