@@ -11,6 +11,7 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) organism_id: String,
     pub(crate) bond: Bond,
     pub(crate) activation_signal: f64,
+    pub(crate) activation_barrier: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_cycles_per_day: f64,
     /// Preserve accumulated progress if settlement fails without changing the
@@ -411,12 +412,17 @@ pub(crate) fn accumulate(
             accumulation.remove(&key);
             continue;
         }
-        let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
+        let Some(activation_barrier) = crate::chemistry::activation_barrier_from_bond_properties(
             bond.strength,
             a.reactivity,
             b.reactivity,
             baselines.reactivity,
         ) else {
+            continue;
+        };
+        let Some(disruption_cost) =
+            crate::chemistry::activation_barrier_from_bond_integrity(bond.strength)
+        else {
             continue;
         };
 
@@ -448,11 +454,12 @@ pub(crate) fn accumulate(
             continue;
         };
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(activation_signal, disruption_cost) {
+        if crate::chemistry::activated(activation_signal, activation_barrier) {
             operations.push(ChemicalBreakOperation {
                 organism_id: organism.id.clone(),
                 bond,
                 activation_signal,
+                activation_barrier,
                 disruption_cost,
                 reaction_frequency_cycles_per_day,
                 accumulation_key: key.clone(),
@@ -947,12 +954,19 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
-        let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_properties(
+        let Some(activation_barrier) = crate::chemistry::activation_barrier_from_bond_properties(
             integrity,
             a.reactivity,
             b.reactivity,
             baselines.reactivity,
         ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(disruption_cost) =
+            crate::chemistry::activation_barrier_from_bond_integrity(integrity)
+        else {
             diagnostics.candidate_chemistry_rejections =
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
@@ -968,7 +982,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
         // prior environmental progress. Mark a key current only after the
         // candidate completes a valid reaction evaluation.
         updated_keys.insert(key.clone());
-        if crate::chemistry::activated(activation_signal, disruption_cost) {
+        if crate::chemistry::activated(activation_signal, activation_barrier) {
             diagnostics.activation_threshold_met =
                 diagnostics.activation_threshold_met.saturating_add(1);
             operations.push(EnvironmentalChemicalBreakOperation {
@@ -978,6 +992,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 source_material: instance.clone(),
                 bond: connection.clone(),
                 activation_signal,
+                activation_barrier,
                 disruption_cost,
                 reaction_frequency_cycles_per_day,
                 local_resonance_similarity,
@@ -1103,9 +1118,11 @@ pub(crate) fn resolve_environmental_diagnosed(
 ) -> Result<(), &'static str> {
     if !operation.activation_signal.is_finite()
         || operation.activation_signal < 0.0
+        || !operation.activation_barrier.is_finite()
+        || operation.activation_barrier < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
-        || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
+        || !crate::chemistry::activated(operation.activation_signal, operation.activation_barrier)
         || !operation.reaction_frequency_cycles_per_day.is_finite()
         || operation.reaction_frequency_cycles_per_day <= 0.0
     {
@@ -1164,6 +1181,7 @@ pub(crate) fn resolve_environmental_diagnosed(
         ledger,
         operation.bond.bond_energy,
         operation.activation_signal,
+        operation.activation_barrier,
         operation.disruption_cost,
         resonant_work,
     ) else {
@@ -1234,7 +1252,9 @@ pub(crate) fn resolve(
         || operation.activation_signal < 0.0
         || !operation.disruption_cost.is_finite()
         || operation.disruption_cost < 0.0
-        || !crate::chemistry::activated(operation.activation_signal, operation.disruption_cost)
+        || !operation.activation_barrier.is_finite()
+        || operation.activation_barrier < 0.0
+        || !crate::chemistry::activated(operation.activation_signal, operation.activation_barrier)
         || !operation.reaction_frequency_cycles_per_day.is_finite()
         || operation.reaction_frequency_cycles_per_day <= 0.0
     {
@@ -1920,6 +1940,7 @@ mod material_identity_tests {
             source_material: source,
             bond,
             activation_signal: 1.0,
+            activation_barrier: 0.1,
             disruption_cost: 0.1,
             reaction_frequency_cycles_per_day: 440.0,
             local_resonance_similarity: 0.0,
@@ -1995,6 +2016,7 @@ mod material_identity_tests {
             source_material: source.clone(),
             bond,
             activation_signal: 1.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             local_resonance_similarity: 0.0,
@@ -2060,6 +2082,7 @@ mod material_identity_tests {
             source_material: source.clone(),
             bond,
             activation_signal: 1.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             local_resonance_similarity: 0.0,
@@ -2132,6 +2155,7 @@ mod material_identity_tests {
             source_material: source,
             bond,
             activation_signal: 1.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             local_resonance_similarity: 0.0,
@@ -2180,6 +2204,7 @@ mod material_identity_tests {
                 bond_energy: 0.0,
             },
             activation_signal: 0.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             local_resonance_similarity: 0.0,
@@ -2233,6 +2258,7 @@ mod material_identity_tests {
                 bond_energy: 0.0,
             },
             activation_signal: 1.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: f64::NAN,
             local_resonance_similarity: 0.0,
@@ -2326,6 +2352,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 1_000.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2371,6 +2398,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 0.5,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2410,6 +2438,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 0.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2498,6 +2527,7 @@ mod material_identity_tests {
             // The signal easily crosses the activation threshold, but the
             // physical bond and energy holders cannot pay the requested work.
             activation_signal: 1_000_000.0,
+            activation_barrier: bond.bond_energy + 1.0,
             disruption_cost: bond.bond_energy + 1.0,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2539,6 +2569,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 1_000.0,
+            activation_barrier: 0.0,
             disruption_cost: 0.0,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2591,6 +2622,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 0.5,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2632,6 +2664,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: 1_000.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "test|rev:0|bond".into(),
@@ -2834,6 +2867,7 @@ mod material_identity_tests {
             organism_id: format!("owner-{owner}"),
             bond,
             activation_signal: 1.0,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: format!("owner-{owner}|candidate-{candidate}"),
@@ -2885,6 +2919,7 @@ mod material_identity_tests {
                 organism_id: simulation.organisms[0].id.clone(),
                 bond: graph_bond,
                 activation_signal: 1.0,
+                activation_barrier: 0.5,
                 disruption_cost: 0.5,
                 reaction_frequency_cycles_per_day: 440.0,
                 accumulation_key: format!("graph|candidate-{index:02}"),
@@ -2899,6 +2934,7 @@ mod material_identity_tests {
                 source_material: source.clone(),
                 bond: environmental_bond.clone(),
                 activation_signal: 1.0,
+                activation_barrier: 0.5,
                 disruption_cost: 0.5,
                 reaction_frequency_cycles_per_day: 440.0,
                 local_resonance_similarity: 0.0,
@@ -2956,6 +2992,7 @@ mod material_identity_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: progress,
+            activation_barrier: 0.5,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: key.into(),
