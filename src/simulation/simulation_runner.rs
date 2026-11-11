@@ -221,7 +221,7 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=0 molecules=1280 constituents=2560 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         duration_seconds,
         planned_ticks,
         simulation.organisms.len(),
