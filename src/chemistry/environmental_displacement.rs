@@ -2644,6 +2644,37 @@ mod tests {
     }
 
     #[test]
+    fn legacy_zero_energy_bond_can_be_displaced_without_inventing_stored_energy() {
+        let catalog = default_catalog();
+        let (mut source, mut old_bond, candidate, investment) =
+            three_participant_fixture(&catalog);
+        old_bond.bond_energy = 0.0;
+        source.bonds[0].bond_energy = 0.0;
+
+        let trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("a valid replacement must not require unallocated legacy bond energy");
+
+        assert_eq!(trial.energy.reactant_energy, 0.0);
+        assert!(trial.energy.product_energy < 0.0);
+        assert!(trial.energy.required_external_input.is_finite());
+        assert!(trial.energy.required_external_input >= 0.0);
+        assert_eq!(trial.structure.bonds.len(), 1);
+        assert!(trial.structure.bonds[0].bond_energy > 0.0);
+    }
+
+    #[test]
     fn committed_trial_updates_graph_energy_and_products_together() {
         let catalog = default_catalog();
         let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
