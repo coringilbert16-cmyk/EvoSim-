@@ -1450,7 +1450,7 @@ mod tests {
                 .expect("each canonical resource must realize as a physical object");
 
                 let mut fixture = None;
-                'poses: for step in 1..=80 {
+                for step in 1..=80 {
                     let distance = step as f64 * 0.05;
                     for rotation_step in 0..12 {
                         let source_b = PhysicalMaterial::realized(
@@ -1514,8 +1514,18 @@ mod tests {
                             )
                         });
                         if interface.is_some() && selected.candidate.facing > 0.0 {
-                            fixture = Some((source_b, structure, indices_a, indices_b, selected));
-                            break 'poses;
+                            let improves_facing = fixture.as_ref().is_none_or(
+                                |(_, _, _, _, best): &(
+                                    PhysicalMaterial,
+                                    OrganismStructure,
+                                    Vec<usize>,
+                                    Vec<usize>,
+                                    SelectedContact,
+                                )| selected.candidate.facing > best.candidate.facing,
+                            );
+                            if improves_facing {
+                                fixture = Some((source_b, structure, indices_a, indices_b, selected));
+                            }
                         }
                     }
                 }
@@ -1580,7 +1590,7 @@ mod tests {
                         trial_environment.field.cells[0]
                             .physical_materials
                             .extend([source_a.clone(), source_b.clone()]);
-                        trial_environment.chemistry_usable_energy = 1.0e9;
+                        trial_environment.chemistry_usable_energy = 100.0;
                         let mut ledger = crate::state::EnergyLedger {
                             total_usable_energy_held: trial_environment.chemistry_usable_energy,
                             initial_usable_energy_held: trial_environment.chemistry_usable_energy,
