@@ -2457,17 +2457,15 @@ mod tests {
             total_resonant_energy_held: 2.0,
             ..Default::default()
         };
-        let prepared = prepare_chemical_break_energy_with_resonance(
-            20.0, &ledger, 4.0, 0.5, 0.4, 5.0, 2.0,
-        )
-        .expect("the activation signal crosses its own threshold");
+        let prepared =
+            prepare_chemical_break_energy_with_resonance(20.0, &ledger, 4.0, 0.5, 0.4, 5.0, 2.0)
+                .expect("the activation signal crosses its own threshold");
         assert_eq!(prepared.usable_energy, 13.0);
         assert_eq!(prepared.ledger.total_work_expended, 5.0);
         assert_eq!(prepared.ledger.total_resonant_energy_held, 0.0);
 
-        let underactivated = prepare_chemical_break_energy_with_resonance(
-            20.0, &ledger, 4.0, 0.3, 0.4, 5.0, 2.0,
-        );
+        let underactivated =
+            prepare_chemical_break_energy_with_resonance(20.0, &ledger, 4.0, 0.3, 0.4, 5.0, 2.0);
         assert!(underactivated.is_none());
     }
 
