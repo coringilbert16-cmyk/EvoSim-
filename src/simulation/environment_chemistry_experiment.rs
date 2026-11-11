@@ -251,8 +251,26 @@ pub(crate) fn seed_randomized_resources(
     pile_sizes
 }
 
-/// Seed 1,280 physical objects for transport benchmarking: 1,200 free resources
-/// plus 80 intact molecules (40 H-S and 40 C-H) in randomized piles.
+fn place_molecule_prototype(
+    mut molecule: PhysicalMaterial,
+    placement: Placement,
+) -> PhysicalMaterial {
+    let (sin, cos) = placement.rotation_radians.sin_cos();
+    for part in molecule
+        .placements
+        .as_mut()
+        .expect("realized molecule prototypes retain constituent placements")
+    {
+        let local_x = part.x;
+        let local_y = part.y;
+        part.x = placement.x + local_x * cos - local_y * sin;
+        part.y = placement.y + local_x * sin + local_y * cos;
+        part.rotation_radians += placement.rotation_radians;
+    }
+    molecule
+}
+
+/// Seed 1,280 intact, known two-constituent molecules in randomized piles.
 fn seed_randomized_molecular_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -272,6 +290,24 @@ fn seed_randomized_molecular_resources(
         "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
+    let molecule_prototypes: Vec<PhysicalMaterial> = if include_molecules {
+        KNOWN_TWO_UNIT_MOLECULES
+            .iter()
+            .map(|(left, right)| {
+                realize_natural_molecule(
+                    &[(*left).into(), (*right).into()],
+                    Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    catalog,
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let objects: Vec<(Vec<String>, bool)> = if include_molecules {
         let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
         let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
@@ -342,7 +378,11 @@ fn seed_randomized_molecular_resources(
             };
             let (parts, is_molecule) = &objects[object_index];
             let physical = if *is_molecule {
-                realize_natural_molecule(parts, placement, catalog)
+                let prototype_index = KNOWN_TWO_UNIT_MOLECULES
+                    .iter()
+                    .position(|(left, right)| parts[0] == *left && parts[1] == *right)
+                    .expect("every seeded molecule must belong to the known catalog");
+                place_molecule_prototype(molecule_prototypes[prototype_index].clone(), placement)
             } else {
                 PhysicalMaterial::realized(
                     Material::free_base(&parts[0], 1.0),
