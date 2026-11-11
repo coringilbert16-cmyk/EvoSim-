@@ -4,6 +4,27 @@ use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransactio
 use crate::state::{ActiveTransformation, EnergyLedger, Environment, Organism, Simulation};
 use crate::structure::Placement;
 
+/// Resolve BREAK activation from the realized bond's local integrity and the
+/// reactivity of its actual endpoint materials. Adhesion and stored potential
+/// are intentionally absent from this calculation.
+fn bond_activation_barrier(
+    bond: crate::structure::Bond,
+    structure: &crate::structure::OrganismStructure,
+    catalog: &[crate::resources::BaseResource],
+    reactivity_baseline: f64,
+) -> Option<f64> {
+    let unit_a = structure.unit_index(bond.endpoint_a.constituent_id)?;
+    let unit_b = structure.unit_index(bond.endpoint_b.constituent_id)?;
+    let properties_a = structure.units.get(unit_a)?.properties(catalog)?;
+    let properties_b = structure.units.get(unit_b)?.properties(catalog)?;
+    crate::chemistry::activation_barrier_from_bond_properties(
+        bond.strength,
+        properties_a.reactivity,
+        properties_b.reactivity,
+        reactivity_baseline,
+    )
+}
+
 /// Energy accounting for separating a stable physical bond.
 ///
 /// `bond_energy` is the positive dissociation-energy magnitude, not a stored
@@ -245,8 +266,12 @@ pub(crate) fn resolve_resonance_overload_break(
         let Some(bond) = organism.structure.bonds.get(index).copied() else {
             continue;
         };
-        let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(bond.strength)
-        else {
+        let Some(barrier) = bond_activation_barrier(
+            bond,
+            &organism.structure,
+            &environment.catalog,
+            baselines.reactivity,
+        ) else {
             continue;
         };
         if barrier <= 1e-9 {
@@ -318,8 +343,12 @@ pub(crate) fn resolve_resonance_overload_break(
     let Some(target) = organism.structure.bonds.get(target_index).copied() else {
         return false;
     };
-    let Some(barrier) = crate::chemistry::activation_barrier_from_bond_strength(target.strength)
-    else {
+    let Some(barrier) = bond_activation_barrier(
+        target,
+        &organism.structure,
+        &environment.catalog,
+        baselines.reactivity,
+    ) else {
         return false;
     };
     let required_resonance = barrier;
