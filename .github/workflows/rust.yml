@@ -44,7 +44,7 @@ jobs:
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
       - name: Run default environmental chemistry baseline
-        if: success() && github.event_name != 'pull_request'
+        if: success()
         timeout-minutes: 3
         run: |
           set -euo pipefail
@@ -56,17 +56,39 @@ jobs:
             --diagnostics environmental-chemistry-default-baseline.jsonl \
             --diagnostic-interval 100
       - name: Analyze default environmental chemistry baseline
-        if: success() && github.event_name != 'pull_request'
+        if: success()
         run: |
           python3 tools/chemistry_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-analysis.json \
             --markdown-out environmental-chemistry-analysis.md
       - name: Analyze default baseline chemical organization
-        if: success() && github.event_name != 'pull_request'
+        if: success()
         run: |
           python3 tools/chemistry_organization_analyzer.py environmental-chemistry-default-baseline.jsonl \
             --json-out environmental-chemistry-organization.json \
             --markdown-out environmental-chemistry-organization.md
+      - name: Run matched environmental chemistry control (local activation disabled)
+        if: success() && github.event_name == 'pull_request' && github.event.pull_request.number == 344
+        timeout-minutes: 3
+        env:
+          EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION: "1"
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics environmental-chemistry-local-resonance-disabled.jsonl \
+            --diagnostic-interval 100
+      - name: Upload matched environmental chemistry control
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 344 && hashFiles('environmental-chemistry-local-resonance-disabled.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-chemistry-local-resonance-disabled
+          path: environmental-chemistry-local-resonance-disabled.jsonl
+          if-no-files-found: error
+          retention-days: 14
       - name: Upload default environmental chemistry baseline
         if: always() && hashFiles('environmental-chemistry-default-baseline.jsonl') != ''
         uses: actions/upload-artifact@v4
@@ -339,3 +361,94 @@ jobs:
           retention-days: 30
 
 # Re-trigger CI for the molecular lineage observability pull request.
+
+  pr344-five-seed-resonance-observation:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 344
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        seed: [42, 43, 44, 45, 46]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run five-minute observation with local resonance enabled
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          mkdir -p observations
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 300 \
+            --seed ${{ matrix.seed }} \
+            --diagnostics observations/seed-${{ matrix.seed }}-enabled.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze enabled chemistry and molecular organization
+        run: |
+          python3 tools/chemistry_analyzer.py observations/seed-${{ matrix.seed }}-enabled.jsonl \
+            --json-out observations/seed-${{ matrix.seed }}-enabled-chemistry.json \
+            --markdown-out observations/seed-${{ matrix.seed }}-enabled-chemistry.md
+          python3 tools/chemistry_organization_analyzer.py observations/seed-${{ matrix.seed }}-enabled.jsonl \
+            --json-out observations/seed-${{ matrix.seed }}-enabled-organization.json \
+            --markdown-out observations/seed-${{ matrix.seed }}-enabled-organization.md
+      - name: Run five-minute matched control with local resonance disabled
+        timeout-minutes: 10
+        env:
+          EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION: "1"
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 300 \
+            --seed ${{ matrix.seed }} \
+            --diagnostics observations/seed-${{ matrix.seed }}-disabled.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze disabled chemistry and molecular organization
+        run: |
+          python3 tools/chemistry_analyzer.py observations/seed-${{ matrix.seed }}-disabled.jsonl \
+            --json-out observations/seed-${{ matrix.seed }}-disabled-chemistry.json \
+            --markdown-out observations/seed-${{ matrix.seed }}-disabled-chemistry.md
+          python3 tools/chemistry_organization_analyzer.py observations/seed-${{ matrix.seed }}-disabled.jsonl \
+            --json-out observations/seed-${{ matrix.seed }}-disabled-organization.json \
+            --markdown-out observations/seed-${{ matrix.seed }}-disabled-organization.md
+      - name: Upload paired seed diagnostics and analysis
+        if: always() && hashFiles('observations/seed-*.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr344-resonance-seed-${{ matrix.seed }}
+          path: observations/
+          if-no-files-found: error
+          retention-days: 30
+
+  pr344-five-seed-resonance-aggregate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 344
+    needs: [pr344-five-seed-resonance-observation]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all five paired seed artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pr344-resonance-seed-*
+          path: observations
+          merge-multiple: false
+      - name: Connect all ten runs into one paired report
+        run: |
+          python3 tools/chemistry_batch_analyzer.py observations \
+            --json-out resonance-five-seed-combined.json \
+            --markdown-out resonance-five-seed-combined.md
+      - name: Upload combined five-seed report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr344-resonance-five-seed-combined
+          path: |
+            resonance-five-seed-combined.json
+            resonance-five-seed-combined.md
+          if-no-files-found: error
+          retention-days: 30

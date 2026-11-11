@@ -29,6 +29,7 @@ pub(crate) struct EnvironmentalChemicalBreakOperation {
     pub(crate) activation_signal: f64,
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_cycles_per_day: f64,
+    pub(crate) local_resonance_similarity: f64,
     pub(crate) accumulation_key: String,
     pub(crate) accumulated_reaction: f64,
 }
@@ -587,6 +588,7 @@ pub(crate) fn accumulate_environmental(
         chemistry_library,
         tick,
         remaining_discovery_work,
+        None,
         &mut diagnostics,
     )
 }
@@ -597,6 +599,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     chemistry_library: &mut ChemistryLibrary,
     tick: u64,
     remaining_discovery_work: &mut usize,
+    local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
     diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalChemicalBreakOperation> {
     // Environmental progress belongs to the field, not to the organism
@@ -611,6 +614,14 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
     diagnostics.bond_candidates_inspected = candidates.len() as u64;
     let checked_materials = discovery.checked_materials;
     let indices: Vec<usize> = (0..candidates.len()).collect();
+    // Full local boundary reception evaluates every resonant emitter against
+    // one receiver. Rotate one candidate per tick to bound this geometric work
+    // while ensuring the field can influence every candidate over time.
+    let local_resonance_candidate_index = if candidates.is_empty() {
+        None
+    } else {
+        Some(tick as usize % candidates.len())
+    };
     *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
     let mut checked_keys = std::collections::BTreeSet::new();
     let mut updated_keys = std::collections::BTreeSet::new();
@@ -843,11 +854,80 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
+        // The field is sampled at both actual bond endpoints. Its normalized
+        // spectral match increases local reaction accumulation; it is not
+        // converted into energy or credited to either energy reservoir.
+        let local_resonance_similarity = if Some(candidate_index) == local_resonance_candidate_index
+        {
+            diagnostics.local_resonance_sample_attempts = diagnostics
+                .local_resonance_sample_attempts
+                .saturating_add(1);
+            let sample_started = std::time::Instant::now();
+            let sampled_similarity = local_resonance_world.and_then(|world| {
+                let point_a = crate::contact::endpoint_world_point(
+                    connection.endpoint_a,
+                    &hypothetical.units[unit_a],
+                    &environment.catalog,
+                )?;
+                let point_b = crate::contact::endpoint_world_point(
+                    connection.endpoint_b,
+                    &hypothetical.units[unit_b],
+                    &environment.catalog,
+                )?;
+                world.reaction_similarity(
+                    instance.environmental_identity,
+                    &[(point_a.x, point_a.y), (point_b.x, point_b.y)],
+                    reaction_frequency_cycles_per_day,
+                    &environment.catalog,
+                    tick,
+                )
+            });
+            diagnostics.local_resonance_sample_nanoseconds = diagnostics
+                .local_resonance_sample_nanoseconds
+                .saturating_add(sample_started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            match sampled_similarity {
+                Some(similarity) if similarity.is_finite() => {
+                    diagnostics.local_resonance_samples =
+                        diagnostics.local_resonance_samples.saturating_add(1);
+                    diagnostics.local_resonance_similarity_sum += similarity;
+                    diagnostics.local_resonance_similarity_max =
+                        diagnostics.local_resonance_similarity_max.max(similarity);
+                    similarity.clamp(0.0, 1.0)
+                }
+                _ => {
+                    diagnostics.local_resonance_unavailable =
+                        diagnostics.local_resonance_unavailable.saturating_add(1);
+                    0.0
+                }
+            }
+        } else {
+            0.0
+        };
         let previous = accumulation.get(&key).copied().unwrap_or(0.0);
         diagnostics.max_accumulated_reaction = diagnostics.max_accumulated_reaction.max(previous);
         let Some(next) = crate::chemistry::accumulate_reaction(
             previous,
-            potential,
+            potential * (1.0 + local_resonance_similarity),
             contact_factor,
             engagement,
             crate::chemistry::CHEMICAL_DISSIPATION,
@@ -873,26 +953,6 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
             continue;
         };
-        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
-        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
-        if !frequency_a.is_finite()
-            || frequency_a <= 0.0
-            || !frequency_b.is_finite()
-            || frequency_b <= 0.0
-        {
-            diagnostics.candidate_chemistry_rejections =
-                diagnostics.candidate_chemistry_rejections.saturating_add(1);
-            continue;
-        }
-        let reaction_frequency_cycles_per_day =
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
-        if !reaction_frequency_cycles_per_day.is_finite()
-            || reaction_frequency_cycles_per_day <= 0.0
-        {
-            diagnostics.candidate_chemistry_rejections =
-                diagnostics.candidate_chemistry_rejections.saturating_add(1);
-            continue;
-        }
         let Some(activation_signal) =
             crate::chemistry::normalized_chemistry_to_activation_signal(next)
         else {
@@ -916,6 +976,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                 activation_signal,
                 disruption_cost,
                 reaction_frequency_cycles_per_day,
+                local_resonance_similarity,
                 accumulation_key: key,
                 accumulated_reaction: next,
             });
@@ -1655,6 +1716,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost,
             reaction_frequency_cycles_per_day,
+            local_resonance_similarity: 0.0,
             accumulation_key: "sunlight-powered-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -1856,6 +1918,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.1,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "sunlight-funded-environmental-break".into(),
             accumulated_reaction: 1.0,
         };
@@ -1930,6 +1993,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "environmental-atomic-break-success".into(),
             accumulated_reaction: 1.0,
         };
@@ -1994,6 +2058,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "environmental-atomic-break-resonance".into(),
             accumulated_reaction: 1.0,
         };
@@ -2065,6 +2130,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "environmental-atomic-break-no-work".into(),
             accumulated_reaction: 1.0,
         };
@@ -2112,6 +2178,7 @@ mod material_identity_tests {
             activation_signal: 0.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: 440.0,
+            local_resonance_similarity: 0.0,
             accumulation_key: "invalid-environmental-activation".into(),
             accumulated_reaction: 0.0,
         };
@@ -2164,6 +2231,7 @@ mod material_identity_tests {
             activation_signal: 1.0,
             disruption_cost: 0.5,
             reaction_frequency_cycles_per_day: f64::NAN,
+            local_resonance_similarity: 0.0,
             accumulation_key: "invalid-environmental-frequency".into(),
             accumulated_reaction: 1.0,
         };
@@ -2829,6 +2897,7 @@ mod material_identity_tests {
                 activation_signal: 1.0,
                 disruption_cost: 0.5,
                 reaction_frequency_cycles_per_day: 440.0,
+                local_resonance_similarity: 0.0,
                 accumulation_key: format!("environment|candidate-{index:02}"),
                 accumulated_reaction: 100.0 + index as f64,
             })

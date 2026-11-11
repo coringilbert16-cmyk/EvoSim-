@@ -79,6 +79,19 @@ pub(crate) fn accumulate_incoming_activation(
     previous: f64,
     catalog: &[BaseResource],
 ) -> Option<f64> {
+    accumulate_incoming_activation_with_resonance(
+        anchor, incoming, candidate, previous, 0.0, catalog,
+    )
+}
+
+fn accumulate_incoming_activation_with_resonance(
+    anchor: &crate::structure::StructuralUnit,
+    incoming: &crate::structure::StructuralUnit,
+    candidate: ConnectionPairCandidate,
+    previous: f64,
+    local_resonance_similarity: f64,
+    catalog: &[BaseResource],
+) -> Option<f64> {
     if candidate.distance < 0.0
         || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
         || !candidate.available_a
@@ -104,7 +117,7 @@ pub(crate) fn accumulate_incoming_activation(
     let engagement = crate::chemistry::interface_engagement(candidate.facing)?;
     crate::chemistry::accumulate_reaction(
         previous,
-        interaction.static_potential,
+        interaction.static_potential * (1.0 + local_resonance_similarity.clamp(0.0, 1.0)),
         contact,
         engagement,
         crate::chemistry::CHEMICAL_DISSIPATION,
@@ -782,6 +795,7 @@ fn displacement_reaction_frequency(
 /// Discover live A-B + C contacts. The old bond is removed only on a trial
 /// graph before candidate generation, making every compatible, available anchor
 /// endpoint eligible for a replacement contact.
+#[cfg(test)]
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
@@ -789,6 +803,26 @@ pub(crate) fn accumulate_environmental(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
+    // Diagnostics accumulate across the run; sampling budget is local to the active tick.
+    accumulate_environmental_with_resonance(
+        environment,
+        accumulation,
+        tick,
+        remaining_discovery_work,
+        None,
+        diagnostics,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_resonance(
+    environment: &Environment,
+    accumulation: &mut BTreeMap<String, f64>,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
+    diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
+) -> Vec<EnvironmentalDisplacementOperation> {
+    let mut local_resonance_sampled_this_tick = false;
     if *remaining_discovery_work == 0 || environment.field.cells.is_empty() {
         dissipate_unupdated_displacement_accumulations(accumulation, &BTreeSet::new());
         return Vec::new();
@@ -991,11 +1025,79 @@ pub(crate) fn accumulate_environmental(
                                     candidate,
                                 );
                                 let previous = accumulation.get(&key).copied().unwrap_or(0.0);
-                                let Some(next) = accumulate_incoming_activation(
+                                // Keep the expensive endpoint-spectrum query bounded to one actual
+                                // replacement contact per tick. Discovery rotates its field anchors.
+                                let local_resonance_similarity = if let Some(world) =
+                                    local_resonance_world
+                                        .filter(|_| !local_resonance_sampled_this_tick)
+                                {
+                                    diagnostics.local_resonance_sample_attempts = diagnostics
+                                        .local_resonance_sample_attempts
+                                        .saturating_add(1);
+                                    local_resonance_sampled_this_tick = true;
+                                    let incoming_frequency = displacement_reaction_frequency(
+                                        &combined.units[anchor_unit],
+                                        &combined.units[incoming_unit],
+                                        &environment.catalog,
+                                    )
+                                    .unwrap_or(frequency);
+                                    let sampled = crate::contact::endpoint_world_point(
+                                        candidate.endpoint_a,
+                                        &combined.units[anchor_unit],
+                                        &environment.catalog,
+                                    )
+                                    .zip(crate::contact::endpoint_world_point(
+                                        candidate.endpoint_b,
+                                        &combined.units[incoming_unit],
+                                        &environment.catalog,
+                                    ))
+                                    .and_then(|(point_a, point_b)| {
+                                        let a = world.reaction_similarity(
+                                            source_a.environmental_identity,
+                                            &[(point_a.x, point_a.y)],
+                                            incoming_frequency,
+                                            &environment.catalog,
+                                            tick,
+                                        )?;
+                                        let b = world.reaction_similarity(
+                                            source_b.environmental_identity,
+                                            &[(point_b.x, point_b.y)],
+                                            incoming_frequency,
+                                            &environment.catalog,
+                                            tick,
+                                        )?;
+                                        Some(0.5 * (a + b))
+                                    })
+                                    .filter(|value| value.is_finite())
+                                    .map(|value| value.clamp(0.0, 1.0));
+                                    match sampled {
+                                        Some(value) => {
+                                            diagnostics.local_resonance_samples = diagnostics
+                                                .local_resonance_samples
+                                                .saturating_add(1);
+                                            diagnostics.local_resonance_similarity_sum += value;
+                                            diagnostics.local_resonance_similarity_max =
+                                                diagnostics
+                                                    .local_resonance_similarity_max
+                                                    .max(value);
+                                            value
+                                        }
+                                        None => {
+                                            diagnostics.local_resonance_unavailable = diagnostics
+                                                .local_resonance_unavailable
+                                                .saturating_add(1);
+                                            0.0
+                                        }
+                                    }
+                                } else {
+                                    0.0
+                                };
+                                let Some(next) = accumulate_incoming_activation_with_resonance(
                                     &combined.units[anchor_unit],
                                     &combined.units[incoming_unit],
                                     candidate,
                                     previous,
+                                    local_resonance_similarity,
                                     &environment.catalog,
                                 ) else {
                                     continue;
@@ -1989,6 +2091,20 @@ mod tests {
         .expect("valid live contact should accumulate incoming influence");
         assert!(activation > 0.0);
         assert!(activation.is_finite());
+
+        let resonance_influenced_activation = accumulate_incoming_activation_with_resonance(
+            &source.units[0],
+            &source.units[2],
+            candidate,
+            0.0,
+            0.5,
+            &catalog,
+        )
+        .expect("local resonance should preserve the valid incoming contact");
+        assert!(
+            resonance_influenced_activation > activation,
+            "positive local spectral similarity must increase incoming-contact activation"
+        );
     }
 
     #[test]

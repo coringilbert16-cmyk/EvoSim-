@@ -4,6 +4,8 @@
 //! no spatial shape and is not an occluder. The live tick uses the resulting frame
 //! to settle direct sunlight into each living organism's existing energy holder.
 
+use std::collections::{HashMap, HashSet};
+
 use crate::energy_ledger::EnergyLedgerAuthority;
 use crate::material_storage::StoredMaterial;
 use crate::organism_geometry::OrganismBodyGeometry;
@@ -761,6 +763,103 @@ fn body_from_owner_relative_material(
 /// independent pair-potential inventory oracle. This intentionally mirrors
 /// the authoritative body classes assembled by WorldToneOccluderSnapshot.
 type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Option<usize>>);
+
+/// Tick-local material-origin resonance view shared by environmental reaction
+/// candidates. Build the physical world inventory once, then query each bond
+/// against the same emitters and occluders.
+pub(crate) struct LocalResonanceWorldSnapshot {
+    bodies: Vec<PhysicalMaterial>,
+    resonant_indices: Vec<usize>,
+    resonant_index_set: HashSet<usize>,
+    receiver_indices: HashMap<u64, Option<usize>>,
+    emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
+}
+
+impl LocalResonanceWorldSnapshot {
+    pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
+        let (bodies, resonant_indices, _) =
+            world_physical_materials_for_pair_potential(simulation)?;
+        let emitters = crate::harmonics::material_resonance_emitters_at_tick(
+            &bodies,
+            &resonant_indices,
+            &simulation.environment.catalog,
+            simulation.tick,
+        )?;
+        // Resolve stable environmental identities once per tick. A duplicate
+        // identity remains ambiguous and fails closed, matching the former
+        // full scan's uniqueness check.
+        let mut receiver_indices = HashMap::with_capacity(bodies.len());
+        for (index, body) in bodies.iter().enumerate() {
+            let identity = body.environmental_identity;
+            if identity == 0 {
+                continue;
+            }
+            match receiver_indices.entry(identity) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(Some(index));
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    entry.insert(None);
+                }
+            }
+        }
+        let resonant_index_set = resonant_indices.iter().copied().collect();
+        Some(Self {
+            bodies,
+            resonant_indices,
+            resonant_index_set,
+            receiver_indices,
+            emitters,
+        })
+    }
+
+    /// Return the mean endpoint spectral match to a reaction's natural
+    /// frequency. This is a dimensionless activation influence, not energy.
+    pub(crate) fn reaction_similarity(
+        &self,
+        receiver_identity: u64,
+        points: &[(f64, f64)],
+        reaction_frequency_cycles_per_day: f64,
+        catalog: &[BaseResource],
+        _tick: u64,
+    ) -> Option<f64> {
+        if receiver_identity == 0
+            || !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+            || points.is_empty()
+        {
+            return None;
+        }
+        let receiver_index = self
+            .receiver_indices
+            .get(&receiver_identity)
+            .copied()
+            .flatten()?;
+        if !self.resonant_index_set.contains(&receiver_index) {
+            return None;
+        }
+        let spectra = crate::harmonics::material_resonance_spectra_from_emitters(
+            &self.emitters,
+            &self.bodies[receiver_index],
+            receiver_index,
+            points,
+            catalog,
+        )?;
+        let target = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_cycles_per_day: reaction_frequency_cycles_per_day,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let similarity = spectra
+            .iter()
+            .map(|spectrum| crate::harmonics::spectral_activation_influence(spectrum, &target))
+            .sum::<f64>()
+            / spectra.len() as f64;
+        (similarity.is_finite()).then_some(similarity.clamp(0.0, 1.0))
+    }
+}
 
 fn world_physical_materials_for_pair_potential(
     simulation: &Simulation,

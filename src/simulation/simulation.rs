@@ -265,6 +265,7 @@ fn environmental_break_local_resonance_sample(
         "material_identity": operation.source_material.environmental_identity,
         "bond_index": operation.bond_index,
         "reaction_frequency_cycles_per_day": operation.reaction_frequency_cycles_per_day,
+        "local_resonance_similarity": operation.local_resonance_similarity,
         "activation_signal": operation.activation_signal,
         "disruption_cost": operation.disruption_cost,
         "stored_bond_energy": operation.bond.bond_energy,
@@ -1071,6 +1072,22 @@ impl Simulation {
         let mut environmental_break_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
         let mut break_discovery = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+        // Build the material-origin field once per tick and share it across
+        // bounded environmental BREAK candidates.
+        let local_resonance_snapshot_started = std::time::Instant::now();
+        // A controlled A/B run can disable only local activation influence. Stored
+        // resonance funding and all other environmental chemistry remain unchanged.
+        let local_resonance_world =
+            if std::env::var_os("EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION").is_some() {
+                None
+            } else {
+                crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
+            };
+        break_discovery.local_resonance_snapshot_build_nanoseconds =
+            local_resonance_snapshot_started
+                .elapsed()
+                .as_nanos()
+                .min(u64::MAX as u128) as u64;
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
@@ -1078,6 +1095,7 @@ impl Simulation {
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_break_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut break_discovery,
             );
         self.environmental_chemistry_diagnostics.break_discovery = break_discovery;
@@ -1098,6 +1116,7 @@ impl Simulation {
                 &mut self.chemistry_library,
                 self.tick,
                 &mut environmental_combine_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut self.environmental_chemistry_diagnostics.combine_search,
             );
         self.environmental_chemistry_diagnostics
@@ -1342,11 +1361,12 @@ impl Simulation {
         let mut displacement_discovery =
             crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default();
         let environmental_displacement_operations =
-            crate::environmental_displacement::accumulate_environmental(
+            crate::environmental_displacement::accumulate_environmental_with_resonance(
                 &self.environment,
                 &mut self.chemical_reaction_accumulation,
                 self.tick,
                 &mut environmental_displacement_discovery_remaining,
+                local_resonance_world.as_ref(),
                 &mut displacement_discovery,
             );
         self.environmental_chemistry_diagnostics

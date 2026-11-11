@@ -630,6 +630,20 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) progress_preserved_unsearched: u64,
     /// Checked but unupdated progress entries that dissipated.
     pub(crate) progress_dissipated_checked: u64,
+    /// Number of environmental BREAK candidates selected for local resonance sampling.
+    pub(crate) local_resonance_sample_attempts: u64,
+    /// Successful local endpoint-spectrum samples, including zero similarity.
+    pub(crate) local_resonance_samples: u64,
+    /// Selected candidates for which local endpoint sampling was unavailable.
+    pub(crate) local_resonance_unavailable: u64,
+    /// Sum of successful dimensionless endpoint spectral similarities.
+    pub(crate) local_resonance_similarity_sum: f64,
+    /// Maximum successful dimensionless endpoint spectral similarity.
+    pub(crate) local_resonance_similarity_max: f64,
+    /// Time spent evaluating local endpoint spectra, in nanoseconds.
+    pub(crate) local_resonance_sample_nanoseconds: u64,
+    /// Time spent constructing the tick-local world material snapshot, in nanoseconds.
+    pub(crate) local_resonance_snapshot_build_nanoseconds: u64,
     /// Largest incoming bond activation accumulation observed.
     pub(crate) max_accumulated_reaction: f64,
 }
@@ -675,6 +689,23 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.activation_updates = self
             .activation_updates
             .saturating_add(tick.activation_updates);
+        self.local_resonance_sample_attempts = self
+            .local_resonance_sample_attempts
+            .saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self
+            .local_resonance_samples
+            .saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self
+            .local_resonance_unavailable
+            .saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() {
+            self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
+        }
+        if tick.local_resonance_similarity_max.is_finite() {
+            self.local_resonance_similarity_max = self
+                .local_resonance_similarity_max
+                .max(tick.local_resonance_similarity_max);
+        }
         self.activation_below_threshold = self
             .activation_below_threshold
             .saturating_add(tick.activation_below_threshold);
@@ -690,6 +721,29 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.progress_dissipated_checked = self
             .progress_dissipated_checked
             .saturating_add(tick.progress_dissipated_checked);
+        self.local_resonance_sample_attempts = self
+            .local_resonance_sample_attempts
+            .saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self
+            .local_resonance_samples
+            .saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self
+            .local_resonance_unavailable
+            .saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() {
+            self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
+        }
+        if tick.local_resonance_similarity_max.is_finite() {
+            self.local_resonance_similarity_max = self
+                .local_resonance_similarity_max
+                .max(tick.local_resonance_similarity_max);
+        }
+        self.local_resonance_sample_nanoseconds = self
+            .local_resonance_sample_nanoseconds
+            .saturating_add(tick.local_resonance_sample_nanoseconds);
+        self.local_resonance_snapshot_build_nanoseconds = self
+            .local_resonance_snapshot_build_nanoseconds
+            .saturating_add(tick.local_resonance_snapshot_build_nanoseconds);
         if tick.max_accumulated_reaction.is_finite() {
             self.max_accumulated_reaction = self
                 .max_accumulated_reaction
@@ -716,6 +770,17 @@ pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
     pub(crate) replacement_contacts_found: u64,
     /// Valid incoming-contact activation accumulations updated.
     pub(crate) activation_updates: u64,
+    /// DISPLACEMENT local resonance endpoint sampling diagnostics.
+    #[serde(default)]
+    pub(crate) local_resonance_sample_attempts: u64,
+    #[serde(default)]
+    pub(crate) local_resonance_samples: u64,
+    #[serde(default)]
+    pub(crate) local_resonance_unavailable: u64,
+    #[serde(default)]
+    pub(crate) local_resonance_similarity_sum: f64,
+    #[serde(default)]
+    pub(crate) local_resonance_similarity_max: f64,
     /// Activation checks that reached the existing bond's displacement barrier.
     pub(crate) activation_threshold_met: u64,
     /// Activation checks still below the existing bond's displacement barrier.
@@ -776,6 +841,23 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
         self.activation_updates = self
             .activation_updates
             .saturating_add(tick.activation_updates);
+        self.local_resonance_sample_attempts = self
+            .local_resonance_sample_attempts
+            .saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self
+            .local_resonance_samples
+            .saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self
+            .local_resonance_unavailable
+            .saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() {
+            self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum;
+        }
+        if tick.local_resonance_similarity_max.is_finite() {
+            self.local_resonance_similarity_max = self
+                .local_resonance_similarity_max
+                .max(tick.local_resonance_similarity_max);
+        }
         self.activation_threshold_met = self
             .activation_threshold_met
             .saturating_add(tick.activation_threshold_met);
@@ -845,6 +927,16 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) target_material_pairs_restore_failed: usize,
     pub(crate) target_material_pairs_rejected_for_overlap: usize,
     pub(crate) constituent_pairs_available: usize,
+    /// Time spent generating conservative current-geometry constituent candidates.
+    pub(crate) spatial_candidate_generation_nanoseconds: u64,
+    /// Number of source-material pairs for which spatial candidates were generated.
+    pub(crate) spatial_candidate_generation_calls: usize,
+    /// COMBINE local resonance endpoint sampling diagnostics.
+    pub(crate) local_resonance_sample_attempts: u64,
+    pub(crate) local_resonance_samples: u64,
+    pub(crate) local_resonance_unavailable: u64,
+    pub(crate) local_resonance_similarity_sum: f64,
+    pub(crate) local_resonance_similarity_max: f64,
     pub(crate) constituent_pairs_inspected: usize,
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,

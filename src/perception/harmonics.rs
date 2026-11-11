@@ -205,6 +205,7 @@ enum MaterialAuraBoundary {
 }
 
 impl MaterialAuraBoundary {
+    #[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
     fn normal_at(self, point: (f64, f64)) -> Option<(f64, f64)> {
         const TOLERANCE: f64 = 1e-7;
         match self {
@@ -295,12 +296,11 @@ pub(crate) struct MaterialResonanceDensitySample {
 
 /// Build a local resonance-density heat map over one realized receiver.
 ///
-/// Every other supplied material is considered as a possible emitter and all
-/// supplied materials remain in the occlusion set. The caller must provide
-/// world-resolved physical materials; stored owner-relative materials are
-/// rejected by the existing reception API. The spatial grid is diagnostic
-/// sampling only: reaction code must use continuous physical samples, never
-/// make eligibility depend on this grid.
+/// Every other supplied material is considered as a possible emitter. Other
+/// materials do not occlude chemistry-scale resonance; receiver geometry is
+/// used only to choose spatially meaningful boundary sample locations. The
+/// spatial grid is diagnostic sampling only: reaction code must use continuous
+/// physical samples, never make eligibility depend on this grid.
 #[allow(dead_code)] // Diagnostic field sampler; reaction integration follows energy-provenance validation.
 pub(crate) fn material_resonance_density_on_receiver(
     materials: &[crate::physical_material::PhysicalMaterial],
@@ -329,14 +329,12 @@ pub(crate) fn material_resonance_density_on_receiver(
 
     for &source_index in source_indices {
         let source = materials.get(source_index)?;
-        let receptions =
-            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+        // Receiver geometry supplies useful map coordinates, but chemistry
+        // resonance itself is sampled through the unoccluded point-field API.
+        // In particular, no third material can hide a source from this map.
+        let receptions = material_aura_receptions(source, receiver, catalog, tick)?;
         for reception in receptions {
-            if !reception.receiver_x.is_finite()
-                || !reception.receiver_y.is_finite()
-                || !reception.projected_extent.is_finite()
-                || reception.projected_extent <= f64::EPSILON
-            {
+            if !reception.receiver_x.is_finite() || !reception.receiver_y.is_finite() {
                 return None;
             }
             let cell_x_f = (reception.receiver_x / cell_size).floor();
@@ -351,48 +349,33 @@ pub(crate) fn material_resonance_density_on_receiver(
                 return None;
             }
             let key = (cell_x_f as i64, cell_y_f as i64, source_index);
+            let spectra = material_resonance_spectra_at_boundary_points(
+                materials,
+                &[source_index],
+                receiver_index,
+                &[(reception.receiver_x, reception.receiver_y)],
+                catalog,
+                tick,
+            )?;
+            let spectrum = spectra.first()?;
             let samples = source_cells.entry(key).or_default();
-            let dx = reception.source_x - reception.receiver_x;
-            let dy = reception.source_y - reception.receiver_y;
-            let distance = dx.hypot(dy);
-            if !distance.is_finite() || distance <= f64::EPSILON {
-                return None;
-            }
-            let directional_projection =
-                ((reception.receiver_normal_x * dx + reception.receiver_normal_y * dy) / distance)
-                    .max(0.0);
-            if !directional_projection.is_finite() {
-                return None;
-            }
-            if directional_projection <= f64::EPSILON {
-                continue;
-            }
-            let local_scale = directional_projection.sqrt() / reception.projected_extent.sqrt();
-            if !local_scale.is_finite() || local_scale < 0.0 {
-                return None;
-            }
-            for component in &reception.incident_spectrum.components {
-                let local = ToneComponent {
-                    frequency_cycles_per_day: component.frequency_cycles_per_day,
-                    amplitude: component.amplitude * local_scale,
-                    phase_radians: component.phase_radians,
-                };
-                if !local.frequency_cycles_per_day.is_finite()
-                    || local.frequency_cycles_per_day <= 0.0
-                    || !local.amplitude.is_finite()
-                    || local.amplitude < 0.0
-                    || !local.phase_radians.is_finite()
+            for component in &spectrum.components {
+                if !component.frequency_cycles_per_day.is_finite()
+                    || component.frequency_cycles_per_day <= 0.0
+                    || !component.amplitude.is_finite()
+                    || component.amplitude < 0.0
+                    || !component.phase_radians.is_finite()
                 {
                     return None;
                 }
                 if let Some((existing, count)) = samples.iter_mut().find(|(existing, _)| {
-                    (existing.frequency_cycles_per_day - local.frequency_cycles_per_day).abs()
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
                         <= 1e-9
                 }) {
-                    *existing = combine_component(*existing, local);
+                    *existing = combine_component(*existing, *component);
                     *count += 1;
                 } else {
-                    samples.push((local, 1));
+                    samples.push((*component, 1));
                 }
             }
         }
@@ -1310,19 +1293,14 @@ pub(crate) fn material_aura_receptions_with_occluders(
     if std::ptr::eq(source, receiver) {
         return Some(Vec::new());
     }
-    let (source_x, source_y, source_extent, emitted) =
-        environmental_material_resonance(source, catalog, tick)?;
     let receiver_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
-    if source_geometry.parts.is_empty() {
-        return None;
-    }
 
-    // Keep the receiver as the only target while every other body remains
-    // in the visibility set as a possible occluder. The source itself is
-    // deliberately excluded: its aura originates inside that body's geometry.
+    // Keep the receiver first as the only target. Other bodies remain exact
+    // occluders; the source itself is excluded because its aura originates
+    // inside its own geometry.
     let mut receiver_bodies = Vec::with_capacity(1 + occluders.len());
     receiver_bodies.push(receiver_geometry);
     for occluder in occluders {
@@ -1335,17 +1313,120 @@ pub(crate) fn material_aura_receptions_with_occluders(
             )?,
         );
     }
+
+    material_aura_receptions_with_geometry(
+        source,
+        receiver,
+        &source_geometry,
+        &receiver_bodies,
+        catalog,
+        tick,
+    )
+}
+
+/// Conservative AABB broad phase for possible occluders between a point
+/// source and the sampled receiver endpoints. Every source-to-endpoint segment
+/// lies inside the envelope of the source and requested points.
+#[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
+fn geometry_bounds_may_occlude_source_points(
+    source: (f64, f64),
+    points: &[(f64, f64)],
+    candidate: &crate::organism_geometry::OrganismBodyGeometry,
+) -> bool {
+    let mut min_x = source.0;
+    let mut max_x = source.0;
+    let mut min_y = source.1;
+    let mut max_y = source.1;
+    for &(x, y) in points {
+        min_x = min_x.min(x);
+        max_x = max_x.max(x);
+        min_y = min_y.min(y);
+        max_y = max_y.max(y);
+    }
+    !(candidate.max_x < min_x
+        || candidate.min_x > max_x
+        || candidate.max_y < min_y
+        || candidate.min_y > max_y)
+}
+
+fn receiver_has_straight_boundary(
+    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+) -> bool {
+    receiver
+        .parts
+        .iter()
+        .any(|part| part.form.polygon_vertices().is_some())
+}
+
+fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
+    receiver.parts.iter().any(|part| match &part.form {
+        crate::resources::Form::Circle { .. } => true,
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: Some(_),
+            ..
+        } => true,
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: Some(multi),
+            ..
+        } => multi.pieces.iter().any(|piece| {
+            matches!(
+                piece,
+                crate::capillary_geometry::FluidBoundaryPiece::FreeArc(_)
+            )
+        }),
+        crate::resources::Form::Fluid {
+            boundary: None,
+            arc_boundary: None,
+            multi_contact_boundary: None,
+            ..
+        } => true,
+        _ => false,
+    })
+}
+
+/// Evaluate one source against prebuilt world geometry. The receiver must be
+/// the first body in `receiver_bodies`; all remaining bodies are occluders.
+fn material_aura_receptions_with_geometry(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialAuraReception>> {
+    if source.owner_relative_origin.is_some()
+        || receiver.owner_relative_origin.is_some()
+        || receiver_bodies.is_empty()
+        || source_geometry.parts.is_empty()
+    {
+        return None;
+    }
+    let (source_x, source_y, source_extent, emitted) =
+        environmental_material_resonance(source, catalog, tick)?;
+
     let target_body_indices = [0];
-    let straight_intervals = crate::source_exposure::visible_polygonal_intervals_for_targets(
-        (source_x, source_y),
-        &receiver_bodies,
-        &target_body_indices,
-    )?;
-    let curved_intervals = crate::source_exposure::visible_circular_arc_intervals_for_targets(
-        (source_x, source_y),
-        &receiver_bodies,
-        &target_body_indices,
-    )?;
+    let receiver_geometry = receiver_bodies.first()?;
+    let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
+        crate::source_exposure::visible_polygonal_intervals_for_targets(
+            (source_x, source_y),
+            receiver_bodies,
+            &target_body_indices,
+        )?
+    } else {
+        Vec::new()
+    };
+    let curved_intervals = if receiver_has_curved_boundary(receiver_geometry) {
+        crate::source_exposure::visible_circular_arc_intervals_for_targets(
+            (source_x, source_y),
+            receiver_bodies,
+            &target_body_indices,
+        )?
+    } else {
+        Vec::new()
+    };
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1442,86 +1523,173 @@ pub(crate) fn material_aura_receptions_with_occluders(
     Some(receptions)
 }
 
-/// Evaluate the frequency-resolved incident field at one or more exact points
-/// on a receiver's currently exposed physical boundary. Receptions are built
-/// once per source and then evaluated at every requested point, keeping paired
-/// reaction-endpoint sampling from rebuilding the same geometry twice.
-pub(crate) fn material_resonance_spectra_at_boundary_points(
+/// One tick-local emitter prepared for repeated chemistry-field queries.
+/// Source position, mass scaling, and emitted spectrum are shared by every
+/// candidate sample during the tick instead of being rebuilt per reaction.
+#[derive(Clone, Debug)]
+pub(crate) struct MaterialResonanceEmitter {
+    source_index: usize,
+    source_x: f64,
+    source_y: f64,
+    mass_scale: f64,
+    emitted: ToneSpectrum,
+}
+
+/// Prepare the unoccluded material-origin emitters once for a simulation tick.
+pub(crate) fn material_resonance_emitters_at_tick(
     materials: &[crate::physical_material::PhysicalMaterial],
     source_indices: &[usize],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<MaterialResonanceEmitter>> {
+    let mut seen_sources = std::collections::BTreeSet::new();
+    if source_indices
+        .iter()
+        .any(|index| *index >= materials.len() || !seen_sources.insert(*index))
+    {
+        return None;
+    }
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let phase = phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick);
+    // Environmental inventories contain many independent objects made from
+    // the same material composition. Their emitted spectrum and mass response
+    // are composition/tick dependent, not position dependent. Prepare that
+    // response once per distinct composition and reuse it across the objects.
+    let mut response_cache =
+        std::collections::HashMap::<Vec<(String, u64)>, (f64, ToneSpectrum)>::new();
+    let mut emitters = Vec::with_capacity(source_indices.len());
+    for &source_index in source_indices {
+        let source = materials.get(source_index)?;
+        if !source.material.is_valid() || source.material.is_empty() {
+            return None;
+        }
+        let placements = source.placements.as_ref()?;
+        if placements.len() != source.material.parts.len() || placements.is_empty() {
+            return None;
+        }
+        let mut source_x = 0.0;
+        let mut source_y = 0.0;
+        for placement in placements {
+            source_x += placement.x;
+            source_y += placement.y;
+        }
+        let count = placements.len() as f64;
+        source_x /= count;
+        source_y /= count;
+        if !source_x.is_finite() || !source_y.is_finite() {
+            return None;
+        }
+
+        let signature: Vec<_> = source
+            .material
+            .parts
+            .iter()
+            .map(|(name, amount)| (name.clone(), amount.to_bits()))
+            .collect();
+        let (mass_scale, emitted) = response_cache.entry(signature).or_insert_with(|| {
+            let mass_scale =
+                environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+            let emitted = material_response(
+                source.material.weighted_properties(catalog),
+                baselines,
+                phase,
+            );
+            (mass_scale, emitted)
+        });
+        if !mass_scale.is_finite() || *mass_scale < 0.0 {
+            return None;
+        }
+        if *mass_scale > f64::EPSILON {
+            emitters.push(MaterialResonanceEmitter {
+                source_index,
+                source_x,
+                source_y,
+                mass_scale: *mass_scale,
+                emitted: emitted.clone(),
+            });
+        }
+    }
+    Some(emitters)
+}
+
+/// Evaluate prepared emitters at exact points around one receiver. Chemistry
+/// reception remains unoccluded and independent of receiver boundary geometry.
+/// Apply the receiver response directly to a scaled prepared emitter.
+///
+/// The scaled incident spectrum has the same component ordering as the emitted
+/// spectrum, so it is unnecessary to allocate an intermediate ToneSpectrum
+/// merely to multiply every amplitude before applying the response.
+fn material_response_spectrum_from_scaled_emitter(
+    properties: ResourceProperties,
+    baselines: ResourceBaselines,
+    emitted: &ToneSpectrum,
+    scale: f64,
+) -> Option<ToneSpectrum> {
+    if !scale.is_finite() || scale <= f64::EPSILON {
+        return None;
+    }
+    let incoming_energy = spectrum_energy(emitted)? * scale * scale;
+    if !incoming_energy.is_finite() {
+        return None;
+    }
+    let mut transformed = ToneSpectrum::empty();
+    for component in &emitted.components {
+        if component.amplitude <= f64::EPSILON {
+            continue;
+        }
+        let response = material_response_to_drive(
+            properties,
+            baselines,
+            component.frequency_cycles_per_day,
+            component.amplitude * scale,
+            component.phase_radians,
+        );
+        transformed.merge_from(&response, 1.0);
+    }
+    bound_spectrum_energy(&mut transformed, incoming_energy);
+    Some(transformed)
+}
+
+pub(crate) fn material_resonance_spectra_from_emitters(
+    emitters: &[MaterialResonanceEmitter],
+    receiver: &crate::physical_material::PhysicalMaterial,
     receiver_index: usize,
     points: &[(f64, f64)],
     catalog: &[crate::resources::BaseResource],
-    tick: u64,
 ) -> Option<Vec<ToneSpectrum>> {
     if points.is_empty()
         || points
             .iter()
             .any(|point| !point.0.is_finite() || !point.1.is_finite())
+        || !receiver.material.is_valid()
+        || receiver.material.is_empty()
     {
         return None;
     }
-    let receiver = materials.get(receiver_index)?;
-    let mut seen_sources = std::collections::BTreeSet::new();
-    if source_indices.iter().any(|index| {
-        *index >= materials.len() || *index == receiver_index || !seen_sources.insert(*index)
-    }) {
-        return None;
-    }
-
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let receiver_properties = receiver.material.weighted_properties(catalog);
     let mut fields = vec![ToneSpectrum::empty(); points.len()];
-    for &source_index in source_indices {
-        let source = materials.get(source_index)?;
-        let receptions =
-            material_aura_receptions_with_occluders(source, receiver, materials, catalog, tick)?;
+    for emitter in emitters
+        .iter()
+        .filter(|emitter| emitter.source_index != receiver_index)
+    {
         for (point_index, point) in points.iter().enumerate() {
-            let mut matched = None;
-            for reception in &receptions {
-                if let Some(normal) = reception.boundary.normal_at(*point) {
-                    if matched.is_some() {
-                        // A corner shared by multiple exposed intervals has no
-                        // unique local normal; do not choose one arbitrarily.
-                        return None;
-                    }
-                    matched = Some((reception, normal));
-                }
-            }
-            let Some((reception, normal)) = matched else {
-                continue;
-            };
-
-            let dx = reception.source_x - point.0;
-            let dy = reception.source_y - point.1;
-            let distance = dx.hypot(dy);
-            let midpoint_distance = (reception.source_x - reception.receiver_x)
-                .hypot(reception.source_y - reception.receiver_y);
-            if !distance.is_finite()
-                || distance <= f64::EPSILON
-                || !midpoint_distance.is_finite()
-                || reception.projected_extent <= f64::EPSILON
-            {
+            let distance = (emitter.source_x - point.0).hypot(emitter.source_y - point.1);
+            if !distance.is_finite() {
                 return None;
             }
-            let directional_projection = ((normal.0 * dx + normal.1 * dy) / distance).max(0.0);
-            if !directional_projection.is_finite() {
-                return None;
-            }
-            if directional_projection <= f64::EPSILON {
+            let attenuation = emitter.mass_scale / (1.0 + distance);
+            if !attenuation.is_finite() || attenuation <= f64::EPSILON {
                 continue;
             }
-
-            // Remove interval midpoint attenuation and projected-boundary
-            // scaling, then recalculate both at the exact requested point.
-            let local_scale = directional_projection.sqrt() * (1.0 + midpoint_distance)
-                / ((1.0 + distance) * reception.projected_extent.sqrt());
-            if !local_scale.is_finite() || local_scale < 0.0 {
-                return None;
-            }
-            add_spectrum(
-                &mut fields[point_index],
-                &reception.incident_spectrum,
-                local_scale,
-            );
+            let mut received = material_response_spectrum_from_scaled_emitter(
+                receiver_properties,
+                baselines,
+                &emitter.emitted,
+                attenuation,
+            )?;
+            received.retain_strongest();
+            add_spectrum(&mut fields[point_index], &received, 1.0);
         }
     }
     for field in &mut fields {
@@ -1530,7 +1698,25 @@ pub(crate) fn material_resonance_spectra_at_boundary_points(
     Some(fields)
 }
 
-/// Single-point compatibility wrapper for continuous boundary reception.
+/// Compatibility entry point for callers that need a one-off field query.
+/// Repeated reaction queries should prepare emitters once and reuse them.
+pub(crate) fn material_resonance_spectra_at_boundary_points(
+    materials: &[crate::physical_material::PhysicalMaterial],
+    source_indices: &[usize],
+    receiver_index: usize,
+    points: &[(f64, f64)],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ToneSpectrum>> {
+    let receiver = materials.get(receiver_index)?;
+    if source_indices.contains(&receiver_index) {
+        return None;
+    }
+    let emitters = material_resonance_emitters_at_tick(materials, source_indices, catalog, tick)?;
+    material_resonance_spectra_from_emitters(&emitters, receiver, receiver_index, points, catalog)
+}
+
+/// Single-point compatibility wrapper for unoccluded chemistry-scale reception.
 #[allow(dead_code)] // Direct query retained for focused geometry tests and callers.
 pub(crate) fn material_resonance_spectrum_at_boundary_point(
     materials: &[crate::physical_material::PhysicalMaterial],
@@ -2004,9 +2190,192 @@ pub(crate) fn spectral_similarity(a: &ToneSpectrum, b: &ToneSpectrum) -> f64 {
     ((directional(a, b) + directional(b, a)) * 0.5).clamp(0.0, 1.0)
 }
 
+/// Convert a received local spectrum into a reaction activation influence.
+///
+/// Frequency similarity alone is scale-invariant and would let an arbitrarily
+/// weak distant signal activate a reaction as strongly as a nearby one. Keep
+/// frequency matching separate from field strength: the received RMS amplitude
+/// is measured against the model's unit-amplitude reference drive and saturates
+/// at one. This remains a dimensionless signal influence, never usable energy.
+pub(crate) fn spectral_activation_influence(received: &ToneSpectrum, target: &ToneSpectrum) -> f64 {
+    let frequency_match = spectral_similarity(received, target);
+    // The chemistry field sums contributions from many materials, so its
+    // magnitude can legitimately exceed one. A smooth bounded response keeps
+    // stronger signals more influential without allowing unbounded activation.
+    let magnitude = spectrum_magnitude(received);
+    let signal_strength = magnitude / (1.0 + magnitude);
+    (frequency_match * signal_strength).clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scaled_emitter_response_matches_the_existing_scaled_spectrum_path() {
+        let emitted = ToneSpectrum {
+            components: vec![
+                ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.8,
+                    phase_radians: 0.3,
+                },
+                ToneComponent {
+                    frequency_cycles_per_day: 880.0,
+                    amplitude: 0.2,
+                    phase_radians: 0.6,
+                },
+            ],
+        };
+        let scale = 0.37;
+        let properties = properties(1.0, 4.0, 1.0);
+        let baselines = baselines();
+
+        let mut incident = ToneSpectrum::empty();
+        add_spectrum(&mut incident, &emitted, scale);
+        incident.retain_strongest();
+        let mut expected = material_response_spectrum(properties, baselines, &incident).unwrap();
+        expected.retain_strongest();
+
+        let mut actual =
+            material_response_spectrum_from_scaled_emitter(properties, baselines, &emitted, scale)
+                .unwrap();
+        actual.retain_strongest();
+
+        assert_eq!(actual.components.len(), expected.components.len());
+        for (actual, expected) in actual.components.iter().zip(&expected.components) {
+            assert!(
+                (actual.frequency_cycles_per_day - expected.frequency_cycles_per_day).abs()
+                    <= 1e-12
+            );
+            assert!((actual.amplitude - expected.amplitude).abs() <= 1e-12);
+            assert!((actual.phase_radians - expected.phase_radians).abs() <= 1e-12);
+        }
+    }
+
+    #[test]
+    fn reaction_activation_influence_preserves_received_signal_strength() {
+        let target = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        let received = |amplitude| ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude,
+                phase_radians: 0.0,
+            }],
+        };
+
+        let unit = spectral_activation_influence(&received(1.0), &target);
+        let weak = spectral_activation_influence(&received(0.1), &target);
+        let distant = spectral_activation_influence(&received(0.01), &target);
+        let strong = spectral_activation_influence(&received(5.0), &target);
+
+        assert!((unit - 0.5).abs() < 1e-12);
+        assert!((weak - (0.1_f64 / 1.1)).abs() < 1e-12);
+        assert!((distant - (0.01_f64 / 1.01)).abs() < 1e-12);
+        assert!((strong - (5.0_f64 / 6.0)).abs() < 1e-12);
+        assert!(strong > unit && unit > weak && weak > distant);
+    }
+
+    #[test]
+    fn resonance_occluder_broad_phase_keeps_endpoint_path_bounds_and_discards_disjoint_bounds() {
+        let endpoint_points = [(4.0, 0.0), (4.0, 1.0)];
+        let crossing = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 2.0,
+            max_x: 3.0,
+            min_y: 0.25,
+            max_y: 0.75,
+        };
+        let outside_y = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 1.0,
+            max_x: 3.0,
+            min_y: 2.0,
+            max_y: 3.0,
+        };
+        let outside_x = crate::organism_geometry::OrganismBodyGeometry {
+            parts: Vec::new(),
+            min_x: 5.0,
+            max_x: 6.0,
+            min_y: 0.25,
+            max_y: 0.75,
+        };
+
+        assert!(geometry_bounds_may_occlude_source_points(
+            (0.0, 0.0),
+            &endpoint_points,
+            &crossing,
+        ));
+        assert!(!geometry_bounds_may_occlude_source_points(
+            (0.0, 0.0),
+            &endpoint_points,
+            &outside_y,
+        ));
+        assert!(!geometry_bounds_may_occlude_source_points(
+            (0.0, 0.0),
+            &endpoint_points,
+            &outside_x,
+        ));
+    }
+
+    #[test]
+    fn resonance_visibility_runs_only_for_boundary_types_present_on_receiver() {
+        let polygon = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Rectangle {
+                    width: 1.0,
+                    height: 1.0,
+                },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let circle = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Circle { radius: 0.5 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: -0.5,
+            max_y: 0.5,
+        };
+        let line = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Line { length: 1.0 },
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: -0.5,
+            max_x: 0.5,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+
+        assert!(receiver_has_straight_boundary(&polygon));
+        assert!(!receiver_has_curved_boundary(&polygon));
+        assert!(!receiver_has_straight_boundary(&circle));
+        assert!(receiver_has_curved_boundary(&circle));
+        assert!(!receiver_has_straight_boundary(&line));
+        assert!(!receiver_has_curved_boundary(&line));
+    }
 
     #[test]
     fn phase_clock_starts_at_peak_and_advances_reference_tone_by_6_point_6_degrees_per_tick() {
@@ -2598,7 +2967,7 @@ mod tests {
     }
 
     #[test]
-    fn continuous_resonance_query_is_grid_free_and_respects_visible_boundary_geometry() {
+    fn chemistry_scale_resonance_query_is_grid_free_and_unoccluded() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
             crate::physical_material::PhysicalMaterial::realized(
@@ -2636,7 +3005,7 @@ mod tests {
 
         let first =
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
-                .expect("valid exposed reaction point should be queryable");
+                .expect("a finite reaction endpoint should be queryable");
         let repeated =
             material_resonance_spectrum_at_boundary_point(&materials, &[0], 1, point, &catalog, 0)
                 .expect("the continuous query should be deterministic");
@@ -2649,11 +3018,11 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("paired endpoint sampling should accept valid boundary points");
+        .expect("paired endpoint sampling should accept finite reaction points");
         assert_eq!(paired, vec![first.clone(), first.clone()]);
         assert!(
             !first.components.is_empty(),
-            "visible reaction geometry should receive the source field"
+            "the local resonance field should reach the reaction endpoint"
         );
 
         let off_boundary = (point.0 + 0.25, point.1 + 0.25);
@@ -2665,15 +3034,18 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("a valid but non-boundary point should produce an empty field");
-        assert!(outside.components.is_empty());
+        .expect("any finite chemistry endpoint should be queryable");
+        assert!(
+            !outside.components.is_empty(),
+            "chemistry-scale resonance is not restricted to a material boundary"
+        );
 
         let blocked_materials = vec![
             materials[0].clone(),
             materials[1].clone(),
             make_material("Nitrogen", 4.0, 0.0),
         ];
-        let blocked = material_resonance_spectrum_at_boundary_point(
+        let unoccluded = material_resonance_spectrum_at_boundary_point(
             &blocked_materials,
             &[0],
             1,
@@ -2681,10 +3053,10 @@ mod tests {
             &catalog,
             0,
         )
-        .expect("valid occluded geometry should be queryable");
-        assert!(
-            blocked.components.is_empty(),
-            "a source hidden behind a physical blocker must not contribute at this point"
+        .expect("third-party geometry must not be needed for chemistry-scale reception");
+        assert_eq!(
+            unoccluded, first,
+            "small chemistry materials do not cast resonance shadows"
         );
     }
 
@@ -2787,7 +3159,7 @@ mod tests {
     }
 
     #[test]
-    fn local_resonance_density_respects_occlusion_and_source_distance() {
+    fn local_resonance_density_ignores_occlusion_but_respects_source_distance() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
             crate::physical_material::PhysicalMaterial::realized(
@@ -2815,12 +3187,12 @@ mod tests {
         };
 
         let clear = density_sum(&[nearby_source.clone(), receiver.clone()]);
-        let shadowed = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
+        let intervened = density_sum(&[nearby_source.clone(), receiver.clone(), blocker]);
         let farther = density_sum(&[distant_source, receiver]);
         assert!(clear > 0.0);
         assert!(
-            shadowed < clear,
-            "an intervening material should reduce received local density"
+            (intervened - clear).abs() <= 1e-9 * clear.max(1.0),
+            "third-party materials must not occlude chemistry-scale resonance"
         );
         assert!(
             farther < clear,

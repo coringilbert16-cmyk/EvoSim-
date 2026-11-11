@@ -795,6 +795,8 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             || diagnostics.displacement_scheduled > 0
             || diagnostics.displacement_committed > 0
             || diagnostics.displacement_rejected > 0
+            || diagnostics.displacement_discovery
+                != crate::state::EnvironmentalDisplacementDiscoveryDiagnostics::default()
             || diagnostics.hotspot_settlement_succeeded == Some(false)
         {
             self.write_event(json!({
