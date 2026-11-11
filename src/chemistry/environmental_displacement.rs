@@ -2559,12 +2559,11 @@ mod tests {
                         baseline,
                         0.0,
                         0.0,
-                    ).expect("every non-Water unlike replacement must have finite preflight");
-                    let is_stronger = preflight.replacement_bond_energy
-                        > preflight.old_bond_energy;
-                    let funded = preflight.can_commit(
-                        preflight.energy.required_external_input,
-                    );
+                    )
+                    .expect("every non-Water unlike replacement must have finite preflight");
+                    let is_stronger =
+                        preflight.replacement_bond_energy > preflight.old_bond_energy;
+                    let funded = preflight.can_commit(preflight.energy.required_external_input);
                     assert!(preflight.is_activated());
                     assert!(funded);
                     if is_stronger {
@@ -2588,7 +2587,10 @@ mod tests {
             }
         }
 
-        assert_eq!(cases, 120, "matrix must cover every ordered unlike old bond and distinct incoming resource");
+        assert_eq!(
+            cases, 120,
+            "matrix must cover every ordered unlike old bond and distinct incoming resource"
+        );
         assert!(stronger > 0);
         assert!(
             weaker_or_tied_but_fundable > 0,
@@ -2598,5 +2600,4 @@ mod tests {
             "DISPLACEMENT_PAIR_MATRIX_SUMMARY|cases={cases}|stronger={stronger}|weaker_or_tied_but_fundable={weaker_or_tied_but_fundable}"
         );
     }
-
 }
