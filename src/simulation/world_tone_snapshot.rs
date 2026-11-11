@@ -830,7 +830,11 @@ impl LocalResonanceWorldSnapshot {
         {
             return None;
         }
-        let receiver_index = self.receiver_indices.get(&receiver_identity).copied().flatten()?;
+        let receiver_index = self
+            .receiver_indices
+            .get(&receiver_identity)
+            .copied()
+            .flatten()?;
         if !self.resonant_index_set.contains(&receiver_index) {
             return None;
         }
