@@ -16,6 +16,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
     let mut dispersion = crate::environment_chemistry_experiment::DispersionMode::Randomized;
+    let mut starting_mixture = crate::environment_chemistry_experiment::StartingMixture::Baseline;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -39,6 +40,15 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
                     }
                     Some(value) => panic!("unsupported chemistry dispersion: {value}"),
                     None => panic!("--dispersion requires randomized, uniform, or clustered"),
+                };
+            }
+            "--starting-mixture" => {
+                starting_mixture = match args.next().as_deref() {
+                    Some("baseline") => crate::environment_chemistry_experiment::StartingMixture::Baseline,
+                    Some("high-bonded") => crate::environment_chemistry_experiment::StartingMixture::HighBonded,
+                    Some("mixed-stability") => crate::environment_chemistry_experiment::StartingMixture::MixedStability,
+                    Some(value) => panic!("unsupported chemistry starting mixture: {value}"),
+                    None => panic!("--starting-mixture requires baseline, high-bonded, or mixed-stability"),
                 };
             }
             "--seed" => {
@@ -85,6 +95,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         run_environment_chemistry_experiment(
             seed,
             dispersion,
+            starting_mixture,
             ticks,
             duration_seconds,
             diagnostics_path
@@ -216,12 +227,15 @@ fn report(simulation: &Simulation, label: &str) {
 fn run_environment_chemistry_experiment(
     seed: u64,
     dispersion: crate::environment_chemistry_experiment::DispersionMode,
+    starting_mixture: crate::environment_chemistry_experiment::StartingMixture,
     max_ticks: u64,
     duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
-    let fixture = crate::environment_chemistry_experiment::build_with_dispersion(seed, dispersion);
+    let fixture = crate::environment_chemistry_experiment::build_with_dispersion_and_mixture(
+        seed, dispersion, starting_mixture,
+    );
     let mut simulation = fixture.simulation;
     simulation.record_local_resonance_diagnostics = true;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
@@ -233,6 +247,7 @@ fn run_environment_chemistry_experiment(
         planned_ticks,
         &simulation,
         dispersion.as_str(),
+        starting_mixture.as_str(),
         &fixture.pile_sizes,
     )
     .unwrap_or_else(|error| {
