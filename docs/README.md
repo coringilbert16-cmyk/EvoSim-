@@ -20,6 +20,7 @@ This index is the entry point for repository documentation. It classifies docume
 
 ## Chemistry and material handling
 
+- [Material and chemical interaction model specification](material-chemistry-model-spec.md) — approved design direction and staged implementation roadmap for adhesion, intrinsic cohesion, bond integrity, emergent cohesion, COMBINE, BREAK, DISPLACEMENT, and energy accounting. This is the design reference for the next chemistry implementation sequence; it describes intended behavior, not yet-implemented runtime behavior.
 - Chemistry implementation and authority are documented in the source tree and current README; use the focused code/audit before making claims about conservation.
 - [Fluid coalescence transaction](fluid-coalescence-transaction.md) also covers material-state changes that cross geometry and chemistry boundaries.
 

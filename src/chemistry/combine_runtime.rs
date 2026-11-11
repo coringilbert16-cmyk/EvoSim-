@@ -3,7 +3,10 @@
 //! Physics is evaluated by `combine`; this module selects a physical
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
-use crate::combine::{bond_strength, eligible_candidates, formation_cost, FormationEvaluation};
+use crate::combine::{
+    bond_strength, conservative_pair_potential, eligible_candidates, formation_cost,
+    FormationEvaluation, PairPotentialEvaluation,
+};
 use crate::contact::ConnectionCompatibilityCache;
 use crate::developmental_blueprint::DevelopmentalFieldBlueprint;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, EnergyTransaction};
@@ -70,6 +73,24 @@ fn energy_requirement(
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<f64> {
+    energy_requirement_with_rounding(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        false,
+    )
+}
+
+fn energy_requirement_with_rounding(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<f64> {
     if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
@@ -79,13 +100,22 @@ fn energy_requirement(
     } else {
         product_structural_energy
     };
-    crate::energy_ledger::ReactionEnergyBalance::calculate(
-        reactant_structural_energy,
-        product_energy,
-        work,
-        0.0,
-    )
-    .map(|balance| balance.required_external_input)
+    let balance = if conservative_deficit {
+        crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    } else {
+        crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    }?;
+    Some(balance.required_external_input)
 }
 
 fn combine_energy_transaction(
@@ -95,6 +125,24 @@ fn combine_energy_transaction(
     reactant_structural_energy: f64,
     product_structural_energy: f64,
 ) -> Option<EnergyTransaction> {
+    combine_energy_transaction_with_rounding(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        false,
+    )
+}
+
+fn combine_energy_transaction_with_rounding(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<EnergyTransaction> {
     if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
         return None;
     }
@@ -103,14 +151,87 @@ fn combine_energy_transaction(
         // only actual physical work is debited from usable energy.
         return EnergyTransaction::expenditure(EnergyReason::Combine, 0.0, work, 0.0);
     }
-    // The same pre/post-state balance drives both affordability and settlement.
-    crate::energy_ledger::ReactionEnergyBalance::calculate(
-        reactant_structural_energy,
-        product_structural_energy,
-        work,
-        0.0,
-    )?
-    .settlement_transaction(EnergyReason::Combine)
+    if conservative_deficit {
+        crate::energy_ledger::ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_structural_energy,
+            work,
+            0.0,
+        )?
+        .settlement_transaction_conservative(EnergyReason::Combine)
+    } else {
+        crate::energy_ledger::ReactionEnergyBalance::calculate(
+            reactant_structural_energy,
+            product_structural_energy,
+            work,
+            0.0,
+        )?
+        .settlement_transaction(EnergyReason::Combine)
+    }
+}
+
+/// Resolve the adhesion at the actual structural-unit interface.
+/// Structural units represent individual physical constituents; compound-wide
+/// weighted properties are deliberately not used for pair adhesion.
+/// Water remains on its existing compatibility path during this staged migration.
+fn active_pair_potential(
+    structure: &crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Result<Option<PairPotentialEvaluation>, &'static str> {
+    let unit_a = structure
+        .units
+        .get(unit_a)
+        .ok_or("missing interface constituent A")?;
+    let unit_b = structure
+        .units
+        .get(unit_b)
+        .ok_or("missing interface constituent B")?;
+    let [(name_a, amount_a)] = unit_a.material.parts.as_slice() else {
+        return Err("interface constituent A is not an individual resource");
+    };
+    let [(name_b, amount_b)] = unit_b.material.parts.as_slice() else {
+        return Err("interface constituent B is not an individual resource");
+    };
+    if !amount_a.is_finite() || *amount_a <= 0.0 || !amount_b.is_finite() || *amount_b <= 0.0 {
+        return Err("interface constituent amount is invalid");
+    }
+    let resource_a = catalog
+        .iter()
+        .find(|resource| resource.name == *name_a)
+        .ok_or("interface resource A is missing from catalog")?;
+    let resource_b = catalog
+        .iter()
+        .find(|resource| resource.name == *name_b)
+        .ok_or("interface resource B is missing from catalog")?;
+
+    // The new multidimensional model is explicitly scoped to the six
+    // migrated non-Water resources. Legacy/custom catalog entries retain their
+    // existing interaction adapter until they receive approved descriptors.
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    if !active_resource(&resource_a.name) || !active_resource(&resource_b.name) {
+        return Ok(None);
+    }
+
+    let potential = conservative_pair_potential(
+        resource_a.adhesion,
+        resource_b.adhesion,
+        candidate.distance,
+        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        crate::chemistry::CHEMICAL_MAX_FORCE,
+    )
+    .ok_or("pair adhesion potential is invalid")?;
+    if potential.adhesion.net <= EPSILON {
+        return Err("interface pair has no net attractive adhesion");
+    }
+    Ok(Some(potential))
 }
 
 fn evaluate_candidate(
@@ -128,10 +249,10 @@ fn evaluate_candidate(
     }
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
-    // Chemical materials must have a real attractive interaction at the
-    // realized contact. This makes chemistry an actual formation driver,
-    // rather than merely a source of stored bond energy after COMBINE.
-    if a.chemical_position.is_some() && b.chemical_position.is_some() {
+    // Non-Water chemistry uses the actual resource pair at this interface.
+    // Water remains on the legacy path until its fluid/capillary adapter is migrated.
+    let pair_potential = active_pair_potential(structure, ua, ub, candidate, catalog).ok()?;
+    if pair_potential.is_none() && a.chemical_position.is_some() && b.chemical_position.is_some() {
         let interaction = crate::combine::chemical_interaction(
             a,
             b,
@@ -146,12 +267,21 @@ fn evaluate_candidate(
         }
     }
     let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
-    let (work, investment) = formation_cost(a, b, evaluation).ok()?;
+    let (work, investment) = if let Some(potential) = pair_potential {
+        (potential.approach_work, evaluation.threshold)
+    } else {
+        formation_cost(a, b, evaluation).ok()?
+    };
+    if !work.is_finite() || work < 0.0 || !investment.is_finite() || investment < 0.0 {
+        return None;
+    }
     let strength = bond_strength(a, b);
     if !strength.is_finite() {
         return None;
     }
-    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    let bond_energy = pair_potential
+        .map(|potential| potential.bond_energy)
+        .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
     }
@@ -162,13 +292,24 @@ fn evaluate_candidate(
     } else {
         reactant_structural_energy - bond_energy
     };
-    let required = energy_requirement(
-        bond_energy,
-        work,
-        transient_fluid_bond,
-        reactant_structural_energy,
-        product_structural_energy,
-    )?;
+    let required = if pair_potential.is_some() {
+        energy_requirement_with_rounding(
+            bond_energy,
+            work,
+            transient_fluid_bond,
+            reactant_structural_energy,
+            product_structural_energy,
+            true,
+        )?
+    } else {
+        energy_requirement(
+            bond_energy,
+            work,
+            transient_fluid_bond,
+            reactant_structural_energy,
+            product_structural_energy,
+        )?
+    };
     Some((evaluation, work, investment, required))
 }
 
@@ -233,8 +374,12 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
 
     let a = structure.units[unit_a].properties(catalog)?;
     let b = structure.units[unit_b].properties(catalog)?;
+    let pair_potential =
+        active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
     let strength = bond_strength(a, b);
-    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    let bond_energy = pair_potential
+        .map(|potential| potential.bond_energy)
+        .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
     if !strength.is_finite()
         || !(0.0..=1.0).contains(&strength)
         || !bond_energy.is_finite()
@@ -466,20 +611,24 @@ fn form_bond_from_candidate_diagnostic(
     let b = structure.units[ub]
         .properties(catalog)
         .ok_or("unit B properties unavailable")?;
-    let evaluation = crate::combine::evaluate_formation(candidate, a.cohesion, b.cohesion);
+    let (evaluation, work, threshold, _) =
+        evaluate_candidate(structure, ua, ub, candidate, catalog)
+            .ok_or("COMBINE interface evaluation rejected candidate")?;
     if !crate::combine::formation_succeeds(evaluation, investment) {
         return Err("COMBINE formation criteria rejected candidate");
     }
-    let (work, threshold) =
-        formation_cost(a, b, evaluation).map_err(|_| "formation cost calculation failed")?;
     if (threshold - investment).abs() > EPSILON {
         return Err("selected investment differs from formation threshold");
     }
+    let pair_potential = active_pair_potential(structure, ua, ub, candidate, catalog)
+        .map_err(|_| "COMBINE pair adhesion evaluation failed")?;
     let strength = bond_strength(a, b);
     if !strength.is_finite() {
-        return Err("calculated bond strength is not finite");
+        return Err("calculated bond integrity is not finite");
     }
-    let bond_energy = crate::combine::intrinsic_bond_potential(a, b, strength);
+    let bond_energy = pair_potential
+        .map(|potential| potential.bond_energy)
+        .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
     if !bond_energy.is_finite() || bond_energy < 0.0 {
         return Err("calculated intrinsic bond energy is invalid");
     }
@@ -507,13 +656,24 @@ fn form_bond_from_candidate_diagnostic(
         .ok_or("COMBINE reactant structural energy is invalid")?;
     let product_structural_energy = crate::energy_ledger::structural_potential(&trial_structure)
         .ok_or("COMBINE product structural energy is invalid")?;
-    let transaction = combine_energy_transaction(
-        bond_energy,
-        work,
-        fluid_pair,
-        reactant_structural_energy,
-        product_structural_energy,
-    )
+    let transaction = if pair_potential.is_some() {
+        combine_energy_transaction_with_rounding(
+            bond_energy,
+            work,
+            fluid_pair,
+            reactant_structural_energy,
+            product_structural_energy,
+            true,
+        )
+    } else {
+        combine_energy_transaction(
+            bond_energy,
+            work,
+            fluid_pair,
+            reactant_structural_energy,
+            product_structural_energy,
+        )
+    }
     .ok_or("COMBINE energy transaction could not be constructed")?;
     if !ledger.settle_transaction(energy, transaction) {
         #[cfg(test)]

@@ -3,7 +3,10 @@
 //! resource-derived bond strength.
 use crate::chemistry::{attraction, interaction_potential, CHEMICAL_D_MAX, CHEMICAL_K};
 use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
-use crate::resources::{combine_materials, BaseResource, Material, ResourceProperties};
+use crate::resources::{
+    combine_materials, pair_adhesion, AdhesionDescriptors, BaseResource, Material, PairAdhesion,
+    ResourceProperties,
+};
 use crate::structure::{formation_threshold, OrganismStructure};
 use std::collections::HashMap;
 const EPSILON: f64 = 1e-12;
@@ -15,6 +18,64 @@ pub const EXPERIMENTAL_MAX_BOND_STRENGTH: f64 = 1.0;
 pub struct ChemicalInteraction {
     pub static_potential: f64,
     pub attraction: f64,
+}
+
+/// Conservative pair-potential evaluation using the approved shared adhesion
+/// score and the existing physical force/radius scales.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PairPotentialEvaluation {
+    pub adhesion: PairAdhesion,
+    /// Signed potential energy at the current separation.
+    pub potential_energy: f64,
+    /// Signed radial force: positive is attractive, negative is repulsive.
+    pub force: f64,
+    /// Signed force-integral over the remaining approach distance.
+    pub approach_work: f64,
+    /// Stable attractive well depth assigned to a realized bond.
+    pub bond_energy: f64,
+}
+
+/// Evaluate the conservative pair potential at a non-negative separation
+/// measured outward from contact. The same J and physical scales govern force,
+/// approach work, potential energy, and stable bond energy.
+pub fn conservative_pair_potential(
+    a: AdhesionDescriptors,
+    b: AdhesionDescriptors,
+    separation: f64,
+    contact_radius: f64,
+    max_force: f64,
+) -> Option<PairPotentialEvaluation> {
+    if !separation.is_finite()
+        || separation < 0.0
+        || !contact_radius.is_finite()
+        || contact_radius <= 0.0
+        || !max_force.is_finite()
+        || max_force < 0.0
+    {
+        return None;
+    }
+    let adhesion = pair_adhesion(a, b)?;
+    let distance = separation.min(contact_radius);
+    let remaining = 1.0 - distance / contact_radius;
+    let scale = max_force * contact_radius / 3.0;
+    let potential_energy = -scale * adhesion.net * remaining.powi(3);
+    let force = max_force * adhesion.net * remaining.powi(2);
+    let approach_work = scale * adhesion.net * (1.0 - remaining.powi(3));
+    let bond_energy = scale * adhesion.net.max(0.0);
+    if !potential_energy.is_finite()
+        || !force.is_finite()
+        || !approach_work.is_finite()
+        || !bond_energy.is_finite()
+    {
+        return None;
+    }
+    Some(PairPotentialEvaluation {
+        adhesion,
+        potential_energy,
+        force,
+        approach_work,
+        bond_energy,
+    })
 }
 
 pub fn chemical_interaction(
@@ -321,6 +382,80 @@ mod tests {
             MaterialRecipeKey::from_inputs(&[carbon(1.0), oxygen(3.0)])
         )
     }
+
+    #[test]
+    fn conservative_pair_potential_uses_one_score_for_all_energy_terms() {
+        let catalog = default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
+        let contact =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 0.0, 1.0, 1.0).unwrap();
+        assert!(contact.adhesion.net > 0.0);
+        assert_eq!(contact.potential_energy, -contact.bond_energy);
+        assert_eq!(contact.force, contact.adhesion.net);
+        assert_eq!(contact.approach_work, 0.0);
+
+        let edge =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 1.0, 1.0, 1.0).unwrap();
+        assert_eq!(edge.potential_energy, 0.0);
+        assert_eq!(edge.force, 0.0);
+        assert!((edge.approach_work - contact.bond_energy).abs() < 1e-12);
+        assert_eq!(edge.bond_energy, contact.bond_energy);
+    }
+
+    #[test]
+    fn conservative_pair_potential_keeps_repulsion_and_does_not_create_a_bond() {
+        let catalog = default_catalog();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
+        let result =
+            conservative_pair_potential(oxygen.adhesion, oxygen.adhesion, 0.5, 1.0, 1.0).unwrap();
+        assert!(result.adhesion.net < 0.0);
+        assert!(result.force < 0.0);
+        assert!(result.potential_energy > 0.0);
+        assert!(result.approach_work < 0.0);
+        assert_eq!(result.bond_energy, 0.0);
+    }
+
+    #[test]
+    fn conservative_pair_potential_is_symmetric_and_clamps_outside_range() {
+        let catalog = default_catalog();
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        let oxygen = catalog
+            .iter()
+            .find(|resource| resource.name == "Oxygen")
+            .unwrap();
+        let ab =
+            conservative_pair_potential(carbon.adhesion, oxygen.adhesion, 2.0, 1.0, 1.0).unwrap();
+        let ba =
+            conservative_pair_potential(oxygen.adhesion, carbon.adhesion, 1.0, 1.0, 1.0).unwrap();
+        assert_eq!(ab, ba);
+        assert_eq!(ab.potential_energy, 0.0);
+        assert_eq!(ab.force, 0.0);
+    }
+
+    #[test]
+    fn conservative_pair_potential_rejects_invalid_scales_and_separation() {
+        let descriptor = AdhesionDescriptors::default();
+        assert!(conservative_pair_potential(descriptor, descriptor, -0.1, 1.0, 1.0).is_none());
+        assert!(conservative_pair_potential(descriptor, descriptor, f64::NAN, 1.0, 1.0).is_none());
+        assert!(conservative_pair_potential(descriptor, descriptor, 0.0, 0.0, 1.0).is_none());
+        assert!(
+            conservative_pair_potential(descriptor, descriptor, 0.0, 1.0, f64::INFINITY).is_none()
+        );
+    }
+
     #[test]
     fn chemical_interaction_uses_catalog_positions_not_potential_energy() {
         let a = ResourceProperties {

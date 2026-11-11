@@ -13,6 +13,7 @@ mod tests {
         vec![
             BaseResource {
                 name: "Carbon".into(),
+                adhesion: Default::default(),
                 properties: ResourceProperties {
                     mass: 1.0,
                     potential_energy: 3.0,
@@ -27,6 +28,7 @@ mod tests {
             },
             BaseResource {
                 name: "Hydrogen".into(),
+                adhesion: Default::default(),
                 properties: ResourceProperties {
                     mass: 1.0,
                     potential_energy: 5.0,
