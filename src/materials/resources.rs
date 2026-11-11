@@ -25,10 +25,84 @@ pub struct ResourceProperties {
     pub cohesion: f64,
 }
 
+/// Abstract material interaction characteristics. These describe adhesion only;
+/// they do not encode intrinsic cohesion, reactivity, or stored energy.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub struct AdhesionDescriptors {
+    /// Non-directional dispersion attraction in [0, 1].
+    pub dispersion: f64,
+    /// Signed interaction orientation in [-1, 1].
+    pub polarity: f64,
+    /// Donor-like complementary interaction propensity in [0, 1].
+    pub donor: f64,
+    /// Acceptor-like complementary interaction propensity in [0, 1].
+    pub acceptor: f64,
+}
+
+impl AdhesionDescriptors {
+    pub fn is_valid(self) -> bool {
+        self.dispersion.is_finite()
+            && (0.0..=1.0).contains(&self.dispersion)
+            && self.polarity.is_finite()
+            && (-1.0..=1.0).contains(&self.polarity)
+            && self.donor.is_finite()
+            && (0.0..=1.0).contains(&self.donor)
+            && self.acceptor.is_finite()
+            && (0.0..=1.0).contains(&self.acceptor)
+    }
+}
+
+/// Symmetric decomposition of one resource-pair interaction.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PairAdhesion {
+    pub attraction: f64,
+    pub repulsion: f64,
+    pub net: f64,
+}
+
+/// Calculate the same pair interaction regardless of endpoint ordering.
+/// Returns None for invalid material descriptors rather than hiding bad catalog data.
+pub fn pair_adhesion(
+    a: AdhesionDescriptors,
+    b: AdhesionDescriptors,
+) -> Option<PairAdhesion> {
+    if !a.is_valid() || !b.is_valid() {
+        return None;
+    }
+
+    let dispersion = (a.dispersion * b.dispersion).sqrt();
+    let polarity_attraction = (-a.polarity * b.polarity).max(0.0);
+    let polarity_repulsion = (a.polarity * b.polarity).max(0.0);
+    let complementary_attraction =
+        (a.donor * b.acceptor + a.acceptor * b.donor) / 2.0;
+    let like_role_repulsion = (a.donor * b.donor + a.acceptor * b.acceptor) / 2.0;
+
+    let attraction =
+        (dispersion + polarity_attraction + complementary_attraction) / 3.0;
+    let repulsion = (polarity_repulsion + like_role_repulsion) / 2.0;
+    let net = attraction - repulsion;
+
+    (attraction.is_finite()
+        && repulsion.is_finite()
+        && net.is_finite()
+        && (0.0..=1.0).contains(&attraction)
+        && (0.0..=1.0).contains(&repulsion)
+        && (-1.0..=1.0).contains(&net))
+        .then_some(PairAdhesion {
+            attraction,
+            repulsion,
+            net,
+        })
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BaseResource {
     pub name: String,
     pub properties: ResourceProperties,
+    /// Independent pair-interaction descriptors. Missing fields in historical
+    /// serialized catalogs migrate to neutral zero descriptors.
+    #[serde(default)]
+    pub adhesion: AdhesionDescriptors,
     #[serde(default)]
     pub physical_state: PhysicalState,
 
@@ -718,6 +792,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
     vec![
         BaseResource {
             name: "Carbon".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.80, polarity: 0.00, donor: 0.25, acceptor: 0.25 },
             properties: ResourceProperties {
                 mass: 1.00,
                 potential_energy: 1.0,
@@ -735,6 +810,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Oxygen".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.55, polarity: -0.80, donor: 0.10, acceptor: 0.95 },
             properties: ResourceProperties {
                 mass: 0.75,
                 potential_energy: 20.0,
@@ -752,6 +828,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Hydrogen".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.25, polarity: 0.35, donor: 0.65, acceptor: 0.10 },
             properties: ResourceProperties {
                 mass: 0.25,
                 potential_energy: 12.0,
@@ -771,6 +848,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Sulfur".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.90, polarity: -0.20, donor: 0.50, acceptor: 0.55 },
             properties: ResourceProperties {
                 mass: 1.50,
                 potential_energy: 8.0,
@@ -794,6 +872,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Nitrogen".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.65, polarity: 0.15, donor: 0.75, acceptor: 0.70 },
             properties: ResourceProperties {
                 mass: 1.25,
                 potential_energy: 0.75,
@@ -811,6 +890,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Phosphorus".into(),
+            adhesion: AdhesionDescriptors { dispersion: 0.85, polarity: 0.55, donor: 0.45, acceptor: 0.35 },
             properties: ResourceProperties {
                 mass: 1.75,
                 potential_energy: 1.50,
@@ -835,6 +915,7 @@ pub fn default_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "Water".into(),
+            adhesion: AdhesionDescriptors::default(),
             properties: ResourceProperties {
                 mass: 1.00,
                 potential_energy: 0.0,
@@ -1417,5 +1498,96 @@ mod shape_tests {
         assert_eq!(linear.internal_bonds.len(), 3);
         assert_eq!(branched.internal_bonds.len(), 3);
         assert_ne!(linear.internal_bonds, branched.internal_bonds);
+    }
+}
+
+
+#[cfg(test)]
+mod adhesion_descriptor_tests {
+    use super::*;
+
+    #[test]
+    fn descriptor_ranges_reject_non_finite_and_out_of_range_values() {
+        assert!(AdhesionDescriptors::default().is_valid());
+        assert!(!AdhesionDescriptors { dispersion: f64::NAN, ..Default::default() }.is_valid());
+        assert!(!AdhesionDescriptors { polarity: 1.01, ..Default::default() }.is_valid());
+        assert!(!AdhesionDescriptors { donor: -0.01, ..Default::default() }.is_valid());
+        assert!(!AdhesionDescriptors { acceptor: f64::INFINITY, ..Default::default() }.is_valid());
+    }
+
+    #[test]
+    fn pair_interaction_is_symmetric_and_reports_separate_channels() {
+        let catalog = default_catalog();
+        for a in &catalog {
+            for b in &catalog {
+                let ab = pair_adhesion(a.adhesion, b.adhesion).expect("valid descriptors");
+                let ba = pair_adhesion(b.adhesion, a.adhesion).expect("valid descriptors");
+                assert!((ab.attraction - ba.attraction).abs() < 1e-12);
+                assert!((ab.repulsion - ba.repulsion).abs() < 1e-12);
+                assert!((ab.net - ba.net).abs() < 1e-12);
+                assert!((0.0..=1.0).contains(&ab.attraction));
+                assert!((0.0..=1.0).contains(&ab.repulsion));
+                assert!((-1.0..=1.0).contains(&ab.net));
+            }
+        }
+    }
+
+    #[test]
+    fn six_active_resources_have_the_approved_21_pair_prediction_matrix() {
+        let catalog = default_catalog();
+        let active = ["Carbon", "Oxygen", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus"];
+        let expected = [
+            ("Carbon", "Carbon", 0.256250),
+            ("Carbon", "Oxygen", 0.199233),
+            ("Carbon", "Hydrogen", 0.133446),
+            ("Carbon", "Sulfur", 0.260968),
+            ("Carbon", "Nitrogen", 0.210162),
+            ("Carbon", "Phosphorus", 0.258207),
+            ("Oxygen", "Oxygen", -0.333125),
+            ("Oxygen", "Hydrogen", 0.281520),
+            ("Oxygen", "Sulfur", 0.099729),
+            ("Oxygen", "Nitrogen", 0.184721),
+            ("Oxygen", "Phosphorus", 0.357288),
+            ("Hydrogen", "Hydrogen", -0.064375),
+            ("Hydrogen", "Sulfur", 0.154364),
+            ("Hydrogen", "Nitrogen", 0.057079),
+            ("Hydrogen", "Phosphorus", 0.020951),
+            ("Sulfur", "Sulfur", 0.233542),
+            ("Sulfur", "Nitrogen", 0.202034),
+            ("Sulfur", "Phosphorus", 0.294256),
+            ("Nitrogen", "Nitrogen", 0.117292),
+            ("Nitrogen", "Phosphorus", 0.157143),
+            ("Phosphorus", "Phosphorus", 0.103333),
+        ];
+        assert_eq!(expected.len(), 21);
+        for (left, right, expected_net) in expected {
+            assert!(active.contains(&left) && active.contains(&right));
+            let a = catalog.iter().find(|resource| resource.name == left).unwrap();
+            let b = catalog.iter().find(|resource| resource.name == right).unwrap();
+            let result = pair_adhesion(a.adhesion, b.adhesion).unwrap();
+            assert!(
+                (result.net - expected_net).abs() < 0.0000006,
+                "{left}-{right}: expected {expected_net}, got {}",
+                result.net
+            );
+        }
+    }
+
+    #[test]
+    fn same_element_pairs_are_calculated_and_not_forced_to_zero() {
+        let catalog = default_catalog();
+        for name in ["Carbon", "Oxygen", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus"] {
+            let resource = catalog.iter().find(|resource| resource.name == name).unwrap();
+            let pair = pair_adhesion(resource.adhesion, resource.adhesion).unwrap();
+            assert!(pair.attraction > 0.0 || pair.repulsion > 0.0, "{name}");
+        }
+    }
+
+    #[test]
+    fn historical_water_catalog_entry_is_retained_but_not_assigned_active_adhesion() {
+        let catalog = default_catalog();
+        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        assert_eq!(water.adhesion, AdhesionDescriptors::default());
+        assert_eq!(catalog.len(), 7);
     }
 }
