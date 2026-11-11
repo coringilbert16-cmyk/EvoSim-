@@ -105,31 +105,45 @@ pub fn interface_engagement(facing: f64) -> Option<f64> {
 }
 
 /// A structural activation barrier expressed in the same normalized scale as
-/// accumulated reaction. Existing bond strength is the physical barrier; no
-/// second arbitrary chemistry threshold is introduced.
-pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
-    if !bond_strength.is_finite() || bond_strength < 0.0 {
+/// accumulated reaction. The supplied value is local bond integrity, not
+/// adhesion or stored bond potential; no second arbitrary threshold is introduced.
+/// Convert local bond integrity into the initial physical work scale for
+/// disrupting that bond. This quantity is independent of material reactivity.
+pub fn bond_disruption_work_from_integrity(bond_integrity: f64) -> Option<f64> {
+    if !bond_integrity.is_finite() || bond_integrity < 0.0 {
         return None;
     }
-    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
+    normalized_chemistry_to_energy(bond_integrity.clamp(0.0, 1.0))
 }
 
-/// Derive a bond's disruption tolerance from its cohesion-derived strength
-/// and the two materials' existing reactivity values.
+/// Base activation threshold before the endpoint-reactivity modifier is applied.
+pub fn activation_barrier_from_bond_integrity(bond_integrity: f64) -> Option<f64> {
+    bond_disruption_work_from_integrity(bond_integrity)
+}
+
+/// Compatibility adapter for historical callers that still name local
+/// integrity as bond strength. New BREAK code should use the explicit API.
+pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
+    activation_barrier_from_bond_integrity(bond_strength)
+}
+
+/// Derive a bond's activation barrier from its local integrity and the two
+/// endpoint materials' reactivity values.
 ///
 /// Reactivity is normalized against the catalog mean so the modifier is
 /// dimensionless and remains stable when the catalog's native scale changes.
 /// The arithmetic pair mean lets either reactive constituent increase the
-/// pair's response. Higher reactivity lowers the activation/disruption
-/// tolerance; it does not create energy or alter chemical attraction.
+/// pair's response. Higher reactivity lowers the activation threshold only;
+/// it does not change integrity-derived disruption work, create energy, or
+/// alter chemical attraction.
 pub fn activation_barrier_from_bond_properties(
-    bond_strength: f64,
+    bond_integrity: f64,
     reactivity_a: f64,
     reactivity_b: f64,
     reactivity_baseline: f64,
 ) -> Option<f64> {
-    if !bond_strength.is_finite()
-        || bond_strength < 0.0
+    if !bond_integrity.is_finite()
+        || bond_integrity < 0.0
         || !reactivity_a.is_finite()
         || reactivity_a < 0.0
         || !reactivity_b.is_finite()
@@ -153,7 +167,7 @@ pub fn activation_barrier_from_bond_properties(
     } else {
         reactivity_baseline / (reactivity_baseline + pair_reactivity)
     };
-    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0) * response_factor)
+    activation_barrier_from_bond_integrity(bond_integrity.clamp(0.0, 1.0) * response_factor)
 }
 
 /// Convert the normalized accumulated chemistry quantity into physical energy.
@@ -408,9 +422,13 @@ mod tests {
     }
 
     #[test]
-    fn activation_barrier_is_existing_bond_strength() {
+    fn activation_barrier_uses_local_integrity_and_preserves_legacy_adapter() {
+        assert_eq!(activation_barrier_from_bond_integrity(0.75), Some(0.75));
+        assert_eq!(activation_barrier_from_bond_integrity(2.0), Some(1.0));
         assert_eq!(activation_barrier_from_bond_strength(0.75), Some(0.75));
         assert_eq!(activation_barrier_from_bond_strength(2.0), Some(1.0));
+        assert!(activation_barrier_from_bond_integrity(f64::NAN).is_none());
+        assert!(activation_barrier_from_bond_integrity(-0.1).is_none());
     }
 
     #[test]
@@ -426,6 +444,23 @@ mod tests {
         assert!(baseline_reactivity > high_reactivity);
         assert!((mixed_ab - mixed_ba).abs() < 1e-12);
         assert!((mixed_ab - baseline_reactivity).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reactivity_changes_activation_but_not_integrity_derived_work() {
+        let integrity = 0.8;
+        let low_reactivity =
+            activation_barrier_from_bond_properties(integrity, 0.0, 0.0, 2.0).unwrap();
+        let high_reactivity =
+            activation_barrier_from_bond_properties(integrity, 4.0, 4.0, 2.0).unwrap();
+        let physical_work = bond_disruption_work_from_integrity(integrity).unwrap();
+
+        assert!(high_reactivity < low_reactivity);
+        assert_eq!(physical_work, integrity);
+        assert_eq!(
+            bond_disruption_work_from_integrity(integrity),
+            Some(physical_work)
+        );
     }
 
     #[test]

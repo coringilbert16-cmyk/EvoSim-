@@ -1440,6 +1440,7 @@ mod integration_tests {
             organism_id: simulation.organisms[0].id.clone(),
             bond,
             activation_signal: disruption_cost,
+            activation_barrier: disruption_cost,
             disruption_cost,
             reaction_frequency_cycles_per_day: 440.0,
             accumulation_key: "rejected-inventory|rev:0|bond".into(),

@@ -3321,6 +3321,7 @@ mod decomposition_finalization_tests {
                 1.0e9,
                 0.0,
                 0.0,
+                0.0,
                 &mut simulation.energy_ledger,
             )
         );
@@ -3407,6 +3408,7 @@ mod decomposition_finalization_tests {
                 organism,
                 bond,
                 1.0e9,
+                0.0,
                 0.0,
                 0.0,
                 &mut simulation.energy_ledger,

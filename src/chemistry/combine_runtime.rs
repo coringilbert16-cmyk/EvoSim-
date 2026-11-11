@@ -4,7 +4,7 @@
 //! candidate, applies the returned result, mutates structure, and settles
 //! the actual energy holder through the unified ledger authority.
 use crate::combine::{
-    bond_strength, conservative_pair_potential, eligible_candidates, formation_cost,
+    bond_integrity, conservative_pair_potential, eligible_candidates, formation_cost,
     FormationEvaluation, PairPotentialEvaluation,
 };
 use crate::contact::ConnectionCompatibilityCache;
@@ -275,7 +275,7 @@ fn evaluate_candidate(
     if !work.is_finite() || work < 0.0 || !investment.is_finite() || investment < 0.0 {
         return None;
     }
-    let strength = bond_strength(a, b);
+    let strength = bond_integrity(a, b)?;
     if !strength.is_finite() {
         return None;
     }
@@ -376,7 +376,7 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
     let b = structure.units[unit_b].properties(catalog)?;
     let pair_potential =
         active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
-    let strength = bond_strength(a, b);
+    let strength = bond_integrity(a, b)?;
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
         .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
@@ -622,10 +622,9 @@ fn form_bond_from_candidate_diagnostic(
     }
     let pair_potential = active_pair_potential(structure, ua, ub, candidate, catalog)
         .map_err(|_| "COMBINE pair adhesion evaluation failed")?;
-    let strength = bond_strength(a, b);
-    if !strength.is_finite() {
-        return Err("calculated bond integrity is not finite");
-    }
+    let Some(strength) = bond_integrity(a, b) else {
+        return Err("calculated bond integrity is invalid");
+    };
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
         .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
