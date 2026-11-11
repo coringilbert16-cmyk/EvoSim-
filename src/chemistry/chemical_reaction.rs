@@ -1277,6 +1277,7 @@ pub(crate) fn resolve(
         organism,
         operation.bond,
         operation.activation_signal,
+        operation.activation_barrier,
         operation.disruption_cost,
         resonant_work,
         ledger,
