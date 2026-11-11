@@ -126,22 +126,35 @@ fn obstacle_for(
     catalog: &[BaseResource],
     height: f64,
 ) -> Option<Obstacle> {
-    let (x, y) = material_center(material, height)?;
     let placements = material.placements.as_ref()?;
-    let mut radius: f64 = 0.5;
-    let mut rigid_constituents = 0usize;
-    for (index, (name, _amount)) in material.material.parts.iter().enumerate() {
+    let mut rigid_parts = Vec::new();
+    let mut total_rigid_weight = 0.0;
+    let mut weighted_x = 0.0;
+    let mut weighted_y = 0.0;
+    for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
         if resource.physical_state != PhysicalState::Rigid {
             continue;
         }
+        if !amount.is_finite() || *amount <= 0.0 {
+            return None;
+        }
         let placement = placements.get(index)?;
-        radius = radius
-            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
-        rigid_constituents += 1;
+        total_rigid_weight += *amount;
+        weighted_x += placement.x * *amount;
+        weighted_y += placement.y * *amount;
+        rigid_parts.push((placement, &resource.shape.form));
     }
-    if rigid_constituents == 0 {
+    if !total_rigid_weight.is_finite() || total_rigid_weight <= 0.0 {
         return None;
+    }
+    let x = weighted_x / total_rigid_weight;
+    let y = weighted_y / total_rigid_weight;
+    let mut radius: f64 = 0.5;
+    for (placement, form) in rigid_parts {
+        radius = radius.max(
+            (placement.x - x).hypot(placement.y - y) + shape_radius(form),
+        );
     }
     Some(Obstacle {
         source_cell,
