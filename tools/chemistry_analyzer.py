@@ -573,6 +573,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "initial_physical_material_count": header.get("initial_physical_material_count"),
             "initial_independent_resource_count": header.get("initial_independent_resource_count"),
             "initial_molecule_count": header.get("initial_molecule_count"),
+            "initial_constituent_count": header.get("initial_constituent_count"),
             "diagnostic_interval": header.get("diagnostic_interval"),
         },
         "resource_coverage": {
