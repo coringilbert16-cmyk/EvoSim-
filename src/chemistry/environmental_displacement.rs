@@ -2646,8 +2646,7 @@ mod tests {
     #[test]
     fn legacy_zero_energy_bond_can_be_displaced_without_inventing_stored_energy() {
         let catalog = default_catalog();
-        let (mut source, mut old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, mut old_bond, candidate, investment) = three_participant_fixture(&catalog);
         old_bond.bond_energy = 0.0;
         source.bonds[0].bond_energy = 0.0;
 
