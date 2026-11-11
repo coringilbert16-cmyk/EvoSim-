@@ -642,71 +642,71 @@ fn chemical_step(
     // The environmental scan itself rotates its anchors and materials each tick.
     let local_resonance_similarity =
         if let Some(world) = local_resonance_world.filter(|_| !local_resonance_sampled_this_tick) {
-        diagnostics.local_resonance_sample_attempts = diagnostics
-            .local_resonance_sample_attempts
-            .saturating_add(1);
-        local_resonance_sampled_this_tick = true;
-        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
-            a,
-            crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
-        );
-        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(
-            b,
-            crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
-        );
-        let reaction_frequency = if frequency_a.is_finite()
-            && frequency_a > 0.0
-            && frequency_b.is_finite()
-            && frequency_b > 0.0
-        {
-            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp()
-        } else {
-            0.0
-        };
-        let sampled = crate::contact::endpoint_world_point(
-            selected.candidate.endpoint_a,
-            unit_a,
-            &environment.catalog,
-        )
-        .zip(crate::contact::endpoint_world_point(
-            selected.candidate.endpoint_b,
-            unit_b,
-            &environment.catalog,
-        ))
-        .and_then(|(point_a, point_b)| {
-            let similarity_a = world.reaction_similarity(
-                source_a.environmental_identity,
-                &[(point_a.x, point_a.y)],
-                reaction_frequency,
-                &environment.catalog,
-                tick,
-            )?;
-            let similarity_b = world.reaction_similarity(
-                source_b.environmental_identity,
-                &[(point_b.x, point_b.y)],
-                reaction_frequency,
-                &environment.catalog,
-                tick,
-            )?;
-            Some(0.5 * (similarity_a + similarity_b))
-        })
-        .filter(|value| value.is_finite())
-        .map(|value| value.clamp(0.0, 1.0));
-        match sampled {
-            Some(value) => {
-                diagnostics.local_resonance_samples =
-                    diagnostics.local_resonance_samples.saturating_add(1);
-                diagnostics.local_resonance_similarity_sum += value;
-                diagnostics.local_resonance_similarity_max =
-                    diagnostics.local_resonance_similarity_max.max(value);
-                value
-            }
-            None => {
-                diagnostics.local_resonance_unavailable =
-                    diagnostics.local_resonance_unavailable.saturating_add(1);
+            diagnostics.local_resonance_sample_attempts = diagnostics
+                .local_resonance_sample_attempts
+                .saturating_add(1);
+            local_resonance_sampled_this_tick = true;
+            let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
+                a,
+                crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
+            );
+            let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(
+                b,
+                crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
+            );
+            let reaction_frequency = if frequency_a.is_finite()
+                && frequency_a > 0.0
+                && frequency_b.is_finite()
+                && frequency_b > 0.0
+            {
+                (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp()
+            } else {
                 0.0
+            };
+            let sampled = crate::contact::endpoint_world_point(
+                selected.candidate.endpoint_a,
+                unit_a,
+                &environment.catalog,
+            )
+            .zip(crate::contact::endpoint_world_point(
+                selected.candidate.endpoint_b,
+                unit_b,
+                &environment.catalog,
+            ))
+            .and_then(|(point_a, point_b)| {
+                let similarity_a = world.reaction_similarity(
+                    source_a.environmental_identity,
+                    &[(point_a.x, point_a.y)],
+                    reaction_frequency,
+                    &environment.catalog,
+                    tick,
+                )?;
+                let similarity_b = world.reaction_similarity(
+                    source_b.environmental_identity,
+                    &[(point_b.x, point_b.y)],
+                    reaction_frequency,
+                    &environment.catalog,
+                    tick,
+                )?;
+                Some(0.5 * (similarity_a + similarity_b))
+            })
+            .filter(|value| value.is_finite())
+            .map(|value| value.clamp(0.0, 1.0));
+            match sampled {
+                Some(value) => {
+                    diagnostics.local_resonance_samples =
+                        diagnostics.local_resonance_samples.saturating_add(1);
+                    diagnostics.local_resonance_similarity_sum += value;
+                    diagnostics.local_resonance_similarity_max =
+                        diagnostics.local_resonance_similarity_max.max(value);
+                    value
+                }
+                None => {
+                    diagnostics.local_resonance_unavailable =
+                        diagnostics.local_resonance_unavailable.saturating_add(1);
+                    0.0
+                }
             }
-        }
     } else {
         0.0
     };
