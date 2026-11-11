@@ -376,7 +376,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Snapshots: {report['sampling']['snapshot_count']}",
         f"- Reaction events: {report['sampling']['reaction_event_count']}",
         "",
-        "## Seven-resource coverage",
+        "## Canonical and active experiment resource coverage",
         "",
         "| Resource | Initial amount |",
         "|---|---:|",
@@ -385,7 +385,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"| {name} | {coverage['initial_inventory'].get(name, 'missing')} |")
     lines += [
         "",
-        f"All seven present initially: **{'yes' if coverage['all_seven_present_at_start'] else 'NO'}**",
+        f"All six active non-Water resources present initially: **{'yes' if coverage['all_active_experiment_resources_present_at_start'] else 'NO'}**",
+        f"Water present in this run: **{'yes' if coverage['all_seven_present_at_start'] else 'no'}**",
         "",
         "## Reaction event counts",
         "",
@@ -463,8 +464,8 @@ def main() -> int:
         args.markdown_out.write_text(render_markdown(report), encoding="utf-8")
     if not args.json_out and not args.markdown_out:
         print(render_markdown(report), end="")
-    if not report["resource_coverage"]["all_seven_present_at_start"]:
-        print("chemistry analyzer: initial inventory does not contain all seven resources",
+    if not report["resource_coverage"]["all_active_experiment_resources_present_at_start"]:
+        print("chemistry analyzer: initial inventory does not contain all six active non-Water resources",
               file=sys.stderr)
         return 1
     lifecycle_errors = report["molecular_history"]["validation_errors"]
