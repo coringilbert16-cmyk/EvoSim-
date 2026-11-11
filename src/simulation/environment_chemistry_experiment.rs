@@ -158,14 +158,17 @@ pub(crate) fn seed_randomized_resources(
     height: f64,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    // Water is retained in the canonical catalog, but deliberately excluded
+    // from current chemistry experiments pending a later model review.
     let resource_names = catalog
         .iter()
+        .filter(|resource| resource.name != "Water")
         .map(|resource| resource.name.clone())
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the environment requires seven canonical base resources"
+        6,
+        "current chemistry experiments use the six non-Water canonical resources"
     );
 
     let mut identities = resource_names.clone();
@@ -241,14 +244,17 @@ fn seed_randomized_molecular_resources(
     include_molecules: bool,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    // Water is retained in the canonical catalog, but deliberately excluded
+    // from current chemistry experiments pending a later model review.
     let resource_names = catalog
         .iter()
+        .filter(|resource| resource.name != "Water")
         .map(|resource| resource.name.clone())
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the environment requires seven canonical base resources"
+        6,
+        "current chemistry experiments use the six non-Water canonical resources"
     );
 
     let mut identities = resource_names.clone();
@@ -733,7 +739,8 @@ mod tests {
                 }
             }
         }
-        assert_eq!(represented_types.len(), 7);
+        assert_eq!(represented_types.len(), 6);
+        assert!(!represented_types.contains("Water"));
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)
