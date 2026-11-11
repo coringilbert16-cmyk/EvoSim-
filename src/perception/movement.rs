@@ -550,7 +550,6 @@ fn resolve_push_chain(
     let moving_destination = organism_parts_at(moving, environment, dx, dy);
     let mut plan = PushPlan::default();
     if push_blockers_for_parts(
-        moving,
         &moving_destination,
         before,
         after,
@@ -570,7 +569,6 @@ fn resolve_push_chain(
 }
 
 fn push_blockers_for_parts(
-    moving: &Organism,
     moving_destination: &[PlacedMaterialPart],
     before: &[Organism],
     after: &[Organism],
@@ -600,7 +598,6 @@ fn push_blockers_for_parts(
         let destination = organism_parts_at(candidate, environment, dx, dy);
         organism_visited[index] = true;
         if !push_blockers_for_parts(
-            candidate,
             &destination,
             before,
             after,
@@ -686,7 +683,6 @@ fn push_blockers_for_parts(
             let destination = physical_parts_at(candidate, environment, dx, dy);
             physical_visited.insert(key);
             if !push_blockers_for_parts(
-                moving,
                 &destination,
                 before,
                 after,
