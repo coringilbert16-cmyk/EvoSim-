@@ -989,7 +989,6 @@ mod shape_tests {
         assert_eq!(find("Hydrogen").physical_state, PhysicalState::Rigid);
     }
 
-
     #[test]
     fn resource_edge_lengths_follow_the_shared_connection_scale() {
         fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
