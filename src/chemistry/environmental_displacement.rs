@@ -92,7 +92,9 @@ fn displacement_pair_static_potential(
     {
         return None;
     }
-    let anchor_resource = catalog.iter().find(|resource| resource.name == *anchor_name)?;
+    let anchor_resource = catalog
+        .iter()
+        .find(|resource| resource.name == *anchor_name)?;
     let incoming_resource = catalog
         .iter()
         .find(|resource| resource.name == *incoming_name)?;
@@ -2311,11 +2313,7 @@ mod tests {
         }
         let mut cache = ConnectionCompatibilityCache::new();
         let candidate = crate::contact::connection_pair_candidates_cached(
-            &structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
+            &structure, 0, 1, &catalog, &mut cache,
         )
         .into_iter()
         .find(|candidate| {
