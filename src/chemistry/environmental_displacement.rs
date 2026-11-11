@@ -245,11 +245,23 @@ fn build_displacement_trial_with_activation_status(
     let displaced = source.units[displaced_unit].properties(catalog)?;
     let incoming = source.units[incoming_unit].properties(catalog)?;
     let old_strength = old_bond.strength;
-    let preflight = evaluate_displacement_preflight(
+    let old_bond_energy = crate::combine_runtime::bond_energy_for_pair(
+        &source.units[anchor_unit],
+        &source.units[displaced_unit],
+        catalog,
+    )?;
+    let replacement_bond_energy = crate::combine_runtime::bond_energy_for_pair(
+        &source.units[anchor_unit],
+        &source.units[incoming_unit],
+        catalog,
+    )?;
+    let preflight = evaluate_displacement_preflight_with_bond_energies(
         anchor,
         displaced,
         incoming,
         old_strength,
+        old_bond_energy,
+        replacement_bond_energy,
         incoming_activation,
         reactivity_baseline,
         0.0,
@@ -269,15 +281,10 @@ fn build_displacement_trial_with_activation_status(
         return None;
     }
 
-    // Bond energy stores the magnitude of stable structural potential. A
-    // stronger replacement has a greater magnitude; ties and weaker bonds
-    // cannot displace the existing bond.
-    if preflight.replacement_bond_energy <= preflight.old_bond_energy {
-        if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Other;
-        }
-        return None;
-    }
+    // Replacement strength is not a separate eligibility gate. The signed
+    // pre/post structural-energy change and physical work are settled together
+    // below; a weaker replacement is valid only when legitimate energy funds
+    // the resulting deficit at the atomic transaction boundary.
 
     let mut trial = source.clone();
     if trial.break_matching_bond(old_bond).is_none() {
@@ -451,7 +458,48 @@ pub(crate) fn evaluate_displacement_preflight(
     physical_work: f64,
     dissipated_heat: f64,
 ) -> Option<DisplacementPreflight> {
-    if !incoming_activation.is_finite() || incoming_activation < 0.0 {
+    let old_bond_energy = intrinsic_bond_potential(anchor, displaced, old_bond_strength);
+    let replacement_bond_energy = intrinsic_bond_potential(
+        anchor,
+        incoming,
+        bond_strength(anchor, incoming),
+    );
+    evaluate_displacement_preflight_with_bond_energies(
+        anchor,
+        displaced,
+        incoming,
+        old_bond_strength,
+        old_bond_energy,
+        replacement_bond_energy,
+        incoming_activation,
+        reactivity_baseline,
+        physical_work,
+        dissipated_heat,
+    )
+}
+
+/// Evaluate a replacement using bond energies supplied by the same authority
+/// that created the retained bonds. Active elemental pairs use pair-adhesion
+/// well depths; legacy materials may continue to use intrinsic bond potentials.
+fn evaluate_displacement_preflight_with_bond_energies(
+    anchor: ResourceProperties,
+    displaced: ResourceProperties,
+    incoming: ResourceProperties,
+    old_bond_strength: f64,
+    old_bond_energy: f64,
+    replacement_bond_energy: f64,
+    incoming_activation: f64,
+    reactivity_baseline: f64,
+    physical_work: f64,
+    dissipated_heat: f64,
+) -> Option<DisplacementPreflight> {
+    if !incoming_activation.is_finite()
+        || incoming_activation < 0.0
+        || !old_bond_energy.is_finite()
+        || old_bond_energy < 0.0
+        || !replacement_bond_energy.is_finite()
+        || replacement_bond_energy < 0.0
+    {
         return None;
     }
 
@@ -459,21 +507,6 @@ pub(crate) fn evaluate_displacement_preflight(
     if !old_bond_strength.is_finite()
         || old_bond_strength < 0.0
         || (old_bond_strength - expected_old_strength).abs() > 1e-9
-    {
-        return None;
-    }
-
-    let replacement_strength = bond_strength(anchor, incoming);
-    if !replacement_strength.is_finite() {
-        return None;
-    }
-
-    let old_bond_energy = intrinsic_bond_potential(anchor, displaced, old_bond_strength);
-    let replacement_bond_energy = intrinsic_bond_potential(anchor, incoming, replacement_strength);
-    if !old_bond_energy.is_finite()
-        || old_bond_energy < 0.0
-        || !replacement_bond_energy.is_finite()
-        || replacement_bond_energy < 0.0
     {
         return None;
     }
