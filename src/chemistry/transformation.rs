@@ -1290,6 +1290,7 @@ pub(crate) fn resolve_transformation(
         0.0,
         0.0,
         0.0,
+        0.0,
     ) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
@@ -2458,7 +2459,7 @@ mod tests {
         };
         let original_ledger = ledger;
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
-            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 5.0, 2.0,
         );
         assert!(prepared.is_none());
         assert_eq!(ledger, original_ledger);
