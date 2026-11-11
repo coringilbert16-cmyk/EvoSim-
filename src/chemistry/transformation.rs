@@ -94,13 +94,9 @@ fn prepare_stored_bond_break_energy(
     {
         return None;
     }
-    let transaction = crate::energy_ledger::ReactionEnergyBalance::calculate(
-        0.0,
-        bond_energy,
-        0.0,
-        0.0,
-    )?
-    .settlement_transaction(EnergyReason::Break)?;
+    let transaction =
+        crate::energy_ledger::ReactionEnergyBalance::calculate(0.0, bond_energy, 0.0, 0.0)?
+            .settlement_transaction(EnergyReason::Break)?;
     let mut prepared_ledger = *ledger;
     let mut prepared_usable_energy = usable_energy;
     if !prepared_ledger.settle_transaction(&mut prepared_usable_energy, transaction) {
@@ -951,9 +947,7 @@ impl Simulation {
         }
 
         let before_energy = organism.usable_energy;
-        if prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy)
-        .is_none()
-        {
+        if prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy).is_none() {
             organism.active_transformation_id = None;
             return false;
         }
@@ -1305,7 +1299,9 @@ pub(crate) fn resolve_transformation(
         return;
     }
     let before_energy = organism.usable_energy;
-    let Some(prepared_break_energy) = prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy) else {
+    let Some(prepared_break_energy) =
+        prepare_stored_bond_break_energy(before_energy, ledger, target.bond_energy)
+    else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
