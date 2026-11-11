@@ -834,6 +834,19 @@ mod tests {
         let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
             .expect("rigid constituent geometry should obstruct flow");
         assert_eq!(obstacle.obstruction_strength, 1.0);
+        let oxygen = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Oxygen", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog oxygen should realize");
+        let low_cohesion_obstacle = obstacle_for(0, 1, &oxygen, &catalog, 100.0)
+            .expect("rigid low-cohesion geometry should obstruct flow");
+        assert_eq!(low_cohesion_obstacle.obstruction_strength, 1.0);
 
         let mut fluid_catalog = catalog.clone();
         fluid_catalog
