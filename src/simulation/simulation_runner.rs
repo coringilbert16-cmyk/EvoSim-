@@ -15,6 +15,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
     let mut seed = 42_u64;
     let mut max_ticks_provided = false;
     let mut duration_seconds: Option<u64> = None;
+    let mut dispersion = crate::environment_chemistry_experiment::DispersionMode::Randomized;
 
     let mut args = args.skip(1);
     while let Some(arg) = args.next() {
@@ -24,6 +25,15 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
             }
             "--audit-chemistry-transport-endpoints" => {
                 transport_endpoint_audit = true;
+            }
+            "--dispersion" => {
+                dispersion = match args.next().as_deref() {
+                    Some("randomized") => crate::environment_chemistry_experiment::DispersionMode::Randomized,
+                    Some("uniform") => crate::environment_chemistry_experiment::DispersionMode::Uniform,
+                    Some("clustered") => crate::environment_chemistry_experiment::DispersionMode::Clustered,
+                    Some(value) => panic!("unsupported chemistry dispersion: {value}"),
+                    None => panic!("--dispersion requires randomized, uniform, or clustered"),
+                };
             }
             "--seed" => {
                 seed = args
@@ -68,6 +78,7 @@ pub(crate) fn run_from_args(args: impl Iterator<Item = String>) {
         };
         run_environment_chemistry_experiment(
             seed,
+            dispersion,
             ticks,
             duration_seconds,
             diagnostics_path
@@ -198,12 +209,13 @@ fn report(simulation: &Simulation, label: &str) {
 
 fn run_environment_chemistry_experiment(
     seed: u64,
+    dispersion: crate::environment_chemistry_experiment::DispersionMode,
     max_ticks: u64,
     duration_seconds: Option<u64>,
     diagnostics_path: &str,
     diagnostic_interval: u64,
 ) {
-    let fixture = crate::environment_chemistry_experiment::build(seed);
+    let fixture = crate::environment_chemistry_experiment::build_with_dispersion(seed, dispersion);
     let mut simulation = fixture.simulation;
     simulation.record_local_resonance_diagnostics = true;
     let planned_ticks = duration_seconds.is_none().then_some(max_ticks);
@@ -211,9 +223,11 @@ fn run_environment_chemistry_experiment(
         diagnostics_path,
         diagnostic_interval,
         seed,
+        dispersion.as_str(),
         duration_seconds,
         planned_ticks,
         &simulation,
+        dispersion.as_str(),
         &fixture.pile_sizes,
     )
     .unwrap_or_else(|error| {
@@ -221,7 +235,7 @@ fn run_environment_chemistry_experiment(
     });
 
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} dispersion={} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         duration_seconds,
         planned_ticks,
         simulation.organisms.len(),
