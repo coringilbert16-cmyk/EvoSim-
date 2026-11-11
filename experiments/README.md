@@ -46,6 +46,7 @@ molecular-organization reports. A final aggregate artifact combines:
 - Displacement discovery work and budget exhaustion.
 - Molecular creation, destruction, lineage reuse, and COMBINE-after-reuse.
 - Structural-family recurrence across independent seeds and family transitions.
+- Exact formed and broken bond counts for all 21 unordered active-element pairs, separated by BREAK, COMBINE, and DISPLACEMENT.
 - Elemental material incorporated into reaction-created compounds.
 - Energy-balance residuals and per-seed validation.
 
@@ -59,7 +60,14 @@ The seed is the independent observation; individual reactions within one run
 are not independent samples. Cross-seed structural matching is based on
 composition and bond topology, not bond energy or endpoint geometry. Lineage
 reuse is evidence of molecular reuse, not by itself proof of a productive
-multistep synthesis pathway. The existing feasibility matrix tests cover all
-21 unordered non-Water element pairs; exact observed bond-pair attribution is
-a separate instrumentation improvement and should not be inferred from
-composition-only reaction records.
+multistep synthesis pathway. The chemistry analyzer attributes observed bond changes from each committed reaction's
+full `PhysicalMaterial` lifecycle snapshots. It maps each `internal_connections`
+edge's `part_a`/`part_b` indices through the material's constituent list to obtain
+the exact unordered element pair. For BREAK and DISPLACEMENT, the explicit
+`broken_bond_index` is accounted for separately before comparing remaining
+reactant edges with product edges; this ensures a same-element-pair replacement
+is counted as one broken and one formed bond rather than cancelling to zero.
+The report includes zero-count rows for all 21 active-element pairs and separate
+counts by reaction type. This is elemental-pair attribution, not endpoint-geometry
+or bond-energy calibration. Committed events without complete lifecycle graph
+snapshots are reported as missing rather than inferred from composition.
