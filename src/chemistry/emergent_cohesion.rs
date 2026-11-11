@@ -1,4 +1,7 @@
-#![expect(dead_code, reason = "Staged API retained for compound-stability integration")]
+#![expect(
+    dead_code,
+    reason = "Staged API retained for compound-stability integration"
+)]
 //! Compound-level cohesion derived from the topology of its realized bond graph.
 //!
 //! Local bond integrity is the weight of each edge. Emergent cohesion is the
@@ -108,11 +111,13 @@ fn stoer_wagner_min_cut(mut weights: Vec<Vec<f64>>) -> f64 {
 mod tests {
     use super::*;
     use crate::structure::{
-        Bond, BondEndpoint, ConnectionEndpoint, PhysicalConstituentGraph, Placement,
-        StructuralUnit,
+        Bond, BondEndpoint, ConnectionEndpoint, PhysicalConstituentGraph, Placement, StructuralUnit,
     };
 
-    fn graph_with_edges(vertex_count: usize, edges: &[(usize, usize, f64)]) -> PhysicalConstituentGraph {
+    fn graph_with_edges(
+        vertex_count: usize,
+        edges: &[(usize, usize, f64)],
+    ) -> PhysicalConstituentGraph {
         let mut graph = PhysicalConstituentGraph::new();
         for index in 0..vertex_count {
             graph.add_unit(StructuralUnit::new(
@@ -151,12 +156,7 @@ mod tests {
 
     #[test]
     fn ring_requires_cutting_two_edges() {
-        let graph = graph_with_edges(4, &[
-            (0, 1, 1.0),
-            (1, 2, 1.0),
-            (2, 3, 1.0),
-            (3, 0, 1.0),
-        ]);
+        let graph = graph_with_edges(4, &[(0, 1, 1.0), (1, 2, 1.0), (2, 3, 1.0), (3, 0, 1.0)]);
         assert_eq!(emergent_cohesion(&graph), Some(2.0));
     }
 
@@ -169,11 +169,7 @@ mod tests {
     #[test]
     fn redundant_edge_increases_emergent_cohesion_without_changing_edge_weights() {
         let chain = graph_with_edges(3, &[(0, 1, 1.0), (1, 2, 1.0)]);
-        let triangle = graph_with_edges(3, &[
-            (0, 1, 1.0),
-            (1, 2, 1.0),
-            (2, 0, 1.0),
-        ]);
+        let triangle = graph_with_edges(3, &[(0, 1, 1.0), (1, 2, 1.0), (2, 0, 1.0)]);
         assert_eq!(emergent_cohesion(&chain), Some(1.0));
         assert_eq!(emergent_cohesion(&triangle), Some(2.0));
         assert_eq!(chain.bonds[0].strength, triangle.bonds[0].strength);
