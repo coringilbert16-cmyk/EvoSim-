@@ -1859,6 +1859,58 @@ mod tests {
     }
 
     #[test]
+    fn pair_adhesion_allows_weaker_replacement_when_the_net_deficit_is_funded() {
+        let catalog = default_catalog();
+        let carbon = crate::structure::StructuralUnit::new(
+            "Carbon",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let oxygen = crate::structure::StructuralUnit::new(
+            "Oxygen",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let hydrogen = crate::structure::StructuralUnit::new(
+            "Hydrogen",
+            crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let old_energy =
+            crate::combine_runtime::bond_energy_for_pair(&carbon, &oxygen, &catalog).unwrap();
+        let replacement_energy =
+            crate::combine_runtime::bond_energy_for_pair(&carbon, &hydrogen, &catalog).unwrap();
+        assert!(replacement_energy < old_energy);
+
+        let preflight = evaluate_displacement_preflight_with_bond_energies(
+            properties("Carbon"),
+            properties("Oxygen"),
+            properties("Hydrogen"),
+            bond_strength(properties("Carbon"), properties("Oxygen")),
+            old_energy,
+            replacement_energy,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            0.0,
+        )
+        .expect("pair-specific energy balance should be finite");
+        assert!(preflight.is_activated());
+        assert!(preflight.energy.required_external_input > 0.0);
+        assert!(!preflight.can_commit(0.0));
+        assert!(preflight.can_commit(preflight.energy.required_external_input));
+    }
+
+    #[test]
     fn favorable_replacement_is_rejected_without_sufficient_incoming_activation() {
         let anchor = properties("Carbon");
         let displaced = properties("Hydrogen");
@@ -2247,7 +2299,7 @@ mod tests {
     fn same_element_incoming_contact_can_activate_displacement() {
         let catalog = default_catalog();
         let mut structure = OrganismStructure::new();
-        for x in [0.0, 1.5] {
+        for x in [0.0, 2.0] {
             structure.add_unit(crate::structure::StructuralUnit::new(
                 "Carbon",
                 crate::structure::Placement {
