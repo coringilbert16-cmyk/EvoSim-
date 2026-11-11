@@ -904,7 +904,7 @@ impl Simulation {
         }
 
         let before_energy = organism.usable_energy;
-        let Some(prepared) = prepare_chemical_break_energy_with_structural_potentials(
+        if prepare_chemical_break_energy_with_structural_potentials(
             before_energy,
             ledger,
             target.bond_energy,
@@ -913,22 +913,17 @@ impl Simulation {
             0.0,
             0.0,
             0.0,
-        ) else {
+        )
+        .is_none()
+        {
             organism.active_transformation_id = None;
             return false;
-        };
+        }
 
-        // Stage the accounting alongside the exact source escrow. Do not debit
-        // the live holder until the physical split commits in resolve_transformation.
-        transformation.prepared_usable_energy = Some(prepared.usable_energy);
-        transformation.prepared_ledger = Some(prepared.ledger);
-        transformation.prepared_usable_energy_before = Some(before_energy);
-        transformation.prepared_ledger_before = Some(*ledger);
-        transformation.prepared_energy = Some((
-            before_energy,
-            prepared.usable_energy - before_energy,
-            prepared.heat_dissipated,
-        ));
+        // This is a preflight only. The final energy transaction is rebuilt
+        // against the live holder and ledger at completion so intervening
+        // world-energy updates cannot be overwritten by a stale snapshot.
+        transformation.prepared_energy = Some((before_energy, 0.0, 0.0));
         true
     }
 }
@@ -1271,14 +1266,22 @@ pub(crate) fn resolve_transformation(
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     }
-    let Some(prepared_usable_energy) = transformation.prepared_usable_energy else {
+    let before_energy = organism.usable_energy;
+    let Some(prepared_break_energy) = prepare_chemical_break_energy_with_structural_potentials(
+        before_energy,
+        ledger,
+        target.bond_energy,
+        0.0,
+        target.bond_energy,
+        0.0,
+        0.0,
+        0.0,
+    ) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
-    let Some(prepared_ledger) = transformation.prepared_ledger.clone() else {
-        restore_failed_stored_break_source(transformation, organism, environment);
-        return;
-    };
+    let usable = prepared_break_energy.usable_energy - before_energy;
+    let heat = prepared_break_energy.heat_dissipated;
     let Some(pieces) = stored.break_internal_bond(target) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
@@ -1321,10 +1324,8 @@ pub(crate) fn resolve_transformation(
             .stored_material
             .commit_prepared_physical_batch(prepared);
     }
-    organism.usable_energy = prepared_usable_energy;
-    *ledger = prepared_ledger;
-
-    let (_, usable, heat) = transformation.prepared_energy.unwrap();
+    organism.usable_energy = prepared_break_energy.usable_energy;
+    *ledger = prepared_break_energy.ledger;
     organism.add_transaction_stress(heat);
     organism.active_transformation_id = None;
     crate::decision_runtime::record_consequence(
@@ -2348,14 +2349,8 @@ mod tests {
                 ledger.total_structural_energy_delta,
                 before_ledger.total_structural_energy_delta
             );
-            assert_eq!(
-                transformation.prepared_energy,
-                Some((before_energy, -bond_energy, 0.0))
-            );
-            assert_eq!(
-                transformation.prepared_usable_energy,
-                Some(before_energy - bond_energy)
-            );
+            assert_eq!(transformation.prepared_energy, Some((before_energy, 0.0, 0.0)));
+            assert_eq!(transformation.prepared_usable_energy, None);
 
             resolve_transformation(
                 &transformation,
