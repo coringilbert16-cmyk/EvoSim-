@@ -234,6 +234,52 @@ fn active_pair_potential(
     Ok(Some(potential))
 }
 
+/// Return the stable bond energy using the same authority as COMBINE.
+/// Active six-element chemistry stores the pair-adhesion well depth; legacy
+/// catalog entries retain their intrinsic-bond fallback until migrated.
+pub(crate) fn bond_energy_for_pair(
+    unit_a: &crate::structure::StructuralUnit,
+    unit_b: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let properties_a = unit_a.properties(catalog)?;
+    let properties_b = unit_b.properties(catalog)?;
+    let [(name_a, amount_a)] = unit_a.material.parts.as_slice() else {
+        return None;
+    };
+    let [(name_b, amount_b)] = unit_b.material.parts.as_slice() else {
+        return None;
+    };
+    if !amount_a.is_finite() || *amount_a <= 0.0 || !amount_b.is_finite() || *amount_b <= 0.0 {
+        return None;
+    }
+    let resource_a = catalog.iter().find(|resource| resource.name == *name_a)?;
+    let resource_b = catalog.iter().find(|resource| resource.name == *name_b)?;
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    if active_resource(&resource_a.name) && active_resource(&resource_b.name) {
+        let potential = conservative_pair_potential(
+            resource_a.adhesion,
+            resource_b.adhesion,
+            0.0,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        (potential.adhesion.net > EPSILON).then_some(potential.bond_energy)
+    } else {
+        let energy = crate::combine::intrinsic_bond_potential(
+            properties_a,
+            properties_b,
+            crate::combine::bond_strength(properties_a, properties_b),
+        );
+        (energy.is_finite() && energy >= 0.0).then_some(energy)
+    }
+}
+
 fn evaluate_candidate(
     structure: &crate::structure::OrganismStructure,
     ua: usize,
