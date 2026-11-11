@@ -3166,6 +3166,9 @@ mod tests {
             &mut direct_accumulation,
             &mut direct_updated,
             &mut direct_operations,
+            None,
+            0,
+            &mut crate::state::EnvironmentalCombineSearchDiagnostics::default(),
         );
         assert!(
             !direct_accumulation.is_empty() || !direct_operations.is_empty(),
