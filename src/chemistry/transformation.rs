@@ -1271,6 +1271,14 @@ pub(crate) fn resolve_transformation(
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     }
+    let Some(prepared_usable_energy) = transformation.prepared_usable_energy else {
+        restore_failed_stored_break_source(transformation, organism, environment);
+        return;
+    };
+    let Some(prepared_ledger) = transformation.prepared_ledger.clone() else {
+        restore_failed_stored_break_source(transformation, organism, environment);
+        return;
+    };
     let Some(pieces) = stored.break_internal_bond(target) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
@@ -1313,16 +1321,8 @@ pub(crate) fn resolve_transformation(
             .stored_material
             .commit_prepared_physical_batch(prepared);
     }
-    let Some(prepared_usable_energy) = transformation.prepared_usable_energy else {
-        restore_failed_stored_break_source(transformation, organism, environment);
-        return;
-    };
-    let Some(prepared_ledger) = transformation.prepared_ledger.as_ref() else {
-        restore_failed_stored_break_source(transformation, organism, environment);
-        return;
-    };
     organism.usable_energy = prepared_usable_energy;
-    *ledger = prepared_ledger.clone();
+    *ledger = prepared_ledger;
 
     let (_, usable, heat) = transformation.prepared_energy.unwrap();
     organism.add_transaction_stress(heat);
