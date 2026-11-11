@@ -3822,7 +3822,8 @@ mod tests {
                         let [(name, _)] = structure.units[*index].material.parts.as_slice() else {
                             return None;
                         };
-                        let constituent = catalog.iter().find(|candidate| candidate.name == *name)?;
+                        let constituent =
+                            catalog.iter().find(|candidate| candidate.name == *name)?;
                         crate::resources::pair_adhesion(
                             constituent.adhesion,
                             external_resource.adhesion,
@@ -3896,11 +3897,8 @@ mod tests {
                     return None;
                 };
                 let constituent = catalog.iter().find(|resource| resource.name == *name)?;
-                crate::resources::pair_adhesion(
-                    constituent.adhesion,
-                    external_resource.adhesion,
-                )
-                .map(|adhesion| adhesion.net)
+                crate::resources::pair_adhesion(constituent.adhesion, external_resource.adhesion)
+                    .map(|adhesion| adhesion.net)
             })
             .collect();
         assert_eq!(
@@ -3983,11 +3981,9 @@ mod tests {
             .iter()
             .find(|resource| resource.name == *selected_name)
             .expect("selected constituent must exist in the catalog");
-        let expected_adhesion = crate::resources::pair_adhesion(
-            selected_resource.adhesion,
-            external_resource.adhesion,
-        )
-        .expect("catalog descriptors must produce a valid symmetric interaction");
+        let expected_adhesion =
+            crate::resources::pair_adhesion(selected_resource.adhesion, external_resource.adhesion)
+                .expect("catalog descriptors must produce a valid symmetric interaction");
         assert!(
             (actual_potential - expected_adhesion.net).abs() <= 1e-12,
             "live activation must use the same pair-adhesion score as the formation evaluator"
