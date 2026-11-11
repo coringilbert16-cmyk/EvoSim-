@@ -421,8 +421,8 @@ pub(crate) fn build_with_dispersion(
         simulation.environment.width,
         simulation.environment.height,
         true,
-,
-        dispersion    );
+        dispersion,
+    );
 
     // Establish stable IDs for the complete tick-zero inventory before any
     // diagnostics or reaction can observe the environment.
