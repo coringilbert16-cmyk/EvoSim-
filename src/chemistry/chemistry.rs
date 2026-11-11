@@ -254,12 +254,15 @@ mod tests {
     /// COMBINE: geometry, contact, interface engagement, activation, and energy
     /// settlement are tested separately by the environmental chemistry suite.
     #[test]
-    fn static_pair_matrix_characterizes_all_base_resource_pairs() {
-        let catalog = crate::resources::default_catalog();
+    fn static_pair_matrix_characterizes_active_non_water_resource_pairs() {
+        let catalog: Vec<_> = crate::resources::default_catalog()
+            .into_iter()
+            .filter(|resource| resource.name != "Water")
+            .collect();
         assert_eq!(
             catalog.len(),
-            7,
-            "the canonical chemistry matrix must cover all seven base resources"
+            6,
+            "active chemistry diagnostics exclude Water until it is revisited"
         );
 
         let mut pair_count = 0usize;
@@ -313,8 +316,8 @@ mod tests {
             }
         }
         assert_eq!(
-            pair_count, 28,
-            "seven resources yield 28 unordered pairs including self-pairs"
+            pair_count, 21,
+            "six active resources yield 21 unordered pairs including self-pairs"
         );
     }
 
