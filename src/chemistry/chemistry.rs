@@ -265,11 +265,14 @@ mod tests {
             "active chemistry diagnostics exclude Water until it is revisited"
         );
 
-        let reactivity_baseline = catalog
+        // Use the production catalog-wide baseline while excluding Water
+        // from every pair tested in this matrix.
+        let full_catalog = crate::resources::default_catalog();
+        let reactivity_baseline = full_catalog
             .iter()
             .map(|resource| resource.properties.reactivity)
             .sum::<f64>()
-            / catalog.len() as f64;
+            / full_catalog.len() as f64;
         let mut pair_count = 0usize;
         for i in 0..catalog.len() {
             for j in i..catalog.len() {
