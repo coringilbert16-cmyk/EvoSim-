@@ -142,9 +142,8 @@ fn obstacle_for(
         let placement = placements.get(index)?;
         let anchor_y = *rigid_anchor_y.get_or_insert(placement.y);
         weighted_x += placement.x * *amount;
-        weighted_y_offset += ((placement.y - anchor_y + height * 0.5).rem_euclid(height)
-            - height * 0.5)
-            * *amount;
+        weighted_y_offset +=
+            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * *amount;
         rigid_amount += *amount;
     }
     if !rigid_amount.is_finite()
@@ -168,9 +167,7 @@ fn obstacle_for(
         }
         let placement = placements.get(index)?;
         let dy = (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
-        radius = radius.max(
-            (placement.x - x).hypot(dy) + shape_radius(&resource.shape.form),
-        );
+        radius = radius.max((placement.x - x).hypot(dy) + shape_radius(&resource.shape.form));
     }
 
     Some(Obstacle {
