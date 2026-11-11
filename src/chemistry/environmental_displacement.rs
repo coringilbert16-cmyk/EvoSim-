@@ -72,6 +72,55 @@ fn displacement_chemical_properties(
 /// contact with the anchor. Elemental chemical positions are read from the
 /// catalog here, without changing aggregate material properties or assigning
 /// an averaged coordinate to a mixed compound.
+fn displacement_pair_static_potential(
+    anchor: &crate::structure::StructuralUnit,
+    incoming: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let [(anchor_name, anchor_amount)] = anchor.material.parts.as_slice() else {
+        return None;
+    };
+    let [(incoming_name, incoming_amount)] = incoming.material.parts.as_slice() else {
+        return None;
+    };
+    if !anchor_amount.is_finite()
+        || *anchor_amount <= 0.0
+        || !incoming_amount.is_finite()
+        || *incoming_amount <= 0.0
+    {
+        return None;
+    }
+    let anchor_resource = catalog.iter().find(|resource| resource.name == *anchor_name)?;
+    let incoming_resource = catalog
+        .iter()
+        .find(|resource| resource.name == *incoming_name)?;
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    if active_resource(&anchor_resource.name) && active_resource(&incoming_resource.name) {
+        return crate::resources::pair_adhesion(
+            anchor_resource.adhesion,
+            incoming_resource.adhesion,
+        )
+        .map(|adhesion| adhesion.net)
+        .filter(|potential| potential.is_finite() && *potential > 0.0);
+    }
+    let anchor_properties = displacement_chemical_properties(anchor, catalog)?;
+    let incoming_properties = displacement_chemical_properties(incoming, catalog)?;
+    let position_a = anchor_properties.chemical_position?;
+    let position_b = incoming_properties.chemical_position?;
+    crate::chemistry::interaction_potential(
+        position_a,
+        position_b,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+    )
+    .filter(|potential| potential.is_finite() && *potential > 0.0)
+}
+
 pub(crate) fn accumulate_incoming_activation(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -99,17 +148,7 @@ fn accumulate_incoming_activation_with_resonance(
     {
         return None;
     }
-    let anchor = displacement_chemical_properties(anchor, catalog)?;
-    let incoming = displacement_chemical_properties(incoming, catalog)?;
-    let interaction = crate::combine::chemical_interaction(
-        anchor,
-        incoming,
-        candidate,
-        crate::chemistry::CHEMICAL_K,
-        crate::chemistry::CHEMICAL_D_MAX,
-        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
-        crate::chemistry::CHEMICAL_MAX_FORCE,
-    )?;
+    let static_potential = displacement_pair_static_potential(anchor, incoming, catalog)?;
     let contact = crate::chemistry::contact_factor(
         candidate.distance,
         crate::chemistry::CHEMICAL_CONTACT_RADIUS,
@@ -117,7 +156,7 @@ fn accumulate_incoming_activation_with_resonance(
     let engagement = crate::chemistry::interface_engagement(candidate.facing)?;
     crate::chemistry::accumulate_reaction(
         previous,
-        interaction.static_potential * (1.0 + local_resonance_similarity.clamp(0.0, 1.0)),
+        static_potential * (1.0 + local_resonance_similarity.clamp(0.0, 1.0)),
         contact,
         engagement,
         crate::chemistry::CHEMICAL_DISSIPATION,
