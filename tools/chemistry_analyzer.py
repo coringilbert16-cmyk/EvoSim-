@@ -118,6 +118,20 @@ def _molecule_bond_pairs(molecule: Any) -> tuple[Counter[str], int]:
     return counts, malformed
 
 
+def _bond_pair_at_index(molecule: Any, bond_index: int) -> str | None:
+    if not isinstance(molecule, dict):
+        return None
+    connections = molecule.get("internal_connections")
+    if not isinstance(connections, list) or not 0 <= bond_index < len(connections):
+        return None
+    single_bond_molecule = dict(molecule)
+    single_bond_molecule["internal_connections"] = [connections[bond_index]]
+    counts, malformed = _molecule_bond_pairs(single_bond_molecule)
+    if malformed or len(counts) != 1:
+        return None
+    return next(iter(counts))
+
+
 def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
     """Attribute committed reaction bond changes from full reactant/product graphs."""
     formed_by_reaction: dict[str, Counter[str]] = {}
@@ -135,6 +149,7 @@ def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         reactants: Counter[str] = Counter()
         products: Counter[str] = Counter()
+        reactant_molecules: list[Any] = []
         has_reactant = has_product = False
         for record in lifecycle:
             if not isinstance(record, dict):
@@ -145,6 +160,7 @@ def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
             malformed += invalid
             if record.get("action") == "destroyed":
                 reactants.update(counts)
+                reactant_molecules.append(molecule)
                 has_reactant |= isinstance(molecule, dict)
             elif record.get("action") == "created":
                 products.update(counts)
@@ -153,8 +169,24 @@ def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
             missing += 1
             continue
         reaction = str(event.get("reaction", "UNKNOWN"))
-        formed = products - reactants
-        broken = reactants - products
+        remaining_reactants = reactants.copy()
+        explicitly_broken: Counter[str] = Counter()
+        broken_index = event.get("broken_bond_index")
+        if (
+            reaction in ("BREAK", "DISPLACEMENT")
+            and isinstance(broken_index, int) and not isinstance(broken_index, bool)
+            and reactant_molecules
+        ):
+            selected_pair = _bond_pair_at_index(reactant_molecules[0], broken_index)
+            if selected_pair and remaining_reactants[selected_pair] > 0:
+                remaining_reactants[selected_pair] -= 1
+                if remaining_reactants[selected_pair] == 0:
+                    del remaining_reactants[selected_pair]
+                explicitly_broken[selected_pair] += 1
+            else:
+                malformed += 1
+        formed = products - remaining_reactants
+        broken = (remaining_reactants - products) + explicitly_broken
         formed_by_reaction.setdefault(reaction, Counter()).update(formed)
         broken_by_reaction.setdefault(reaction, Counter()).update(broken)
         formed_total.update(formed)
