@@ -53,6 +53,10 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
                 "broken_total": 0,
                 "formed": {"Carbon-Hydrogen": 1},
                 "broken": {"Carbon-Hydrogen": 0},
+                "initial_bond_inventory": {"Carbon-Hydrogen": 0},
+                "final_bond_inventory": {"Carbon-Hydrogen": 1},
+                "inventory_delta": {"Carbon-Hydrogen": 1},
+                "inventory_reconciliation": {"matches": True, "mismatches": {}},
                 "by_reaction": {
                     "COMBINE": {
                         "formed": {"Carbon-Hydrogen": 1},
@@ -111,6 +115,9 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["elemental_bond_pairs"]["formed"]["Carbon-Hydrogen"], 2)
         self.assertEqual(report["elemental_bond_pairs"]["by_reaction"]["COMBINE"]["formed_total"], 2)
         self.assertEqual(len(report["elemental_bond_pairs"]["element_pairs"]), 21)
+        self.assertEqual(report["elemental_bond_pairs"]["initial_bond_inventory"]["Carbon-Hydrogen"], 0)
+        self.assertEqual(report["elemental_bond_pairs"]["final_bond_inventory"]["Carbon-Hydrogen"], 2)
+        self.assertTrue(report["elemental_bond_pairs"]["inventory_reconciliation_all_seeds_match"])
         self.assertTrue(report["validation"]["all_runs_pass_inventory_and_lifecycle_checks"])
 
     def test_rejects_water_in_the_active_chemistry_inventory(self):
