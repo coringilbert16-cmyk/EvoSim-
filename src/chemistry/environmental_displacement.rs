@@ -1089,9 +1089,9 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                                 0.0
                                             }
                                         }
-                                } else {
-                                    0.0
-                                };
+                                    } else {
+                                        0.0
+                                    };
                                 let Some(next) = accumulate_incoming_activation_with_resonance(
                                     &combined.units[anchor_unit],
                                     &combined.units[incoming_unit],
