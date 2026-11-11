@@ -1502,16 +1502,6 @@ pub(crate) fn resolve_environmental_diagnosed(
     let remaining_external_deficit =
         (trial.energy.required_external_input - resonant_funding).max(0.0);
     if remaining_external_deficit > environment.chemistry_usable_energy {
-        #[cfg(test)]
-        eprintln!(
-            "[displacement-funding] initial_deficit={:?} resonance_budget={:?} compatible_before={:?} withdrawn={:?} remaining_deficit={:?} holder={:?}",
-            trial.energy.required_external_input,
-            resonance_funding_budget,
-            compatible_resonance_before,
-            resonant_funding,
-            remaining_external_deficit,
-            environment.chemistry_usable_energy,
-        );
         return Err("insufficient_usable_energy");
     }
     let Some(transaction) = trial
