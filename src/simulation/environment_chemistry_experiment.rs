@@ -239,7 +239,8 @@ fn seed_randomized_molecular_resources(
     width: f64,
     height: f64,
     include_molecules: bool,
-) -> Vec<usize> {
+,
+    dispersion: DispersionMode) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
         .iter()
@@ -276,76 +277,128 @@ fn seed_randomized_molecular_resources(
     }
     objects.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
-    {
-        pile_sizes.push(cut - previous);
-        previous = cut;
-    }
+    let pile_sizes = match dispersion {
+        DispersionMode::Randomized => {
+            let pile_count = rng.gen_range(3..=10);
+            let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
+            cuts.shuffle(&mut rng);
+            cuts.truncate(pile_count - 1);
+            cuts.sort_unstable();
+            let mut previous = 0;
+            let mut sizes = Vec::with_capacity(pile_count);
+            for cut in cuts.into_iter().chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT)) {
+                sizes.push(cut - previous);
+                previous = cut;
+            }
+            sizes
+        }
+        DispersionMode::Uniform => vec![1; ENVIRONMENT_OBJECT_COUNT],
+        DispersionMode::Clustered => vec![40; 32],
+    };
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
-    let centers = randomized_pile_centers(
-        &pile_sizes,
-        hotspot.center_x,
-        hotspot.center_y,
-        width,
-        height,
-        &mut rng,
-    );
-    let mut object_index = 0;
-    for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
-        let (center_x, center_y) = centers[pile_index];
-        let columns = (pile_size as f64).sqrt().ceil() as usize;
-        let rows = pile_size.div_ceil(columns);
-        for local_index in 0..pile_size {
-            let column = local_index % columns;
-            let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 2.8);
-            let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
-            let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
-            let placement = Placement {
-                x,
-                y,
-                rotation_radians: rotation,
-            };
-            let (parts, is_molecule) = &objects[object_index];
-            let physical = if *is_molecule {
-                realize_natural_molecule(parts, placement, catalog)
-            } else {
-                PhysicalMaterial::realized(
-                    Material::free_base(&parts[0], 1.0),
-                    vec![placement],
-                    catalog,
-                )
-                .expect("canonical base resource must have valid physical geometry")
-            };
-            object_index += 1;
-            assert!(
-                field.deposit_physical(x, y, physical, catalog),
-                "randomized pile {pile_index} object {local_index} must remain in bounds"
+    let mut positions = Vec::with_capacity(ENVIRONMENT_OBJECT_COUNT);
+    match dispersion {
+        DispersionMode::Randomized | DispersionMode::Clustered => {
+            let centers = randomized_pile_centers(
+                &pile_sizes,
+                hotspot.center_x,
+                hotspot.center_y,
+                width,
+                height,
+                &mut rng,
             );
+            for (group_index, (center_x, center_y)) in centers.into_iter().enumerate() {
+                let count = pile_sizes[group_index];
+                let columns = (count as f64).sqrt().ceil() as usize;
+                let rows = count.div_ceil(columns);
+                for local_index in 0..count {
+                    let column = local_index % columns;
+                    let row = local_index / columns;
+                    let x = (center_x
+                        + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+                        .clamp(1.0, width - 2.8);
+                    let y = (center_y
+                        + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
+                        .clamp(1.0, height - 1.0);
+                    positions.push((x, y));
+                }
+            }
+        }
+        DispersionMode::Uniform => {
+            let columns = (ENVIRONMENT_OBJECT_COUNT as f64 * width / height)
+                .sqrt()
+                .ceil() as usize;
+            let rows = ENVIRONMENT_OBJECT_COUNT.div_ceil(columns);
+            for index in 0..ENVIRONMENT_OBJECT_COUNT {
+                let column = index % columns;
+                let row = index / columns;
+                let x = ((column as f64 + 0.5) * width / columns as f64
+                    + rng.gen_range(-0.3..0.3))
+                    .clamp(2.8, width - 2.8);
+                let y = ((row as f64 + 0.5) * height / rows as f64
+                    + rng.gen_range(-0.3..0.3))
+                    .clamp(1.0, height - 1.0);
+                positions.push((x, y));
+            }
         }
     }
-    assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(positions.len(), ENVIRONMENT_OBJECT_COUNT);
+
+    for (object_index, (x, y)) in positions.into_iter().enumerate() {
+        let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
+        let placement = Placement { x, y, rotation_radians: rotation };
+        let (parts, is_molecule) = &objects[object_index];
+        let physical = if *is_molecule {
+            realize_natural_molecule(parts, placement, catalog)
+        } else {
+            PhysicalMaterial::realized(
+                Material::free_base(&parts[0], 1.0),
+                vec![placement],
+                catalog,
+            )
+            .expect("canonical base resource must have valid physical geometry")
+        };
+        assert!(
+            field.deposit_physical(x, y, physical, catalog),
+            "{:?} dispersion object {object_index} must remain in bounds",
+            dispersion
+        );
+    }
+    assert_eq!(pile_sizes.iter().sum::<usize>(), ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DispersionMode {
+    Randomized,
+    Uniform,
+    Clustered,
+}
+
+impl DispersionMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Randomized => "randomized",
+            Self::Uniform => "uniform",
+            Self::Clustered => "clustered",
+        }
+    }
+}
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
 }
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
+    build_with_dispersion(seed, DispersionMode::Randomized)
+}
+
+pub(crate) fn build_with_dispersion(
+    seed: u64,
+    dispersion: DispersionMode,
+) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
     simulation.record_environmental_molecular_history = true;
     simulation.organisms.clear();
@@ -368,7 +421,8 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.width,
         simulation.environment.height,
         true,
-    );
+,
+        dispersion    );
 
     // Establish stable IDs for the complete tick-zero inventory before any
     // diagnostics or reaction can observe the environment.
