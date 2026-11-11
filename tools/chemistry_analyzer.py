@@ -86,7 +86,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     initial_inventory = header.get("initial_material_inventory", {})
     if not isinstance(initial_inventory, dict):
         raise ValueError("header initial_material_inventory must be an object")
-    missing_resources = [name for name in CANONICAL_RESOURCES
+    missing_resources = [name for name in ACTIVE_EXPERIMENT_RESOURCES
                          if _number(initial_inventory.get(name)) is None
                          or float(initial_inventory.get(name, 0)) <= 0.0]
 
@@ -103,8 +103,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "constituent_count": snap.get("constituent_count"),
             "internal_bond_count": snap.get("internal_bond_count"),
             "resource_inventory": amounts,
-            "missing_resources": [name for name, amount in amounts.items()
-                                  if amount is None or float(amount) <= 0.0],
+            "missing_resources": [name for name in ACTIVE_EXPERIMENT_RESOURCES
+                                  if amounts[name] is None or float(amounts[name]) <= 0.0],
             "energy": snap.get("energy", {}),
         })
 
