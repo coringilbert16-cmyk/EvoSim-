@@ -76,6 +76,7 @@ def load_run(chemistry_path: Path, seed: int, mode: str) -> dict[str, Any]:
             "committed": int(row.get("committed", 0) or 0),
             "rejected": int(row.get("rejected", 0) or 0),
             "events": int(event_counts.get(reaction, 0) or 0),
+            "local_resonance": row.get("local_resonance", {}),
             "outcomes": {
                 outcome: int(count)
                 for key, count in event_outcomes.items()
@@ -182,6 +183,26 @@ def summarize_mode(runs: list[dict[str, Any]], all_families: dict[str, Any]) -> 
         }
         for reaction in REACTIONS
     }
+    local_resonance_totals: dict[str, dict[str, Any]] = {}
+    for reaction in REACTIONS:
+        samples = [run["reaction_metrics"][reaction].get("local_resonance", {}) for run in runs]
+        attempts = sum(int(sample.get("sample_attempts", 0) or 0) for sample in samples)
+        successful = sum(int(sample.get("successful_samples", 0) or 0) for sample in samples)
+        unavailable = sum(int(sample.get("unavailable_samples", 0) or 0) for sample in samples)
+        similarity_sum = sum(float(sample.get("similarity_sum", 0.0) or 0.0) for sample in samples)
+        maxima = [number(sample.get("maximum_similarity")) for sample in samples]
+        maxima = [float(value) for value in maxima if value is not None]
+        mean_similarity = similarity_sum / successful if successful else None
+        local_resonance_totals[reaction] = {
+            "sample_attempts": attempts,
+            "successful_samples": successful,
+            "unavailable_samples": unavailable,
+            "similarity_sum": similarity_sum,
+            "mean_similarity": mean_similarity,
+            "maximum_similarity": max(maxima, default=None),
+            "mean_activation_multiplier": 1.0 + mean_similarity
+                if mean_similarity is not None else None,
+        }
     metric_names = (
         "molecules_created", "molecules_destroyed", "active_molecules_at_end",
         "unique_structural_families", "recurrent_product_families",
@@ -228,6 +249,7 @@ def summarize_mode(runs: list[dict[str, Any]], all_families: dict[str, Any]) -> 
         "run_count": len(runs),
         "simulated_seconds": sum(int(run["duration_seconds"]) for run in runs),
         "reaction_totals": reaction_totals,
+        "local_resonance_activation": local_resonance_totals,
         "organization_mean_per_seed": organization_means,
         "pooled_mean_observed_lifetime_ticks": pooled_mean_lifetime,
         "molecule_creations_by_reaction": dict(sorted(reaction_product_counts.items())),
@@ -415,6 +437,24 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(
                 f"| {mode} | {reaction} | {values['ready']} | {values['scheduled']} | "
                 f"{values['committed']} | {values['rejected']} | {values['events']} |"
+            )
+
+    lines += [
+        "",
+        "## Local resonance activation sampling",
+        "",
+        "| Condition | Reaction | Attempts | Successful | Unavailable | Mean similarity | Max similarity | Mean activation multiplier |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for mode in MODES:
+        for reaction in REACTIONS:
+            sample = conditions[mode]["local_resonance_activation"][reaction]
+            lines.append(
+                f"| {mode} | {reaction} | {sample['sample_attempts']} | "
+                f"{sample['successful_samples']} | {sample['unavailable_samples']} | "
+                f"{fmt(sample['mean_similarity'], 6)} | "
+                f"{fmt(sample['maximum_similarity'], 6)} | "
+                f"{fmt(sample['mean_activation_multiplier'], 6)} |"
             )
 
     lines += [
