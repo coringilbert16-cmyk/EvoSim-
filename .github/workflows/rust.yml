@@ -315,6 +315,26 @@ jobs:
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
+      - name: Print non-Water COMBINE and BREAK feasibility matrix
+        if: success()
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cargo test --locked controlled_physical_pair_matrix_classifies_all_base_resource_pairs -- --nocapture 2>&1 | tee non-water-combine-break-pair-matrix.log
+      - name: Print non-Water DISPLACEMENT feasibility matrix
+        if: success()
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cargo test --locked non_water_displacement_feasibility_matrix_classifies_funded_replacements -- --nocapture 2>&1 | tee non-water-displacement-pair-matrix.log
+      - name: Upload non-Water pair feasibility matrices
+        if: always() && hashFiles('non-water-*-pair-matrix.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: non-water-pair-feasibility-matrices
+          path: non-water-*-pair-matrix.log
+          if-no-files-found: error
+          retention-days: 30
       - name: Capture rustfmt correction patch
         if: always()
         run: |
