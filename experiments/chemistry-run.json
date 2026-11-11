@@ -1,5 +1,5 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 300,
   "diagnostic_interval": 100
