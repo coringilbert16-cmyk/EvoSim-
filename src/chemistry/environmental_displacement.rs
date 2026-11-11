@@ -2529,7 +2529,7 @@ mod tests {
         );
         assert!(
             accumulation.contains_key(&key) || !operations.is_empty(),
-            "field scheduler should discover and accumulate the validated contact"
+            "field scheduler should discover and accumulate the validated contact; diagnostics={discovery_diagnostics:?}; accumulation={accumulation:?}; operations={operations:?}; remaining_work={discovery_work}"
         );
         let operation = if let Some(operation) = operations.pop() {
             operation
