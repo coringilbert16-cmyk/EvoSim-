@@ -62,10 +62,7 @@ pub struct PairAdhesion {
 
 /// Calculate the same pair interaction regardless of endpoint ordering.
 /// Returns None for invalid material descriptors rather than hiding bad catalog data.
-pub fn pair_adhesion(
-    a: AdhesionDescriptors,
-    b: AdhesionDescriptors,
-) -> Option<PairAdhesion> {
+pub fn pair_adhesion(a: AdhesionDescriptors, b: AdhesionDescriptors) -> Option<PairAdhesion> {
     if !a.is_valid() || !b.is_valid() {
         return None;
     }
@@ -73,12 +70,10 @@ pub fn pair_adhesion(
     let dispersion = (a.dispersion * b.dispersion).sqrt();
     let polarity_attraction = (-a.polarity * b.polarity).max(0.0);
     let polarity_repulsion = (a.polarity * b.polarity).max(0.0);
-    let complementary_attraction =
-        (a.donor * b.acceptor + a.acceptor * b.donor) / 2.0;
+    let complementary_attraction = (a.donor * b.acceptor + a.acceptor * b.donor) / 2.0;
     let like_role_repulsion = (a.donor * b.donor + a.acceptor * b.acceptor) / 2.0;
 
-    let attraction =
-        (dispersion + polarity_attraction + complementary_attraction) / 3.0;
+    let attraction = (dispersion + polarity_attraction + complementary_attraction) / 3.0;
     let repulsion = (polarity_repulsion + like_role_repulsion) / 2.0;
     let net = attraction - repulsion;
 
@@ -88,11 +83,11 @@ pub fn pair_adhesion(
         && (0.0..=1.0).contains(&attraction)
         && (0.0..=1.0).contains(&repulsion)
         && (-1.0..=1.0).contains(&net))
-        .then_some(PairAdhesion {
-            attraction,
-            repulsion,
-            net,
-        })
+    .then_some(PairAdhesion {
+        attraction,
+        repulsion,
+        net,
+    })
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -1501,7 +1496,6 @@ mod shape_tests {
     }
 }
 
-
 #[cfg(test)]
 mod adhesion_descriptor_tests {
     use super::*;
@@ -1509,10 +1503,26 @@ mod adhesion_descriptor_tests {
     #[test]
     fn descriptor_ranges_reject_non_finite_and_out_of_range_values() {
         assert!(AdhesionDescriptors::default().is_valid());
-        assert!(!AdhesionDescriptors { dispersion: f64::NAN, ..Default::default() }.is_valid());
-        assert!(!AdhesionDescriptors { polarity: 1.01, ..Default::default() }.is_valid());
-        assert!(!AdhesionDescriptors { donor: -0.01, ..Default::default() }.is_valid());
-        assert!(!AdhesionDescriptors { acceptor: f64::INFINITY, ..Default::default() }.is_valid());
+        assert!(!AdhesionDescriptors {
+            dispersion: f64::NAN,
+            ..Default::default()
+        }
+        .is_valid());
+        assert!(!AdhesionDescriptors {
+            polarity: 1.01,
+            ..Default::default()
+        }
+        .is_valid());
+        assert!(!AdhesionDescriptors {
+            donor: -0.01,
+            ..Default::default()
+        }
+        .is_valid());
+        assert!(!AdhesionDescriptors {
+            acceptor: f64::INFINITY,
+            ..Default::default()
+        }
+        .is_valid());
     }
 
     #[test]
@@ -1535,7 +1545,14 @@ mod adhesion_descriptor_tests {
     #[test]
     fn six_active_resources_have_the_approved_21_pair_prediction_matrix() {
         let catalog = default_catalog();
-        let active = ["Carbon", "Oxygen", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus"];
+        let active = [
+            "Carbon",
+            "Oxygen",
+            "Hydrogen",
+            "Sulfur",
+            "Nitrogen",
+            "Phosphorus",
+        ];
         let expected = [
             ("Carbon", "Carbon", 0.256250),
             ("Carbon", "Oxygen", 0.199233),
@@ -1562,8 +1579,14 @@ mod adhesion_descriptor_tests {
         assert_eq!(expected.len(), 21);
         for (left, right, expected_net) in expected {
             assert!(active.contains(&left) && active.contains(&right));
-            let a = catalog.iter().find(|resource| resource.name == left).unwrap();
-            let b = catalog.iter().find(|resource| resource.name == right).unwrap();
+            let a = catalog
+                .iter()
+                .find(|resource| resource.name == left)
+                .unwrap();
+            let b = catalog
+                .iter()
+                .find(|resource| resource.name == right)
+                .unwrap();
             let result = pair_adhesion(a.adhesion, b.adhesion).unwrap();
             assert!(
                 (result.net - expected_net).abs() < 0.0000006,
@@ -1576,8 +1599,18 @@ mod adhesion_descriptor_tests {
     #[test]
     fn same_element_pairs_are_calculated_and_not_forced_to_zero() {
         let catalog = default_catalog();
-        for name in ["Carbon", "Oxygen", "Hydrogen", "Sulfur", "Nitrogen", "Phosphorus"] {
-            let resource = catalog.iter().find(|resource| resource.name == name).unwrap();
+        for name in [
+            "Carbon",
+            "Oxygen",
+            "Hydrogen",
+            "Sulfur",
+            "Nitrogen",
+            "Phosphorus",
+        ] {
+            let resource = catalog
+                .iter()
+                .find(|resource| resource.name == name)
+                .unwrap();
             let pair = pair_adhesion(resource.adhesion, resource.adhesion).unwrap();
             assert!(pair.attraction > 0.0 || pair.repulsion > 0.0, "{name}");
         }
@@ -1586,7 +1619,10 @@ mod adhesion_descriptor_tests {
     #[test]
     fn historical_water_catalog_entry_is_retained_but_not_assigned_active_adhesion() {
         let catalog = default_catalog();
-        let water = catalog.iter().find(|resource| resource.name == "Water").unwrap();
+        let water = catalog
+            .iter()
+            .find(|resource| resource.name == "Water")
+            .unwrap();
         assert_eq!(water.adhesion, AdhesionDescriptors::default());
         assert_eq!(catalog.len(), 7);
     }
