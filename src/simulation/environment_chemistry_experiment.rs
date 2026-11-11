@@ -165,7 +165,7 @@ pub(crate) fn seed_randomized_resources(
     assert_eq!(
         resource_names.len(),
         7,
-        "the environment requires seven canonical base resources"
+        "the default environment retains all seven canonical resources"
     );
 
     let mut identities = resource_names.clone();
@@ -247,8 +247,8 @@ fn seed_randomized_molecular_resources(
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the environment requires seven canonical base resources"
+        6,
+        "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
     let mut identities = resource_names.clone();
@@ -359,7 +359,15 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         DEFAULT_CELL_SIZE,
     );
-    let catalog = simulation.environment.catalog.clone();
+    // Keep Water in the authoritative catalog and all historical data, but
+    // omit it from active chemistry experiment inventories until revisited.
+    let catalog: Vec<_> = simulation
+        .environment
+        .catalog
+        .iter()
+        .filter(|resource| resource.name != "Water")
+        .cloned()
+        .collect();
 
     let pile_sizes = seed_randomized_molecular_resources(
         &mut simulation.environment.field,
@@ -368,6 +376,21 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.width,
         simulation.environment.height,
         true,
+    );
+
+    assert!(
+        simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| &cell.physical_materials)
+            .all(|material| material
+                .material
+                .parts
+                .iter()
+                .all(|(name, _)| name != "Water")),
+        "active environmental chemistry experiments must not seed Water"
     );
 
     // Establish stable IDs for the complete tick-zero inventory before any
@@ -733,7 +756,8 @@ mod tests {
                 }
             }
         }
-        assert_eq!(represented_types.len(), 7);
+        assert_eq!(represented_types.len(), 6);
+        assert!(!represented_types.contains("Water"));
         assert_eq!(
             first.simulation.energy_inventory_snapshot().residual(),
             Some(0.0)

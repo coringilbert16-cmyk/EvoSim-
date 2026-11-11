@@ -1,3 +1,5 @@
+> **Historical plan:** This document records the original implementation direction. Its cohesion-derived permeability model has since been retired. Current flow obstruction is based on realized geometry and `PhysicalState`; do not reintroduce permeability from this plan without a new design decision.
+
 # Environmental PR — S-shaped Water Flow and Obstacle-Aware Transport
 
 ## Purpose

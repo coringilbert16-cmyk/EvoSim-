@@ -43,6 +43,14 @@ jobs:
       - name: Test offline chemical organization analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
+      - name: Non-Water chemistry feasibility matrices
+        if: success()
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cargo test --locked static_pair_matrix_characterizes_active_non_water_resource_pairs -- --nocapture
+          cargo test --locked controlled_physical_pair_matrix_classifies_non_water_resource_pairs -- --nocapture
+          cargo test --locked non_water_displacement_preflight_matrix_classifies_all_ordered_triples -- --nocapture
       - name: Run default environmental chemistry baseline
         if: success()
         timeout-minutes: 3

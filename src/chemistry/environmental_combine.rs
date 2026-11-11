@@ -1414,9 +1414,19 @@ mod tests {
     }
 
     #[test]
-    fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
+    fn controlled_physical_pair_matrix_classifies_non_water_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
-        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        let catalog: Vec<_> = simulation
+            .environment
+            .catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .cloned()
+            .collect();
         let mut pair_count = 0usize;
         let mut contact_count = 0usize;
 
@@ -1524,33 +1534,38 @@ mod tests {
                     let mut operations = Vec::new();
                     let mut resonance_diagnostics =
                         crate::state::EnvironmentalCombineSearchDiagnostics::default();
-                    chemical_step(
-                        &simulation.environment,
-                        &mut simulation.chemistry_library,
-                        &structure,
-                        selected,
-                        &indices_a,
-                        &indices_b,
-                        &source_a,
-                        &source_b,
-                        0,
-                        0,
-                        0,
-                        1,
-                        &mut accumulation,
-                        &mut updated,
-                        &mut operations,
-                        None,
-                        &mut false,
-                        simulation.tick,
-                        &mut resonance_diagnostics,
-                    );
+                    for observation_tick in 0..60 {
+                        chemical_step(
+                            &simulation.environment,
+                            &mut simulation.chemistry_library,
+                            &structure,
+                            selected,
+                            &indices_a,
+                            &indices_b,
+                            &source_a,
+                            &source_b,
+                            0,
+                            0,
+                            0,
+                            1,
+                            &mut accumulation,
+                            &mut updated,
+                            &mut operations,
+                            None,
+                            &mut false,
+                            simulation.tick + observation_tick,
+                            &mut resonance_diagnostics,
+                        );
+                        if !operations.is_empty() {
+                            break;
+                        }
+                    }
                     let outcome = if !operations.is_empty() {
-                        "activated"
+                        "operation_generated"
                     } else if !accumulation.is_empty() {
-                        "accumulating"
+                        "activation_accumulated_no_operation"
                     } else {
-                        "contact_no_progress_or_rejected"
+                        "contact_no_chemical_progress"
                     };
                     println!(
                         "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|outcome={}",
@@ -1574,8 +1589,8 @@ mod tests {
         }
 
         assert_eq!(
-            pair_count, 28,
-            "controlled matrix must classify all unordered pairs"
+            pair_count, 21,
+            "controlled matrix must classify all 21 unordered pairs among the six active non-Water resources"
         );
         assert!(
             contact_count > 0,
@@ -1590,7 +1605,17 @@ mod tests {
     #[test]
     fn compound_base_matrix_exercises_constituent_level_chemistry() {
         let mut simulation = crate::state::Simulation::new(23229, 10.0);
-        let catalog = simulation.environment.catalog.clone();
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        let catalog: Vec<_> = simulation
+            .environment
+            .catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .cloned()
+            .collect();
         let compound = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],

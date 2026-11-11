@@ -73,6 +73,21 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertFalse(report["resource_coverage"]["all_seven_present_at_start"])
         self.assertEqual(report["resource_coverage"]["missing_at_start"], ["Oxygen"])
 
+    def test_accepts_explicit_water_exclusion_for_active_experiments(self):
+        records = fixture_records()
+        records[0]["excluded_resources"] = ["Water"]
+        del records[0]["initial_material_inventory"]["Water"]
+
+        report = analyze(records)
+        coverage = report["resource_coverage"]
+        self.assertEqual(coverage["canonical_resources"], list(CANONICAL_RESOURCES))
+        self.assertEqual(coverage["excluded_resources"], ["Water"])
+        self.assertEqual(len(coverage["required_resources"]), 6)
+        self.assertTrue(coverage["all_required_present_at_start"])
+        self.assertFalse(coverage["all_seven_present_at_start"])
+        self.assertEqual(coverage["missing_at_start"], [])
+        self.assertEqual(report["resource_coverage"]["snapshots"][0]["missing_resources"], [])
+
     def test_uses_summary_totals_and_reaction_events(self):
         report = analyze(fixture_records())
         self.assertEqual(report["reactions"]["diagnostic_totals"]["BREAK"]["committed"], 1)

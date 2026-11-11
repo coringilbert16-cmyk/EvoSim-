@@ -1670,6 +1670,75 @@ mod tests {
             / catalog.len() as f64
     }
 
+    /// Exhaustive preflight census for every ordered anchor/displaced/incoming
+    /// triple among the six active resources. This separates energy feasibility
+    /// from the production trial builder's stronger-replacement restriction.
+    #[test]
+    fn non_water_displacement_preflight_matrix_classifies_all_ordered_triples() {
+        let catalog = default_catalog()
+            .into_iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
+        let baseline = catalog_reactivity_baseline();
+        let mut triples = 0usize;
+        let mut valid_preflights = 0usize;
+        let mut stronger_replacements = 0usize;
+        let mut weaker_funded_replacements = 0usize;
+        for anchor_resource in &catalog {
+            for displaced_resource in &catalog {
+                for incoming_resource in &catalog {
+                    let anchor = anchor_resource.properties;
+                    let displaced = displaced_resource.properties;
+                    let incoming = incoming_resource.properties;
+                    let old_strength = bond_strength(anchor, displaced);
+                    let preflight = evaluate_displacement_preflight(
+                        anchor,
+                        displaced,
+                        incoming,
+                        old_strength,
+                        10.0,
+                        baseline,
+                        0.0,
+                        0.0,
+                    );
+                    if let Some(preflight) = preflight {
+                        valid_preflights += 1;
+                        if preflight.replacement_bond_energy > preflight.old_bond_energy {
+                            stronger_replacements += 1;
+                        } else if preflight.energy.required_external_input > 0.0 {
+                            weaker_funded_replacements += 1;
+                        }
+                        println!(
+                            "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=true|activated={}|old_energy={:.9}|replacement_energy={:.9}|external_input={:.9}|production_stronger_gate={}",
+                            anchor_resource.name, displaced_resource.name, incoming_resource.name,
+                            preflight.is_activated(),
+                            preflight.old_bond_energy,
+                            preflight.replacement_bond_energy,
+                            preflight.energy.required_external_input,
+                            preflight.replacement_bond_energy > preflight.old_bond_energy,
+                        );
+                    } else {
+                        println!(
+                            "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=false",
+                            anchor_resource.name, displaced_resource.name, incoming_resource.name,
+                        );
+                    }
+                    triples += 1;
+                }
+            }
+        }
+        assert_eq!(triples, 216);
+        assert_eq!(
+            valid_preflights, 216,
+            "all catalog triples should have finite preflight calculations"
+        );
+        assert!(stronger_replacements > 0);
+        assert!(
+            weaker_funded_replacements > 0,
+            "the preflight model should expose energy-funded weaker replacements even though the production trial gate rejects them"
+        );
+    }
+
     #[test]
     fn carbon_oxygen_can_replace_carbon_hydrogen_when_incoming_contact_activates_it() {
         let anchor = properties("Carbon");
