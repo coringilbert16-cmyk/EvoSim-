@@ -11,7 +11,9 @@ pub(crate) struct ChemicalBreakOperation {
     pub(crate) organism_id: String,
     pub(crate) bond: Bond,
     pub(crate) activation_signal: f64,
+    /// Reactivity-adjusted threshold for crossing BREAK activation.
     pub(crate) activation_barrier: f64,
+    /// Integrity-derived physical work; independent of reactivity.
     pub(crate) disruption_cost: f64,
     pub(crate) reaction_frequency_cycles_per_day: f64,
     /// Preserve accumulated progress if settlement fails without changing the
