@@ -1679,9 +1679,11 @@ mod tests {
             .into_iter()
             .filter(|resource| resource.name != "Water")
             .collect::<Vec<_>>();
-        let baseline = catalog.iter()
+        let baseline = catalog
+            .iter()
             .map(|resource| resource.properties.reactivity)
-            .sum::<f64>() / catalog.len() as f64;
+            .sum::<f64>()
+            / catalog.len() as f64;
         let mut triples = 0usize;
         let mut valid_preflights = 0usize;
         let mut stronger_replacements = 0usize;
@@ -1712,9 +1714,7 @@ mod tests {
                         }
                         println!(
                             "DISPLACEMENT_FEASIBILITY|{}|{}|{}|valid=true|activated={}|old_energy={:.9}|replacement_energy={:.9}|external_input={:.9}|production_stronger_gate={}",
-                            anchor_resource.name,
-                            displaced_resource.name,
-                            incoming_resource.name,
+                            anchor_resource.name, displaced_resource.name, incoming_resource.name,
                             preflight.is_activated(),
                             preflight.old_bond_energy,
                             preflight.replacement_bond_energy,
@@ -1734,7 +1734,10 @@ mod tests {
             }
         }
         assert_eq!(triples, 216);
-        assert_eq!(valid_preflights, 216, "all catalog triples should have finite preflight calculations");
+        assert_eq!(
+            valid_preflights, 216,
+            "all catalog triples should have finite preflight calculations"
+        );
         assert!(stronger_replacements > 0);
         assert!(
             weaker_funded_replacements > 0,
