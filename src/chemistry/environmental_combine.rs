@@ -707,9 +707,9 @@ fn chemical_step(
                     0.0
                 }
             }
-    } else {
-        0.0
-    };
+        } else {
+            0.0
+        };
     let previous = accumulation.get(&key).copied().unwrap_or(0.0);
     let Some(next) = crate::chemistry::accumulate_reaction(
         previous,
