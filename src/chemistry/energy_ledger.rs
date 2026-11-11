@@ -306,7 +306,15 @@ impl ReactionEnergyBalance {
         if !net_reaction_change.is_finite() || !net_budget_change.is_finite() {
             return None;
         }
-        let required_external_input = net_budget_change.max(0.0);
+        let required_external_input = if net_budget_change > 0.0 {
+            let rounded_up = f64::from_bits(net_budget_change.to_bits() + 1);
+            if !rounded_up.is_finite() {
+                return None;
+            }
+            rounded_up
+        } else {
+            0.0
+        };
         let released_surplus = (-net_budget_change).max(0.0);
         Some(Self {
             reactant_energy,
@@ -328,12 +336,19 @@ impl ReactionEnergyBalance {
     /// Build the ledger transaction from the same pre/post-state balance
     /// used to decide whether the reaction is favorable or needs energy input.
     pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
-        EnergyTransaction::reaction(
+        let mut transaction = EnergyTransaction::reaction(
             reason,
             self.net_reaction_change,
             self.physical_work,
             self.dissipated_heat,
-        )
+        )?;
+        if self.required_external_input > 0.0 {
+            // Match the conservative, upward-rounded deficit used by
+            // affordability checks. This prevents a zero-holder settlement
+            // from being rejected for a one-ULP positive residual.
+            transaction.usable_delta = -self.required_external_input;
+        }
+        Some(transaction)
     }
 
     /// The signed conservation residual after applying the supplied input and

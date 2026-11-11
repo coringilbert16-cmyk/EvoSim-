@@ -708,9 +708,23 @@ mod tests {
             let unit_b = &restored.units[indices[connection.part_b]];
             let properties_a = unit_a.properties(catalog).unwrap();
             let properties_b = unit_b.properties(catalog).unwrap();
-            let strength = crate::combine::bond_strength(properties_a, properties_b);
-            let expected_energy =
-                crate::combine::intrinsic_bond_potential(properties_a, properties_b, strength);
+            let resource_a = catalog
+                .iter()
+                .find(|resource| resource.name == unit_a.material.parts[0].0)
+                .unwrap();
+            let resource_b = catalog
+                .iter()
+                .find(|resource| resource.name == unit_b.material.parts[0].0)
+                .unwrap();
+            let expected_energy = crate::combine::conservative_pair_potential(
+                resource_a.adhesion,
+                resource_b.adhesion,
+                0.0,
+                crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                crate::chemistry::CHEMICAL_MAX_FORCE,
+            )
+            .unwrap()
+            .bond_energy;
             assert!(
                 (connection.bond_energy - expected_energy).abs() <= 1e-9,
                 "stored seed bond energy must equal the ordinary COMBINE intrinsic potential"

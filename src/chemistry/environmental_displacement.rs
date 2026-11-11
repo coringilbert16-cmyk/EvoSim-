@@ -2582,11 +2582,23 @@ mod tests {
             .expect("ordinary-COMBINE molecule must restore");
             assert_eq!(restored.bonds.len(), 1);
             assert_eq!(restored.bonds[0].bond_energy, connection.bond_energy);
-            let expected_energy = intrinsic_bond_potential(
-                restored.units[0].properties(&catalog).unwrap(),
-                restored.units[1].properties(&catalog).unwrap(),
-                restored.bonds[0].strength,
-            );
+            let resource_a = catalog
+                .iter()
+                .find(|resource| resource.name == restored.units[0].material.parts[0].0)
+                .unwrap();
+            let resource_b = catalog
+                .iter()
+                .find(|resource| resource.name == restored.units[1].material.parts[0].0)
+                .unwrap();
+            let expected_energy = crate::combine::conservative_pair_potential(
+                resource_a.adhesion,
+                resource_b.adhesion,
+                0.0,
+                crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+                crate::chemistry::CHEMICAL_MAX_FORCE,
+            )
+            .unwrap()
+            .bond_energy;
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
     }

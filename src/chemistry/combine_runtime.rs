@@ -153,7 +153,13 @@ fn active_pair_potential(
         .find(|resource| resource.name == *name_b)
         .ok_or("interface resource B is missing from catalog")?;
 
-    if resource_a.name == "Water" || resource_b.name == "Water" {
+    // The new multidimensional model is explicitly scoped to the six
+    // migrated non-Water resources. Legacy/custom catalog entries retain their
+    // existing interaction adapter until they receive approved descriptors.
+    let active_resource = |name: &str| {
+        matches!(name, "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus")
+    };
+    if !active_resource(&resource_a.name) || !active_resource(&resource_b.name) {
         return Ok(None);
     }
 
