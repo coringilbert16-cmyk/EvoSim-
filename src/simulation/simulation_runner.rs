@@ -223,7 +223,6 @@ fn run_environment_chemistry_experiment(
         diagnostics_path,
         diagnostic_interval,
         seed,
-        dispersion.as_str(),
         duration_seconds,
         planned_ticks,
         &simulation,
@@ -236,6 +235,7 @@ fn run_environment_chemistry_experiment(
 
     println!(
         "ENVIRONMENTAL CHEMISTRY START: seed={seed} dispersion={} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=1200 molecules=80 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        dispersion.as_str(),
         duration_seconds,
         planned_ticks,
         simulation.organisms.len(),
