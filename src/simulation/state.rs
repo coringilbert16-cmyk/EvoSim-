@@ -620,6 +620,12 @@ pub(crate) struct EnvironmentalBreakDiscoveryDiagnostics {
     pub(crate) candidate_chemistry_rejections: u64,
     /// Candidates that produced a valid activation update.
     pub(crate) activation_updates: u64,
+    /// DISPLACEMENT local resonance endpoint sampling diagnostics.
+    pub(crate) local_resonance_sample_attempts: u64,
+    pub(crate) local_resonance_samples: u64,
+    pub(crate) local_resonance_unavailable: u64,
+    pub(crate) local_resonance_similarity_sum: f64,
+    pub(crate) local_resonance_similarity_max: f64,
     /// Valid activation updates that remained below the disruption barrier.
     pub(crate) activation_below_threshold: u64,
     /// Valid activation updates that reached the disruption barrier.
@@ -689,6 +695,11 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
         self.activation_updates = self
             .activation_updates
             .saturating_add(tick.activation_updates);
+        self.local_resonance_sample_attempts = self.local_resonance_sample_attempts.saturating_add(tick.local_resonance_sample_attempts);
+        self.local_resonance_samples = self.local_resonance_samples.saturating_add(tick.local_resonance_samples);
+        self.local_resonance_unavailable = self.local_resonance_unavailable.saturating_add(tick.local_resonance_unavailable);
+        if tick.local_resonance_similarity_sum.is_finite() { self.local_resonance_similarity_sum += tick.local_resonance_similarity_sum; }
+        if tick.local_resonance_similarity_max.is_finite() { self.local_resonance_similarity_max = self.local_resonance_similarity_max.max(tick.local_resonance_similarity_max); }
         self.activation_below_threshold = self
             .activation_below_threshold
             .saturating_add(tick.activation_below_threshold);
@@ -886,6 +897,12 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) spatial_candidate_generation_nanoseconds: u64,
     /// Number of source-material pairs for which spatial candidates were generated.
     pub(crate) spatial_candidate_generation_calls: usize,
+    /// COMBINE local resonance endpoint sampling diagnostics.
+    pub(crate) local_resonance_sample_attempts: u64,
+    pub(crate) local_resonance_samples: u64,
+    pub(crate) local_resonance_unavailable: u64,
+    pub(crate) local_resonance_similarity_sum: f64,
+    pub(crate) local_resonance_similarity_max: f64,
     pub(crate) constituent_pairs_inspected: usize,
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,
