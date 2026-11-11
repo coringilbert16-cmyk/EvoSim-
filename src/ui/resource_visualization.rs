@@ -45,6 +45,7 @@ mod tests {
     fn resource(name: &str) -> BaseResource {
         BaseResource {
             name: name.into(),
+            adhesion: Default::default(),
             properties: ResourceProperties {
                 mass: 1.0,
                 potential_energy: 1.0,
