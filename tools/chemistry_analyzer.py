@@ -158,6 +158,61 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
                 ) for key in keys
             }
 
+    def tick_metric(path: str, key: str) -> int:
+        total = 0
+        for tick_record in ticks:
+            value: Any = tick_record.get("reaction_work") or {}
+            for part in path.split("."):
+                value = value.get(part, {}) if isinstance(value, dict) else {}
+            if isinstance(value, dict):
+                count = value.get(key, 0)
+                if isinstance(count, (int, float)) and not isinstance(count, bool):
+                    total += int(count)
+        return total
+
+    # Put each reaction's existing discovery counters into one comparable
+    # opportunity funnel. These are observed stages, not inferred contacts.
+    opportunity_funnels = {
+        "BREAK": {
+            "bond_records_inspected": tick_metric("break_discovery", "bond_candidates_inspected"),
+            "bond_candidates_checked": tick_metric("break_discovery", "bond_candidates_checked"),
+            "restorations_succeeded": tick_metric("break_discovery", "material_restorations_succeeded"),
+            "geometry_rejections": tick_metric("break_discovery", "candidate_geometry_rejections"),
+            "endpoint_rejections": tick_metric("break_discovery", "candidate_endpoint_rejections"),
+            "interface_rejections": tick_metric("break_discovery", "candidate_interface_rejections"),
+            "chemistry_rejections": tick_metric("break_discovery", "candidate_chemistry_rejections"),
+            "activation_updates": tick_metric("break_discovery", "activation_updates"),
+            "activation_below_threshold": tick_metric("break_discovery", "activation_below_threshold"),
+            "activation_threshold_met": tick_metric("break_discovery", "activation_threshold_met"),
+        },
+        "COMBINE": {
+            "source_materials_inspected": tick_metric("combine_search", "anchor_materials_inspected"),
+            "target_materials_inspected": tick_metric("combine_search", "target_materials_inspected"),
+            "material_pairs_restored": tick_metric("combine_search", "target_material_pairs_restored"),
+            "material_pairs_overlap_rejected": tick_metric("combine_search", "target_material_pairs_rejected_for_overlap"),
+            "constituent_pairs_available": tick_metric("combine_search", "constituent_pairs_available"),
+            "valid_interfaces": tick_metric("combine_search", "constituent_pairs_with_valid_interfaces"),
+            "physically_evaluable_interfaces": tick_metric("combine_search", "physically_evaluable_interfaces"),
+            "interfaces_sent_to_chemistry": tick_metric("combine_search", "interfaces_sent_to_chemistry"),
+        },
+        "DISPLACEMENT": {
+            "anchor_materials_inspected": tick_metric("displacement_discovery", "anchor_materials_inspected"),
+            "bonded_anchor_materials": tick_metric("displacement_discovery", "bonded_anchor_materials"),
+            "target_materials_inspected": tick_metric("displacement_discovery", "target_materials_inspected"),
+            "replacement_contact_searches": tick_metric("displacement_discovery", "replacement_contact_searches"),
+            "replacement_contacts_found": tick_metric("displacement_discovery", "replacement_contacts_found"),
+            "activation_updates": tick_metric("displacement_discovery", "activation_updates"),
+            "activation_below_threshold": tick_metric("displacement_discovery", "activation_below_threshold"),
+            "activation_threshold_met": tick_metric("displacement_discovery", "activation_threshold_met"),
+            "activation_status_unavailable": tick_metric("displacement_discovery", "activation_status_unavailable"),
+        },
+    }
+    for reaction_name, stages in opportunity_funnels.items():
+        totals = reaction_totals.get(reaction_name, {})
+        stages["scheduled"] = int(totals.get("scheduled", 0) or 0)
+        stages["committed"] = int(totals.get("committed", 0) or 0)
+        stages["rejected_after_scheduling"] = int(totals.get("rejected", 0) or 0)
+
     def local_resonance_totals(path: str) -> dict[str, Any]:
         attempts = samples = unavailable = 0
         similarity_sum = 0.0
@@ -300,6 +355,9 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         "schema_version": 1,
         "input": {
             "seed": header.get("seed"),
+            "dispersion": header.get("dispersion", "randomized"),
+            "starting_mixture": header.get("starting_mixture", "baseline"),
+            "initial_material_inventory": header.get("initial_material_inventory", {}),
             "requested_duration_seconds": header.get("requested_duration_seconds"),
             "planned_ticks": header.get("planned_ticks"),
             "initial_physical_material_count": header.get("initial_physical_material_count"),
@@ -329,6 +387,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "outcome_counts": dict(sorted(outcome_counts.items())),
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "diagnostic_totals": reaction_totals,
+            "opportunity_funnels": opportunity_funnels,
         },
         "molecular_history": {
             "lifecycle_record_count": len(lifecycle),
@@ -397,7 +456,48 @@ def render_markdown(report: dict[str, Any]) -> str:
             lines.append(f"- {key}: {value}")
         lines.append("")
     lines += [
+        "",
+        "## Reaction opportunity funnels",
+        "",
+        "Counts are observed discovery and activation stages; a missing stage is not inferred from a later count.",
+        "",
+        "| Reaction | Discovery / contact evidence | Activation updates | Below threshold | Threshold met | Scheduled | Committed | Rejected after scheduling |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    funnel_labels = {
+        "BREAK": "bonds inspected / checked",
+        "COMBINE": "target materials inspected / interfaces sent to chemistry",
+        "DISPLACEMENT": "replacement contacts found / searches",
+    }
+    for name, stages in report["reactions"]["opportunity_funnels"].items():
+        if name == "BREAK":
+            evidence = f'{stages["bond_records_inspected"]} / {stages["bond_candidates_checked"]} ({funnel_labels[name]})'
+            updates = stages["activation_updates"]
+            below = stages["activation_below_threshold"]
+            met = stages["activation_threshold_met"]
+        elif name == "COMBINE":
+            evidence = f'{stages["target_materials_inspected"]} / {stages["interfaces_sent_to_chemistry"]} ({funnel_labels[name]})'
+            updates = below = met = 0
+        else:
+            evidence = f'{stages["replacement_contacts_found"]} / {stages["replacement_contact_searches"]} ({funnel_labels[name]})'
+            updates = stages["activation_updates"]
+            below = stages["activation_below_threshold"]
+            met = stages["activation_threshold_met"]
+        lines.append(
+            f'| {name} | {evidence} | {updates} | {below} | {met} | '
+            f'{stages["scheduled"]} | {stages["committed"]} | {stages["rejected_after_scheduling"]} |'
+        )
+    lines += [
+        "",
+        "### Discovery detail",
+        "",
+    ]
+    for name, stages in report["reactions"]["opportunity_funnels"].items():
+        lines.append(f'**{name}:** ' + ", ".join(f"{key}={value}" for key, value in stages.items()))
+        lines.append("")
+    lines += [
         "## Local resonance activation sampling",
+
         "",
         "| Reaction | Attempts | Successful | Unavailable | Mean similarity | Max similarity | Mean multiplier |",
         "|---|---:|---:|---:|---:|---:|---:|",

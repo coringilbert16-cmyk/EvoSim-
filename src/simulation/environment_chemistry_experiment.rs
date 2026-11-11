@@ -239,6 +239,8 @@ fn seed_randomized_molecular_resources(
     width: f64,
     height: f64,
     include_molecules: bool,
+    dispersion: DispersionMode,
+    starting_mixture: StartingMixture,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -251,7 +253,6 @@ fn seed_randomized_molecular_resources(
         "the environment requires seven canonical base resources"
     );
 
-    let mut identities = resource_names.clone();
     let single_resource_count = if include_molecules {
         ENVIRONMENT_SINGLE_RESOURCE_COUNT
     } else {
@@ -262,90 +263,254 @@ fn seed_randomized_molecular_resources(
     } else {
         0
     };
-    while identities.len() < single_resource_count {
-        identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+    let mut baseline_identities = resource_names.clone();
+    while baseline_identities.len() < single_resource_count {
+        baseline_identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
     }
+    // Keep the complete per-resource inventory identical across starting
+    // mixtures. Only the allocation between bonded molecules and free
+    // resources changes.
+    let baseline_molecules = if include_molecules {
+        StartingMixture::Baseline.molecule_parts()
+    } else {
+        Vec::new()
+    };
+    let target_molecules = if include_molecules {
+        starting_mixture.molecule_parts()
+    } else {
+        Vec::new()
+    };
+    let mut total_inventory = std::collections::BTreeMap::<String, usize>::new();
+    for name in &baseline_identities {
+        *total_inventory.entry(name.clone()).or_default() += 1;
+    }
+    for parts in &baseline_molecules {
+        for name in parts {
+            *total_inventory.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let mut target_inventory = std::collections::BTreeMap::<String, usize>::new();
+    for parts in &target_molecules {
+        for name in parts {
+            *target_inventory.entry(name.clone()).or_default() += 1;
+        }
+    }
+    let mut identities = if starting_mixture == StartingMixture::Baseline {
+        baseline_identities
+    } else {
+        let mut adjusted = Vec::with_capacity(single_resource_count);
+        for name in &resource_names {
+            let total = total_inventory.get(name).copied().unwrap_or_default();
+            let bonded = target_inventory.get(name).copied().unwrap_or_default();
+            let free = total.checked_sub(bonded).unwrap_or_else(|| {
+                panic!(
+                    "starting mixture {:?} exceeds total inventory for {name}",
+                    starting_mixture
+                )
+            });
+            assert!(
+                free > 0,
+                "every canonical resource must remain independently available"
+            );
+            adjusted.extend(std::iter::repeat_n(name.clone(), free));
+        }
+        adjusted
+    };
+    assert_eq!(identities.len(), single_resource_count);
     identities.shuffle(&mut rng);
+
     let mut objects: Vec<(Vec<String>, bool)> = identities
         .into_iter()
         .map(|name| (vec![name], false))
         .collect();
-    for _ in 0..(molecule_count / 2) {
-        objects.push((vec!["Hydrogen".into(), "Sulfur".into()], true));
-        objects.push((vec!["Carbon".into(), "Hydrogen".into()], true));
+    for parts in target_molecules {
+        objects.push((parts, true));
     }
+    assert_eq!(objects.len(), ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(
+        molecule_count,
+        objects.iter().filter(|(_, bonded)| *bonded).count()
+    );
     objects.shuffle(&mut rng);
 
-    let pile_count = rng.gen_range(3..=10);
-    let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
-    cuts.shuffle(&mut rng);
-    cuts.truncate(pile_count - 1);
-    cuts.sort_unstable();
-    let mut previous = 0;
-    let mut pile_sizes = Vec::with_capacity(pile_count);
-    for cut in cuts
-        .into_iter()
-        .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
-    {
-        pile_sizes.push(cut - previous);
-        previous = cut;
-    }
+    let pile_sizes = match dispersion {
+        DispersionMode::Randomized => {
+            let pile_count = rng.gen_range(3..=10);
+            let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
+            cuts.shuffle(&mut rng);
+            cuts.truncate(pile_count - 1);
+            cuts.sort_unstable();
+            let mut previous = 0;
+            let mut sizes = Vec::with_capacity(pile_count);
+            for cut in cuts
+                .into_iter()
+                .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+            {
+                sizes.push(cut - previous);
+                previous = cut;
+            }
+            sizes
+        }
+        DispersionMode::Uniform => vec![1; ENVIRONMENT_OBJECT_COUNT],
+        DispersionMode::Clustered => vec![40; 32],
+    };
 
     let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(width, height)
         .expect("the configured world must support the right-bend hotspot");
-    let centers = randomized_pile_centers(
-        &pile_sizes,
-        hotspot.center_x,
-        hotspot.center_y,
-        width,
-        height,
-        &mut rng,
-    );
-    let mut object_index = 0;
-    for (pile_index, pile_size) in pile_sizes.iter().copied().enumerate() {
-        let (center_x, center_y) = centers[pile_index];
-        let columns = (pile_size as f64).sqrt().ceil() as usize;
-        let rows = pile_size.div_ceil(columns);
-        for local_index in 0..pile_size {
-            let column = local_index % columns;
-            let row = local_index / columns;
-            let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
-                .clamp(1.0, width - 2.8);
-            let y =
-                (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5).clamp(1.0, height - 1.0);
-            let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
-            let placement = Placement {
-                x,
-                y,
-                rotation_radians: rotation,
-            };
-            let (parts, is_molecule) = &objects[object_index];
-            let physical = if *is_molecule {
-                realize_natural_molecule(parts, placement, catalog)
-            } else {
-                PhysicalMaterial::realized(
-                    Material::free_base(&parts[0], 1.0),
-                    vec![placement],
-                    catalog,
-                )
-                .expect("canonical base resource must have valid physical geometry")
-            };
-            object_index += 1;
-            assert!(
-                field.deposit_physical(x, y, physical, catalog),
-                "randomized pile {pile_index} object {local_index} must remain in bounds"
+    let mut positions = Vec::with_capacity(ENVIRONMENT_OBJECT_COUNT);
+    match dispersion {
+        DispersionMode::Randomized | DispersionMode::Clustered => {
+            let centers = randomized_pile_centers(
+                &pile_sizes,
+                hotspot.center_x,
+                hotspot.center_y,
+                width,
+                height,
+                &mut rng,
             );
+            for (group_index, (center_x, center_y)) in centers.into_iter().enumerate() {
+                let count = pile_sizes[group_index];
+                let columns = (count as f64).sqrt().ceil() as usize;
+                let rows = count.div_ceil(columns);
+                for local_index in 0..count {
+                    let column = local_index % columns;
+                    let row = local_index / columns;
+                    let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+                        .clamp(1.0, width - 2.8);
+                    let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
+                        .clamp(1.0, height - 1.0);
+                    positions.push((x, y));
+                }
+            }
+        }
+        DispersionMode::Uniform => {
+            let columns = (ENVIRONMENT_OBJECT_COUNT as f64 * width / height)
+                .sqrt()
+                .ceil() as usize;
+            let rows = ENVIRONMENT_OBJECT_COUNT.div_ceil(columns);
+            for index in 0..ENVIRONMENT_OBJECT_COUNT {
+                let column = index % columns;
+                let row = index / columns;
+                let x = ((column as f64 + 0.5) * width / columns as f64 + rng.gen_range(-0.3..0.3))
+                    .clamp(2.8, width - 2.8);
+                let y = ((row as f64 + 0.5) * height / rows as f64 + rng.gen_range(-0.3..0.3))
+                    .clamp(1.0, height - 1.0);
+                positions.push((x, y));
+            }
         }
     }
-    assert_eq!(object_index, ENVIRONMENT_OBJECT_COUNT);
+    assert_eq!(positions.len(), ENVIRONMENT_OBJECT_COUNT);
+
+    for (object_index, (x, y)) in positions.into_iter().enumerate() {
+        let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
+        let placement = Placement {
+            x,
+            y,
+            rotation_radians: rotation,
+        };
+        let (parts, is_molecule) = &objects[object_index];
+        let physical = if *is_molecule {
+            realize_natural_molecule(parts, placement, catalog)
+        } else {
+            PhysicalMaterial::realized(
+                Material::free_base(&parts[0], 1.0),
+                vec![placement],
+                catalog,
+            )
+            .expect("canonical base resource must have valid physical geometry")
+        };
+        assert!(
+            field.deposit_physical(x, y, physical, catalog),
+            "{:?} dispersion object {object_index} must remain in bounds",
+            dispersion
+        );
+    }
+    assert_eq!(pile_sizes.iter().sum::<usize>(), ENVIRONMENT_OBJECT_COUNT);
     pile_sizes
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DispersionMode {
+    Randomized,
+    Uniform,
+    Clustered,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum StartingMixture {
+    Baseline,
+    HighBonded,
+    MixedStability,
+}
+
+impl StartingMixture {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Baseline => "baseline",
+            Self::HighBonded => "high-bonded",
+            Self::MixedStability => "mixed-stability",
+        }
+    }
+
+    fn molecule_parts(self) -> Vec<Vec<String>> {
+        let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
+        let mut add = |count: usize, a: &str, b: &str| {
+            molecules.extend((0..count).map(|_| vec![a.to_string(), b.to_string()]));
+        };
+        match self {
+            Self::Baseline => {
+                for _ in 0..40 {
+                    molecules.push(vec!["Hydrogen".into(), "Sulfur".into()]);
+                    molecules.push(vec!["Carbon".into(), "Hydrogen".into()]);
+                }
+            }
+            Self::HighBonded => {
+                add(27, "Carbon", "Sulfur");
+                add(27, "Phosphorus", "Sulfur");
+                add(26, "Nitrogen", "Sulfur");
+            }
+            Self::MixedStability => {
+                add(20, "Carbon", "Sulfur");
+                add(20, "Phosphorus", "Sulfur");
+                add(20, "Nitrogen", "Sulfur");
+                add(20, "Carbon", "Oxygen");
+            }
+        }
+        assert_eq!(molecules.len(), ENVIRONMENT_MOLECULE_COUNT);
+        molecules
+    }
+}
+
+impl DispersionMode {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Randomized => "randomized",
+            Self::Uniform => "uniform",
+            Self::Clustered => "clustered",
+        }
+    }
+}
+
 pub(crate) struct EnvironmentalChemistryFixture {
     pub(crate) simulation: Simulation,
     pub(crate) pile_sizes: Vec<usize>,
 }
 
 pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
+    build_with_dispersion(seed, DispersionMode::Randomized)
+}
+
+pub(crate) fn build_with_dispersion(
+    seed: u64,
+    dispersion: DispersionMode,
+) -> EnvironmentalChemistryFixture {
+    build_with_dispersion_and_mixture(seed, dispersion, StartingMixture::Baseline)
+}
+
+pub(crate) fn build_with_dispersion_and_mixture(
+    seed: u64,
+    dispersion: DispersionMode,
+    starting_mixture: StartingMixture,
+) -> EnvironmentalChemistryFixture {
     let mut simulation = Simulation::new(seed, 10.0);
     simulation.record_environmental_molecular_history = true;
     simulation.organisms.clear();
@@ -368,6 +533,8 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.width,
         simulation.environment.height,
         true,
+        dispersion,
+        starting_mixture,
     );
 
     // Establish stable IDs for the complete tick-zero inventory before any
@@ -618,6 +785,174 @@ mod tests {
             material.material.parts.len() == 1 && material.material.parts[0].1 == 1.0
         }));
         assert!(simulation.hotspot.is_some());
+    }
+
+    #[test]
+    fn dispersion_layouts_are_deterministic_and_preserve_the_complete_inventory() {
+        for dispersion in [
+            DispersionMode::Randomized,
+            DispersionMode::Uniform,
+            DispersionMode::Clustered,
+        ] {
+            let first = build_with_dispersion(42, dispersion);
+            let second = build_with_dispersion(42, dispersion);
+            assert_eq!(first.pile_sizes, second.pile_sizes);
+            assert_eq!(
+                first.simulation.environment.field.cells, second.simulation.environment.field.cells,
+                "{dispersion:?} placement must be reproducible"
+            );
+            assert_eq!(
+                first.pile_sizes.iter().sum::<usize>(),
+                ENVIRONMENT_OBJECT_COUNT
+            );
+            assert!(first.simulation.organisms.is_empty());
+            let materials = first
+                .simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .collect::<Vec<_>>();
+            assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
+            assert_eq!(
+                materials
+                    .iter()
+                    .filter(|material| material.material.parts.len() == 1)
+                    .count(),
+                ENVIRONMENT_SINGLE_RESOURCE_COUNT
+            );
+            assert_eq!(
+                materials
+                    .iter()
+                    .filter(|material| material.material.parts.len() == 2)
+                    .count(),
+                ENVIRONMENT_MOLECULE_COUNT
+            );
+            let represented = materials
+                .iter()
+                .flat_map(|material| material.material.parts.iter().map(|part| part.0.as_str()))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(represented.len(), 7);
+            assert_eq!(
+                first.simulation.energy_inventory_snapshot().residual(),
+                Some(0.0)
+            );
+
+            match dispersion {
+                DispersionMode::Randomized => {
+                    assert!((3..=10).contains(&first.pile_sizes.len()));
+                }
+                DispersionMode::Uniform => {
+                    assert_eq!(first.pile_sizes.len(), ENVIRONMENT_OBJECT_COUNT);
+                    assert!(first.pile_sizes.iter().all(|size| *size == 1));
+                    let xs = materials.iter().map(|material| {
+                        material
+                            .placements
+                            .as_ref()
+                            .and_then(|placements| placements.first())
+                            .expect("uniformly placed material must retain its placement")
+                            .x
+                    });
+                    let min_x = xs.clone().fold(f64::INFINITY, f64::min);
+                    let max_x = xs.fold(f64::NEG_INFINITY, f64::max);
+                    assert!(min_x < 5.0 && max_x > 245.0);
+                }
+                DispersionMode::Clustered => {
+                    assert_eq!(first.pile_sizes.len(), 32);
+                    assert!(first.pile_sizes.iter().all(|size| *size == 40));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn starting_mixtures_preserve_the_same_total_resource_inventory() {
+        let mixtures = [
+            StartingMixture::Baseline,
+            StartingMixture::HighBonded,
+            StartingMixture::MixedStability,
+        ];
+        for seed in [42, 43, 44, 45, 46] {
+            let mut expected = None;
+            for mixture in mixtures {
+                let fixture =
+                    build_with_dispersion_and_mixture(seed, DispersionMode::Randomized, mixture);
+                let materials = fixture
+                    .simulation
+                    .environment
+                    .field
+                    .cells
+                    .iter()
+                    .flat_map(|cell| cell.physical_materials.iter());
+                let mut inventory = std::collections::BTreeMap::<String, usize>::new();
+                let mut molecules = std::collections::BTreeMap::<String, usize>::new();
+                let mut object_count = 0;
+                let mut independent_count = 0;
+                for material in materials {
+                    object_count += 1;
+                    if material.material.parts.len() == 1 {
+                        independent_count += 1;
+                    } else {
+                        let mut names = material
+                            .material
+                            .parts
+                            .iter()
+                            .map(|part| part.0.clone())
+                            .collect::<Vec<_>>();
+                        names.sort();
+                        *molecules.entry(names.join("-")).or_default() += 1;
+                    }
+                    for (name, _) in &material.material.parts {
+                        *inventory.entry(name.clone()).or_default() += 1;
+                    }
+                }
+                assert_eq!(object_count, ENVIRONMENT_OBJECT_COUNT);
+                assert_eq!(independent_count, ENVIRONMENT_SINGLE_RESOURCE_COUNT);
+                assert_eq!(
+                    molecules.values().sum::<usize>(),
+                    ENVIRONMENT_MOLECULE_COUNT
+                );
+                if let Some(expected_inventory) = &expected {
+                    assert_eq!(
+                        &inventory, expected_inventory,
+                        "seed {seed}, mixture {mixture:?}"
+                    );
+                } else {
+                    expected = Some(inventory);
+                }
+                let expected_molecules = match mixture {
+                    StartingMixture::Baseline => {
+                        [("Carbon-Hydrogen", 40_usize), ("Hydrogen-Sulfur", 40_usize)]
+                            .into_iter()
+                            .map(|(name, count)| (name.to_string(), count))
+                            .collect::<std::collections::BTreeMap<_, _>>()
+                    }
+                    StartingMixture::HighBonded => [
+                        ("Carbon-Sulfur", 27_usize),
+                        ("Nitrogen-Sulfur", 26_usize),
+                        ("Phosphorus-Sulfur", 27_usize),
+                    ]
+                    .into_iter()
+                    .map(|(name, count)| (name.to_string(), count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
+                    StartingMixture::MixedStability => [
+                        ("Carbon-Oxygen", 20_usize),
+                        ("Carbon-Sulfur", 20_usize),
+                        ("Nitrogen-Sulfur", 20_usize),
+                        ("Phosphorus-Sulfur", 20_usize),
+                    ]
+                    .into_iter()
+                    .map(|(name, count)| (name.to_string(), count))
+                    .collect::<std::collections::BTreeMap<_, _>>(),
+                };
+                assert_eq!(molecules, expected_molecules);
+                assert_eq!(
+                    fixture.simulation.energy_inventory_snapshot().residual(),
+                    Some(0.0)
+                );
+            }
+        }
     }
 
     #[test]

@@ -40,6 +40,12 @@ jobs:
       - name: Test offline chemistry analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
+      - name: Test offline chemistry dispersion batch analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_dispersion_batch_analyzer.py'
+      - name: Test offline chemistry starting-mixture batch analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_starting_mixture_batch_analyzer.py'
       - name: Test offline chemical organization analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
@@ -450,5 +456,160 @@ jobs:
           path: |
             resonance-five-seed-combined.json
             resonance-five-seed-combined.md
+          if-no-files-found: error
+          retention-days: 30
+
+  pr345-dispersion-observation:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 345
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        seed: [42, 43, 44, 45, 46]
+        dispersion: [randomized, uniform, clustered]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run five-minute chemistry observation
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 300 \
+            --seed ${{ matrix.seed }} \
+            --dispersion ${{ matrix.dispersion }} \
+            --diagnostics seed-${{ matrix.seed }}-${{ matrix.dispersion }}.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze chemistry and organization
+        run: |
+          python3 tools/chemistry_analyzer.py seed-${{ matrix.seed }}-${{ matrix.dispersion }}.jsonl \
+            --json-out seed-${{ matrix.seed }}-${{ matrix.dispersion }}-chemistry.json \
+            --markdown-out seed-${{ matrix.seed }}-${{ matrix.dispersion }}-chemistry.md
+          python3 tools/chemistry_organization_analyzer.py seed-${{ matrix.seed }}-${{ matrix.dispersion }}.jsonl \
+            --json-out seed-${{ matrix.seed }}-${{ matrix.dispersion }}-organization.json \
+            --markdown-out seed-${{ matrix.seed }}-${{ matrix.dispersion }}-organization.md
+      - name: Upload dispersion diagnostics and analysis
+        if: always() && hashFiles('seed-*.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr345-dispersion-${{ matrix.dispersion }}-seed-${{ matrix.seed }}
+          path: |
+            seed-${{ matrix.seed }}-${{ matrix.dispersion }}.jsonl
+            seed-${{ matrix.seed }}-${{ matrix.dispersion }}-chemistry.json
+            seed-${{ matrix.seed }}-${{ matrix.dispersion }}-chemistry.md
+            seed-${{ matrix.seed }}-${{ matrix.dispersion }}-organization.json
+            seed-${{ matrix.seed }}-${{ matrix.dispersion }}-organization.md
+          if-no-files-found: error
+          retention-days: 30
+
+  pr345-dispersion-aggregate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 345
+    needs: [pr345-dispersion-observation]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all fifteen dispersion runs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pr345-dispersion-*
+          path: observations
+          merge-multiple: true
+      - name: Aggregate the three five-seed conditions
+        run: |
+          python3 tools/chemistry_dispersion_batch_analyzer.py observations \
+            --json-out dispersion-five-seed-report.json \
+            --markdown-out dispersion-five-seed-report.md
+      - name: Upload combined dispersion report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr345-dispersion-five-seed-combined
+          path: |
+            dispersion-five-seed-report.json
+            dispersion-five-seed-report.md
+          if-no-files-found: error
+          retention-days: 30
+
+  pr345-starting-mixture-observation:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 345
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 5
+      matrix:
+        seed: [42, 43, 44, 45, 46]
+        mixture: [baseline, high-bonded, mixed-stability]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run five-minute randomized chemistry observation
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 300 \
+            --seed ${{ matrix.seed }} \
+            --dispersion randomized \
+            --starting-mixture ${{ matrix.mixture }} \
+            --diagnostics seed-${{ matrix.seed }}-${{ matrix.mixture }}.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze chemistry and organization
+        run: |
+          python3 tools/chemistry_analyzer.py seed-${{ matrix.seed }}-${{ matrix.mixture }}.jsonl \
+            --json-out seed-${{ matrix.seed }}-${{ matrix.mixture }}-chemistry.json \
+            --markdown-out seed-${{ matrix.seed }}-${{ matrix.mixture }}-chemistry.md
+          python3 tools/chemistry_organization_analyzer.py seed-${{ matrix.seed }}-${{ matrix.mixture }}.jsonl \
+            --json-out seed-${{ matrix.seed }}-${{ matrix.mixture }}-organization.json \
+            --markdown-out seed-${{ matrix.seed }}-${{ matrix.mixture }}-organization.md
+      - name: Upload starting-mixture diagnostics and analysis
+        if: always() && hashFiles('seed-*.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr345-starting-mixture-${{ matrix.mixture }}-seed-${{ matrix.seed }}
+          path: |
+            seed-${{ matrix.seed }}-${{ matrix.mixture }}.jsonl
+            seed-${{ matrix.seed }}-${{ matrix.mixture }}-chemistry.json
+            seed-${{ matrix.seed }}-${{ matrix.mixture }}-chemistry.md
+            seed-${{ matrix.seed }}-${{ matrix.mixture }}-organization.json
+            seed-${{ matrix.seed }}-${{ matrix.mixture }}-organization.md
+          if-no-files-found: error
+          retention-days: 30
+
+  pr345-starting-mixture-aggregate:
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 345
+    needs: [pr345-starting-mixture-observation]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all fifteen starting-mixture runs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pr345-starting-mixture-*
+          path: observations
+          merge-multiple: true
+      - name: Aggregate matched starting-mixture conditions
+        run: |
+          python3 tools/chemistry_starting_mixture_batch_analyzer.py observations \
+            --json-out starting-mixture-five-seed-report.json \
+            --markdown-out starting-mixture-five-seed-report.md
+      - name: Upload combined starting-mixture report
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr345-starting-mixture-five-seed-combined
+          path: |
+            starting-mixture-five-seed-report.json
+            starting-mixture-five-seed-report.md
           if-no-files-found: error
           retention-days: 30
