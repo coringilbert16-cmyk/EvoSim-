@@ -107,11 +107,18 @@ pub fn interface_engagement(facing: f64) -> Option<f64> {
 /// A structural activation barrier expressed in the same normalized scale as
 /// accumulated reaction. The supplied value is local bond integrity, not
 /// adhesion or stored bond potential; no second arbitrary threshold is introduced.
-pub fn activation_barrier_from_bond_integrity(bond_integrity: f64) -> Option<f64> {
+/// Convert local bond integrity into the initial physical work scale for
+/// disrupting that bond. This quantity is independent of material reactivity.
+pub fn bond_disruption_work_from_integrity(bond_integrity: f64) -> Option<f64> {
     if !bond_integrity.is_finite() || bond_integrity < 0.0 {
         return None;
     }
     normalized_chemistry_to_energy(bond_integrity.clamp(0.0, 1.0))
+}
+
+/// Base activation threshold before the endpoint-reactivity modifier is applied.
+pub fn activation_barrier_from_bond_integrity(bond_integrity: f64) -> Option<f64> {
+    bond_disruption_work_from_integrity(bond_integrity)
 }
 
 /// Compatibility adapter for historical callers that still name local
@@ -445,12 +452,12 @@ mod tests {
             activation_barrier_from_bond_properties(integrity, 0.0, 0.0, 2.0).unwrap();
         let high_reactivity =
             activation_barrier_from_bond_properties(integrity, 4.0, 4.0, 2.0).unwrap();
-        let physical_work = activation_barrier_from_bond_integrity(integrity).unwrap();
+        let physical_work = bond_disruption_work_from_integrity(integrity).unwrap();
 
         assert!(high_reactivity < low_reactivity);
         assert_eq!(physical_work, integrity);
         assert_eq!(
-            activation_barrier_from_bond_integrity(integrity),
+            bond_disruption_work_from_integrity(integrity),
             Some(physical_work)
         );
     }
