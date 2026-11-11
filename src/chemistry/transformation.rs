@@ -2344,7 +2344,10 @@ mod tests {
                 None,
             ));
             assert_eq!(organism.usable_energy, before_energy);
-            assert_eq!(ledger.total_structural_energy_delta, before_ledger.total_structural_energy_delta);
+            assert_eq!(
+                ledger.total_structural_energy_delta,
+                before_ledger.total_structural_energy_delta
+            );
             assert_eq!(
                 transformation.prepared_energy,
                 Some((before_energy, -bond_energy, 0.0))
@@ -2354,7 +2357,12 @@ mod tests {
                 Some(before_energy - bond_energy)
             );
 
-            resolve_transformation(&transformation, &mut organism, &mut environment, &mut ledger);
+            resolve_transformation(
+                &transformation,
+                &mut organism,
+                &mut environment,
+                &mut ledger,
+            );
             assert!((organism.usable_energy - (before_energy - bond_energy)).abs() < 1e-12);
             assert!((ledger.total_structural_energy_delta - bond_energy).abs() < 1e-12);
             assert_eq!(organism.active_transformation_id, None);
