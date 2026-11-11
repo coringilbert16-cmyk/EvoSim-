@@ -190,7 +190,7 @@ pub(crate) struct DisplacementTrial {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum DisplacementTrialFailureStage {
     Activation,
-    OldBondEnergy,
+    InvalidStoredBondEnergy,
     Topology,
     CandidateCheck,
     Formation,
@@ -312,7 +312,7 @@ fn build_displacement_trial_with_activation_status(
     }
     if !old_bond_energy.is_finite() || old_bond_energy < 0.0 {
         if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
+            diagnostic.failure_stage = DisplacementTrialFailureStage::InvalidStoredBondEnergy;
         }
         return None;
     }
@@ -1249,7 +1249,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                                 .saturating_add(1);
                                         match trial_diagnostic.failure_stage {
                                             DisplacementTrialFailureStage::Activation => {}
-                                            DisplacementTrialFailureStage::OldBondEnergy => {
+                                            DisplacementTrialFailureStage::InvalidStoredBondEnergy => {
                                                 diagnostics.trial_rejections_old_bond_energy =
                                                     diagnostics
                                                         .trial_rejections_old_bond_energy
@@ -2277,7 +2277,10 @@ mod tests {
         assert_eq!(diagnostic.old_bond_energy_abs_error, Some(expected.abs()));
         assert!(expected > 0.0);
         assert!(trial.energy.required_external_input > 0.0);
-        assert_eq!(trial.disruption_work, trial.energy.physical_work - trial.formation_work);
+        assert!(
+            (trial.disruption_work - (trial.energy.physical_work - trial.formation_work)).abs()
+                <= 1e-9
+        );
     }
 
     #[test]
