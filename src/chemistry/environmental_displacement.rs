@@ -1679,11 +1679,7 @@ mod tests {
             .into_iter()
             .filter(|resource| resource.name != "Water")
             .collect::<Vec<_>>();
-        let baseline = catalog
-            .iter()
-            .map(|resource| resource.properties.reactivity)
-            .sum::<f64>()
-            / catalog.len() as f64;
+        let baseline = catalog_reactivity_baseline();
         let mut triples = 0usize;
         let mut valid_preflights = 0usize;
         let mut stronger_replacements = 0usize;
