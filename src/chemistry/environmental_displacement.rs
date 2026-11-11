@@ -319,7 +319,6 @@ fn build_displacement_trial_with_activation_status(
     let preflight = evaluate_displacement_preflight_with_bond_energies(
         anchor,
         displaced,
-        incoming,
         old_strength,
         old_bond_energy,
         replacement_bond_energy,
@@ -522,7 +521,6 @@ pub(crate) fn evaluate_displacement_preflight(
     evaluate_displacement_preflight_with_bond_energies(
         anchor,
         displaced,
-        incoming,
         old_bond_strength,
         old_bond_energy,
         replacement_bond_energy,
@@ -539,7 +537,6 @@ pub(crate) fn evaluate_displacement_preflight(
 fn evaluate_displacement_preflight_with_bond_energies(
     anchor: ResourceProperties,
     displaced: ResourceProperties,
-    incoming: ResourceProperties,
     old_bond_strength: f64,
     old_bond_energy: f64,
     replacement_bond_energy: f64,
@@ -1923,7 +1920,6 @@ mod tests {
         let preflight = evaluate_displacement_preflight_with_bond_energies(
             properties("Carbon"),
             properties("Oxygen"),
-            properties("Hydrogen"),
             bond_strength(properties("Carbon"), properties("Oxygen")),
             old_energy,
             replacement_energy,
