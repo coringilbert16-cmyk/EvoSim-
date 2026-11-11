@@ -126,37 +126,59 @@ fn obstacle_for(
     catalog: &[BaseResource],
     height: f64,
 ) -> Option<Obstacle> {
-    let (x, y) = material_center(material, height)?;
+    if !height.is_finite() || height <= 0.0 {
+        return None;
+    }
     let placements = material.placements.as_ref()?;
-    let mut radius: f64 = 0.5;
+    let mut rigid_anchor_y = None;
+    let mut weighted_x = 0.0;
+    let mut weighted_y_offset = 0.0;
     let mut rigid_amount = 0.0;
-    let mut total_amount = 0.0;
     for (index, (name, amount)) in material.material.parts.iter().enumerate() {
         let resource = resource_for_part(name, catalog)?;
-        let placement = placements.get(index)?;
-        radius = radius
-            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
-        if resource.physical_state == PhysicalState::Rigid {
-            rigid_amount += *amount;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
         }
-        total_amount += *amount;
+        let placement = placements.get(index)?;
+        let anchor_y = *rigid_anchor_y.get_or_insert(placement.y);
+        weighted_x += placement.x * *amount;
+        weighted_y_offset +=
+            (placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        rigid_amount += *amount;
     }
-    if !rigid_amount.is_finite() || !total_amount.is_finite() || total_amount <= 0.0 {
+    if !rigid_amount.is_finite()
+        || rigid_amount <= 0.0
+        || !weighted_x.is_finite()
+        || !weighted_y_offset.is_finite()
+    {
         return None;
     }
-    // Flow obstruction follows realized rigid geometry. Fluid constituents
-    // contribute to the enclosing footprint but do not create a rigid wake.
-    let solidity = (rigid_amount / total_amount).clamp(0.0, 1.0);
-    if solidity <= 1e-6 {
-        return None;
+    let x = weighted_x / rigid_amount;
+    let anchor_y = rigid_anchor_y?;
+    let y = (anchor_y + weighted_y_offset / rigid_amount).rem_euclid(height);
+
+    // Only rigid constituents occupy the flow-obstructing footprint. Fluid
+    // constituents do not enlarge the obstacle or dilute its physical effect.
+    let mut radius: f64 = 0.5;
+    for (index, (name, _)) in material.material.parts.iter().enumerate() {
+        let resource = resource_for_part(name, catalog)?;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
+        }
+        let placement = placements.get(index)?;
+        let dy = (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
+        radius = radius.max(
+            (placement.x - x).hypot(dy) + shape_radius(&resource.shape.form),
+        );
     }
+
     Some(Obstacle {
         source_cell,
         source_index,
         x,
         y,
         radius,
-        solidity,
+        solidity: 1.0,
     })
 }
 
