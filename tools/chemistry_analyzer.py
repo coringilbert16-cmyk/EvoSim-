@@ -67,6 +67,132 @@ def _structural_signature(molecule: Any) -> str:
     )
 
 
+
+ACTIVE_ELEMENTS = ("Carbon", "Hydrogen", "Nitrogen", "Oxygen", "Phosphorus", "Sulfur")
+ELEMENTAL_BOND_PAIRS = tuple(
+    f"{left}-{right}"
+    for index, left in enumerate(ACTIVE_ELEMENTS)
+    for right in ACTIVE_ELEMENTS[index:]
+)
+
+
+def _molecule_bond_pairs(molecule: Any) -> tuple[Counter[str], int]:
+    """Count authoritative internal-connection edges by their endpoint elements."""
+    if not isinstance(molecule, dict):
+        return Counter(), 0
+    material = molecule.get("material")
+    if not isinstance(material, dict):
+        return Counter(), 0
+    parts = material.get("parts")
+    connections = molecule.get("internal_connections")
+    if not isinstance(parts, list) or not isinstance(connections, list):
+        return Counter(), 0
+
+    counts: Counter[str] = Counter()
+    malformed = 0
+    for bond in connections:
+        if not isinstance(bond, dict):
+            malformed += 1
+            continue
+        a = bond.get("part_a")
+        b = bond.get("part_b")
+        if (
+            not isinstance(a, int) or isinstance(a, bool)
+            or not isinstance(b, int) or isinstance(b, bool)
+            or a < 0 or b < 0 or a >= len(parts) or b >= len(parts) or a == b
+        ):
+            malformed += 1
+            continue
+        part_a, part_b = parts[a], parts[b]
+        if not (
+            isinstance(part_a, (list, tuple)) and len(part_a) == 2
+            and isinstance(part_b, (list, tuple)) and len(part_b) == 2
+        ):
+            malformed += 1
+            continue
+        element_a, element_b = str(part_a[0]), str(part_b[0])
+        if element_a not in ACTIVE_ELEMENTS or element_b not in ACTIVE_ELEMENTS:
+            continue
+        left, right = sorted((element_a, element_b))
+        counts[f"{left}-{right}"] += 1
+    return counts, malformed
+
+
+def _bond_pair_attribution(reactions: list[dict[str, Any]]) -> dict[str, Any]:
+    """Attribute committed reaction bond changes from full reactant/product graphs."""
+    formed_by_reaction: dict[str, Counter[str]] = {}
+    broken_by_reaction: dict[str, Counter[str]] = {}
+    formed_total: Counter[str] = Counter()
+    broken_total: Counter[str] = Counter()
+    observed = missing = malformed = 0
+
+    for event in reactions:
+        if event.get("outcome") != "committed":
+            continue
+        lifecycle = event.get("molecular_lifecycle")
+        if not isinstance(lifecycle, list) or not lifecycle:
+            missing += 1
+            continue
+        reactants: Counter[str] = Counter()
+        products: Counter[str] = Counter()
+        has_reactant = has_product = False
+        for record in lifecycle:
+            if not isinstance(record, dict):
+                malformed += 1
+                continue
+            molecule = record.get("molecule")
+            counts, invalid = _molecule_bond_pairs(molecule)
+            malformed += invalid
+            if record.get("action") == "destroyed":
+                reactants.update(counts)
+                has_reactant |= isinstance(molecule, dict)
+            elif record.get("action") == "created":
+                products.update(counts)
+                has_product |= isinstance(molecule, dict)
+        if not (has_reactant and has_product):
+            missing += 1
+            continue
+        reaction = str(event.get("reaction", "UNKNOWN"))
+        formed = products - reactants
+        broken = reactants - products
+        formed_by_reaction.setdefault(reaction, Counter()).update(formed)
+        broken_by_reaction.setdefault(reaction, Counter()).update(broken)
+        formed_total.update(formed)
+        broken_total.update(broken)
+        observed += 1
+
+    def complete(counter: Counter[str]) -> dict[str, int]:
+        return {pair: int(counter.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS}
+
+    by_reaction = {}
+    for reaction in sorted(set(formed_by_reaction) | set(broken_by_reaction)):
+        formed = formed_by_reaction.get(reaction, Counter())
+        broken = broken_by_reaction.get(reaction, Counter())
+        by_reaction[reaction] = {
+            "formed": complete(formed),
+            "broken": complete(broken),
+            "formed_total": sum(formed.values()),
+            "broken_total": sum(broken.values()),
+        }
+    return {
+        "element_pairs": list(ELEMENTAL_BOND_PAIRS),
+        "committed_events_with_graph_deltas": observed,
+        "committed_events_missing_graph_deltas": missing,
+        "malformed_bond_records": malformed,
+        "formed_total": sum(formed_total.values()),
+        "broken_total": sum(broken_total.values()),
+        "formed": complete(formed_total),
+        "broken": complete(broken_total),
+        "by_reaction": by_reaction,
+        "method": (
+            "For each committed reaction, compare the multiset of endpoint-element "
+            "pairs in destroyed reactant PhysicalMaterial.internal_connections "
+            "against created product connections. Product-minus-reactant is formed; "
+            "reactant-minus-product is broken."
+        ),
+    }
+
+
 def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     headers = [r for r in records if r.get("event") == "environmental_chemistry_header"]
     snapshots = [r for r in records if r.get("event") == "environmental_chemistry_snapshot"]
@@ -129,6 +255,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         reason = event.get("failure_reason")
         if reason:
             failure_reasons[f"{kind}:{reason}"] += 1
+    bond_pair_attribution = _bond_pair_attribution(reactions)
+
 
     # Prefer the recorder's accumulated totals; tick records are a fallback.
     if summaries:
@@ -345,6 +473,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "outcome_counts": dict(sorted(outcome_counts.items())),
             "failure_reasons": dict(sorted(failure_reasons.items())),
             "diagnostic_totals": reaction_totals,
+            "elemental_bond_pairs": bond_pair_attribution,
         },
         "molecular_history": {
             "lifecycle_record_count": len(lifecycle),
@@ -428,6 +557,21 @@ def render_markdown(report: dict[str, Any]) -> str:
             f"{sample['unavailable_samples']} | {sample['mean_similarity']} | "
             f"{sample['maximum_similarity']} | {sample['mean_activation_multiplier']} |"
         )
+    bond_pairs = report["reactions"]["elemental_bond_pairs"]
+    lines += [
+        "",
+        "## Exact elemental bond-pair changes",
+        "",
+        f"- Committed reaction events with complete graph deltas: {bond_pairs['committed_events_with_graph_deltas']}",
+        f"- Committed events missing graph deltas: {bond_pairs['committed_events_missing_graph_deltas']}",
+        f"- Formed bonds: {bond_pairs['formed_total']}",
+        f"- Broken bonds: {bond_pairs['broken_total']}",
+        "",
+        "| Element pair | Formed | Broken |",
+        "|---|---:|---:|",
+    ]
+    for pair in bond_pairs["element_pairs"]:
+        lines.append(f"| {pair} | {bond_pairs['formed'][pair]} | {bond_pairs['broken'][pair]} |")
     lines += [
         "",
         "## Energy accounting",
