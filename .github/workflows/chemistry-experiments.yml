@@ -39,13 +39,12 @@ jobs:
           python3 - <<'PY'
           import json
           import os
-          import re
 
           raw = os.environ["SEEDS_INPUT"]
           parts = [part.strip() for part in raw.split(",") if part.strip()]
           if not parts or len(parts) > 25:
               raise SystemExit("Provide between 1 and 25 comma-separated seeds.")
-          if any(not re.fullmatch(r"\\d+", part) for part in parts):
+          if any(not part.isascii() or not part.isdecimal() for part in parts):
               raise SystemExit("Every seed must be a nonnegative integer.")
           seeds = [int(part) for part in parts]
           if len(seeds) != len(set(seeds)):
@@ -57,7 +56,7 @@ jobs:
           if not 1 <= interval <= 100000:
               raise SystemExit("Diagnostic interval must be between 1 and 100,000 ticks.")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-              output.write("seeds=" + json.dumps(seeds) + "\\n")
+              output.write("seeds=" + json.dumps(seeds) + chr(10))
           print(f"Validated {len(seeds)} seeds: {seeds}")
           print(f"Duration per seed: {duration}s; diagnostic interval: {interval} ticks")
           PY
@@ -83,27 +82,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p observations
-          cargo run --locked -- \\
-            --headless \\
-            --environment-chemistry-experiment \\
-            --seconds "$DURATION_SECONDS" \\
-            --seed "$SEED" \\
-            --diagnostics "observations/seed-$SEED.jsonl" \\
-            --diagnostic-interval "$DIAGNOSTIC_INTERVAL"
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds "$DURATION_SECONDS" --seed "$SEED" --diagnostics "observations/seed-$SEED.jsonl" --diagnostic-interval "$DIAGNOSTIC_INTERVAL"
       - name: Analyze reactions and energy
         env:
           SEED: ${{ matrix.seed }}
         run: |
-          python3 tools/chemistry_analyzer.py "observations/seed-$SEED.jsonl" \\
-            --json-out "observations/seed-$SEED-chemistry.json" \\
-            --markdown-out "observations/seed-$SEED-chemistry.md"
+          python3 tools/chemistry_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-chemistry.json" --markdown-out "observations/seed-$SEED-chemistry.md"
       - name: Analyze molecular organization and lineage
         env:
           SEED: ${{ matrix.seed }}
         run: |
-          python3 tools/chemistry_organization_analyzer.py "observations/seed-$SEED.jsonl" \\
-            --json-out "observations/seed-$SEED-organization.json" \\
-            --markdown-out "observations/seed-$SEED-organization.md"
+          python3 tools/chemistry_organization_analyzer.py "observations/seed-$SEED.jsonl" --json-out "observations/seed-$SEED-organization.json" --markdown-out "observations/seed-$SEED-organization.md"
       - name: Upload raw observation and per-seed analysis
         if: always() && hashFiles('observations/seed-*.jsonl') != ''
         uses: actions/upload-artifact@v4
@@ -130,11 +119,7 @@ jobs:
           DURATION_SECONDS: ${{ inputs.duration_seconds }}
         run: |
           set -euo pipefail
-          python3 tools/chemistry_experiment_batch_analyzer.py observations \\
-            --seeds "$SEEDS" \\
-            --duration-seconds "$DURATION_SECONDS" \\
-            --json-out chemistry-experiment-combined.json \\
-            --markdown-out chemistry-experiment-combined.md
+          python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
         with:
