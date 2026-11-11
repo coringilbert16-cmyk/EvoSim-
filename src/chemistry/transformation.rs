@@ -2799,7 +2799,7 @@ mod tests {
             ..Default::default()
         };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
-            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 5.0, 2.0,
         )
         .expect("two withdrawn resonance units should fund two work units");
 
