@@ -926,6 +926,7 @@ impl Simulation {
             0.0,
             0.0,
             0.0,
+            0.0,
         )
         .is_none()
         {
@@ -2430,7 +2431,7 @@ mod tests {
             ..Default::default()
         };
         let prepared = prepare_chemical_break_energy_with_structural_potentials(
-            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 2.0,
+            20.0, &ledger, 4.0, 0.0, 4.0, 5.0, 5.0, 5.0, 2.0,
         )
         .expect("two withdrawn resonance units fund two units of work");
 
@@ -2469,7 +2470,7 @@ mod tests {
         // Even if a later caller can provide resonance, activation itself must
         // cross the full physical barrier; it is not an energy credit.
         let prepared =
-            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 1.0, 5.0, 0.0);
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 1.0, 5.0, 5.0, 0.0);
         assert!(prepared.is_none());
         assert_eq!(ledger, crate::state::EnergyLedger::default());
     }
@@ -2483,7 +2484,7 @@ mod tests {
         };
         let original_ledger = ledger;
         let prepared =
-            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 0.0)
+            prepare_chemical_break_energy_with_resonance(10.0, &ledger, 0.0, 5.0, 5.0, 5.0, 0.0)
                 .expect("the holder can pay the complete work for a zero-energy physical bond");
 
         assert!((prepared.usable_energy - 5.0).abs() < 1e-12);
@@ -2508,7 +2509,7 @@ mod tests {
         };
         let original_ledger = ledger;
         let prepared =
-            prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 0.0);
+            prepare_chemical_break_energy_with_resonance(1.0, &ledger, 0.0, 5.0, 5.0, 5.0, 0.0);
         assert!(prepared.is_none());
         assert_eq!(ledger, original_ledger);
     }
