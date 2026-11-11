@@ -12,7 +12,9 @@ use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::state::{EnergyLedger, Environment, EnvironmentalDisplacementDiscoveryDiagnostics};
 
-use crate::combine::{bond_strength, intrinsic_bond_potential};
+use crate::combine::bond_strength;
+#[cfg(test)]
+use crate::combine::intrinsic_bond_potential;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
 use crate::resources::{BaseResource, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure};
@@ -487,6 +489,7 @@ pub(crate) fn commit_displacement_trial(
 /// as ordinary COMBINE. Physical work and heat are included once in the single
 /// net reaction balance. This function does not claim to model unrepresented
 /// chemical free-energy terms.
+#[cfg(test)]
 pub(crate) fn evaluate_displacement_preflight(
     anchor: ResourceProperties,
     displaced: ResourceProperties,
