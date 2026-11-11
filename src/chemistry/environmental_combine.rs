@@ -417,6 +417,51 @@ fn select_best_contact(
         .next()
 }
 
+fn is_active_non_water_resource(name: &str) -> bool {
+    matches!(
+        name,
+        "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+    )
+}
+
+/// One canonical activation potential for a physical constituent pair.
+/// The six active elements use the same symmetric adhesion descriptors as
+/// COMBINE eligibility and bond formation; legacy catalog materials retain
+/// their chemical-position adapter.
+fn constituent_pair_static_potential(
+    unit_a: &crate::structure::StructuralUnit,
+    unit_b: &crate::structure::StructuralUnit,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let [(name_a, amount_a)] = unit_a.material.parts.as_slice() else {
+        return None;
+    };
+    let [(name_b, amount_b)] = unit_b.material.parts.as_slice() else {
+        return None;
+    };
+    if !amount_a.is_finite() || *amount_a <= 0.0 || !amount_b.is_finite() || *amount_b <= 0.0 {
+        return None;
+    }
+    let resource_a = catalog.iter().find(|resource| resource.name == *name_a)?;
+    let resource_b = catalog.iter().find(|resource| resource.name == *name_b)?;
+    if is_active_non_water_resource(&resource_a.name)
+        && is_active_non_water_resource(&resource_b.name)
+    {
+        return crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
+            .map(|adhesion| adhesion.net)
+            .filter(|potential| potential.is_finite() && *potential > 0.0);
+    }
+    let position_a = resource_a.properties.chemical_position?;
+    let position_b = resource_b.properties.chemical_position?;
+    crate::chemistry::interaction_potential(
+        position_a,
+        position_b,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+    )
+    .filter(|potential| potential.is_finite() && *potential > 0.0)
+}
+
 fn select_best_contact_from_pairs(
     structure: &OrganismStructure,
     pairs: &[(usize, usize)],
@@ -437,21 +482,8 @@ fn select_best_contact_from_pairs(
         let chemical_potential = structure
             .units
             .get(unit_a)
-            .and_then(|unit| constituent_chemical_position(unit, catalog))
-            .zip(
-                structure
-                    .units
-                    .get(unit_b)
-                    .and_then(|unit| constituent_chemical_position(unit, catalog)),
-            )
-            .and_then(|(position_a, position_b)| {
-                crate::chemistry::interaction_potential(
-                    position_a,
-                    position_b,
-                    crate::chemistry::CHEMICAL_K,
-                    crate::chemistry::CHEMICAL_D_MAX,
-                )
-            });
+            .zip(structure.units.get(unit_b))
+            .and_then(|(a, b)| constituent_pair_static_potential(a, b, catalog));
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
@@ -576,34 +608,61 @@ fn chemical_step(
     let Some(b) = unit_b.properties(&environment.catalog) else {
         reject_step!();
     };
-    let Some(position_a) = constituent_chemical_position(unit_a, &environment.catalog) else {
+    let Some(resource_a) = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == *material_name_a)
+    else {
         reject_step!();
     };
-    let Some(position_b) = constituent_chemical_position(unit_b, &environment.catalog) else {
+    let Some(resource_b) = environment
+        .catalog
+        .iter()
+        .find(|resource| resource.name == *material_name_b)
+    else {
         reject_step!();
     };
-    // The static potential depends on canonical chemistry identity and
-    // chemical positions, not the geometry variant that happens to be touching.
-    let cache_key = chemistry_library.key_from_chemical_pair(
-        material_name_a,
-        material_name_b,
-        position_a,
-        position_b,
-    );
-    let static_potential = match chemistry_library.get(&cache_key) {
-        Some(record) => record.static_potential,
-        None => {
-            let Some(calculated) = crate::chemistry::interaction_potential(
-                position_a,
-                position_b,
-                crate::chemistry::CHEMICAL_K,
-                crate::chemistry::CHEMICAL_D_MAX,
-            ) else {
-                reject_step!();
-            };
-            match chemistry_library.get_or_insert_static_potential(cache_key, calculated) {
-                Ok(Some(value)) => value,
-                Ok(None) | Err(_) => calculated,
+    let static_potential = if is_active_non_water_resource(&resource_a.name)
+        && is_active_non_water_resource(&resource_b.name)
+    {
+        let Some(adhesion) =
+            crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
+        else {
+            reject_step!();
+        };
+        if !adhesion.net.is_finite() || adhesion.net <= 0.0 {
+            reject_step!();
+        }
+        adhesion.net
+    } else {
+        // Legacy/custom catalog entries retain their chemical-position cache.
+        let Some(position_a) = resource_a.properties.chemical_position else {
+            reject_step!();
+        };
+        let Some(position_b) = resource_b.properties.chemical_position else {
+            reject_step!();
+        };
+        let cache_key = chemistry_library.key_from_chemical_pair(
+            material_name_a,
+            material_name_b,
+            position_a,
+            position_b,
+        );
+        match chemistry_library.get(&cache_key) {
+            Some(record) => record.static_potential,
+            None => {
+                let Some(calculated) = crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                ) else {
+                    reject_step!();
+                };
+                match chemistry_library.get_or_insert_static_potential(cache_key, calculated) {
+                    Ok(Some(value)) => value,
+                    Ok(None) | Err(_) => calculated,
+                }
             }
         }
     };
