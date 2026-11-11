@@ -803,6 +803,8 @@ pub(crate) fn accumulate_environmental(
     remaining_discovery_work: &mut usize,
     diagnostics: &mut EnvironmentalDisplacementDiscoveryDiagnostics,
 ) -> Vec<EnvironmentalDisplacementOperation> {
+    // This budget is per invocation/tick; diagnostics accumulate across the run.
+    let mut local_resonance_sampled_this_tick = false;
     accumulate_environmental_with_resonance(
         environment,
         accumulation,
@@ -1026,12 +1028,11 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 // Keep the expensive endpoint-spectrum query bounded to one actual
                                 // replacement contact per tick. Discovery rotates its field anchors.
                                 let local_resonance_similarity = if let Some(world) =
-                                    local_resonance_world.filter(|_| {
-                                        diagnostics.local_resonance_sample_attempts == 0
-                                    }) {
+                                    local_resonance_world.filter(|_| !local_resonance_sampled_this_tick) {
                                     diagnostics.local_resonance_sample_attempts = diagnostics
                                         .local_resonance_sample_attempts
                                         .saturating_add(1);
+                                    local_resonance_sampled_this_tick = true;
                                     let incoming_frequency = displacement_reaction_frequency(
                                         &combined.units[anchor_unit],
                                         &combined.units[incoming_unit],
