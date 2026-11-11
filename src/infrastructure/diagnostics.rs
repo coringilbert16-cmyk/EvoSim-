@@ -616,6 +616,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         duration_seconds: Option<u64>,
         planned_ticks: Option<u64>,
         simulation: &Simulation,
+        dispersion: &str,
         pile_sizes: &[usize],
     ) -> std::io::Result<Self> {
         let file = File::create(path)?;
@@ -628,6 +629,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "event": "environmental_chemistry_header",
             "version": 2,
             "seed": seed,
+            "dispersion": dispersion,
             "tick_zero": 0,
             "requested_duration_seconds": duration_seconds,
             "planned_ticks": planned_ticks,
