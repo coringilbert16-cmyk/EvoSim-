@@ -807,13 +807,15 @@ mod tests {
                 rotation_radians: 0.0,
             }],
             &catalog,
-        ).expect("catalog carbon should realize");
+        )
+        .expect("catalog carbon should realize");
         let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
             .expect("rigid constituent geometry should obstruct flow");
         assert_eq!(obstacle.solidity, 1.0);
 
         let mut fluid_catalog = catalog.clone();
-        fluid_catalog.iter_mut()
+        fluid_catalog
+            .iter_mut()
             .find(|resource| resource.name == "Carbon")
             .expect("carbon catalog entry")
             .physical_state = PhysicalState::Fluid;
@@ -825,7 +827,8 @@ mod tests {
                 rotation_radians: 0.0,
             }],
             &fluid_catalog,
-        ).expect("fluid-state carbon geometry should realize");
+        )
+        .expect("fluid-state carbon geometry should realize");
         assert!(
             obstacle_for(0, 0, &fluid_carbon, &fluid_catalog, 100.0).is_none(),
             "fluid-state material should not become a rigid flow obstacle"
