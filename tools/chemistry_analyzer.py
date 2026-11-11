@@ -15,6 +15,9 @@ from typing import Any
 CANONICAL_RESOURCES = (
     "Water", "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
 )
+ACTIVE_EXPERIMENT_RESOURCES = (
+    "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
+)
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
@@ -311,7 +314,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "canonical_resources": list(CANONICAL_RESOURCES),
             "initial_inventory": {name: initial_inventory.get(name) for name in CANONICAL_RESOURCES},
             "missing_at_start": missing_resources,
-            "all_seven_present_at_start": not missing_resources,
+            "active_experiment_resources": list(ACTIVE_EXPERIMENT_RESOURCES),
+            "all_active_experiment_resources_present_at_start": not missing_resources,
+            "all_seven_present_at_start": all(
+                initial_inventory.get(name, 0) > 0 for name in CANONICAL_RESOURCES
+            ),
             "snapshots": snapshot_rows,
             "snapshots_missing_resources": [
                 {"label": row["label"], "tick": row["tick"], "missing": row["missing_resources"]}
