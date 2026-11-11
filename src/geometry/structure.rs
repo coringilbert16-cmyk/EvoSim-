@@ -1310,8 +1310,8 @@ impl PhysicalConstituentGraph {
         let Some(pb) = self.units[d].properties(c) else {
             return false;
         };
-        let strength = crate::combine::bond_strength(pa, pb);
-        strength.is_finite() && (0.0..=1.0).contains(&strength)
+        crate::combine::bond_integrity(pa, pb)
+            .is_some_and(|integrity| (0.0..=1.0).contains(&integrity))
     }
     /// Stable physical IDs that established the qualifying genome cavity.
     pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
