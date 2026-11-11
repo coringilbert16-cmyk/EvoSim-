@@ -262,7 +262,7 @@ def _bond_pair_attribution(
         "inventory_delta": inventory_delta,
         "reaction_delta": reaction_delta,
         "inventory_reconciliation": {
-            "matches": not inventory_mismatches,
+            "matches": not inventory_mismatches and missing == 0,
             "mismatches": inventory_mismatches,
             "malformed_inventory_bond_records": inventory_malformed,
         },
@@ -271,7 +271,7 @@ def _bond_pair_attribution(
             "For each committed reaction, compare the multiset of endpoint-element "
             "pairs in destroyed reactant PhysicalMaterial.internal_connections "
             "against created product connections. Product-minus-reactant is formed; "
-            "reactant-minus-product is broken."
+            "reactant-minus-product is broken. The resulting pair deltas are reconciled against the initial and final live-molecule inventories."
         ),
     }
 
