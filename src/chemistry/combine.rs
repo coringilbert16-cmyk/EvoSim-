@@ -571,6 +571,35 @@ mod tests {
     }
 
     #[test]
+    fn local_bond_integrity_is_explicit_and_independent_of_reactivity() {
+        let a = ResourceProperties {
+            mass: 1.0,
+            potential_energy: 1.0,
+            reactivity: 0.1,
+            chemical_position: Some(1.0),
+            cohesion: 0.8,
+        };
+        let b = ResourceProperties {
+            mass: 2.0,
+            potential_energy: 10.0,
+            reactivity: 4.0,
+            chemical_position: Some(12.0),
+            cohesion: 0.2,
+        };
+        let expected = (0.8_f64 * 0.2).sqrt();
+        assert!((bond_integrity(a, b).unwrap() - expected).abs() < 1e-12);
+
+        let mut altered_reactivity = b;
+        altered_reactivity.reactivity = 900.0;
+        assert_eq!(bond_integrity(a, b), bond_integrity(a, altered_reactivity));
+        assert_eq!(bond_integrity(a, b), Some(bond_strength(a, b)));
+
+        let mut invalid = b;
+        invalid.cohesion = f64::NAN;
+        assert!(bond_integrity(a, invalid).is_none());
+    }
+
+    #[test]
     fn intrinsic_bond_strength_is_cohesion_only() {
         let a = ResourceProperties {
             mass: 1.0,
