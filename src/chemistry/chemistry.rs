@@ -133,8 +133,9 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
 /// Reactivity is normalized against the catalog mean so the modifier is
 /// dimensionless and remains stable when the catalog's native scale changes.
 /// The arithmetic pair mean lets either reactive constituent increase the
-/// pair's response. Higher reactivity lowers the activation/disruption
-/// tolerance; it does not create energy or alter chemical attraction.
+/// pair's response. Higher reactivity lowers the activation threshold only;
+/// it does not change integrity-derived disruption work, create energy, or
+/// alter chemical attraction.
 pub fn activation_barrier_from_bond_properties(
     bond_integrity: f64,
     reactivity_a: f64,
