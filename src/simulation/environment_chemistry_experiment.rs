@@ -165,7 +165,7 @@ pub(crate) fn seed_randomized_resources(
     assert_eq!(
         resource_names.len(),
         6,
-        "active chemistry experiments exclude Water until it is explicitly revisited"
+        "the environment requires seven canonical base resources"
     );
 
     let mut identities = resource_names.clone();
@@ -247,8 +247,8 @@ fn seed_randomized_molecular_resources(
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the environment requires seven canonical base resources"
+        6,
+        "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
     let mut identities = resource_names.clone();
