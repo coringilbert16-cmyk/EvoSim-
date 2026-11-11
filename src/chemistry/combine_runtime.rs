@@ -157,7 +157,10 @@ fn active_pair_potential(
     // migrated non-Water resources. Legacy/custom catalog entries retain their
     // existing interaction adapter until they receive approved descriptors.
     let active_resource = |name: &str| {
-        matches!(name, "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus")
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
     };
     if !active_resource(&resource_a.name) || !active_resource(&resource_b.name) {
         return Ok(None);

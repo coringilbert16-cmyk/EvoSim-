@@ -706,8 +706,6 @@ mod tests {
             assert_eq!(restored.bonds.len(), 1);
             let unit_a = &restored.units[indices[connection.part_a]];
             let unit_b = &restored.units[indices[connection.part_b]];
-            let properties_a = unit_a.properties(catalog).unwrap();
-            let properties_b = unit_b.properties(catalog).unwrap();
             let resource_a = catalog
                 .iter()
                 .find(|resource| resource.name == unit_a.material.parts[0].0)
