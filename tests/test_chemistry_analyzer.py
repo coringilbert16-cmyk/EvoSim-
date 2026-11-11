@@ -117,6 +117,51 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         markdown = render_markdown(analyze(records))
         self.assertIn("Local resonance activation sampling", markdown)
 
+    def test_reports_observed_reaction_opportunity_funnels(self):
+        records = fixture_records()
+        records.append({
+            "event": "environmental_chemistry_tick",
+            "tick": 10,
+            "reaction_work": {
+                "break_discovery": {
+                    "bond_candidates_inspected": 12,
+                    "bond_candidates_checked": 8,
+                    "material_restorations_succeeded": 7,
+                    "activation_updates": 5,
+                    "activation_below_threshold": 4,
+                    "activation_threshold_met": 1,
+                },
+                "combine_search": {
+                    "anchor_materials_inspected": 20,
+                    "target_materials_inspected": 30,
+                    "target_material_pairs_restored": 10,
+                    "constituent_pairs_available": 6,
+                    "constituent_pairs_with_valid_interfaces": 4,
+                    "physically_evaluable_interfaces": 3,
+                    "interfaces_sent_to_chemistry": 3,
+                },
+                "displacement_discovery": {
+                    "anchor_materials_inspected": 40,
+                    "bonded_anchor_materials": 6,
+                    "target_materials_inspected": 15,
+                    "replacement_contact_searches": 9,
+                    "replacement_contacts_found": 2,
+                    "activation_updates": 2,
+                    "activation_below_threshold": 1,
+                    "activation_threshold_met": 1,
+                },
+            },
+        })
+        funnels = analyze(records)["reactions"]["opportunity_funnels"]
+        self.assertEqual(funnels["BREAK"]["bond_candidates_checked"], 8)
+        self.assertEqual(funnels["BREAK"]["activation_threshold_met"], 1)
+        self.assertEqual(funnels["COMBINE"]["interfaces_sent_to_chemistry"], 3)
+        self.assertEqual(funnels["DISPLACEMENT"]["replacement_contacts_found"], 2)
+        self.assertEqual(funnels["DISPLACEMENT"]["activation_threshold_met"], 1)
+        markdown = render_markdown(analyze(records))
+        self.assertIn("Reaction opportunity funnels", markdown)
+        self.assertIn("replacement contacts found / searches", markdown)
+
     def test_markdown_explicitly_lists_all_resources(self):
         markdown = render_markdown(analyze(fixture_records()))
         for name in CANONICAL_RESOURCES:
