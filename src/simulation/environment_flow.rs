@@ -7,7 +7,7 @@
 
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Form};
+use crate::resources::{BaseResource, Form, PhysicalState};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct Velocity {
@@ -54,7 +54,7 @@ struct Obstacle {
     x: f64,
     y: f64,
     radius: f64,
-    solidity: f64,
+    obstruction_strength: f64,
 }
 
 fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a BaseResource> {
@@ -126,31 +126,53 @@ fn obstacle_for(
     catalog: &[BaseResource],
     height: f64,
 ) -> Option<Obstacle> {
-    let (x, y) = material_center(material, height)?;
-    let placements = material.placements.as_ref()?;
-    let mut radius: f64 = 0.5;
-    let mut weighted_cohesion = 0.0;
-    let mut total = 0.0;
-    for (index, (name, amount)) in material.material.parts.iter().enumerate() {
-        let resource = resource_for_part(name, catalog)?;
-        let placement = placements.get(index)?;
-        radius = radius
-            .max((placement.x - x).hypot(placement.y - y) + shape_radius(&resource.shape.form));
-        weighted_cohesion += resource.properties.cohesion * *amount;
-        total += *amount;
-    }
-    if !weighted_cohesion.is_finite() || total <= 0.0 {
+    if !height.is_finite() || height <= 0.0 {
         return None;
     }
-    let cohesion = weighted_cohesion / total;
-    let permeability = crate::resources::permeability_from_cohesion(cohesion, catalog);
+    let placements = material.placements.as_ref()?;
+    let mut total_rigid_weight = 0.0;
+    let mut weighted_x = 0.0;
+    let mut weighted_y_offset = 0.0;
+    let mut rigid_anchor_y = None;
+    for (index, (name, amount)) in material.material.parts.iter().enumerate() {
+        let resource = resource_for_part(name, catalog)?;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
+        }
+        if !amount.is_finite() || *amount <= 0.0 {
+            return None;
+        }
+        let placement = placements.get(index)?;
+        let anchor_y = *rigid_anchor_y.get_or_insert(placement.y);
+        let y_offset = (placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5;
+        total_rigid_weight += *amount;
+        weighted_x += placement.x * *amount;
+        weighted_y_offset += y_offset * *amount;
+    }
+    if !total_rigid_weight.is_finite() || total_rigid_weight <= 0.0 {
+        return None;
+    }
+    let anchor_y = rigid_anchor_y?;
+    let x = weighted_x / total_rigid_weight;
+    let y = (anchor_y + weighted_y_offset / total_rigid_weight).rem_euclid(height);
+    let mut radius: f64 = 0.5;
+    for (index, (name, _amount)) in material.material.parts.iter().enumerate() {
+        let resource = resource_for_part(name, catalog)?;
+        if resource.physical_state != PhysicalState::Rigid {
+            continue;
+        }
+        let placement = placements.get(index)?;
+        let wrapped_dy = (placement.y - y + height * 0.5).rem_euclid(height) - height * 0.5;
+        radius =
+            radius.max((placement.x - x).hypot(wrapped_dy) + shape_radius(&resource.shape.form));
+    }
     Some(Obstacle {
         source_cell,
         source_index,
         x,
         y,
         radius,
-        solidity: (1.0 - permeability).clamp(0.0, 1.0),
+        obstruction_strength: 1.0,
     })
 }
 
@@ -209,7 +231,7 @@ fn obstacle_adjusted_velocity(
         if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
             continue;
         }
-        if obstacle.solidity <= 1e-6 {
+        if obstacle.obstruction_strength <= 1e-6 {
             continue;
         }
         let dx = x - obstacle.x;
@@ -226,7 +248,8 @@ fn obstacle_adjusted_velocity(
         let distance = dx.hypot(dy).max(1e-9);
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+            let influence =
+                obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
@@ -237,7 +260,8 @@ fn obstacle_adjusted_velocity(
         if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
-            let attenuation = (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+            let attenuation =
+                (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
             velocity = velocity.scale(1.0 - attenuation);
         }
     }
@@ -798,45 +822,100 @@ mod tests {
     }
 
     #[test]
-    fn actual_material_cohesion_sets_obstacle_permeability() {
+    fn rigid_geometry_obstructs_flow_independent_of_cohesion() {
         let catalog = crate::resources::default_catalog();
-        let make_material = |name: &str| {
-            PhysicalMaterial::realized(
-                crate::resources::Material::free_base(name, 1.0),
-                vec![crate::structure::Placement {
+        let carbon = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog carbon should realize");
+        let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
+            .expect("rigid constituent geometry should obstruct flow");
+        assert_eq!(obstacle.obstruction_strength, 1.0);
+        let oxygen = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Oxygen", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("catalog oxygen should realize");
+        let low_cohesion_obstacle = obstacle_for(0, 1, &oxygen, &catalog, 100.0)
+            .expect("rigid low-cohesion geometry should obstruct flow");
+        assert_eq!(low_cohesion_obstacle.obstruction_strength, 1.0);
+
+        let mut fluid_catalog = catalog.clone();
+        fluid_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .expect("carbon catalog entry")
+            .physical_state = PhysicalState::Fluid;
+        let fluid_carbon = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &fluid_catalog,
+        )
+        .expect("fluid-state carbon geometry should realize");
+        assert!(
+            obstacle_for(0, 0, &fluid_carbon, &fluid_catalog, 100.0).is_none(),
+            "fluid-state material should not become a rigid flow obstacle"
+        );
+
+        let mut mixed_catalog = catalog.clone();
+        mixed_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Oxygen")
+            .expect("oxygen catalog entry")
+            .physical_state = PhysicalState::Fluid;
+        let mixed_material = PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Oxygen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::structure::Placement {
                     x: 10.0,
                     y: 10.0,
                     rotation_radians: 0.0,
-                }],
-                &catalog,
-            )
-            .expect("catalog material should realize")
-        };
-        let water = make_material("Water");
-        let carbon = make_material("Carbon");
-        let water_obstacle = obstacle_for(0, 0, &water, &catalog, 100.0).unwrap();
-        let carbon_obstacle = obstacle_for(0, 1, &carbon, &catalog, 100.0).unwrap();
-
-        assert_eq!(water_obstacle.solidity, 0.0);
+                },
+                crate::structure::Placement {
+                    x: 100.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &mixed_catalog,
+        )
+        .expect("mixed rigid/fluid geometry should realize");
+        let mixed_obstacle = obstacle_for(0, 0, &mixed_material, &mixed_catalog, 100.0)
+            .expect("rigid constituent should remain an obstacle");
+        assert!((mixed_obstacle.x - 10.0).abs() < 1e-9);
         assert!(
-            carbon_obstacle.solidity > 0.9,
-            "dense carbon geometry should strongly disturb local flow"
-        );
-        assert!(
-            carbon_obstacle.radius > water_obstacle.radius,
-            "the obstacle footprint should come from the material's actual catalog shape"
+            mixed_obstacle.radius < 10.0,
+            "distant fluid constituents must not inflate the rigid obstacle footprint"
         );
     }
 
     #[test]
-    fn porous_obstacle_does_not_create_a_solid_wake() {
+    fn zero_strength_obstacle_does_not_create_a_solid_wake() {
         let porous = Obstacle {
             source_cell: 9,
             source_index: 9,
             x: 10.0,
             y: 10.0,
             radius: 3.0,
-            solidity: 0.0,
+            obstruction_strength: 0.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
         assert_eq!(
@@ -1133,7 +1212,7 @@ mod tests {
                 if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
                     continue;
                 }
-                if obstacle.solidity <= 1e-6 {
+                if obstacle.obstruction_strength <= 1e-6 {
                     continue;
                 }
                 let dx = x - obstacle.x;
@@ -1141,7 +1220,8 @@ mod tests {
                 let distance = dx.hypot(dy).max(1e-9);
                 let radius = obstacle.radius.max(0.5);
                 if distance < radius * 2.5 {
-                    let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+                    let influence =
+                        obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
                     let side = if dy >= 0.0 { 1.0 } else { -1.0 };
                     velocity = velocity.add(Velocity {
                         x: -dx.signum() * influence * 0.22,
@@ -1152,7 +1232,8 @@ mod tests {
                     let longitudinal = 1.0 - dx / (radius * 6.0);
                     let lateral = 1.0 - dy.abs() / (radius * 2.0);
                     let attenuation =
-                        (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                        (obstacle.obstruction_strength * longitudinal * lateral * 0.72)
+                            .clamp(0.0, 0.85);
                     velocity = velocity.scale(1.0 - attenuation);
                 }
             }
@@ -1166,7 +1247,7 @@ mod tests {
                 x: 20.0,
                 y: 30.0,
                 radius: 0.5,
-                solidity: 1.0,
+                obstruction_strength: 1.0,
             },
             Obstacle {
                 source_cell: 2,
@@ -1174,7 +1255,7 @@ mod tests {
                 x: 40.0,
                 y: 50.0,
                 radius: 1.0,
-                solidity: 0.65,
+                obstruction_strength: 0.65,
             },
             Obstacle {
                 source_cell: 3,
@@ -1182,7 +1263,7 @@ mod tests {
                 x: 60.0,
                 y: 70.0,
                 radius: 3.0,
-                solidity: 0.9,
+                obstruction_strength: 0.9,
             },
             Obstacle {
                 source_cell: 4,
@@ -1190,7 +1271,7 @@ mod tests {
                 x: 80.0,
                 y: 90.0,
                 radius: 8.0,
-                solidity: 0.4,
+                obstruction_strength: 0.4,
             },
             Obstacle {
                 source_cell: 5,
@@ -1198,7 +1279,7 @@ mod tests {
                 x: 99.0,
                 y: 2.0,
                 radius: 2.0,
-                solidity: 1.0,
+                obstruction_strength: 1.0,
             },
             Obstacle {
                 source_cell: 6,
@@ -1206,7 +1287,7 @@ mod tests {
                 x: 5.0,
                 y: 98.0,
                 radius: 1.5,
-                solidity: 1e-7,
+                obstruction_strength: 1e-7,
             },
         ];
         let velocity = Velocity { x: 0.73, y: -0.21 };
@@ -1307,7 +1388,7 @@ mod tests {
             x: 10.0,
             y: 10.0,
             radius: 3.0,
-            solidity: 1.0,
+            obstruction_strength: 1.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
         let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0);

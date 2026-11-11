@@ -1663,11 +1663,15 @@ mod tests {
 
     fn catalog_reactivity_baseline() -> f64 {
         let catalog = default_catalog();
-        catalog
+        let active = catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
+        active
             .iter()
             .map(|resource| resource.properties.reactivity)
             .sum::<f64>()
-            / catalog.len() as f64
+            / active.len() as f64
     }
 
     #[test]
@@ -2520,5 +2524,91 @@ mod tests {
             );
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
+    }
+    #[test]
+    fn non_water_displacement_feasibility_matrix_classifies_funded_replacements() {
+        let catalog = default_catalog();
+        let resources = catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
+        let baseline = catalog_reactivity_baseline();
+        let mut cases = 0usize;
+        let mut stronger = 0usize;
+        let mut weaker_or_tied_but_fundable = 0usize;
+
+        for anchor_index in 0..resources.len() {
+            for displaced_index in 0..resources.len() {
+                if anchor_index == displaced_index {
+                    continue;
+                }
+                let anchor = crate::resources::Material::free_base(
+                    resources[anchor_index].name.clone(),
+                    1.0,
+                )
+                .weighted_properties(&catalog);
+                let displaced = crate::resources::Material::free_base(
+                    resources[displaced_index].name.clone(),
+                    1.0,
+                )
+                .weighted_properties(&catalog);
+                let old_strength = crate::combine::bond_strength(anchor, displaced);
+                for incoming_index in 0..resources.len() {
+                    if incoming_index == anchor_index || incoming_index == displaced_index {
+                        continue;
+                    }
+                    let incoming = crate::resources::Material::free_base(
+                        resources[incoming_index].name.clone(),
+                        1.0,
+                    )
+                    .weighted_properties(&catalog);
+                    let preflight = evaluate_displacement_preflight(
+                        anchor,
+                        displaced,
+                        incoming,
+                        old_strength,
+                        1_000.0,
+                        baseline,
+                        0.0,
+                        0.0,
+                    )
+                    .expect("every non-Water unlike replacement must have finite preflight");
+                    let is_stronger = preflight.replacement_bond_energy > preflight.old_bond_energy;
+                    let funded = preflight.can_commit(preflight.energy.required_external_input);
+                    assert!(preflight.is_activated());
+                    assert!(funded);
+                    if is_stronger {
+                        stronger += 1;
+                    } else {
+                        weaker_or_tied_but_fundable += 1;
+                    }
+                    println!(
+                        "DISPLACEMENT_PAIR_MATRIX|anchor={}|displaced={}|incoming={}|old_energy={:.9}|replacement_energy={:.9}|required_input={:.9}|preflight_fundable={}|trial_builder_allows={}",
+                        resources[anchor_index].name,
+                        resources[displaced_index].name,
+                        resources[incoming_index].name,
+                        preflight.old_bond_energy,
+                        preflight.replacement_bond_energy,
+                        preflight.energy.required_external_input,
+                        funded,
+                        is_stronger
+                    );
+                    cases += 1;
+                }
+            }
+        }
+
+        assert_eq!(
+            cases, 120,
+            "matrix must cover every ordered unlike old bond and distinct incoming resource"
+        );
+        assert!(stronger > 0);
+        assert!(
+            weaker_or_tied_but_fundable > 0,
+            "the matrix must expose funded replacements that the trial builder still rejects"
+        );
+        println!(
+            "DISPLACEMENT_PAIR_MATRIX_SUMMARY|cases={cases}|stronger={stronger}|weaker_or_tied_but_fundable={weaker_or_tied_but_fundable}"
+        );
     }
 }

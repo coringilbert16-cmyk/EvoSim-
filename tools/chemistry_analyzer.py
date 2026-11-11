@@ -15,6 +15,9 @@ from typing import Any
 CANONICAL_RESOURCES = (
     "Water", "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
 )
+ACTIVE_EXPERIMENT_RESOURCES = (
+    "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
+)
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
@@ -83,7 +86,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     initial_inventory = header.get("initial_material_inventory", {})
     if not isinstance(initial_inventory, dict):
         raise ValueError("header initial_material_inventory must be an object")
-    missing_resources = [name for name in CANONICAL_RESOURCES
+    missing_resources = [name for name in ACTIVE_EXPERIMENT_RESOURCES
                          if _number(initial_inventory.get(name)) is None
                          or float(initial_inventory.get(name, 0)) <= 0.0]
 
@@ -100,8 +103,8 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "constituent_count": snap.get("constituent_count"),
             "internal_bond_count": snap.get("internal_bond_count"),
             "resource_inventory": amounts,
-            "missing_resources": [name for name, amount in amounts.items()
-                                  if amount is None or float(amount) <= 0.0],
+            "missing_resources": [name for name in ACTIVE_EXPERIMENT_RESOURCES
+                                  if amounts[name] is None or float(amounts[name]) <= 0.0],
             "energy": snap.get("energy", {}),
         })
 
@@ -311,7 +314,11 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "canonical_resources": list(CANONICAL_RESOURCES),
             "initial_inventory": {name: initial_inventory.get(name) for name in CANONICAL_RESOURCES},
             "missing_at_start": missing_resources,
-            "all_seven_present_at_start": not missing_resources,
+            "active_experiment_resources": list(ACTIVE_EXPERIMENT_RESOURCES),
+            "all_active_experiment_resources_present_at_start": not missing_resources,
+            "all_seven_present_at_start": all(
+                initial_inventory.get(name, 0) > 0 for name in CANONICAL_RESOURCES
+            ),
             "snapshots": snapshot_rows,
             "snapshots_missing_resources": [
                 {"label": row["label"], "tick": row["tick"], "missing": row["missing_resources"]}
@@ -369,7 +376,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Snapshots: {report['sampling']['snapshot_count']}",
         f"- Reaction events: {report['sampling']['reaction_event_count']}",
         "",
-        "## Seven-resource coverage",
+        "## Canonical and active experiment resource coverage",
         "",
         "| Resource | Initial amount |",
         "|---|---:|",
@@ -378,7 +385,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"| {name} | {coverage['initial_inventory'].get(name, 'missing')} |")
     lines += [
         "",
-        f"All seven present initially: **{'yes' if coverage['all_seven_present_at_start'] else 'NO'}**",
+        f"All six active non-Water resources present initially: **{'yes' if coverage['all_active_experiment_resources_present_at_start'] else 'NO'}**",
+        f"Water present in this run: **{'yes' if coverage['all_seven_present_at_start'] else 'no'}**",
         "",
         "## Reaction event counts",
         "",
@@ -456,8 +464,8 @@ def main() -> int:
         args.markdown_out.write_text(render_markdown(report), encoding="utf-8")
     if not args.json_out and not args.markdown_out:
         print(render_markdown(report), end="")
-    if not report["resource_coverage"]["all_seven_present_at_start"]:
-        print("chemistry analyzer: initial inventory does not contain all seven resources",
+    if not report["resource_coverage"]["all_active_experiment_resources_present_at_start"]:
+        print("chemistry analyzer: initial inventory does not contain all six active non-Water resources",
               file=sys.stderr)
         return 1
     lifecycle_errors = report["molecular_history"]["validation_errors"]
