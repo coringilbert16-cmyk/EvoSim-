@@ -379,7 +379,11 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
     );
 
     assert!(
-        simulation.environment.field.cells.iter()
+        simulation
+            .environment
+            .field
+            .cells
+            .iter()
             .flat_map(|cell| &cell.physical_materials)
             .all(|material| material.material.parts.iter().all(|(name, _)| name != "Water")),
         "active environmental chemistry experiments must not seed Water"
