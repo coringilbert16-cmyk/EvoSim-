@@ -189,6 +189,7 @@ pub(crate) struct DisplacementTrial {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum DisplacementTrialFailureStage {
+    Activation,
     OldBondEnergy,
     Topology,
     CandidateCheck,
@@ -317,7 +318,13 @@ fn build_displacement_trial_with_activation_status(
         diagnostic.old_bond_energy_expected = Some(preflight.old_bond_energy);
         diagnostic.old_bond_energy_abs_error = Some(old_bond_energy_abs_error);
     }
-    if !preflight.is_activated() || old_bond_energy_abs_error > 1e-9 {
+    if !preflight.is_activated() {
+        if let Some(diagnostic) = diagnostic.as_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::Activation;
+        }
+        return None;
+    }
+    if old_bond_energy_abs_error > 1e-9 {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::OldBondEnergy;
         }
