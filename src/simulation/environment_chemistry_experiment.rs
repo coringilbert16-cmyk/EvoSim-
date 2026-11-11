@@ -286,7 +286,10 @@ fn seed_randomized_molecular_resources(
             cuts.sort_unstable();
             let mut previous = 0;
             let mut sizes = Vec::with_capacity(pile_count);
-            for cut in cuts.into_iter().chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT)) {
+            for cut in cuts
+                .into_iter()
+                .chain(std::iter::once(ENVIRONMENT_OBJECT_COUNT))
+            {
                 sizes.push(cut - previous);
                 previous = cut;
             }
@@ -316,11 +319,9 @@ fn seed_randomized_molecular_resources(
                 for local_index in 0..count {
                     let column = local_index % columns;
                     let row = local_index / columns;
-                    let x = (center_x
-                        + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
+                    let x = (center_x + (column as f64 - (columns - 1) as f64 * 0.5) * 1.5)
                         .clamp(1.0, width - 2.8);
-                    let y = (center_y
-                        + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
+                    let y = (center_y + (row as f64 - (rows - 1) as f64 * 0.5) * 1.5)
                         .clamp(1.0, height - 1.0);
                     positions.push((x, y));
                 }
@@ -334,11 +335,9 @@ fn seed_randomized_molecular_resources(
             for index in 0..ENVIRONMENT_OBJECT_COUNT {
                 let column = index % columns;
                 let row = index / columns;
-                let x = ((column as f64 + 0.5) * width / columns as f64
-                    + rng.gen_range(-0.3..0.3))
+                let x = ((column as f64 + 0.5) * width / columns as f64 + rng.gen_range(-0.3..0.3))
                     .clamp(2.8, width - 2.8);
-                let y = ((row as f64 + 0.5) * height / rows as f64
-                    + rng.gen_range(-0.3..0.3))
+                let y = ((row as f64 + 0.5) * height / rows as f64 + rng.gen_range(-0.3..0.3))
                     .clamp(1.0, height - 1.0);
                 positions.push((x, y));
             }
@@ -348,7 +347,11 @@ fn seed_randomized_molecular_resources(
 
     for (object_index, (x, y)) in positions.into_iter().enumerate() {
         let rotation = rng.gen_range(0.0..std::f64::consts::TAU);
-        let placement = Placement { x, y, rotation_radians: rotation };
+        let placement = Placement {
+            x,
+            y,
+            rotation_radians: rotation,
+        };
         let (parts, is_molecule) = &objects[object_index];
         let physical = if *is_molecule {
             realize_natural_molecule(parts, placement, catalog)
@@ -685,29 +688,46 @@ mod tests {
             let second = build_with_dispersion(42, dispersion);
             assert_eq!(first.pile_sizes, second.pile_sizes);
             assert_eq!(
-                first.simulation.environment.field.cells,
-                second.simulation.environment.field.cells,
+                first.simulation.environment.field.cells, second.simulation.environment.field.cells,
                 "{dispersion:?} placement must be reproducible"
             );
-            assert_eq!(first.pile_sizes.iter().sum::<usize>(), ENVIRONMENT_OBJECT_COUNT);
+            assert_eq!(
+                first.pile_sizes.iter().sum::<usize>(),
+                ENVIRONMENT_OBJECT_COUNT
+            );
             assert!(first.simulation.organisms.is_empty());
-            let materials = first.simulation.environment.field.cells.iter()
+            let materials = first
+                .simulation
+                .environment
+                .field
+                .cells
+                .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
                 .collect::<Vec<_>>();
             assert_eq!(materials.len(), ENVIRONMENT_OBJECT_COUNT);
             assert_eq!(
-                materials.iter().filter(|material| material.material.parts.len() == 1).count(),
+                materials
+                    .iter()
+                    .filter(|material| material.material.parts.len() == 1)
+                    .count(),
                 ENVIRONMENT_SINGLE_RESOURCE_COUNT
             );
             assert_eq!(
-                materials.iter().filter(|material| material.material.parts.len() == 2).count(),
+                materials
+                    .iter()
+                    .filter(|material| material.material.parts.len() == 2)
+                    .count(),
                 ENVIRONMENT_MOLECULE_COUNT
             );
-            let represented = materials.iter()
+            let represented = materials
+                .iter()
                 .flat_map(|material| material.material.parts.iter().map(|part| part.0.as_str()))
                 .collect::<std::collections::BTreeSet<_>>();
             assert_eq!(represented.len(), 7);
-            assert_eq!(first.simulation.energy_inventory_snapshot().residual(), Some(0.0));
+            assert_eq!(
+                first.simulation.energy_inventory_snapshot().residual(),
+                Some(0.0)
+            );
 
             match dispersion {
                 DispersionMode::Randomized => {
