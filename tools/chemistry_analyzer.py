@@ -15,6 +15,7 @@ from typing import Any
 CANONICAL_RESOURCES = (
     "Water", "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
 )
+ACTIVE_EXPERIMENT_RESOURCES = tuple(name for name in CANONICAL_RESOURCES if name != "Water")
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
@@ -83,9 +84,20 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
     initial_inventory = header.get("initial_material_inventory", {})
     if not isinstance(initial_inventory, dict):
         raise ValueError("header initial_material_inventory must be an object")
-    missing_resources = [name for name in CANONICAL_RESOURCES
-                         if _number(initial_inventory.get(name)) is None
-                         or float(initial_inventory.get(name, 0)) <= 0.0]
+    excluded_resources = header.get("excluded_resources", [])
+    if not isinstance(excluded_resources, list) or any(
+        not isinstance(name, str) or name not in CANONICAL_RESOURCES
+        for name in excluded_resources
+    ):
+        raise ValueError("header excluded_resources must contain canonical resource names")
+    required_resources = [
+        name for name in CANONICAL_RESOURCES if name not in excluded_resources
+    ]
+    missing_resources = [
+        name for name in required_resources
+        if _number(initial_inventory.get(name)) is None
+        or float(initial_inventory.get(name, 0)) <= 0.0
+    ]
 
     snapshot_rows = []
     for snap in snapshots:
@@ -100,8 +112,10 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "constituent_count": snap.get("constituent_count"),
             "internal_bond_count": snap.get("internal_bond_count"),
             "resource_inventory": amounts,
-            "missing_resources": [name for name, amount in amounts.items()
-                                  if amount is None or float(amount) <= 0.0],
+            "missing_resources": [
+                name for name in required_resources
+                if amounts[name] is None or float(amounts[name]) <= 0.0
+            ],
             "energy": snap.get("energy", {}),
         })
 
@@ -309,9 +323,12 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "resource_coverage": {
             "canonical_resources": list(CANONICAL_RESOURCES),
+            "required_resources": required_resources,
+            "excluded_resources": excluded_resources,
             "initial_inventory": {name: initial_inventory.get(name) for name in CANONICAL_RESOURCES},
             "missing_at_start": missing_resources,
-            "all_seven_present_at_start": not missing_resources,
+            "all_required_present_at_start": not missing_resources,
+            "all_seven_present_at_start": not missing_resources and not excluded_resources,
             "snapshots": snapshot_rows,
             "snapshots_missing_resources": [
                 {"label": row["label"], "tick": row["tick"], "missing": row["missing_resources"]}
@@ -369,16 +386,19 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Snapshots: {report['sampling']['snapshot_count']}",
         f"- Reaction events: {report['sampling']['reaction_event_count']}",
         "",
-        "## Seven-resource coverage",
+        "## Resource coverage",
         "",
-        "| Resource | Initial amount |",
-        "|---|---:|",
+        "| Resource | Initial amount | Role in this run |",
+        "|---|---:|---|",
     ]
     for name in CANONICAL_RESOURCES:
-        lines.append(f"| {name} | {coverage['initial_inventory'].get(name, 'missing')} |")
+        role = "excluded" if name in coverage["excluded_resources"] else "required"
+        lines.append(
+            f"| {name} | {coverage['initial_inventory'].get(name, 'missing')} | {role} |"
+        )
     lines += [
         "",
-        f"All seven present initially: **{'yes' if coverage['all_seven_present_at_start'] else 'NO'}**",
+        f"All required resources present initially: **{'yes' if coverage['all_required_present_at_start'] else 'NO'}**",
         "",
         "## Reaction event counts",
         "",
@@ -432,7 +452,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         "- Lifetime values for molecules still active at the final record are right-censored observations, not completed lifetimes.",
         "- Lineage is reported only when explicit molecular_lifecycle records are present; it is never inferred from cell indices or compositions.",
-        "- Resource coverage is checked against all seven canonical resource names; none is excluded based on reaction likelihood.",
+        "- Canonical resource history is retained; explicit experiment exclusions are honored when validating active inventory coverage.",
         "",
     ]
     return "\n".join(lines)
@@ -456,8 +476,8 @@ def main() -> int:
         args.markdown_out.write_text(render_markdown(report), encoding="utf-8")
     if not args.json_out and not args.markdown_out:
         print(render_markdown(report), end="")
-    if not report["resource_coverage"]["all_seven_present_at_start"]:
-        print("chemistry analyzer: initial inventory does not contain all seven resources",
+    if not report["resource_coverage"]["all_required_present_at_start"]:
+        print("chemistry analyzer: initial inventory does not contain all required experiment resources",
               file=sys.stderr)
         return 1
     lifecycle_errors = report["molecular_history"]["validation_errors"]
