@@ -43,6 +43,9 @@ jobs:
       - name: Test offline chemical organization analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
+      - name: Test offline chemistry experiment batch analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_chemistry_experiment_batch_analyzer.py'
       - name: Non-Water chemistry feasibility matrices
         if: success()
         timeout-minutes: 10
@@ -368,95 +371,3 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-# Re-trigger CI for the molecular lineage observability pull request.
-
-  pr344-five-seed-resonance-observation:
-    if: (github.event_name == 'pull_request' && github.event.pull_request.number == 344) || (github.event_name == 'push' && github.event.head_commit.message == 'Run five-seed resonance experiment [run-five-seed-resonance]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      max-parallel: 5
-      matrix:
-        seed: [42, 43, 44, 45, 46]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Run five-minute observation with local resonance enabled
-        timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          mkdir -p observations
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 300 \
-            --seed ${{ matrix.seed }} \
-            --diagnostics observations/seed-${{ matrix.seed }}-enabled.jsonl \
-            --diagnostic-interval 100
-      - name: Analyze enabled chemistry and molecular organization
-        run: |
-          python3 tools/chemistry_analyzer.py observations/seed-${{ matrix.seed }}-enabled.jsonl \
-            --json-out observations/seed-${{ matrix.seed }}-enabled-chemistry.json \
-            --markdown-out observations/seed-${{ matrix.seed }}-enabled-chemistry.md
-          python3 tools/chemistry_organization_analyzer.py observations/seed-${{ matrix.seed }}-enabled.jsonl \
-            --json-out observations/seed-${{ matrix.seed }}-enabled-organization.json \
-            --markdown-out observations/seed-${{ matrix.seed }}-enabled-organization.md
-      - name: Run five-minute matched control with local resonance disabled
-        timeout-minutes: 10
-        env:
-          EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION: "1"
-        run: |
-          set -euo pipefail
-          cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 300 \
-            --seed ${{ matrix.seed }} \
-            --diagnostics observations/seed-${{ matrix.seed }}-disabled.jsonl \
-            --diagnostic-interval 100
-      - name: Analyze disabled chemistry and molecular organization
-        run: |
-          python3 tools/chemistry_analyzer.py observations/seed-${{ matrix.seed }}-disabled.jsonl \
-            --json-out observations/seed-${{ matrix.seed }}-disabled-chemistry.json \
-            --markdown-out observations/seed-${{ matrix.seed }}-disabled-chemistry.md
-          python3 tools/chemistry_organization_analyzer.py observations/seed-${{ matrix.seed }}-disabled.jsonl \
-            --json-out observations/seed-${{ matrix.seed }}-disabled-organization.json \
-            --markdown-out observations/seed-${{ matrix.seed }}-disabled-organization.md
-      - name: Upload paired seed diagnostics and analysis
-        if: always() && hashFiles('observations/seed-*.jsonl') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr344-resonance-seed-${{ matrix.seed }}
-          path: observations/
-          if-no-files-found: error
-          retention-days: 30
-
-  pr344-five-seed-resonance-aggregate:
-    if: (github.event_name == 'pull_request' && github.event.pull_request.number == 344) || (github.event_name == 'push' && github.event.head_commit.message == 'Run five-seed resonance experiment [run-five-seed-resonance]')
-    needs: [pr344-five-seed-resonance-observation]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download all five paired seed artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: pr344-resonance-seed-*
-          path: observations
-          merge-multiple: false
-      - name: Connect all ten runs into one paired report
-        run: |
-          python3 tools/chemistry_batch_analyzer.py observations \
-            --json-out resonance-five-seed-combined.json \
-            --markdown-out resonance-five-seed-combined.md
-      - name: Upload combined five-seed report
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr344-resonance-five-seed-combined
-          path: |
-            resonance-five-seed-combined.json
-            resonance-five-seed-combined.md
-          if-no-files-found: error
-          retention-days: 30
