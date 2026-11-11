@@ -795,6 +795,7 @@ fn displacement_reaction_frequency(
 /// Discover live A-B + C contacts. The old bond is removed only on a trial
 /// graph before candidate generation, making every compatible, available anchor
 /// endpoint eligible for a replacement contact.
+#[cfg(test)]
 pub(crate) fn accumulate_environmental(
     environment: &Environment,
     accumulation: &mut BTreeMap<String, f64>,
