@@ -1075,8 +1075,14 @@ impl Simulation {
         // Build the material-origin field once per tick and share it across
         // bounded environmental BREAK candidates.
         let local_resonance_snapshot_started = std::time::Instant::now();
+        // A controlled A/B run can disable only local activation influence. Stored
+        // resonance funding and all other environmental chemistry remain unchanged.
         let local_resonance_world =
-            crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self);
+            if std::env::var_os("EVOSIM_DISABLE_LOCAL_RESONANCE_ACTIVATION").is_some() {
+                None
+            } else {
+                crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
+            };
         break_discovery.local_resonance_snapshot_build_nanoseconds =
             local_resonance_snapshot_started
                 .elapsed()
