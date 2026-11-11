@@ -105,8 +105,8 @@ pub fn interface_engagement(facing: f64) -> Option<f64> {
 }
 
 /// A structural activation barrier expressed in the same normalized scale as
-/// accumulated reaction. Existing bond strength is the physical barrier; no
-/// second arbitrary chemistry threshold is introduced.
+/// accumulated reaction. The supplied value is local bond integrity, not
+/// adhesion or stored bond potential; no second arbitrary threshold is introduced.
 pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> {
     if !bond_strength.is_finite() || bond_strength < 0.0 {
         return None;
@@ -114,8 +114,8 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
     normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0))
 }
 
-/// Derive a bond's disruption tolerance from its cohesion-derived strength
-/// and the two materials' existing reactivity values.
+/// Derive a bond's activation barrier from its local integrity and the two
+/// endpoint materials' reactivity values.
 ///
 /// Reactivity is normalized against the catalog mean so the modifier is
 /// dimensionless and remains stable when the catalog's native scale changes.
@@ -123,13 +123,13 @@ pub fn activation_barrier_from_bond_strength(bond_strength: f64) -> Option<f64> 
 /// pair's response. Higher reactivity lowers the activation/disruption
 /// tolerance; it does not create energy or alter chemical attraction.
 pub fn activation_barrier_from_bond_properties(
-    bond_strength: f64,
+    bond_integrity: f64,
     reactivity_a: f64,
     reactivity_b: f64,
     reactivity_baseline: f64,
 ) -> Option<f64> {
-    if !bond_strength.is_finite()
-        || bond_strength < 0.0
+    if !bond_integrity.is_finite()
+        || bond_integrity < 0.0
         || !reactivity_a.is_finite()
         || reactivity_a < 0.0
         || !reactivity_b.is_finite()
@@ -153,7 +153,7 @@ pub fn activation_barrier_from_bond_properties(
     } else {
         reactivity_baseline / (reactivity_baseline + pair_reactivity)
     };
-    normalized_chemistry_to_energy(bond_strength.clamp(0.0, 1.0) * response_factor)
+    normalized_chemistry_to_energy(bond_integrity.clamp(0.0, 1.0) * response_factor)
 }
 
 /// Convert the normalized accumulated chemistry quantity into physical energy.
