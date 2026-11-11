@@ -1359,11 +1359,11 @@ pub(crate) fn resolve_environmental_preserving_accumulation(
 mod tests {
     use super::*;
 
-    /// Controlled one-tick physical COMBINE diagnostic for all unordered base pairs.
+    /// Multi-tick physical COMBINE feasibility matrix for the six non-Water resources.
     ///
     /// This deliberately does not force activation or alter chemistry thresholds.
-    /// It searches bounded poses for a valid contact, then lets the existing
-    /// environmental chemical step report whether reaction progress is made.
+    /// It searches bounded poses for valid contact, then repeatedly advances the
+    /// existing environmental chemical step and records whether activation is reached.
     #[test]
     fn unsearched_environmental_accumulations_are_preserved_without_decay() {
         let key = format!("{ENVIRONMENT_PREFIX}unvisited-interface");
@@ -1417,13 +1417,19 @@ mod tests {
     fn controlled_physical_pair_matrix_classifies_all_base_resource_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
+        // Preserve Water's catalog and historical implementation, but do not
+        // include it in current pair-feasibility experiments.
+        let resources = catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
         let mut pair_count = 0usize;
         let mut contact_count = 0usize;
 
-        for i in 0..catalog.len() {
-            for j in i..catalog.len() {
-                let resource_a = &catalog[i];
-                let resource_b = &catalog[j];
+        for i in 0..resources.len() {
+            for j in i..resources.len() {
+                let resource_a = resources[i];
+                let resource_b = resources[j];
                 let source_a = PhysicalMaterial::realized(
                     Material::free_base(resource_a.name.clone(), 1.0),
                     vec![Placement {
@@ -1524,42 +1530,73 @@ mod tests {
                     let mut operations = Vec::new();
                     let mut resonance_diagnostics =
                         crate::state::EnvironmentalCombineSearchDiagnostics::default();
-                    chemical_step(
-                        &simulation.environment,
-                        &mut simulation.chemistry_library,
-                        &structure,
-                        selected,
-                        &indices_a,
-                        &indices_b,
-                        &source_a,
-                        &source_b,
-                        0,
-                        0,
-                        0,
-                        1,
-                        &mut accumulation,
-                        &mut updated,
-                        &mut operations,
-                        None,
-                        &mut false,
-                        simulation.tick,
-                        &mut resonance_diagnostics,
-                    );
-                    let outcome = if !operations.is_empty() {
-                        "activated"
-                    } else if !accumulation.is_empty() {
-                        "accumulating"
+                    let mut ticks_to_activation = None;
+                    for tick in 0..2_000_u64 {
+                        operations.clear();
+                        updated.clear();
+                        let mut sampled = false;
+                        chemical_step(
+                            &simulation.environment,
+                            &mut simulation.chemistry_library,
+                            &structure,
+                            selected,
+                            &indices_a,
+                            &indices_b,
+                            &source_a,
+                            &source_b,
+                            0,
+                            0,
+                            0,
+                            1,
+                            &mut accumulation,
+                            &mut updated,
+                            &mut operations,
+                            None,
+                            &mut sampled,
+                            tick,
+                            &mut resonance_diagnostics,
+                        );
+                        if !operations.is_empty() {
+                            ticks_to_activation = Some(tick + 1);
+                            break;
+                        }
+                    }
+                    let outcome = if ticks_to_activation.is_some() {
+                        "activation_ready"
+                    } else if accumulation.get(&source_pair_key(
+                        0, 0, &source_a, 0, 1, &source_b,
+                        selected.unit_a, selected.unit_b,
+                    )).is_some_and(|value| *value > 0.0) {
+                        "accumulating_below_threshold"
                     } else {
-                        "contact_no_progress_or_rejected"
+                        "no_accumulation"
                     };
+                    let properties_a = structure.units[selected.unit_a]
+                        .properties(&catalog).expect("valid first constituent");
+                    let properties_b = structure.units[selected.unit_b]
+                        .properties(&catalog).expect("valid second constituent");
+                    let strength = crate::combine::bond_strength(properties_a, properties_b);
+                    let break_barrier = crate::chemistry::activation_barrier_from_bond_properties(
+                        strength,
+                        properties_a.reactivity,
+                        properties_b.reactivity,
+                        crate::resources::ResourceBaselines::from_catalog(&catalog).reactivity,
+                    ).unwrap_or(f64::NAN);
+                    let bond_energy = crate::combine::intrinsic_bond_potential(
+                        properties_a, properties_b, strength,
+                    );
                     println!(
-                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|outcome={}",
+                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|activation_ticks={:?}|outcome={}|bond_strength={:.9}|break_barrier={:.9}|bond_energy={:.9}",
                         resource_a.name,
                         resource_b.name,
                         potential.unwrap_or(f64::NAN),
                         selected.candidate.distance,
                         selected.candidate.facing,
-                        outcome
+                        ticks_to_activation,
+                        outcome,
+                        strength,
+                        break_barrier,
+                        bond_energy
                     );
                 } else {
                     println!(
@@ -1574,8 +1611,8 @@ mod tests {
         }
 
         assert_eq!(
-            pair_count, 28,
-            "controlled matrix must classify all unordered pairs"
+            pair_count, 21,
+            "controlled matrix must classify all unordered pairs among six non-Water resources"
         );
         assert!(
             contact_count > 0,
