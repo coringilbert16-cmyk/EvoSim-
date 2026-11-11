@@ -302,9 +302,15 @@ fn seed_randomized_molecular_resources(
         let total = total_inventory.get(name).copied().unwrap_or_default();
         let bonded = target_inventory.get(name).copied().unwrap_or_default();
         let free = total.checked_sub(bonded).unwrap_or_else(|| {
-            panic!("starting mixture {:?} exceeds total inventory for {name}", starting_mixture)
+            panic!(
+                "starting mixture {:?} exceeds total inventory for {name}",
+                starting_mixture
+            )
         });
-        assert!(free > 0, "every canonical resource must remain independently available");
+        assert!(
+            free > 0,
+            "every canonical resource must remain independently available"
+        );
         identities.extend(std::iter::repeat(name.clone()).take(free));
     }
     assert_eq!(identities.len(), single_resource_count);
@@ -318,7 +324,10 @@ fn seed_randomized_molecular_resources(
         objects.push((parts, true));
     }
     assert_eq!(objects.len(), ENVIRONMENT_OBJECT_COUNT);
-    assert_eq!(molecule_count, objects.iter().filter(|(_, bonded)| *bonded).count());
+    assert_eq!(
+        molecule_count,
+        objects.iter().filter(|(_, bonded)| *bonded).count()
+    );
     objects.shuffle(&mut rng);
 
     let pile_sizes = match dispersion {
@@ -442,9 +451,7 @@ impl StartingMixture {
     fn molecule_parts(self) -> Vec<Vec<String>> {
         let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
         let mut add = |count: usize, a: &str, b: &str| {
-            molecules.extend(
-                (0..count).map(|_| vec![a.to_string(), b.to_string()]),
-            );
+            molecules.extend((0..count).map(|_| vec![a.to_string(), b.to_string()]));
         };
         match self {
             Self::Baseline => {
@@ -864,11 +871,8 @@ mod tests {
         for seed in [42, 43, 44, 45, 46] {
             let mut expected = None;
             for mixture in mixtures {
-                let fixture = build_with_dispersion_and_mixture(
-                    seed,
-                    DispersionMode::Randomized,
-                    mixture,
-                );
+                let fixture =
+                    build_with_dispersion_and_mixture(seed, DispersionMode::Randomized, mixture);
                 let materials = fixture
                     .simulation
                     .environment
@@ -900,33 +904,36 @@ mod tests {
                 }
                 assert_eq!(object_count, ENVIRONMENT_OBJECT_COUNT);
                 assert_eq!(independent_count, ENVIRONMENT_SINGLE_RESOURCE_COUNT);
-                assert_eq!(molecules.values().sum::<usize>(), ENVIRONMENT_MOLECULE_COUNT);
+                assert_eq!(
+                    molecules.values().sum::<usize>(),
+                    ENVIRONMENT_MOLECULE_COUNT
+                );
                 if let Some(expected_inventory) = &expected {
-                    assert_eq!(&inventory, expected_inventory, "seed {seed}, mixture {mixture:?}");
+                    assert_eq!(
+                        &inventory, expected_inventory,
+                        "seed {seed}, mixture {mixture:?}"
+                    );
                 } else {
                     expected = Some(inventory);
                 }
                 let expected_molecules = match mixture {
-                    StartingMixture::Baseline => [
-                        ("Carbon-Hydrogen", 40),
-                        ("Hydrogen-Sulfur", 40),
-                    ]
-                    .into_iter()
+                    StartingMixture::Baseline => [("Carbon-Hydrogen", 40_usize), ("Hydrogen-Sulfur", 40_usize)]
+                        .into_iter()
                     .map(|(name, count)| (name.to_string(), count))
                     .collect::<std::collections::BTreeMap<_, _>>(),
                     StartingMixture::HighBonded => [
-                        ("Carbon-Sulfur", 27),
-                        ("Nitrogen-Sulfur", 26),
-                        ("Phosphorus-Sulfur", 27),
+                        ("Carbon-Sulfur", 27_usize),
+                        ("Nitrogen-Sulfur", 26_usize),
+                        ("Phosphorus-Sulfur", 27_usize),
                     ]
                     .into_iter()
                     .map(|(name, count)| (name.to_string(), count))
                     .collect::<std::collections::BTreeMap<_, _>>(),
                     StartingMixture::MixedStability => [
-                        ("Carbon-Oxygen", 20),
-                        ("Carbon-Sulfur", 20),
-                        ("Nitrogen-Sulfur", 20),
-                        ("Phosphorus-Sulfur", 20),
+                        ("Carbon-Oxygen", 20_usize),
+                        ("Carbon-Sulfur", 20_usize),
+                        ("Nitrogen-Sulfur", 20_usize),
+                        ("Phosphorus-Sulfur", 20_usize),
                     ]
                     .into_iter()
                     .map(|(name, count)| (name.to_string(), count))
