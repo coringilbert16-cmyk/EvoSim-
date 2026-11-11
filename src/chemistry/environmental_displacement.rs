@@ -1463,27 +1463,25 @@ pub(crate) fn resolve_environmental_diagnosed(
     if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
         return Err("frequency_revalidation_failed");
     }
-    // Resonance directly funds physical work; it is not first credited to the
-    // usable-energy holder. This keeps the usable debit equal to the unfunded
-    // remainder while the ledger still records the complete physical work.
+    // Resonance is a named energy reservoir and may fund the complete reaction
+    // deficit, including unfavorable structural change as well as physical work.
+    // Transfer the withdrawn amount into the usable holder before settling the
+    // complete conservative transaction so every destination is accounted once.
     let mut staged_resonance = environment.resonant_energy.clone();
     let Some(resonant_before) = staged_resonance.total_energy() else {
         return Err("invalid_resonance_state");
     };
-    let resonance_work_budget = trial
-        .energy
-        .physical_work
-        .min(trial.energy.required_external_input);
+    let resonance_funding_budget = trial.energy.required_external_input;
     let compatible_resonance_before =
         staged_resonance.compatible_energy(operation.reaction_frequency_cycles_per_day);
-    let resonant_work = staged_resonance.withdraw_compatible(
+    let resonant_funding = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
-        resonance_work_budget,
+        resonance_funding_budget,
     );
     let Some(resonant_after) = staged_resonance.total_energy() else {
         return Err("invalid_resonance_state");
     };
-    if !resonant_work.is_finite() || resonant_work < 0.0 {
+    if !resonant_funding.is_finite() || resonant_funding < 0.0 {
         return Err("invalid_resonance_withdrawal");
     }
     if !resonant_before.is_finite() || !resonant_after.is_finite() {
@@ -1491,14 +1489,14 @@ pub(crate) fn resolve_environmental_diagnosed(
     }
     let withdrawal_budget_tolerance = 1e-9_f64.max(
         f64::EPSILON
-            * resonance_work_budget.abs().max(1.0)
+            * resonance_funding_budget.abs().max(1.0)
             * environment.resonant_energy.components.len().max(1) as f64
             * 4.0,
     );
-    if resonant_work > resonance_work_budget + withdrawal_budget_tolerance {
+    if resonant_funding > resonance_funding_budget + withdrawal_budget_tolerance {
         return Err("resonance_withdrawal_exceeds_budget");
     }
-    if (resonant_before - resonant_after - resonant_work).abs()
+    if (resonant_before - resonant_after - resonant_funding).abs()
         > resonance_withdrawal_rounding_tolerance(
             resonant_before,
             resonant_after,
@@ -1512,47 +1510,39 @@ pub(crate) fn resolve_environmental_diagnosed(
         return Err("resonance_conservation_mismatch");
     }
 
-    let remaining_physical_work = trial.energy.physical_work - resonant_work;
-    let Some(mut funded_energy) = ReactionEnergyBalance::calculate_conservative(
-        trial.energy.reactant_energy,
-        trial.energy.product_energy,
-        remaining_physical_work,
-        trial.energy.dissipated_heat,
-    ) else {
-        return Err("reaction_energy_balance_invalid");
-    };
-    funded_energy.required_external_input =
-        (trial.energy.required_external_input - resonant_work).max(0.0);
-    if funded_energy.required_external_input > environment.chemistry_usable_energy {
+    let remaining_external_deficit =
+        (trial.energy.required_external_input - resonant_funding).max(0.0);
+    if remaining_external_deficit > environment.chemistry_usable_energy {
         #[cfg(test)]
         eprintln!(
-            "[displacement-funding] initial_deficit={:?} resonance_budget={:?} compatible_before={:?} withdrawn={:?} remaining_work={:?} recomputed_deficit={:?} remaining_deficit={:?} holder={:?}",
+            "[displacement-funding] initial_deficit={:?} resonance_budget={:?} compatible_before={:?} withdrawn={:?} remaining_deficit={:?} holder={:?}",
             trial.energy.required_external_input,
-            resonance_work_budget,
+            resonance_funding_budget,
             compatible_resonance_before,
-            resonant_work,
-            remaining_physical_work,
-            funded_energy.product_energy - funded_energy.reactant_energy + funded_energy.physical_work + funded_energy.dissipated_heat,
-            funded_energy.required_external_input,
+            resonant_funding,
+            remaining_external_deficit,
             environment.chemistry_usable_energy,
         );
         return Err("insufficient_usable_energy");
     }
-    let Some(transaction) =
-        funded_energy.settlement_transaction_conservative(EnergyReason::Combine)
+    let Some(transaction) = trial
+        .energy
+        .settlement_transaction_conservative(EnergyReason::Combine)
     else {
         return Err("energy_settlement_transaction_invalid");
     };
 
     let mut staged_ledger = *ledger;
-    let mut staged_usable_energy = environment.chemistry_usable_energy;
-    if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
+    let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_funding;
+    if !staged_usable_energy.is_finite()
+        || !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction)
+    {
         return Err("energy_settlement_rejected");
     }
     let usable_delta = staged_usable_energy - environment.chemistry_usable_energy;
     let structural_delta = trial.energy.net_reaction_change;
     let next_total_usable = staged_ledger.total_usable_energy_held + usable_delta;
-    let next_total_resonant = ledger.total_resonant_energy_held - resonant_work;
+    let next_total_resonant = ledger.total_resonant_energy_held - resonant_funding;
     let next_total_structural = staged_ledger.total_structural_energy_held + structural_delta;
     let next_total_work = ledger.total_work_expended + trial.energy.physical_work;
     if !usable_delta.is_finite()
