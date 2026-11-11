@@ -54,7 +54,7 @@ struct Obstacle {
     x: f64,
     y: f64,
     radius: f64,
-    solidity: f64,
+    obstruction_strength: f64,
 }
 
 fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a BaseResource> {
@@ -149,7 +149,7 @@ fn obstacle_for(
         x,
         y,
         radius,
-        solidity: 1.0,
+        obstruction_strength: 1.0,
     })
 }
 
@@ -208,7 +208,7 @@ fn obstacle_adjusted_velocity(
         if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
             continue;
         }
-        if obstacle.solidity <= 1e-6 {
+        if obstacle.obstruction_strength <= 1e-6 {
             continue;
         }
         let dx = x - obstacle.x;
@@ -225,7 +225,7 @@ fn obstacle_adjusted_velocity(
         let distance = dx.hypot(dy).max(1e-9);
         // Dense geometry pushes nearby flow around its sides.
         if distance < radius * 2.5 {
-            let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+            let influence = obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
             let side = if dy >= 0.0 { 1.0 } else { -1.0 };
             velocity = velocity.add(Velocity {
                 x: -dx.signum() * influence * 0.22,
@@ -236,7 +236,7 @@ fn obstacle_adjusted_velocity(
         if dx > 0.0 && dx < radius * 6.0 && dy.abs() < radius * 2.0 {
             let longitudinal = 1.0 - dx / (radius * 6.0);
             let lateral = 1.0 - dy.abs() / (radius * 2.0);
-            let attenuation = (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+            let attenuation = (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
             velocity = velocity.scale(1.0 - attenuation);
         }
     }
@@ -811,7 +811,7 @@ mod tests {
         .expect("catalog carbon should realize");
         let obstacle = obstacle_for(0, 0, &carbon, &catalog, 100.0)
             .expect("rigid constituent geometry should obstruct flow");
-        assert_eq!(obstacle.solidity, 1.0);
+        assert_eq!(obstacle.obstruction_strength, 1.0);
 
         let mut fluid_catalog = catalog.clone();
         fluid_catalog
@@ -836,14 +836,14 @@ mod tests {
     }
 
     #[test]
-    fn porous_obstacle_does_not_create_a_solid_wake() {
+    fn zero_strength_obstacle_does_not_create_a_solid_wake() {
         let porous = Obstacle {
             source_cell: 9,
             source_index: 9,
             x: 10.0,
             y: 10.0,
             radius: 3.0,
-            solidity: 0.0,
+            obstruction_strength: 0.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
         assert_eq!(
@@ -1140,7 +1140,7 @@ mod tests {
                 if obstacle.source_cell == source_cell && obstacle.source_index == source_index {
                     continue;
                 }
-                if obstacle.solidity <= 1e-6 {
+                if obstacle.obstruction_strength <= 1e-6 {
                     continue;
                 }
                 let dx = x - obstacle.x;
@@ -1148,7 +1148,7 @@ mod tests {
                 let distance = dx.hypot(dy).max(1e-9);
                 let radius = obstacle.radius.max(0.5);
                 if distance < radius * 2.5 {
-                    let influence = obstacle.solidity * (1.0 - distance / (radius * 2.5)).powi(2);
+                    let influence = obstacle.obstruction_strength * (1.0 - distance / (radius * 2.5)).powi(2);
                     let side = if dy >= 0.0 { 1.0 } else { -1.0 };
                     velocity = velocity.add(Velocity {
                         x: -dx.signum() * influence * 0.22,
@@ -1159,7 +1159,7 @@ mod tests {
                     let longitudinal = 1.0 - dx / (radius * 6.0);
                     let lateral = 1.0 - dy.abs() / (radius * 2.0);
                     let attenuation =
-                        (obstacle.solidity * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
+                        (obstacle.obstruction_strength * longitudinal * lateral * 0.72).clamp(0.0, 0.85);
                     velocity = velocity.scale(1.0 - attenuation);
                 }
             }
@@ -1173,7 +1173,7 @@ mod tests {
                 x: 20.0,
                 y: 30.0,
                 radius: 0.5,
-                solidity: 1.0,
+                obstruction_strength: 1.0,
             },
             Obstacle {
                 source_cell: 2,
@@ -1181,7 +1181,7 @@ mod tests {
                 x: 40.0,
                 y: 50.0,
                 radius: 1.0,
-                solidity: 0.65,
+                obstruction_strength: 0.65,
             },
             Obstacle {
                 source_cell: 3,
@@ -1189,7 +1189,7 @@ mod tests {
                 x: 60.0,
                 y: 70.0,
                 radius: 3.0,
-                solidity: 0.9,
+                obstruction_strength: 0.9,
             },
             Obstacle {
                 source_cell: 4,
@@ -1197,7 +1197,7 @@ mod tests {
                 x: 80.0,
                 y: 90.0,
                 radius: 8.0,
-                solidity: 0.4,
+                obstruction_strength: 0.4,
             },
             Obstacle {
                 source_cell: 5,
@@ -1205,7 +1205,7 @@ mod tests {
                 x: 99.0,
                 y: 2.0,
                 radius: 2.0,
-                solidity: 1.0,
+                obstruction_strength: 1.0,
             },
             Obstacle {
                 source_cell: 6,
@@ -1213,7 +1213,7 @@ mod tests {
                 x: 5.0,
                 y: 98.0,
                 radius: 1.5,
-                solidity: 1e-7,
+                obstruction_strength: 1e-7,
             },
         ];
         let velocity = Velocity { x: 0.73, y: -0.21 };
@@ -1314,7 +1314,7 @@ mod tests {
             x: 10.0,
             y: 10.0,
             radius: 3.0,
-            solidity: 1.0,
+            obstruction_strength: 1.0,
         };
         let free = Velocity { x: 1.0, y: 0.0 };
         let wake = obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[obstacle], 100.0);
