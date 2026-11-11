@@ -2087,6 +2087,20 @@ mod tests {
         .expect("valid live contact should accumulate incoming influence");
         assert!(activation > 0.0);
         assert!(activation.is_finite());
+
+        let resonance_influenced_activation = accumulate_incoming_activation_with_resonance(
+            &source.units[0],
+            &source.units[2],
+            candidate,
+            0.0,
+            0.5,
+            &catalog,
+        )
+        .expect("local resonance should preserve the valid incoming contact");
+        assert!(
+            resonance_influenced_activation > activation,
+            "positive local spectral similarity must increase incoming-contact activation"
+        );
     }
 
     #[test]
