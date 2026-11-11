@@ -77,6 +77,7 @@ def load_seed(root: Path, seed: int, duration: int) -> dict[str, Any]:
         "reaction_events": chemistry.get("reactions", {}).get("event_counts", {}),
         "outcomes": chemistry.get("reactions", {}).get("outcome_counts", {}),
         "failure_reasons": chemistry.get("reactions", {}).get("failure_reasons", {}),
+        "elemental_bond_pairs": chemistry.get("reactions", {}).get("elemental_bond_pairs", {}),
         "displacement_discovery": totals.get("DISPLACEMENT", {}).get("discovery", {}),
         "displacement_budget_exhausted_ticks": totals.get("DISPLACEMENT", {}).get("discovery_budget_exhausted_ticks", 0),
         "molecules_created": history.get("molecule_creation_count", 0),
@@ -115,11 +116,29 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     lineage_edges = 0
     reused_reaction_products = 0
     multistep_combine_edges = 0
+    formed_bonds: Counter[str] = Counter()
+    broken_bonds: Counter[str] = Counter()
+    formed_by_reaction: dict[str, Counter[str]] = {}
+    broken_by_reaction: dict[str, Counter[str]] = {}
+    bond_pair_coverage_by_seed: dict[str, dict[str, Any]] = {}
     for run in runs:
         failures.update(run["failure_reasons"])
         event_counts.update(run["reaction_events"])
         outcomes.update(run["outcomes"])
         products.update({key: float(value) for key, value in run["reaction_product_material"].items()})
+        attribution = run["elemental_bond_pairs"]
+        formed = attribution.get("formed", {})
+        broken = attribution.get("broken", {})
+        formed_bonds.update({key: int(value) for key, value in formed.items()})
+        broken_bonds.update({key: int(value) for key, value in broken.items()})
+        bond_pair_coverage_by_seed[str(run["seed"])] = {
+            "committed_events_with_graph_deltas": attribution.get("committed_events_with_graph_deltas", 0),
+            "committed_events_missing_graph_deltas": attribution.get("committed_events_missing_graph_deltas", 0),
+            "malformed_bond_records": attribution.get("malformed_bond_records", 0),
+        }
+        for reaction, values in attribution.get("by_reaction", {}).items():
+            formed_by_reaction.setdefault(reaction, Counter()).update(values.get("formed", {}))
+            broken_by_reaction.setdefault(reaction, Counter()).update(values.get("broken", {}))
         molecules = {row["molecule_id"]: row for row in run["molecules"]}
         for edge in run["lineage_edges"]:
             lineage_edges += 1
@@ -160,6 +179,24 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         (row for row in families.values() if row["seed_count"] >= 2),
         key=lambda row: (-row["seed_count"], -row["reaction_created_events"], row["signature"]),
     )
+    element_pairs = sorted(set(formed_bonds) | set(broken_bonds))
+    elemental_bond_pairs = {
+        "element_pairs": element_pairs,
+        "formed_total": sum(formed_bonds.values()),
+        "broken_total": sum(broken_bonds.values()),
+        "formed": dict(sorted(formed_bonds.items())),
+        "broken": dict(sorted(broken_bonds.items())),
+        "by_reaction": {
+            reaction: {
+                "formed": dict(sorted(formed_by_reaction.get(reaction, Counter()).items())),
+                "broken": dict(sorted(broken_by_reaction.get(reaction, Counter()).items())),
+                "formed_total": sum(formed_by_reaction.get(reaction, Counter()).values()),
+                "broken_total": sum(broken_by_reaction.get(reaction, Counter()).values()),
+            }
+            for reaction in sorted(set(formed_by_reaction) | set(broken_by_reaction))
+        },
+        "coverage_by_seed": bond_pair_coverage_by_seed,
+    }
     energy_residuals = [
         abs(float(run["energy_max_abs_snapshot_residual"]))
         for run in runs if isinstance(run["energy_max_abs_snapshot_residual"], (int, float))
@@ -183,6 +220,7 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         "reaction_event_counts": dict(event_counts),
         "reaction_outcomes": dict(outcomes),
         "failure_reasons": dict(failures),
+        "elemental_bond_pairs": elemental_bond_pairs,
         "displacement": {
             "budget_exhausted_ticks_total": sum(int(run["displacement_budget_exhausted_ticks"] or 0) for run in runs),
             "discovery_by_seed": {str(run["seed"]): run["displacement_discovery"] for run in runs},
@@ -268,6 +306,20 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"| {row['seed_count']} | {row['reaction_created_occurrences']} | {row['reaction_created_events']} | {row['active_reaction_created_occurrences']} | {composition} |")
     if not report["organization"]["cross_seed_recurrent_product_families"]:
         lines.append("| — | — | — | — | None observed in multiple seeds |")
+    lines += [
+        "",
+        "## Exact elemental bond-pair changes",
+        "",
+        f"- Formed bonds: {report['elemental_bond_pairs']['formed_total']}",
+        f"- Broken bonds: {report['elemental_bond_pairs']['broken_total']}",
+        "",
+        "| Element pair | Formed | Broken |",
+        "|---|---:|---:|",
+    ]
+    for pair in report["elemental_bond_pairs"]["element_pairs"]:
+        formed = report["elemental_bond_pairs"]["formed"].get(pair, 0)
+        broken = report["elemental_bond_pairs"]["broken"].get(pair, 0)
+        lines.append(f"| {pair} | {formed} | {broken} |")
     lines += [
         "",
         "## Energy and displacement",
