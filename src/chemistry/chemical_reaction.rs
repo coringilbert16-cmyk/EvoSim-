@@ -422,7 +422,7 @@ pub(crate) fn accumulate(
             continue;
         };
         let Some(disruption_cost) =
-            crate::chemistry::activation_barrier_from_bond_integrity(bond.strength)
+            crate::chemistry::bond_disruption_work_from_integrity(bond.strength)
         else {
             continue;
         };
@@ -966,7 +966,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             continue;
         };
         let Some(disruption_cost) =
-            crate::chemistry::activation_barrier_from_bond_integrity(integrity)
+            crate::chemistry::bond_disruption_work_from_integrity(integrity)
         else {
             diagnostics.candidate_chemistry_rejections =
                 diagnostics.candidate_chemistry_rejections.saturating_add(1);
