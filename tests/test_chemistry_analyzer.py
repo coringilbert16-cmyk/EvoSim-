@@ -151,6 +151,8 @@ class ChemistryAnalyzerTests(unittest.TestCase):
             "internal_connections": [{"part_a": 0, "part_b": 1}],
         }
         records = fixture_records()
+        records[0]["initial_physical_material_count"] = 2
+        records[1]["physical_material_count"] = 1
         records[2] = {
             "event": "environmental_reaction",
             "reaction": {
@@ -182,6 +184,8 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(attribution["inventory_delta"]["Carbon-Hydrogen"], 1)
         self.assertEqual(attribution["reaction_delta"]["Carbon-Hydrogen"], 1)
         self.assertTrue(attribution["inventory_reconciliation"]["matches"])
+        self.assertEqual(attribution["inventory_reconciliation"]["initial_lifecycle_material_count"], 2)
+        self.assertEqual(attribution["inventory_reconciliation"]["final_lifecycle_material_count"], 1)
         self.assertEqual(attribution["inventory_reconciliation"]["mismatches"], {})
 
     def test_bond_pair_inventory_reconciliation_is_not_claimed_without_lifecycle_data(self):
