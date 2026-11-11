@@ -123,6 +123,10 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     multistep_combine_edges = 0
     formed_bonds: Counter[str] = Counter()
     broken_bonds: Counter[str] = Counter()
+    initial_bond_inventory: Counter[str] = Counter()
+    final_bond_inventory: Counter[str] = Counter()
+    inventory_delta: dict[str, int] = {}
+    inventory_reconciliation_by_seed: dict[str, dict[str, Any]] = {}
     formed_by_reaction: dict[str, Counter[str]] = {}
     broken_by_reaction: dict[str, Counter[str]] = {}
     bond_pair_coverage_by_seed: dict[str, dict[str, Any]] = {}
@@ -136,6 +140,19 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         broken = attribution.get("broken", {})
         formed_bonds.update({key: int(value) for key, value in formed.items()})
         broken_bonds.update({key: int(value) for key, value in broken.items()})
+        initial_bond_inventory.update({
+            key: int(value)
+            for key, value in attribution.get("initial_bond_inventory", {}).items()
+        })
+        final_bond_inventory.update({
+            key: int(value)
+            for key, value in attribution.get("final_bond_inventory", {}).items()
+        })
+        for key, value in attribution.get("inventory_delta", {}).items():
+            inventory_delta[key] = inventory_delta.get(key, 0) + int(value)
+        inventory_reconciliation_by_seed[str(run["seed"])] = attribution.get(
+            "inventory_reconciliation", {"matches": False, "mismatches": {}}
+        )
         bond_pair_coverage_by_seed[str(run["seed"])] = {
             "committed_events_with_graph_deltas": attribution.get("committed_events_with_graph_deltas", 0),
             "committed_events_missing_graph_deltas": attribution.get("committed_events_missing_graph_deltas", 0),
@@ -203,6 +220,19 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         "broken_total": sum(broken_bonds.values()),
         "formed": dict(sorted(formed_bonds.items())),
         "broken": dict(sorted(broken_bonds.items())),
+        "initial_bond_inventory": {
+            pair: int(initial_bond_inventory.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS
+        },
+        "final_bond_inventory": {
+            pair: int(final_bond_inventory.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS
+        },
+        "inventory_delta": {
+            pair: int(inventory_delta.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS
+        },
+        "inventory_reconciliation_by_seed": inventory_reconciliation_by_seed,
+        "inventory_reconciliation_all_seeds_match": all(
+            bool(row.get("matches")) for row in inventory_reconciliation_by_seed.values()
+        ) and len(inventory_reconciliation_by_seed) == len(runs),
         "by_reaction": {
             reaction: {
                 "formed": dict(sorted(formed_by_reaction.get(reaction, Counter()).items())),
@@ -332,14 +362,17 @@ def render_markdown(report: dict[str, Any]) -> str:
         f"- Malformed bond records: {report['elemental_bond_pairs']['malformed_bond_records']}",
         f"- Formed bonds: {report['elemental_bond_pairs']['formed_total']}",
         f"- Broken bonds: {report['elemental_bond_pairs']['broken_total']}",
+        f"- Initial-to-final bond inventory reconciles in every seed: {report['elemental_bond_pairs']['inventory_reconciliation_all_seeds_match']}",
         "",
-        "| Element pair | Formed | Broken |",
+        "| Element pair | Initial | Formed | Broken | Final |",
         "|---|---:|---:|",
     ]
     for pair in report["elemental_bond_pairs"]["element_pairs"]:
+        initial = report["elemental_bond_pairs"]["initial_bond_inventory"].get(pair, 0)
         formed = report["elemental_bond_pairs"]["formed"].get(pair, 0)
         broken = report["elemental_bond_pairs"]["broken"].get(pair, 0)
-        lines.append(f"| {pair} | {formed} | {broken} |")
+        final = report["elemental_bond_pairs"]["final_bond_inventory"].get(pair, 0)
+        lines.append(f"| {pair} | {initial} | {formed} | {broken} | {final} |")
     for reaction, values in report["elemental_bond_pairs"]["by_reaction"].items():
         lines += [
             "",
