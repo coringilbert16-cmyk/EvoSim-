@@ -12,6 +12,7 @@ fn line_catalog() -> Vec<BaseResource> {
     vec![
         BaseResource {
             name: "A".into(),
+            adhesion: Default::default(),
             properties: ResourceProperties {
                 mass: 1.0,
                 potential_energy: 2.0,
@@ -26,6 +27,7 @@ fn line_catalog() -> Vec<BaseResource> {
         },
         BaseResource {
             name: "B".into(),
+            adhesion: Default::default(),
             properties: ResourceProperties {
                 mass: 1.0,
                 potential_energy: 3.0,
