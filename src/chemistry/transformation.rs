@@ -2245,125 +2245,126 @@ mod tests {
     }
 
     #[test]
-    fn stored_material_break_does_not_credit_unallocated_bond_energy() {
-        // Keep this accounting regression independent of the calibrated
-        // developmental constructor; it needs a holder and storage, not a genome.
-        let catalog = crate::resources::default_catalog();
-        let mut organism = crate::state::Organism {
-            id: "stored-break-accounting-test".into(),
-            developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
-            developmental_orientation_radians: 0.0,
-            occupied_cells: Vec::new(),
-            genome: crate::genome::initial_genome(),
-            harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
-            resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
-            experience_memory: crate::memory::ExperienceMemory::default(),
-            pending_movement_experience: None,
-            decision_history: crate::decision::DecisionHistory::default(),
-            usable_energy: 100.0,
-            stress: 0.0,
-            maintenance_debt: 0.0,
-            stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
-            stored_material: crate::material_storage::MaterialStorage::default(),
-            structure: crate::structure::OrganismStructure::new(),
-            genome_core_identity_established: false,
-            active_transformation_id: None,
-            active_movement: None,
-            reproductive_construction: None,
-            structure_revision: 0,
-            position_revision: 0,
-            cached_cavity_revision: None,
-            cached_cavity: None,
-            cached_developmental_revision: None,
-            cached_developmental_realization: None,
-            peak_developmental_realization: 0.0,
-            cached_harmonic_key: None,
-            last_movement_attempt: None,
-        };
-        let mut environment = crate::state::Environment {
-            width: 1000.0,
-            height: 1000.0,
-            chemistry_usable_energy: 0.0,
-            resonant_energy: Default::default(),
-            catalog: catalog.clone(),
-            field: crate::environment::ActiveMaterialField::new(
-                1000.0,
-                1000.0,
-                crate::environment::DEFAULT_CELL_SIZE,
-            ),
-        };
-        let material = crate::resources::Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![crate::resources::InternalBond {
-                part_a: 0,
-                part_b: 1,
-            }],
-        };
-        let physical = crate::physical_material::PhysicalMaterial::realized(
-            material,
-            vec![
-                crate::structure::Placement {
-                    x: 0.0,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-                crate::structure::Placement {
-                    x: 0.838,
-                    y: 0.0,
-                    rotation_radians: 0.0,
-                },
-            ],
-            &catalog,
-        )
-        .expect("internally bonded physical material should be realizable");
-        assert!(organism
-            .stored_material
-            .store_physical_instance(physical, &catalog));
+    fn stored_material_break_pays_only_recorded_bond_energy_at_commit() {
+        fn run_case(bond_energy: f64) {
+            let catalog = crate::resources::default_catalog();
+            let mut organism = crate::state::Organism {
+                id: "stored-break-accounting-test".into(),
+                developmental_origin: crate::state::Position { x: 0.0, y: 0.0 },
+                developmental_orientation_radians: 0.0,
+                occupied_cells: Vec::new(),
+                genome: crate::genome::initial_genome(),
+                harmonic_spectrum: crate::harmonics::ToneSpectrum::empty(),
+                resonant_energy: crate::harmonics::ResonantEnergyReservoir::default(),
+                experience_memory: crate::memory::ExperienceMemory::default(),
+                pending_movement_experience: None,
+                decision_history: crate::decision::DecisionHistory::default(),
+                usable_energy: 100.0,
+                stress: 0.0,
+                maintenance_debt: 0.0,
+                stress_threshold: crate::state::INITIAL_STRESS_THRESHOLD,
+                stored_material: crate::material_storage::MaterialStorage::default(),
+                structure: crate::structure::OrganismStructure::new(),
+                genome_core_identity_established: false,
+                active_transformation_id: None,
+                active_movement: None,
+                reproductive_construction: None,
+                structure_revision: 0,
+                position_revision: 0,
+                cached_cavity_revision: None,
+                cached_cavity: None,
+                cached_developmental_revision: None,
+                cached_developmental_realization: None,
+                peak_developmental_realization: 0.0,
+                cached_harmonic_key: None,
+                last_movement_attempt: None,
+            };
+            let mut environment = crate::state::Environment {
+                width: 1000.0,
+                height: 1000.0,
+                chemistry_usable_energy: 0.0,
+                resonant_energy: Default::default(),
+                catalog: catalog.clone(),
+                field: crate::environment::ActiveMaterialField::new(
+                    1000.0,
+                    1000.0,
+                    crate::environment::DEFAULT_CELL_SIZE,
+                ),
+            };
+            let material = crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            };
+            let mut physical = crate::physical_material::PhysicalMaterial::realized(
+                material,
+                vec![
+                    crate::structure::Placement {
+                        x: 0.0,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                    crate::structure::Placement {
+                        x: 0.838,
+                        y: 0.0,
+                        rotation_radians: 0.0,
+                    },
+                ],
+                &catalog,
+            )
+            .expect("internally bonded physical material should be realizable");
+            physical.internal_connections.as_mut().unwrap()[0].bond_energy = bond_energy;
+            assert!(organism
+                .stored_material
+                .store_physical_instance(physical, &catalog));
 
-        let decision = crate::decision_runtime::ActionCandidate {
-            action: crate::decision::ActionKind::Break,
-            context_key: Some("stored:0:bond:0".into()),
-        };
-        let mut next_id = 1;
-        let mut transformation =
-            Simulation::try_start_transformation(&mut organism, &catalog, &mut next_id, &decision)
-                .expect("stored internal bond should be a BREAK candidate");
-        let before_energy = organism.usable_energy;
-        let mut ledger = crate::state::EnergyLedger::default();
-        let before_ledger = ledger;
+            let decision = crate::decision_runtime::ActionCandidate {
+                action: crate::decision::ActionKind::Break,
+                context_key: Some("stored:0:bond:0".into()),
+            };
+            let mut next_id = 1;
+            let mut transformation = Simulation::try_start_transformation(
+                &mut organism,
+                &catalog,
+                &mut next_id,
+                &decision,
+            )
+            .expect("stored internal bond should be a BREAK candidate");
+            let before_energy = organism.usable_energy;
+            let mut ledger = crate::state::EnergyLedger::default();
+            let before_ledger = ledger;
 
-        assert!(Simulation::prepare_transformation(
-            &mut transformation,
-            &mut organism,
-            &mut environment,
-            &mut ledger,
-            None,
-        ));
-        assert_eq!(organism.usable_energy, before_energy);
-        assert_eq!(
-            transformation.prepared_energy,
-            Some((before_energy, 0.0, 0.0))
-        );
-        assert_eq!(
-            ledger.total_potential_energy_released,
-            before_ledger.total_potential_energy_released
-        );
-        assert_eq!(
-            ledger.total_external_energy_input,
-            before_ledger.total_external_energy_input
-        );
-        assert_eq!(
-            ledger.total_work_expended,
-            before_ledger.total_work_expended
-        );
-        assert_eq!(
-            ledger.total_heat_dissipated,
-            before_ledger.total_heat_dissipated
-        );
-        assert_eq!(
-            ledger.total_structural_energy_delta,
-            before_ledger.total_structural_energy_delta
-        );
+            assert!(Simulation::prepare_transformation(
+                &mut transformation,
+                &mut organism,
+                &mut environment,
+                &mut ledger,
+                None,
+            ));
+            assert_eq!(organism.usable_energy, before_energy);
+            assert_eq!(ledger.total_structural_energy_delta, before_ledger.total_structural_energy_delta);
+            assert_eq!(
+                transformation.prepared_energy,
+                Some((before_energy, -bond_energy, 0.0))
+            );
+            assert_eq!(
+                transformation.prepared_usable_energy,
+                Some(before_energy - bond_energy)
+            );
+
+            resolve_transformation(&transformation, &mut organism, &mut environment, &mut ledger);
+            assert!((organism.usable_energy - (before_energy - bond_energy)).abs() < 1e-12);
+            assert!((ledger.total_structural_energy_delta - bond_energy).abs() < 1e-12);
+            assert_eq!(organism.active_transformation_id, None);
+            assert_eq!(organism.stored_material.physical_count(), 2);
+        }
+
+        // Legacy bonds have no known allocation and remain connectivity-only.
+        run_case(0.0);
+        // New bonds must pay their recorded dissociation energy exactly once.
+        run_case(5.0);
     }
 
     #[test]
