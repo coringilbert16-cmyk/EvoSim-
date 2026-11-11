@@ -91,6 +91,7 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
     ledger: &EnergyLedger,
     bond_energy: f64,
     activation_signal: f64,
+    activation_barrier: f64,
     disruption_cost: f64,
     resonance_withdrawal: f64,
 ) -> Option<PreparedChemicalBreakEnergy> {
@@ -101,6 +102,7 @@ pub(crate) fn prepare_chemical_break_energy_with_resonance(
         0.0,
         bond_energy,
         activation_signal,
+        activation_barrier,
         disruption_cost,
         resonance_withdrawal,
     )
@@ -113,6 +115,7 @@ fn prepare_chemical_break_energy_with_structural_potentials(
     reactant_structural_potential: f64,
     product_structural_potential: f64,
     activation_signal: f64,
+    activation_barrier: f64,
     disruption_cost: f64,
     resonance_withdrawal: f64,
 ) -> Option<PreparedChemicalBreakEnergy> {
@@ -124,11 +127,13 @@ fn prepare_chemical_break_energy_with_structural_potentials(
         || resonance_withdrawal < 0.0
         || !ledger.total_resonant_energy_held.is_finite()
         || ledger.total_resonant_energy_held < 0.0
+        || !activation_barrier.is_finite()
+        || activation_barrier < 0.0
         || !disruption_cost.is_finite()
         || disruption_cost < 0.0
         || !activation_signal.is_finite()
         || activation_signal < 0.0
-        || !crate::chemistry::can_chemical_break(activation_signal, disruption_cost)
+        || !crate::chemistry::can_chemical_break(activation_signal, activation_barrier)
     {
         return None;
     }
@@ -195,6 +200,7 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
     organism: &mut Organism,
     bond: crate::structure::Bond,
     activation_signal: f64,
+    activation_barrier: f64,
     disruption_cost: f64,
     resonance_withdrawal: f64,
     ledger: &mut EnergyLedger,
@@ -217,6 +223,7 @@ pub(crate) fn settle_chemical_break_energy_with_resonance(
         before_potential,
         after_potential,
         activation_signal,
+        activation_barrier,
         disruption_cost,
         resonance_withdrawal,
     ) else {
@@ -351,7 +358,12 @@ pub(crate) fn resolve_resonance_overload_break(
     ) else {
         return false;
     };
-    let required_resonance = barrier;
+    let Some(disruption_cost) = crate::chemistry::activation_barrier_from_bond_integrity(
+        target.strength,
+    ) else {
+        return false;
+    };
+    let required_resonance = disruption_cost;
     let mut trial_reservoir = organism.resonant_energy.clone();
     let resonance_withdrawal =
         trial_reservoir.withdraw_compatible(reaction_frequency_cycles_per_day, required_resonance);
@@ -366,6 +378,7 @@ pub(crate) fn resolve_resonance_overload_break(
         target,
         reaction_energy,
         barrier,
+        disruption_cost,
         resonance_withdrawal,
         ledger,
     ) {
