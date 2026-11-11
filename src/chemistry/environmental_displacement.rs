@@ -405,7 +405,9 @@ pub(crate) fn commit_displacement_trial(
         return None;
     }
 
-    let transaction = trial.energy.settlement_transaction_conservative(EnergyReason::Combine)?;
+    let transaction = trial
+        .energy
+        .settlement_transaction_conservative(EnergyReason::Combine)?;
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = *usable_energy;
     if !staged_ledger.settle_transaction(&mut staged_usable_energy, transaction) {
@@ -1520,7 +1522,9 @@ pub(crate) fn resolve_environmental_diagnosed(
     if funded_energy.required_external_input > environment.chemistry_usable_energy {
         return Err("insufficient_usable_energy");
     }
-    let Some(transaction) = funded_energy.settlement_transaction_conservative(EnergyReason::Combine) else {
+    let Some(transaction) =
+        funded_energy.settlement_transaction_conservative(EnergyReason::Combine)
+    else {
         return Err("energy_settlement_transaction_invalid");
     };
 

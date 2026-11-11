@@ -372,8 +372,6 @@ impl ReactionEnergyBalance {
             && (legitimate_external_input - self.required_external_input).is_finite()
     }
 
-    /// Build the ledger transaction from the same pre/post-state balance
-    /// used to decide whether the reaction is favorable or needs energy input.
     /// Build the legacy reaction transaction using the original signed energy
     /// arithmetic. Existing BREAK callers retain this exact settlement path.
     pub(crate) fn settlement_transaction(self, reason: EnergyReason) -> Option<EnergyTransaction> {
