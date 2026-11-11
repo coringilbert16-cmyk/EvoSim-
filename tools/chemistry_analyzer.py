@@ -15,7 +15,6 @@ from typing import Any
 CANONICAL_RESOURCES = (
     "Water", "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
 )
-ACTIVE_EXPERIMENT_RESOURCES = tuple(name for name in CANONICAL_RESOURCES if name != "Water")
 
 
 def load_records(path: Path) -> list[dict[str, Any]]:
