@@ -1563,28 +1563,39 @@ mod tests {
                     }
                     let outcome = if ticks_to_activation.is_some() {
                         "activation_ready"
-                    } else if accumulation.get(&source_pair_key(
-                        0, 0, &source_a, 0, 1, &source_b,
-                        selected.unit_a, selected.unit_b,
-                    )).is_some_and(|value| *value > 0.0) {
+                    } else if accumulation
+                        .get(&source_pair_key(
+                            0,
+                            0,
+                            &source_a,
+                            0,
+                            1,
+                            &source_b,
+                            selected.unit_a,
+                            selected.unit_b,
+                        ))
+                        .is_some_and(|value| *value > 0.0)
+                    {
                         "accumulating_below_threshold"
                     } else {
                         "no_accumulation"
                     };
                     let properties_a = structure.units[selected.unit_a]
-                        .properties(&catalog).expect("valid first constituent");
+                        .properties(&catalog)
+                        .expect("valid first constituent");
                     let properties_b = structure.units[selected.unit_b]
-                        .properties(&catalog).expect("valid second constituent");
+                        .properties(&catalog)
+                        .expect("valid second constituent");
                     let strength = crate::combine::bond_strength(properties_a, properties_b);
                     let break_barrier = crate::chemistry::activation_barrier_from_bond_properties(
                         strength,
                         properties_a.reactivity,
                         properties_b.reactivity,
                         crate::resources::ResourceBaselines::from_catalog(&catalog).reactivity,
-                    ).unwrap_or(f64::NAN);
-                    let bond_energy = crate::combine::intrinsic_bond_potential(
-                        properties_a, properties_b, strength,
-                    );
+                    )
+                    .unwrap_or(f64::NAN);
+                    let bond_energy =
+                        crate::combine::intrinsic_bond_potential(properties_a, properties_b, strength);
                     println!(
                         "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|activation_ticks={:?}|outcome={}|bond_strength={:.9}|break_barrier={:.9}|bond_energy={:.9}",
                         resource_a.name,
