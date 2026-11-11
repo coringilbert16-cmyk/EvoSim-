@@ -1586,18 +1586,16 @@ pub(crate) fn material_resonance_emitters_at_tick(
             .iter()
             .map(|(name, amount)| (name.clone(), amount.to_bits()))
             .collect();
-        let (mass_scale, emitted) = response_cache
-            .entry(signature)
-            .or_insert_with(|| {
-                let mass_scale =
-                    environmental_mass_scale(source.material.mass(catalog), baselines.mass);
-                let emitted = material_response(
-                    source.material.weighted_properties(catalog),
-                    baselines,
-                    phase,
-                );
-                (mass_scale, emitted)
-            });
+        let (mass_scale, emitted) = response_cache.entry(signature).or_insert_with(|| {
+            let mass_scale =
+                environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+            let emitted = material_response(
+                source.material.weighted_properties(catalog),
+                baselines,
+                phase,
+            );
+            (mass_scale, emitted)
+        });
         if !mass_scale.is_finite() || *mass_scale < 0.0 {
             return None;
         }
