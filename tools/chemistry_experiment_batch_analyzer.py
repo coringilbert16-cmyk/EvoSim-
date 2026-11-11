@@ -12,6 +12,11 @@ from typing import Any
 
 ACTIVE_ELEMENTS = ("Carbon", "Hydrogen", "Nitrogen", "Oxygen", "Phosphorus", "Sulfur")
 REACTIONS = ("BREAK", "COMBINE", "DISPLACEMENT")
+ELEMENTAL_BOND_PAIRS = tuple(
+    f"{left}-{right}"
+    for index, left in enumerate(ACTIVE_ELEMENTS)
+    for right in ACTIVE_ELEMENTS[index:]
+)
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -179,7 +184,7 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         (row for row in families.values() if row["seed_count"] >= 2),
         key=lambda row: (-row["seed_count"], -row["reaction_created_events"], row["signature"]),
     )
-    element_pairs = sorted(set(formed_bonds) | set(broken_bonds))
+    element_pairs = list(ELEMENTAL_BOND_PAIRS)
     elemental_bond_pairs = {
         "element_pairs": element_pairs,
         "formed_total": sum(formed_bonds.values()),
