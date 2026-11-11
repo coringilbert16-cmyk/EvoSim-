@@ -638,23 +638,6 @@ fn chemical_step(
         selected.unit_b,
         selected.candidate,
     );
-    let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
-        a,
-        crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
-    );
-    let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(
-        b,
-        crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
-    );
-    let reaction_frequency = if frequency_a.is_finite()
-        && frequency_a > 0.0
-        && frequency_b.is_finite()
-        && frequency_b > 0.0
-    {
-        (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp()
-    } else {
-        0.0
-    };
     // Bound full endpoint-spectrum evaluation to one actual contact per tick.
     // The environmental scan itself rotates its anchors and materials each tick.
     let local_resonance_similarity = if let Some(world) =
@@ -663,6 +646,23 @@ fn chemical_step(
         diagnostics.local_resonance_sample_attempts = diagnostics
             .local_resonance_sample_attempts
             .saturating_add(1);
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(
+            a,
+            crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
+        );
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(
+            b,
+            crate::resources::ResourceBaselines::from_catalog(&environment.catalog),
+        );
+        let reaction_frequency = if frequency_a.is_finite()
+            && frequency_a > 0.0
+            && frequency_b.is_finite()
+            && frequency_b > 0.0
+        {
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp()
+        } else {
+            0.0
+        };
         let sampled = crate::contact::endpoint_world_point(
             selected.candidate.endpoint_a,
             unit_a,
