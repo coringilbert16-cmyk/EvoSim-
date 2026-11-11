@@ -76,6 +76,17 @@ ELEMENTAL_BOND_PAIRS = tuple(
 )
 
 
+def _has_complete_molecule_graph(molecule: Any) -> bool:
+    if not isinstance(molecule, dict):
+        return False
+    material = molecule.get("material")
+    return (
+        isinstance(material, dict)
+        and isinstance(material.get("parts"), list)
+        and isinstance(molecule.get("internal_connections"), list)
+    )
+
+
 def _molecule_bond_pairs(molecule: Any) -> tuple[Counter[str], int]:
     """Count authoritative internal-connection edges by their endpoint elements."""
     if not isinstance(molecule, dict):
@@ -133,7 +144,10 @@ def _bond_pair_at_index(molecule: Any, bond_index: int) -> str | None:
 
 
 def _bond_pair_attribution(
-    reactions: list[dict[str, Any]], lifecycle_records: list[dict[str, Any]]
+    reactions: list[dict[str, Any]],
+    lifecycle_records: list[dict[str, Any]],
+    expected_initial_material_count: Any,
+    expected_final_material_count: Any,
 ) -> dict[str, Any]:
     """Attribute committed reaction bond changes from full reactant/product graphs."""
     formed_by_reaction: dict[str, Counter[str]] = {}
@@ -201,6 +215,8 @@ def _bond_pair_attribution(
     initial_inventory: Counter[str] = Counter()
     active_molecules: dict[int, Any] = {}
     inventory_malformed = 0
+    initial_lifecycle_material_count = 0
+    missing_inventory_graph_snapshots = 0
     for record in lifecycle_records:
         molecule_id = record.get("molecule_id")
         action = record.get("action")
@@ -210,6 +226,9 @@ def _bond_pair_attribution(
             molecule = record.get("molecule")
             active_molecules[molecule_id] = molecule
             if record.get("reaction") == "INITIAL":
+                initial_lifecycle_material_count += 1
+                if not _has_complete_molecule_graph(molecule):
+                    missing_inventory_graph_snapshots += 1
                 counts, invalid = _molecule_bond_pairs(molecule)
                 initial_inventory.update(counts)
                 inventory_malformed += invalid
@@ -218,6 +237,8 @@ def _bond_pair_attribution(
 
     final_inventory: Counter[str] = Counter()
     for molecule in active_molecules.values():
+        if not _has_complete_molecule_graph(molecule):
+            missing_inventory_graph_snapshots += 1
         counts, invalid = _molecule_bond_pairs(molecule)
         final_inventory.update(counts)
         inventory_malformed += invalid
@@ -262,8 +283,20 @@ def _bond_pair_attribution(
         "inventory_delta": inventory_delta,
         "reaction_delta": reaction_delta,
         "inventory_reconciliation": {
-            "matches": not inventory_mismatches and missing == 0,
+            "matches": (
+                not inventory_mismatches
+                and missing == 0
+                and inventory_malformed == 0
+                and missing_inventory_graph_snapshots == 0
+                and initial_lifecycle_material_count == expected_initial_material_count
+                and len(active_molecules) == expected_final_material_count
+            ),
             "mismatches": inventory_mismatches,
+            "initial_lifecycle_material_count": initial_lifecycle_material_count,
+            "expected_initial_material_count": expected_initial_material_count,
+            "final_lifecycle_material_count": len(active_molecules),
+            "expected_final_material_count": expected_final_material_count,
+            "missing_inventory_graph_snapshots": missing_inventory_graph_snapshots,
             "malformed_inventory_bond_records": inventory_malformed,
         },
         "by_reaction": by_reaction,
@@ -339,7 +372,12 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
         if reason:
             failure_reasons[f"{kind}:{reason}"] += 1
     lifecycle = [r for r in records if r.get("event") == "molecular_lifecycle"]
-    bond_pair_attribution = _bond_pair_attribution(reactions, lifecycle)
+    bond_pair_attribution = _bond_pair_attribution(
+        reactions,
+        lifecycle,
+        header.get("initial_physical_material_count"),
+        snapshots[-1].get("physical_material_count"),
+    )
 
 
     # Prefer the recorder's accumulated totals; tick records are a fallback.
