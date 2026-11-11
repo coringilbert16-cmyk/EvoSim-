@@ -1565,6 +1565,58 @@ mod tests {
                             break;
                         }
                     }
+                    let mut combine_committed = false;
+                    let mut break_activation_ticks = None;
+                    let mut break_committed = false;
+                    if let Some(operation) = operations.pop() {
+                        let mut trial_environment = simulation.environment.clone();
+                        for cell in &mut trial_environment.field.cells {
+                            cell.physical_materials.clear();
+                        }
+                        trial_environment.field.cells[0]
+                            .physical_materials
+                            .extend([source_a.clone(), source_b.clone()]);
+                        trial_environment.chemistry_usable_energy = 1.0e9;
+                        let mut ledger = crate::state::EnergyLedger {
+                            total_usable_energy_held: trial_environment.chemistry_usable_energy,
+                            initial_usable_energy_held: trial_environment.chemistry_usable_energy,
+                            total_structural_energy_held:
+                                crate::energy_ledger::structural_potential(&structure)
+                                    .expect("unbonded pair has valid structural energy"),
+                            ..Default::default()
+                        };
+                        combine_committed =
+                            resolve_environmental(operation, &mut trial_environment, &mut ledger);
+                        if combine_committed {
+                            let mut break_accumulation = BTreeMap::new();
+                            for tick in 0..2_000_u64 {
+                                let mut remaining_work =
+                                    crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK;
+                                let mut break_diagnostics =
+                                    crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+                                let break_operations =
+                                    crate::chemical_reaction::accumulate_environmental_with_diagnostics(
+                                        &trial_environment,
+                                        &mut break_accumulation,
+                                        &mut simulation.chemistry_library,
+                                        tick,
+                                        &mut remaining_work,
+                                        None,
+                                        &mut break_diagnostics,
+                                    );
+                                if let Some(break_operation) = break_operations.into_iter().next() {
+                                    break_activation_ticks = Some(tick + 1);
+                                    break_committed =
+                                        crate::chemical_reaction::resolve_environmental(
+                                            break_operation,
+                                            &mut trial_environment,
+                                            &mut ledger,
+                                        );
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     let outcome = if ticks_to_activation.is_some() {
                         "activation_ready"
                     } else if accumulation
@@ -1604,7 +1656,7 @@ mod tests {
                         strength,
                     );
                     println!(
-                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|activation_ticks={:?}|outcome={}|bond_strength={:.9}|break_barrier={:.9}|bond_energy={:.9}",
+                        "PHYSICAL_PAIR_MATRIX|{}|{}|potential={:.9}|contact=eligible|distance={:.6}|facing={:.6}|combine_activation_ticks={:?}|combine_outcome={}|combine_committed={}|break_activation_ticks={:?}|break_committed={}|bond_strength={:.9}|break_barrier={:.9}|bond_energy={:.9}",
                         resource_a.name,
                         resource_b.name,
                         potential.unwrap_or(f64::NAN),
@@ -1612,6 +1664,9 @@ mod tests {
                         selected.candidate.facing,
                         ticks_to_activation,
                         outcome,
+                        combine_committed,
+                        break_activation_ticks,
+                        break_committed,
                         strength,
                         break_barrier,
                         bond_energy
