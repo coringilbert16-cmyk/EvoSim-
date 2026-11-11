@@ -1514,15 +1514,9 @@ mod tests {
                             )
                         });
                         if interface.is_some() && selected.candidate.facing > 0.0 {
-                            let improves_facing = fixture.as_ref().is_none_or(
-                                |(_, _, _, _, best): &(
-                                    PhysicalMaterial,
-                                    OrganismStructure,
-                                    Vec<usize>,
-                                    Vec<usize>,
-                                    SelectedContact,
-                                )| selected.candidate.facing > best.candidate.facing,
-                            );
+                            let improves_facing = fixture
+                                .as_ref()
+                                .map_or(true, |best| selected.candidate.facing > best.4.candidate.facing);
                             if improves_facing {
                                 fixture = Some((source_b, structure, indices_a, indices_b, selected));
                             }
