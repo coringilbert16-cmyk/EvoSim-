@@ -62,9 +62,9 @@ pub(crate) struct RigidBodyMassProperties {
 }
 
 /// Persistent Newtonian state for one realized elemental or molecular body.
-/// Linear velocity is expressed in the same frame as the body's placements;
-/// angular velocity is radians per physics-time unit. Environmental flow does
-/// not modify this state. Legacy serialized materials begin at rest.
+/// Linear velocity is the center-of-mass velocity in world axes; angular
+/// velocity is radians per physics-time unit. Environmental flow does not
+/// modify this state. Legacy serialized materials begin at rest.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct InertialMotion {
     pub(crate) velocity_x: f64,
@@ -143,7 +143,7 @@ impl InertialMotion {
         (energy.is_finite() && energy >= 0.0).then_some(energy)
     }
 
-    /// Velocity of a point offset from the body's reference origin.
+    /// Velocity of a point offset from the center of mass.
     pub(crate) fn velocity_at_offset(self, offset_x: f64, offset_y: f64) -> Option<(f64, f64)> {
         if !self.is_finite() || !offset_x.is_finite() || !offset_y.is_finite() {
             return None;
@@ -466,13 +466,19 @@ impl PhysicalMaterial {
 
     /// Break one pre-existing internal bond and return the resulting physically
     /// disconnected pieces. The bond itself must belong to this stored material.
-    pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
+    pub(crate) fn break_internal_bond(
+        &self,
+        target: &PhysicalMaterialBond,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Vec<Self>> {
         // Persisted active transformations can reach completion without passing
         // through the ordinary source-selection gate. Revalidate the whole
         // object so malformed bond topology cannot be split into new objects.
         if !self.is_realized() {
             return None;
         }
+        let source_mass_properties = self.mass_properties(catalog, vertical_period)?;
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
         if self
@@ -554,7 +560,7 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
-            pieces.push(Self {
+            let mut piece = Self {
                 material: Material {
                     parts,
                     internal_bonds,
@@ -570,7 +576,21 @@ impl PhysicalMaterial {
                         .map(|&old_index| shapes[old_index].clone())
                         .collect()
                 }),
+            };
+            let piece_mass_properties = piece.mass_properties(catalog, vertical_period)?;
+            let offset_x = piece_mass_properties.center_x - source_mass_properties.center_x;
+            let raw_offset_y = piece_mass_properties.center_y - source_mass_properties.center_y;
+            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
+                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
             });
+            let (velocity_x, velocity_y) =
+                self.inertial_motion.velocity_at_offset(offset_x, offset_y)?;
+            piece.inertial_motion = InertialMotion {
+                velocity_x,
+                velocity_y,
+                angular_velocity: self.inertial_motion.angular_velocity,
+            };
+            pieces.push(piece);
         }
         Some(pieces)
     }
@@ -653,15 +673,9 @@ impl PhysicalMaterial {
                 }
             })
             .collect();
-        let (velocity_x, velocity_y) = self
+        let inertial_motion = self
             .inertial_motion
-            .velocity_at_offset(origin.x, origin.y)?;
-        let inertial_motion = InertialMotion {
-            velocity_x,
-            velocity_y,
-            angular_velocity: self.inertial_motion.angular_velocity,
-        }
-        .rotated_axes(-origin.rotation_radians)?;
+            .rotated_axes(-origin.rotation_radians)?;
         Some(Self {
             material: self.material,
             inertial_motion,
@@ -800,22 +814,17 @@ mod tests {
     }
 
     #[test]
-    fn intrinsic_frame_conversion_preserves_reference_point_velocity() {
+    fn intrinsic_frame_conversion_preserves_center_of_mass_velocity() {
         let motion = InertialMotion {
             velocity_x: 1.0,
             velocity_y: 2.0,
             angular_velocity: 3.0,
         };
-        let world_velocity = motion.velocity_at_offset(2.0, 1.0).unwrap();
-        let local = InertialMotion {
-            velocity_x: world_velocity.0,
-            velocity_y: world_velocity.1,
-            angular_velocity: motion.angular_velocity,
-        }
-        .rotated_axes(-std::f64::consts::FRAC_PI_2)
-        .unwrap();
-        assert!((local.velocity_x - 8.0).abs() < 1e-12);
-        assert!((local.velocity_y - 2.0).abs() < 1e-12);
+        let local = motion
+            .rotated_axes(-std::f64::consts::FRAC_PI_2)
+            .unwrap();
+        assert!((local.velocity_x - 2.0).abs() < 1e-12);
+        assert!((local.velocity_y + 1.0).abs() < 1e-12);
         assert_eq!(local.angular_velocity, motion.angular_velocity);
     }
 
@@ -1084,13 +1093,28 @@ mod tests {
             velocity_y: -0.5,
             angular_velocity: 0.75,
         };
+        let source_mass_properties = physical.mass_properties(&catalog, None).unwrap();
         let expected_motion = physical.inertial_motion;
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
-        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        let pieces = physical
+            .break_internal_bond(&target, &catalog, None)
+            .expect("stored bond");
         assert_eq!(pieces.len(), 2);
-        assert!(pieces
-            .iter()
-            .all(|piece| piece.inertial_motion == expected_motion));
+        for piece in &pieces {
+            let properties = piece.mass_properties(&catalog, None).unwrap();
+            let expected = expected_motion
+                .velocity_at_offset(
+                    properties.center_x - source_mass_properties.center_x,
+                    properties.center_y - source_mass_properties.center_y,
+                )
+                .unwrap();
+            assert!((piece.inertial_motion.velocity_x - expected.0).abs() < 1e-12);
+            assert!((piece.inertial_motion.velocity_y - expected.1).abs() < 1e-12);
+            assert_eq!(
+                piece.inertial_motion.angular_velocity,
+                expected_motion.angular_velocity
+            );
+        }
         assert!(pieces
             .iter()
             .all(|piece| piece.material.internal_bonds.is_empty()));
