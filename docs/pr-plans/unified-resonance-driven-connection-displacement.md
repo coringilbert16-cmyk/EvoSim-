@@ -40,7 +40,7 @@ These regimes must not be collapsed into one force-to-motion conversion. In part
 
 Use the existing canonical movement/transport commit boundaries. Do not introduce a second movement executor. Stage velocity, angular velocity, pose, collision/push consequences, pair-potential change, kinetic-energy change, and all affected energy holders together so failed movement leaves the complete state unchanged.
 
-The Newtonian integrator's damping/drag law and its coupling to the overdamped environmental field remain explicit design inputs; do not invent a coefficient or silently infer one from the ambient-flow mobility.
+Elemental and molecular bodies experience **no background linear or angular drag** from the environmental flow. Their inertial motion persists unless a specific physical interaction transfers or dissipates mechanical energy. Environmental flow may influence their motion only through an explicitly modeled physical interaction; it must not apply a velocity-proportional damping force, erase momentum, or silently relax their velocity toward the flow field. Any dissipative interaction (for example, an explicitly modeled inelastic collision or other physically justified coupling) must identify the mechanical-energy loss and transfer it to the appropriate energy/heat inventory exactly once. Do not add generic numerical damping to stabilize the integrator. In the absence of such an interaction, Newtonian momentum and kinetic energy must be conserved subject to the modeled forces and their potential-energy accounting.
 
 ## 3. Exact snapped connection geometry
 
