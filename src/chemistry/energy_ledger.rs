@@ -1043,6 +1043,33 @@ impl EnergyLedgerAuthority for EnergyLedger {
     }
 }
 
+/// Settle a world-potential change against the shared environmental
+/// chemistry and resonance stores. Both holders and the ledger are staged so
+/// a failed funding or conservation check leaves all three unchanged.
+pub(crate) fn settle_environmental_pair_potential_change(
+    ledger: &mut EnergyLedger,
+    environmental_usable_energy: &mut f64,
+    environmental_resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    components: &[crate::harmonics::ResonancePairPotentialComponent],
+) -> bool {
+    let mut staged_ledger = *ledger;
+    let mut staged_usable_energy = *environmental_usable_energy;
+    let mut staged_resonance = environmental_resonance.clone();
+    let settled = settle_pair_potential_change(
+        &mut staged_ledger,
+        &mut staged_usable_energy,
+        &mut [&mut staged_resonance],
+        components,
+    );
+    if !settled {
+        return false;
+    }
+    *ledger = staged_ledger;
+    *environmental_usable_energy = staged_usable_energy;
+    *environmental_resonance = staged_resonance;
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
