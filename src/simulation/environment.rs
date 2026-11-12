@@ -638,9 +638,8 @@ impl ActiveMaterialField {
             for (material_index, material) in cell.physical_materials.iter().enumerate() {
                 if let Some(connections) = material.internal_connections.as_ref() {
                     self.environmental_bond_index.extend(
-                        (0..connections.len()).map(|bond_index| {
-                            (cell_index, material_index, bond_index)
-                        }),
+                        (0..connections.len())
+                            .map(|bond_index| (cell_index, material_index, bond_index)),
                     );
                 }
             }
@@ -658,9 +657,8 @@ impl ActiveMaterialField {
             for (material_index, material) in cell.physical_materials.iter().enumerate() {
                 if let Some(connections) = material.internal_connections.as_ref() {
                     self.environmental_bond_index.extend(
-                        (0..connections.len()).map(|bond_index| {
-                            (cell_index, material_index, bond_index)
-                        }),
+                        (0..connections.len())
+                            .map(|bond_index| (cell_index, material_index, bond_index)),
                     );
                 }
             }
@@ -688,7 +686,10 @@ impl ActiveMaterialField {
         }
         let start = tick as usize % self.environmental_bond_index.len();
         (0..count)
-            .map(|offset| self.environmental_bond_index[(start + offset) % self.environmental_bond_index.len()])
+            .map(|offset| {
+                self.environmental_bond_index
+                    [(start + offset) % self.environmental_bond_index.len()]
+            })
             .collect()
     }
 
