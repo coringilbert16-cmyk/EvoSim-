@@ -1332,6 +1332,28 @@ impl PhysicalConstituentGraph {
         let Some(d) = self.endpoint_index(b.endpoint_b) else {
             return false;
         };
+        let face_binding_is_valid = |endpoint: BondEndpoint, unit: &StructuralUnit| {
+            let Some(binding) = endpoint.face_binding else {
+                return true;
+            };
+            if !binding.is_valid() {
+                return false;
+            }
+            let [(resource_name, _)] = unit.material.parts.as_slice() else {
+                return false;
+            };
+            let Some(shape) = unit.shape(c) else {
+                return false;
+            };
+            crate::connection_faces::connection_faces(shape, resource_name)
+                .iter()
+                .any(|face| face.face_index == binding.face_index)
+        };
+        if !face_binding_is_valid(b.endpoint_a, &self.units[a])
+            || !face_binding_is_valid(b.endpoint_b, &self.units[d])
+        {
+            return false;
+        }
         if !b.is_valid(|e| {
             self.endpoint_index(e)
                 .and_then(|i| e.location.world_point(self.units.get(i)?, c))
@@ -1621,6 +1643,49 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bond_validation_rejects_face_bindings_that_do_not_exist_on_the_shape() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let a = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let id_a = structure.physical_id(a).unwrap();
+        let id_b = structure.physical_id(b).unwrap();
+        let invalid = Bond {
+            endpoint_a: BondEndpoint::new_with_face_binding(
+                id_a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                ConnectionFaceBinding {
+                    face_index: usize::MAX,
+                    start: 0.0,
+                    end: 1.0,
+                },
+            )
+            .unwrap(),
+            endpoint_b: BondEndpoint::new(
+                id_b,
+                ConnectionEndpoint::Corner { point_index: 2 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        assert!(!structure.is_valid_bond(&invalid, &catalog));
+    }
 
     #[test]
     fn bond_endpoint_face_binding_round_trips_and_legacy_records_remain_readable() {
