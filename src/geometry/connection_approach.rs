@@ -91,8 +91,7 @@ pub fn rigid_approach_path_is_collision_free(
     let period = vertical_period.unwrap_or(0.0);
     moving_parts.iter().all(|moving| {
         let relative_y = if period > 0.0 {
-            (moving.placement.y - anchor_start.y + period * 0.5).rem_euclid(period)
-                - period * 0.5
+            (moving.placement.y - anchor_start.y + period * 0.5).rem_euclid(period) - period * 0.5
         } else {
             moving.placement.y - anchor_start.y
         };
