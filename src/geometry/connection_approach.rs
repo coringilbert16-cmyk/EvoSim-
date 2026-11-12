@@ -760,6 +760,34 @@ pub fn approach_error_to_face_pair(
     approach_error(face_b, current_b, target)
 }
 
+/// Combine endpoint and orientation error into one face-pair pose error.
+///
+/// Angular error is converted to the displacement at half the paired face
+/// length. Taking the maximum requires both endpoint alignment and orientation
+/// to improve; a good center/endpoint fit cannot hide a poor angular fit.
+pub fn connection_approach_progress(
+    initial: ConnectionApproachError,
+    current: ConnectionApproachError,
+    paired_face_length: f64,
+) -> Option<f64> {
+    if !paired_face_length.is_finite() || paired_face_length <= 0.0 {
+        return None;
+    }
+    let pose_error = |error: ConnectionApproachError| {
+        if !error.endpoint_error.is_finite()
+            || error.endpoint_error < 0.0
+            || !error.rotation_error.is_finite()
+            || error.rotation_error < 0.0
+        {
+            return None;
+        }
+        Some(error
+            .endpoint_error
+            .max(error.rotation_error * paired_face_length * 0.5))
+    };
+    approach_progress(pose_error(initial)?, pose_error(current)?)
+}
+
 /// Relative progress from a recorded initial endpoint error to the current
 /// endpoint error. Progress may decrease if physics moves away from the target.
 pub fn approach_progress(initial_error: f64, current_error: f64) -> Option<f64> {
@@ -926,6 +954,31 @@ mod tests {
             approach_error_to_face_pair(face_a, moved_a, face_b, moved_target, span).unwrap();
         assert!(is_at_snapped_target(error, 1e-10, 1e-10));
         assert_ne!(initial_target, moved_target);
+    }
+
+    #[test]
+    fn connection_progress_requires_endpoint_and_orientation_alignment() {
+        let initial = ConnectionApproachError {
+            endpoint_error: 4.0,
+            rotation_error: 0.0,
+        };
+        let improved_endpoint_but_worse_orientation = ConnectionApproachError {
+            endpoint_error: 1.0,
+            rotation_error: 1.5,
+        };
+        assert_eq!(
+            connection_approach_progress(initial, improved_endpoint_but_worse_orientation, 4.0),
+            Some(0.25),
+        );
+
+        let aligned = ConnectionApproachError {
+            endpoint_error: 1.0,
+            rotation_error: 0.25,
+        };
+        assert_eq!(
+            connection_approach_progress(initial, aligned, 4.0),
+            Some(0.75),
+        );
     }
 
     #[test]
