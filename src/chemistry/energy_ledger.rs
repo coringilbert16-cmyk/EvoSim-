@@ -2286,4 +2286,77 @@ mod tests {
         assert!(ledger.transfer(&mut a, &mut b, 4.0));
         assert_eq!(a + b, 12.0);
     }
+    #[test]
+    fn environmental_pair_potential_increase_spends_only_environmental_usable_energy() {
+        let mut ledger = EnergyLedger::default();
+        ledger.initial_usable_energy_held = 5.0;
+        ledger.total_usable_energy_held = 5.0;
+        ledger.total_usable_energy_gained = 5.0;
+        let mut usable = 5.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 2.0,
+        }];
+
+        assert!(settle_environmental_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            &mut resonance,
+            &components,
+        ));
+        assert_eq!(usable, 3.0);
+        assert_eq!(ledger.total_pair_interaction_potential_held, 2.0);
+        assert_eq!(ledger.total_usable_energy_held, 3.0);
+        assert_eq!(resonance.total_energy(), Some(0.0));
+    }
+
+    #[test]
+    fn environmental_pair_potential_release_is_retained_or_dissipated_once() {
+        let mut ledger = EnergyLedger::default();
+        let mut usable = 0.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: -2.0,
+        }];
+
+        assert!(settle_environmental_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            &mut resonance,
+            &components,
+        ));
+        let retained = resonance.total_energy().expect("valid environmental reservoir");
+        assert!(retained >= 0.0 && retained <= 2.0 + EPSILON);
+        assert!((ledger.total_resonant_energy_held - retained).abs() <= EPSILON);
+        assert!((ledger.total_pair_interaction_potential_held + 2.0).abs() <= EPSILON);
+        assert!((retained + ledger.total_heat_dissipated - 2.0).abs() <= EPSILON);
+    }
+
+    #[test]
+    fn rejected_environmental_pair_potential_settlement_is_atomic() {
+        let mut ledger = EnergyLedger::default();
+        ledger.initial_usable_energy_held = 1.0;
+        ledger.total_usable_energy_held = 1.0;
+        ledger.total_usable_energy_gained = 1.0;
+        let ledger_before = ledger;
+        let mut usable = 1.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 2.0,
+        }];
+
+        assert!(!settle_environmental_pair_potential_change(
+            &mut ledger,
+            &mut usable,
+            &mut resonance,
+            &components,
+        ));
+        assert_eq!(ledger, ledger_before);
+        assert_eq!(usable, 1.0);
+        assert_eq!(resonance.total_energy(), Some(0.0));
+    }
+
 }
