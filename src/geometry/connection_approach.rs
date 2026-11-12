@@ -549,24 +549,32 @@ pub fn occupied_face_intervals(
                     if count < 3 || point_index >= count {
                         return None;
                     }
-                    let adjacent_faces = [point_index, (point_index + count - 1) % count];
-                    let mut mapped = false;
-                    for adjacent_face_index in adjacent_faces {
-                        if faces
-                            .iter()
-                            .any(|face| face.face_index == adjacent_face_index)
-                        {
-                            mapped = true;
-                            if adjacent_face_index == face_index {
-                                occupied.push(FaceInterval {
-                                    start: 0.0,
-                                    end: 1.0,
-                                });
-                            }
-                        }
-                    }
-                    if !mapped {
+                    let vertex = *vertices.get(point_index)?;
+                    // Corner endpoint indices are defined by the rigid endpoint
+                    // geometry, while chemical face indices belong to the
+                    // filtered connection-face list. Do not assume that every
+                    // polygon edge is exposed as a chemical face (notably for
+                    // Hydrogen). Resolve incidence from the actual face
+                    // endpoints instead of deriving face indices arithmetically.
+                    let adjacent_faces: Vec<usize> = faces
+                        .iter()
+                        .filter(|face| {
+                            let matches = |point: (f64, f64)| {
+                                (point.0 - vertex.0).abs() <= VECTOR_EPSILON
+                                    && (point.1 - vertex.1).abs() <= VECTOR_EPSILON
+                            };
+                            matches(face.start) || matches(face.end)
+                        })
+                        .map(|face| face.face_index)
+                        .collect();
+                    if adjacent_faces.is_empty() {
                         return None;
+                    }
+                    if adjacent_faces.contains(&face_index) {
+                        occupied.push(FaceInterval {
+                            start: 0.0,
+                            end: 1.0,
+                        });
                     }
                 }
                 ConnectionEndpoint::LineEndpoint { .. }
