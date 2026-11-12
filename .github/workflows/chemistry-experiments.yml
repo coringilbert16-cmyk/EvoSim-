@@ -11,7 +11,7 @@ on:
       duration_seconds:
         description: "Real simulation duration per seed, in seconds."
         required: true
-        default: 1500
+        default: 300
         type: number
       diagnostic_interval:
         description: "Ticks between full inventory snapshots."
