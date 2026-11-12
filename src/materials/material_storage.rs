@@ -5,7 +5,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Organism material inventory.
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::Material;
+use crate::resources::{BaseResource, Material};
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
 
