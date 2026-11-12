@@ -2094,10 +2094,9 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
     let blocker_can_affect_gradient = occluders
         .iter()
         .map(|blocker| {
-            let geometry =
-                crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                    blocker, catalog,
-                )?;
+            let geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                blocker, catalog,
+            )?;
             Some(geometry_bounds_may_occlude_source_points(
                 (source_x, source_y),
                 &step_points,
