@@ -1,7 +1,7 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 300,
   "diagnostic_interval": 100,
-  "request_note": "Approved five-seed five-minute instance-level opportunity diagnostics experiment on chemistry/reaction-network-diagnostics"
+  "request_note": "Completed approved five-seed five-minute instance-level opportunity diagnostics experiment"
 }
