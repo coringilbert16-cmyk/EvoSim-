@@ -2021,18 +2021,21 @@ mod tests {
         let carbon = properties("Carbon");
         let mut displaced = properties("Oxygen");
         let mut incoming = properties("Nitrogen");
-        let hydrogen = properties("Hydrogen");
+        let mut stronger_incoming = properties("Hydrogen");
 
         // Isolate the competition rule from catalog tuning: the incumbent
-        // bond is deliberately stronger, while the incoming bond is weaker.
+        // bond is deliberately stronger than the weaker incoming bond, while
+        // the control incoming bond is deliberately stronger than the incumbent.
         displaced.cohesion = 0.9;
         incoming.cohesion = 0.1;
+        stronger_incoming.cohesion = 1.0;
         assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
         assert!(!replacement_wins_bond_competition(
             carbon, displaced, incoming
         ));
+        assert!(bond_strength(carbon, stronger_incoming) > bond_strength(carbon, displaced));
         assert!(replacement_wins_bond_competition(
-            carbon, displaced, hydrogen
+            carbon, displaced, stronger_incoming
         ));
     }
 
