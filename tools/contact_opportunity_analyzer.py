@@ -98,6 +98,9 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                     if isinstance(sample, dict):
                         opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
                 displacement = work.get("displacement_discovery") or {}
+                for sample in displacement.get("opportunity_samples", []) or []:
+                    if isinstance(sample, dict):
+                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
                 for field in DISPLACEMENT_FIELDS:
                     value = int(displacement.get(field, 0) or 0)
                     row[f"displacement_{field}"] = value
