@@ -566,7 +566,7 @@ impl PhysicalMaterial {
                     internal_bonds,
                 },
                 environmental_identity: 0,
-                inertial_motion,
+                inertial_motion: self.inertial_motion,
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin,
