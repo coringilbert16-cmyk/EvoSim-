@@ -1575,7 +1575,7 @@ mod tests {
         };
         let target = placement(2.0, 0.0, 0.0);
         let step = plan_connection_approach_step(
-            &[moving.clone()],
+            std::slice::from_ref(&moving),
             placement(0.0, 0.0, 0.0),
             target,
             &[],
