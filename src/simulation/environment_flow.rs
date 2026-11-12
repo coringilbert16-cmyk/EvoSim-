@@ -6,7 +6,7 @@
 //! simulation tick.
 
 use crate::environment::ActiveMaterialField;
-use crate::physical_material::PhysicalMaterial;
+use crate::physical_material::{intrinsic_moment_of_inertia, PhysicalMaterial};
 use crate::resources::{BaseResource, Form, PhysicalState};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -95,27 +95,6 @@ fn shape_radius(form: &Form) -> f64 {
             .map(|(x, y)| x.hypot(*y))
             .fold(0.0, f64::max),
         Form::Fluid { nominal_area, .. } => (nominal_area.max(0.0) / std::f64::consts::PI).sqrt(),
-    }
-}
-
-/// Approximate each constituent's intrinsic planar moment from its
-/// realized geometry. Compound inertia adds this to the point-mass contribution
-/// from each constituent's offset from the compound center.
-fn intrinsic_moment_of_inertia(form: &Form, mass: f64) -> f64 {
-    match form {
-        Form::Circle { radius } => 0.5 * mass * radius * radius,
-        Form::Line { length } => mass * length * length / 12.0,
-        Form::Rectangle { width, height } => mass * (width * width + height * height) / 12.0,
-        Form::RegularPolygon { radius, .. } => 0.5 * mass * radius * radius,
-        Form::Polygon { vertices } => {
-            let mean_radius_sq = vertices.iter().map(|(x, y)| x * x + y * y).sum::<f64>()
-                / vertices.len().max(1) as f64;
-            0.5 * mass * mean_radius_sq
-        }
-        Form::Fluid { nominal_area, .. } => {
-            let radius_sq = nominal_area.max(0.0) / std::f64::consts::PI;
-            0.5 * mass * radius_sq
-        }
     }
 }
 
