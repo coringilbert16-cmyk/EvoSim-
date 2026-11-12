@@ -451,7 +451,6 @@ pub(crate) struct ResonanceBodyForce {
     pub(crate) y: f64,
 }
 
-
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -2080,9 +2079,9 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
             y: derivatives[1],
         });
     }
-    let total_force = forces.iter().fold((0.0, 0.0), |sum, force| {
-        (sum.0 + force.x, sum.1 + force.y)
-    });
+    let total_force = forces
+        .iter()
+        .fold((0.0, 0.0), |sum, force| (sum.0 + force.x, sum.1 + force.y));
     let scale = forces
         .iter()
         .map(|force| force.x.abs().max(force.y.abs()))
