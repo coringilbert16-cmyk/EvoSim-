@@ -2114,6 +2114,11 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
                 continue;
             }
             let (dx, dy) = if axis == 0 {
+                (DIFFERENCE_STEP, 0.0)
+            } else {
+                (0.0, DIFFERENCE_STEP)
+            };
+            let (plus, minus) = if participant == 0 {
                 let shifted_plus = translated_physical_material(a, dx, dy)?;
                 let shifted_minus = translated_physical_material(a, -dx, -dy)?;
                 (
