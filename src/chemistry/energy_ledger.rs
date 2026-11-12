@@ -927,8 +927,20 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
-        let next_work = self.total_work_expended + transaction.work_expended;
-        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        let mut next_work = self.total_work_expended + transaction.work_expended;
+        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        // Cumulative counters can round a small increment upward by an ULP.
+        // Record the increment conservatively so an exactly funded reaction
+        // cannot be rejected when its usable-energy holder is already empty.
+        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended
+        {
+            next_work = f64::from_bits(next_work.to_bits() - 1);
+        }
+        if next_heat.is_finite()
+            && next_heat - self.total_heat_dissipated > transaction.heat_dissipated
+        {
+            next_heat = f64::from_bits(next_heat.to_bits() - 1);
+        }
         if !next_released.is_finite()
             || !next_structural.is_finite()
             || !next_work.is_finite()
@@ -1034,6 +1046,28 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fully_funded_transaction_accepts_sub_epsilon_counter_rounding_at_zero_holder() {
+        let mut ledger = EnergyLedger {
+            total_work_expended: 1.693_919_956_337_485,
+            ..EnergyLedger::default()
+        };
+        let work: f64 = 0.022_384_104_252_493_892;
+        let structural_delta: f64 = 0.08;
+        let required = f64::from_bits((structural_delta + work).to_bits() + 1);
+        let mut holder = required;
+        let mut transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, structural_delta, work, 0.0)
+                .expect("valid reaction transaction");
+        // Match the conservative external-deficit rounding used by
+        // COMBINE and DISPLACEMENT.
+        transaction.usable_delta = -required;
+
+        assert!(transaction.balanced());
+        assert!(ledger.settle_transaction(&mut holder, transaction));
+        assert_eq!(holder, 0.0);
+    }
 
     #[test]
     fn positive_pair_potential_change_is_paid_only_by_active_mover() {
