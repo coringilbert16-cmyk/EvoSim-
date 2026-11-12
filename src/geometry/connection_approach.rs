@@ -107,11 +107,6 @@ pub fn compatible_face_spans(a: ConnectionFace, b: ConnectionFace) -> Vec<FaceSp
     Vec::new()
 }
 
-/// Calculate B's exact rigid target pose for one compatible face-span pairing.
-///
-/// The selected face segments meet endpoint-to-endpoint and their outward
-/// normals oppose. B is not moved by this function; callers must reach this
-/// target through continuous, collision-valid physical movement.
 /// Build every exact snapped target allowed by the two faces' length ratio.
 pub fn connection_approach_targets(
     face_a: ConnectionFace,
@@ -133,6 +128,11 @@ pub fn connection_approach_targets(
         .collect()
 }
 
+/// Calculate B's exact rigid target pose for one compatible face-span pairing.
+///
+/// The selected face segments meet endpoint-to-endpoint and their outward
+/// normals oppose. B is not moved by this function; callers must reach this
+/// target through continuous, collision-valid physical movement.
 pub fn snapped_target_placement(
     face_a: ConnectionFace,
     placement_a: Placement,
@@ -325,6 +325,30 @@ mod tests {
         for span in spans {
             assert!(snapped_target_placement(full, placement(0.0, 0.0, 0.0), half, span).is_some());
         }
+    }
+
+    #[test]
+    fn smaller_face_can_occupy_either_half_of_a_larger_b_face() {
+        let small = connection_faces(&rectangle(0.5, 0.5), "Carbon")[0];
+        let large = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let spans = compatible_face_spans(small, large);
+        assert_eq!(spans.len(), 2);
+        assert_eq!((spans[0].b_start, spans[0].b_end), (0.0, 0.5));
+        assert_eq!((spans[1].b_start, spans[1].b_end), (0.5, 1.0));
+        assert!(spans.into_iter().all(|span| {
+            snapped_target_placement(small, placement(0.0, 0.0, 0.0), large, span).is_some()
+        }));
+    }
+
+    #[test]
+    fn target_builder_returns_only_valid_face_pairings() {
+        let full = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let half = connection_faces(&rectangle(0.5, 0.5), "Carbon")[0];
+        let targets = connection_approach_targets(full, placement(2.0, 3.0, 0.0), half);
+        assert_eq!(targets.len(), 2);
+        assert!(targets.iter().all(|target| {
+            target.face_a_index == full.face_index && target.face_b_index == half.face_index
+        }));
     }
 
     #[test]
