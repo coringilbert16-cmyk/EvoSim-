@@ -36,9 +36,7 @@ pub struct ConnectionApproachError {
 }
 
 fn finite_placement(placement: Placement) -> bool {
-    placement.x.is_finite()
-        && placement.y.is_finite()
-        && placement.rotation_radians.is_finite()
+    placement.x.is_finite() && placement.y.is_finite() && placement.rotation_radians.is_finite()
 }
 
 fn rotate(point: (f64, f64), angle: f64) -> (f64, f64) {
@@ -189,8 +187,8 @@ pub fn snapped_target_placement(
     // maps to A's end.
     let angle_a = a_edge.1.atan2(a_edge.0);
     let angle_b = b_edge.1.atan2(b_edge.0);
-    let target_rotation = (angle_a + std::f64::consts::PI - angle_b)
-        .rem_euclid(std::f64::consts::TAU);
+    let target_rotation =
+        (angle_a + std::f64::consts::PI - angle_b).rem_euclid(std::f64::consts::TAU);
     let target_b_end = rotate(b_end_local, target_rotation);
     let a_start_world = world_point(a_start_local, placement_a);
     let target = Placement {
@@ -308,7 +306,10 @@ mod tests {
         };
         let error = approach_error(b, target, target_record).unwrap();
         assert!(is_at_snapped_target(error, 1e-10, 1e-10));
-        let a_start = a.world_endpoint(crate::connection_faces::FaceEnd::Start, placement(4.0, 5.0, 0.0));
+        let a_start = a.world_endpoint(
+            crate::connection_faces::FaceEnd::Start,
+            placement(4.0, 5.0, 0.0),
+        );
         let b_end = b.world_endpoint(crate::connection_faces::FaceEnd::End, target);
         assert!((a_start.0 - b_end.0).hypot(a_start.1 - b_end.1) <= 1e-10);
     }
@@ -369,7 +370,9 @@ mod tests {
     fn invalid_pose_and_non_finite_progress_fail_closed() {
         let full = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
         let span = compatible_face_spans(full, full)[0];
-        assert!(snapped_target_placement(full, placement(f64::NAN, 0.0, 0.0), full, span).is_none());
+        assert!(
+            snapped_target_placement(full, placement(f64::NAN, 0.0, 0.0), full, span).is_none()
+        );
         assert_eq!(approach_progress(f64::NAN, 1.0), None);
     }
 }
