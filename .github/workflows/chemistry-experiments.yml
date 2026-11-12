@@ -19,7 +19,7 @@ on:
         default: 100
         type: number
   push:
-    branches: [main, chemistry/reaction-network-diagnostics]
+    branches: [main]
     paths:
       - experiments/chemistry-run.json
 
