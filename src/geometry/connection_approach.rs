@@ -1336,7 +1336,7 @@ mod tests {
         });
 
         let occupied_start = occupied_face_intervals(&structure, unit_a, 0, &catalog).unwrap();
-        let occupied_previous = occupied_face_intervals(&structure, unit_a, 3, &catalog).unwrap();
+        let occupied_previous = occupied_face_intervals(&structure, unit_a, 5, &catalog).unwrap();
         assert_eq!(occupied_start.len(), 1);
         assert_eq!(occupied_previous.len(), 1);
         for interval in occupied_start.iter().chain(&occupied_previous) {
