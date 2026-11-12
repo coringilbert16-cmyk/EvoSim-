@@ -309,12 +309,14 @@ def markdown(report):
         mean_text = f"{mean:.1f}" if mean is not None else "—"
         lines.append(f"| {r['family']} | {r['reaction_created_seed_count']} | {r['reaction_created_identities']} | {r['reused_product_identity_count']} | {r['reaction_created_active_at_end']} | {mean_text} |")
     lines += ["", "## Recurrent reaction pathways", "",
-              "| Reaction | Parent families | Child families | Events | Seeds | Reused child identities | Mean child lifetime (ticks) |",
-              "|---|---|---|---:|---:|---:|---:|"]
+              "| Reaction | Parent families | Child families | Events | Seeds | Reused child identities | Formed bond pairs | Broken bond pairs | Mean child lifetime (ticks) |",
+              "|---|---|---|---:|---:|---:|---|---|---:|"]
     for r in report["reaction_pathways"][:40]:
         mean = r["mean_child_lifetime_ticks"]
         mean_text = f"{mean:.1f}" if mean is not None else "—"
-        lines.append(f"| {r['reaction']} | {' + '.join(r['parent_families'])} | {' + '.join(r['child_families'])} | {r['event_count']} | {r['seed_count']} | {r['reused_child_observations']} | {mean_text} |")
+        formed = ", ".join(f"{pair} x{count}" for pair, count in r["formed_bond_pairs"].items()) or "—"
+        broken = ", ".join(f"{pair} x{count}" for pair, count in r["broken_bond_pairs"].items()) or "—"
+        lines.append(f"| {r['reaction']} | {' + '.join(r['parent_families'])} | {' + '.join(r['child_families'])} | {r['event_count']} | {r['seed_count']} | {r['reused_child_observations']} | {formed} | {broken} | {mean_text} |")
     lines += ["", "## Interpretation limits", ""]
     lines.extend(f"- {item}" for item in report["interpretation_limits"])
     return "\n".join(lines) + "\n"
