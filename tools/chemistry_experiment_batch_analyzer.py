@@ -257,7 +257,7 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "duration_seconds_per_seed": duration,
             "total_simulated_seconds": duration * len(seeds),
             "condition": "ordinary environmental chemistry; local resonance enabled; no control or forced reactions",
-            "initial_environment": "1,280 physical materials: 1,200 independent resources plus 80 molecules; six active elements; Water excluded",
+            "initial_environment": "1,280 established two-constituent molecules; zero independent resources; 2,560 constituents; six active elements; Water excluded",
             "simulation_rules_changed": False,
         },
         "validation": {
