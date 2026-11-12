@@ -2029,17 +2029,15 @@ mod tests {
         displaced.cohesion = 0.9;
         incoming.cohesion = 0.1;
         stronger_incoming.cohesion = 1.0;
-        assert!(
-            bond_strength(carbon, displaced) > bond_strength(carbon, incoming)
-        );
+        assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
         assert!(!replacement_wins_bond_competition(
             carbon, displaced, incoming
         ));
-        assert!(
-            bond_strength(carbon, stronger_incoming) > bond_strength(carbon, displaced)
-        );
+        assert!(bond_strength(carbon, stronger_incoming) > bond_strength(carbon, displaced));
         assert!(replacement_wins_bond_competition(
-            carbon, displaced, stronger_incoming
+            carbon,
+            displaced,
+            stronger_incoming
         ));
     }
 
