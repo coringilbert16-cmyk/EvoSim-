@@ -876,12 +876,15 @@ impl Simulation {
                 total_pair_interaction_potential_held: trial_ledger
                     .total_pair_interaction_potential_held
                     - original_ledger.total_pair_interaction_potential_held,
+                total_kinetic_energy_held: trial_ledger.total_kinetic_energy_held
+                    - original_ledger.total_kinetic_energy_held,
                 // This value is a transaction delta, not a live inventory snapshot.
                 initial_usable_energy_held: 0.0,
                 initial_resonant_energy_held: 0.0,
                 total_structural_energy_held: 0.0,
                 initial_structural_energy_held: 0.0,
                 initial_pair_interaction_potential_held: 0.0,
+                initial_kinetic_energy_held: 0.0,
                 // This is a transaction delta; the source-once guard is unchanged.
                 initial_condition_energy_settled: original_ledger.initial_condition_energy_settled,
             };
@@ -1488,6 +1491,8 @@ mod tests {
             initial_structural_energy_held: 14.5,
             total_pair_interaction_potential_held: 15.75,
             initial_pair_interaction_potential_held: 16.5,
+            total_kinetic_energy_held: 17.75,
+            initial_kinetic_energy_held: 18.5,
         };
         let mut usable_energy = before_energy + 0.1;
         let mut ledger = EnergyLedger {
@@ -1511,6 +1516,8 @@ mod tests {
                 .total_pair_interaction_potential_held
                 + 1.2,
             initial_pair_interaction_potential_held: -1.3,
+            total_kinetic_energy_held: before_ledger.total_kinetic_energy_held + 1.3,
+            initial_kinetic_energy_held: 95.0,
         };
 
         rollback_prepared_combine(
