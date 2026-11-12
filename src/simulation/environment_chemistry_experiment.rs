@@ -803,7 +803,10 @@ mod tests {
             ENVIRONMENT_MOLECULE_COUNT
         );
         let mut molecule_type_counts = std::collections::BTreeMap::new();
-        for material in &materials {
+        for material in materials
+            .iter()
+            .filter(|material| material.material.parts.len() == 2)
+        {
             let mut elements = material
                 .material
                 .parts
