@@ -1104,13 +1104,33 @@ pub(crate) fn settle_environmental_pair_potential_change(
     environmental_resonance: &mut crate::harmonics::ResonantEnergyReservoir,
     components: &[crate::harmonics::ResonancePairPotentialComponent],
 ) -> bool {
+    settle_environmental_pair_potential_and_kinetic_change(
+        ledger,
+        environmental_usable_energy,
+        environmental_resonance,
+        0.0,
+        components,
+    )
+}
+
+/// Settle the shared environmental holders together with a kinetic-energy
+/// change. This is the atomic entry point for Newtonian material movement.
+#[allow(dead_code)] // Activated with the live Newtonian movement transaction.
+pub(crate) fn settle_environmental_pair_potential_and_kinetic_change(
+    ledger: &mut EnergyLedger,
+    environmental_usable_energy: &mut f64,
+    environmental_resonance: &mut crate::harmonics::ResonantEnergyReservoir,
+    kinetic_energy_delta: f64,
+    components: &[crate::harmonics::ResonancePairPotentialComponent],
+) -> bool {
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = *environmental_usable_energy;
     let mut staged_resonance = environmental_resonance.clone();
-    let settled = settle_pair_potential_change(
+    let settled = settle_pair_potential_and_kinetic_change(
         &mut staged_ledger,
         &mut staged_usable_energy,
         &mut [&mut staged_resonance],
+        kinetic_energy_delta,
         components,
     );
     if !settled {
@@ -1152,6 +1172,88 @@ mod tests {
         assert!(transaction.balanced());
         assert!(ledger.settle_transaction(&mut holder, transaction));
         assert_eq!(holder, 0.0);
+    }
+
+    #[test]
+    fn pair_potential_can_convert_directly_into_kinetic_energy() {
+        let mut ledger = EnergyLedger {
+            total_pair_interaction_potential_held: 0.0,
+            total_kinetic_energy_held: 0.0,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 0.0;
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: -3.0,
+        }];
+        assert!(settle_pair_potential_and_kinetic_change(
+            &mut ledger,
+            &mut usable,
+            &mut [],
+            3.0,
+            &components,
+        ));
+        assert_eq!(ledger.total_pair_interaction_potential_held, -3.0);
+        assert_eq!(ledger.total_kinetic_energy_held, 3.0);
+        assert_eq!(ledger.total_heat_dissipated, 0.0);
+        assert_eq!(usable, 0.0);
+    }
+
+    #[test]
+    fn kinetic_energy_loss_can_fund_pair_potential_increase() {
+        let mut ledger = EnergyLedger {
+            total_kinetic_energy_held: 5.0,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 5.0;
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 5.0,
+        }];
+        assert!(settle_pair_potential_and_kinetic_change(
+            &mut ledger,
+            &mut usable,
+            &mut [],
+            -3.0,
+            &components,
+        ));
+        assert_eq!(ledger.total_pair_interaction_potential_held, 5.0);
+        assert_eq!(ledger.total_kinetic_energy_held, 2.0);
+        assert_eq!(usable, 3.0);
+    }
+
+    #[test]
+    fn isolated_kinetic_energy_loss_becomes_heat() {
+        let mut ledger = EnergyLedger {
+            total_kinetic_energy_held: 2.0,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 0.0;
+        assert!(settle_pair_potential_and_kinetic_change(
+            &mut ledger,
+            &mut usable,
+            &mut [],
+            -2.0,
+            &[],
+        ));
+        assert_eq!(ledger.total_kinetic_energy_held, 0.0);
+        assert_eq!(ledger.total_heat_dissipated, 2.0);
+    }
+
+    #[test]
+    fn unaffordable_kinetic_energy_increase_rolls_back_atomically() {
+        let mut ledger = EnergyLedger::default();
+        let before = ledger;
+        let mut usable = 0.0;
+        assert!(!settle_pair_potential_and_kinetic_change(
+            &mut ledger,
+            &mut usable,
+            &mut [],
+            1.0,
+            &[],
+        ));
+        assert_eq!(ledger, before);
+        assert_eq!(usable, 0.0);
     }
 
     #[test]
