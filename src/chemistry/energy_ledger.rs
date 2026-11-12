@@ -602,8 +602,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
             return false;
         }
         let actual_usable_delta = next_usable - *active_mover_usable_energy;
-        let actual_pair_delta =
-            next_pair_potential - ledger.total_pair_interaction_potential_held;
+        let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
         let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
         let residual = actual_usable_delta + actual_pair_delta + actual_kinetic_delta;
         if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
@@ -711,10 +710,8 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
     let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
     let actual_resonant_delta = next_resonant_held - ledger.total_resonant_energy_held;
     let mut actual_heat_delta = next_heat - ledger.total_heat_dissipated;
-    let mut residual = actual_pair_delta
-        + actual_kinetic_delta
-        + actual_resonant_delta
-        + actual_heat_delta;
+    let mut residual =
+        actual_pair_delta + actual_kinetic_delta + actual_resonant_delta + actual_heat_delta;
     if !residual.is_finite() {
         return false;
     }
@@ -726,10 +723,8 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
             return false;
         }
         actual_heat_delta = next_heat - ledger.total_heat_dissipated;
-        residual = actual_pair_delta
-            + actual_kinetic_delta
-            + actual_resonant_delta
-            + actual_heat_delta;
+        residual =
+            actual_pair_delta + actual_kinetic_delta + actual_resonant_delta + actual_heat_delta;
     }
     if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
         return false;
