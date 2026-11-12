@@ -3358,12 +3358,12 @@ mod decomposition_finalization_tests {
                 internal_bonds: Vec::new(),
             },
             vec![
-                crate::geometry::Placement {
+                crate::structure::Placement {
                     x: 0.0,
                     y: 0.0,
                     rotation_radians: 0.0,
                 },
-                crate::geometry::Placement {
+                crate::structure::Placement {
                     x: 0.838,
                     y: 0.0,
                     rotation_radians: 0.0,
