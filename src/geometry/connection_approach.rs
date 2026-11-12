@@ -62,9 +62,8 @@ pub fn translation_path_is_collision_free(
     if moving_parts.is_empty()
         || !delta_x.is_finite()
         || !delta_y.is_finite()
-        || vertical_period.is_some_and(|period| {
-            !period.is_finite() || period <= 0.0 || delta_y.abs() > period
-        })
+        || vertical_period
+            .is_some_and(|period| !period.is_finite() || period <= 0.0 || delta_y.abs() > period)
         || moving_parts.iter().chain(obstacles).any(|part| {
             !finite_placement(part.placement)
                 || !part.form.bounding_radius().is_finite()
@@ -891,8 +890,7 @@ mod tests {
     fn approach_delta_uses_shortest_rotation_and_vertical_wrap() {
         let current = placement(2.0, 9.0, 3.0);
         let target = placement(5.0, 1.0, -3.0);
-        let (dx, dy, rotation) =
-            connection_approach_delta(current, target, Some(10.0)).unwrap();
+        let (dx, dy, rotation) = connection_approach_delta(current, target, Some(10.0)).unwrap();
         assert_eq!(dx, 3.0);
         assert_eq!(dy, 2.0);
         assert!((rotation - (2.0 * std::f64::consts::PI - 6.0)).abs() < 1e-12);
