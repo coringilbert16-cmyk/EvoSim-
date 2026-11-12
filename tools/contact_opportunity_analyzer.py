@@ -192,7 +192,7 @@ def main() -> int:
         "\n".join(lines) + "\n", encoding="utf-8"
     )
     sample_path = args.output_dir / "contact-opportunity-samples.json"
-    sample_path.write_text(json.dumps(report["opportunity_samples"], indent=2) + "\\n", encoding="utf-8")
+    sample_path.write_text(json.dumps(report["opportunity_samples"], indent=2) + "\n", encoding="utf-8")
     if report["opportunity_samples"]:
         with (args.output_dir / "contact-opportunity-samples.csv").open("w", newline="", encoding="utf-8") as sample_stream:
             sample_writer = csv.DictWriter(sample_stream, fieldnames=list(report["opportunity_samples"][0]))
