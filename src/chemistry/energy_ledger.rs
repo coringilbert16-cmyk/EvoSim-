@@ -1043,8 +1043,8 @@ mod tests {
     fn fully_funded_transaction_accepts_sub_epsilon_counter_rounding_at_zero_holder() {
         let mut ledger = EnergyLedger::default();
         ledger.total_work_expended = 1.693_919_956_337_485;
-        let work = 0.022_384_104_252_493_892;
-        let structural_delta = 0.08;
+        let work: f64 = 0.022_384_104_252_493_892;
+        let structural_delta: f64 = 0.08;
         let required = f64::from_bits((structural_delta + work).to_bits() + 1);
         let mut holder = required;
         let mut transaction =
