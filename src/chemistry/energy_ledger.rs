@@ -1699,6 +1699,29 @@ mod tests {
     }
 
     #[test]
+    fn world_inventory_accounts_for_kinetic_energy_change() {
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 0.0,
+            current_usable_energy: 0.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_kinetic_energy: 2.0,
+            current_kinetic_energy: 5.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 0.0,
+            external_energy_input: 3.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert_eq!(inventory.residual(), Some(0.0));
+        assert!(inventory.is_balanced_without_creation(1e-12));
+    }
+
+    #[test]
     fn world_inventory_counts_retained_resonance_as_a_distinct_energy_store() {
         let inventory = EnergyInventorySnapshot {
             initial_usable_energy: 10.0,
