@@ -1088,6 +1088,9 @@ impl Simulation {
                 .elapsed()
                 .as_nanos()
                 .min(u64::MAX as u128) as u64;
+        self.environment
+            .field
+            .ensure_environmental_bond_index();
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
