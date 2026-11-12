@@ -624,6 +624,31 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             interval: interval.max(1),
             totals: EnvironmentalChemistryDiagnosticTotals::default(),
         };
+        let initial_materials: Vec<_> = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .collect();
+        let initial_independent_resource_count = initial_materials
+            .iter()
+            .filter(|material| {
+                material.material.parts.len() == 1
+                    && material.material.internal_bonds.is_empty()
+            })
+            .count();
+        let initial_molecule_count = initial_materials
+            .iter()
+            .filter(|material| {
+                material.material.parts.len() > 1
+                    && !material.material.internal_bonds.is_empty()
+            })
+            .count();
+        let initial_constituent_count = initial_materials
+            .iter()
+            .map(|material| material.material.parts.len())
+            .sum::<usize>();
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
             "version": 2,
@@ -633,9 +658,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "planned_ticks": planned_ticks,
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280,
-            "initial_constituent_count": simulation.environment.field.cells.iter().flat_map(|cell| &cell.physical_materials).map(|material| material.material.parts.len()).sum::<usize>(),
+            "initial_independent_resource_count": initial_independent_resource_count,
+            "initial_molecule_count": initial_molecule_count,
+            "initial_constituent_count": initial_constituent_count,
             "initial_material_inventory": environmental_material_inventory(simulation),
             "excluded_resources": ["Water"],
             "pile_sizes": pile_sizes,
