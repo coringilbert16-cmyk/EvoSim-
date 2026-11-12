@@ -42,6 +42,44 @@ pub fn connection_approach_delta(
         .then_some(delta)
 }
 
+/// Plan one collision-valid movement step toward a selected exact connection.
+///
+/// This function only plans a physically reachable partial transform. It
+/// never mutates material, changes bonds, or applies a final snap correction.
+pub fn plan_connection_approach_step(
+    moving_parts: &[PlacedMaterialPart],
+    current_anchor: Placement,
+    target_anchor: Placement,
+    obstacles: &[PlacedMaterialPart],
+    vertical_period: Option<f64>,
+) -> Option<ConnectionApproachStep> {
+    let requested = connection_approach_delta(current_anchor, target_anchor, vertical_period)?;
+    let fraction = collision_free_rigid_approach_fraction(
+        moving_parts,
+        current_anchor,
+        (requested.0, requested.1),
+        requested.2,
+        obstacles,
+        vertical_period,
+    )?;
+    let translation = (requested.0 * fraction, requested.1 * fraction);
+    let rotation_delta = requested.2 * fraction;
+    let destination_anchor = Placement {
+        x: current_anchor.x + translation.0,
+        y: vertical_period.map_or(current_anchor.y + translation.1, |period| {
+            (current_anchor.y + translation.1).rem_euclid(period)
+        }),
+        rotation_radians: (current_anchor.rotation_radians + rotation_delta)
+            .rem_euclid(std::f64::consts::TAU),
+    };
+    finite_placement(destination_anchor).then_some(ConnectionApproachStep {
+        fraction,
+        destination_anchor,
+        translation,
+        rotation_delta,
+    })
+}
+
 /// Validate a straight-line translation against stationary geometry.
 ///
 /// The broad phase uses the exact swept center segment and each pair's
@@ -446,6 +484,18 @@ pub struct ConnectionApproachTarget {
     pub span: FaceSpan,
     /// Exact rigid placement of B relative to the current placement of A.
     pub placement_b: Placement,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConnectionApproachStep {
+    /// Fraction of the requested transform that is verified collision-free.
+    pub fraction: f64,
+    /// Resulting anchor pose after applying only the verified movement.
+    pub destination_anchor: Placement,
+    /// Translation actually permitted by the path validator.
+    pub translation: (f64, f64),
+    /// Rotation actually permitted by the path validator, in radians.
+    pub rotation_delta: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -884,6 +934,42 @@ mod tests {
         assert_eq!(approach_progress(10.0, 12.0), Some(0.0));
         assert_eq!(approach_progress(0.0, 0.0), Some(1.0));
         assert_eq!(approach_progress(0.0, 0.5), Some(0.0));
+    }
+
+    #[test]
+    fn approach_step_reaches_target_only_when_the_path_is_clear() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(0.0, 0.0, 0.0),
+        };
+        let target = placement(2.0, 0.0, 0.0);
+        let step = plan_connection_approach_step(
+            &[moving.clone()],
+            placement(0.0, 0.0, 0.0),
+            target,
+            &[],
+            None,
+        )
+        .unwrap();
+        assert_eq!(step.fraction, 1.0);
+        assert_eq!(step.destination_anchor, target);
+
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(1.0, 0.0, 0.0),
+        };
+        let blocked_step = plan_connection_approach_step(
+            &[moving],
+            placement(0.0, 0.0, 0.0),
+            target,
+            &[obstacle],
+            None,
+        )
+        .unwrap();
+        assert!(blocked_step.fraction > 0.0 && blocked_step.fraction < 1.0);
+        assert!(blocked_step.destination_anchor.x < target.x);
     }
 
     #[test]
