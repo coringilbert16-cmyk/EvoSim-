@@ -306,7 +306,11 @@ pub fn approach_progress(initial_error: f64, current_error: f64) -> Option<f64> 
         return None;
     }
     if initial_error <= VECTOR_EPSILON {
-        return Some(1.0);
+        return Some(if current_error <= VECTOR_EPSILON {
+            1.0
+        } else {
+            0.0
+        });
     }
     Some((1.0 - current_error / initial_error).clamp(0.0, 1.0))
 }
@@ -464,6 +468,7 @@ mod tests {
         assert_eq!(approach_progress(10.0, 2.5), Some(0.75));
         assert_eq!(approach_progress(10.0, 12.0), Some(0.0));
         assert_eq!(approach_progress(0.0, 0.0), Some(1.0));
+        assert_eq!(approach_progress(0.0, 0.5), Some(0.0));
     }
 
     #[test]
