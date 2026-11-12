@@ -273,7 +273,8 @@ def markdown(report):
     ]
     for r in report["reaction_created_families"][:30]:
         mean = r["reaction_created_mean_lifetime_ticks"]
-        lines.append(f"| {r['family']} | {r['reaction_created_seed_count']} | {r['reaction_created_identities']} | {r['reused_product_identity_count']} | {r['reaction_created_active_at_end']} | {mean:.1f if mean is not None else '—'} |")
+        mean_text = f"{mean:.1f}" if mean is not None else "—"
+        lines.append(f"| {r['family']} | {r['reaction_created_seed_count']} | {r['reaction_created_identities']} | {r['reused_product_identity_count']} | {r['reaction_created_active_at_end']} | {mean_text} |")
     lines += ["", "## Recurrent reaction pathways", "",
               "| Reaction | Parent families | Child families | Events | Seeds | Reused child identities | Mean child lifetime (ticks) |",
               "|---|---|---|---:|---:|---:|---:|"]
