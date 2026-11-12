@@ -568,6 +568,23 @@ pub fn occupied_face_intervals(
     Some(occupied)
 }
 
+impl ConnectionApproachTarget {
+    /// Convert the selected normalized face spans into persistent bond bindings.
+    pub fn face_bindings(self) -> Option<(ConnectionFaceBinding, ConnectionFaceBinding)> {
+        let binding_a = ConnectionFaceBinding {
+            face_index: self.face_a_index,
+            start: self.span.a_start,
+            end: self.span.a_end,
+        };
+        let binding_b = ConnectionFaceBinding {
+            face_index: self.face_b_index,
+            start: self.span.b_start,
+            end: self.span.b_end,
+        };
+        (binding_a.is_valid() && binding_b.is_valid()).then_some((binding_a, binding_b))
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachStep {
     /// Fraction of the requested transform that is verified collision-free.
@@ -1210,6 +1227,26 @@ mod tests {
         assert_eq!(activation_signal_at_approach(0.8, 1.0), Some(0.8));
         assert!(activation_signal_at_approach(0.8, 1.01).is_none());
         assert!(activation_signal_at_approach(f64::NAN, 0.5).is_none());
+    }
+
+    #[test]
+    fn target_face_bindings_preserve_partial_span_and_stable_face_indices() {
+        let target = ConnectionApproachTarget {
+            face_a_index: 2,
+            face_b_index: 3,
+            span: FaceSpan {
+                a_start: 0.25,
+                a_end: 0.75,
+                b_start: 0.0,
+                b_end: 0.5,
+            },
+            placement_b: placement(0.0, 0.0, 0.0),
+        };
+        let (binding_a, binding_b) = target.face_bindings().unwrap();
+        assert_eq!(binding_a.face_index, 2);
+        assert_eq!((binding_a.start, binding_a.end), (0.25, 0.75));
+        assert_eq!(binding_b.face_index, 3);
+        assert_eq!((binding_b.start, binding_b.end), (0.0, 0.5));
     }
 
     #[test]
