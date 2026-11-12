@@ -412,7 +412,7 @@ fn select_best_contact(
     remaining_work: &mut usize,
 ) -> Option<SelectedContact> {
     let pairs = current_geometry_candidate_pairs(structure, indices_a, indices_b, catalog);
-    select_best_contact_from_pairs(structure, &pairs, catalog, cache, remaining_work, None)
+    select_best_contact_from_pairs(structure, &pairs, catalog, cache, remaining_work, None, None)
         .into_iter()
         .next()
 }
@@ -462,6 +462,13 @@ fn constituent_pair_static_potential(
     .filter(|potential| potential.is_finite() && *potential > 0.0)
 }
 
+fn diagnostic_material_signature(source: &PhysicalMaterial) -> u64 {
+    let descriptor = format!("{:?}|{:?}", source.material.parts, source.material.internal_bonds);
+    descriptor.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    })
+}
+
 fn select_best_contact_from_pairs(
     structure: &OrganismStructure,
     pairs: &[(usize, usize)],
@@ -469,12 +476,15 @@ fn select_best_contact_from_pairs(
     cache: &mut ConnectionCompatibilityCache,
     remaining_work: &mut usize,
     diagnostics: Option<&mut crate::state::EnvironmentalCombineSearchDiagnostics>,
+    sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
 ) -> Vec<SelectedContact> {
     let mut diagnostics = diagnostics;
     let mut selected_contacts = Vec::new();
     let mut constituent_pairs_with_valid_interfaces = 0usize;
     let inspected_pairs = (*remaining_work).min(pairs.len());
-    for &(unit_a, unit_b) in pairs.iter().take(inspected_pairs) {
+    for (pair_index, &(unit_a, unit_b)) in
+        pairs.iter().take(inspected_pairs).enumerate()
+    {
         *remaining_work = (*remaining_work).saturating_sub(1);
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.constituent_pairs_inspected += 1;
@@ -492,10 +502,44 @@ fn select_best_contact_from_pairs(
         }
         let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
-            let Some((evaluation, _work, investment, required_energy)) =
-                crate::combine_runtime::selected_candidate_evaluation(
-                    structure, unit_a, unit_b, candidate, catalog,
-                )
+            let mut physically_valid = false;
+            let evaluation_result = crate::combine_runtime::selected_candidate_evaluation(
+                structure, unit_a, unit_b, candidate, catalog,
+            );
+            physically_valid = evaluation_result.is_some();
+            if pair_index % 17 == 0 {
+                if let (Some(diagnostics), Some((source_a, source_b))) =
+                    (diagnostics.as_deref_mut(), sources)
+                {
+                    if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len() {
+                        if let (Some(unit_a_ref), Some(unit_b_ref)) =
+                            (structure.units.get(unit_a), structure.units.get(unit_b))
+                        {
+                            diagnostics.opportunity_samples[diagnostics.opportunity_sample_count] =
+                                Some(crate::state::EnvironmentalContactOpportunitySample {
+                                    source_a_identity: source_a.environmental_identity,
+                                    source_b_identity: source_b.environmental_identity,
+                                    source_a_signature: diagnostic_material_signature(source_a),
+                                    source_b_signature: diagnostic_material_signature(source_b),
+                                    unit_a,
+                                    unit_b,
+                                    position_a_x: unit_a_ref.placement.x,
+                                    position_a_y: unit_a_ref.placement.y,
+                                    position_a_rotation: unit_a_ref.placement.rotation_radians,
+                                    position_b_x: unit_b_ref.placement.x,
+                                    position_b_y: unit_b_ref.placement.y,
+                                    position_b_rotation: unit_b_ref.placement.rotation_radians,
+                                    endpoint_a: candidate.endpoint_a,
+                                    endpoint_b: candidate.endpoint_b,
+                                    endpoint_distance: candidate.distance,
+                                    physically_valid,
+                                });
+                            diagnostics.opportunity_sample_count += 1;
+                        }
+                    }
+                }
+            }
+            let Some((evaluation, _work, investment, required_energy)) = evaluation_result
             else {
                 if let Some(diagnostics) = diagnostics.as_deref_mut() {
                     diagnostics.endpoint_pair_candidates_rejected_by_evaluation += 1;
@@ -1062,6 +1106,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         &mut cache,
                         &mut component_work,
                         Some(&mut *diagnostics),
+                        Some((&source_a, &source_b)),
                     );
                     let component_work_used = component_work_initial.saturating_sub(component_work);
                     *remaining_discovery_work =
@@ -3653,6 +3698,7 @@ mod tests {
             &mut cache,
             &mut work,
             Some(&mut diagnostics),
+            None,
         );
         assert!(
             selected.iter().any(|contact| {
