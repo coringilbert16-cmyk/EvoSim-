@@ -416,6 +416,18 @@ impl PhysicalMaterial {
             .then_some(properties)
     }
 
+    /// Translational plus rotational kinetic energy from authoritative
+    /// realized mass properties.
+    pub(crate) fn kinetic_energy(
+        &self,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<f64> {
+        let properties = self.mass_properties(catalog, vertical_period)?;
+        self.inertial_motion
+            .kinetic_energy(properties.mass, properties.moment_of_inertia)
+    }
+
     pub(crate) fn realized_shape_for_part(
         &self,
         part_index: usize,
