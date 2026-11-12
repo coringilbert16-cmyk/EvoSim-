@@ -766,17 +766,8 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let next_holder = *holder + transaction.usable_delta;
         let next_external = self.total_external_energy_input + transaction.external_input;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta;
-        let mut next_work = self.total_work_expended + transaction.work_expended;
-        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
-        // Cumulative counters can round a small increment upward by an ULP.
-        // Record the increment conservatively so an exactly funded reaction
-        // cannot be rejected when its usable-energy holder is already empty.
-        if next_work - self.total_work_expended > transaction.work_expended {
-            next_work = f64::from_bits(next_work.to_bits() - 1);
-        }
-        if next_heat - self.total_heat_dissipated > transaction.heat_dissipated {
-            next_heat = f64::from_bits(next_heat.to_bits() - 1);
-        }
+        let next_work = self.total_work_expended + transaction.work_expended;
+        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
         if !next_holder.is_finite()
             || !next_external.is_finite()
             || !next_gained.is_finite()
@@ -936,8 +927,17 @@ impl EnergyLedgerAuthority for EnergyLedger {
         }
         let next_released = self.total_potential_energy_released + transaction.potential_released;
         let next_structural = self.total_structural_energy_delta + transaction.structural_delta;
-        let next_work = self.total_work_expended + transaction.work_expended;
-        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        let mut next_work = self.total_work_expended + transaction.work_expended;
+        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        // Cumulative counters can round a small increment upward by an ULP.
+        // Record the increment conservatively so an exactly funded reaction
+        // cannot be rejected when its usable-energy holder is already empty.
+        if next_work - self.total_work_expended > transaction.work_expended {
+            next_work = f64::from_bits(next_work.to_bits() - 1);
+        }
+        if next_heat - self.total_heat_dissipated > transaction.heat_dissipated {
+            next_heat = f64::from_bits(next_heat.to_bits() - 1);
+        }
         if !next_released.is_finite()
             || !next_structural.is_finite()
             || !next_work.is_finite()
