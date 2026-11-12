@@ -781,9 +781,11 @@ pub fn connection_approach_progress(
         {
             return None;
         }
-        Some(error
-            .endpoint_error
-            .max(error.rotation_error * paired_face_length * 0.5))
+        Some(
+            error
+                .endpoint_error
+                .max(error.rotation_error * paired_face_length * 0.5),
+        )
     };
     approach_progress(pose_error(initial)?, pose_error(current)?)
 }
@@ -792,10 +794,7 @@ pub fn connection_approach_progress(
 /// approach progress. The chemistry-defined barrier is unchanged; this only
 /// prevents proximity or resonance from advancing activation independently of
 /// progress toward a valid snapped geometry.
-pub fn activation_signal_at_approach(
-    chemistry_signal: f64,
-    approach_progress: f64,
-) -> Option<f64> {
+pub fn activation_signal_at_approach(chemistry_signal: f64, approach_progress: f64) -> Option<f64> {
     if !chemistry_signal.is_finite()
         || chemistry_signal < 0.0
         || !approach_progress.is_finite()
