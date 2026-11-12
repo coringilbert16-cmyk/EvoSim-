@@ -768,6 +768,7 @@ type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Optio
 /// candidates. Build the physical world inventory once, then query each bond
 /// against the same emitters and occluders.
 pub(crate) struct LocalResonanceWorldSnapshot {
+    tick: u64,
     bodies: Vec<PhysicalMaterial>,
     resonant_indices: Vec<usize>,
     resonant_index_set: HashSet<usize>,
@@ -814,6 +815,7 @@ impl LocalResonanceWorldSnapshot {
         }
         let resonant_index_set = resonant_indices.iter().copied().collect();
         Some(Self {
+            tick: simulation.tick,
             bodies,
             resonant_indices,
             resonant_index_set,
@@ -831,7 +833,6 @@ impl LocalResonanceWorldSnapshot {
         identity_a: u64,
         identity_b: u64,
         catalog: &[BaseResource],
-        tick: u64,
     ) -> Option<Vec<ResonanceWorldBodyForce>> {
         if identity_a == 0
             || identity_b == 0
@@ -861,7 +862,7 @@ impl LocalResonanceWorldSnapshot {
             &self.bodies[index_b],
             &occluders,
             catalog,
-            tick,
+            self.tick,
         )?;
         if forces.len() != occluder_indices.len() + 2 {
             return None;
@@ -1468,7 +1469,6 @@ mod tests {
                 identities[0],
                 identities[1],
                 &simulation.environment.catalog,
-                simulation.tick,
             )
             .expect("identified pair should produce a complete multi-body force");
         assert_eq!(
