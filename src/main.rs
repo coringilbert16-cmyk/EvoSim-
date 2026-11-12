@@ -42,6 +42,8 @@ mod world_tone_snapshot;
 mod capillary_geometry;
 #[path = "geometry/cavity.rs"]
 mod cavity;
+// Geometry foundation is intentionally staged ahead of its movement-loop integration.
+#[allow(dead_code)]
 #[path = "geometry/connection_approach.rs"]
 mod connection_approach;
 #[path = "geometry/connection_faces.rs"]
