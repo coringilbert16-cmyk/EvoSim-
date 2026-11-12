@@ -278,10 +278,11 @@ class ChemistryAnalyzerTests(unittest.TestCase):
             "reaction": {
                 "reaction": "COMBINE",
                 "outcome": "committed",
+                "tick": 1,
                 "molecular_lifecycle": [
-                    {"action": "destroyed", "molecule": carbon},
-                    {"action": "destroyed", "molecule": hydrogen},
-                    {"action": "created", "molecule": carbon_hydrogen},
+                    {"action": "destroyed", "molecule": carbon, "molecule_id": 1, "reaction_id": "1-0"},
+                    {"action": "destroyed", "molecule": hydrogen, "molecule_id": 2, "reaction_id": "1-0"},
+                    {"action": "created", "molecule": carbon_hydrogen, "molecule_id": 3, "reaction_id": "1-0"},
                 ],
             },
         }
