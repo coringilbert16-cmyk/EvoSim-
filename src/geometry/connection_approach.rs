@@ -996,7 +996,9 @@ pub fn approach_error(
 /// Re-evaluate approach error against A's current pose.
 ///
 /// Call this with current placements during movement; this keeps the target
-/// attached to A rather than leaving it at an earlier world-space location.pub fn approach_error_to_face_pair(
+/// attached to A rather than leaving it at an earlier world-space location.
+///
+pub fn approach_error_to_face_pair(
     face_a: ConnectionFace,
     current_a: Placement,
     face_b: ConnectionFace,
@@ -1495,7 +1497,8 @@ mod tests {
             face_a_index: face_a.face_index,
             face_b_index: face_b.face_index,
             span,
-            placement_b: target_b,        };
+            placement_b: target_b,
+        };
         let error = approach_error(face_b, target_b, target).unwrap();
         let moving = PlacedMaterialPart {
             part_index: 0,
