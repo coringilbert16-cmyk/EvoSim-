@@ -112,6 +112,27 @@ pub fn compatible_face_spans(a: ConnectionFace, b: ConnectionFace) -> Vec<FaceSp
 /// The selected face segments meet endpoint-to-endpoint and their outward
 /// normals oppose. B is not moved by this function; callers must reach this
 /// target through continuous, collision-valid physical movement.
+/// Build every exact snapped target allowed by the two faces' length ratio.
+pub fn connection_approach_targets(
+    face_a: ConnectionFace,
+    placement_a: Placement,
+    face_b: ConnectionFace,
+) -> Vec<ConnectionApproachTarget> {
+    compatible_face_spans(face_a, face_b)
+        .into_iter()
+        .filter_map(|span| {
+            snapped_target_placement(face_a, placement_a, face_b, span).map(|placement_b| {
+                ConnectionApproachTarget {
+                    face_a_index: face_a.face_index,
+                    face_b_index: face_b.face_index,
+                    span,
+                    placement_b,
+                }
+            })
+        })
+        .collect()
+}
+
 pub fn snapped_target_placement(
     face_a: ConnectionFace,
     placement_a: Placement,
@@ -129,6 +150,17 @@ pub fn snapped_target_placement(
             .iter()
             .any(|value| !value.is_finite() || !(0.0..=1.0).contains(value))
     {
+        return None;
+    }
+    let allowed_span = compatible_face_spans(face_a, face_b)
+        .into_iter()
+        .any(|allowed| {
+            (allowed.a_start - span.a_start).abs() <= LENGTH_RELATIVE_EPSILON
+                && (allowed.a_end - span.a_end).abs() <= LENGTH_RELATIVE_EPSILON
+                && (allowed.b_start - span.b_start).abs() <= LENGTH_RELATIVE_EPSILON
+                && (allowed.b_end - span.b_end).abs() <= LENGTH_RELATIVE_EPSILON
+        });
+    if !allowed_span {
         return None;
     }
     let a_start_local = span_point(face_a, span.a_start);
