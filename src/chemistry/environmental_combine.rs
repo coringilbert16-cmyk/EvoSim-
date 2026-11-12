@@ -412,9 +412,17 @@ fn select_best_contact(
     remaining_work: &mut usize,
 ) -> Option<SelectedContact> {
     let pairs = current_geometry_candidate_pairs(structure, indices_a, indices_b, catalog);
-    select_best_contact_from_pairs(structure, &pairs, catalog, cache, remaining_work, None, None)
-        .into_iter()
-        .next()
+    select_best_contact_from_pairs(
+        structure,
+        &pairs,
+        catalog,
+        cache,
+        remaining_work,
+        None,
+        None,
+    )
+    .into_iter()
+    .next()
 }
 
 fn is_active_non_water_resource(name: &str) -> bool {
@@ -463,10 +471,15 @@ fn constituent_pair_static_potential(
 }
 
 fn diagnostic_material_signature(source: &PhysicalMaterial) -> u64 {
-    let descriptor = format!("{:?}|{:?}", source.material.parts, source.material.internal_bonds);
-    descriptor.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
-        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
-    })
+    let descriptor = format!(
+        "{:?}|{:?}",
+        source.material.parts, source.material.internal_bonds
+    );
+    descriptor
+        .bytes()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        })
 }
 
 fn select_best_contact_from_pairs(
@@ -482,9 +495,7 @@ fn select_best_contact_from_pairs(
     let mut selected_contacts = Vec::new();
     let mut constituent_pairs_with_valid_interfaces = 0usize;
     let inspected_pairs = (*remaining_work).min(pairs.len());
-    for (pair_index, &(unit_a, unit_b)) in
-        pairs.iter().take(inspected_pairs).enumerate()
-    {
+    for (pair_index, &(unit_a, unit_b)) in pairs.iter().take(inspected_pairs).enumerate() {
         *remaining_work = (*remaining_work).saturating_sub(1);
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.constituent_pairs_inspected += 1;
@@ -510,7 +521,8 @@ fn select_best_contact_from_pairs(
                 if let (Some(diagnostics), Some((source_a, source_b))) =
                     (diagnostics.as_deref_mut(), sources)
                 {
-                    if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len() {
+                    if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len()
+                    {
                         if let (Some(unit_a_ref), Some(unit_b_ref)) =
                             (structure.units.get(unit_a), structure.units.get(unit_b))
                         {
@@ -538,8 +550,7 @@ fn select_best_contact_from_pairs(
                     }
                 }
             }
-            let Some((evaluation, _work, investment, required_energy)) = evaluation_result
-            else {
+            let Some((evaluation, _work, investment, required_energy)) = evaluation_result else {
                 if let Some(diagnostics) = diagnostics.as_deref_mut() {
                     diagnostics.endpoint_pair_candidates_rejected_by_evaluation += 1;
                 }
