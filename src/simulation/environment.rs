@@ -82,6 +82,12 @@ pub struct ActiveMaterialField {
     /// Monotonic allocator for stable physical-material identities.
     #[serde(default = "initial_material_identity")]
     pub(crate) next_material_identity: u64,
+    /// Runtime index of existing environmental bonds, stored as direct field
+    /// locators and updated only when a cell's physical materials change.
+    #[serde(skip)]
+    environmental_bond_index: Vec<(usize, usize, usize)>,
+    #[serde(skip)]
+    environmental_bond_index_initialized: bool,
 }
 
 fn initial_material_identity() -> u64 {
@@ -121,6 +127,8 @@ impl ActiveMaterialField {
             revision: 0,
             cell_revisions: vec![0; width_cells * height_cells],
             next_material_identity: initial_material_identity(),
+            environmental_bond_index: Vec::new(),
+            environmental_bond_index_initialized: true,
         }
     }
 
@@ -157,6 +165,9 @@ impl ActiveMaterialField {
                     seen_identities.insert(identity);
                 }
             }
+        }
+        if !self.environmental_bond_index_initialized {
+            self.rebuild_environmental_bond_index();
         }
     }
 
@@ -614,6 +625,72 @@ impl ActiveMaterialField {
         }
         self.cell_revisions[index] = self.cell_revisions[index].wrapping_add(1);
         self.revision = self.revision.wrapping_add(1);
+        if self.environmental_bond_index_initialized {
+            self.rebuild_environmental_bond_index_for_cell(index);
+        }
+    }
+
+    /// Rebuild the direct bond locator index once after construction or
+    /// deserialization. Normal chemistry ticks never scan the material field.
+    fn rebuild_environmental_bond_index(&mut self) {
+        self.environmental_bond_index.clear();
+        for (cell_index, cell) in self.cells.iter().enumerate() {
+            for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                if let Some(connections) = material.internal_connections.as_ref() {
+                    self.environmental_bond_index.extend(
+                        (0..connections.len())
+                            .map(|bond_index| (cell_index, material_index, bond_index)),
+                    );
+                }
+            }
+        }
+        self.environmental_bond_index.sort_unstable();
+        self.environmental_bond_index_initialized = true;
+    }
+
+    /// Update only the changed cell's portion of the bond index. Material
+    /// movement and reaction commits already report changed cells.
+    fn rebuild_environmental_bond_index_for_cell(&mut self, cell_index: usize) {
+        self.environmental_bond_index
+            .retain(|(indexed_cell, _, _)| *indexed_cell != cell_index);
+        if let Some(cell) = self.cells.get(cell_index) {
+            for (material_index, material) in cell.physical_materials.iter().enumerate() {
+                if let Some(connections) = material.internal_connections.as_ref() {
+                    self.environmental_bond_index.extend(
+                        (0..connections.len())
+                            .map(|bond_index| (cell_index, material_index, bond_index)),
+                    );
+                }
+            }
+        }
+        self.environmental_bond_index.sort_unstable();
+    }
+
+    /// Lazily rebuild the derived index after deserializing a field.
+    pub(crate) fn ensure_environmental_bond_index(&mut self) {
+        if !self.environmental_bond_index_initialized {
+            self.rebuild_environmental_bond_index();
+        }
+    }
+
+    /// Return a tick-rotated bounded window of known bonds. Every locator in
+    /// this result is unique, and no cells or unbonded materials are inspected.
+    pub(crate) fn environmental_bond_candidates(
+        &self,
+        tick: u64,
+        limit: usize,
+    ) -> Vec<(usize, usize, usize)> {
+        let count = limit.min(self.environmental_bond_index.len());
+        if count == 0 {
+            return Vec::new();
+        }
+        let start = tick as usize % self.environmental_bond_index.len();
+        (0..count)
+            .map(|offset| {
+                self.environmental_bond_index
+                    [(start + offset) % self.environmental_bond_index.len()]
+            })
+            .collect()
     }
 
     /// Atomically replace an environmental physical composite with its

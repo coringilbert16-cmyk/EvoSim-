@@ -492,99 +492,44 @@ struct EnvironmentalBondDiscovery {
 /// field. Environmental bonds are restored only into a trial graph to recover
 /// their authoritative geometry and activation strength; allocated bond energy
 /// remains attached to the environmental bond and is transferred through restoration.
-/// Traverse a bounded, tick-rotated window of environmental material bonds.
-/// Returns candidates, inspected-entry count, and the identity/bond-count pairs for
-/// materials reached by the scan. Counting all three levels makes the work bound
-/// testable even in sparse fields; material membership lets accumulation invalidate
-/// removed bonds without penalizing current bonds outside the candidate window.
+/// Traverse a bounded, tick-rotated window of the maintained environmental bond
+/// index. Returns only existing bond locators and identity/bond-count pairs for
+/// materials represented in that window. No field cells or unbonded materials
+/// are scanned during normal chemistry discovery.
 fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
     candidate_limit: usize,
 ) -> EnvironmentalBondDiscovery {
-    let cell_count = environment.field.cells.len();
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let mut candidates = Vec::with_capacity(limit);
-    let mut checked_materials = Vec::new();
-    if limit == 0 || cell_count == 0 {
-        return EnvironmentalBondDiscovery {
-            candidates,
-            inspected_entries: 0,
-            checked_materials,
-        };
-    }
+    let candidates = environment.field.environmental_bond_candidates(tick, limit);
+    let mut checked_materials = std::collections::BTreeMap::new();
 
-    let mut scan_steps_remaining = limit.saturating_mul(8).max(1);
-    let scan_steps_initial = scan_steps_remaining;
-    // Advance by the previous tick's scan window rather than one cell. The
-    // scan inspects up to `limit * 8` nested entries, so moving only one
-    // cell per tick causes heavy overlap and makes distant sparse material
-    // effectively invisible at small budgets. A window-sized stride lets
-    // empty-field scans cover successive regions while preserving the same
-    // hard per-tick inspection cap.
-    let scan_window = scan_steps_initial.min(cell_count).max(1);
-    // Reserve two inspection slots for the material and bond nested beneath a
-    // cell. Without this headroom, a sparse bond at the end of a window can be
-    // perpetually skipped: the cell itself consumes the final inspection.
-    let scan_stride = scan_window.saturating_sub(2).max(1);
-    let cell_start = ((tick % cell_count as u64) as usize).wrapping_mul(scan_stride) % cell_count;
-    'discovery: for cell_offset in 0..cell_count {
-        if scan_steps_remaining == 0 {
-            break;
-        }
-        scan_steps_remaining -= 1;
-        let cell_index = (cell_start + cell_offset) % cell_count;
-        let Some(cell) = environment.field.cells.get(cell_index) else {
+    // Read only the maintained index of actual bonds. Resolve each selected
+    // locator once for stale-progress validation; empty cells and unbonded
+    // materials are never traversed during discovery.
+    for &(cell_index, material_index, _) in &candidates {
+        let Some(material) = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+        else {
             continue;
         };
-        let material_count = cell.physical_materials.len();
-        if material_count == 0 {
-            continue;
-        }
-        let material_start = tick as usize % material_count;
-        for material_offset in 0..material_count {
-            if scan_steps_remaining == 0 {
-                break 'discovery;
-            }
-            scan_steps_remaining -= 1;
-            let material_index = (material_start + material_offset) % material_count;
-            let Some(material) = cell.physical_materials.get(material_index) else {
-                continue;
-            };
-            let bond_count = material
-                .internal_connections
-                .as_ref()
-                .map_or(0, |connections| connections.len());
-            checked_materials.push((material.environmental_identity, bond_count));
-            let Some(connections) = material.internal_connections.as_ref() else {
-                continue;
-            };
-            let bond_count = connections.len();
-            if bond_count == 0 {
-                continue;
-            }
-            let bond_start = tick as usize % bond_count;
-            for bond_offset in 0..bond_count {
-                if scan_steps_remaining == 0 {
-                    break 'discovery;
-                }
-                scan_steps_remaining -= 1;
-                let bond_index = (bond_start + bond_offset) % bond_count;
-                candidates.push((cell_index, material_index, bond_index));
-                if candidates.len() >= limit {
-                    break 'discovery;
-                }
-            }
-        }
+        let bond_count = material
+            .internal_connections
+            .as_ref()
+            .map_or(0, |connections| connections.len());
+        checked_materials.insert((material.environmental_identity, bond_count), ());
     }
 
     EnvironmentalBondDiscovery {
+        inspected_entries: candidates.len(),
         candidates,
-        inspected_entries: scan_steps_initial - scan_steps_remaining,
-        checked_materials,
+        checked_materials: checked_materials.into_keys().collect(),
     }
 }
-
 #[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
 pub(crate) fn accumulate_environmental(
     environment: &crate::state::Environment,
@@ -1591,6 +1536,15 @@ mod material_identity_tests {
             .expect("fixture must contain an internal bond")
             .clone();
         let last_cell = simulation.environment.field.cells.len() - 1;
+        assert_ne!(last_cell, 0, "fixture needs distinct first and last cells");
+        // The index is ordered by field locator, not by the old cell traversal
+        // budget. Put an earlier bond in the first cell so a one-bond budget
+        // genuinely leaves the target bond outside the selected index window.
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
         assert!(simulation.environment.field.deposit_physical_at_index(
             last_cell,
             source,
