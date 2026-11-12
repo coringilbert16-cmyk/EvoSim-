@@ -498,6 +498,36 @@ pub struct ConnectionApproachStep {
     pub rotation_delta: f64,
 }
 
+pub struct ConnectionApproachInput<'a> {
+    pub face_a: ConnectionFace,
+    pub placement_a: Placement,
+    pub face_b: ConnectionFace,
+    pub placement_b: Placement,
+    pub span: FaceSpan,
+    pub initial_error: ConnectionApproachError,
+    pub occupied_a: &'a [FaceInterval],
+    pub occupied_b: &'a [FaceInterval],
+    pub moving_parts: &'a [PlacedMaterialPart],
+    pub obstacles: &'a [PlacedMaterialPart],
+    /// Requested displacement from the live resonance/physics force.
+    pub requested_translation: (f64, f64),
+    pub requested_rotation_delta: f64,
+    pub chemistry_signal: f64,
+    pub endpoint_tolerance: f64,
+    pub angular_tolerance_radians: f64,
+    pub vertical_period: Option<f64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ConnectionApproachEvaluation {
+    pub target: ConnectionApproachTarget,
+    pub error: ConnectionApproachError,
+    pub progress: f64,
+    pub activation_signal: f64,
+    pub movement_fraction: f64,
+    pub at_snapped_target: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachError {
     /// Maximum endpoint displacement from the exact target pose.
@@ -708,6 +738,60 @@ pub fn snapped_target_placement(
         return None;
     }
     Some(target)
+}
+
+/// Evaluate one face-pair approach as a single geometry/chemistry/physics state.
+///
+/// The caller supplies the requested movement from the existing resonance
+/// force. This function validates that movement's swept path, measures progress
+/// toward the exact snapped target, and gates the existing chemistry signal by
+/// that same progress. It does not apply movement or create a bond.
+pub fn evaluate_connection_approach(
+    input: ConnectionApproachInput<'_>,
+) -> Option<ConnectionApproachEvaluation> {
+    if !face_span_is_unoccupied(input.span, input.occupied_a, input.occupied_b) {
+        return None;
+    }
+    let target_placement_b = snapped_target_placement(
+        input.face_a,
+        input.placement_a,
+        input.face_b,
+        input.span,
+    )?;
+    let target = ConnectionApproachTarget {
+        face_a_index: input.face_a.face_index,
+        face_b_index: input.face_b.face_index,
+        span: input.span,
+        placement_b: target_placement_b,
+    };
+    let error = approach_error(input.face_b, input.placement_b, target)?;
+    let paired_face_length = input.face_a.length * (input.span.a_end - input.span.a_start);
+    let progress = connection_approach_progress(
+        input.initial_error,
+        error,
+        paired_face_length,
+    )?;
+    let activation_signal = activation_signal_at_approach(input.chemistry_signal, progress)?;
+    let movement_fraction = collision_free_rigid_approach_fraction(
+        input.moving_parts,
+        input.placement_b,
+        input.requested_translation,
+        input.requested_rotation_delta,
+        input.obstacles,
+        input.vertical_period,
+    )?;
+    Some(ConnectionApproachEvaluation {
+        target,
+        error,
+        progress,
+        activation_signal,
+        movement_fraction,
+        at_snapped_target: is_at_snapped_target(
+            error,
+            input.endpoint_tolerance,
+            input.angular_tolerance_radians,
+        ),
+    })
 }
 
 /// Measure how far B's selected face segment is from its exact snapped pose.
@@ -981,6 +1065,101 @@ mod tests {
         assert_eq!(activation_signal_at_approach(0.8, 1.0), Some(0.8));
         assert!(activation_signal_at_approach(0.8, 1.01).is_none());
         assert!(activation_signal_at_approach(f64::NAN, 0.5).is_none());
+    }
+
+    #[test]
+    fn approach_evaluation_couples_geometry_activation_and_safe_movement() {
+        let face_a = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let face_b = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let placement_a = placement(0.0, 0.0, 0.0);
+        let span = compatible_face_spans(face_a, face_b)[0];
+        let target_b = snapped_target_placement(face_a, placement_a, face_b, span).unwrap();
+        let current_b = placement(target_b.x + 1.0, target_b.y, target_b.rotation_radians);
+        let target_record = ConnectionApproachTarget {
+            face_a_index: face_a.face_index,
+            face_b_index: face_b.face_index,
+            span,
+            placement_b: target_b,
+        };
+        let initial_error = approach_error(face_b, current_b, target_record).unwrap();
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Rectangle {
+                width: 1.0,
+                height: 1.0,
+            },
+            placement: current_b,
+        };
+        let input = ConnectionApproachInput {
+            face_a,
+            placement_a,
+            face_b,
+            placement_b: current_b,
+            span,
+            initial_error,
+            occupied_a: &[],
+            occupied_b: &[],
+            moving_parts: &[moving],
+            obstacles: &[],
+            requested_translation: (-0.25, 0.0),
+            requested_rotation_delta: 0.0,
+            chemistry_signal: 0.8,
+            endpoint_tolerance: 1e-8,
+            angular_tolerance_radians: 1e-8,
+            vertical_period: None,
+        };
+        let evaluation = evaluate_connection_approach(input).unwrap();
+        assert_eq!(evaluation.progress, 0.0);
+        assert_eq!(evaluation.activation_signal, 0.0);
+        assert_eq!(evaluation.movement_fraction, 1.0);
+        assert!(!evaluation.at_snapped_target);
+    }
+
+    #[test]
+    fn approach_evaluation_rejects_occupied_faces_before_force_or_activation() {
+        let face_a = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let face_b = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let placement_a = placement(0.0, 0.0, 0.0);
+        let span = compatible_face_spans(face_a, face_b)[0];
+        let target_b = snapped_target_placement(face_a, placement_a, face_b, span).unwrap();
+        let target = ConnectionApproachTarget {
+            face_a_index: face_a.face_index,
+            face_b_index: face_b.face_index,
+            span,
+            placement_b: target_b,
+        };
+        let error = approach_error(face_b, target_b, target).unwrap();
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Rectangle {
+                width: 1.0,
+                height: 1.0,
+            },
+            placement: target_b,
+        };
+        let occupied = [FaceInterval {
+            start: 0.0,
+            end: 1.0,
+        }];
+        let input = ConnectionApproachInput {
+            face_a,
+            placement_a,
+            face_b,
+            placement_b: target_b,
+            span,
+            initial_error: error,
+            occupied_a: &occupied,
+            occupied_b: &[],
+            moving_parts: &[moving],
+            obstacles: &[],
+            requested_translation: (0.0, 0.0),
+            requested_rotation_delta: 0.0,
+            chemistry_signal: 1.0,
+            endpoint_tolerance: 1e-8,
+            angular_tolerance_radians: 1e-8,
+            vertical_period: None,
+        };
+        assert!(evaluate_connection_approach(input).is_none());
     }
 
     #[test]
