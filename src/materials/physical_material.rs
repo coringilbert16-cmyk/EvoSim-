@@ -431,15 +431,6 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
-            let first_placement = *piece_placements.first()?;
-            let inertial_motion = self
-                .inertial_motion
-                .velocity_at_offset(first_placement.x, first_placement.y)
-                .map(|(velocity_x, velocity_y)| InertialMotion {
-                    velocity_x,
-                    velocity_y,
-                    angular_velocity: self.inertial_motion.angular_velocity,
-                })?;
             pieces.push(Self {
                 material: Material {
                     parts,
@@ -479,6 +470,7 @@ impl PhysicalMaterial {
             return false;
         };
         if placements.is_empty()
+            || !self.inertial_motion.is_finite()
             || !self.material.is_valid()
             || placements.len() != self.material.parts.len()
             || placements.iter().any(|placement| {
@@ -538,9 +530,18 @@ impl PhysicalMaterial {
                 }
             })
             .collect();
+        let (velocity_x, velocity_y) = self
+            .inertial_motion
+            .velocity_at_offset(origin.x, origin.y)?;
+        let inertial_motion = InertialMotion {
+            velocity_x,
+            velocity_y,
+            angular_velocity: self.inertial_motion.angular_velocity,
+        }
+        .rotated_axes(-origin.rotation_radians)?;
         Some(Self {
             material: self.material,
-            inertial_motion: self.inertial_motion.rotated_axes(-origin.rotation_radians)?,
+            inertial_motion,
             environmental_identity: self.environmental_identity,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
@@ -554,6 +555,66 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn inertial_motion_integrates_force_and_torque_without_drag() {
+        let initial = InertialMotion {
+            velocity_x: 2.0,
+            velocity_y: -1.0,
+            angular_velocity: 0.5,
+        };
+        let next = initial
+            .advanced(4.0, -2.0, 3.0, 2.0, 1.5, 0.25)
+            .expect("finite Newtonian update should succeed");
+        assert_eq!(next.velocity_x, 2.5);
+        assert_eq!(next.velocity_y, -1.25);
+        assert_eq!(next.angular_velocity, 1.0);
+
+        let coasting = next
+            .advanced(0.0, 0.0, 0.0, 2.0, 1.5, 10.0)
+            .expect("unforced motion should persist");
+        assert_eq!(coasting, next);
+    }
+
+    #[test]
+    fn inertial_motion_kinetic_energy_includes_translation_and_rotation() {
+        let motion = InertialMotion {
+            velocity_x: 3.0,
+            velocity_y: 4.0,
+            angular_velocity: 2.0,
+        };
+        assert_eq!(motion.kinetic_energy(2.0, 0.5), Some(22.0));
+        assert_eq!(InertialMotion::default().kinetic_energy(2.0, 0.5), Some(0.0));
+    }
+
+    #[test]
+    fn inertial_motion_rejects_invalid_dynamics_inputs() {
+        let motion = InertialMotion::default();
+        assert!(motion.advanced(1.0, 0.0, 0.0, 0.0, 1.0, 1.0).is_none());
+        assert!(motion.advanced(1.0, 0.0, 0.0, 1.0, 0.0, 1.0).is_none());
+        assert!(motion.advanced(1.0, 0.0, 0.0, 1.0, 1.0, f64::NAN).is_none());
+        assert!(motion.kinetic_energy(-1.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn intrinsic_frame_conversion_preserves_reference_point_velocity() {
+        let motion = InertialMotion {
+            velocity_x: 1.0,
+            velocity_y: 2.0,
+            angular_velocity: 3.0,
+        };
+        let world_velocity = motion.velocity_at_offset(2.0, 1.0).unwrap();
+        let local = InertialMotion {
+            velocity_x: world_velocity.0,
+            velocity_y: world_velocity.1,
+            angular_velocity: motion.angular_velocity,
+        }
+        .rotated_axes(-std::f64::consts::FRAC_PI_2)
+        .unwrap();
+        assert!((local.velocity_x - 5.0).abs() < 1e-12);
+        assert!((local.velocity_y + 7.0).abs() < 1e-12);
+        assert_eq!(local.angular_velocity, motion.angular_velocity);
+    }
 
     #[test]
     fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {
