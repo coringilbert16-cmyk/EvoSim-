@@ -4,7 +4,7 @@
 //! do not move materials, create bonds, or override collision geometry.
 use crate::connection_faces::ConnectionFace;
 use crate::material_geometry::{placed_forms_penetrate, PlacedMaterialPart};
-use crate::structure::Placement;
+use crate::structure::{ConnectionEndpoint, ConnectionFaceBinding, OrganismStructure, Placement};
 
 const LENGTH_RELATIVE_EPSILON: f64 = 1e-9;
 const VECTOR_EPSILON: f64 = 1e-12;
@@ -480,6 +480,92 @@ pub struct ConnectionApproachTarget {
     pub span: FaceSpan,
     /// Exact rigid placement of B relative to the current placement of A.
     pub placement_b: Placement,
+}
+
+impl ConnectionApproachTarget {
+    /// Convert the selected normalized spans into persistent endpoint bindings.
+    pub fn face_bindings(self) -> Option<(ConnectionFaceBinding, ConnectionFaceBinding)> {
+        let binding_a = ConnectionFaceBinding {
+            face_index: self.face_a_index,
+            start: self.span.a_start,
+            end: self.span.a_end,
+        };
+        let binding_b = ConnectionFaceBinding {
+            face_index: self.face_b_index,
+            start: self.span.b_start,
+            end: self.span.b_end,
+        };
+        (binding_a.is_valid() && binding_b.is_valid()).then_some((binding_a, binding_b))
+    }
+}
+
+/// Resolve occupied face intervals from the live bond graph.
+///
+/// New bonds carry exact face bindings. Legacy corner bonds conservatively
+/// occupy both adjacent faces in full because their original span cannot be
+/// recovered safely. Legacy continuous endpoints fail closed rather than
+/// pretending an unknown face is available.
+pub fn occupied_face_intervals(
+    structure: &OrganismStructure,
+    unit_index: usize,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<Vec<FaceInterval>> {
+    let unit = structure.units.get(unit_index)?;
+    let physical_id = structure.physical_id(unit_index)?;
+    let [(resource_name, _)] = unit.material.parts.as_slice() else {
+        return None;
+    };
+    let shape = unit.shape(catalog)?;
+    let faces = crate::connection_faces::connection_faces(shape, resource_name);
+    let vertices = shape.form.polygon_vertices();
+    let mut occupied = Vec::new();
+
+    for bond in &structure.bonds {
+        for endpoint in [bond.endpoint_a, bond.endpoint_b] {
+            if endpoint.constituent_id != physical_id {
+                continue;
+            }
+            if let Some(binding) = endpoint.face_binding {
+                if !binding.is_valid()
+                    || !faces.iter().any(|face| face.face_index == binding.face_index)
+                {
+                    return None;
+                }
+                occupied.push(FaceInterval {
+                    start: binding.start,
+                    end: binding.end,
+                });
+                continue;
+            }
+
+            match endpoint.location {
+                ConnectionEndpoint::Corner { point_index } => {
+                    let count = vertices.as_ref()?.len();
+                    if count < 3 || point_index >= count {
+                        return None;
+                    }
+                    let adjacent_faces = [point_index, (point_index + count - 1) % count];
+                    let mut mapped = false;
+                    for face_index in adjacent_faces {
+                        if faces.iter().any(|face| face.face_index == face_index) {
+                            occupied.push(FaceInterval {
+                                start: 0.0,
+                                end: 1.0,
+                            });
+                            mapped = true;
+                        }
+                    }
+                    if !mapped {
+                        return None;
+                    }
+                }
+                ConnectionEndpoint::LineEndpoint { .. }
+                | ConnectionEndpoint::Boundary { .. }
+                | ConnectionEndpoint::Fluid { .. } => return None,
+            }
+        }
+    }
+    Some(occupied)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -1124,6 +1210,88 @@ mod tests {
         assert_eq!(activation_signal_at_approach(0.8, 1.0), Some(0.8));
         assert!(activation_signal_at_approach(0.8, 1.01).is_none());
         assert!(activation_signal_at_approach(f64::NAN, 0.5).is_none());
+    }
+
+    #[test]
+    fn occupied_face_intervals_use_persisted_partial_bindings() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let unit_a = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            placement(0.0, 0.0, 0.0),
+        ));
+        let unit_b = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            placement(1.0, 0.0, 0.0),
+        ));
+        let id_a = structure.physical_id(unit_a).unwrap();
+        let id_b = structure.physical_id(unit_b).unwrap();
+        let binding_a = ConnectionFaceBinding {
+            face_index: 0,
+            start: 0.25,
+            end: 0.75,
+        };
+        let binding_b = ConnectionFaceBinding {
+            face_index: 2,
+            start: 0.0,
+            end: 0.5,
+        };
+        structure.bonds.push(crate::structure::Bond {
+            endpoint_a: crate::structure::BondEndpoint::new_with_face_binding(
+                id_a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+                binding_a,
+            )
+            .unwrap(),
+            endpoint_b: crate::structure::BondEndpoint::new_with_face_binding(
+                id_b,
+                ConnectionEndpoint::Corner { point_index: 2 },
+                binding_b,
+            )
+            .unwrap(),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        assert_eq!(
+            occupied_face_intervals(&structure, unit_a, &catalog),
+            Some(vec![FaceInterval {
+                start: 0.25,
+                end: 0.75,
+            }]),
+        );
+    }
+
+    #[test]
+    fn legacy_corner_bond_occupies_both_adjacent_faces_conservatively() {
+        let catalog = crate::resources::default_catalog();
+        let mut structure = OrganismStructure::new();
+        let unit_a = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            placement(0.0, 0.0, 0.0),
+        ));
+        let unit_b = structure.add_unit(crate::structure::StructuralUnit::new(
+            "Carbon",
+            placement(1.0, 0.0, 0.0),
+        ));
+        let id_a = structure.physical_id(unit_a).unwrap();
+        let id_b = structure.physical_id(unit_b).unwrap();
+        structure.bonds.push(crate::structure::Bond {
+            endpoint_a: crate::structure::BondEndpoint::new(
+                id_a,
+                ConnectionEndpoint::Corner { point_index: 0 },
+            ),
+            endpoint_b: crate::structure::BondEndpoint::new(
+                id_b,
+                ConnectionEndpoint::Corner { point_index: 2 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let occupied = occupied_face_intervals(&structure, unit_a, &catalog).unwrap();
+        assert_eq!(occupied.len(), 2);
+        assert!(occupied.iter().all(|interval| interval.start == 0.0 && interval.end == 1.0));
     }
 
     #[test]
