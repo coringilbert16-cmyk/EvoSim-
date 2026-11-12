@@ -502,11 +502,10 @@ fn select_best_contact_from_pairs(
         }
         let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
-            let mut physically_valid = false;
             let evaluation_result = crate::combine_runtime::selected_candidate_evaluation(
                 structure, unit_a, unit_b, candidate, catalog,
             );
-            physically_valid = evaluation_result.is_some();
+            let physically_valid = evaluation_result.is_some();
             if pair_index % 17 == 0 {
                 if let (Some(diagnostics), Some((source_a, source_b))) =
                     (diagnostics.as_deref_mut(), sources)
