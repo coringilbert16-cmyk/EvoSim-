@@ -2291,20 +2291,27 @@ impl Simulation {
                 let next = total + energy;
                 (next.is_finite() && next >= 0.0).then_some(next)
             })?;
-        let stored_energy = self.organisms.iter().try_fold(field_energy, |total, organism| {
-            let mut next = total + organism.stored_material.kinetic_energy_held(catalog)?;
-            if let Some(construction) = &organism.reproductive_construction {
-                next += construction.committed_material.kinetic_energy_held(catalog)?;
-            }
-            (next.is_finite() && next >= 0.0).then_some(next)
-        })?;
-        self.active_transformations.iter().try_fold(
-            stored_energy,
-            |total, transformation| {
+        let stored_energy = self
+            .organisms
+            .iter()
+            .try_fold(field_energy, |total, organism| {
+                let mut next = total + organism.stored_material.kinetic_energy_held(catalog)?;
+                if let Some(construction) = &organism.reproductive_construction {
+                    next += construction
+                        .committed_material
+                        .kinetic_energy_held(catalog)?;
+                }
+                (next.is_finite() && next >= 0.0).then_some(next)
+            })?;
+        self.active_transformations
+            .iter()
+            .try_fold(stored_energy, |total, transformation| {
                 let energy = if let Some(source) = &transformation.stored_material {
                     source.kinetic_energy(
                         catalog,
-                        transformation.environmental_source.then_some(self.environment.height),
+                        transformation
+                            .environmental_source
+                            .then_some(self.environment.height),
                     )?
                 } else if let Some((_, source)) = &transformation.combine_environmental_source {
                     source.kinetic_energy(catalog, Some(self.environment.height))?
@@ -2315,8 +2322,7 @@ impl Simulation {
                 };
                 let next = total + energy;
                 (next.is_finite() && next >= 0.0).then_some(next)
-            },
-        )
+            })
     }
 
     /// Independent diagnostic oracle: recompute current stores from their owning state,
