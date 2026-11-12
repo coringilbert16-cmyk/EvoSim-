@@ -788,6 +788,25 @@ pub fn connection_approach_progress(
     approach_progress(pose_error(initial)?, pose_error(current)?)
 }
 
+/// Scale the existing chemistry activation signal by verified face-pair
+/// approach progress. The chemistry-defined barrier is unchanged; this only
+/// prevents proximity or resonance from advancing activation independently of
+/// progress toward a valid snapped geometry.
+pub fn activation_signal_at_approach(
+    chemistry_signal: f64,
+    approach_progress: f64,
+) -> Option<f64> {
+    if !chemistry_signal.is_finite()
+        || chemistry_signal < 0.0
+        || !approach_progress.is_finite()
+        || !(0.0..=1.0).contains(&approach_progress)
+    {
+        return None;
+    }
+    let signal = chemistry_signal * approach_progress;
+    signal.is_finite().then_some(signal)
+}
+
 /// Relative progress from a recorded initial endpoint error to the current
 /// endpoint error. Progress may decrease if physics moves away from the target.
 pub fn approach_progress(initial_error: f64, current_error: f64) -> Option<f64> {
@@ -954,6 +973,15 @@ mod tests {
             approach_error_to_face_pair(face_a, moved_a, face_b, moved_target, span).unwrap();
         assert!(is_at_snapped_target(error, 1e-10, 1e-10));
         assert_ne!(initial_target, moved_target);
+    }
+
+    #[test]
+    fn activation_signal_advances_only_with_connection_approach_progress() {
+        assert_eq!(activation_signal_at_approach(0.8, 0.0), Some(0.0));
+        assert_eq!(activation_signal_at_approach(0.8, 0.5), Some(0.4));
+        assert_eq!(activation_signal_at_approach(0.8, 1.0), Some(0.8));
+        assert!(activation_signal_at_approach(0.8, 1.01).is_none());
+        assert!(activation_signal_at_approach(f64::NAN, 0.5).is_none());
     }
 
     #[test]
