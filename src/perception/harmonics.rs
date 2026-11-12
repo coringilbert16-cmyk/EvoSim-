@@ -2025,6 +2025,11 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
         return None;
     }
 
+    // Reuse the blocker vectors across finite-difference samples. Cloning
+    // the complete occluder inventory for every blocker and axis made this
+    // otherwise local derivative allocate quadratically in blocker count.
+    let mut plus_blockers = occluders.to_vec();
+    let mut minus_blockers = occluders.to_vec();
     let mut forces = Vec::with_capacity(occluders.len() + 2);
     for participant in 0..occluders.len() + 2 {
         let mut derivatives = [0.0; 2];
@@ -2050,8 +2055,6 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
                 )
             } else {
                 let blocker_index = participant - 2;
-                let mut plus_blockers = occluders.to_vec();
-                let mut minus_blockers = occluders.to_vec();
                 plus_blockers[blocker_index] =
                     translated_physical_material(&occluders[blocker_index], dx, dy)?;
                 minus_blockers[blocker_index] =
@@ -2065,6 +2068,11 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
             if !derivative.is_finite() {
                 return None;
             }
+        }
+        if participant >= 2 {
+            let blocker_index = participant - 2;
+            plus_blockers[blocker_index] = occluders[blocker_index].clone();
+            minus_blockers[blocker_index] = occluders[blocker_index].clone();
         }
         forces.push(ResonanceBodyForce {
             x: derivatives[0],
