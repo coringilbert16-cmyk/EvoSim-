@@ -568,22 +568,6 @@ pub fn occupied_face_intervals(
     Some(occupied)
 }
 
-impl ConnectionApproachTarget {
-    /// Convert the selected normalized face spans into persistent bond bindings.
-    pub fn face_bindings(self) -> Option<(ConnectionFaceBinding, ConnectionFaceBinding)> {
-        let binding_a = ConnectionFaceBinding {
-            face_index: self.face_a_index,
-            start: self.span.a_start,
-            end: self.span.a_end,
-        };
-        let binding_b = ConnectionFaceBinding {
-            face_index: self.face_b_index,
-            start: self.span.b_start,
-            end: self.span.b_end,
-        };
-        (binding_a.is_valid() && binding_b.is_valid()).then_some((binding_a, binding_b))
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachStep {
