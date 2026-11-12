@@ -1103,7 +1103,11 @@ pub(crate) fn resolve_environmental_diagnosed(
     {
         return Err("stale_source_or_bond_mismatch");
     }
-    let Some(pieces) = source.break_internal_bond(&operation.bond, &environment.catalog, Some(environment.height)) else {
+    let Some(pieces) = source.break_internal_bond(
+        &operation.bond,
+        &environment.catalog,
+        Some(environment.height),
+    ) else {
         return Err("bond_cannot_be_split");
     };
     // Environmental chemistry may spend only energy that actually reached
