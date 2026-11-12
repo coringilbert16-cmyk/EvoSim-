@@ -527,7 +527,9 @@ pub fn occupied_face_intervals(
             }
             if let Some(binding) = endpoint.face_binding {
                 if !binding.is_valid()
-                    || !faces.iter().any(|face| face.face_index == binding.face_index)
+                    || !faces
+                        .iter()
+                        .any(|face| face.face_index == binding.face_index)
                 {
                     return None;
                 }
@@ -1312,7 +1314,9 @@ mod tests {
 
         let occupied = occupied_face_intervals(&structure, unit_a, &catalog).unwrap();
         assert_eq!(occupied.len(), 2);
-        assert!(occupied.iter().all(|interval| interval.start == 0.0 && interval.end == 1.0));
+        assert!(occupied
+            .iter()
+            .all(|interval| interval.start == 0.0 && interval.end == 1.0));
     }
 
     #[test]
