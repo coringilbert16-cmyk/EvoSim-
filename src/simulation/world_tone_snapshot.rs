@@ -1497,10 +1497,7 @@ mod tests {
             "the organism's partial occlusion force must map back to its owner"
         );
         let total_force = contributions.iter().fold((0.0, 0.0), |sum, contribution| {
-            (
-                sum.0 + contribution.force.x,
-                sum.1 + contribution.force.y,
-            )
+            (sum.0 + contribution.force.x, sum.1 + contribution.force.y)
         });
         assert!(total_force.0.abs() < 1e-5);
         assert!(total_force.1.abs() < 1e-5);
