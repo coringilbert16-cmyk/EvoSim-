@@ -24,7 +24,9 @@ def _rounded(value: float) -> float:
     return round(float(value), 6)
 
 
-def geometry_descriptor(molecule: dict[str, Any]) -> dict[str, Any] | None:
+def geometry_descriptor(
+    molecule: dict[str, Any], world_height: float | None = 250.0
+) -> dict[str, Any] | None:
     """Return translation/rotation-normalized physical geometry for one molecule."""
     material = molecule.get("material") or {}
     parts = material.get("parts") or []
@@ -50,14 +52,35 @@ def geometry_descriptor(molecule: dict[str, Any]) -> dict[str, Any] | None:
             return None
         if any(not isinstance(part, (list, tuple)) or len(part) != 2 for part in parts):
             return None
+        if world_height is not None and (
+            not math.isfinite(world_height) or world_height <= 0.0
+        ):
+            return None
     except (KeyError, TypeError, ValueError):
         return None
 
-    center_x = statistics.fmean(p[0] for p in points)
-    center_y = statistics.fmean(p[1] for p in points)
+    # The simulation wraps vertically (world y), so unwrap every constituent
+    # relative to the first before computing intrinsic geometry. Raw world-y
+    # subtraction would turn a molecule crossing the seam into a ~world-height
+    # molecule. Keep the wrapped centroid separately for world-space reference.
+    anchor_y = points[0][1]
+    if world_height is None:
+        geometry_points = points
+        center_y = statistics.fmean(p[1] for p in points)
+    else:
+        geometry_points = [
+            (
+                x,
+                anchor_y + ((y - anchor_y + world_height * 0.5) % world_height)
+                - world_height * 0.5,
+            )
+            for x, y in points
+        ]
+        center_y = statistics.fmean(p[1] for p in geometry_points) % world_height
+    center_x = statistics.fmean(p[0] for p in geometry_points)
     frame_angle = rotations[0]
-    for x, y in points[1:]:
-        dx, dy = x - points[0][0], y - points[0][1]
+    for x, y in geometry_points[1:]:
+        dx, dy = x - geometry_points[0][0], y - geometry_points[0][1]
         if math.hypot(dx, dy) > 1e-9:
             frame_angle = math.atan2(dy, dx)
             break
@@ -65,7 +88,7 @@ def geometry_descriptor(molecule: dict[str, Any]) -> dict[str, Any] | None:
     cosine, sine = math.cos(frame_angle), math.sin(frame_angle)
     constituents = []
     for index, ((element, amount), point, rotation, shape) in enumerate(
-        zip(parts, points, rotations, shapes)
+        zip(parts, geometry_points, rotations, shapes)
     ):
         dx, dy = point[0] - center_x, point[1] - center_y
         local_x = dx * cosine + dy * sine
@@ -86,7 +109,7 @@ def geometry_descriptor(molecule: dict[str, Any]) -> dict[str, Any] | None:
             pair_distances.append({
                 "part_a": left,
                 "part_b": right,
-                "distance": _rounded(math.dist(points[left], points[right])),
+                "distance": _rounded(math.dist(geometry_points[left], geometry_points[right])),
             })
 
     bonds = []
@@ -108,8 +131,9 @@ def geometry_descriptor(molecule: dict[str, Any]) -> dict[str, Any] | None:
             return None
 
     return {
-        "coordinate_frame": "constituent centroid; first noncoincident constituent vector defines +x; rotation only, no reflection",
+        "coordinate_frame": "constituent centroid; first noncoincident constituent vector defines +x; vertical y is minimum-image unwrapped; rotation only, no reflection",
         "world_centroid": {"x": _rounded(center_x), "y": _rounded(center_y)},
+        "vertical_wrap_period": _rounded(world_height) if world_height is not None else None,
         "world_frame_rotation_radians": _rounded(frame_angle),
         "constituents": constituents,
         "pairwise_constituent_distances": pair_distances,
@@ -152,7 +176,9 @@ def _load_seed(root: Path, seed: int, duration: int) -> tuple[dict[str, Any], li
     return chemistry, records
 
 
-def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
+def analyze(
+    root: Path, seeds: list[int], duration: int, world_height: float | None = 250.0
+) -> dict[str, Any]:
     instances: list[dict[str, Any]] = []
     reactions: list[dict[str, Any]] = []
     geometry_missing_at_creation = 0
@@ -167,7 +193,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
 
         for identity, row in rows.items():
             molecule = row.get("molecule") or {}
-            descriptor = geometry_descriptor(molecule)
+            descriptor = geometry_descriptor(molecule, world_height)
             if descriptor is None:
                 geometry_missing_at_creation += 1
             try:
@@ -213,7 +239,9 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                 identity = lifecycle_row.get("molecule_id")
                 if not isinstance(identity, int):
                     continue
-                descriptor = geometry_descriptor(lifecycle_row.get("molecule") or {})
+                descriptor = geometry_descriptor(
+                    lifecycle_row.get("molecule") or {}, world_height
+                )
                 if lifecycle_row.get("action") == "destroyed":
                     parents.append(identity)
                     if descriptor is not None:
@@ -277,6 +305,8 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         "experiment": {
             "seeds": seeds,
             "duration_seconds_per_seed": duration,
+            "world_height": world_height,
+            "vertical_boundary": "periodic wrap" if world_height is not None else "not normalized",
             "starting_inventory": "1,280 established two-constituent molecules; zero independent resources; 2,560 constituents",
         },
         "summary": summary,
@@ -347,12 +377,16 @@ def main() -> int:
     parser.add_argument("input_dir", type=Path)
     parser.add_argument("--seeds", required=True)
     parser.add_argument("--duration-seconds", type=int, required=True)
+    parser.add_argument(
+        "--world-height", type=float, default=250.0,
+        help="Vertical periodic-wrap period used to unwrap constituent geometry (default: 250).",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     seeds = [int(value.strip()) for value in args.seeds.split(",") if value.strip()]
     if not seeds or len(seeds) != len(set(seeds)):
         parser.error("--seeds must be a nonempty list of unique integers")
-    report = analyze(args.input_dir, seeds, args.duration_seconds)
+    report = analyze(args.input_dir, seeds, args.duration_seconds, args.world_height)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "geometry-aware-network.json").write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8"
