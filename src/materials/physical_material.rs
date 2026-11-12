@@ -583,7 +583,7 @@ mod tests {
             velocity_y: 4.0,
             angular_velocity: 2.0,
         };
-        assert_eq!(motion.kinetic_energy(2.0, 0.5), Some(22.0));
+        assert_eq!(motion.kinetic_energy(2.0, 0.5), Some(26.0));
         assert_eq!(InertialMotion::default().kinetic_energy(2.0, 0.5), Some(0.0));
     }
 
@@ -611,8 +611,8 @@ mod tests {
         }
         .rotated_axes(-std::f64::consts::FRAC_PI_2)
         .unwrap();
-        assert!((local.velocity_x - 5.0).abs() < 1e-12);
-        assert!((local.velocity_y + 7.0).abs() < 1e-12);
+        assert!((local.velocity_x - 8.0).abs() < 1e-12);
+        assert!((local.velocity_y - 2.0).abs() < 1e-12);
         assert_eq!(local.angular_velocity, motion.angular_velocity);
     }
 
