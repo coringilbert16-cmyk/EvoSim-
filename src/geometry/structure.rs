@@ -1640,10 +1640,7 @@ mod tests {
         assert_eq!(restored, endpoint);
 
         let mut legacy_value = serialized;
-        legacy_value
-            .as_object_mut()
-            .unwrap()
-            .remove("face_binding");
+        legacy_value.as_object_mut().unwrap().remove("face_binding");
         let legacy: BondEndpoint = serde_json::from_value(legacy_value).unwrap();
         assert_eq!(legacy.constituent_id, endpoint.constituent_id);
         assert_eq!(legacy.location, endpoint.location);
