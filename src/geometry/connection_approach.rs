@@ -53,14 +53,7 @@ pub fn translation_path_is_collision_free(
             images.iter().all(|image_y| {
                 let mut image = obstacle.clone();
                 image.placement.y += *image_y;
-                translation_pair_is_clear(
-                    moving,
-                    &image,
-                    (delta_x, delta_y),
-                    0.0,
-                    1.0,
-                    0,
-                )
+                translation_pair_is_clear(moving, &image, (delta_x, delta_y), 0.0, 1.0, 0)
             })
         })
     })
@@ -260,13 +253,7 @@ pub fn collision_free_translation_fraction(
     delta_y: f64,
     vertical_period: Option<f64>,
 ) -> Option<f64> {
-    if !translation_path_is_collision_free(
-        moving_parts,
-        obstacles,
-        0.0,
-        0.0,
-        vertical_period,
-    ) {
+    if !translation_path_is_collision_free(moving_parts, obstacles, 0.0, 0.0, vertical_period) {
         return None;
     }
     if translation_path_is_collision_free(
@@ -348,21 +335,8 @@ fn translation_pair_is_clear(
         return false;
     }
 
-    translation_pair_is_clear(
-        moving,
-        obstacle,
-        displacement,
-        start,
-        midpoint,
-        depth + 1,
-    ) && translation_pair_is_clear(
-        moving,
-        obstacle,
-        displacement,
-        midpoint,
-        end,
-        depth + 1,
-    )
+    translation_pair_is_clear(moving, obstacle, displacement, start, midpoint, depth + 1)
+        && translation_pair_is_clear(moving, obstacle, displacement, midpoint, end, depth + 1)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -935,14 +909,8 @@ mod tests {
             },
             placement: placement(5.0, 0.0, 0.0),
         };
-        let fraction = collision_free_translation_fraction(
-            &[moving],
-            &[obstacle],
-            10.0,
-            0.0,
-            None,
-        )
-        .unwrap();
+        let fraction =
+            collision_free_translation_fraction(&[moving], &[obstacle], 10.0, 0.0, None).unwrap();
         assert!(fraction > 0.0 && fraction < 0.5);
     }
 
