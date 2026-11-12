@@ -1446,6 +1446,10 @@ mod tests {
                 &simulation.environment.catalog,
             ));
         }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
         let identities = simulation
             .environment
             .field
