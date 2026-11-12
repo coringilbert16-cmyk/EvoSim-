@@ -47,10 +47,15 @@ def load_seed(root: Path, seed: int, duration: int) -> dict[str, Any]:
         raise ValueError(f"seed {seed}: expected {duration}s, got {source.get('requested_duration_seconds')}")
     if source.get("initial_physical_material_count") != 1280:
         raise ValueError(f"seed {seed}: expected 1,280 starting physical materials")
-    if source.get("initial_independent_resource_count") != 0 or source.get("initial_molecule_count") != 1280:
-        raise ValueError(f"seed {seed}: expected 1,280 starting two-constituent molecules and no free resources")
-    if source.get("initial_constituent_count") != 2560:
-        raise ValueError(f"seed {seed}: expected 2,560 starting constituents")
+    if (
+        source.get("initial_independent_resource_count") != 1200
+        or source.get("initial_molecule_count") != 80
+    ):
+        raise ValueError(
+            f"seed {seed}: expected 1,200 independent resources and 80 starting molecules"
+        )
+    if source.get("initial_constituent_count") != 1360:
+        raise ValueError(f"seed {seed}: expected 1,360 starting constituents")
     if coverage.get("excluded_resources") != ["Water"]:
         raise ValueError(f"seed {seed}: active chemistry must exclude Water")
     if set(coverage.get("required_resources", [])) != set(ACTIVE_ELEMENTS):
