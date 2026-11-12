@@ -134,6 +134,48 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - Run focused geometry, force, activation, displacement, rollback, and energy-conservation tests, then the complete CI suite.
 - Do not run extended environmental experiments or benchmarks unless specifically requested; establish correctness and green CI first.
 
+## 7.1 Runtime integration audit (Phase B entry)
+
+The live free-material movement path is `Simulation::step` ->
+`environment_flow::transport_field_with_singleton_center_velocity_reuse` ->
+environmental BREAK/COMBINE discovery. The flow pass already snapshots all
+field materials, computes complete destination proposals, removes source
+entries in reverse index order, deposits destinations, and updates affected
+cell revisions. This is the correct environmental movement boundary to extend;
+a second independent transport pass must not be introduced.
+
+The current world-potential gradient in `world_tone_snapshot.rs` is a
+correctness oracle, not a production force consumer. It perturbs every world
+body and recomputes the full occlusion-aware pair inventory for each axis.
+It must not be called unconditionally from the ordinary tick loop. Production
+integration needs a cached/local interaction evaluation that preserves every
+relevant occluder's contribution and returns balanced forces for all affected
+bodies.
+
+The existing `settle_pair_potential_change` helper stages its ledger and
+resonance-holder changes, but its current caller contract accepts one active
+mover's usable-energy holder and eligible biological resonance holders.
+Environmental field materials have no independent usable-energy or retained
+resonance holder. The implementation must therefore preserve the approved
+ownership rule: do not debit an unrelated or distant organism, and do not
+invent a nonliving material energy reserve. A proposed movement whose positive
+pair-potential change has no legitimate source must be rejected before any
+placement or cell-index mutation.
+
+The first runtime slice will establish, in dependency order:
+1. A production-scalable force snapshot with stable body identities and
+   complete multi-body occlusion/reaction-force accounting.
+2. A pure movement proposal stage that combines the existing ambient flow,
+   resonance force, collision/path validation, and exact face-pair approach.
+3. A staged before/after pair-potential and mechanical-work settlement that
+   uses only legitimate local holders.
+4. One commit boundary for all moved placements, topology/activation changes,
+   energy holders, ledger counters, and field-cell revisions.
+
+Until those prerequisites pass focused rollback and conservation tests, the
+existing ambient flow remains unchanged and the full-world gradient remains
+test/oracle-only.
+
 ## 8. Required regression and acceptance coverage
 
 **Geometry and snapping**
