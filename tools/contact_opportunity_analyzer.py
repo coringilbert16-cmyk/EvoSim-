@@ -74,7 +74,7 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
         path = root / f"seed-{seed}.jsonl"
         if not path.is_file():
             raise ValueError(f"seed {seed}: missing raw observation {path}")
-        seed_totals = {field: 0 for field in (*SEARCH_FIELDS, *REACTION_FIELDS)}
+        seed_totals = {field: 0 for field in (*SEARCH_FIELDS, *DISPLACEMENT_FIELDS, *REACTION_FIELDS)}
         ticks = 0
         with path.open(encoding="utf-8") as stream:
             for line_number, line in enumerate(stream, 1):
