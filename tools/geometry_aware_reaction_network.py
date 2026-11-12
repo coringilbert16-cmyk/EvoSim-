@@ -66,7 +66,8 @@ def geometry_descriptor(
     anchor_y = points[0][1]
     if world_height is None:
         geometry_points = points
-        center_y = statistics.fmean(p[1] for p in points)
+        center_y_unwrapped = statistics.fmean(p[1] for p in points)
+        center_y_world = center_y_unwrapped
     else:
         geometry_points = [
             (
@@ -76,7 +77,8 @@ def geometry_descriptor(
             )
             for x, y in points
         ]
-        center_y = statistics.fmean(p[1] for p in geometry_points) % world_height
+        center_y_unwrapped = statistics.fmean(p[1] for p in geometry_points)
+        center_y_world = center_y_unwrapped % world_height
     center_x = statistics.fmean(p[0] for p in geometry_points)
     frame_angle = rotations[0]
     for x, y in geometry_points[1:]:
@@ -132,7 +134,7 @@ def geometry_descriptor(
 
     return {
         "coordinate_frame": "constituent centroid; first noncoincident constituent vector defines +x; vertical y is minimum-image unwrapped; rotation only, no reflection",
-        "world_centroid": {"x": _rounded(center_x), "y": _rounded(center_y)},
+        "world_centroid": {"x": _rounded(center_x), "y": _rounded(center_y_world)},
         "vertical_wrap_period": _rounded(world_height) if world_height is not None else None,
         "world_frame_rotation_radians": _rounded(frame_angle),
         "constituents": constituents,
