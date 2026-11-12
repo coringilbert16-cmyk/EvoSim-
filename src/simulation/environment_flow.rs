@@ -374,9 +374,7 @@ fn angular_displacement(
                 - ry * (local_velocity.x - center_velocity.x));
     }
 
-    let response = if placements.len() > 1
-        && mass_properties.moment_of_inertia > f64::EPSILON
-    {
+    let response = if placements.len() > 1 && mass_properties.moment_of_inertia > f64::EPSILON {
         torque / mass_properties.moment_of_inertia
     } else {
         // A single constituent has no center-of-mass lever arm. Its shape's
