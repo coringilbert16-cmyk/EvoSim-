@@ -99,6 +99,13 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - Add path-validity and multi-body collision checks for the continuous movement toward the target.
 - Keep ordinary collision geometry unchanged.
 
+**Current Phase A implementation status**
+- Exact full-face and half-face pairing, stable face identity, snapped target poses, and normalized face occupancy checks are implemented in `src/geometry/connection_approach.rs`.
+- Conservative swept translation and rigid-rotation path checks are implemented. They use the shared material penetration predicate and fail closed when a narrow interval cannot be proven clear.
+- Collision-limited transform fractions and a geometry-only approach step planner are implemented; they return a verified movement proposal and never mutate world state.
+- A shared face-pair evaluation now combines endpoint/angular progress, activation-signal gating, occupancy validation, collision-valid requested movement, and exact-snap eligibility in one result.
+- These helpers are still staged: the live environmental movement/reaction loop does not yet call them. Phase A is not complete until the runtime integration and its atomic rollback tests are implemented.
+
 ### Phase B — resonance force and energy integration
 - Integrate the existing pair potential/force into normal environmental physical movement.
 - Resolve occluder-aware multi-body gradients, including reaction forces on blockers; do not use the isolated-pair force in a crowded scene.
