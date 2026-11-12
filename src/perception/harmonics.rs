@@ -1308,6 +1308,18 @@ pub(crate) fn material_aura_receptions_with_occluders(
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
+    let (source_x, source_y, _, _) =
+        environmental_material_resonance(source, catalog, tick)?;
+    // Every source-to-receiver-boundary segment lies inside this AABB. A body
+    // outside it cannot occlude any sampled ray, so retain only geometries
+    // whose bounds intersect the conservative envelope. No relevant blocker
+    // is truncated and no distance cutoff is introduced.
+    let receiver_envelope = [
+        (receiver_geometry.min_x, receiver_geometry.min_y),
+        (receiver_geometry.min_x, receiver_geometry.max_y),
+        (receiver_geometry.max_x, receiver_geometry.min_y),
+        (receiver_geometry.max_x, receiver_geometry.max_y),
+    ];
 
     // Keep the receiver first as the only target. Other bodies remain exact
     // occluders; the source itself is excluded because its aura originates
@@ -1318,11 +1330,17 @@ pub(crate) fn material_aura_receptions_with_occluders(
         if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
             continue;
         }
-        receiver_bodies.push(
+        let geometry =
             crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
                 occluder, catalog,
-            )?,
-        );
+            )?;
+        if geometry_bounds_may_occlude_source_points(
+            (source_x, source_y),
+            &receiver_envelope,
+            &geometry,
+        ) {
+            receiver_bodies.push(geometry);
+        }
     }
 
     material_aura_receptions_with_geometry(
@@ -1338,7 +1356,6 @@ pub(crate) fn material_aura_receptions_with_occluders(
 /// Conservative AABB broad phase for possible occluders between a point
 /// source and the sampled receiver endpoints. Every source-to-endpoint segment
 /// lies inside the envelope of the source and requested points.
-#[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
 fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
     points: &[(f64, f64)],
