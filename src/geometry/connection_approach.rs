@@ -97,10 +97,13 @@ pub fn rigid_approach_path_is_collision_free(
 
     let period = vertical_period.unwrap_or(0.0);
     moving_parts.iter().all(|moving| {
-        let relative = (
-            moving.placement.x - anchor_start.x,
-            moving.placement.y - anchor_start.y,
-        );
+        let relative_y = if period > 0.0 {
+            (moving.placement.y - anchor_start.y + period * 0.5).rem_euclid(period)
+                - period * 0.5
+        } else {
+            moving.placement.y - anchor_start.y
+        };
+        let relative = (moving.placement.x - anchor_start.x, relative_y);
         let local_offset = rotate(relative, -anchor_start.rotation_radians);
         let local_rotation = moving.placement.rotation_radians - anchor_start.rotation_radians;
         obstacles.iter().all(|obstacle| {
