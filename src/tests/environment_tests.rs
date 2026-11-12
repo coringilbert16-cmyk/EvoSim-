@@ -759,6 +759,12 @@ fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells
     )
     .expect("bonded carbon-hydrogen should be realizable");
 
+    assert_eq!(
+        bonded.internal_connections.as_ref().map(Vec::len),
+        Some(1),
+        "the fixture must contain exactly one realized internal bond"
+    );
+
     let cell = field.index_for_position(12.5, 12.5).unwrap();
     assert!(field.deposit_physical_at_index(cell, free, &catalog));
     assert!(field.environmental_bond_candidates(0, 8).is_empty());
