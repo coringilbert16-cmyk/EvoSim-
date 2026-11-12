@@ -11,7 +11,8 @@ use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
-const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
+const ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT: usize = 1_200;
+const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
 
 // Two-constituent structures previously observed as reaction-created products.
 // Every type receives an equal starting share; the final remainder is assigned
@@ -272,14 +273,14 @@ fn place_molecule_prototype(
     molecule
 }
 
-/// Seed 1,280 intact, known two-constituent molecules in randomized piles.
+/// Seed the standard 1,280-object mixture: 1,200 independent resources and
+/// 80 intact, known two-constituent molecules, all in randomized piles.
 fn seed_randomized_molecular_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
     seed: u64,
     width: f64,
     height: f64,
-    include_molecules: bool,
 ) -> Vec<usize> {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     let resource_names = catalog
@@ -292,48 +293,44 @@ fn seed_randomized_molecular_resources(
         "active chemistry experiments exclude Water until it is explicitly revisited"
     );
 
-    let molecule_prototypes: Vec<PhysicalMaterial> = if include_molecules {
-        KNOWN_TWO_UNIT_MOLECULES
-            .iter()
-            .map(|(left, right)| {
-                realize_natural_molecule(
-                    &[(*left).into(), (*right).into()],
-                    Placement {
-                        x: 0.0,
-                        y: 0.0,
-                        rotation_radians: 0.0,
-                    },
-                    catalog,
-                )
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let objects: Vec<(Vec<String>, bool)> = if include_molecules {
-        let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
-        let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
-        let remainder = ENVIRONMENT_MOLECULE_COUNT % KNOWN_TWO_UNIT_MOLECULES.len();
-        for (index, (left, right)) in KNOWN_TWO_UNIT_MOLECULES.iter().enumerate() {
-            let count = base_share + usize::from(index < remainder);
-            molecules.extend(std::iter::repeat_n(
-                (vec![(*left).into(), (*right).into()], true),
-                count,
-            ));
-        }
-        molecules.shuffle(&mut rng);
-        molecules
-    } else {
-        let mut identities = resource_names.clone();
-        while identities.len() < ENVIRONMENT_OBJECT_COUNT {
-            identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
-        }
-        identities.shuffle(&mut rng);
-        identities
+    let molecule_prototypes: Vec<PhysicalMaterial> = KNOWN_TWO_UNIT_MOLECULES
+        .iter()
+        .map(|(left, right)| {
+            realize_natural_molecule(
+                &[(*left).into(), (*right).into()],
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                catalog,
+            )
+        })
+        .collect();
+
+    let mut objects: Vec<(Vec<String>, bool)> = Vec::with_capacity(ENVIRONMENT_OBJECT_COUNT);
+    let mut independent_resources = resource_names.clone();
+    while independent_resources.len() < ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT {
+        independent_resources.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+    }
+    independent_resources.shuffle(&mut rng);
+    objects.extend(
+        independent_resources
             .into_iter()
-            .map(|name| (vec![name], false))
-            .collect()
-    };
+            .map(|name| (vec![name], false)),
+    );
+
+    let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
+    let remainder = ENVIRONMENT_MOLECULE_COUNT % KNOWN_TWO_UNIT_MOLECULES.len();
+    for (index, (left, right)) in KNOWN_TWO_UNIT_MOLECULES.iter().enumerate() {
+        let count = base_share + usize::from(index < remainder);
+        objects.extend(std::iter::repeat_n(
+            (vec![(*left).into(), (*right).into()], true),
+            count,
+        ));
+    }
+    objects.shuffle(&mut rng);
+    assert_eq!(objects.len(), ENVIRONMENT_OBJECT_COUNT);
 
     let pile_count = rng.gen_range(3..=10);
     let mut cuts: Vec<usize> = (1_usize..ENVIRONMENT_OBJECT_COUNT).collect();
@@ -438,7 +435,6 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         seed,
         simulation.environment.width,
         simulation.environment.height,
-        true,
     );
 
     assert!(
