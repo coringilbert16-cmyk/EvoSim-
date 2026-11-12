@@ -1097,6 +1097,13 @@ mod tests {
             .break_internal_bond(&target, &catalog, None)
             .expect("stored bond");
         assert_eq!(pieces.len(), 2);
+        let source_kinetic_energy = expected_motion
+            .kinetic_energy(
+                source_mass_properties.mass,
+                source_mass_properties.moment_of_inertia,
+            )
+            .unwrap();
+        let mut pieces_kinetic_energy = 0.0;
         for piece in &pieces {
             let properties = piece.mass_properties(&catalog, None).unwrap();
             let expected = expected_motion
@@ -1111,7 +1118,15 @@ mod tests {
                 piece.inertial_motion.angular_velocity,
                 expected_motion.angular_velocity
             );
+            pieces_kinetic_energy += piece
+                .inertial_motion
+                .kinetic_energy(properties.mass, properties.moment_of_inertia)
+                .unwrap();
         }
+        assert!(
+            (pieces_kinetic_energy - source_kinetic_energy).abs() < 1e-12,
+            "splitting a rigid body without an impulse must conserve total kinetic energy"
+        );
         assert!(pieces
             .iter()
             .all(|piece| piece.material.internal_bonds.is_empty()));
