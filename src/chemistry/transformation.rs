@@ -947,7 +947,8 @@ impl Simulation {
                 &environment.catalog,
                 transformation.environmental_source.then_some(environment.height),
             )
-            .is_none() {
+            .is_none()
+        {
             organism.active_transformation_id = None;
             return false;
         }
