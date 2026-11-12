@@ -1623,6 +1623,49 @@ mod tests {
     use super::*;
 
     #[test]
+    fn bond_endpoint_face_binding_round_trips_and_legacy_records_remain_readable() {
+        let binding = ConnectionFaceBinding {
+            face_index: 3,
+            start: 0.25,
+            end: 0.75,
+        };
+        let endpoint = BondEndpoint::new_with_face_binding(
+            PhysicalConstituentId(42),
+            ConnectionEndpoint::Corner { point_index: 2 },
+            binding,
+        )
+        .unwrap();
+        let serialized = serde_json::to_value(endpoint).unwrap();
+        let restored: BondEndpoint = serde_json::from_value(serialized.clone()).unwrap();
+        assert_eq!(restored, endpoint);
+
+        let mut legacy_value = serialized;
+        legacy_value
+            .as_object_mut()
+            .unwrap()
+            .remove("face_binding");
+        let legacy: BondEndpoint = serde_json::from_value(legacy_value).unwrap();
+        assert_eq!(legacy.constituent_id, endpoint.constituent_id);
+        assert_eq!(legacy.location, endpoint.location);
+        assert_eq!(legacy.face_binding, None);
+    }
+
+    #[test]
+    fn bond_endpoint_deserialization_rejects_invalid_face_intervals() {
+        let endpoint = BondEndpoint::new(
+            PhysicalConstituentId(7),
+            ConnectionEndpoint::Corner { point_index: 0 },
+        );
+        let mut value = serde_json::to_value(endpoint).unwrap();
+        value["face_binding"] = serde_json::json!({
+            "face_index": 0,
+            "start": 0.8,
+            "end": 0.2
+        });
+        assert!(serde_json::from_value::<BondEndpoint>(value).is_err());
+    }
+
+    #[test]
     fn hydrogen_line_endpoints_follow_rigid_rotation() {
         let catalog = crate::resources::default_catalog();
         let rotation = std::f64::consts::FRAC_PI_4;
