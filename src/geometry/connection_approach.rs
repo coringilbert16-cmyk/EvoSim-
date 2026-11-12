@@ -129,6 +129,60 @@ pub fn rigid_approach_path_is_collision_free(
     clippy::too_many_arguments,
     reason = "The recursive sweep keeps the rigid transform explicit and immutable"
 )]
+/// Find the furthest collision-free fraction of a rigid translation/rotation.
+///
+/// This is the rotational counterpart to collision_free_translation_fraction.
+/// It never applies a partial move; it returns the maximum verified fraction
+/// for the caller to stage and commit.
+pub fn collision_free_rigid_approach_fraction(
+    moving_parts: &[PlacedMaterialPart],
+    anchor_start: Placement,
+    translation: (f64, f64),
+    rotation_delta: f64,
+    obstacles: &[PlacedMaterialPart],
+    vertical_period: Option<f64>,
+) -> Option<f64> {
+    if !rigid_approach_path_is_collision_free(
+        moving_parts,
+        anchor_start,
+        (0.0, 0.0),
+        0.0,
+        obstacles,
+        vertical_period,
+    ) {
+        return None;
+    }
+    if rigid_approach_path_is_collision_free(
+        moving_parts,
+        anchor_start,
+        translation,
+        rotation_delta,
+        obstacles,
+        vertical_period,
+    ) {
+        return Some(1.0);
+    }
+
+    let mut clear = 0.0;
+    let mut blocked = 1.0;
+    for _ in 0..48 {
+        let midpoint = (clear + blocked) * 0.5;
+        if rigid_approach_path_is_collision_free(
+            moving_parts,
+            anchor_start,
+            (translation.0 * midpoint, translation.1 * midpoint),
+            rotation_delta * midpoint,
+            obstacles,
+            vertical_period,
+        ) {
+            clear = midpoint;
+        } else {
+            blocked = midpoint;
+        }
+    }
+    Some(clear)
+}
+
 fn rigid_approach_pair_is_clear(
     moving: &PlacedMaterialPart,
     obstacle: PlacedMaterialPart,
@@ -870,6 +924,30 @@ mod tests {
             &[obstacle],
             None,
         ));
+    }
+
+    #[test]
+    fn rigid_approach_fraction_stops_before_swept_rotation_collision() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(2.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(0.0, 2.0, 0.0),
+        };
+        let fraction = collision_free_rigid_approach_fraction(
+            &[moving],
+            placement(0.0, 0.0, 0.0),
+            (0.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+            &[obstacle],
+            None,
+        )
+        .unwrap();
+        assert!(fraction > 0.0 && fraction < 1.0);
     }
 
     #[test]
