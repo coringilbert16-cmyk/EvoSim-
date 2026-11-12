@@ -1308,8 +1308,20 @@ pub(crate) fn material_aura_receptions_with_occluders(
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
-    let (source_x, source_y, _, _) =
-        environmental_material_resonance(source, catalog, tick)?;
+    let source_placements = source.placements.as_ref()?;
+    if source_placements.is_empty()
+        || source_placements.len() != source.material.parts.len()
+    {
+        return None;
+    }
+    let source_count = source_placements.len() as f64;
+    let source_x = source_placements.iter().map(|placement| placement.x).sum::<f64>()
+        / source_count;
+    let source_y = source_placements.iter().map(|placement| placement.y).sum::<f64>()
+        / source_count;
+    if !source_x.is_finite() || !source_y.is_finite() {
+        return None;
+    }
     // Every source-to-receiver-boundary segment lies inside this AABB. A body
     // outside it cannot occlude any sampled ray, so retain only geometries
     // whose bounds intersect the conservative envelope. No relevant blocker
