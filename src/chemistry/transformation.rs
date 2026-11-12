@@ -941,7 +941,13 @@ impl Simulation {
         // deserialize with zero bond energy and therefore remain connectivity-
         // only; bonds formed under the current COMBINE model carry their actual
         // dissociation energy and must be paid for when separated.
-        if stored.break_internal_bond(target).is_none() {
+        if stored
+            .break_internal_bond(
+                target,
+                &environment.catalog,
+                transformation.environmental_source.then_some(environment.height),
+            )
+            .is_none() {
             organism.active_transformation_id = None;
             return false;
         }
@@ -1307,7 +1313,11 @@ pub(crate) fn resolve_transformation(
     };
     let usable = prepared_break_energy.usable_energy - before_energy;
     let heat = prepared_break_energy.heat_dissipated;
-    let Some(pieces) = stored.break_internal_bond(target) else {
+    let Some(pieces) = stored.break_internal_bond(
+        target,
+        &environment.catalog,
+        transformation.environmental_source.then_some(environment.height),
+    ) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
     };
