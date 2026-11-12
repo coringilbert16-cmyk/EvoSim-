@@ -66,11 +66,7 @@ impl ConnectionFaceEndpoint {
             .map(|face| face.endpoint(self.end))
     }
 
-    pub fn world_point(
-        self,
-        faces: &[ConnectionFace],
-        placement: Placement,
-    ) -> Option<(f64, f64)> {
+    pub fn world_point(self, faces: &[ConnectionFace], placement: Placement) -> Option<(f64, f64)> {
         faces
             .iter()
             .find(|face| face.face_index == self.face_index)
@@ -86,7 +82,10 @@ impl ConnectionFaceEndpoint {
 /// shapes expose each of their boundary edges. Curved and fluid boundaries
 /// remain continuous surfaces and are not discretized by this API.
 pub fn connection_faces(shape: &Shape, resource_name: &str) -> Vec<ConnectionFace> {
-    if matches!(&shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }) {
+    if matches!(
+        &shape.form,
+        Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+    ) {
         return Vec::new();
     }
     let Some(vertices) = shape.form.polygon_vertices() else {
