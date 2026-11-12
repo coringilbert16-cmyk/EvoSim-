@@ -140,25 +140,33 @@ class GeometryAwareNetworkTests(unittest.TestCase):
         self.assertEqual(first["pairwise_constituent_distances"], second["pairwise_constituent_distances"])
         self.assertNotEqual(first["world_centroid"], second["world_centroid"])
 
-    def test_vertical_wrap_seam_preserves_compact_intrinsic_geometry(self):
+    def test_horizontal_wrap_seam_preserves_compact_intrinsic_geometry(self):
         across_seam = molecule(
             ["Carbon", "Hydrogen"],
-            [(10.0, 249.8), (10.0, 0.2)],
+            [(249.8, 10.0), (0.2, 10.0)],
             bonds=[(0, 1)],
         )
-        descriptor = geometry_descriptor(across_seam, world_height=250.0)
+        descriptor = geometry_descriptor(across_seam, world_width=250.0)
         self.assertIsNotNone(descriptor)
         self.assertEqual(
             descriptor["pairwise_constituent_distances"][0]["distance"], 0.4
         )
-        self.assertAlmostEqual(
-            descriptor["constituents"][0]["x"], -0.2, places=6
-        )
-        self.assertAlmostEqual(
-            descriptor["constituents"][1]["x"], 0.2, places=6
-        )
+        self.assertAlmostEqual(descriptor["constituents"][0]["x"], -0.2, places=6)
+        self.assertAlmostEqual(descriptor["constituents"][1]["x"], 0.2, places=6)
         self.assertAlmostEqual(descriptor["constituents"][0]["y"], 0.0, places=6)
         self.assertAlmostEqual(descriptor["constituents"][1]["y"], 0.0, places=6)
+
+    def test_vertical_hard_walls_are_not_treated_as_connected(self):
+        across_vertical_extent = molecule(
+            ["Carbon", "Hydrogen"],
+            [(10.0, 249.8), (10.0, 0.2)],
+            bonds=[(0, 1)],
+        )
+        descriptor = geometry_descriptor(across_vertical_extent, world_width=250.0)
+        self.assertIsNotNone(descriptor)
+        self.assertEqual(
+            descriptor["pairwise_constituent_distances"][0]["distance"], 249.6
+        )
 
     def test_missing_physical_geometry_is_reported_not_fabricated(self):
         incomplete = molecule(["Carbon"], [(0.0, 0.0)])
