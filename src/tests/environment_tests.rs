@@ -701,7 +701,7 @@ fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
     let parent = field.cells[0].physical_materials[0].clone();
     let bond = parent.internal_connections.as_ref().unwrap()[0].clone();
     let pieces = parent
-        .break_internal_bond(&bond)
+        .break_internal_bond(&bond, &catalog, None)
         .expect("the single internal bond should split into two products");
 
     assert!(field.split_physical_at_index(0, 0, &parent, pieces, &catalog));
