@@ -1320,8 +1320,8 @@ pub(crate) fn resolve_transformation(
         target,
         &environment.catalog,
         transformation
-                    .environmental_source
-                    .then_some(environment.height),
+            .environmental_source
+            .then_some(environment.height),
     ) else {
         restore_failed_stored_break_source(transformation, organism, environment);
         return;
