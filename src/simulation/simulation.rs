@@ -361,6 +361,8 @@ impl Simulation {
             crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
                 + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
+        energy_ledger.total_kinetic_energy_held = 0.0;
+        energy_ledger.initial_kinetic_energy_held = 0.0;
         let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
             environment.width,
             environment.height,
@@ -2272,6 +2274,49 @@ impl Simulation {
             })
             .sum()
     }
+    /// Recompute kinetic energy from every currently owned physical material.
+    /// Field materials use the world's periodic vertical geometry; stored and
+    /// escrowed materials are expressed in their owner's intrinsic frame.
+    fn current_kinetic_energy_held(&self) -> Option<f64> {
+        let catalog = &self.environment.catalog;
+        let vertical_period = Some(self.environment.height);
+        let field_energy = self
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .try_fold(0.0, |total, material| {
+                let energy = material.kinetic_energy(catalog, vertical_period)?;
+                let next = total + energy;
+                (next.is_finite() && next >= 0.0).then_some(next)
+            })?;
+        let stored_energy = self.organisms.iter().try_fold(field_energy, |total, organism| {
+            let mut next = total + organism.stored_material.kinetic_energy_held(catalog)?;
+            if let Some(construction) = &organism.reproductive_construction {
+                next += construction.committed_material.kinetic_energy_held(catalog)?;
+            }
+            (next.is_finite() && next >= 0.0).then_some(next)
+        })?;
+        self.active_transformations.iter().try_fold(
+            stored_energy,
+            |total, transformation| {
+                let energy = if let Some(source) = &transformation.stored_material {
+                    source.kinetic_energy(
+                        catalog,
+                        transformation.environmental_source.then_some(self.environment.height),
+                    )?
+                } else if let Some(prepared) = &transformation.prepared_stored_material {
+                    prepared.kinetic_energy_held(catalog)?
+                } else {
+                    0.0
+                };
+                let next = total + energy;
+                (next.is_finite() && next >= 0.0).then_some(next)
+            },
+        )
+    }
+
     /// Independent diagnostic oracle: recompute current stores from their owning state,
     /// rather than trusting the production ledger's cached aggregate totals.
     /// Cumulative flows and tick-zero baselines still come from the ledger because
@@ -2295,6 +2340,7 @@ impl Simulation {
                 &self.organisms,
                 &self.decomposing_bodies,
             ) + Self::environmental_structural_energy_held(&self.environment);
+        let current_kinetic_energy = self.current_kinetic_energy_held().unwrap_or(f64::NAN);
 
         crate::energy_ledger::EnergyInventorySnapshot {
             initial_usable_energy: self.energy_ledger.initial_usable_energy_held,
@@ -2303,6 +2349,8 @@ impl Simulation {
             current_resonant_energy,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
             current_structural_energy,
+            initial_kinetic_energy: self.energy_ledger.initial_kinetic_energy_held,
+            current_kinetic_energy,
             initial_pair_interaction_potential: self
                 .energy_ledger
                 .initial_pair_interaction_potential_held,
