@@ -31,6 +31,29 @@ SEARCH_FIELDS = (
     "accumulation_keys_preserved_unsearched",
     "accumulation_keys_invalidated",
 )
+DISPLACEMENT_FIELDS = (
+    "anchor_materials_inspected",
+    "bonded_anchor_materials",
+    "target_cells_inspected",
+    "target_materials_inspected",
+    "bonds_inspected",
+    "replacement_contact_searches",
+    "replacement_contacts_found",
+    "activation_updates",
+    "activation_threshold_met",
+    "activation_below_threshold",
+    "activation_status_unavailable",
+    "trial_build_rejections_after_activation",
+    "trial_rejections_old_bond_energy",
+    "trial_rejections_topology",
+    "trial_rejections_replacement",
+    "trial_rejections_candidate_revalidation",
+    "trial_rejections_formation_investment",
+    "trial_rejections_physical_insertion",
+    "trial_rejections_energy",
+    "trial_rejections_products",
+    "trial_rejections_other",
+)
 REACTION_FIELDS = (
     "combine_ready_candidates",
     "combine_scheduled",
@@ -46,7 +69,7 @@ REACTION_FIELDS = (
 def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     per_seed: list[dict[str, Any]] = []
     all_ticks: list[dict[str, Any]] = []
-    totals = {field: 0 for field in (*SEARCH_FIELDS, *REACTION_FIELDS)}
+    totals = {field: 0 for field in (*SEARCH_FIELDS, *DISPLACEMENT_FIELDS, *REACTION_FIELDS)}
     for seed in seeds:
         path = root / f"seed-{seed}.jsonl"
         if not path.is_file():
@@ -69,6 +92,11 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                 for field in SEARCH_FIELDS:
                     value = int(search.get(field, 0) or 0)
                     row[field] = value
+                    seed_totals[field] += value
+                displacement = work.get("displacement_discovery") or {}
+                for field in DISPLACEMENT_FIELDS:
+                    value = int(displacement.get(field, 0) or 0)
+                    row[f"displacement_{field}"] = value
                     seed_totals[field] += value
                 for field in REACTION_FIELDS:
                     value = int(work.get(field, 0) or 0)
@@ -100,6 +128,12 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "valid_interface_fraction_of_inspected_pairs": valid_pairs / inspected if inspected else None,
             "interfaces_per_inspected_pair": interfaces / inspected if inspected else None,
             "combine_commits_per_interface_submitted": totals["combine_committed"] / totals["interfaces_sent_to_chemistry"] if totals["interfaces_sent_to_chemistry"] else None,
+            "displacement_replacement_contact_searches": totals["replacement_contact_searches"],
+            "displacement_replacement_contacts_found": totals["replacement_contacts_found"],
+            "displacement_contacts_found_per_search": totals["replacement_contacts_found"] / totals["replacement_contact_searches"] if totals["replacement_contact_searches"] else None,
+            "displacement_activation_threshold_met": totals["activation_threshold_met"],
+            "displacement_activation_below_threshold": totals["activation_below_threshold"],
+            "displacement_trial_rejections_after_activation": totals["trial_build_rejections_after_activation"],
         },
         "interpretation_limits": [
             "These are per-tick aggregate discovery counters, not a complete list of every molecule-pair encounter.",
