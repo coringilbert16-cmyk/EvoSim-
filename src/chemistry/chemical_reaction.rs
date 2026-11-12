@@ -2155,6 +2155,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                inertial_motion: crate::physical_material::InertialMotion::default(),
                 environmental_identity: 0,
                 placements: None,
                 internal_connections: None,
@@ -2209,6 +2210,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                inertial_motion: crate::physical_material::InertialMotion::default(),
                 environmental_identity: 0,
                 placements: None,
                 internal_connections: None,
