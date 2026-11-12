@@ -193,10 +193,6 @@ pub fn rigid_approach_path_is_collision_free(
     })
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "The recursive sweep keeps the rigid transform explicit and immutable"
-)]
 /// Find the furthest collision-free fraction of a rigid translation/rotation.
 ///
 /// This is the rotational counterpart to collision_free_translation_fraction.
