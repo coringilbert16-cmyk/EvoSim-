@@ -12,6 +12,36 @@ const VECTOR_EPSILON: f64 = 1e-12;
 const SWEEP_MAX_DEPTH: u8 = 12;
 const SWEEP_DISTANCE_EPSILON: f64 = 1e-10;
 
+/// Compute the shortest continuous rigid transform from the current pose
+/// to the exact snapped target. The returned delta is a requested movement,
+/// not an instruction to teleport or commit the target pose.
+pub fn connection_approach_delta(
+    current: Placement,
+    target: Placement,
+    vertical_period: Option<f64>,
+) -> Option<(f64, f64, f64)> {
+    if !finite_placement(current)
+        || !finite_placement(target)
+        || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+    {
+        return None;
+    }
+    let delta_y = if let Some(period) = vertical_period {
+        (target.y - current.y + period * 0.5).rem_euclid(period) - period * 0.5
+    } else {
+        target.y - current.y
+    };
+    let delta_rotation = (target.rotation_radians - current.rotation_radians
+        + std::f64::consts::PI)
+        .rem_euclid(std::f64::consts::TAU)
+        - std::f64::consts::PI;
+    let delta = (target.x - current.x, delta_y, delta_rotation);
+    [delta.0, delta.1, delta.2]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(delta)
+}
+
 /// Validate a straight-line translation against stationary geometry.
 ///
 /// The broad phase uses the exact swept center segment and each pair's
@@ -853,6 +883,33 @@ mod tests {
         assert_eq!(approach_progress(10.0, 12.0), Some(0.0));
         assert_eq!(approach_progress(0.0, 0.0), Some(1.0));
         assert_eq!(approach_progress(0.0, 0.5), Some(0.0));
+    }
+
+    #[test]
+    fn approach_delta_uses_shortest_rotation_and_vertical_wrap() {
+        let current = placement(2.0, 9.0, 3.0);
+        let target = placement(5.0, 1.0, -3.0);
+        let (dx, dy, rotation) =
+            connection_approach_delta(current, target, Some(10.0)).unwrap();
+        assert_eq!(dx, 3.0);
+        assert_eq!(dy, 2.0);
+        assert!((rotation - (2.0 * std::f64::consts::PI - 6.0)).abs() < 1e-12);
+    }
+
+    #[test]
+    fn approach_delta_rejects_invalid_poses_and_periods() {
+        assert!(connection_approach_delta(
+            placement(f64::NAN, 0.0, 0.0),
+            placement(0.0, 0.0, 0.0),
+            None,
+        )
+        .is_none());
+        assert!(connection_approach_delta(
+            placement(0.0, 0.0, 0.0),
+            placement(0.0, 0.0, 0.0),
+            Some(0.0),
+        )
+        .is_none());
     }
 
     #[test]
