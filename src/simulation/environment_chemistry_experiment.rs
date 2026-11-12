@@ -879,7 +879,12 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - (ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT) as f64).abs() < 1e-6);
+        assert!(
+            (total_material
+                - (ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT) as f64)
+                .abs()
+                < 1e-6
+        );
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
