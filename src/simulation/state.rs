@@ -943,6 +943,12 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,
     pub(crate) constituent_pairs_with_valid_interfaces: usize,
+    /// Broad-phase constituent pairs that produced no physically valid endpoint interface.
+    pub(crate) constituent_pairs_without_valid_interfaces: usize,
+    /// Endpoint candidates generated before the final live geometry/energy evaluation.
+    pub(crate) endpoint_pair_candidates_generated: usize,
+    /// Endpoint candidates rejected by the final selected-candidate evaluation.
+    pub(crate) endpoint_pair_candidates_rejected_by_evaluation: usize,
     pub(crate) constituent_pairs_suppressed_by_global_selection: usize,
     pub(crate) physically_evaluable_interfaces: usize,
     /// Every physically valid interface passed to its independent chemistry step.
