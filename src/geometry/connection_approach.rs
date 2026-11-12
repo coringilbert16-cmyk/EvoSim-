@@ -1081,7 +1081,12 @@ mod tests {
             span,
             placement_b: target_b,
         };
-        let initial_error = approach_error(face_b, current_b, target_record).unwrap();
+        let current_error = approach_error(face_b, current_b, target_record).unwrap();
+        let initial_error = ConnectionApproachError {
+            endpoint_error: 2.0,
+            rotation_error: 0.0,
+        };
+        assert_eq!(current_error.endpoint_error, 1.0);
         let moving = PlacedMaterialPart {
             part_index: 0,
             form: Form::Rectangle {
@@ -1109,8 +1114,8 @@ mod tests {
             vertical_period: None,
         };
         let evaluation = evaluate_connection_approach(input).unwrap();
-        assert_eq!(evaluation.progress, 0.0);
-        assert_eq!(evaluation.activation_signal, 0.0);
+        assert_eq!(evaluation.progress, 0.5);
+        assert_eq!(evaluation.activation_signal, 0.4);
         assert_eq!(evaluation.movement_fraction, 1.0);
         assert!(!evaluation.at_snapped_target);
     }
