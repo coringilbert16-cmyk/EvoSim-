@@ -50,9 +50,12 @@ impl InertialMotion {
     }
 
     /// Apply a constant net force and torque over an explicitly supplied
-    /// physics-time interval.
-    #[cfg_attr(not(test), expect(dead_code, reason = "Newtonian runtime integration follows in this PR"))] No drag or damping is applied. The caller owns
+    /// physics-time interval. No drag or damping is applied. The caller owns
     /// the timestep and the authoritative mass/inertia calculation.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
+    )]
     pub(crate) fn advanced(
         self,
         force_x: f64,
@@ -81,7 +84,10 @@ impl InertialMotion {
     }
 
     /// Kinetic energy for the supplied authoritative mass and inertia.
-    #[cfg_attr(not(test), expect(dead_code, reason = "Newtonian runtime integration follows in this PR"))]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
+    )]
     pub(crate) fn kinetic_energy(self, mass: f64, moment_of_inertia: f64) -> Option<f64> {
         if !self.is_finite()
             || !mass.is_finite()
@@ -716,6 +722,7 @@ mod tests {
         };
         let underfilled = PhysicalMaterial {
             material: Material::free_base("Water", 2.0),
+            inertial_motion: InertialMotion::default(),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
