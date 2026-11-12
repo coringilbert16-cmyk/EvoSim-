@@ -1309,15 +1309,19 @@ pub(crate) fn material_aura_receptions_with_occluders(
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
     let source_placements = source.placements.as_ref()?;
-    if source_placements.is_empty()
-        || source_placements.len() != source.material.parts.len()
-    {
+    if source_placements.is_empty() || source_placements.len() != source.material.parts.len() {
         return None;
     }
     let source_count = source_placements.len() as f64;
-    let source_x = source_placements.iter().map(|placement| placement.x).sum::<f64>()
+    let source_x = source_placements
+        .iter()
+        .map(|placement| placement.x)
+        .sum::<f64>()
         / source_count;
-    let source_y = source_placements.iter().map(|placement| placement.y).sum::<f64>()
+    let source_y = source_placements
+        .iter()
+        .map(|placement| placement.y)
+        .sum::<f64>()
         / source_count;
     if !source_x.is_finite() || !source_y.is_finite() {
         return None;
@@ -1342,10 +1346,9 @@ pub(crate) fn material_aura_receptions_with_occluders(
         if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
             continue;
         }
-        let geometry =
-            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                occluder, catalog,
-            )?;
+        let geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            occluder, catalog,
+        )?;
         if geometry_bounds_may_occlude_source_points(
             (source_x, source_y),
             &receiver_envelope,
