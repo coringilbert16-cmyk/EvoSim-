@@ -932,9 +932,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         // Cumulative counters can round a small increment upward by an ULP.
         // Record the increment conservatively so an exactly funded reaction
         // cannot be rejected when its usable-energy holder is already empty.
-        if next_work.is_finite()
-            && next_work - self.total_work_expended > transaction.work_expended
-        {
+        if next_work.is_finite() && next_work - self.total_work_expended > transaction.work_expended {
             next_work = f64::from_bits(next_work.to_bits() - 1);
         }
         if next_heat.is_finite()
