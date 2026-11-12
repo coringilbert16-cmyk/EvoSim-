@@ -498,7 +498,6 @@ impl ConnectionApproachTarget {
         (binding_a.is_valid() && binding_b.is_valid()).then_some((binding_a, binding_b))
     }
 }
-
 /// Resolve occupied face intervals from the live bond graph.
 ///
 /// New bonds carry exact face bindings. Legacy corner bonds conservatively
@@ -549,7 +548,7 @@ pub fn occupied_face_intervals(
                     if count < 3 || point_index >= count {
                         return None;
                     }
-                    let vertex = *vertices.get(point_index)?;
+                    let vertex = *vertices.as_ref()?.get(point_index)?;
                     // Corner endpoint indices are defined by the rigid endpoint
                     // geometry, while chemical face indices belong to the
                     // filtered connection-face list. Do not assume that every
@@ -997,8 +996,7 @@ pub fn approach_error(
 /// Re-evaluate approach error against A's current pose.
 ///
 /// Call this with current placements during movement; this keeps the target
-/// attached to A rather than leaving it at an earlier world-space location.
-pub fn approach_error_to_face_pair(
+/// attached to A rather than leaving it at an earlier world-space location.pub fn approach_error_to_face_pair(
     face_a: ConnectionFace,
     current_a: Placement,
     face_b: ConnectionFace,
@@ -1497,8 +1495,7 @@ mod tests {
             face_a_index: face_a.face_index,
             face_b_index: face_b.face_index,
             span,
-            placement_b: target_b,
-        };
+            placement_b: target_b,        };
         let error = approach_error(face_b, target_b, target).unwrap();
         let moving = PlacedMaterialPart {
             part_index: 0,
