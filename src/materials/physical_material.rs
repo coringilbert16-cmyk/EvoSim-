@@ -1039,7 +1039,9 @@ mod tests {
         });
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
 
-        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        let pieces = physical
+            .break_internal_bond(&target, &catalog, None)
+            .expect("stored bond");
         assert_eq!(pieces.len(), 2);
         let offset = 0.838_f64;
         let expected = Placement {
@@ -1457,7 +1459,9 @@ mod tests {
             "persisted connection endpoints must agree with declared material topology"
         );
         assert!(
-            physical.break_internal_bond(&malformed_target).is_none(),
+            physical
+                .break_internal_bond(&malformed_target, &catalog, None)
+                .is_none(),
             "stored BREAK completion must fail closed on malformed persisted topology"
         );
     }
