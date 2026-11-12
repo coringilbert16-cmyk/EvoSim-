@@ -1,13 +1,7 @@
 {
-  "run": false,
-  "seeds": [
-    42,
-    43,
-    44,
-    45,
-    46
-  ],
-  "duration_seconds": 1500,
+  "run": true,
+  "seeds": [42, 43, 44, 45, 46],
+  "duration_seconds": 300,
   "diagnostic_interval": 100,
-  "request_note": "2026-11-12 approved 5-seed 25-minute contact-opportunity run already launched as Actions run 43246280958; inactive to prevent duplicate runs on merge"
+  "request_note": "Approved five-seed five-minute instance-level opportunity diagnostics experiment on chemistry/reaction-network-diagnostics"
 }
