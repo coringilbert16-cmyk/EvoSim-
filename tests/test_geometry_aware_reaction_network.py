@@ -152,11 +152,13 @@ class GeometryAwareNetworkTests(unittest.TestCase):
             descriptor["pairwise_constituent_distances"][0]["distance"], 0.4
         )
         self.assertAlmostEqual(
-            descriptor["constituents"][0]["y"], -0.2, places=6
+            descriptor["constituents"][0]["x"], -0.2, places=6
         )
         self.assertAlmostEqual(
-            descriptor["constituents"][1]["y"], 0.2, places=6
+            descriptor["constituents"][1]["x"], 0.2, places=6
         )
+        self.assertAlmostEqual(descriptor["constituents"][0]["y"], 0.0, places=6)
+        self.assertAlmostEqual(descriptor["constituents"][1]["y"], 0.0, places=6)
 
     def test_missing_physical_geometry_is_reported_not_fabricated(self):
         incomplete = molecule(["Carbon"], [(0.0, 0.0)])
