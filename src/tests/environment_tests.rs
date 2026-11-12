@@ -723,3 +723,60 @@ fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
     assert!(child_ids.iter().all(|id| *id != 0 && *id != parent_id));
     assert_ne!(child_ids[0], child_ids[1]);
 }
+
+
+#[test]
+fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells() {
+    use crate::physical_material::PhysicalMaterial;
+    use crate::structure::Placement;
+
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let free = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement {
+            x: 12.5,
+            y: 12.5,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .expect("free carbon should be realizable");
+    let bonded = PhysicalMaterial::realized(
+        make_structured(2.0),
+        vec![
+            Placement {
+                x: 12.5,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+            Placement {
+                x: 13.5,
+                y: 12.5,
+                rotation_radians: 0.0,
+            },
+        ],
+        &catalog,
+    )
+    .expect("bonded carbon-hydrogen should be realizable");
+
+    let cell = field.index_for_position(12.5, 12.5).unwrap();
+    assert!(field.deposit_physical_at_index(cell, free, &catalog));
+    assert!(field.environmental_bond_candidates(0, 8).is_empty());
+
+    assert!(field.deposit_physical_at_index(cell, bonded, &catalog));
+    let first = field.environmental_bond_candidates(0, 8);
+    assert_eq!(first.len(), 1, "only the existing internal bond is indexed");
+    assert_eq!(
+        field.environmental_bond_candidates(1, 8),
+        first,
+        "tick rotation over a single known bond must not duplicate it"
+    );
+
+    field.cells[cell].physical_materials.pop();
+    field.mark_changed_at_index(cell);
+    assert!(
+        field.environmental_bond_candidates(2, 8).is_empty(),
+        "removing a bonded material must remove its bond locator"
+    );
+}
