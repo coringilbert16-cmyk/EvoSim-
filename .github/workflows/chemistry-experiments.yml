@@ -11,7 +11,7 @@ on:
       duration_seconds:
         description: "Real simulation duration per seed, in seconds."
         required: true
-        default: 300
+        default: 1500
         type: number
       diagnostic_interval:
         description: "Ticks between full inventory snapshots."
@@ -152,6 +152,7 @@ jobs:
           python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
           python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
           python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
         with:
@@ -161,5 +162,6 @@ jobs:
             chemistry-experiment-combined.md
             reaction-network/
             geometry-aware-network/
+            contact-opportunities/
           if-no-files-found: error
           retention-days: 90
