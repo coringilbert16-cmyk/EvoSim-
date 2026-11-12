@@ -839,15 +839,17 @@ fn best_replacement_contact(
             && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
             && candidate.facing.is_finite()
             && candidate.facing > 0.0;
-        let evaluation = geometry_valid.then(|| {
-            crate::combine_runtime::selected_candidate_evaluation(
-                &topology_trial,
-                anchor_unit,
-                incoming_unit,
-                candidate,
-                catalog,
-            )
-        }).flatten();
+        let evaluation = geometry_valid
+            .then(|| {
+                crate::combine_runtime::selected_candidate_evaluation(
+                    &topology_trial,
+                    anchor_unit,
+                    incoming_unit,
+                    candidate,
+                    catalog,
+                )
+            })
+            .flatten();
         let physically_valid = evaluation.is_some();
         if sample_this_search && candidate_index == 0 {
             if let (Some(diagnostics), Some((source_a, source_b))) =
@@ -2223,8 +2225,9 @@ mod tests {
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
         );
 
-        let (production_selected, _) = best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
-            .expect("the production selector must find a valid replacement");
+        let (production_selected, _) =
+            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
+                .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
             .iter()
@@ -2546,11 +2549,17 @@ mod tests {
             .first()
             .copied()
             .expect("restored source should contain its old bond");
-        let (candidate, _investment) =
-            best_replacement_contact(
-                &combined, anchor_unit, incoming_unit, old_bond, &catalog, None, None, false,
-            )
-                .expect("incoming source should contact a compatible available anchor endpoint");
+        let (candidate, _investment) = best_replacement_contact(
+            &combined,
+            anchor_unit,
+            incoming_unit,
+            old_bond,
+            &catalog,
+            None,
+            None,
+            false,
+        )
+        .expect("incoming source should contact a compatible available anchor endpoint");
         let first_activation = accumulate_incoming_activation(
             &combined.units[anchor_unit],
             &combined.units[incoming_unit],
