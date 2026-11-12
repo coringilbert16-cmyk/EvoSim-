@@ -9,7 +9,7 @@ use crate::structure::Placement;
 const LENGTH_RELATIVE_EPSILON: f64 = 1e-9;
 const VECTOR_EPSILON: f64 = 1e-12;
 
-const SWEEP_MAX_DEPTH: u8 = 24;
+const SWEEP_MAX_DEPTH: u8 = 12;
 const SWEEP_DISTANCE_EPSILON: f64 = 1e-10;
 
 /// Validate a straight-line translation against stationary geometry.
@@ -46,9 +46,9 @@ pub fn translation_path_is_collision_free(
         obstacles.iter().all(|obstacle| {
             let period = vertical_period.unwrap_or(0.0);
             let images = if period > 0.0 {
-                [-period, 0.0, period].as_slice()
+                [-period, 0.0, period]
             } else {
-                [0.0, 0.0, 0.0].as_slice()
+                [0.0, 0.0, 0.0]
             };
             images.iter().all(|image_y| {
                 let mut image = obstacle.clone();
