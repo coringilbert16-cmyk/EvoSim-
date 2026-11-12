@@ -13,9 +13,9 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "requested_duration_seconds": 300,
             "planned_ticks": 3000,
             "initial_physical_material_count": 1280,
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280,
-            "initial_constituent_count": 2560,
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80,
+            "initial_constituent_count": 1360,
         },
         "resource_coverage": {
             "excluded_resources": ["Water"] if water_excluded else [],
@@ -120,6 +120,21 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
         self.assertEqual(report["elemental_bond_pairs"]["final_bond_inventory"]["Carbon-Hydrogen"], 2)
         self.assertTrue(report["elemental_bond_pairs"]["inventory_reconciliation_all_seeds_match"])
         self.assertTrue(report["validation"]["all_runs_pass_inventory_and_lifecycle_checks"])
+
+    def test_rejects_all_molecule_starting_inventory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_run(root, 42)
+            path = root / "seed-42-chemistry.json"
+            chemistry = json.loads(path.read_text(encoding="utf-8"))
+            chemistry["input"].update({
+                "initial_independent_resource_count": 0,
+                "initial_molecule_count": 1280,
+                "initial_constituent_count": 2560,
+            })
+            path.write_text(json.dumps(chemistry), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "1,200 independent resources and 80"):
+                build_report(root, [42], 300)
 
     def test_rejects_water_in_the_active_chemistry_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
