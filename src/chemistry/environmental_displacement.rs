@@ -2028,8 +2028,12 @@ mod tests {
         displaced.cohesion = 0.9;
         incoming.cohesion = 0.1;
         assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
-        assert!(!replacement_wins_bond_competition(carbon, incoming, displaced));
-        assert!(replacement_wins_bond_competition(carbon, hydrogen, displaced));
+        assert!(!replacement_wins_bond_competition(
+            carbon, incoming, displaced
+        ));
+        assert!(replacement_wins_bond_competition(
+            carbon, hydrogen, displaced
+        ));
     }
 
     #[test]
