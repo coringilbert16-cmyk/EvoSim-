@@ -44,6 +44,8 @@ mod capillary_geometry;
 mod cavity;
 #[path = "geometry/connection_faces.rs"]
 mod connection_faces;
+#[path = "geometry/connection_approach.rs"]
+mod connection_approach;
 #[path = "geometry/connection_geometry.rs"]
 mod connection_geometry;
 #[path = "construction/material_selection.rs"]
