@@ -772,12 +772,21 @@ pub(crate) struct LocalResonanceWorldSnapshot {
     resonant_indices: Vec<usize>,
     resonant_index_set: HashSet<usize>,
     receiver_indices: HashMap<u64, Option<usize>>,
+    force_owner_indices: Vec<Option<usize>>,
     emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
+}
+
+/// One body contribution to a candidate pair's complete occlusion-aware force.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonanceWorldBodyForce {
+    pub(crate) environmental_identity: u64,
+    pub(crate) owner_organism_index: Option<usize>,
+    pub(crate) force: crate::harmonics::ResonanceBodyForce,
 }
 
 impl LocalResonanceWorldSnapshot {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
-        let (bodies, resonant_indices, _) =
+        let (bodies, resonant_indices, force_owner_indices) =
             world_physical_materials_for_pair_potential(simulation)?;
         let emitters = crate::harmonics::material_resonance_emitters_at_tick(
             &bodies,
@@ -809,8 +818,71 @@ impl LocalResonanceWorldSnapshot {
             resonant_indices,
             resonant_index_set,
             receiver_indices,
+            force_owner_indices,
             emitters,
         })
+    }
+
+    /// Derive the complete force contribution for one environmental material
+    /// pair. Every other physical body remains an occluder and receives its
+    /// own gradient contribution; attached bodies retain their owner mapping.
+    pub(crate) fn pair_force_contributions(
+        &self,
+        identity_a: u64,
+        identity_b: u64,
+        catalog: &[BaseResource],
+        tick: u64,
+    ) -> Option<Vec<ResonanceWorldBodyForce>> {
+        if identity_a == 0
+            || identity_b == 0
+            || identity_a == identity_b
+            || self.force_owner_indices.len() != self.bodies.len()
+        {
+            return None;
+        }
+        let index_a = self.receiver_indices.get(&identity_a).copied().flatten()?;
+        let index_b = self.receiver_indices.get(&identity_b).copied().flatten()?;
+        if index_a == index_b
+            || !self.resonant_index_set.contains(&index_a)
+            || !self.resonant_index_set.contains(&index_b)
+        {
+            return None;
+        }
+
+        let occluder_indices = (0..self.bodies.len())
+            .filter(|index| *index != index_a && *index != index_b)
+            .collect::<Vec<_>>();
+        let occluders = occluder_indices
+            .iter()
+            .map(|index| self.bodies[*index].clone())
+            .collect::<Vec<_>>();
+        let forces = crate::harmonics::resonance_multi_body_forces_with_occluders(
+            &self.bodies[index_a],
+            &self.bodies[index_b],
+            &occluders,
+            catalog,
+            tick,
+        )?;
+        if forces.len() != occluder_indices.len() + 2 {
+            return None;
+        }
+
+        let mut contributions = Vec::with_capacity(forces.len());
+        for (body_index, force) in [(index_a, forces[0]), (index_b, forces[1])] {
+            contributions.push(ResonanceWorldBodyForce {
+                environmental_identity: self.bodies[body_index].environmental_identity,
+                owner_organism_index: self.force_owner_indices[body_index],
+                force,
+            });
+        }
+        for (offset, body_index) in occluder_indices.into_iter().enumerate() {
+            contributions.push(ResonanceWorldBodyForce {
+                environmental_identity: self.bodies[body_index].environmental_identity,
+                owner_organism_index: self.force_owner_indices[body_index],
+                force: forces[offset + 2],
+            });
+        }
+        Some(contributions)
     }
 
     /// Return the mean endpoint spectral match to a reaction's natural
