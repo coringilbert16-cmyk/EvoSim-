@@ -1064,6 +1064,12 @@ pub(crate) fn settle_environmental_pair_potential_change(
     if !settled {
         return false;
     }
+    let usable_delta = staged_usable_energy - *environmental_usable_energy;
+    let next_usable_held = staged_ledger.total_usable_energy_held + usable_delta;
+    if !usable_delta.is_finite() || !next_usable_held.is_finite() || next_usable_held < 0.0 {
+        return false;
+    }
+    staged_ledger.total_usable_energy_held = next_usable_held;
     *ledger = staged_ledger;
     *environmental_usable_energy = staged_usable_energy;
     *environmental_resonance = staged_resonance;
