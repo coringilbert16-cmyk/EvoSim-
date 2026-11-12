@@ -1536,6 +1536,15 @@ mod material_identity_tests {
             .expect("fixture must contain an internal bond")
             .clone();
         let last_cell = simulation.environment.field.cells.len() - 1;
+        assert_ne!(last_cell, 0, "fixture needs distinct first and last cells");
+        // The index is ordered by field locator, not by the old cell traversal
+        // budget. Put an earlier bond in the first cell so a one-bond budget
+        // genuinely leaves the target bond outside the selected index window.
+        assert!(simulation.environment.field.deposit_physical_at_index(
+            0,
+            source.clone(),
+            &simulation.environment.catalog,
+        ));
         assert!(simulation.environment.field.deposit_physical_at_index(
             last_cell,
             source,
