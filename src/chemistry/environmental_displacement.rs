@@ -797,35 +797,49 @@ fn census_replacement_contacts(
     census
 }
 
+fn diagnostic_material_signature(source: &PhysicalMaterial) -> u64 {
+    let descriptor = format!(
+        "{:?}|{:?}",
+        source.material.parts, source.material.internal_bonds
+    );
+    descriptor
+        .bytes()
+        .fold(0xcbf29ce484222325_u64, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+        })
+}
+
 fn best_replacement_contact(
     combined: &OrganismStructure,
     anchor_unit: usize,
     incoming_unit: usize,
     old_bond: Bond,
     catalog: &[BaseResource],
+    diagnostics: Option<&mut crate::state::EnvironmentalDisplacementDiscoveryDiagnostics>,
+    sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
+    sample_this_search: bool,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
     topology_trial.break_matching_bond(old_bond)?;
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-    for candidate in crate::contact::connection_pair_candidates_cached(
+    let candidates = crate::contact::connection_pair_candidates_cached(
         &topology_trial,
         anchor_unit,
         incoming_unit,
         catalog,
         &mut cache,
-    ) {
-        if !candidate.available_a
-            || !candidate.available_b
-            || !candidate.distance.is_finite()
-            || candidate.distance < 0.0
-            || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
-            || !candidate.facing.is_finite()
-            || candidate.facing <= 0.0
-        {
-            continue;
-        }
-        let Some((_evaluation, _formation_work, investment, required_energy)) =
+    );
+    let mut diagnostics = diagnostics;
+    for (candidate_index, candidate) in candidates.into_iter().enumerate() {
+        let geometry_valid = candidate.available_a
+            && candidate.available_b
+            && candidate.distance.is_finite()
+            && candidate.distance >= 0.0
+            && candidate.distance <= crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+            && candidate.facing.is_finite()
+            && candidate.facing > 0.0;
+        let evaluation = geometry_valid.then(|| {
             crate::combine_runtime::selected_candidate_evaluation(
                 &topology_trial,
                 anchor_unit,
@@ -833,7 +847,44 @@ fn best_replacement_contact(
                 candidate,
                 catalog,
             )
-        else {
+        }).flatten();
+        let physically_valid = evaluation.is_some();
+        if sample_this_search && candidate_index == 0 {
+            if let (Some(diagnostics), Some((source_a, source_b))) =
+                (diagnostics.as_deref_mut(), sources)
+            {
+                if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len() {
+                    if let (Some(anchor), Some(incoming)) = (
+                        combined.units.get(anchor_unit),
+                        combined.units.get(incoming_unit),
+                    ) {
+                        diagnostics.opportunity_samples[diagnostics.opportunity_sample_count] =
+                            Some(crate::state::EnvironmentalContactOpportunitySample {
+                                source_a_identity: source_a.environmental_identity,
+                                source_b_identity: source_b.environmental_identity,
+                                source_a_signature: diagnostic_material_signature(source_a),
+                                source_b_signature: diagnostic_material_signature(source_b),
+                                unit_a: anchor_unit,
+                                unit_b: incoming_unit,
+                                position_a_x: anchor.placement.x,
+                                position_a_y: anchor.placement.y,
+                                position_a_rotation: anchor.placement.rotation_radians,
+                                position_b_x: incoming.placement.x,
+                                position_b_y: incoming.placement.y,
+                                position_b_rotation: incoming.placement.rotation_radians,
+                                endpoint_a: candidate.endpoint_a,
+                                endpoint_b: candidate.endpoint_b,
+                                endpoint_distance: candidate.distance,
+                                physically_valid,
+                                reaction_kind: 1,
+                                old_bond_energy: old_bond.bond_energy,
+                            });
+                        diagnostics.opportunity_sample_count += 1;
+                    }
+                }
+            }
+        }
+        let Some((_evaluation, _formation_work, investment, required_energy)) = evaluation else {
             continue;
         };
         let replace = best.map_or(true, |(current, _, current_energy)| {
@@ -1091,12 +1142,17 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     diagnostics.replacement_contact_searches.saturating_add(1);
                                 *remaining_discovery_work =
                                     remaining_discovery_work.saturating_sub(1);
+                                let sample_this_search =
+                                    diagnostics.replacement_contact_searches % 17 == 0;
                                 let Some((candidate, investment)) = best_replacement_contact(
                                     &combined,
                                     anchor_unit,
                                     incoming_unit,
                                     old_bond,
                                     &environment.catalog,
+                                    Some(&mut *diagnostics),
+                                    Some((&source_a, &source_b)),
+                                    sample_this_search,
                                 ) else {
                                     continue;
                                 };
@@ -2167,7 +2223,7 @@ mod tests {
                 >= complete.alternatives.len() + complete.duplicate_endpoint_pairs
         );
 
-        let (production_selected, _) = best_replacement_contact(&source, 0, 2, old_bond, &catalog)
+        let (production_selected, _) = best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
             .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
@@ -2491,7 +2547,9 @@ mod tests {
             .copied()
             .expect("restored source should contain its old bond");
         let (candidate, _investment) =
-            best_replacement_contact(&combined, anchor_unit, incoming_unit, old_bond, &catalog)
+            best_replacement_contact(
+                &combined, anchor_unit, incoming_unit, old_bond, &catalog, None, None, false,
+            )
                 .expect("incoming source should contact a compatible available anchor endpoint");
         let first_activation = accumulate_incoming_activation(
             &combined.units[anchor_unit],
