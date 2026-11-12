@@ -43,6 +43,9 @@ jobs:
       - name: Test offline topology-aware reaction network analyzer
         timeout-minutes: 2
         run: python3 -m unittest discover -s tests -p 'test_reaction_network_analyzer.py'
+      - name: Test offline instance-level geometry-aware reaction network analyzer
+        timeout-minutes: 2
+        run: python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
       - name: Non-Water chemistry feasibility matrices
         if: success()
         timeout-minutes: 10
