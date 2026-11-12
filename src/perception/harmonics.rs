@@ -3597,6 +3597,37 @@ mod tests {
     }
 
     #[test]
+    fn distant_non_occluding_body_does_not_change_pair_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let distant = make_material("Nitrogen", 50.0, 50.0);
+        let baseline = resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+            .expect("unoccluded pair potential should be valid");
+        let with_distant = resonance_pair_potential_components_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&distant),
+            &catalog,
+            0,
+        )
+        .expect("distant body should be excluded by the conservative occluder broad phase");
+        assert_eq!(with_distant, baseline);
+    }
+
+    #[test]
     fn occluded_pair_does_not_claim_an_unbalanced_two_body_force() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x| {
