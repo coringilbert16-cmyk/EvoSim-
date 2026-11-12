@@ -2019,13 +2019,17 @@ mod tests {
     #[test]
     fn energy_funding_cannot_make_a_weaker_incoming_bond_win_competition() {
         let carbon = properties("Carbon");
-        let oxygen = properties("Oxygen");
-        let nitrogen = properties("Nitrogen");
+        let mut displaced = properties("Oxygen");
+        let mut incoming = properties("Nitrogen");
         let hydrogen = properties("Hydrogen");
 
-        assert!(bond_strength(carbon, oxygen) > bond_strength(carbon, nitrogen));
-        assert!(!replacement_wins_bond_competition(carbon, oxygen, nitrogen));
-        assert!(replacement_wins_bond_competition(carbon, hydrogen, oxygen));
+        // Isolate the competition rule from catalog tuning: the incumbent
+        // bond is deliberately stronger, while the incoming bond is weaker.
+        displaced.cohesion = 0.9;
+        incoming.cohesion = 0.1;
+        assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
+        assert!(!replacement_wins_bond_competition(carbon, incoming, displaced));
+        assert!(replacement_wins_bond_competition(carbon, hydrogen, displaced));
     }
 
     #[test]
