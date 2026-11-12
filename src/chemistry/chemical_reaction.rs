@@ -492,11 +492,10 @@ struct EnvironmentalBondDiscovery {
 /// field. Environmental bonds are restored only into a trial graph to recover
 /// their authoritative geometry and activation strength; allocated bond energy
 /// remains attached to the environmental bond and is transferred through restoration.
-/// Traverse a bounded, tick-rotated window of environmental material bonds.
-/// Returns candidates, inspected-entry count, and the identity/bond-count pairs for
-/// materials reached by the scan. Counting all three levels makes the work bound
-/// testable even in sparse fields; material membership lets accumulation invalidate
-/// removed bonds without penalizing current bonds outside the candidate window.
+/// Traverse a bounded, tick-rotated window of the maintained environmental bond
+/// index. Returns only existing bond locators and identity/bond-count pairs for
+/// materials represented in that window. No field cells or unbonded materials
+/// are scanned during normal chemistry discovery.
 fn discover_environmental_bonds(
     environment: &crate::state::Environment,
     tick: u64,
