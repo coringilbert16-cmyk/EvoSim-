@@ -2029,10 +2029,10 @@ mod tests {
         incoming.cohesion = 0.1;
         assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
         assert!(!replacement_wins_bond_competition(
-            carbon, incoming, displaced
+            carbon, displaced, incoming
         ));
         assert!(replacement_wins_bond_competition(
-            carbon, hydrogen, displaced
+            carbon, displaced, hydrogen
         ));
     }
 
