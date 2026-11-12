@@ -2294,10 +2294,12 @@ mod tests {
     }
     #[test]
     fn environmental_pair_potential_increase_spends_only_environmental_usable_energy() {
-        let mut ledger = EnergyLedger::default();
-        ledger.initial_usable_energy_held = 5.0;
-        ledger.total_usable_energy_held = 5.0;
-        ledger.total_usable_energy_gained = 5.0;
+        let mut ledger = EnergyLedger {
+            initial_usable_energy_held: 5.0,
+            total_usable_energy_held: 5.0,
+            total_usable_energy_gained: 5.0,
+            ..EnergyLedger::default()
+        };
         let mut usable = 5.0;
         let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
         let components = [crate::harmonics::ResonancePairPotentialComponent {
@@ -2336,7 +2338,7 @@ mod tests {
         let retained = resonance
             .total_energy()
             .expect("valid environmental reservoir");
-        assert!(retained >= 0.0 && retained <= 2.0 + EPSILON);
+        assert!((0.0..=2.0 + EPSILON).contains(&retained));
         assert!((ledger.total_resonant_energy_held - retained).abs() <= EPSILON);
         assert!((ledger.total_pair_interaction_potential_held + 2.0).abs() <= EPSILON);
         assert!((retained + ledger.total_heat_dissipated - 2.0).abs() <= EPSILON);
@@ -2344,10 +2346,12 @@ mod tests {
 
     #[test]
     fn rejected_environmental_pair_potential_settlement_is_atomic() {
-        let mut ledger = EnergyLedger::default();
-        ledger.initial_usable_energy_held = 1.0;
-        ledger.total_usable_energy_held = 1.0;
-        ledger.total_usable_energy_gained = 1.0;
+        let mut ledger = EnergyLedger {
+            initial_usable_energy_held: 1.0,
+            total_usable_energy_held: 1.0,
+            total_usable_energy_gained: 1.0,
+            ..EnergyLedger::default()
+        };
         let ledger_before = ledger;
         let mut usable = 1.0;
         let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
