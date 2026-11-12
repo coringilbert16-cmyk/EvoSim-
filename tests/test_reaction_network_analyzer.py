@@ -41,6 +41,17 @@ def write_seed(root: Path, seed: int) -> None:
             "initial_independent_resource_count": 0,
             "initial_molecule_count": 1280, "initial_constituent_count": 2560,
         },
+        "reactions": {
+            "elemental_bond_pairs": {
+                "events_missing_reaction_id": 0,
+                "event_attribution": [
+                    {"reaction_id": "1-1", "reaction": "COMBINE", "tick": 1,
+                     "formed": {"Carbon-Oxygen": 1}, "broken": {}},
+                    {"reaction_id": "2-1", "reaction": "COMBINE", "tick": 2,
+                     "formed": {"Hydrogen-Sulfur": 1}, "broken": {}},
+                ],
+            },
+        },
         "molecular_history": {
             "validation_errors": [], "molecules": molecules, "active_at_end_count": 1,
             "mean_observed_lifetime_ticks": 2.4,
@@ -79,12 +90,16 @@ class ReactionNetworkAnalyzerTests(unittest.TestCase):
         self.assertEqual(summary["reaction_created_parent_lineage_edges"], 2)
         self.assertEqual(summary["reaction_created_parent_edges_followed_by_combine"], 2)
         self.assertEqual(summary["reaction_created_families_recurrent_in_2_or_more_seeds"], 1)
+        self.assertEqual(summary["lineage_events_with_bond_pair_attribution"], 4)
+        self.assertEqual(summary["lineage_events_missing_bond_pair_attribution"], 0)
         pathway = next(
             row for row in report["reaction_pathways"]
             if "Carbon-Hydrogen-Oxygen-Sulfur [0-1,1-2,2-3]" in row["parent_families"]
         )
         self.assertEqual(pathway["event_count"], 2)
         self.assertEqual(pathway["seed_count"], 2)
+        self.assertEqual(pathway["formed_bond_pairs"], {"Hydrogen-Sulfur": 2})
+        self.assertEqual(pathway["formed_bond_count"], 2)
 
     def test_rejects_incorrect_starting_inventory(self):
         with tempfile.TemporaryDirectory() as temporary:
