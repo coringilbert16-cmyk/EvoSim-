@@ -420,7 +420,8 @@ impl ReactionEnergyBalance {
 ///
 /// Structural energy is the signed potential of realized bonds relative to the
 /// separated-material baseline: stable bonds contribute negative potential,
-/// counted once across all structures. Initial values are the tick-zero baseline;
+/// counted once across all structures. Kinetic energy is translational plus
+/// rotational energy of every owned physical material. Initial values are the tick-zero baseline;
 /// cumulative flows are totals since that baseline. Internal transfers cancel
 /// at world scale and are intentionally absent.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -431,8 +432,6 @@ pub(crate) struct EnergyInventorySnapshot {
     pub(crate) current_resonant_energy: f64,
     pub(crate) initial_structural_energy: f64,
     pub(crate) current_structural_energy: f64,
-            initial_kinetic_energy: 0.0,
-            current_kinetic_energy: 0.0,
     pub(crate) initial_kinetic_energy: f64,
     pub(crate) current_kinetic_energy: f64,
     /// Signed pair-interaction potential relative to the tick-zero reference.
@@ -450,8 +449,8 @@ pub(crate) struct EnergyInventorySnapshot {
 
 impl EnergyInventorySnapshot {
     /// Signed conservation residual. A value of zero means the change in
-    /// usable, resonant, and structural energy plus work, heat, and escaped tone
-    /// equals all external sources.
+    /// usable, resonant, structural, pair-potential, and kinetic energy plus
+    /// work, heat, and escaped tone equals all external sources.
     pub(crate) fn residual(self) -> Option<f64> {
         let nonnegative_values = [
             self.initial_usable_energy,
