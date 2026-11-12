@@ -508,9 +508,9 @@ fn discover_environmental_bonds(
         .environmental_bond_candidates(tick, limit);
     let mut checked_materials = std::collections::BTreeMap::new();
 
-    // Candidate discovery now reads only the maintained index of actual bonds.
-    // Resolve each selected locator once to retain stale-progress validation;
-    // unbonded materials and empty cells are never visited.
+    // Read only the maintained index of actual bonds. Resolve each selected
+    // locator once for stale-progress validation; empty cells and unbonded
+    // materials are never traversed during discovery.
     for &(cell_index, material_index, _) in &candidates {
         let Some(material) = environment
             .field
@@ -533,6 +533,455 @@ fn discover_environmental_bonds(
         checked_materials: checked_materials.into_keys().collect(),
     }
 }
+#[allow(dead_code)] // Compatibility wrapper used by focused chemistry tests.
+pub(crate) fn accumulate_environmental(
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
+    let mut diagnostics = crate::state::EnvironmentalBreakDiscoveryDiagnostics::default();
+    accumulate_environmental_with_diagnostics(
+        environment,
+        accumulation,
+        chemistry_library,
+        tick,
+        remaining_discovery_work,
+        None,
+        &mut diagnostics,
+    )
+}
+
+pub(crate) fn accumulate_environmental_with_diagnostics(
+    environment: &crate::state::Environment,
+    accumulation: &mut std::collections::BTreeMap<String, f64>,
+    chemistry_library: &mut ChemistryLibrary,
+    tick: u64,
+    remaining_discovery_work: &mut usize,
+    local_resonance_world: Option<&crate::world_tone_snapshot::LocalResonanceWorldSnapshot>,
+    diagnostics: &mut crate::state::EnvironmentalBreakDiscoveryDiagnostics,
+) -> Vec<EnvironmentalChemicalBreakOperation> {
+    // Environmental progress belongs to the field, not to the organism
+    // whose turn happens to discover it. Search the field directly; the
+    // bounded candidate budget below keeps this world-owned scan finite.
+    const ENVIRONMENT_PREFIX: &str = "environment|environment:";
+    let current_prefix = ENVIRONMENT_PREFIX.to_owned();
+    let count = (*remaining_discovery_work).min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
+    let discovery = discover_environmental_bonds(environment, tick, count);
+    diagnostics.scan_entries_inspected = discovery.inspected_entries as u64;
+    let candidates = discovery.candidates;
+    diagnostics.bond_candidates_inspected = candidates.len() as u64;
+    let checked_materials = discovery.checked_materials;
+    let indices: Vec<usize> = (0..candidates.len()).collect();
+    // Full local boundary reception evaluates every resonant emitter against
+    // one receiver. Rotate one candidate per tick to bound this geometric work
+    // while ensuring the field can influence every candidate over time.
+    let local_resonance_candidate_index = if candidates.is_empty() {
+        None
+    } else {
+        Some(tick as usize % candidates.len())
+    };
+    *remaining_discovery_work = remaining_discovery_work.saturating_sub(indices.len());
+    let mut checked_keys = std::collections::BTreeSet::new();
+    let mut updated_keys = std::collections::BTreeSet::new();
+    for (identity, bond_count) in checked_materials {
+        if identity == 0 {
+            continue;
+        }
+        let material_prefix = format!("environment|environment:{identity}:");
+        for key in accumulation.keys() {
+            let Some(existing_index) = key
+                .strip_prefix(&material_prefix)
+                .and_then(|suffix| suffix.split(':').next())
+                .and_then(|index| index.parse::<usize>().ok())
+            else {
+                continue;
+            };
+            if existing_index >= bond_count {
+                checked_keys.insert(key.clone());
+                diagnostics.stale_progress_invalidated =
+                    diagnostics.stale_progress_invalidated.saturating_add(1);
+            }
+        }
+    }
+    let mut operations = Vec::new();
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let mut restored_materials = std::collections::BTreeMap::new();
+
+    for candidate_index in indices {
+        let Some(&(cell_index, material_index, bond_index)) = candidates.get(candidate_index)
+        else {
+            continue;
+        };
+        let Some(instance) = environment
+            .field
+            .cells
+            .get(cell_index)
+            .and_then(|cell| cell.physical_materials.get(material_index))
+        else {
+            continue;
+        };
+        let Some(connection) = instance
+            .internal_connections
+            .as_ref()
+            .and_then(|connections| connections.get(bond_index))
+        else {
+            continue;
+        };
+        diagnostics.bond_candidates_checked = diagnostics.bond_candidates_checked.saturating_add(1);
+        let key = environmental_break_accumulation_key(instance, bond_index, connection);
+        if instance.environmental_identity != 0 {
+            let bond_prefix = format!(
+                "environment|environment:{}:{bond_index}:",
+                instance.environmental_identity
+            );
+            for previous_key in accumulation.keys() {
+                if previous_key.starts_with(&bond_prefix) && previous_key != &key {
+                    checked_keys.insert(previous_key.clone());
+                    diagnostics.stale_progress_invalidated =
+                        diagnostics.stale_progress_invalidated.saturating_add(1);
+                }
+            }
+        }
+        checked_keys.insert(key.clone());
+        // Environmental chemistry must derive its candidate geometry from the
+        // realized environmental material itself. An organism graph is not a
+        // valid geometry owner for a world-owned bond: it can carry unrelated
+        // units, IDs, and contact context into candidate resolution.
+        // The material and its bonds are immutable throughout this discovery
+        // pass. Restore each realized material once and reuse that authoritative
+        // trial graph for every bond discovered within it.
+        let material_key = (cell_index, material_index);
+        if let std::collections::btree_map::Entry::Vacant(entry) =
+            restored_materials.entry(material_key)
+        {
+            let mut hypothetical = crate::structure::OrganismStructure::new();
+            let restored = crate::material_restoration::restore_material(
+                &mut hypothetical,
+                instance,
+                crate::structure::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                &environment.catalog,
+            )
+            .map(|restored_indices| (hypothetical, restored_indices));
+            if restored.is_some() {
+                diagnostics.material_restorations_succeeded = diagnostics
+                    .material_restorations_succeeded
+                    .saturating_add(1);
+            } else {
+                diagnostics.material_restoration_rejections = diagnostics
+                    .material_restoration_rejections
+                    .saturating_add(1);
+            }
+            // Failed restorations are stable too; memoize them rather than
+            // repeating the same rejected work for every bond in this material.
+            entry.insert(restored);
+        }
+        let Some(Some((hypothetical, restored_indices))) = restored_materials.get(&material_key)
+        else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(&unit_a) = restored_indices.get(connection.part_a) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_mapping_rejections =
+                diagnostics.candidate_mapping_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(&unit_b) = restored_indices.get(connection.part_b) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_mapping_rejections =
+                diagnostics.candidate_mapping_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(a) = hypothetical
+            .units
+            .get(unit_a)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_property_rejections =
+                diagnostics.candidate_property_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(b) = hypothetical
+            .units
+            .get(unit_b)
+            .and_then(|unit| unit.properties(&environment.catalog))
+        else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_property_rejections =
+                diagnostics.candidate_property_rejections.saturating_add(1);
+            continue;
+        };
+        let (Some(position_a), Some(position_b)) = (
+            constituent_chemical_position(&hypothetical.units[unit_a], &environment.catalog),
+            constituent_chemical_position(&hypothetical.units[unit_b], &environment.catalog),
+        ) else {
+            diagnostics.candidate_position_rejections =
+                diagnostics.candidate_position_rejections.saturating_add(1);
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(candidate) = crate::contact::connection_pair_candidate_for_endpoints(
+            hypothetical,
+            unit_a,
+            unit_b,
+            &environment.catalog,
+            connection.endpoint_a,
+            connection.endpoint_b,
+        ) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_endpoint_rejections =
+                diagnostics.candidate_endpoint_rejections.saturating_add(1);
+            continue;
+        };
+        let geometry_material_a = hypothetical.units[unit_a]
+            .material
+            .parts
+            .first()
+            .map(|part| part.0.as_str())
+            .unwrap_or("unknown");
+        let geometry_material_b = hypothetical.units[unit_b]
+            .material
+            .parts
+            .first()
+            .map(|part| part.0.as_str())
+            .unwrap_or("unknown");
+        let material_a = material_identity(&hypothetical.units[unit_a].material);
+        let material_b = material_identity(&hypothetical.units[unit_b].material);
+        let key_record = chemistry_library.key_from_chemical_pair(
+            &material_a,
+            &material_b,
+            position_a,
+            position_b,
+        );
+        let potential = match chemistry_library.get(&key_record) {
+            Some(record) => record.static_potential,
+            None => {
+                let Some(calculated) = crate::chemistry::interaction_potential(
+                    position_a,
+                    position_b,
+                    crate::chemistry::CHEMICAL_K,
+                    crate::chemistry::CHEMICAL_D_MAX,
+                ) else {
+                    diagnostics.candidate_chemistry_rejections =
+                        diagnostics.candidate_chemistry_rejections.saturating_add(1);
+                    continue;
+                };
+                match chemistry_library.get_or_insert_static_potential(key_record, calculated) {
+                    Ok(Some(value)) => value,
+                    Ok(None) | Err(_) => calculated,
+                }
+            }
+        };
+        // Static potential reuse never bypasses live interface eligibility.
+        let Some(_interface) = crate::geometry_reference_library::resolve_live_contact_candidate(
+            geometry_material_a,
+            &hypothetical.units[unit_a],
+            geometry_material_b,
+            &hypothetical.units[unit_b],
+            candidate,
+            &environment.catalog,
+        ) else {
+            diagnostics.candidate_geometry_rejections =
+                diagnostics.candidate_geometry_rejections.saturating_add(1);
+            diagnostics.candidate_interface_rejections =
+                diagnostics.candidate_interface_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(contact_factor) = crate::chemistry::contact_factor(
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+        ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(engagement) = crate::chemistry::interface_engagement(candidate.facing) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(a, baselines);
+        let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(b, baselines);
+        if !frequency_a.is_finite()
+            || frequency_a <= 0.0
+            || !frequency_b.is_finite()
+            || frequency_b <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
+        let reaction_frequency_cycles_per_day =
+            (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+        if !reaction_frequency_cycles_per_day.is_finite()
+            || reaction_frequency_cycles_per_day <= 0.0
+        {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        }
+        // The field is sampled at both actual bond endpoints. Its normalized
+        // spectral match increases local reaction accumulation; it is not
+        // converted into energy or credited to either energy reservoir.
+        let local_resonance_similarity = if Some(candidate_index) == local_resonance_candidate_index
+        {
+            diagnostics.local_resonance_sample_attempts = diagnostics
+                .local_resonance_sample_attempts
+                .saturating_add(1);
+            let sample_started = std::time::Instant::now();
+            let sampled_similarity = local_resonance_world.and_then(|world| {
+                let point_a = crate::contact::endpoint_world_point(
+                    connection.endpoint_a,
+                    &hypothetical.units[unit_a],
+                    &environment.catalog,
+                )?;
+                let point_b = crate::contact::endpoint_world_point(
+                    connection.endpoint_b,
+                    &hypothetical.units[unit_b],
+                    &environment.catalog,
+                )?;
+                world.reaction_similarity(
+                    instance.environmental_identity,
+                    &[(point_a.x, point_a.y), (point_b.x, point_b.y)],
+                    reaction_frequency_cycles_per_day,
+                    &environment.catalog,
+                    tick,
+                )
+            });
+            diagnostics.local_resonance_sample_nanoseconds = diagnostics
+                .local_resonance_sample_nanoseconds
+                .saturating_add(sample_started.elapsed().as_nanos().min(u64::MAX as u128) as u64);
+            match sampled_similarity {
+                Some(similarity) if similarity.is_finite() => {
+                    diagnostics.local_resonance_samples =
+                        diagnostics.local_resonance_samples.saturating_add(1);
+                    diagnostics.local_resonance_similarity_sum += similarity;
+                    diagnostics.local_resonance_similarity_max =
+                        diagnostics.local_resonance_similarity_max.max(similarity);
+                    similarity.clamp(0.0, 1.0)
+                }
+                _ => {
+                    diagnostics.local_resonance_unavailable =
+                        diagnostics.local_resonance_unavailable.saturating_add(1);
+                    0.0
+                }
+            }
+        } else {
+            0.0
+        };
+        let previous = accumulation.get(&key).copied().unwrap_or(0.0);
+        diagnostics.max_accumulated_reaction = diagnostics.max_accumulated_reaction.max(previous);
+        let Some(next) = crate::chemistry::accumulate_reaction(
+            previous,
+            potential * (1.0 + local_resonance_similarity),
+            contact_factor,
+            engagement,
+            crate::chemistry::CHEMICAL_DISSIPATION,
+        ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        diagnostics.activation_updates = diagnostics.activation_updates.saturating_add(1);
+        if next <= 0.0 {
+            updated_keys.insert(key.clone());
+            accumulation.remove(&key);
+            continue;
+        }
+        let Some(integrity) = crate::combine::bond_integrity(a, b) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(activation_barrier) = crate::chemistry::activation_barrier_from_bond_properties(
+            integrity,
+            a.reactivity,
+            b.reactivity,
+            baselines.reactivity,
+        ) else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(disruption_cost) =
+            crate::chemistry::bond_disruption_work_from_integrity(integrity)
+        else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        let Some(activation_signal) =
+            crate::chemistry::normalized_chemistry_to_activation_signal(next)
+        else {
+            diagnostics.candidate_chemistry_rejections =
+                diagnostics.candidate_chemistry_rejections.saturating_add(1);
+            continue;
+        };
+        // Invalid geometry/barrier candidates must not pause dissipation of
+        // prior environmental progress. Mark a key current only after the
+        // candidate completes a valid reaction evaluation.
+        updated_keys.insert(key.clone());
+        if crate::chemistry::activated(activation_signal, activation_barrier) {
+            diagnostics.activation_threshold_met =
+                diagnostics.activation_threshold_met.saturating_add(1);
+            operations.push(EnvironmentalChemicalBreakOperation {
+                cell_index,
+                material_index,
+                bond_index,
+                source_material: instance.clone(),
+                bond: connection.clone(),
+                activation_signal,
+                activation_barrier,
+                disruption_cost,
+                reaction_frequency_cycles_per_day,
+                local_resonance_similarity,
+                accumulation_key: key,
+                accumulated_reaction: next,
+            });
+            accumulation.remove(&operations.last().expect("just pushed").accumulation_key);
+        } else {
+            diagnostics.activation_below_threshold =
+                diagnostics.activation_below_threshold.saturating_add(1);
+            accumulation.insert(key, next);
+        }
+    }
+
+    let (preserved, dissipated) = dissipate_checked_unupdated_accumulations(
+        accumulation,
+        &current_prefix,
+        &checked_keys,
+        &updated_keys,
+    );
+    diagnostics.progress_preserved_unsearched = preserved;
+    diagnostics.progress_dissipated_checked = dissipated;
+    operations
+}
+
+fn environmental_break_accumulation_key(
+    instance: &crate::physical_material::PhysicalMaterial,
+    bond_index: usize,
+    connection: &crate::physical_material::PhysicalMaterialBond,
+) -> String {
+    format!(
+        "environment|environment:{}:{}:{:?}",
+        instance.environmental_identity, bond_index, connection
+    )
+}
+
 /// Apply the same bounded, deterministic work policy to environmental reactions
 /// after graph reactions have used their share of the owner's realization budget.
 pub(crate) fn schedule_environmental_operations(
