@@ -221,8 +221,12 @@ pub fn snapped_target_placement(
     // maps to A's end.
     let angle_a = a_edge.1.atan2(a_edge.0);
     let angle_b = b_edge.1.atan2(b_edge.0);
-    let target_rotation =
-        (angle_a + std::f64::consts::PI - angle_b).rem_euclid(std::f64::consts::TAU);
+    // B's local edge must oppose A's world-space edge. Include A's
+    // current rotation so the target remains correct for a moving/rotated anchor.
+    let target_rotation = (angle_a + placement_a.rotation_radians
+        + std::f64::consts::PI
+        - angle_b)
+        .rem_euclid(std::f64::consts::TAU);
     let target_b_end = rotate(b_end_local, target_rotation);
     let a_start_world = world_point(a_start_local, placement_a);
     let target = Placement {
