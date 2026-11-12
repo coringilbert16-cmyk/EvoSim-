@@ -29,6 +29,19 @@ Do not create parallel systems or duplicate fields.
 
 The existing resonance force is staged and not yet driving ordinary material movement. Its isolated-pair implementation currently fails closed when third-party occluders are present. It must not be applied in crowded environments until a correct multi-body gradient accounts for forces on occluding bodies as well as the interacting pair.
 
+## 2.1 Physical movement regimes — approved
+
+The movement model has two distinct regimes:
+
+- **Environmental flow is overdamped.** The environmental velocity field continues to evolve and transport according to its existing overdamped flow model. It does not acquire persistent inertial velocity or angular momentum.
+- **Elemental and molecular bodies are Newtonian.** Their resonance-derived forces act through persistent linear and angular velocity. Translation follows mass-based acceleration; rotation follows torque and moment of inertia. Their kinetic energy must be represented explicitly and settled through the energy ledger.
+
+These regimes must not be collapsed into one force-to-motion conversion. In particular, the ambient-flow mobility and `FLOW_RESPONSE_SCALE` are not Newtonian force or acceleration coefficients. Environmental flow may provide an external influence on elemental and molecular motion, but it must not silently replace or erase their inertial state.
+
+Use the existing canonical movement/transport commit boundaries. Do not introduce a second movement executor. Stage velocity, angular velocity, pose, collision/push consequences, pair-potential change, kinetic-energy change, and all affected energy holders together so failed movement leaves the complete state unchanged.
+
+The Newtonian integrator's damping/drag law and its coupling to the overdamped environmental field remain explicit design inputs; do not invent a coefficient or silently infer one from the ambient-flow mobility.
+
 ## 3. Exact snapped connection geometry
 
 Snapping is the physically reached destination of continuous movement, never a teleport, post-reaction correction, or override of collision geometry.
