@@ -2062,16 +2062,59 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
     // otherwise local derivative allocate quadratically in blocker count.
     let mut plus_blockers = occluders.to_vec();
     let mut minus_blockers = occluders.to_vec();
+    // Only blockers whose bounds intersect the source-to-receiver envelope
+    // (expanded by the finite-difference step) can affect this pair's visibility
+    // gradient. Keep every such blocker; distant bodies have an exact zero
+    // derivative and do not need four additional potential evaluations.
+    let (source_x, source_y, _, _) = environmental_material_resonance(a, catalog, tick)?;
+    let receiver_geometry =
+        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(b, catalog)?;
+    let step_points = [
+        (source_x - DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
+        (source_x - DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
+        (source_x + DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
+        (source_x + DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
+        (
+            receiver_geometry.min_x - DIFFERENCE_STEP,
+            receiver_geometry.min_y - DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.min_x - DIFFERENCE_STEP,
+            receiver_geometry.max_y + DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.max_x + DIFFERENCE_STEP,
+            receiver_geometry.min_y - DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.max_x + DIFFERENCE_STEP,
+            receiver_geometry.max_y + DIFFERENCE_STEP,
+        ),
+    ];
+    let blocker_can_affect_gradient = occluders
+        .iter()
+        .map(|blocker| {
+            let geometry =
+                crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+                    blocker, catalog,
+                )?;
+            Some(geometry_bounds_may_occlude_source_points(
+                (source_x, source_y),
+                &step_points,
+                &geometry,
+            ))
+        })
+        .collect::<Option<Vec<_>>>()?;
+
     let mut forces = Vec::with_capacity(occluders.len() + 2);
     for participant in 0..occluders.len() + 2 {
         let mut derivatives = [0.0; 2];
         for (axis, derivative) in derivatives.iter_mut().enumerate() {
+            if participant >= 2 && !blocker_can_affect_gradient[participant - 2] {
+                *derivative = 0.0;
+                continue;
+            }
             let (dx, dy) = if axis == 0 {
-                (DIFFERENCE_STEP, 0.0)
-            } else {
-                (0.0, DIFFERENCE_STEP)
-            };
-            let (plus, minus) = if participant == 0 {
                 let shifted_plus = translated_physical_material(a, dx, dy)?;
                 let shifted_minus = translated_physical_material(a, -dx, -dy)?;
                 (
