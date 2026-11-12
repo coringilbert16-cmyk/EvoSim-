@@ -708,15 +708,21 @@ mod tests {
         assert!((properties.mass - 1.25).abs() < 1e-12);
         assert!((properties.center_x - 0.4).abs() < 1e-12);
         assert_eq!(properties.center_y, 0.0);
+        let carbon_form = &catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap()
+            .shape
+            .form;
+        let hydrogen_form = &catalog
+            .iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap()
+            .shape
+            .form;
         let expected_inertia = 0.8
-            + intrinsic_moment_of_inertia(
-                &catalog.iter().find(|resource| resource.name == "Carbon").unwrap().shape.form,
-                1.0,
-            )
-            + intrinsic_moment_of_inertia(
-                &catalog.iter().find(|resource| resource.name == "Hydrogen").unwrap().shape.form,
-                0.25,
-            );
+            + intrinsic_moment_of_inertia(carbon_form, 1.0)
+            + intrinsic_moment_of_inertia(hydrogen_form, 0.25);
         assert!((properties.moment_of_inertia - expected_inertia).abs() < 1e-12);
     }
 
