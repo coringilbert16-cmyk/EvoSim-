@@ -338,6 +338,10 @@ impl PhysicalMaterial {
     /// Derive rigid-body mass, center of mass, and planar moment of inertia
     /// from constituent masses and their authoritative realized geometry.
     /// A vertical period is supplied only for worlds with periodic Y geometry.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
+    )]
     pub(crate) fn mass_properties(
         &self,
         catalog: &[BaseResource],
@@ -664,6 +668,77 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn mass_properties_use_constituent_mass_and_realized_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("unbonded composite should realize");
+        let properties = physical
+            .mass_properties(&catalog, None)
+            .expect("realized geometry should have mass properties");
+        assert!((properties.mass - 1.25).abs() < 1e-12);
+        assert!((properties.center_x - 0.4).abs() < 1e-12);
+        assert_eq!(properties.center_y, 0.0);
+        let expected_inertia = 0.8
+            + intrinsic_moment_of_inertia(
+                &catalog.iter().find(|resource| resource.name == "Carbon").unwrap().shape.form,
+                1.0,
+            )
+            + intrinsic_moment_of_inertia(
+                &catalog.iter().find(|resource| resource.name == "Hydrogen").unwrap().shape.form,
+                0.25,
+            );
+        assert!((properties.moment_of_inertia - expected_inertia).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mass_properties_respect_periodic_vertical_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.1,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.0,
+                    y: 99.9,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("unbonded composite should realize");
+        let properties = physical
+            .mass_properties(&catalog, Some(100.0))
+            .expect("periodic geometry should have mass properties");
+        assert!((properties.center_y - 0.06).abs() < 1e-12);
+        assert!(physical.mass_properties(&catalog, Some(0.0)).is_none());
+    }
 
     #[test]
     fn inertial_motion_integrates_force_and_torque_without_drag() {
