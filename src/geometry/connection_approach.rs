@@ -66,6 +66,148 @@ pub fn translation_path_is_collision_free(
     })
 }
 
+/// Validate a rigid body's continuous translation and rotation against
+/// stationary geometry. Each part follows the same anchor transform, preserving
+/// its local offset and orientation throughout the path.
+pub fn rigid_approach_path_is_collision_free(
+    moving_parts: &[PlacedMaterialPart],
+    anchor_start: Placement,
+    translation: (f64, f64),
+    rotation_delta: f64,
+    obstacles: &[PlacedMaterialPart],
+    vertical_period: Option<f64>,
+) -> bool {
+    if moving_parts.is_empty()
+        || !finite_placement(anchor_start)
+        || !translation.0.is_finite()
+        || !translation.1.is_finite()
+        || !rotation_delta.is_finite()
+        || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        || moving_parts.iter().chain(obstacles).any(|part| {
+            !finite_placement(part.placement)
+                || !part.form.bounding_radius().is_finite()
+                || part.form.bounding_radius() < 0.0
+        })
+    {
+        return false;
+    }
+
+    let period = vertical_period.unwrap_or(0.0);
+    moving_parts.iter().all(|moving| {
+        let relative = (
+            moving.placement.x - anchor_start.x,
+            moving.placement.y - anchor_start.y,
+        );
+        let local_offset = rotate(relative, -anchor_start.rotation_radians);
+        let local_rotation = moving.placement.rotation_radians - anchor_start.rotation_radians;
+        obstacles.iter().all(|obstacle| {
+            let images = if period > 0.0 {
+                [-period, 0.0, period]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
+            images.iter().all(|image_y| {
+                let mut image = obstacle.clone();
+                image.placement.y += *image_y;
+                rigid_approach_pair_is_clear(
+                    moving,
+                    image,
+                    anchor_start,
+                    translation,
+                    rotation_delta,
+                    local_offset,
+                    local_rotation,
+                    0.0,
+                    1.0,
+                    0,
+                )
+            })
+        })
+    })
+}
+
+fn rigid_approach_pair_is_clear(
+    moving: &PlacedMaterialPart,
+    obstacle: PlacedMaterialPart,
+    anchor_start: Placement,
+    translation: (f64, f64),
+    rotation_delta: f64,
+    local_offset: (f64, f64),
+    local_rotation: f64,
+    start: f64,
+    end: f64,
+    depth: u8,
+) -> bool {
+    let pose_at = |progress: f64| {
+        let angle = anchor_start.rotation_radians + rotation_delta * progress;
+        let offset = rotate(local_offset, angle);
+        Placement {
+            x: anchor_start.x + translation.0 * progress + offset.0,
+            y: anchor_start.y + translation.1 * progress + offset.1,
+            rotation_radians: angle + local_rotation,
+        }
+    };
+    let start_pose = pose_at(start);
+    let end_pose = pose_at(end);
+    let segment_x = end_pose.x - start_pose.x;
+    let segment_y = end_pose.y - start_pose.y;
+    let segment_length_sq = segment_x * segment_x + segment_y * segment_y;
+    let projection = if segment_length_sq > f64::EPSILON {
+        (((obstacle.placement.x - start_pose.x) * segment_x
+            + (obstacle.placement.y - start_pose.y) * segment_y)
+            / segment_length_sq)
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let closest_x = start_pose.x + projection * segment_x;
+    let closest_y = start_pose.y + projection * segment_y;
+    let angle_span = (rotation_delta * (end - start)).abs();
+    let arc_radius = local_offset.0.hypot(local_offset.1);
+    let arc_deviation = arc_radius * (1.0 - (angle_span * 0.5).cos());
+    let radius_sum =
+        moving.form.bounding_radius() + obstacle.form.bounding_radius() + arc_deviation;
+
+    if (closest_x - obstacle.placement.x).hypot(closest_y - obstacle.placement.y)
+        >= radius_sum - SWEEP_DISTANCE_EPSILON
+    {
+        return true;
+    }
+
+    let midpoint = (start + end) * 0.5;
+    let mut pose = moving.clone();
+    pose.placement = pose_at(midpoint);
+    if placed_forms_penetrate(&pose, &obstacle, 0.0) {
+        return false;
+    }
+    if depth >= SWEEP_MAX_DEPTH {
+        return false;
+    }
+    rigid_approach_pair_is_clear(
+        moving,
+        obstacle.clone(),
+        anchor_start,
+        translation,
+        rotation_delta,
+        local_offset,
+        local_rotation,
+        start,
+        midpoint,
+        depth + 1,
+    ) && rigid_approach_pair_is_clear(
+        moving,
+        obstacle,
+        anchor_start,
+        translation,
+        rotation_delta,
+        local_offset,
+        local_rotation,
+        midpoint,
+        end,
+        depth + 1,
+    )
+}
+
 /// Find the furthest collision-free fraction of a requested translation.
 ///
 /// Returns `None` when the initial pose already penetrates an obstacle
@@ -691,6 +833,50 @@ mod tests {
             &[obstacle],
             0.0,
             2.0,
+            None,
+        ));
+    }
+
+    #[test]
+    fn rigid_approach_detects_rotation_sweeping_a_part_through_obstacle() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(2.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(0.0, 2.0, 0.0),
+        };
+        assert!(!rigid_approach_path_is_collision_free(
+            &[moving],
+            placement(0.0, 0.0, 0.0),
+            (0.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+            &[obstacle],
+            None,
+        ));
+    }
+
+    #[test]
+    fn rigid_approach_allows_rotation_when_the_swept_arc_is_clear() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(2.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(-2.0, 0.0, 0.0),
+        };
+        assert!(rigid_approach_path_is_collision_free(
+            &[moving],
+            placement(0.0, 0.0, 0.0),
+            (0.0, 0.0),
+            std::f64::consts::FRAC_PI_2,
+            &[obstacle],
             None,
         ));
     }
