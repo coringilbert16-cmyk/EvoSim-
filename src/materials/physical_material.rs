@@ -583,8 +583,9 @@ impl PhysicalMaterial {
             let offset_y = vertical_period.map_or(raw_offset_y, |period| {
                 (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
             });
-            let (velocity_x, velocity_y) =
-                self.inertial_motion.velocity_at_offset(offset_x, offset_y)?;
+            let (velocity_x, velocity_y) = self
+                .inertial_motion
+                .velocity_at_offset(offset_x, offset_y)?;
             piece.inertial_motion = InertialMotion {
                 velocity_x,
                 velocity_y,
@@ -820,9 +821,7 @@ mod tests {
             velocity_y: 2.0,
             angular_velocity: 3.0,
         };
-        let local = motion
-            .rotated_axes(-std::f64::consts::FRAC_PI_2)
-            .unwrap();
+        let local = motion.rotated_axes(-std::f64::consts::FRAC_PI_2).unwrap();
         assert!((local.velocity_x - 2.0).abs() < 1e-12);
         assert!((local.velocity_y + 1.0).abs() < 1e-12);
         assert_eq!(local.angular_velocity, motion.angular_velocity);
