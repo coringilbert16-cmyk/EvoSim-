@@ -217,7 +217,10 @@ pub fn approach_error(
     current_b: Placement,
     target: ConnectionApproachTarget,
 ) -> Option<ConnectionApproachError> {
-    if !finite_placement(current_b) || !finite_placement(target.placement_b) {
+    if face_b.face_index != target.face_b_index
+        || !finite_placement(current_b)
+        || !finite_placement(target.placement_b)
+    {
         return None;
     }
     let current_start = world_point(span_point(face_b, target.span.b_start), current_b);
@@ -254,13 +257,19 @@ pub fn approach_progress(initial_error: f64, current_error: f64) -> Option<f64> 
 }
 
 /// Test exact-target proximity using a caller-supplied geometric tolerance.
-pub fn is_at_snapped_target(error: ConnectionApproachError, tolerance: f64) -> bool {
-    tolerance.is_finite()
-        && tolerance >= 0.0
+pub fn is_at_snapped_target(
+    error: ConnectionApproachError,
+    endpoint_tolerance: f64,
+    angular_tolerance_radians: f64,
+) -> bool {
+    endpoint_tolerance.is_finite()
+        && endpoint_tolerance >= 0.0
+        && angular_tolerance_radians.is_finite()
+        && angular_tolerance_radians >= 0.0
         && error.endpoint_error.is_finite()
         && error.rotation_error.is_finite()
-        && error.endpoint_error <= tolerance
-        && error.rotation_error <= tolerance
+        && error.endpoint_error <= endpoint_tolerance
+        && error.rotation_error <= angular_tolerance_radians
 }
 
 #[cfg(test)]
@@ -298,7 +307,7 @@ mod tests {
             placement_b: target,
         };
         let error = approach_error(b, target, target_record).unwrap();
-        assert!(is_at_snapped_target(error, 1e-10));
+        assert!(is_at_snapped_target(error, 1e-10, 1e-10));
         let a_start = a.world_endpoint(crate::connection_faces::FaceEnd::Start, placement(4.0, 5.0, 0.0));
         let b_end = b.world_endpoint(crate::connection_faces::FaceEnd::End, target);
         assert!((a_start.0 - b_end.0).hypot(a_start.1 - b_end.1) <= 1e-10);
