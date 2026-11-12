@@ -766,8 +766,17 @@ impl EnergyLedgerAuthority for EnergyLedger {
         let next_holder = *holder + transaction.usable_delta;
         let next_external = self.total_external_energy_input + transaction.external_input;
         let next_gained = self.total_usable_energy_gained + transaction.usable_delta;
-        let next_work = self.total_work_expended + transaction.work_expended;
-        let next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        let mut next_work = self.total_work_expended + transaction.work_expended;
+        let mut next_heat = self.total_heat_dissipated + transaction.heat_dissipated;
+        // Cumulative counters can round a small increment upward by an ULP.
+        // Record the increment conservatively instead: otherwise an exactly
+        // funded reaction with an empty holder can appear to create energy.
+        if next_work - self.total_work_expended > transaction.work_expended {
+            next_work = f64::from_bits(next_work.to_bits() - 1);
+        }
+        if next_heat - self.total_heat_dissipated > transaction.heat_dissipated {
+            next_heat = f64::from_bits(next_heat.to_bits() - 1);
+        }
         if !next_holder.is_finite()
             || !next_external.is_finite()
             || !next_gained.is_finite()
@@ -960,11 +969,7 @@ impl EnergyLedgerAuthority for EnergyLedger {
         };
         let mut residual = residual_for(next_holder);
         let mut rounding_steps = 0;
-        // Match the transaction's existing absolute rounding tolerance. A
-        // fully funded reaction can leave its holder at exactly zero, where
-        // there is no representable energy left to debit for a sub-EPSILON
-        // residual caused by cumulative-counter rounding.
-        while residual > EPSILON {
+        while residual > 0.0 {
             if next_holder <= 0.0 || rounding_steps >= 64 {
                 #[cfg(test)]
                 eprintln!(
