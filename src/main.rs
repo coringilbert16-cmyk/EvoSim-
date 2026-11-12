@@ -42,10 +42,10 @@ mod world_tone_snapshot;
 mod capillary_geometry;
 #[path = "geometry/cavity.rs"]
 mod cavity;
-#[path = "geometry/connection_geometry.rs"]
-mod connection_geometry;
 #[path = "geometry/connection_faces.rs"]
 mod connection_faces;
+#[path = "geometry/connection_geometry.rs"]
+mod connection_geometry;
 #[path = "construction/material_selection.rs"]
 mod construction_material_selection;
 #[path = "construction/runtime.rs"]
