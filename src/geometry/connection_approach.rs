@@ -640,6 +640,67 @@ pub fn compatible_face_spans(a: ConnectionFace, b: ConnectionFace) -> Vec<FaceSp
     Vec::new()
 }
 
+/// Select the closest valid face-pair target, with stable face-index tie breaks.
+///
+/// This is geometry-only candidate selection. Chemical compatibility and
+/// activation remain separate authorities, and callers must still validate
+/// the continuous movement path before applying any physical displacement.
+pub fn best_connection_approach_target(
+    shape_a: &crate::resources::Shape,
+    name_a: &str,
+    placement_a: Placement,
+    shape_b: &crate::resources::Shape,
+    name_b: &str,
+    placement_b: Placement,
+    occupied_a: &[FaceInterval],
+    occupied_b: &[FaceInterval],
+) -> Option<(ConnectionApproachTarget, ConnectionApproachError)> {
+    let faces_a = crate::connection_faces::connection_faces(shape_a, name_a);
+    let faces_b = crate::connection_faces::connection_faces(shape_b, name_b);
+    let mut best: Option<(f64, ConnectionApproachTarget, ConnectionApproachError)> = None;
+
+    for face_a in faces_a {
+        for face_b in &faces_b {
+            for span in compatible_face_spans(face_a, *face_b) {
+                if !face_span_is_unoccupied(span, occupied_a, occupied_b) {
+                    continue;
+                }
+                let Some(target_placement) =
+                    snapped_target_placement(face_a, placement_a, *face_b, span)
+                else {
+                    continue;
+                };
+                let target = ConnectionApproachTarget {
+                    face_a_index: face_a.face_index,
+                    face_b_index: face_b.face_index,
+                    span,
+                    placement_b: target_placement,
+                };
+                let Some(error) = approach_error(*face_b, placement_b, target) else {
+                    continue;
+                };
+                let paired_length = face_a.length * (span.a_end - span.a_start);
+                let score = error
+                    .endpoint_error
+                    .max(error.rotation_error * paired_length * 0.5);
+                if !score.is_finite() {
+                    continue;
+                }
+                let replace = best.as_ref().map_or(true, |(best_score, best_target, _)| {
+                    score.total_cmp(best_score).is_lt()
+                        || (score.total_cmp(best_score).is_eq()
+                            && (target.face_a_index, target.face_b_index)
+                                < (best_target.face_a_index, best_target.face_b_index))
+                });
+                if replace {
+                    best = Some((score, target, error));
+                }
+            }
+        }
+    }
+    best.map(|(_, target, error)| (target, error))
+}
+
 /// Build every exact snapped target allowed by the two faces' length ratio.
 pub fn connection_approach_targets(
     face_a: ConnectionFace,
@@ -1063,6 +1124,49 @@ mod tests {
         assert_eq!(activation_signal_at_approach(0.8, 1.0), Some(0.8));
         assert!(activation_signal_at_approach(0.8, 1.01).is_none());
         assert!(activation_signal_at_approach(f64::NAN, 0.5).is_none());
+    }
+
+    #[test]
+    fn best_approach_target_skips_occupied_faces() {
+        let shape = rectangle(1.0, 1.0);
+        let placement_a = placement(0.0, 0.0, 0.0);
+        let placement_b = placement(0.0, 0.0, 0.0);
+        let occupied = [FaceInterval {
+            start: 0.0,
+            end: 1.0,
+        }];
+        let (target, _) = best_connection_approach_target(
+            &shape,
+            "Carbon",
+            placement_a,
+            &shape,
+            "Carbon",
+            placement_b,
+            &occupied,
+            &[],
+        )
+        .unwrap();
+        assert_ne!(target.face_a_index, 0);
+    }
+
+    #[test]
+    fn best_approach_target_fails_closed_when_no_face_pair_is_available() {
+        let shape = rectangle(1.0, 1.0);
+        let occupied = [FaceInterval {
+            start: 0.0,
+            end: 1.0,
+        }];
+        assert!(best_connection_approach_target(
+            &shape,
+            "Carbon",
+            placement(0.0, 0.0, 0.0),
+            &shape,
+            "Carbon",
+            placement(0.0, 0.0, 0.0),
+            &occupied,
+            &occupied,
+        )
+        .is_none());
     }
 
     #[test]
