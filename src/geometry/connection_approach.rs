@@ -76,12 +76,7 @@ pub fn face_span_is_unoccupied(
     occupied_b: &[FaceInterval],
 ) -> bool {
     fn available(start: f64, end: f64, occupied: &[FaceInterval]) -> bool {
-        if !start.is_finite()
-            || !end.is_finite()
-            || start < 0.0
-            || end > 1.0
-            || end <= start
-        {
+        if !start.is_finite() || !end.is_finite() || start < 0.0 || end > 1.0 || end <= start {
             return false;
         }
         occupied.iter().all(|interval| {
@@ -456,8 +451,8 @@ mod tests {
         let initial_target = snapped_target_placement(face_a, initial_a, face_b, span).unwrap();
         let moved_a = placement(7.0, -3.0, 0.4);
         let moved_target = snapped_target_placement(face_a, moved_a, face_b, span).unwrap();
-        let error = approach_error_to_face_pair(face_a, moved_a, face_b, moved_target, span)
-            .unwrap();
+        let error =
+            approach_error_to_face_pair(face_a, moved_a, face_b, moved_target, span).unwrap();
         assert!(is_at_snapped_target(error, 1e-10, 1e-10));
         assert_ne!(initial_target, moved_target);
     }
