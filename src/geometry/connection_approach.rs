@@ -749,8 +749,8 @@ pub fn best_connection_approach_target(
     shape_b: &crate::resources::Shape,
     name_b: &str,
     placement_b: Placement,
-    occupied_a: &[FaceInterval],
-    occupied_b: &[FaceInterval],
+    occupied_a: &[(usize, Vec<FaceInterval>)],
+    occupied_b: &[(usize, Vec<FaceInterval>)],
 ) -> Option<(ConnectionApproachTarget, ConnectionApproachError)> {
     let faces_a = crate::connection_faces::connection_faces(shape_a, name_a);
     let faces_b = crate::connection_faces::connection_faces(shape_b, name_b);
@@ -758,8 +758,16 @@ pub fn best_connection_approach_target(
 
     for face_a in faces_a {
         for face_b in &faces_b {
+            let face_occupied_a = occupied_a
+                .iter()
+                .find(|(face_index, _)| *face_index == face_a.face_index)
+                .map_or(&[][..], |(_, intervals)| intervals.as_slice());
+            let face_occupied_b = occupied_b
+                .iter()
+                .find(|(face_index, _)| *face_index == face_b.face_index)
+                .map_or(&[][..], |(_, intervals)| intervals.as_slice());
             for span in compatible_face_spans(face_a, *face_b) {
-                if !face_span_is_unoccupied(span, occupied_a, occupied_b) {
+                if !face_span_is_unoccupied(span, face_occupied_a, face_occupied_b) {
                     continue;
                 }
                 let Some(target_placement) =
@@ -1338,10 +1346,10 @@ mod tests {
         let shape = rectangle(1.0, 1.0);
         let placement_a = placement(0.0, 0.0, 0.0);
         let placement_b = placement(0.0, 0.0, 0.0);
-        let occupied = [FaceInterval {
+        let occupied = [(0, vec![FaceInterval {
             start: 0.0,
             end: 1.0,
-        }];
+        }])];
         let (target, _) = best_connection_approach_target(
             &shape,
             "Carbon",
@@ -1359,10 +1367,18 @@ mod tests {
     #[test]
     fn best_approach_target_fails_closed_when_no_face_pair_is_available() {
         let shape = rectangle(1.0, 1.0);
-        let occupied = [FaceInterval {
-            start: 0.0,
-            end: 1.0,
-        }];
+        let full_occupancy = crate::connection_faces::connection_faces(&shape, "Carbon")
+            .into_iter()
+            .map(|face| {
+                (
+                    face.face_index,
+                    vec![FaceInterval {
+                        start: 0.0,
+                        end: 1.0,
+                    }],
+                )
+            })
+            .collect::<Vec<_>>();
         assert!(best_connection_approach_target(
             &shape,
             "Carbon",
@@ -1370,8 +1386,8 @@ mod tests {
             &shape,
             "Carbon",
             placement(0.0, 0.0, 0.0),
-            &occupied,
-            &occupied,
+            &full_occupancy,
+            &full_occupancy,
         )
         .is_none());
     }
