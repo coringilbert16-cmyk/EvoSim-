@@ -724,7 +724,6 @@ fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
     assert_ne!(child_ids[0], child_ids[1]);
 }
 
-
 #[test]
 fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells() {
     use crate::physical_material::PhysicalMaterial;
