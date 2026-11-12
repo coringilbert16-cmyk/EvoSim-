@@ -524,6 +524,16 @@ pub struct ConnectionApproachEvaluation {
     pub at_snapped_target: bool,
 }
 
+impl ConnectionApproachEvaluation {
+    /// Bond formation requires both the exact snapped geometry and the existing
+    /// chemistry-defined activation barrier. Neither condition substitutes for
+    /// the other.
+    pub fn reaction_is_eligible(self, chemistry_barrier: f64) -> bool {
+        self.at_snapped_target
+            && crate::chemistry::activated(self.activation_signal, chemistry_barrier)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachError {
     /// Maximum endpoint displacement from the exact target pose.
@@ -1106,6 +1116,38 @@ mod tests {
         assert_eq!(evaluation.activation_signal, 0.4);
         assert_eq!(evaluation.movement_fraction, 1.0);
         assert!(!evaluation.at_snapped_target);
+    }
+
+    #[test]
+    fn reaction_eligibility_requires_exact_snap_and_existing_activation_barrier() {
+        let base = ConnectionApproachEvaluation {
+            target: ConnectionApproachTarget {
+                face_a_index: 0,
+                face_b_index: 1,
+                span: FaceSpan {
+                    a_start: 0.0,
+                    a_end: 1.0,
+                    b_start: 0.0,
+                    b_end: 1.0,
+                },
+                placement_b: placement(0.0, 0.0, 0.0),
+            },
+            error: ConnectionApproachError {
+                endpoint_error: 0.0,
+                rotation_error: 0.0,
+            },
+            progress: 1.0,
+            activation_signal: 0.8,
+            movement_fraction: 1.0,
+            at_snapped_target: true,
+        };
+        assert!(base.reaction_is_eligible(0.5));
+        assert!(!base.reaction_is_eligible(0.9));
+        assert!(!ConnectionApproachEvaluation {
+            at_snapped_target: false,
+            ..base
+        }
+        .reaction_is_eligible(0.5));
     }
 
     #[test]
