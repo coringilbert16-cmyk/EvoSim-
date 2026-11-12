@@ -1334,6 +1334,11 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                                 .saturating_add(1);
                                         match trial_diagnostic.failure_stage {
                                             DisplacementTrialFailureStage::Activation => {}
+                                            DisplacementTrialFailureStage::BondCompetition => {
+                                                diagnostics.trial_rejections_replacement = diagnostics
+                                                    .trial_rejections_replacement
+                                                    .saturating_add(1);
+                                            }
                                             DisplacementTrialFailureStage::InvalidStoredBondEnergy => {
                                                 diagnostics.trial_rejections_old_bond_energy =
                                                     diagnostics
