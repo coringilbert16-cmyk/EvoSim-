@@ -227,17 +227,49 @@ pub enum ConnectionEndpoint {
     Boundary { angle_radians: f64 },
     Fluid { x: f64, y: f64 },
 }
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct ConnectionFaceBinding {
+    pub face_index: usize,
+    /// Normalized interval along the face, in [0, 1].
+    pub start: f64,
+    pub end: f64,
+}
+impl ConnectionFaceBinding {
+    pub fn is_valid(self) -> bool {
+        self.start.is_finite()
+            && self.end.is_finite()
+            && self.start >= 0.0
+            && self.end <= 1.0
+            && self.start < self.end
+    }
+}
+
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 pub struct BondEndpoint {
     pub constituent_id: PhysicalConstituentId,
     pub location: ConnectionEndpoint,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_binding: Option<ConnectionFaceBinding>,
 }
 impl BondEndpoint {
     pub fn new(constituent_id: PhysicalConstituentId, location: ConnectionEndpoint) -> Self {
         Self {
             constituent_id,
             location,
+            face_binding: None,
         }
+    }
+
+    pub fn new_with_face_binding(
+        constituent_id: PhysicalConstituentId,
+        location: ConnectionEndpoint,
+        face_binding: ConnectionFaceBinding,
+    ) -> Option<Self> {
+        face_binding.is_valid().then_some(Self {
+            constituent_id,
+            location,
+            face_binding: Some(face_binding),
+        })
     }
 }
 impl<'de> Deserialize<'de> for BondEndpoint {
@@ -250,14 +282,20 @@ impl<'de> Deserialize<'de> for BondEndpoint {
             constituent_id: Option<PhysicalConstituentId>,
             unit_index: Option<usize>,
             location: ConnectionEndpoint,
+            #[serde(default)]
+            face_binding: Option<ConnectionFaceBinding>,
         }
         let s = Stored::deserialize(deserializer)?;
+        if s.face_binding.is_some_and(|binding| !binding.is_valid()) {
+            return Err(serde::de::Error::custom("invalid connection face binding"));
+        }
         let id = s.constituent_id.unwrap_or_else(|| {
             PhysicalConstituentId(s.unit_index.map(|i| u64::MAX - i as u64).unwrap_or(0))
         });
         Ok(Self {
             constituent_id: id,
             location: s.location,
+            face_binding: s.face_binding,
         })
     }
 }
