@@ -529,10 +529,32 @@ pub(crate) fn settle_pair_potential_change(
     biological_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
     components: &[crate::harmonics::ResonancePairPotentialComponent],
 ) -> bool {
+    settle_pair_potential_and_kinetic_change(
+        ledger,
+        active_mover_usable_energy,
+        biological_resonance_holders,
+        0.0,
+        components,
+    )
+}
+
+/// Atomically settle a signed pair-potential change together with the
+/// corresponding mechanical kinetic-energy change. Their net sum is funded
+/// from usable energy or released to compatible resonance stores and heat.
+pub(crate) fn settle_pair_potential_and_kinetic_change(
+    ledger: &mut EnergyLedger,
+    active_mover_usable_energy: &mut f64,
+    biological_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
+    kinetic_energy_delta: f64,
+    components: &[crate::harmonics::ResonancePairPotentialComponent],
+) -> bool {
     if !active_mover_usable_energy.is_finite()
         || *active_mover_usable_energy < 0.0
         || !ledger.total_pair_interaction_potential_held.is_finite()
         || !ledger.initial_pair_interaction_potential_held.is_finite()
+        || !ledger.total_kinetic_energy_held.is_finite()
+        || ledger.total_kinetic_energy_held < 0.0
+        || !kinetic_energy_delta.is_finite()
         || !ledger.total_usable_energy_gained.is_finite()
         || !ledger.total_resonant_energy_held.is_finite()
         || ledger.total_resonant_energy_held < 0.0
@@ -547,34 +569,43 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     }
 
-    let delta = components
+    let pair_delta = components
         .iter()
         .map(|component| component.energy)
         .sum::<f64>();
-    if !delta.is_finite() {
+    let net_delta = pair_delta + kinetic_energy_delta;
+    if !pair_delta.is_finite() || !net_delta.is_finite() {
         return false;
     }
-    if delta == 0.0 {
+    let next_pair_potential = ledger.total_pair_interaction_potential_held + pair_delta;
+    let next_kinetic_energy = ledger.total_kinetic_energy_held + kinetic_energy_delta;
+    if !next_pair_potential.is_finite()
+        || !next_kinetic_energy.is_finite()
+        || next_kinetic_energy < 0.0
+    {
+        return false;
+    }
+
+    if net_delta == 0.0 {
+        ledger.total_pair_interaction_potential_held = next_pair_potential;
+        ledger.total_kinetic_energy_held = next_kinetic_energy;
         return true;
     }
 
-    let next_pair_potential = ledger.total_pair_interaction_potential_held + delta;
-    if !next_pair_potential.is_finite() {
-        return false;
-    }
-
-    if delta > 0.0 {
-        let next_usable = *active_mover_usable_energy - delta;
+    if net_delta > 0.0 {
+        let next_usable = *active_mover_usable_energy - net_delta;
         if !next_usable.is_finite() || next_usable < 0.0 {
             return false;
         }
-        let next_usable_gained = ledger.total_usable_energy_gained - delta;
+        let next_usable_gained = ledger.total_usable_energy_gained - net_delta;
         if !next_usable_gained.is_finite() {
             return false;
         }
         let actual_usable_delta = next_usable - *active_mover_usable_energy;
-        let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
-        let residual = actual_usable_delta + actual_pair_delta;
+        let actual_pair_delta =
+            next_pair_potential - ledger.total_pair_interaction_potential_held;
+        let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
+        let residual = actual_usable_delta + actual_pair_delta + actual_kinetic_delta;
         if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
             return false;
         }
@@ -582,10 +613,11 @@ pub(crate) fn settle_pair_potential_change(
         *active_mover_usable_energy = next_usable;
         ledger.total_usable_energy_gained = next_usable_gained;
         ledger.total_pair_interaction_potential_held = next_pair_potential;
+        ledger.total_kinetic_energy_held = next_kinetic_energy;
         return true;
     }
 
-    let released = -delta;
+    let released = -net_delta;
     let negative_component_total = components
         .iter()
         .filter(|component| component.energy < 0.0)
@@ -593,11 +625,11 @@ pub(crate) fn settle_pair_potential_change(
         .sum::<f64>();
     if !released.is_finite()
         || !negative_component_total.is_finite()
-        || negative_component_total < released
-        || negative_component_total <= 0.0
+        || negative_component_total < 0.0
     {
         return false;
     }
+    let resonance_release = released.min(negative_component_total);
 
     for (index, holder) in biological_resonance_holders.iter().enumerate() {
         if biological_resonance_holders[..index]
@@ -622,31 +654,33 @@ pub(crate) fn settle_pair_potential_change(
         .iter()
         .map(|reservoir| (**reservoir).clone())
         .collect::<Vec<_>>();
-    for component in components.iter().filter(|component| component.energy < 0.0) {
-        let share = released * (-component.energy / negative_component_total);
-        if !share.is_finite() || share < 0.0 {
-            return false;
-        }
-        let mut remaining = share;
-        for reservoir in &mut staged_resonance {
-            let before = match reservoir.total_energy() {
-                Some(total) => total,
-                None => return false,
-            };
-            if !reservoir.deposit(component.frequency_cycles_per_day, remaining) {
-                continue;
-            }
-            let after = match reservoir.total_energy() {
-                Some(total) => total,
-                None => return false,
-            };
-            let accepted = after - before;
-            if !accepted.is_finite() || accepted < 0.0 || accepted > remaining + EPSILON {
+    if negative_component_total > 0.0 {
+        for component in components.iter().filter(|component| component.energy < 0.0) {
+            let share = resonance_release * (-component.energy / negative_component_total);
+            if !share.is_finite() || share < 0.0 {
                 return false;
             }
-            remaining = (remaining - accepted).max(0.0);
-            if remaining <= f64::EPSILON {
-                break;
+            let mut remaining = share;
+            for reservoir in &mut staged_resonance {
+                let before = match reservoir.total_energy() {
+                    Some(total) => total,
+                    None => return false,
+                };
+                if !reservoir.deposit(component.frequency_cycles_per_day, remaining) {
+                    continue;
+                }
+                let after = match reservoir.total_energy() {
+                    Some(total) => total,
+                    None => return false,
+                };
+                let accepted = after - before;
+                if !accepted.is_finite() || accepted < 0.0 || accepted > remaining + EPSILON {
+                    return false;
+                }
+                remaining = (remaining - accepted).max(0.0);
+                if remaining <= f64::EPSILON {
+                    break;
+                }
             }
         }
     }
@@ -660,7 +694,10 @@ pub(crate) fn settle_pair_potential_change(
         return false;
     };
     let retained_delta = retained_total - original_resonance_total;
-    if !retained_delta.is_finite() || retained_delta < 0.0 || retained_delta > released + EPSILON {
+    if !retained_delta.is_finite()
+        || retained_delta < 0.0
+        || retained_delta > resonance_release + EPSILON
+    {
         return false;
     }
     let next_resonant_held = ledger.total_resonant_energy_held + retained_delta;
@@ -671,9 +708,13 @@ pub(crate) fn settle_pair_potential_change(
     }
 
     let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
+    let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
     let actual_resonant_delta = next_resonant_held - ledger.total_resonant_energy_held;
     let mut actual_heat_delta = next_heat - ledger.total_heat_dissipated;
-    let mut residual = actual_pair_delta + actual_resonant_delta + actual_heat_delta;
+    let mut residual = actual_pair_delta
+        + actual_kinetic_delta
+        + actual_resonant_delta
+        + actual_heat_delta;
     if !residual.is_finite() {
         return false;
     }
@@ -685,7 +726,10 @@ pub(crate) fn settle_pair_potential_change(
             return false;
         }
         actual_heat_delta = next_heat - ledger.total_heat_dissipated;
-        residual = actual_pair_delta + actual_resonant_delta + actual_heat_delta;
+        residual = actual_pair_delta
+            + actual_kinetic_delta
+            + actual_resonant_delta
+            + actual_heat_delta;
     }
     if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
         return false;
@@ -698,6 +742,7 @@ pub(crate) fn settle_pair_potential_change(
         **target = staged;
     }
     ledger.total_pair_interaction_potential_held = next_pair_potential;
+    ledger.total_kinetic_energy_held = next_kinetic_energy;
     ledger.total_resonant_energy_held = next_resonant_held;
     ledger.total_heat_dissipated = next_heat;
     true
