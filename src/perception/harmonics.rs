@@ -3721,11 +3721,12 @@ mod tests {
         let receiver = make_material("Carbon", 8.0, 0.0);
         let blocker = make_material("Nitrogen", 4.0, 0.35);
         let second_blocker = make_material("Hydrogen", 4.5, -0.4);
-        let blockers = vec![blocker, second_blocker];
+        let distant_blocker = make_material("Sulfur", 50.0, 50.0);
+        let blockers = vec![blocker, second_blocker, distant_blocker];
         let forces =
             resonance_multi_body_forces_with_occluders(&source, &receiver, &blockers, &catalog, 0)
                 .expect("the full multi-body gradient should be finite and balanced");
-        assert_eq!(forces.len(), 4);
+        assert_eq!(forces.len(), 5);
         assert!(
             forces[2..]
                 .iter()
@@ -3737,6 +3738,11 @@ mod tests {
                 .iter()
                 .all(|force| force.x.is_finite() && force.y.is_finite()),
             "reused blocker snapshots must not leak one participant's perturbation into another"
+        );
+        assert_eq!(
+            forces[4],
+            ResonanceBodyForce::default(),
+            "a body outside the expanded ray envelope has an exact zero gradient"
         );
         let sum_x = forces.iter().map(|force| force.x).sum::<f64>();
         let sum_y = forces.iter().map(|force| force.y).sum::<f64>();
