@@ -1,5 +1,5 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [
     42,
     43,
