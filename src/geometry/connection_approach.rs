@@ -752,12 +752,8 @@ pub fn evaluate_connection_approach(
     if !face_span_is_unoccupied(input.span, input.occupied_a, input.occupied_b) {
         return None;
     }
-    let target_placement_b = snapped_target_placement(
-        input.face_a,
-        input.placement_a,
-        input.face_b,
-        input.span,
-    )?;
+    let target_placement_b =
+        snapped_target_placement(input.face_a, input.placement_a, input.face_b, input.span)?;
     let target = ConnectionApproachTarget {
         face_a_index: input.face_a.face_index,
         face_b_index: input.face_b.face_index,
@@ -766,11 +762,7 @@ pub fn evaluate_connection_approach(
     };
     let error = approach_error(input.face_b, input.placement_b, target)?;
     let paired_face_length = input.face_a.length * (input.span.a_end - input.span.a_start);
-    let progress = connection_approach_progress(
-        input.initial_error,
-        error,
-        paired_face_length,
-    )?;
+    let progress = connection_approach_progress(input.initial_error, error, paired_face_length)?;
     let activation_signal = activation_signal_at_approach(input.chemistry_signal, progress)?;
     let movement_fraction = collision_free_rigid_approach_fraction(
         input.moving_parts,
