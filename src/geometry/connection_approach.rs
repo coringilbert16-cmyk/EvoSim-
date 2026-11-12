@@ -3,10 +3,135 @@
 //! These helpers describe a physically reachable rigid-body destination. They
 //! do not move materials, create bonds, or override collision geometry.
 use crate::connection_faces::ConnectionFace;
+use crate::material_geometry::{placed_forms_penetrate, PlacedMaterialPart};
 use crate::structure::Placement;
 
 const LENGTH_RELATIVE_EPSILON: f64 = 1e-9;
 const VECTOR_EPSILON: f64 = 1e-12;
+
+const SWEEP_MAX_DEPTH: u8 = 24;
+const SWEEP_DISTANCE_EPSILON: f64 = 1e-10;
+
+/// Validate a straight-line translation against stationary geometry.
+///
+/// The broad phase uses the exact swept center segment and each pair's
+/// bounding radii. Intervals that cannot be proven clear are recursively
+/// subdivided; unresolved intervals fail closed, so a fast body cannot tunnel
+/// through a thin obstacle between endpoint checks. The narrow phase uses the
+/// same material penetration predicate as the rest of the geometry system.
+///
+/// This is intentionally translation-only. Rotating approach paths require a
+/// separate swept rotational bound and must not be approximated as translation.
+pub fn translation_path_is_collision_free(
+    moving_parts: &[PlacedMaterialPart],
+    obstacles: &[PlacedMaterialPart],
+    delta_x: f64,
+    delta_y: f64,
+    vertical_period: Option<f64>,
+) -> bool {
+    if moving_parts.is_empty()
+        || !delta_x.is_finite()
+        || !delta_y.is_finite()
+        || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        || moving_parts.iter().chain(obstacles).any(|part| {
+            !finite_placement(part.placement)
+                || !part.form.bounding_radius().is_finite()
+                || part.form.bounding_radius() < 0.0
+        })
+    {
+        return false;
+    }
+
+    moving_parts.iter().all(|moving| {
+        obstacles.iter().all(|obstacle| {
+            let period = vertical_period.unwrap_or(0.0);
+            let images = if period > 0.0 {
+                [-period, 0.0, period].as_slice()
+            } else {
+                [0.0, 0.0, 0.0].as_slice()
+            };
+            images.iter().all(|image_y| {
+                let mut image = obstacle.clone();
+                image.placement.y += image_y;
+                translation_pair_is_clear(
+                    moving,
+                    &image,
+                    (delta_x, delta_y),
+                    0.0,
+                    1.0,
+                    0,
+                )
+            })
+        })
+    })
+}
+
+fn translation_pair_is_clear(
+    moving: &PlacedMaterialPart,
+    obstacle: &PlacedMaterialPart,
+    displacement: (f64, f64),
+    start: f64,
+    end: f64,
+    depth: u8,
+) -> bool {
+    let start_x = moving.placement.x + displacement.0 * start;
+    let start_y = moving.placement.y + displacement.1 * start;
+    let end_x = moving.placement.x + displacement.0 * end;
+    let end_y = moving.placement.y + displacement.1 * end;
+
+    let segment_x = end_x - start_x;
+    let segment_y = end_y - start_y;
+    let segment_length_sq = segment_x * segment_x + segment_y * segment_y;
+    let projection = if segment_length_sq > f64::EPSILON {
+        (((obstacle.placement.x - start_x) * segment_x
+            + (obstacle.placement.y - start_y) * segment_y)
+            / segment_length_sq)
+            .clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let closest_x = start_x + projection * segment_x;
+    let closest_y = start_y + projection * segment_y;
+    let radius_sum = moving.form.bounding_radius() + obstacle.form.bounding_radius();
+
+    // If the entire swept center segment clears the enclosing circles, the
+    // actual forms necessarily clear one another over this interval.
+    if (closest_x - obstacle.placement.x).hypot(closest_y - obstacle.placement.y)
+        >= radius_sum - SWEEP_DISTANCE_EPSILON
+    {
+        return true;
+    }
+
+    let midpoint = (start + end) * 0.5;
+    let mut pose = moving.clone();
+    pose.placement.x += displacement.0 * midpoint;
+    pose.placement.y += displacement.1 * midpoint;
+    if placed_forms_penetrate(&pose, obstacle, 0.0) {
+        return false;
+    }
+
+    if depth >= SWEEP_MAX_DEPTH {
+        // The conservative broad phase still cannot prove this tiny interval
+        // clear. Reject rather than permit a possible between-sample collision.
+        return false;
+    }
+
+    translation_pair_is_clear(
+        moving,
+        obstacle,
+        displacement,
+        start,
+        midpoint,
+        depth + 1,
+    ) && translation_pair_is_clear(
+        moving,
+        obstacle,
+        displacement,
+        midpoint,
+        end,
+        depth + 1,
+    )
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FaceSpan {
@@ -469,6 +594,75 @@ mod tests {
         assert_eq!(approach_progress(10.0, 12.0), Some(0.0));
         assert_eq!(approach_progress(0.0, 0.0), Some(1.0));
         assert_eq!(approach_progress(0.0, 0.5), Some(0.0));
+    }
+
+    #[test]
+    fn swept_translation_rejects_tunneling_through_thin_obstacle() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(0.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Rectangle {
+                width: 0.05,
+                height: 2.0,
+            },
+            placement: placement(5.0, 0.0, 0.0),
+        };
+        assert!(!translation_path_is_collision_free(
+            &[moving],
+            &[obstacle],
+            10.0,
+            0.0,
+            None,
+        ));
+    }
+
+    #[test]
+    fn swept_translation_allows_a_path_that_clears_obstacle_geometry() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(0.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Rectangle {
+                width: 0.2,
+                height: 2.0,
+            },
+            placement: placement(5.0, 0.0, 0.0),
+        };
+        assert!(translation_path_is_collision_free(
+            &[moving],
+            &[obstacle],
+            0.0,
+            2.0,
+            None,
+        ));
+    }
+
+    #[test]
+    fn swept_translation_checks_vertical_periodic_images() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(5.0, 9.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.2 },
+            placement: placement(5.0, 1.0, 0.0),
+        };
+        assert!(!translation_path_is_collision_free(
+            &[moving],
+            &[obstacle],
+            0.0,
+            3.0,
+            Some(10.0),
+        ));
     }
 
     #[test]
