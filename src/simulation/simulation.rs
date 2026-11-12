@@ -3346,6 +3346,52 @@ mod decomposition_finalization_tests {
     }
 
     #[test]
+    fn world_energy_inventory_counts_environmental_material_kinetic_energy() {
+        let mut simulation = Simulation::new(913, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+        let catalog = simulation.environment.catalog.clone();
+        let mut material = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::physical_material::Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                crate::physical_material::Placement {
+                    x: 0.838,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("test material should realize");
+        material.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: 2.0,
+            velocity_y: -0.5,
+            angular_velocity: 0.75,
+        };
+        let kinetic_energy = material
+            .kinetic_energy(&catalog, Some(simulation.environment.height))
+            .expect("realized material should have finite kinetic energy");
+        simulation.environment.field.cells[0]
+            .physical_materials
+            .push(material);
+        simulation.energy_ledger.total_kinetic_energy_held = kinetic_energy;
+        simulation.energy_ledger.total_external_energy_input += kinetic_energy;
+
+        let inventory = simulation.energy_inventory_snapshot();
+        assert!((inventory.current_kinetic_energy - kinetic_energy).abs() < 1e-12);
+        assert!(inventory.is_balanced_without_creation(1e-9));
+    }
+
+    #[test]
     fn world_energy_inventory_reconciles_across_structural_break() {
         let mut simulation = Simulation::new(917, 10.0);
         let before = simulation.energy_inventory_snapshot();
