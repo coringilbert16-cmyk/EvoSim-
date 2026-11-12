@@ -912,7 +912,7 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalContactOpportunitySample {
     pub(crate) source_a_identity: u64,
     pub(crate) source_b_identity: u64,
