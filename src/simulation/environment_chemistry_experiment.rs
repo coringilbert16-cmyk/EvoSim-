@@ -172,8 +172,8 @@ pub(crate) fn realize_natural_molecule(
     molecule
 }
 
-/// Seed exactly 1,280 individual base resources in randomized piles. Pile sizes
-/// are an unrestricted random partition, not a fixed 6–20 range.
+/// Seed the default all-resource environment. Pile sizes are an unrestricted
+/// random partition, not a fixed 6–20 range.
 pub(crate) fn seed_randomized_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -703,7 +703,7 @@ mod tests {
     }
 
     #[test]
-    fn fixture_has_1280_known_two_unit_molecules_and_no_organisms() {
+    fn fixture_has_1200_independent_resources_and_80_known_two_unit_molecules() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
@@ -793,7 +793,7 @@ mod tests {
                 .iter()
                 .filter(|m| m.material.parts.len() == 1)
                 .count(),
-            0
+            ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT
         );
         assert_eq!(
             materials
@@ -817,16 +817,16 @@ mod tests {
         assert_eq!(
             molecule_type_counts
                 .values()
-                .filter(|count| **count == 72)
+                .filter(|count| **count == 5)
                 .count(),
-            2
+            8
         );
         assert_eq!(
             molecule_type_counts
                 .values()
-                .filter(|count| **count == 71)
+                .filter(|count| **count == 4)
                 .count(),
-            16
+            10
         );
         let hs = materials
             .iter()
@@ -842,8 +842,8 @@ mod tests {
                     && m.material.parts.iter().any(|p| p.0 == "Hydrogen")
             })
             .count();
-        assert_eq!(hs, 72);
-        assert_eq!(ch, 71);
+        assert_eq!(hs, 5);
+        assert_eq!(ch, 5);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -879,7 +879,7 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - (2 * ENVIRONMENT_MOLECULE_COUNT) as f64).abs() < 1e-6);
+        assert!((total_material - (ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT) as f64).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
