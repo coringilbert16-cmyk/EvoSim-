@@ -263,6 +263,12 @@ pub(crate) struct EnergyLedger {
     /// Tick-zero reference for the signed resonance pair-potential inventory.
     #[serde(default)]
     pub(crate) initial_pair_interaction_potential_held: f64,
+    /// Current translational plus rotational kinetic energy of owned physical bodies.
+    #[serde(default)]
+    pub(crate) total_kinetic_energy_held: f64,
+    /// Tick-zero kinetic-energy baseline.
+    #[serde(default)]
+    pub(crate) initial_kinetic_energy_held: f64,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct Organism {
