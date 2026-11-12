@@ -3614,18 +3614,28 @@ mod tests {
         let source = make_material("Carbon", 0.0, 0.0);
         let receiver = make_material("Carbon", 8.0, 0.0);
         let blocker = make_material("Nitrogen", 4.0, 0.35);
+        let second_blocker = make_material("Hydrogen", 4.5, -0.4);
+        let blockers = vec![blocker, second_blocker];
         let forces = resonance_multi_body_forces_with_occluders(
             &source,
             &receiver,
-            std::slice::from_ref(&blocker),
+            &blockers,
             &catalog,
             0,
         )
         .expect("the full multi-body gradient should be finite and balanced");
-        assert_eq!(forces.len(), 3);
+        assert_eq!(forces.len(), 4);
         assert!(
-            forces[2].x.abs() + forces[2].y.abs() > 1e-8,
-            "the occluding body must receive its own derived force"
+            forces[2..]
+                .iter()
+                .any(|force| force.x.abs() + force.y.abs() > 1e-8),
+            "occluding bodies must receive their own derived forces"
+        );
+        assert!(
+            forces
+                .iter()
+                .all(|force| force.x.is_finite() && force.y.is_finite()),
+            "reused blocker snapshots must not leak one participant's perturbation into another"
         );
         let sum_x = forces.iter().map(|force| force.x).sum::<f64>();
         let sum_y = forces.iter().map(|force| force.y).sum::<f64>();
