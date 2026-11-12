@@ -124,11 +124,11 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - Integrate the existing pair potential/force into normal environmental physical movement.
   
 **Persistent inertial-state foundation (implemented; runtime integration pending)**
-- Added serde-compatible `InertialMotion` state to each realized `PhysicalMaterial`, holding persistent linear velocity and angular velocity. Older serialized materials default to rest.
+- Added serde-compatible `InertialMotion` state to each realized `PhysicalMaterial`, holding center-of-mass linear velocity and angular velocity. Older serialized materials default to rest.
 - Added a drag-free Newtonian force/torque update primitive that accepts the caller's explicit physics-time interval, authoritative mass, and moment of inertia. No timestep, force scale, drag coefficient, or damping law is invented here.
 - Added translational and rotational kinetic-energy calculation, point-velocity evaluation, and coordinate-frame conversion. Intrinsic-frame conversion accounts for both the shifted reference point and rotated axes.
 - Added shared geometry-derived rigid-body mass properties: total constituent mass, center of mass, and planar moment of inertia, including periodic vertical geometry and realized fluid shapes. Environmental-flow rotation now reuses the same inertia calculation, without reusing its overdamped mobility or displacement scaling for Newtonian dynamics.
-- Material transport preserves the state through its existing clone-based movement path. Bond splitting preserves the existing rigid-body motion in the unchanged placement frame. Realized-state validation rejects non-finite inertial values.
+- Material transport preserves the state through its existing clone-based movement path. Bond splitting transfers the rigid body's angular velocity and computes each separated piece's center-of-mass velocity from its offset in the parent's rigid motion. Realized-state validation rejects non-finite inertial values.
 - Regression tests cover force/torque acceleration, unforced momentum persistence, kinetic-energy calculation, invalid dynamics inputs, frame conversion, and persistence through bond splitting.
 - This is state/API groundwork only: the resonance force is not yet applied to live material movement, kinetic-energy deltas are not yet settled through the ledger, and environmental flow has not been changed. The next implementation slice must connect these primitives to the existing transport commit boundary without allowing overdamped flow to modify inertial state.
 - Resolve occluder-aware multi-body gradients, including reaction forces on blockers; do not use the isolated-pair force in a crowded scene.
