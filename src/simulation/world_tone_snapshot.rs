@@ -1424,6 +1424,89 @@ mod tests {
     }
 
     #[test]
+    fn identified_environmental_pair_force_maps_every_occluder_and_owner() {
+        let mut simulation = Simulation::new(113, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x) in [("Carbon", 10.0), ("Hydrogen", 14.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental pair member should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                10.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        let identities = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.environmental_identity)
+            .collect::<Vec<_>>();
+        assert_eq!(identities.len(), 2);
+        assert!(identities.iter().all(|identity| *identity != 0));
+
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("world resonance snapshot should be valid");
+        let contributions = snapshot
+            .pair_force_contributions(
+                identities[0],
+                identities[1],
+                &simulation.environment.catalog,
+                simulation.tick,
+            )
+            .expect("identified pair should produce a complete multi-body force");
+        assert_eq!(
+            contributions.len(),
+            snapshot.bodies.len(),
+            "the pair and every other physical body must receive one force contribution"
+        );
+        assert!(contributions.iter().all(|contribution| {
+            contribution.force.x.is_finite() && contribution.force.y.is_finite()
+        }));
+        assert!(
+            contributions.iter().any(|contribution| {
+                contribution.environmental_identity == identities[0]
+                    && contribution.owner_organism_index.is_none()
+            }),
+            "the first field material must retain its stable identity and independent ownership"
+        );
+        assert!(
+            contributions.iter().any(|contribution| {
+                contribution.environmental_identity == identities[1]
+                    && contribution.owner_organism_index.is_none()
+            }),
+            "the second field material must retain its stable identity and independent ownership"
+        );
+        assert!(
+            contributions.iter().any(|contribution| {
+                contribution.environmental_identity == 0
+                    && contribution.owner_organism_index == Some(0)
+            }),
+            "the organism's partial occlusion force must map back to its owner"
+        );
+        let total_force = contributions.iter().fold((0.0, 0.0), |sum, contribution| {
+            (
+                sum.0 + contribution.force.x,
+                sum.1 + contribution.force.y,
+            )
+        });
+        assert!(total_force.0.abs() < 1e-5);
+        assert!(total_force.1.abs() < 1e-5);
+    }
+
+    #[test]
     fn world_pair_potential_oracle_recomputes_all_bodies_with_complete_occlusion() {
         let mut simulation = Simulation::new(77, 1.0);
         clear_environment_physical_material(&mut simulation);
