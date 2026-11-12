@@ -105,6 +105,7 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - Collision-limited transform fractions and a geometry-only approach step planner are implemented; they return a verified movement proposal and never mutate world state.
 - A shared face-pair evaluation now combines endpoint/angular progress, activation-signal gating, occupancy validation, collision-valid requested movement, and exact-snap eligibility in one result.
 - These helpers are still staged: the live environmental movement/reaction loop does not yet call them. Phase A is not complete until the runtime integration and its atomic rollback tests are implemented.
+- Added an occlusion-aware multi-body resonance-gradient API that differentiates the same symmetric pair potential with respect to the source, receiver, and every occluding body. It returns forces only when the complete finite-difference gradient is finite and translationally balanced. This closes the previous two-body fail-closed limitation at the force-calculation layer; it is not yet connected to the runtime movement loop.
 
 ### Phase B — resonance force and energy integration
 - Integrate the existing pair potential/force into normal environmental physical movement.
