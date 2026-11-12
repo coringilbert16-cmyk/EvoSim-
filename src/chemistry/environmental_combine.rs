@@ -544,6 +544,8 @@ fn select_best_contact_from_pairs(
                                     endpoint_b: candidate.endpoint_b,
                                     endpoint_distance: candidate.distance,
                                     physically_valid,
+                                    reaction_kind: 0,
+                                    old_bond_energy: 0.0,
                                 });
                             diagnostics.opportunity_sample_count += 1;
                         }
