@@ -578,7 +578,6 @@ pub fn occupied_face_intervals(
     Some(occupied)
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachStep {
     /// Fraction of the requested transform that is verified collision-free.
@@ -1329,8 +1328,7 @@ mod tests {
         });
 
         let occupied_start = occupied_face_intervals(&structure, unit_a, 0, &catalog).unwrap();
-        let occupied_previous =
-            occupied_face_intervals(&structure, unit_a, 3, &catalog).unwrap();
+        let occupied_previous = occupied_face_intervals(&structure, unit_a, 3, &catalog).unwrap();
         assert_eq!(occupied_start.len(), 1);
         assert_eq!(occupied_previous.len(), 1);
         for interval in occupied_start.iter().chain(&occupied_previous) {
@@ -1346,10 +1344,13 @@ mod tests {
         let shape = rectangle(1.0, 1.0);
         let placement_a = placement(0.0, 0.0, 0.0);
         let placement_b = placement(0.0, 0.0, 0.0);
-        let occupied = [(0, vec![FaceInterval {
-            start: 0.0,
-            end: 1.0,
-        }])];
+        let occupied = [(
+            0,
+            vec![FaceInterval {
+                start: 0.0,
+                end: 1.0,
+            }],
+        )];
         let (target, _) = best_connection_approach_target(
             &shape,
             "Carbon",
