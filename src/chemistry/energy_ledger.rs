@@ -960,7 +960,11 @@ impl EnergyLedgerAuthority for EnergyLedger {
         };
         let mut residual = residual_for(next_holder);
         let mut rounding_steps = 0;
-        while residual > 0.0 {
+        // Match the transaction's existing absolute rounding tolerance. A
+        // fully funded reaction can leave its holder at exactly zero, where
+        // there is no representable energy left to debit for a sub-EPSILON
+        // residual caused by cumulative-counter rounding.
+        while residual > EPSILON {
             if next_holder <= 0.0 || rounding_steps >= 64 {
                 #[cfg(test)]
                 eprintln!(
@@ -1034,6 +1038,26 @@ impl EnergyLedgerAuthority for EnergyLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fully_funded_transaction_accepts_sub_epsilon_counter_rounding_at_zero_holder() {
+        let mut ledger = EnergyLedger::default();
+        ledger.total_work_expended = 1.693_919_956_337_485;
+        let work = 0.022_384_104_252_493_892;
+        let structural_delta = 0.08;
+        let required = f64::from_bits((structural_delta + work).to_bits() + 1);
+        let mut holder = required;
+        let mut transaction =
+            EnergyTransaction::reaction(EnergyReason::Combine, structural_delta, work, 0.0)
+                .expect("valid reaction transaction");
+        // Match the conservative external-deficit rounding used by
+        // COMBINE and DISPLACEMENT.
+        transaction.usable_delta = -required;
+
+        assert!(transaction.balanced());
+        assert!(ledger.settle_transaction(&mut holder, transaction));
+        assert_eq!(holder, 0.0);
+    }
 
     #[test]
     fn positive_pair_potential_change_is_paid_only_by_active_mover() {
