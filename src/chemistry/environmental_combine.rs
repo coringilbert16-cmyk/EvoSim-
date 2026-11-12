@@ -1258,6 +1258,7 @@ fn physical_material_from_structure(
     }
     let physical = PhysicalMaterial {
         material,
+        inertial_motion: crate::physical_material::InertialMotion::default(),
         environmental_identity: 0,
         placements: Some(placements),
         internal_connections: Some(internal_connections),
