@@ -82,7 +82,10 @@ pub fn rigid_approach_path_is_collision_free(
         || !translation.0.is_finite()
         || !translation.1.is_finite()
         || !rotation_delta.is_finite()
-        || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        || rotation_delta.abs() > std::f64::consts::PI
+        || vertical_period.is_some_and(|period| {
+            !period.is_finite() || period <= 0.0 || translation.1.abs() > period
+        })
         || moving_parts.iter().chain(obstacles).any(|part| {
             !finite_placement(part.placement)
                 || !part.form.bounding_radius().is_finite()
@@ -126,6 +129,10 @@ pub fn rigid_approach_path_is_collision_free(
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "The recursive sweep keeps the rigid transform explicit and immutable"
+)]
 fn rigid_approach_pair_is_clear(
     moving: &PlacedMaterialPart,
     obstacle: PlacedMaterialPart,
@@ -163,6 +170,35 @@ fn rigid_approach_pair_is_clear(
     let closest_x = start_pose.x + projection * segment_x;
     let closest_y = start_pose.y + projection * segment_y;
     let angle_span = (rotation_delta * (end - start)).abs();
+    if angle_span > std::f64::consts::PI {
+        if depth >= SWEEP_MAX_DEPTH {
+            return false;
+        }
+        let midpoint = (start + end) * 0.5;
+        return rigid_approach_pair_is_clear(
+            moving,
+            obstacle.clone(),
+            anchor_start,
+            translation,
+            rotation_delta,
+            local_offset,
+            local_rotation,
+            start,
+            midpoint,
+            depth + 1,
+        ) && rigid_approach_pair_is_clear(
+            moving,
+            obstacle,
+            anchor_start,
+            translation,
+            rotation_delta,
+            local_offset,
+            local_rotation,
+            midpoint,
+            end,
+            depth + 1,
+        );
+    }
     let arc_radius = local_offset.0.hypot(local_offset.1);
     let arc_deviation = arc_radius * (1.0 - (angle_span * 0.5).cos());
     let radius_sum =
