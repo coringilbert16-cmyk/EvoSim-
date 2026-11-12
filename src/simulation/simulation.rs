@@ -2306,9 +2306,11 @@ impl Simulation {
                         catalog,
                         transformation.environmental_source.then_some(self.environment.height),
                     )?
-                } else if let Some(prepared) = &transformation.prepared_stored_material {
-                    prepared.kinetic_energy_held(catalog)?
+                } else if let Some((_, source)) = &transformation.combine_environmental_source {
+                    source.kinetic_energy(catalog, Some(self.environment.height))?
                 } else {
+                    // prepared_stored_material is a staged clone of the
+                    // owner's storage, not a second physical energy holder.
                     0.0
                 };
                 let next = total + energy;
