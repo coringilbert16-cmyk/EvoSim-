@@ -128,7 +128,7 @@ impl ActiveMaterialField {
             cell_revisions: vec![0; width_cells * height_cells],
             next_material_identity: initial_material_identity(),
             environmental_bond_index: Vec::new(),
-            environmental_bond_index_initialized: false,
+            environmental_bond_index_initialized: true,
         }
     }
 
