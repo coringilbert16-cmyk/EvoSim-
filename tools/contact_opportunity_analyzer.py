@@ -69,6 +69,7 @@ REACTION_FIELDS = (
 def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
     per_seed: list[dict[str, Any]] = []
     all_ticks: list[dict[str, Any]] = []
+    opportunity_samples: list[dict[str, Any]] = []
     totals = {field: 0 for field in (*SEARCH_FIELDS, *DISPLACEMENT_FIELDS, *REACTION_FIELDS)}
     for seed in seeds:
         path = root / f"seed-{seed}.jsonl"
@@ -93,6 +94,9 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
                     value = int(search.get(field, 0) or 0)
                     row[field] = value
                     seed_totals[field] += value
+                for sample in search.get("opportunity_samples", []) or []:
+                    if isinstance(sample, dict):
+                        opportunity_samples.append({"seed": seed, "tick": record.get("tick"), **sample})
                 displacement = work.get("displacement_discovery") or {}
                 for field in DISPLACEMENT_FIELDS:
                     value = int(displacement.get(field, 0) or 0)
@@ -143,6 +147,11 @@ def analyze(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "The counters do not yet attribute failed opportunities to individual molecule identities or preserve their full geometry.",
         ],
         "tick_diagnostics": all_ticks,
+        "opportunity_samples": opportunity_samples,
+        "opportunity_sample_outcomes": {
+            "physically_valid": sum(bool(row.get("physically_valid")) for row in opportunity_samples),
+            "physically_rejected": sum(not bool(row.get("physically_valid")) for row in opportunity_samples),
+        },
     }
     return report
 
@@ -179,6 +188,13 @@ def main() -> int:
     (args.output_dir / "contact-opportunity-analysis.md").write_text(
         "\n".join(lines) + "\n", encoding="utf-8"
     )
+    sample_path = args.output_dir / "contact-opportunity-samples.json"
+    sample_path.write_text(json.dumps(report["opportunity_samples"], indent=2) + "\\n", encoding="utf-8")
+    if report["opportunity_samples"]:
+        with (args.output_dir / "contact-opportunity-samples.csv").open("w", newline="", encoding="utf-8") as sample_stream:
+            sample_writer = csv.DictWriter(sample_stream, fieldnames=list(report["opportunity_samples"][0]))
+            sample_writer.writeheader()
+            sample_writer.writerows(report["opportunity_samples"])
     with (args.output_dir / "contact-opportunity-ticks.csv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(report["tick_diagnostics"][0]) if report["tick_diagnostics"] else ["seed", "tick"])
         writer.writeheader()
