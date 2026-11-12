@@ -1252,6 +1252,55 @@ mod tests {
     }
 
     #[test]
+    fn environmental_pair_and_kinetic_settlement_updates_shared_holders_atomically() {
+        let mut ledger = EnergyLedger {
+            initial_usable_energy_held: 5.0,
+            total_usable_energy_held: 5.0,
+            total_usable_energy_gained: 5.0,
+            total_kinetic_energy_held: 5.0,
+            ..EnergyLedger::default()
+        };
+        let mut usable = 5.0;
+        let mut resonance = crate::harmonics::ResonantEnergyReservoir::default();
+        let components = [crate::harmonics::ResonancePairPotentialComponent {
+            frequency_cycles_per_day: 440.0,
+            energy: 5.0,
+        }];
+
+        assert!(settle_environmental_pair_potential_and_kinetic_change(
+            &mut ledger,
+            &mut usable,
+            &mut resonance,
+            -3.0,
+            &components,
+        ));
+        assert_eq!(usable, 3.0);
+        assert_eq!(ledger.total_usable_energy_held, 3.0);
+        assert_eq!(ledger.total_pair_interaction_potential_held, 5.0);
+        assert_eq!(ledger.total_kinetic_energy_held, 2.0);
+        assert_eq!(resonance.total_energy(), Some(0.0));
+
+        let inventory = EnergyInventorySnapshot {
+            initial_usable_energy: 5.0,
+            current_usable_energy: 3.0,
+            initial_resonant_energy: 0.0,
+            current_resonant_energy: 0.0,
+            initial_structural_energy: 0.0,
+            current_structural_energy: 0.0,
+            initial_kinetic_energy: 5.0,
+            current_kinetic_energy: 2.0,
+            initial_pair_interaction_potential: 0.0,
+            current_pair_interaction_potential: 5.0,
+            external_energy_input: 0.0,
+            world_tone_energy_escaped: 0.0,
+            other_energy_released: 0.0,
+            work_expended: 0.0,
+            heat_dissipated: 0.0,
+        };
+        assert!(inventory.is_balanced_without_creation(1e-12));
+    }
+
+    #[test]
     fn positive_pair_potential_change_is_paid_only_by_active_mover() {
         let mut ledger = EnergyLedger::default();
         let mut usable = 10.0;
