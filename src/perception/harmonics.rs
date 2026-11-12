@@ -2034,25 +2034,19 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
             } else {
                 (0.0, DIFFERENCE_STEP)
             };
-            let mut shifted_a_plus = None;
-            let mut shifted_a_minus = None;
-            let mut shifted_b_plus = None;
-            let mut shifted_b_minus = None;
-            let mut shifted_occluders_plus = None;
-            let mut shifted_occluders_minus = None;
             let (plus, minus) = if participant == 0 {
-                shifted_a_plus = Some(translated_physical_material(a, dx, dy)?);
-                shifted_a_minus = Some(translated_physical_material(a, -dx, -dy)?);
+                let shifted_plus = translated_physical_material(a, dx, dy)?;
+                let shifted_minus = translated_physical_material(a, -dx, -dy)?;
                 (
-                    potential(shifted_a_plus.as_ref()?, b, occluders)?,
-                    potential(shifted_a_minus.as_ref()?, b, occluders)?,
+                    potential(&shifted_plus, b, occluders)?,
+                    potential(&shifted_minus, b, occluders)?,
                 )
             } else if participant == 1 {
-                shifted_b_plus = Some(translated_physical_material(b, dx, dy)?);
-                shifted_b_minus = Some(translated_physical_material(b, -dx, -dy)?);
+                let shifted_plus = translated_physical_material(b, dx, dy)?;
+                let shifted_minus = translated_physical_material(b, -dx, -dy)?;
                 (
-                    potential(a, shifted_b_plus.as_ref()?, occluders)?,
-                    potential(a, shifted_b_minus.as_ref()?, occluders)?,
+                    potential(a, &shifted_plus, occluders)?,
+                    potential(a, &shifted_minus, occluders)?,
                 )
             } else {
                 let blocker_index = participant - 2;
@@ -2062,11 +2056,9 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
                     translated_physical_material(&occluders[blocker_index], dx, dy)?;
                 minus_blockers[blocker_index] =
                     translated_physical_material(&occluders[blocker_index], -dx, -dy)?;
-                shifted_occluders_plus = Some(plus_blockers);
-                shifted_occluders_minus = Some(minus_blockers);
                 (
-                    potential(a, b, shifted_occluders_plus.as_ref()?)?,
-                    potential(a, b, shifted_occluders_minus.as_ref()?)?,
+                    potential(a, b, &plus_blockers)?,
+                    potential(a, b, &minus_blockers)?,
                 )
             };
             *derivative = -(plus - minus) / (2.0 * DIFFERENCE_STEP);
