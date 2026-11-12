@@ -322,33 +322,12 @@ fn angular_displacement(
     if placements.is_empty() {
         return 0.0;
     }
-    let total_mass = material.material.mass(catalog);
-    if !total_mass.is_finite()
-        || total_mass <= 0.0
-        || placements.len() != material.material.parts.len()
-    {
+    let Some(mass_properties) = material.mass_properties(catalog, Some(height)) else {
         return 0.0;
-    }
-    let anchor_y = placements[0].y;
-    let mut weighted_x = 0.0;
-    let mut weighted_y = 0.0;
-    for (index, placement) in placements.iter().enumerate() {
-        let Some((name, amount)) = material.material.parts.get(index) else {
-            return 0.0;
-        };
-        let Some(resource) = resource_for_part(name, catalog) else {
-            return 0.0;
-        };
-        let part_mass = resource.properties.mass * *amount;
-        if !part_mass.is_finite() || part_mass <= 0.0 {
-            return 0.0;
-        }
-        weighted_x += placement.x * part_mass;
-        weighted_y +=
-            ((placement.y - anchor_y + height * 0.5).rem_euclid(height) - height * 0.5) * part_mass;
-    }
-    let center_x = weighted_x / total_mass;
-    let center_y = (anchor_y + weighted_y / total_mass).rem_euclid(height);
+    };
+    let total_mass = mass_properties.mass;
+    let center_x = mass_properties.center_x;
+    let center_y = mass_properties.center_y;
 
     // Single-part materials have identical arithmetic and mass-weighted centers.
     // Reuse the translational sample instead of scanning the same obstacles again.
@@ -364,7 +343,6 @@ fn angular_displacement(
         )
     });
     let mut torque = 0.0;
-    let mut moment = 0.0;
     for (index, placement) in placements.iter().enumerate() {
         let Some((name, amount)) = material.material.parts.get(index) else {
             continue;
@@ -379,13 +357,6 @@ fn angular_displacement(
         let rx = placement.x - center_x;
         let ry = (placement.y - center_y + height * 0.5).rem_euclid(height) - height * 0.5;
         let radius_sq = rx * rx + ry * ry;
-        let form = material
-            .realized_shapes
-            .as_ref()
-            .and_then(|shapes| shapes.get(index))
-            .map(|shape| &shape.form)
-            .unwrap_or(&resource.shape.form);
-        moment += part_mass * radius_sq + intrinsic_moment_of_inertia(form, part_mass);
         if radius_sq <= f64::EPSILON {
             continue;
         }
@@ -403,8 +374,10 @@ fn angular_displacement(
                 - ry * (local_velocity.x - center_velocity.x));
     }
 
-    let response = if placements.len() > 1 && moment > f64::EPSILON {
-        torque / moment
+    let response = if placements.len() > 1
+        && mass_properties.moment_of_inertia > f64::EPSILON
+    {
+        torque / mass_properties.moment_of_inertia
     } else {
         // A single constituent has no center-of-mass lever arm. Its shape's
         // anisotropy determines whether flow vorticity can turn its orientation.
