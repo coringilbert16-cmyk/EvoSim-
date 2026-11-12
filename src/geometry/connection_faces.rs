@@ -86,7 +86,7 @@ impl ConnectionFaceEndpoint {
 /// shapes expose each of their boundary edges. Curved and fluid boundaries
 /// remain continuous surfaces and are not discretized by this API.
 pub fn connection_faces(shape: &Shape, resource_name: &str) -> Vec<ConnectionFace> {
-    if matches!(shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }) {
+    if matches!(&shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }) {
         return Vec::new();
     }
     let Some(vertices) = shape.form.polygon_vertices() else {
