@@ -72,6 +72,7 @@ def analyze(root, seeds, duration):
     })
     pathways = defaultdict(lambda: {
         "seeds": set(), "events": 0, "child_lifetimes": [], "reused_children": 0,
+        "formed_pairs": Counter(), "broken_pairs": Counter(),
     })
     transitions = defaultdict(lambda: {
         "seeds": set(), "events": 0, "child_lifetimes": [], "reused_children": 0,
@@ -82,6 +83,11 @@ def analyze(root, seeds, duration):
         history = data["molecular_history"]
         molecules = {int(m["molecule_id"]): m for m in history.get("molecules", [])}
         keys = {identity: family_key(row["molecule"]) for identity, row in molecules.items()}
+        pair_events = {
+            str(row["reaction_id"]): row
+            for row in data.get("reactions", {}).get("elemental_bond_pairs", {}).get("event_attribution", [])
+            if row.get("reaction_id") is not None
+        }
         events = defaultdict(lambda: {"parents": set(), "children": set(), "reaction": "", "tick": 0})
         for edge in history.get("lineage_edges", []):
             event = events[str(edge["reaction_id"])]
@@ -127,6 +133,16 @@ def analyze(root, seeds, duration):
                 for i in children if i in molecules
             )
             path["reused_children"] += sum(i in reused_ids for i in children)
+            pair_event = pair_events.get(reaction_id)
+            if pair_event is not None:
+                path["formed_pairs"].update({
+                    pair: int(count) for pair, count in pair_event.get("formed", {}).items()
+                    if int(count) > 0
+                })
+                path["broken_pairs"].update({
+                    pair: int(count) for pair, count in pair_event.get("broken", {}).items()
+                    if int(count) > 0
+                })
             for parent_key in set(parent_keys):
                 for child_key in set(child_keys):
                     edge_row = transitions[(reaction, parent_key, child_key)]
@@ -146,6 +162,13 @@ def analyze(root, seeds, duration):
             "reaction_created_products_reused_as_parents": len(reused_ids),
             "reaction_created_parent_lineage_edges": reused_edges,
             "reaction_created_parent_edges_followed_by_combine": reused_combine_edges,
+            "lineage_events_with_bond_pair_attribution": sum(
+                str(event_id) in pair_events for event_id in events
+            ),
+            "lineage_events_missing_bond_pair_attribution": sum(
+                str(event_id) not in pair_events for event_id in events
+            ),
+            "bond_pair_events_missing_reaction_id": data.get("reactions", {}).get("elemental_bond_pairs", {}).get("events_missing_reaction_id", 0),
             "active_molecules_at_end": history.get("active_at_end_count", 0),
             "mean_observed_lifetime_ticks": history.get("mean_observed_lifetime_ticks"),
         })
@@ -180,6 +203,10 @@ def analyze(root, seeds, duration):
             "seeds": sorted(row["seeds"]),
             "mean_child_lifetime_ticks": statistics.fmean(row["child_lifetimes"]) if row["child_lifetimes"] else None,
             "reused_child_observations": row["reused_children"],
+            "formed_bond_pairs": dict(sorted(row["formed_pairs"].items())),
+            "broken_bond_pairs": dict(sorted(row["broken_pairs"].items())),
+            "formed_bond_count": sum(row["formed_pairs"].values()),
+            "broken_bond_count": sum(row["broken_pairs"].values()),
         })
     pathway_rows.sort(key=lambda r: (
         -r["seed_count"], -r["reused_child_observations"], -r["event_count"],
@@ -207,6 +234,9 @@ def analyze(root, seeds, duration):
         "reaction_created_products_reused_as_parents": sum(r["reaction_created_products_reused_as_parents"] for r in seed_rows),
         "reaction_created_parent_lineage_edges": sum(r["reaction_created_parent_lineage_edges"] for r in seed_rows),
         "reaction_created_parent_edges_followed_by_combine": sum(r["reaction_created_parent_edges_followed_by_combine"] for r in seed_rows),
+        "lineage_events_with_bond_pair_attribution": sum(r["lineage_events_with_bond_pair_attribution"] for r in seed_rows),
+        "lineage_events_missing_bond_pair_attribution": sum(r["lineage_events_missing_bond_pair_attribution"] for r in seed_rows),
+        "bond_pair_events_missing_reaction_id": sum(r["bond_pair_events_missing_reaction_id"] for r in seed_rows),
         "unique_composition_topology_families": len(family_rows),
         "reaction_created_families_recurrent_in_2_or_more_seeds": sum(r["reaction_created_seed_count"] >= 2 for r in family_rows),
         "distinct_pathway_patterns": len(pathway_rows),
@@ -263,6 +293,9 @@ def markdown(report):
         f"- Distinct reaction-created products reused as parents: {s['reaction_created_products_reused_as_parents']}",
         f"- Parent-lineage edges from reaction-created products: {s['reaction_created_parent_lineage_edges']}",
         f"- Those edges leading to COMBINE products: {s['reaction_created_parent_edges_followed_by_combine']}",
+        f"- Lineage events matched to exact bond-pair attribution: {s['lineage_events_with_bond_pair_attribution']}",
+        f"- Lineage events missing bond-pair attribution: {s['lineage_events_missing_bond_pair_attribution']}",
+        f"- Bond-pair events missing reaction IDs: {s['bond_pair_events_missing_reaction_id']}",
         f"- Composition/topology families: {s['unique_composition_topology_families']}",
         f"- Reaction-created families recurring in 2+ seeds: {s['reaction_created_families_recurrent_in_2_or_more_seeds']}",
         f"- Distinct pathway patterns: {s['distinct_pathway_patterns']}",
