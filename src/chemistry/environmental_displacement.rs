@@ -511,9 +511,7 @@ fn replacement_wins_bond_competition(
 ) -> bool {
     let old_strength = bond_strength(anchor, displaced);
     let incoming_strength = bond_strength(anchor, incoming);
-    old_strength.is_finite()
-        && incoming_strength.is_finite()
-        && incoming_strength > old_strength
+    old_strength.is_finite() && incoming_strength.is_finite() && incoming_strength > old_strength
 }
 
 /// Evaluate the coupled A-B -> A-C replacement without mutating any graph or
