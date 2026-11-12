@@ -190,6 +190,7 @@ pub(crate) struct DisplacementTrial {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum DisplacementTrialFailureStage {
     Activation,
+    BondCompetition,
     InvalidStoredBondEnergy,
     Topology,
     CandidateCheck,
@@ -287,7 +288,14 @@ fn build_displacement_trial_with_activation_status(
 
     let anchor = source.units[anchor_unit].properties(catalog)?;
     let displaced = source.units[displaced_unit].properties(catalog)?;
+    let incoming = source.units[incoming_unit].properties(catalog)?;
     let old_strength = old_bond.strength;
+    if !replacement_wins_bond_competition(anchor, displaced, incoming) {
+        if let Some(diagnostic) = diagnostic.as_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::BondCompetition;
+        }
+        return None;
+    }
     // The recorded value is the only energy actually allocated to this
     // existing bond. Historical/seeded composition bonds legitimately carry
     // zero; do not manufacture a stored-energy allocation from descriptors.
@@ -336,10 +344,8 @@ fn build_displacement_trial_with_activation_status(
         return None;
     }
 
-    // Replacement strength is not a separate eligibility gate. The signed
-    // pre/post structural-energy change and physical work are settled together
-    // below; a weaker replacement is valid only when legitimate energy funds
-    // the resulting deficit at the atomic transaction boundary.
+    // Bond competition is decided by the existing bond-strength authority.
+    // Energy funding is evaluated separately and cannot make a weaker bond win.
 
     let mut trial = source.clone();
     if trial.break_matching_bond(old_bond).is_none() {
@@ -493,6 +499,21 @@ pub(crate) fn commit_displacement_trial(
     *ledger = staged_ledger;
     *usable_energy = staged_usable_energy;
     Some(trial.products)
+}
+
+/// A replacement is eligible only when the incoming pair is stronger under
+/// the same bond-strength calculation used to create ordinary bonds. Energy
+/// funding never changes the result of bond competition.
+fn replacement_wins_bond_competition(
+    anchor: ResourceProperties,
+    displaced: ResourceProperties,
+    incoming: ResourceProperties,
+) -> bool {
+    let old_strength = bond_strength(anchor, displaced);
+    let incoming_strength = bond_strength(anchor, incoming);
+    old_strength.is_finite()
+        && incoming_strength.is_finite()
+        && incoming_strength > old_strength
 }
 
 /// Evaluate the coupled A-B -> A-C replacement without mutating any graph or
@@ -1990,6 +2011,18 @@ mod tests {
         assert!(preflight.energy.required_external_input > 0.0);
         assert!(!preflight.can_commit(0.0));
         assert!(preflight.can_commit(preflight.energy.required_external_input));
+    }
+
+    #[test]
+    fn energy_funding_cannot_make_a_weaker_incoming_bond_win_competition() {
+        let carbon = properties("Carbon");
+        let oxygen = properties("Oxygen");
+        let nitrogen = properties("Nitrogen");
+        let hydrogen = properties("Hydrogen");
+
+        assert!(bond_strength(carbon, oxygen) > bond_strength(carbon, nitrogen));
+        assert!(!replacement_wins_bond_competition(carbon, oxygen, nitrogen));
+        assert!(replacement_wins_bond_competition(carbon, hydrogen, oxygen));
     }
 
     #[test]
