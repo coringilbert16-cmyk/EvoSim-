@@ -2327,7 +2327,9 @@ mod tests {
             &mut resonance,
             &components,
         ));
-        let retained = resonance.total_energy().expect("valid environmental reservoir");
+        let retained = resonance
+            .total_energy()
+            .expect("valid environmental reservoir");
         assert!(retained >= 0.0 && retained <= 2.0 + EPSILON);
         assert!((ledger.total_resonant_energy_held - retained).abs() <= EPSILON);
         assert!((ledger.total_pair_interaction_potential_held + 2.0).abs() <= EPSILON);
@@ -2358,5 +2360,4 @@ mod tests {
         assert_eq!(usable, 1.0);
         assert_eq!(resonance.total_energy(), Some(0.0));
     }
-
 }
