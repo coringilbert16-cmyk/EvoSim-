@@ -348,10 +348,6 @@ impl PhysicalMaterial {
     /// Derive rigid-body mass, center of mass, and planar moment of inertia
     /// from constituent masses and their authoritative realized geometry.
     /// A vertical period is supplied only for worlds with periodic Y geometry.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
-    )]
     pub(crate) fn mass_properties(
         &self,
         catalog: &[BaseResource],
