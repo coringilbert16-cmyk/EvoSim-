@@ -10,7 +10,10 @@ import statistics
 from pathlib import Path
 from typing import Any
 
-try:\n    from .reaction_network_analyzer import family_key, family_label\nexcept ImportError:  # Direct script execution from the tools directory.\n    from reaction_network_analyzer import family_key, family_label
+try:
+    from .reaction_network_analyzer import family_key, family_label
+except ImportError:  # Direct script execution from the tools directory.
+    from reaction_network_analyzer import family_key, family_label
 
 
 def _wrap_angle(value: float) -> float:
