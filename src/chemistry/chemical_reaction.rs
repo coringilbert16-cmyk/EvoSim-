@@ -502,9 +502,7 @@ fn discover_environmental_bonds(
     candidate_limit: usize,
 ) -> EnvironmentalBondDiscovery {
     let limit = candidate_limit.min(MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK);
-    let candidates = environment
-        .field
-        .environmental_bond_candidates(tick, limit);
+    let candidates = environment.field.environmental_bond_candidates(tick, limit);
     let mut checked_materials = std::collections::BTreeMap::new();
 
     // Read only the maintained index of actual bonds. Resolve each selected
