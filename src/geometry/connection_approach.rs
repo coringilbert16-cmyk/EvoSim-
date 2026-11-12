@@ -19,6 +19,12 @@ pub struct FaceSpan {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FaceInterval {
+    pub start: f64,
+    pub end: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ConnectionApproachTarget {
     pub face_a_index: usize,
     pub face_b_index: usize,
@@ -58,6 +64,39 @@ fn span_point(face: ConnectionFace, fraction: f64) -> (f64, f64) {
 
 fn lengths_match(a: f64, b: f64) -> bool {
     (a - b).abs() <= LENGTH_RELATIVE_EPSILON * a.max(b).max(1.0)
+}
+
+/// Check whether a proposed paired span is free on both connection faces.
+///
+/// Occupancy is expressed as normalized intervals on each face. Touching at an
+/// interval endpoint is allowed; positive-length overlap is not.
+pub fn face_span_is_unoccupied(
+    span: FaceSpan,
+    occupied_a: &[FaceInterval],
+    occupied_b: &[FaceInterval],
+) -> bool {
+    fn available(start: f64, end: f64, occupied: &[FaceInterval]) -> bool {
+        if !start.is_finite()
+            || !end.is_finite()
+            || start < 0.0
+            || end > 1.0
+            || end <= start
+        {
+            return false;
+        }
+        occupied.iter().all(|interval| {
+            interval.start.is_finite()
+                && interval.end.is_finite()
+                && interval.start >= 0.0
+                && interval.end <= 1.0
+                && interval.end > interval.start
+                && (end <= interval.start + VECTOR_EPSILON
+                    || start >= interval.end - VECTOR_EPSILON)
+        })
+    }
+
+    available(span.a_start, span.a_end, occupied_a)
+        && available(span.b_start, span.b_end, occupied_b)
 }
 
 /// Enumerate permitted full-face or half-face pairings.
@@ -350,6 +389,34 @@ mod tests {
         assert!(targets.iter().all(|target| {
             target.face_a_index == full.face_index && target.face_b_index == half.face_index
         }));
+    }
+
+    #[test]
+    fn partial_face_occupancy_allows_only_the_unoccupied_half() {
+        let full = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let half = connection_faces(&rectangle(0.5, 0.5), "Carbon")[0];
+        let spans = compatible_face_spans(full, half);
+        let occupied = [FaceInterval {
+            start: 0.0,
+            end: 0.5,
+        }];
+        assert!(!face_span_is_unoccupied(spans[0], &occupied, &[]));
+        assert!(face_span_is_unoccupied(spans[1], &occupied, &[]));
+    }
+
+    #[test]
+    fn touching_occupancy_intervals_do_not_overlap() {
+        let span = FaceSpan {
+            a_start: 0.5,
+            a_end: 1.0,
+            b_start: 0.0,
+            b_end: 1.0,
+        };
+        let occupied = [FaceInterval {
+            start: 0.0,
+            end: 0.5,
+        }];
+        assert!(face_span_is_unoccupied(span, &occupied, &[]));
     }
 
     #[test]
