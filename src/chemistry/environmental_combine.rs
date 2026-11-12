@@ -487,6 +487,9 @@ fn select_best_contact_from_pairs(
         let candidates = crate::contact::connection_pair_candidates_cached(
             structure, unit_a, unit_b, catalog, cache,
         );
+        if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.endpoint_pair_candidates_generated += candidates.len();
+        }
         let mut pair_valid_interfaces = 0usize;
         for candidate in candidates {
             let Some((evaluation, _work, investment, required_energy)) =
@@ -494,6 +497,9 @@ fn select_best_contact_from_pairs(
                     structure, unit_a, unit_b, candidate, catalog,
                 )
             else {
+                if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                    diagnostics.endpoint_pair_candidates_rejected_by_evaluation += 1;
+                }
                 continue;
             };
             pair_valid_interfaces += 1;
@@ -510,6 +516,8 @@ fn select_best_contact_from_pairs(
         }
         if pair_valid_interfaces > 0 {
             constituent_pairs_with_valid_interfaces += 1;
+        } else if let Some(diagnostics) = diagnostics.as_deref_mut() {
+            diagnostics.constituent_pairs_without_valid_interfaces += 1;
         }
         if let Some(diagnostics) = diagnostics.as_deref_mut() {
             diagnostics.physically_evaluable_interfaces += pair_valid_interfaces;
