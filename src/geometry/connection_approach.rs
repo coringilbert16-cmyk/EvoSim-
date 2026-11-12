@@ -52,7 +52,7 @@ pub fn translation_path_is_collision_free(
             };
             images.iter().all(|image_y| {
                 let mut image = obstacle.clone();
-                image.placement.y += image_y;
+                image.placement.y += *image_y;
                 translation_pair_is_clear(
                     moving,
                     &image,
@@ -64,6 +64,57 @@ pub fn translation_path_is_collision_free(
             })
         })
     })
+}
+
+/// Find the furthest collision-free fraction of a requested translation.
+///
+/// Returns `None` when the initial pose already penetrates an obstacle
+/// or the inputs are invalid. A result below 1.0 means the requested movement
+/// is blocked before its endpoint; callers must let normal physics resolve the
+/// remaining contact rather than snapping through it.
+pub fn collision_free_translation_fraction(
+    moving_parts: &[PlacedMaterialPart],
+    obstacles: &[PlacedMaterialPart],
+    delta_x: f64,
+    delta_y: f64,
+    vertical_period: Option<f64>,
+) -> Option<f64> {
+    if !translation_path_is_collision_free(
+        moving_parts,
+        obstacles,
+        0.0,
+        0.0,
+        vertical_period,
+    ) {
+        return None;
+    }
+    if translation_path_is_collision_free(
+        moving_parts,
+        obstacles,
+        delta_x,
+        delta_y,
+        vertical_period,
+    ) {
+        return Some(1.0);
+    }
+
+    let mut clear = 0.0;
+    let mut blocked = 1.0;
+    for _ in 0..48 {
+        let midpoint = (clear + blocked) * 0.5;
+        if translation_path_is_collision_free(
+            moving_parts,
+            obstacles,
+            delta_x * midpoint,
+            delta_y * midpoint,
+            vertical_period,
+        ) {
+            clear = midpoint;
+        } else {
+            blocked = midpoint;
+        }
+    }
+    Some(clear)
 }
 
 fn translation_pair_is_clear(
@@ -642,6 +693,32 @@ mod tests {
             2.0,
             None,
         ));
+    }
+
+    #[test]
+    fn collision_free_fraction_stops_before_obstacle_without_snapping_through() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(0.0, 0.0, 0.0),
+        };
+        let obstacle = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Rectangle {
+                width: 0.05,
+                height: 2.0,
+            },
+            placement: placement(5.0, 0.0, 0.0),
+        };
+        let fraction = collision_free_translation_fraction(
+            &[moving],
+            &[obstacle],
+            10.0,
+            0.0,
+            None,
+        )
+        .unwrap();
+        assert!(fraction > 0.0 && fraction < 0.5);
     }
 
     #[test]
