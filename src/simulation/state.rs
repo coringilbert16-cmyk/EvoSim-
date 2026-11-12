@@ -754,6 +754,11 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
+    /// Bounded deterministic sample of instance-level displacement contact opportunities.
+    #[serde(default)]
+    pub(crate) opportunity_samples: [Option<EnvironmentalContactOpportunitySample>; 8],
+    #[serde(default)]
+    pub(crate) opportunity_sample_count: usize,
     /// Environmental source materials visited by the displacement anchor scan.
     pub(crate) anchor_materials_inspected: u64,
     /// Anchors that contain at least one internal bond and can be displaced.
@@ -930,6 +935,8 @@ pub(crate) struct EnvironmentalContactOpportunitySample {
     pub(crate) endpoint_b: crate::structure::ConnectionEndpoint,
     pub(crate) endpoint_distance: f64,
     pub(crate) physically_valid: bool,
+    pub(crate) reaction_kind: u8,
+    pub(crate) old_bond_energy: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
