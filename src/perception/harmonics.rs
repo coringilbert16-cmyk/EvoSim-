@@ -440,6 +440,18 @@ pub(crate) struct ResonancePairPotentialComponent {
     pub(crate) energy: f64,
 }
 
+/// Translation force on one participant in a resonance interaction.
+///
+/// The order returned by the multi-body gradient is source, receiver, then
+/// occluders in caller-supplied order. Forces are all derived from the same
+/// frequency-resolved symmetric potential.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ResonanceBodyForce {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+}
+
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -1987,6 +1999,104 @@ pub(crate) fn resonance_pair_force_with_occluders(
     Some((force_on_a, force_on_b))
 }
 
+/// Derive the translational force on every body participating in an
+/// occluded resonance pair. Unlike the two-body helper, this differentiates
+/// the same occlusion-aware potential with respect to each blocker as well,
+/// preserving the complete multi-body gradient instead of assigning an
+/// unbalanced opposite force to the source/receiver pair alone.
+#[allow(dead_code)] // Staged for integration with environmental rigid-body movement.
+pub(crate) fn resonance_multi_body_forces_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForce>> {
+    if std::ptr::eq(a, b) {
+        return None;
+    }
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let potential = |source: &crate::physical_material::PhysicalMaterial,
+                     receiver: &crate::physical_material::PhysicalMaterial,
+                     blockers: &[crate::physical_material::PhysicalMaterial]| {
+        resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
+    };
+    let baseline = potential(a, b, occluders)?;
+    if !baseline.is_finite() {
+        return None;
+    }
+
+    let mut forces = Vec::with_capacity(occluders.len() + 2);
+    for participant in 0..occluders.len() + 2 {
+        let mut derivatives = [0.0; 2];
+        for (axis, derivative) in derivatives.iter_mut().enumerate() {
+            let (dx, dy) = if axis == 0 {
+                (DIFFERENCE_STEP, 0.0)
+            } else {
+                (0.0, DIFFERENCE_STEP)
+            };
+            let mut shifted_a_plus = None;
+            let mut shifted_a_minus = None;
+            let mut shifted_b_plus = None;
+            let mut shifted_b_minus = None;
+            let mut shifted_occluders_plus = None;
+            let mut shifted_occluders_minus = None;
+            let (plus, minus) = if participant == 0 {
+                shifted_a_plus = Some(translated_physical_material(a, dx, dy)?);
+                shifted_a_minus = Some(translated_physical_material(a, -dx, -dy)?);
+                (
+                    potential(shifted_a_plus.as_ref()?, b, occluders)?,
+                    potential(shifted_a_minus.as_ref()?, b, occluders)?,
+                )
+            } else if participant == 1 {
+                shifted_b_plus = Some(translated_physical_material(b, dx, dy)?);
+                shifted_b_minus = Some(translated_physical_material(b, -dx, -dy)?);
+                (
+                    potential(a, shifted_b_plus.as_ref()?, occluders)?,
+                    potential(a, shifted_b_minus.as_ref()?, occluders)?,
+                )
+            } else {
+                let blocker_index = participant - 2;
+                let mut plus_blockers = occluders.to_vec();
+                let mut minus_blockers = occluders.to_vec();
+                plus_blockers[blocker_index] =
+                    translated_physical_material(&occluders[blocker_index], dx, dy)?;
+                minus_blockers[blocker_index] =
+                    translated_physical_material(&occluders[blocker_index], -dx, -dy)?;
+                shifted_occluders_plus = Some(plus_blockers);
+                shifted_occluders_minus = Some(minus_blockers);
+                (
+                    potential(a, b, shifted_occluders_plus.as_ref()?)?,
+                    potential(a, b, shifted_occluders_minus.as_ref()?)?,
+                )
+            };
+            *derivative = -(plus - minus) / (2.0 * DIFFERENCE_STEP);
+            if !derivative.is_finite() {
+                return None;
+            }
+        }
+        forces.push(ResonanceBodyForce {
+            x: derivatives[0],
+            y: derivatives[1],
+        });
+    }
+    let total_force = forces.iter().fold((0.0, 0.0), |sum, force| {
+        (sum.0 + force.x, sum.1 + force.y)
+    });
+    let scale = forces
+        .iter()
+        .map(|force| force.x.abs().max(force.y.abs()))
+        .fold(1.0_f64, f64::max);
+    if !total_force.0.is_finite()
+        || !total_force.1.is_finite()
+        || total_force.0.abs() > scale * 1e-5
+        || total_force.1.abs() > scale * 1e-5
+    {
+        return None;
+    }
+    Some(forces)
+}
+
 fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
     let segments = cavity.boundary_segments();
     if segments.is_empty() {
@@ -3485,6 +3595,43 @@ mod tests {
             0,
         )
         .is_none());
+    }
+
+    #[test]
+    fn occluded_resonance_gradient_assigns_force_to_blocker_and_balances_all_bodies() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.35);
+        let forces = resonance_multi_body_forces_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&blocker),
+            &catalog,
+            0,
+        )
+        .expect("the full multi-body gradient should be finite and balanced");
+        assert_eq!(forces.len(), 3);
+        assert!(
+            forces[2].x.abs() + forces[2].y.abs() > 1e-8,
+            "the occluding body must receive its own derived force"
+        );
+        let sum_x = forces.iter().map(|force| force.x).sum::<f64>();
+        let sum_y = forces.iter().map(|force| force.y).sum::<f64>();
+        assert!(sum_x.abs() < 1e-5);
+        assert!(sum_y.abs() < 1e-5);
     }
 
     #[test]
