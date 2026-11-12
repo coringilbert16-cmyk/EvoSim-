@@ -50,7 +50,8 @@ impl InertialMotion {
     }
 
     /// Apply a constant net force and torque over an explicitly supplied
-    /// physics-time interval. No drag or damping is applied. The caller owns
+    /// physics-time interval.
+    #[cfg_attr(not(test), expect(dead_code, reason = "Newtonian runtime integration follows in this PR"))] No drag or damping is applied. The caller owns
     /// the timestep and the authoritative mass/inertia calculation.
     pub(crate) fn advanced(
         self,
@@ -80,6 +81,7 @@ impl InertialMotion {
     }
 
     /// Kinetic energy for the supplied authoritative mass and inertia.
+    #[cfg_attr(not(test), expect(dead_code, reason = "Newtonian runtime integration follows in this PR"))]
     pub(crate) fn kinetic_energy(self, mass: f64, moment_of_inertia: f64) -> Option<f64> {
         if !self.is_finite()
             || !mass.is_finite()
@@ -874,9 +876,17 @@ mod tests {
             &catalog,
         )
         .expect("stored compound should be realizable");
+        let mut physical = physical;
+        physical.inertial_motion = InertialMotion {
+            velocity_x: 1.25,
+            velocity_y: -0.5,
+            angular_velocity: 0.75,
+        };
+        let expected_motion = physical.inertial_motion;
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
         let pieces = physical.break_internal_bond(&target).expect("stored bond");
         assert_eq!(pieces.len(), 2);
+        assert!(pieces.iter().all(|piece| piece.inertial_motion == expected_motion));
         assert!(pieces
             .iter()
             .all(|piece| piece.material.internal_bonds.is_empty()));
