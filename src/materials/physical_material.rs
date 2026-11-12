@@ -96,9 +96,16 @@ impl InertialMotion {
         delta_time: f64,
     ) -> Option<Self> {
         if !self.is_finite()
-            || ![force_x, force_y, torque, mass, moment_of_inertia, delta_time]
-                .iter()
-                .all(|value| value.is_finite())
+            || ![
+                force_x,
+                force_y,
+                torque,
+                mass,
+                moment_of_inertia,
+                delta_time,
+            ]
+            .iter()
+            .all(|value| value.is_finite())
             || mass <= 0.0
             || moment_of_inertia <= 0.0
             || delta_time < 0.0
@@ -128,7 +135,10 @@ impl InertialMotion {
             return None;
         }
         let energy = 0.5
-            * (mass * self.velocity_x.mul_add(self.velocity_x, self.velocity_y * self.velocity_y)
+            * (mass
+                * self
+                    .velocity_x
+                    .mul_add(self.velocity_x, self.velocity_y * self.velocity_y)
                 + moment_of_inertia * self.angular_velocity * self.angular_velocity);
         (energy.is_finite() && energy >= 0.0).then_some(energy)
     }
@@ -768,7 +778,10 @@ mod tests {
             angular_velocity: 2.0,
         };
         assert_eq!(motion.kinetic_energy(2.0, 0.5), Some(26.0));
-        assert_eq!(InertialMotion::default().kinetic_energy(2.0, 0.5), Some(0.0));
+        assert_eq!(
+            InertialMotion::default().kinetic_energy(2.0, 0.5),
+            Some(0.0)
+        );
     }
 
     #[test]
@@ -1069,7 +1082,9 @@ mod tests {
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
         let pieces = physical.break_internal_bond(&target).expect("stored bond");
         assert_eq!(pieces.len(), 2);
-        assert!(pieces.iter().all(|piece| piece.inertial_motion == expected_motion));
+        assert!(pieces
+            .iter()
+            .all(|piece| piece.inertial_motion == expected_motion));
         assert!(pieces
             .iter()
             .all(|piece| piece.material.internal_bonds.is_empty()));
