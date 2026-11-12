@@ -31,9 +31,101 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
     }
 }
 
+/// Persistent Newtonian state for one realized elemental or molecular body.
+/// Linear velocity is expressed in the same frame as the body's placements;
+/// angular velocity is radians per physics-time unit. Environmental flow does
+/// not modify this state. Legacy serialized materials begin at rest.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct InertialMotion {
+    pub(crate) velocity_x: f64,
+    pub(crate) velocity_y: f64,
+    pub(crate) angular_velocity: f64,
+}
+
+impl InertialMotion {
+    pub(crate) fn is_finite(self) -> bool {
+        self.velocity_x.is_finite()
+            && self.velocity_y.is_finite()
+            && self.angular_velocity.is_finite()
+    }
+
+    /// Apply a constant net force and torque over an explicitly supplied
+    /// physics-time interval. No drag or damping is applied. The caller owns
+    /// the timestep and the authoritative mass/inertia calculation.
+    pub(crate) fn advanced(
+        self,
+        force_x: f64,
+        force_y: f64,
+        torque: f64,
+        mass: f64,
+        moment_of_inertia: f64,
+        delta_time: f64,
+    ) -> Option<Self> {
+        if !self.is_finite()
+            || ![force_x, force_y, torque, mass, moment_of_inertia, delta_time]
+                .iter()
+                .all(|value| value.is_finite())
+            || mass <= 0.0
+            || moment_of_inertia <= 0.0
+            || delta_time < 0.0
+        {
+            return None;
+        }
+        let next = Self {
+            velocity_x: self.velocity_x + force_x / mass * delta_time,
+            velocity_y: self.velocity_y + force_y / mass * delta_time,
+            angular_velocity: self.angular_velocity + torque / moment_of_inertia * delta_time,
+        };
+        next.is_finite().then_some(next)
+    }
+
+    /// Kinetic energy for the supplied authoritative mass and inertia.
+    pub(crate) fn kinetic_energy(self, mass: f64, moment_of_inertia: f64) -> Option<f64> {
+        if !self.is_finite()
+            || !mass.is_finite()
+            || !moment_of_inertia.is_finite()
+            || mass <= 0.0
+            || moment_of_inertia < 0.0
+        {
+            return None;
+        }
+        let energy = 0.5
+            * (mass * self.velocity_x.mul_add(self.velocity_x, self.velocity_y * self.velocity_y)
+                + moment_of_inertia * self.angular_velocity * self.angular_velocity);
+        (energy.is_finite() && energy >= 0.0).then_some(energy)
+    }
+
+    /// Velocity of a point offset from the body's reference origin.
+    pub(crate) fn velocity_at_offset(self, offset_x: f64, offset_y: f64) -> Option<(f64, f64)> {
+        if !self.is_finite() || !offset_x.is_finite() || !offset_y.is_finite() {
+            return None;
+        }
+        Some((
+            self.velocity_x - self.angular_velocity * offset_y,
+            self.velocity_y + self.angular_velocity * offset_x,
+        ))
+    }
+
+    /// Express the same physical velocity in axes rotated by the supplied angle.
+    pub(crate) fn rotated_axes(self, angle: f64) -> Option<Self> {
+        if !self.is_finite() || !angle.is_finite() {
+            return None;
+        }
+        let (sin, cos) = angle.sin_cos();
+        Some(Self {
+            velocity_x: self.velocity_x * cos - self.velocity_y * sin,
+            velocity_y: self.velocity_x * sin + self.velocity_y * cos,
+            angular_velocity: self.angular_velocity,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
+    /// Persistent rigid-body momentum state; unaffected by ambient flow.
+    #[serde(default)]
+    pub(crate) inertial_motion: InertialMotion,
     /// Stable identity for environmental chemistry; preserved by transport.
     /// Zero means not yet assigned to an active field instance.
     #[serde(default)]
@@ -141,6 +233,7 @@ impl PhysicalMaterial {
 
         Some(Self {
             material,
+            inertial_motion: InertialMotion::default(),
             environmental_identity: 0,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
@@ -338,12 +431,22 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
+            let first_placement = *piece_placements.first()?;
+            let inertial_motion = self
+                .inertial_motion
+                .velocity_at_offset(first_placement.x, first_placement.y)
+                .map(|(velocity_x, velocity_y)| InertialMotion {
+                    velocity_x,
+                    velocity_y,
+                    angular_velocity: self.inertial_motion.angular_velocity,
+                })?;
             pieces.push(Self {
                 material: Material {
                     parts,
                     internal_bonds,
                 },
                 environmental_identity: 0,
+                inertial_motion,
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin,
@@ -437,6 +540,7 @@ impl PhysicalMaterial {
             .collect();
         Some(Self {
             material: self.material,
+            inertial_motion: self.inertial_motion.rotated_axes(-origin.rotation_radians)?,
             environmental_identity: self.environmental_identity,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
@@ -518,6 +622,7 @@ mod tests {
         };
         let physical = PhysicalMaterial {
             material: Material::free_base("Water", 2.0),
+            inertial_motion: InertialMotion::default(),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
