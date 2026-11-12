@@ -92,7 +92,7 @@ def geometry_descriptor(
     for index, ((element, amount), point, rotation, shape) in enumerate(
         zip(parts, geometry_points, rotations, shapes)
     ):
-        dx, dy = point[0] - center_x, point[1] - center_y
+        dx, dy = point[0] - center_x, point[1] - center_y_unwrapped
         local_x = dx * cosine + dy * sine
         local_y = -dx * sine + dy * cosine
         constituents.append({
