@@ -19,7 +19,7 @@ on:
         default: 100
         type: number
   push:
-    branches: [main]
+    branches: [main, chemistry/reaction-network-diagnostics]
     paths:
       - experiments/chemistry-run.json
 
@@ -150,6 +150,9 @@ jobs:
         run: |
           set -euo pipefail
           python3 tools/chemistry_experiment_batch_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --json-out chemistry-experiment-combined.json --markdown-out chemistry-experiment-combined.md
+          python3 tools/reaction_network_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir reaction-network
+          python3 tools/geometry_aware_reaction_network.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir geometry-aware-network
+          python3 tools/contact_opportunity_analyzer.py observations --seeds "$SEEDS" --duration-seconds "$DURATION_SECONDS" --output-dir contact-opportunities
       - name: Upload combined experiment report
         uses: actions/upload-artifact@v4
         with:
@@ -157,5 +160,8 @@ jobs:
           path: |
             chemistry-experiment-combined.json
             chemistry-experiment-combined.md
+            reaction-network/
+            geometry-aware-network/
+            contact-opportunities/
           if-no-files-found: error
           retention-days: 90

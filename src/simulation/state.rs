@@ -754,6 +754,11 @@ impl EnvironmentalBreakDiscoveryDiagnostics {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct EnvironmentalDisplacementDiscoveryDiagnostics {
+    /// Bounded deterministic sample of instance-level displacement contact opportunities.
+    #[serde(default)]
+    pub(crate) opportunity_samples: [Option<EnvironmentalContactOpportunitySample>; 8],
+    #[serde(default)]
+    pub(crate) opportunity_sample_count: usize,
     /// Environmental source materials visited by the displacement anchor scan.
     pub(crate) anchor_materials_inspected: u64,
     /// Anchors that contain at least one internal bond and can be displaced.
@@ -912,6 +917,28 @@ impl EnvironmentalDisplacementDiscoveryDiagnostics {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EnvironmentalContactOpportunitySample {
+    pub(crate) source_a_identity: u64,
+    pub(crate) source_b_identity: u64,
+    pub(crate) source_a_signature: u64,
+    pub(crate) source_b_signature: u64,
+    pub(crate) unit_a: usize,
+    pub(crate) unit_b: usize,
+    pub(crate) position_a_x: f64,
+    pub(crate) position_a_y: f64,
+    pub(crate) position_a_rotation: f64,
+    pub(crate) position_b_x: f64,
+    pub(crate) position_b_y: f64,
+    pub(crate) position_b_rotation: f64,
+    pub(crate) endpoint_a: crate::structure::ConnectionEndpoint,
+    pub(crate) endpoint_b: crate::structure::ConnectionEndpoint,
+    pub(crate) endpoint_distance: f64,
+    pub(crate) physically_valid: bool,
+    pub(crate) reaction_kind: u8,
+    pub(crate) old_bond_energy: f64,
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
 pub(crate) struct EnvironmentalCombineSearchDiagnostics {
@@ -943,6 +970,15 @@ pub(crate) struct EnvironmentalCombineSearchDiagnostics {
     pub(crate) constituent_pairs_uninspected_by_window: usize,
     pub(crate) constituent_pair_windows_truncated: usize,
     pub(crate) constituent_pairs_with_valid_interfaces: usize,
+    /// Broad-phase constituent pairs that produced no physically valid endpoint interface.
+    pub(crate) constituent_pairs_without_valid_interfaces: usize,
+    /// Endpoint candidates generated before the final live geometry/energy evaluation.
+    pub(crate) endpoint_pair_candidates_generated: usize,
+    /// Endpoint candidates rejected by the final selected-candidate evaluation.
+    pub(crate) endpoint_pair_candidates_rejected_by_evaluation: usize,
+    /// Bounded deterministic sample of instance-level successful and failed endpoint opportunities.
+    pub(crate) opportunity_samples: [Option<EnvironmentalContactOpportunitySample>; 8],
+    pub(crate) opportunity_sample_count: usize,
     pub(crate) constituent_pairs_suppressed_by_global_selection: usize,
     pub(crate) physically_evaluable_interfaces: usize,
     /// Every physically valid interface passed to its independent chemistry step.

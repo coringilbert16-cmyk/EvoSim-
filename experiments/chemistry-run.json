@@ -1,13 +1,7 @@
 {
-  "run": true,
-  "seeds": [
-    42,
-    43,
-    44,
-    45,
-    46
-  ],
+  "run": false,
+  "seeds": [42, 43, 44, 45, 46],
   "duration_seconds": 300,
   "diagnostic_interval": 100,
-  "request_note": "2026-11-12 displacement audit 5-seed 300-second observation"
+  "request_note": "Completed approved five-seed five-minute instance-level opportunity diagnostics experiment"
 }

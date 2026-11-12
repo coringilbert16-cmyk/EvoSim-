@@ -109,6 +109,8 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
             write_run(root, 43)
             report = build_report(root, [42, 43], 300)
         self.assertEqual(report["experiment"]["total_simulated_seconds"], 600)
+        self.assertIn("1,280 established two-constituent molecules", report["experiment"]["initial_environment"])
+        self.assertIn("zero independent resources", report["experiment"]["initial_environment"])
         self.assertEqual(report["reaction_totals"]["COMBINE"]["committed"], 2)
         self.assertEqual(report["molecular_development"]["reaction_created_products_reused_as_parents"], 2)
         self.assertEqual(report["organization"]["cross_seed_recurrent_product_families"][0]["seed_count"], 2)
