@@ -159,10 +159,11 @@ class ChemistryAnalyzerTests(unittest.TestCase):
             "reaction": {
                 "reaction": "COMBINE",
                 "outcome": "committed",
+                "tick": 1,
                 "molecular_lifecycle": [
-                    {"action": "destroyed", "molecule": carbon},
-                    {"action": "destroyed", "molecule": hydrogen},
-                    {"action": "created", "molecule": carbon_hydrogen},
+                    {"action": "destroyed", "molecule": carbon, "molecule_id": 1, "reaction_id": "1-0"},
+                    {"action": "destroyed", "molecule": hydrogen, "molecule_id": 2, "reaction_id": "1-0"},
+                    {"action": "created", "molecule": carbon_hydrogen, "molecule_id": 3, "reaction_id": "1-0"},
                 ],
             },
         }
@@ -290,11 +291,12 @@ class ChemistryAnalyzerTests(unittest.TestCase):
                 "reaction": "DISPLACEMENT",
                 "outcome": "committed",
                 "broken_bond_index": 0,
+                "tick": 2,
                 "molecular_lifecycle": [
-                    {"action": "destroyed", "molecule": carbon_hydrogen},
-                    {"action": "destroyed", "molecule": nitrogen},
-                    {"action": "created", "molecule": carbon_nitrogen},
-                    {"action": "created", "molecule": hydrogen},
+                    {"action": "destroyed", "molecule": carbon_hydrogen, "molecule_id": 3, "reaction_id": "2-0"},
+                    {"action": "destroyed", "molecule": nitrogen, "molecule_id": 4, "reaction_id": "2-0"},
+                    {"action": "created", "molecule": carbon_nitrogen, "molecule_id": 5, "reaction_id": "2-0"},
+                    {"action": "created", "molecule": hydrogen, "molecule_id": 6, "reaction_id": "2-0"},
                 ],
             },
         })
@@ -304,11 +306,12 @@ class ChemistryAnalyzerTests(unittest.TestCase):
                 "reaction": "DISPLACEMENT",
                 "outcome": "committed",
                 "broken_bond_index": 0,
+                "tick": 3,
                 "molecular_lifecycle": [
-                    {"action": "destroyed", "molecule": carbon_hydrogen},
-                    {"action": "destroyed", "molecule": hydrogen},
-                    {"action": "created", "molecule": carbon_hydrogen},
-                    {"action": "created", "molecule": hydrogen},
+                    {"action": "destroyed", "molecule": carbon_hydrogen, "molecule_id": 7, "reaction_id": "3-0"},
+                    {"action": "destroyed", "molecule": hydrogen, "molecule_id": 8, "reaction_id": "3-0"},
+                    {"action": "created", "molecule": carbon_hydrogen, "molecule_id": 9, "reaction_id": "3-0"},
+                    {"action": "created", "molecule": hydrogen, "molecule_id": 10, "reaction_id": "3-0"},
                 ],
             },
         })
@@ -324,6 +327,11 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertEqual(attribution["by_reaction"]["COMBINE"]["formed_total"], 1)
         self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["broken_total"], 2)
         self.assertEqual(attribution["by_reaction"]["DISPLACEMENT"]["formed"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(len(attribution["event_attribution"]), 3)
+        self.assertEqual([row["reaction_id"] for row in attribution["event_attribution"]], ["1-0", "2-0", "3-0"])
+        self.assertEqual(attribution["event_attribution"][1]["formed"]["Carbon-Nitrogen"], 1)
+        self.assertEqual(attribution["event_attribution"][1]["broken"]["Carbon-Hydrogen"], 1)
+        self.assertEqual(attribution["events_missing_reaction_id"], 0)
 
 if __name__ == "__main__":
     unittest.main()
