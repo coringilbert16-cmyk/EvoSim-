@@ -1,4 +1,5 @@
 //! Explicit chemical connection faces, separate from physical collision boundaries.
+#![expect(dead_code, reason = "Staged API retained for snapping integration")]
 //!
 //! A face is an eligible boundary segment. Its two termini are valid discrete
 //! connection endpoints; later snapping/occupancy logic may select positions
@@ -85,6 +86,9 @@ impl ConnectionFaceEndpoint {
 /// shapes expose each of their boundary edges. Curved and fluid boundaries
 /// remain continuous surfaces and are not discretized by this API.
 pub fn connection_faces(shape: &Shape, resource_name: &str) -> Vec<ConnectionFace> {
+    if matches!(shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }) {
+        return Vec::new();
+    }
     let Some(vertices) = shape.form.polygon_vertices() else {
         return Vec::new();
     };
@@ -106,8 +110,8 @@ pub fn connection_faces(shape: &Shape, resource_name: &str) -> Vec<ConnectionFac
 
     let hydrogen = resource_name == "Hydrogen";
     let longest_hydrogen_face = if hydrogen {
-        match shape.form {
-            Form::Rectangle { width, height } => Some(width.max(height)),
+        match &shape.form {
+            Form::Rectangle { width, height } => Some((*width).max(*height)),
             _ => None,
         }
     } else {
