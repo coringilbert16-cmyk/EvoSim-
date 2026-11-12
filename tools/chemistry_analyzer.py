@@ -158,6 +158,9 @@ def _bond_pair_attribution(
     events_missing_reaction_id = 0
     observed = missing = malformed = 0
 
+    def complete(counter: Counter[str]) -> dict[str, int]:
+        return {pair: int(counter.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS}
+
     for event in reactions:
         if event.get("outcome") != "committed":
             continue
@@ -246,9 +249,6 @@ def _bond_pair_attribution(
             "broken_total": sum(broken.values()),
         })
         observed += 1
-
-    def complete(counter: Counter[str]) -> dict[str, int]:
-        return {pair: int(counter.get(pair, 0)) for pair in ELEMENTAL_BOND_PAIRS}
 
     initial_inventory: Counter[str] = Counter()
     active_molecules: dict[int, Any] = {}
