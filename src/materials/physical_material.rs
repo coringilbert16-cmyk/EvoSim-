@@ -31,6 +31,36 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
     }
 }
 
+/// Approximate planar intrinsic inertia using the same realized-shape
+/// convention used by environmental transport. The result is independent of
+/// the flow mobility/response model and is suitable for Newtonian rotation.
+pub(crate) fn intrinsic_moment_of_inertia(form: &crate::resources::Form, mass: f64) -> f64 {
+    use crate::resources::Form;
+    match form {
+        Form::Circle { radius } => 0.5 * mass * radius * radius,
+        Form::Line { length } => mass * length * length / 12.0,
+        Form::Rectangle { width, height } => mass * (width * width + height * height) / 12.0,
+        Form::RegularPolygon { radius, .. } => 0.5 * mass * radius * radius,
+        Form::Polygon { vertices } => {
+            let mean_radius_sq = vertices.iter().map(|(x, y)| x * x + y * y).sum::<f64>()
+                / vertices.len().max(1) as f64;
+            0.5 * mass * mean_radius_sq
+        }
+        Form::Fluid { nominal_area, .. } => {
+            let radius_sq = nominal_area.max(0.0) / std::f64::consts::PI;
+            0.5 * mass * radius_sq
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RigidBodyMassProperties {
+    pub(crate) mass: f64,
+    pub(crate) center_x: f64,
+    pub(crate) center_y: f64,
+    pub(crate) moment_of_inertia: f64,
+}
+
 /// Persistent Newtonian state for one realized elemental or molecular body.
 /// Linear velocity is expressed in the same frame as the body's placements;
 /// angular velocity is radians per physics-time unit. Environmental flow does
@@ -305,6 +335,77 @@ impl PhysicalMaterial {
 
     /// Resolve the stored physical shape for one constituent, validating any
     /// override against the catalog's material state and conserved fluid area.
+    /// Derive rigid-body mass, center of mass, and planar moment of inertia
+    /// from constituent masses and their authoritative realized geometry.
+    /// A vertical period is supplied only for worlds with periodic Y geometry.
+    pub(crate) fn mass_properties(
+        &self,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<RigidBodyMassProperties> {
+        if !self.is_realized()
+            || !self.material.is_valid_for_catalog(catalog)
+            || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        {
+            return None;
+        }
+        let placements = self.placements.as_ref()?;
+        if placements.len() != self.material.parts.len() {
+            return None;
+        }
+        let origin = *placements.first()?;
+        let mut constituents = Vec::with_capacity(placements.len());
+        let mut total_mass = 0.0;
+        let mut weighted_x = 0.0;
+        let mut weighted_y = 0.0;
+        for (index, ((name, amount), placement)) in
+            self.material.parts.iter().zip(placements).enumerate()
+        {
+            let resource = catalog.iter().find(|resource| resource.name == *name)?;
+            let part_mass = resource.properties.mass * *amount;
+            if !part_mass.is_finite() || part_mass <= 0.0 {
+                return None;
+            }
+            let dx = placement.x - origin.x;
+            let raw_dy = placement.y - origin.y;
+            let dy = vertical_period.map_or(raw_dy, |period| {
+                (raw_dy + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let shape = self.realized_shape_for_part(index, catalog)?;
+            total_mass += part_mass;
+            weighted_x += dx * part_mass;
+            weighted_y += dy * part_mass;
+            constituents.push((part_mass, dx, dy, shape));
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
+            return None;
+        }
+        let center_offset_x = weighted_x / total_mass;
+        let center_offset_y = weighted_y / total_mass;
+        let mut moment_of_inertia = 0.0;
+        for (part_mass, dx, dy, shape) in constituents {
+            let rx = dx - center_offset_x;
+            let ry = dy - center_offset_y;
+            moment_of_inertia += part_mass * rx.mul_add(rx, ry * ry)
+                + intrinsic_moment_of_inertia(&shape.form, part_mass);
+        }
+        let center_y = vertical_period.map_or(origin.y + center_offset_y, |period| {
+            (origin.y + center_offset_y).rem_euclid(period)
+        });
+        let properties = RigidBodyMassProperties {
+            mass: total_mass,
+            center_x: origin.x + center_offset_x,
+            center_y,
+            moment_of_inertia,
+        };
+        (properties.mass.is_finite()
+            && properties.center_x.is_finite()
+            && properties.center_y.is_finite()
+            && properties.moment_of_inertia.is_finite()
+            && properties.moment_of_inertia > 0.0)
+            .then_some(properties)
+    }
+
     pub(crate) fn realized_shape_for_part(
         &self,
         part_index: usize,
