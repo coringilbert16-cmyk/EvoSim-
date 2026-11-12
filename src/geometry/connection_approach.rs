@@ -508,6 +508,7 @@ impl ConnectionApproachTarget {
 pub fn occupied_face_intervals(
     structure: &OrganismStructure,
     unit_index: usize,
+    face_index: usize,
     catalog: &[crate::resources::BaseResource],
 ) -> Option<Vec<FaceInterval>> {
     let unit = structure.units.get(unit_index)?;
@@ -533,10 +534,12 @@ pub fn occupied_face_intervals(
                 {
                     return None;
                 }
-                occupied.push(FaceInterval {
-                    start: binding.start,
-                    end: binding.end,
-                });
+                if binding.face_index == face_index {
+                    occupied.push(FaceInterval {
+                        start: binding.start,
+                        end: binding.end,
+                    });
+                }
                 continue;
             }
 
@@ -548,13 +551,18 @@ pub fn occupied_face_intervals(
                     }
                     let adjacent_faces = [point_index, (point_index + count - 1) % count];
                     let mut mapped = false;
-                    for face_index in adjacent_faces {
-                        if faces.iter().any(|face| face.face_index == face_index) {
-                            occupied.push(FaceInterval {
-                                start: 0.0,
-                                end: 1.0,
-                            });
+                    for adjacent_face_index in adjacent_faces {
+                        if faces
+                            .iter()
+                            .any(|face| face.face_index == adjacent_face_index)
+                        {
                             mapped = true;
+                            if adjacent_face_index == face_index {
+                                occupied.push(FaceInterval {
+                                    start: 0.0,
+                                    end: 1.0,
+                                });
+                            }
                         }
                     }
                     if !mapped {
@@ -1277,7 +1285,7 @@ mod tests {
         });
 
         assert_eq!(
-            occupied_face_intervals(&structure, unit_a, &catalog),
+            occupied_face_intervals(&structure, unit_a, 0, &catalog),
             Some(vec![FaceInterval {
                 start: 0.25,
                 end: 0.75,
@@ -1312,11 +1320,17 @@ mod tests {
             bond_energy: 1.0,
         });
 
-        let occupied = occupied_face_intervals(&structure, unit_a, &catalog).unwrap();
-        assert_eq!(occupied.len(), 2);
-        assert!(occupied
-            .iter()
-            .all(|interval| interval.start == 0.0 && interval.end == 1.0));
+        let occupied_start = occupied_face_intervals(&structure, unit_a, 0, &catalog).unwrap();
+        let occupied_previous =
+            occupied_face_intervals(&structure, unit_a, 3, &catalog).unwrap();
+        assert_eq!(occupied_start.len(), 1);
+        assert_eq!(occupied_previous.len(), 1);
+        for interval in occupied_start.iter().chain(&occupied_previous) {
+            assert_eq!((interval.start, interval.end), (0.0, 1.0));
+        }
+        assert!(occupied_face_intervals(&structure, unit_a, 1, &catalog)
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
