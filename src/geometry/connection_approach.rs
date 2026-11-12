@@ -62,7 +62,9 @@ pub fn translation_path_is_collision_free(
     if moving_parts.is_empty()
         || !delta_x.is_finite()
         || !delta_y.is_finite()
-        || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        || vertical_period.is_some_and(|period| {
+            !period.is_finite() || period <= 0.0 || delta_y.abs() > period
+        })
         || moving_parts.iter().chain(obstacles).any(|part| {
             !finite_placement(part.placement)
                 || !part.form.bounding_radius().is_finite()
@@ -1046,6 +1048,22 @@ mod tests {
         let fraction =
             collision_free_translation_fraction(&[moving], &[obstacle], 10.0, 0.0, None).unwrap();
         assert!(fraction > 0.0 && fraction < 0.5);
+    }
+
+    #[test]
+    fn swept_translation_rejects_steps_spanning_multiple_vertical_periods() {
+        let moving = PlacedMaterialPart {
+            part_index: 0,
+            form: Form::Circle { radius: 0.1 },
+            placement: placement(5.0, 1.0, 0.0),
+        };
+        assert!(!translation_path_is_collision_free(
+            &[moving],
+            &[],
+            0.0,
+            21.0,
+            Some(10.0),
+        ));
     }
 
     #[test]
