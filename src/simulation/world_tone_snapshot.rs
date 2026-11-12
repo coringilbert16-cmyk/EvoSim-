@@ -1843,6 +1843,8 @@ mod tests {
             current_resonant_energy: current_resonant,
             initial_structural_energy: 0.0,
             current_structural_energy: 0.0,
+            initial_kinetic_energy: 0.0,
+            current_kinetic_energy: 0.0,
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: ledger.total_pair_interaction_potential_held,
             external_energy_input: 0.0,
