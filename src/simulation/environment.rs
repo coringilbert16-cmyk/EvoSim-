@@ -666,6 +666,13 @@ impl ActiveMaterialField {
         self.environmental_bond_index.sort_unstable();
     }
 
+    /// Lazily rebuild the derived index after deserializing a field.
+    pub(crate) fn ensure_environmental_bond_index(&mut self) {
+        if !self.environmental_bond_index_initialized {
+            self.rebuild_environmental_bond_index();
+        }
+    }
+
     /// Return a tick-rotated bounded window of known bonds. Every locator in
     /// this result is unique, and no cells or unbonded materials are inspected.
     pub(crate) fn environmental_bond_candidates(
