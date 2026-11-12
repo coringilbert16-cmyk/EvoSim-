@@ -634,15 +634,13 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
         let initial_independent_resource_count = initial_materials
             .iter()
             .filter(|material| {
-                material.material.parts.len() == 1
-                    && material.material.internal_bonds.is_empty()
+                material.material.parts.len() == 1 && material.material.internal_bonds.is_empty()
             })
             .count();
         let initial_molecule_count = initial_materials
             .iter()
             .filter(|material| {
-                material.material.parts.len() > 1
-                    && !material.material.internal_bonds.is_empty()
+                material.material.parts.len() > 1 && !material.material.internal_bonds.is_empty()
             })
             .count();
         let initial_constituent_count = initial_materials
