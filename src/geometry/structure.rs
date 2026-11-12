@@ -1677,10 +1677,7 @@ mod tests {
                 },
             )
             .unwrap(),
-            endpoint_b: BondEndpoint::new(
-                id_b,
-                ConnectionEndpoint::Corner { point_index: 2 },
-            ),
+            endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 2 }),
             strength: 0.5,
             bond_energy: 1.0,
         };
