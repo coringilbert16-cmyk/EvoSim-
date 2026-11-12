@@ -277,6 +277,27 @@ pub fn approach_error(
     (error.endpoint_error.is_finite() && error.rotation_error.is_finite()).then_some(error)
 }
 
+/// Re-evaluate approach error against A's current pose.
+///
+/// Call this with current placements during movement; this keeps the target
+/// attached to A rather than leaving it at an earlier world-space location.
+pub fn approach_error_to_face_pair(
+    face_a: ConnectionFace,
+    current_a: Placement,
+    face_b: ConnectionFace,
+    current_b: Placement,
+    span: FaceSpan,
+) -> Option<ConnectionApproachError> {
+    let target_placement_b = snapped_target_placement(face_a, current_a, face_b, span)?;
+    let target = ConnectionApproachTarget {
+        face_a_index: face_a.face_index,
+        face_b_index: face_b.face_index,
+        span,
+        placement_b: target_placement_b,
+    };
+    approach_error(face_b, current_b, target)
+}
+
 /// Relative progress from a recorded initial endpoint error to the current
 /// endpoint error. Progress may decrease if physics moves away from the target.
 pub fn approach_progress(initial_error: f64, current_error: f64) -> Option<f64> {
@@ -424,6 +445,21 @@ mod tests {
         let full = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
         let other = connection_faces(&rectangle(0.3, 0.3), "Carbon")[0];
         assert!(compatible_face_spans(full, other).is_empty());
+    }
+
+    #[test]
+    fn approach_error_tracks_a_moving_anchor_without_stale_world_target() {
+        let face_a = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let face_b = connection_faces(&rectangle(1.0, 1.0), "Carbon")[0];
+        let span = compatible_face_spans(face_a, face_b)[0];
+        let initial_a = placement(0.0, 0.0, 0.0);
+        let initial_target = snapped_target_placement(face_a, initial_a, face_b, span).unwrap();
+        let moved_a = placement(7.0, -3.0, 0.4);
+        let moved_target = snapped_target_placement(face_a, moved_a, face_b, span).unwrap();
+        let error = approach_error_to_face_pair(face_a, moved_a, face_b, moved_target, span)
+            .unwrap();
+        assert!(is_at_snapped_target(error, 1e-10, 1e-10));
+        assert_ne!(initial_target, moved_target);
     }
 
     #[test]
