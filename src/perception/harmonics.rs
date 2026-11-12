@@ -3616,14 +3616,9 @@ mod tests {
         let blocker = make_material("Nitrogen", 4.0, 0.35);
         let second_blocker = make_material("Hydrogen", 4.5, -0.4);
         let blockers = vec![blocker, second_blocker];
-        let forces = resonance_multi_body_forces_with_occluders(
-            &source,
-            &receiver,
-            &blockers,
-            &catalog,
-            0,
-        )
-        .expect("the full multi-body gradient should be finite and balanced");
+        let forces =
+            resonance_multi_body_forces_with_occluders(&source, &receiver, &blockers, &catalog, 0)
+                .expect("the full multi-body gradient should be finite and balanced");
         assert_eq!(forces.len(), 4);
         assert!(
             forces[2..]
