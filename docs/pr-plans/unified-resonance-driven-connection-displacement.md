@@ -402,3 +402,54 @@ The generic inertial primitives remain reusable, but the active movement populat
 The tick-local `MaterialResonanceEmitter` cache is now used by the environmental pair-force path, not only by chemistry activation queries. For each pair and every finite-difference perturbation, the source and receiver reuse their already-prepared composition/tick mass scale and emitted spectrum. Their center and extent are still recomputed from the perturbed placements, so translation and rotation derivatives use current geometry rather than stale emitter coordinates. Receiver response to the incident spectrum and all exact boundary/visibility sampling remain unchanged; no emitter aggregation or activation Top-K ordering was altered.
 
 The chemistry snapshot regression evaluates the same three-body pair both through prepared emitters and through the uncached reference path, then compares every body's force and torque to (10^{-10}). This is an exactness-preserving preparation step for the future multipole evaluator, not a multipole approximation. It does not change the force law or make the all-pairs oracle suitable for live ticks.
+
+## 11. Live objective audit and minimal closeout plan — 2026-11-13
+
+This audit compares the live branch against the original objective: free environmental atoms and molecules must move under the existing resonance interaction physics; physical approach, exact chemical face alignment, activation, and bond competition must advance together; displacement must be the same continuous physical event; and the complete movement/chemistry/energy/field update must commit atomically. Organism mechanics remain isolated and off limits.
+
+### Verified current runtime gaps
+
+1. `Simulation::step_with_transport_reuse` still calls `environment_flow::transport_field_with_singleton_center_velocity_reuse` before environmental reaction discovery. That consumer calculates overdamped flow displacement and rotation and commits changed field-cell membership/revisions. It remains the live material-movement authority.
+2. `PhysicalMaterial::advanced_under_force`, `ResonanceForceAccumulator`, and `ResonanceForceAccumulator::stage_motion` provide staged Newtonian foundations, but the live tick does not call them. The force accumulator and motion staging are explicitly marked as awaiting runtime integration.
+3. `LocalResonanceWorldSnapshot` is correctly built only from free environmental field materials. Its exact complete-pair force oracle evaluates every unordered pair and includes occluder reaction forces/torques, but is explicitly a small-world correctness oracle and is not called by the live tick.
+4. `EnvironmentalFlowField` is a read-only ambient-flow sampler. The legacy transport consumer still uses its sampled velocity to advect material. That is not Newtonian movement and must not remain a second writer after the new mover is enabled.
+5. Environmental COMBINE and displacement discovery still begin from near-contact endpoint candidates. There is no live chemistry-native approach controller that advances physical poses, exact face alignment, and activation together.
+6. `environmental_displacement.rs` currently reconstructs free field materials into `OrganismStructure` via `restore_displacement_source`, then uses organism-structure geometry and bond graph helpers for candidate discovery and trial topology. This is a chemistry-path dependency on an organism-specific graph representation. Replace it with chemistry-native molecular topology/geometry before completing approach or displacement. Do not modify organism mechanics to accomplish this.
+7. The current displacement resolver stages a topology/energy replacement, but it does not stage and commit the physical trajectories of the incoming, anchor, and displaced materials. It therefore does not yet implement physical displacement.
+
+### Minimal closeout sequence
+
+**1 — Make the chemistry movement population and data model self-contained.**
+- Keep the active bodies strictly to free environmental atoms and molecules.
+- Replace the `OrganismStructure` adapter in environmental displacement with chemistry-owned molecular bond/face geometry and trial topology.
+- Reuse generic shape, collision, and geometry primitives only where they do not call or mutate organism systems.
+- Keep the existing organism implementation untouched.
+
+**2 — Establish the production resonance-force evaluator.**
+- Preserve the existing resonance pair potential, frequency/phase behavior, visibility, and force/torque reaction on occluding environmental bodies.
+- Validate any scalable mutual evaluator against the exact small-world oracle with explicit potential, force, and torque error controls.
+- Do not use an arbitrary interaction radius, fixed cutoff, or unbounded approximation. Keep exact evaluation as the fallback where an approximation cannot be certified.
+- Do not spend another standalone research phase on multipoles: derive and implement only what the production evaluator actually needs, with correctness tests against the oracle.
+
+**3 — Replace the live material-advection authority with one Newtonian movement transaction.**
+- Connect the production force evaluator to persistent inertial state and staged rigid-body poses.
+- Validate swept collision paths, world boundaries, and final placements for every affected free material.
+- Use ambient flow only according to an explicitly approved physical coupling law; do not substitute flow velocity for momentum or invent drag.
+- Commit all moved placements, cell membership, identities, and field-cell revisions once. Do not run a second movement pass.
+
+**4 — Join approach, COMBINE, BREAK, and displacement to that same physical authority.**
+- Implement chemistry-native compatible-face approach. Geometric progress, resonance interaction, and existing chemistry activation must advance together.
+- Form a bond only at exact valid face alignment and after the existing activation/energy rules pass.
+- Preserve existing BREAK chemistry while ensuring split products retain physically correct momentum.
+- For displacement, the stronger incoming bond must win by existing bond-strength rules. The incumbent must be moved by the same collision-validated physical motion; try valid adjacent reconnection, otherwise break the weaker bond. No teleport, switch-place shortcut, or separate BREAK-then-COMBINE sequence.
+
+**5 — Make the complete event atomic and close with focused validation.**
+- One staged transaction must include all affected poses/momenta, collision/path checks, face occupancy, activation, topology, signed pair-potential and kinetic-energy changes, energy-holder/heat settlement, and field-cell updates.
+- Any failure must leave all source materials, positions, momentum, bonds, activation, reservoirs, ledger values, identities, and cell revisions unchanged.
+- Add focused regressions for force/torque, visibility/occluder reactions, momentum, swept collision, exact face alignment, activation timing, COMBINE, BREAK, stronger/weaker displacement, adjacent reconnection/fallback, energy balance, and full rollback.
+- Run the full CI suite after implementation. Do not run extended observation windows or benchmark campaigns unless explicitly requested.
+
+### Completion definition
+
+This PR is not complete when the force helpers compile or when a staged topology transaction passes in isolation. It is complete only when the ordinary live environmental tick uses one chemistry-only Newtonian movement authority; free materials visibly move from the existing physical interaction law; compatible approach and activation progress through real motion; COMBINE/BREAK/displacement resolve through the same atomic movement/chemistry/energy boundary; organism code remains unchanged; and full CI is green.
+
