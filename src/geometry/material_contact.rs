@@ -42,7 +42,7 @@ fn view(
 }
 
 fn endpoint_indices(view: &ConstituentView) -> Vec<ConnectionEndpoint> {
-    if view.name == "Hydrogen" && matches!(view.shape.form, Form::Rectangle { .. }) {
+    if view.name == "Hydrogen" && matches!(&view.shape.form, Form::Rectangle { .. }) {
         return (0..2)
             .map(|point_index| ConnectionEndpoint::LineEndpoint { point_index })
             .collect();
@@ -80,11 +80,11 @@ fn endpoint_world_point(
             )
         }
         ConnectionEndpoint::LineEndpoint { point_index } => {
-            let line_like = matches!(view.shape.form, Form::Line { .. })
+            let line_like = matches!(&view.shape.form, Form::Line { .. })
                 || matches!(
-                    view.shape.form,
+                    &view.shape.form,
                     Form::Rectangle { width, height }
-                        if view.name == "Hydrogen" && height <= width * 0.1 + 1e-12
+                        if view.name == "Hydrogen" && *height <= *width * 0.1 + 1e-12
                 );
             if !line_like {
                 return None;
@@ -146,7 +146,7 @@ fn continuous_endpoint(
     let local_x = ux * cos + uy * sin;
     let local_y = -ux * sin + uy * cos;
     let point = boundary_point_toward(&view.shape, local_x, local_y)?;
-    match view.shape.form {
+    match &view.shape.form {
         Form::Circle { .. }
         | Form::Rectangle { .. }
         | Form::RegularPolygon { .. }
@@ -323,8 +323,8 @@ fn rigid_surface_candidates(
     limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     if limit == 0
-        || matches!(a.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
-        || matches!(b.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
+        || matches!(&a.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
+        || matches!(&b.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
     {
         return Vec::new();
     }
@@ -527,10 +527,10 @@ fn candidate_endpoints(a: &ConstituentView, b: &ConstituentView) -> Vec<(Connect
         b,
         usize::MAX.saturating_sub(out.len()),
     ));
-    if matches!(a.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
+    if matches!(&a.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
         out.extend(multi_contact_fluid_pairs(a, b, usize::MAX.saturating_sub(out.len())));
     }
-    if matches!(b.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
+    if matches!(&b.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
         out.extend(
             multi_contact_fluid_pairs(b, a, usize::MAX.saturating_sub(out.len()))
                 .into_iter()
@@ -552,8 +552,12 @@ pub(crate) fn connection_pair_candidates_for_material_parts(
     let b = view(source_b, part_b, catalog)?;
     let mut candidates = Vec::new();
     for (endpoint_a, endpoint_b) in candidate_endpoints(&a, &b) {
-        let point_a = endpoint_world_point(&a, endpoint_a)?;
-        let point_b = endpoint_world_point(&b, endpoint_b)?;
+        let Some(point_a) = endpoint_world_point(&a, endpoint_a) else {
+            continue;
+        };
+        let Some(point_b) = endpoint_world_point(&b, endpoint_b) else {
+            continue;
+        };
         let available_a = endpoint_available(source_a, part_a, endpoint_a, excluded_connection_a);
         let available_b = endpoint_available(source_b, part_b, endpoint_b, None);
         let candidate = ConnectionPairCandidate {
