@@ -301,9 +301,6 @@ fn evaluate_environmental_displacement_candidate(
 struct EnvironmentalDisplacementTrial {
     products: Vec<PhysicalMaterial>,
     energy: ReactionEnergyBalance,
-    replacement_bond_energy: f64,
-    formation_work: f64,
-    disruption_work: f64,
 }
 
 /// Revalidate and stage a complete displacement using only environmental
@@ -431,13 +428,7 @@ fn build_native_environmental_displacement_trial(
     {
         return None;
     }
-    Some(EnvironmentalDisplacementTrial {
-        products,
-        energy,
-        replacement_bond_energy,
-        formation_work,
-        disruption_work: preflight.disruption_work,
-    })
+    Some(EnvironmentalDisplacementTrial { products, energy })
 }
 
 fn displacement_reaction_frequency_from_properties(
