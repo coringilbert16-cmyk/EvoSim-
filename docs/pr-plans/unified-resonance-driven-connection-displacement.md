@@ -175,10 +175,12 @@ persistent inertial state.
 
 Do not simply add a second movement pass. The eventual chemistry movement
 transaction must become the sole writer of free-material placements, with
-field-cell membership and revisions committed atomically. Before that
-replacement, separate flow-field evaluation from material advection so the
-flow calculation can continue without silently moving atoms or molecules.
-Do not invent a drag coefficient or an unapproved flow-force law.
+field-cell membership and revisions committed atomically. A read-only `EnvironmentalFlowField` snapshot now builds obstacle bins and
+samples ambient velocity without mutating material positions, cell revisions,
+identities, or inertial state. The legacy transport pass consumes this field
+but still performs overdamped material advection; that consumer remains to be
+replaced once the Newtonian movement transaction is ready. Do not invent a
+drag coefficient or an unapproved flow-force law.
 
 The direct pair-potential gradient and the new complete unordered-pair force
 sum are correctness oracles for small chemistry worlds, not production force
@@ -331,9 +333,10 @@ not be implemented or used as force participants/occluders.
 
 1. Prove a scalable mutual force evaluator against the exact complete-pair
    oracle, including visibility and per-body force/torque error.
-2. Separate the overdamped environmental-flow field from legacy
-   overdamped material advection. Keep the field calculation; do not use its
-   velocity as a substitute for Newtonian body momentum.
+2. Keep the read-only overdamped environmental-flow field sampler and
+   replace its legacy material-advection consumer only when the Newtonian
+   movement transaction can commit complete body proposals atomically. Do not
+   use sampled flow velocity as a substitute for Newtonian body momentum.
 3. Connect accumulated resonance forces to one Newtonian rigid-body proposal
    and atomic environmental-field commit, including collision/path validation,
    energy settlement, and field-cell revisions.
