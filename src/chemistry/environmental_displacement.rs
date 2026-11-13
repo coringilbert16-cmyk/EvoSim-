@@ -2629,8 +2629,7 @@ mod tests {
     #[test]
     fn material_native_displacement_chemistry_matches_restored_constituent_authority() {
         let catalog = default_catalog();
-        let (source, _old_bond, candidate, _investment) =
-            three_participant_fixture(&catalog);
+        let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
         let anchor_material = PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
             vec![source.units[0].placement],
@@ -2657,25 +2656,17 @@ mod tests {
             &catalog,
         )
         .expect("restored-graph authority should accept the fixture contact");
-        let material_activation = accumulate_environmental_constituent_activation(
-            anchor,
-            incoming,
-            candidate,
-            0.0,
-            0.5,
-        )
-        .expect("material-native authority should accept the same contact");
+        let material_activation =
+            accumulate_environmental_constituent_activation(anchor, incoming, candidate, 0.0, 0.5)
+                .expect("material-native authority should accept the same contact");
         assert!(
             (legacy_activation - material_activation).abs() <= 1e-12,
             "material-native activation must preserve the approved chemistry equation"
         );
 
-        let legacy_frequency = displacement_reaction_frequency(
-            &source.units[0],
-            &source.units[1],
-            &catalog,
-        )
-        .expect("legacy reaction frequency should be valid");
+        let legacy_frequency =
+            displacement_reaction_frequency(&source.units[0], &source.units[1], &catalog)
+                .expect("legacy reaction frequency should be valid");
         let material_frequency = displacement_reaction_frequency_from_materials(
             &PhysicalMaterial::realized(
                 crate::resources::Material::free_base("Carbon", 1.0),
@@ -2699,12 +2690,9 @@ mod tests {
             "material-native frequency must preserve the approved catalog properties"
         );
 
-        let legacy_anchor_point = crate::contact::endpoint_world_point(
-            candidate.endpoint_a,
-            &source.units[0],
-            &catalog,
-        )
-        .expect("legacy anchor endpoint should resolve");
+        let legacy_anchor_point =
+            crate::contact::endpoint_world_point(candidate.endpoint_a, &source.units[0], &catalog)
+                .expect("legacy anchor endpoint should resolve");
         let material_anchor_point = environmental_constituent_endpoint_world_point(
             &anchor_material,
             0,
