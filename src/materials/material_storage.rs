@@ -5,7 +5,7 @@
 #![expect(dead_code, reason = "Staged API retained for subsystem integration")]
 //! Organism material inventory.
 use crate::physical_material::PhysicalMaterial;
-use crate::resources::{BaseResource, Material};
+use crate::resources::Material;
 use crate::structure::Placement;
 use serde::{Deserialize, Serialize};
 
@@ -68,17 +68,6 @@ impl MaterialStorage {
 
     pub(crate) fn drain_entries(&mut self) -> Vec<StoredMaterial> {
         std::mem::take(&mut self.entries)
-    }
-
-    /// Sum kinetic energy of physically stored entries in their intrinsic frames.
-    pub(crate) fn kinetic_energy_held(&self, catalog: &[BaseResource]) -> Option<f64> {
-        self.entries.iter().try_fold(0.0, |total, entry| {
-            let energy = match entry {
-                StoredMaterial::Physical(instance) => instance.kinetic_energy(catalog, None)?,
-            };
-            let next = total + energy;
-            (next.is_finite() && next >= 0.0).then_some(next)
-        })
     }
 
     pub(crate) fn physical_count(&self) -> usize {
