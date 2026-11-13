@@ -1347,9 +1347,9 @@ fn material_aura_receptions_with_occluders_prepared(
         return Some(Vec::new());
     }
     let receiver_geometry =
-        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
-        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(source, catalog)?;
     let (source_x, source_y, _) = environmental_material_geometry(source)?;
     if !source_x.is_finite() || !source_y.is_finite() {
         return None;
@@ -1374,7 +1374,7 @@ fn material_aura_receptions_with_occluders_prepared(
         if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
             continue;
         }
-        let geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+        let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
             occluder, catalog,
         )?;
         if geometry_bounds_may_occlude_source_points(
@@ -1403,7 +1403,7 @@ fn material_aura_receptions_with_occluders_prepared(
 fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
     points: &[(f64, f64)],
-    candidate: &crate::organism_geometry::OrganismBodyGeometry,
+    candidate: &crate::physical_body_geometry::PhysicalBodyGeometry,
 ) -> bool {
     let mut min_x = source.0;
     let mut max_x = source.0;
@@ -1422,7 +1422,7 @@ fn geometry_bounds_may_occlude_source_points(
 }
 
 fn receiver_has_straight_boundary(
-    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver: &crate::physical_body_geometry::PhysicalBodyGeometry,
 ) -> bool {
     receiver
         .parts
@@ -1430,7 +1430,7 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
-fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
+fn receiver_has_curved_boundary(receiver: &crate::physical_body_geometry::PhysicalBodyGeometry) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
         crate::resources::Form::Fluid {
@@ -1464,8 +1464,8 @@ fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBod
 fn material_aura_receptions_with_geometry_prepared(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
-    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
-    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    source_geometry: &crate::physical_body_geometry::PhysicalBodyGeometry,
+    receiver_bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     catalog: &[crate::resources::BaseResource],
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
@@ -2251,7 +2251,7 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     // derivative and do not need four additional potential evaluations.
     let (source_x, source_y, _) = environmental_material_geometry(a)?;
     let receiver_geometry =
-        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(b, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(b, catalog)?;
     let step_points = [
         (source_x - DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
         (source_x - DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
@@ -2277,7 +2277,7 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     let blocker_can_affect_gradient = occluders
         .iter()
         .map(|blocker| {
-            let geometry = crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
+            let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
                 blocker, catalog,
             )?;
             Some(geometry_bounds_may_occlude_source_points(
@@ -2697,21 +2697,21 @@ mod tests {
     #[test]
     fn resonance_occluder_broad_phase_keeps_endpoint_path_bounds_and_discards_disjoint_bounds() {
         let endpoint_points = [(4.0, 0.0), (4.0, 1.0)];
-        let crossing = crate::organism_geometry::OrganismBodyGeometry {
+        let crossing = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 2.0,
             max_x: 3.0,
             min_y: 0.25,
             max_y: 0.75,
         };
-        let outside_y = crate::organism_geometry::OrganismBodyGeometry {
+        let outside_y = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 1.0,
             max_x: 3.0,
             min_y: 2.0,
             max_y: 3.0,
         };
-        let outside_x = crate::organism_geometry::OrganismBodyGeometry {
+        let outside_x = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 5.0,
             max_x: 6.0,
@@ -2738,7 +2738,7 @@ mod tests {
 
     #[test]
     fn resonance_visibility_runs_only_for_boundary_types_present_on_receiver() {
-        let polygon = crate::organism_geometry::OrganismBodyGeometry {
+        let polygon = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::organism_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Rectangle {
@@ -2754,7 +2754,7 @@ mod tests {
             min_y: -0.5,
             max_y: 0.5,
         };
-        let circle = crate::organism_geometry::OrganismBodyGeometry {
+        let circle = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::organism_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Circle { radius: 0.5 },
@@ -2767,7 +2767,7 @@ mod tests {
             min_y: -0.5,
             max_y: 0.5,
         };
-        let line = crate::organism_geometry::OrganismBodyGeometry {
+        let line = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::organism_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Line { length: 1.0 },
