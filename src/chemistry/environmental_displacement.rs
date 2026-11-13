@@ -987,7 +987,6 @@ pub(crate) struct DisplacementTrial {
     #[cfg(test)]
     pub(crate) replacement_bond: Bond,
     pub(crate) energy: ReactionEnergyBalance,
-    pub(crate) replacement_bond_energy: f64,
     pub(crate) formation_work: f64,
     pub(crate) disruption_work: f64,
 }
