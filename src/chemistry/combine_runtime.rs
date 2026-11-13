@@ -420,8 +420,8 @@ pub(crate) fn admit_selected_candidate_to_trial_structure_diagnostic(
     )
     .into_iter()
     .find(|live| {
-        live.endpoint_a == candidate.endpoint_a
-            && live.endpoint_b == candidate.endpoint_b
+        live.endpoint_a.same_location(candidate.endpoint_a)
+            && live.endpoint_b.same_location(candidate.endpoint_b)
             && live.distance <= COMBINE_CONTACT_TOLERANCE
             && live.available_a
             && live.available_b
