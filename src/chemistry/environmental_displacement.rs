@@ -1635,6 +1635,7 @@ fn diagnostic_material_signature(source: &PhysicalMaterial) -> u64 {
         })
 }
 
+#[cfg(test)]
 fn best_replacement_contact(
     combined: &OrganismStructure,
     anchor_unit: usize,
@@ -1747,6 +1748,148 @@ fn best_replacement_contact(
         }
         let Some((_evaluation, _formation_work, investment, required_energy, _bond_energy)) =
             evaluation
+        else {
+            continue;
+        };
+        let replace = best.map_or(true, |(current, _, current_energy)| {
+            required_energy
+                .partial_cmp(&current_energy)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    candidate
+                        .distance
+                        .partial_cmp(&current.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .is_lt()
+        });
+        if replace {
+            best = Some((candidate, investment, required_energy));
+        }
+    }
+    best.map(|(candidate, investment, _)| (candidate, investment))
+}
+
+fn environmental_material_pair_penetrates(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    catalog: &[BaseResource],
+) -> Option<bool> {
+    if !source_a.is_realized()
+        || !source_b.is_realized()
+        || source_a.owner_relative_origin.is_some()
+        || source_b.owner_relative_origin.is_some()
+    {
+        return None;
+    }
+    let placements_a = source_a.placements.as_ref()?;
+    let placements_b = source_b.placements.as_ref()?;
+    for (part_a, placement_a) in placements_a.iter().copied().enumerate() {
+        let shape_a = source_a.realized_shape_for_part(part_a, catalog)?;
+        let placed_a = crate::material_geometry::PlacedMaterialPart {
+            part_index: part_a,
+            form: shape_a.form,
+            placement: placement_a,
+        };
+        for (part_b, placement_b) in placements_b.iter().copied().enumerate() {
+            let shape_b = source_b.realized_shape_for_part(part_b, catalog)?;
+            let placed_b = crate::material_geometry::PlacedMaterialPart {
+                part_index: part_b,
+                form: shape_b.form,
+                placement: placement_b,
+            };
+            if crate::material_geometry::placed_forms_penetrate(
+                &placed_a,
+                &placed_b,
+                crate::material_geometry::GEOMETRY_EPSILON,
+            ) {
+                return Some(true);
+            }
+        }
+    }
+    Some(false)
+}
+
+fn best_environmental_replacement_contact(
+    source_a: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    source_b: &PhysicalMaterial,
+    incoming_part: usize,
+    old_bond_index: usize,
+    catalog: &[BaseResource],
+    mut diagnostics: Option<&mut EnvironmentalDisplacementDiscoveryDiagnostics>,
+    sample_this_search: bool,
+) -> Option<(ConnectionPairCandidate, f64)> {
+    let candidates = crate::material_contact::connection_pair_candidates_for_material_parts(
+        source_a,
+        anchor_part,
+        Some(old_bond_index),
+        source_b,
+        incoming_part,
+        catalog,
+    )?;
+    let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
+    let old_bond_energy = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?
+        .bond_energy;
+    for (candidate_index, candidate) in candidates.into_iter().enumerate() {
+        let evaluation = evaluate_environmental_displacement_candidate(
+            source_a,
+            anchor_part,
+            displaced_part,
+            source_b,
+            incoming_part,
+            old_bond_index,
+            candidate,
+            catalog,
+        );
+        let physically_valid = evaluation.is_some();
+        if sample_this_search && candidate_index == 0 {
+            if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len() {
+                    let Some(position_a) = source_a
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.get(anchor_part))
+                    else {
+                        continue;
+                    };
+                    let Some(position_b) = source_b
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.get(incoming_part))
+                    else {
+                        continue;
+                    };
+                    diagnostics.opportunity_samples[diagnostics.opportunity_sample_count] =
+                        Some(crate::state::EnvironmentalContactOpportunitySample {
+                            source_a_identity: source_a.environmental_identity,
+                            source_b_identity: source_b.environmental_identity,
+                            source_a_signature: diagnostic_material_signature(source_a),
+                            source_b_signature: diagnostic_material_signature(source_b),
+                            unit_a: anchor_part,
+                            unit_b: incoming_part,
+                            position_a_x: position_a.x,
+                            position_a_y: position_a.y,
+                            position_a_rotation: position_a.rotation_radians,
+                            position_b_x: position_b.x,
+                            position_b_y: position_b.y,
+                            position_b_rotation: position_b.rotation_radians,
+                            endpoint_a: candidate.endpoint_a,
+                            endpoint_b: candidate.endpoint_b,
+                            endpoint_distance: candidate.distance,
+                            physically_valid,
+                            reaction_kind: 1,
+                            old_bond_energy,
+                        });
+                    diagnostics.opportunity_sample_count += 1;
+                }
+            }
+        }
+        let Some((_formation, _work, investment, required_energy, _bond_energy)) = evaluation
         else {
             continue;
         };
