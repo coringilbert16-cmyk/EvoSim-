@@ -979,10 +979,13 @@ mod tests {
         let revision_before = field.revision;
         let identity_before = field.next_material_identity;
 
+        let source_cell = field
+            .index_for_position(50.0, 40.0)
+            .expect("deposited material cell");
         let flow = EnvironmentalFlowField::from_field(&field, &catalog, 100.0, 80.0)
             .expect("valid environmental flow field should build");
         let sampled = flow
-            .sample_velocity_for_material(50.0, 40.0, 0, 0)
+            .sample_velocity_for_material(50.0, 40.0, source_cell, 0)
             .expect("finite center sample");
         let background = background_velocity(50.0, 40.0, 100.0, 80.0);
         assert!((sampled.0 - background.x).abs() < 1e-12);
@@ -1009,7 +1012,7 @@ mod tests {
         assert_eq!(field.revision, revision_before);
         assert_eq!(field.next_material_identity, identity_before);
         assert_eq!(
-            field.cells[0].physical_materials[0].inertial_motion,
+            field.cells[source_cell].physical_materials[0].inertial_motion,
             material.inertial_motion,
             "sampling the overdamped flow field must not alter Newtonian momentum"
         );
