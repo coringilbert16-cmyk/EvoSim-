@@ -1302,6 +1302,19 @@ pub(crate) fn material_aura_receptions_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_occluders_prepared(
+        source, receiver, occluders, catalog, tick, None,
+    )
+}
+
+fn material_aura_receptions_with_occluders_prepared(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitter: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<MaterialAuraReception>> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -1369,13 +1382,14 @@ pub(crate) fn material_aura_receptions_with_occluders(
         }
     }
 
-    material_aura_receptions_with_geometry(
+    material_aura_receptions_with_geometry_prepared(
         source,
         receiver,
         &source_geometry,
         &receiver_bodies,
         catalog,
         tick,
+        prepared_emitter,
     )
 }
 
