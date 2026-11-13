@@ -227,49 +227,17 @@ pub enum ConnectionEndpoint {
     Boundary { angle_radians: f64 },
     Fluid { x: f64, y: f64 },
 }
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
-pub struct ConnectionFaceBinding {
-    pub face_index: usize,
-    /// Normalized interval along the face, in [0, 1].
-    pub start: f64,
-    pub end: f64,
-}
-impl ConnectionFaceBinding {
-    pub fn is_valid(self) -> bool {
-        self.start.is_finite()
-            && self.end.is_finite()
-            && self.start >= 0.0
-            && self.end <= 1.0
-            && self.start < self.end
-    }
-}
-
 #[derive(Serialize, Clone, Copy, Debug, PartialEq)]
 pub struct BondEndpoint {
     pub constituent_id: PhysicalConstituentId,
     pub location: ConnectionEndpoint,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub face_binding: Option<ConnectionFaceBinding>,
 }
 impl BondEndpoint {
     pub fn new(constituent_id: PhysicalConstituentId, location: ConnectionEndpoint) -> Self {
         Self {
             constituent_id,
             location,
-            face_binding: None,
         }
-    }
-
-    pub fn new_with_face_binding(
-        constituent_id: PhysicalConstituentId,
-        location: ConnectionEndpoint,
-        face_binding: ConnectionFaceBinding,
-    ) -> Option<Self> {
-        face_binding.is_valid().then_some(Self {
-            constituent_id,
-            location,
-            face_binding: Some(face_binding),
-        })
     }
 }
 impl<'de> Deserialize<'de> for BondEndpoint {
@@ -282,20 +250,14 @@ impl<'de> Deserialize<'de> for BondEndpoint {
             constituent_id: Option<PhysicalConstituentId>,
             unit_index: Option<usize>,
             location: ConnectionEndpoint,
-            #[serde(default)]
-            face_binding: Option<ConnectionFaceBinding>,
         }
         let s = Stored::deserialize(deserializer)?;
-        if s.face_binding.is_some_and(|binding| !binding.is_valid()) {
-            return Err(serde::de::Error::custom("invalid connection face binding"));
-        }
         let id = s.constituent_id.unwrap_or_else(|| {
             PhysicalConstituentId(s.unit_index.map(|i| u64::MAX - i as u64).unwrap_or(0))
         });
         Ok(Self {
             constituent_id: id,
             location: s.location,
-            face_binding: s.face_binding,
         })
     }
 }
@@ -1332,28 +1294,6 @@ impl PhysicalConstituentGraph {
         let Some(d) = self.endpoint_index(b.endpoint_b) else {
             return false;
         };
-        let face_binding_is_valid = |endpoint: BondEndpoint, unit: &StructuralUnit| {
-            let Some(binding) = endpoint.face_binding else {
-                return true;
-            };
-            if !binding.is_valid() {
-                return false;
-            }
-            let [(resource_name, _)] = unit.material.parts.as_slice() else {
-                return false;
-            };
-            let Some(shape) = unit.shape(c) else {
-                return false;
-            };
-            crate::connection_faces::connection_faces(shape, resource_name)
-                .iter()
-                .any(|face| face.face_index == binding.face_index)
-        };
-        if !face_binding_is_valid(b.endpoint_a, &self.units[a])
-            || !face_binding_is_valid(b.endpoint_b, &self.units[d])
-        {
-            return false;
-        }
         if !b.is_valid(|e| {
             self.endpoint_index(e)
                 .and_then(|i| e.location.world_point(self.units.get(i)?, c))
@@ -1643,86 +1583,6 @@ pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn bond_validation_rejects_face_bindings_that_do_not_exist_on_the_shape() {
-        let catalog = crate::resources::default_catalog();
-        let mut structure = OrganismStructure::new();
-        let a = structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let b = structure.add_unit(StructuralUnit::new(
-            "Carbon",
-            Placement {
-                x: 2.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let id_a = structure.physical_id(a).unwrap();
-        let id_b = structure.physical_id(b).unwrap();
-        let invalid = Bond {
-            endpoint_a: BondEndpoint::new_with_face_binding(
-                id_a,
-                ConnectionEndpoint::Corner { point_index: 0 },
-                ConnectionFaceBinding {
-                    face_index: usize::MAX,
-                    start: 0.0,
-                    end: 1.0,
-                },
-            )
-            .unwrap(),
-            endpoint_b: BondEndpoint::new(id_b, ConnectionEndpoint::Corner { point_index: 2 }),
-            strength: 0.5,
-            bond_energy: 1.0,
-        };
-        assert!(!structure.is_valid_bond(&invalid, &catalog));
-    }
-
-    #[test]
-    fn bond_endpoint_face_binding_round_trips_and_legacy_records_remain_readable() {
-        let binding = ConnectionFaceBinding {
-            face_index: 3,
-            start: 0.25,
-            end: 0.75,
-        };
-        let endpoint = BondEndpoint::new_with_face_binding(
-            PhysicalConstituentId(42),
-            ConnectionEndpoint::Corner { point_index: 2 },
-            binding,
-        )
-        .unwrap();
-        let serialized = serde_json::to_value(endpoint).unwrap();
-        let restored: BondEndpoint = serde_json::from_value(serialized.clone()).unwrap();
-        assert_eq!(restored, endpoint);
-
-        let mut legacy_value = serialized;
-        legacy_value.as_object_mut().unwrap().remove("face_binding");
-        let legacy: BondEndpoint = serde_json::from_value(legacy_value).unwrap();
-        assert_eq!(legacy.constituent_id, endpoint.constituent_id);
-        assert_eq!(legacy.location, endpoint.location);
-        assert_eq!(legacy.face_binding, None);
-    }
-
-    #[test]
-    fn bond_endpoint_deserialization_rejects_invalid_face_intervals() {
-        let endpoint = BondEndpoint::new(
-            PhysicalConstituentId(7),
-            ConnectionEndpoint::Corner { point_index: 0 },
-        );
-        let mut value = serde_json::to_value(endpoint).unwrap();
-        value["face_binding"] = serde_json::json!({
-            "face_index": 0,
-            "start": 0.8,
-            "end": 0.2
-        });
-        assert!(serde_json::from_value::<BondEndpoint>(value).is_err());
-    }
 
     #[test]
     fn hydrogen_line_endpoints_follow_rigid_rotation() {
