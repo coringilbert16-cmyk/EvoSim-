@@ -576,8 +576,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         return false;
     }
     let next_pair_potential = ledger.total_pair_interaction_potential_held + pair_delta;
-    if !next_pair_potential.is_finite()
-    {
+    if !next_pair_potential.is_finite() {
         return false;
     }
 
@@ -605,7 +604,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         *active_mover_usable_energy = next_usable;
         ledger.total_usable_energy_gained = next_usable_gained;
         ledger.total_pair_interaction_potential_held = next_pair_potential;
-            return true;
+        return true;
     }
 
     let released = -net_delta;
@@ -728,7 +727,6 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         **target = staged;
     }
     ledger.total_pair_interaction_potential_held = next_pair_potential;
-    ledger.total_kinetic_energy_held = next_kinetic_energy;
     ledger.total_resonant_energy_held = next_resonant_held;
     ledger.total_heat_dissipated = next_heat;
     true
@@ -1242,7 +1240,6 @@ mod tests {
             initial_usable_energy_held: 5.0,
             total_usable_energy_held: 5.0,
             total_usable_energy_gained: 5.0,
-            total_kinetic_energy_held: 5.0,
             ..EnergyLedger::default()
         };
         let mut usable = 5.0;
@@ -1262,7 +1259,6 @@ mod tests {
         assert_eq!(usable, 3.0);
         assert_eq!(ledger.total_usable_energy_held, 3.0);
         assert_eq!(ledger.total_pair_interaction_potential_held, 5.0);
-        assert_eq!(ledger.total_kinetic_energy_held, 2.0);
         assert_eq!(resonance.total_energy(), Some(0.0));
 
         let inventory = EnergyInventorySnapshot {
