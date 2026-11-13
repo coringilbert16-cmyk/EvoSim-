@@ -385,8 +385,8 @@ impl ResonanceFarFieldExpansion {
                     .zip(evaluation.source_forces)
                     .zip(evaluation.source_force_error_bounds)
                 {
-                    let distance =
-                        (source.position.x - root_center.x).hypot(source.position.y - root_center.y);
+                    let distance = (source.position.x - root_center.x)
+                        .hypot(source.position.y - root_center.y);
                     result.source_forces[source_index] = force;
                     result.source_force_error_bounds[source_index] = source_error;
                     result.error.torque_about_center += distance * source_error;
