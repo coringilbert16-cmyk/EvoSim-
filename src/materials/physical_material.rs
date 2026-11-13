@@ -1333,10 +1333,16 @@ mod tests {
             rotation_radians: owner_rotation,
         });
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
+        assert!(
+            physical
+                .break_environmental_internal_bond(&target, &catalog, None)
+                .is_none(),
+            "owner-relative stored material must never enter the environmental movement path"
+        );
 
         let pieces = physical
-            .break_environmental_internal_bond(&target, &catalog, None)
-            .expect("free environmental molecule");
+            .break_internal_bond(&target)
+            .expect("legacy stored-material split");
         assert_eq!(pieces.len(), 2);
         let offset = 0.838_f64;
         let expected = Placement {
