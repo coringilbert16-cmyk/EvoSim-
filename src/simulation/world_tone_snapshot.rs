@@ -810,11 +810,12 @@ impl ResonanceForceAccumulator {
         if !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
             return false;
         }
-        let (existing_identity, owner, current) = self.bodies.get(&body_index).copied().unwrap_or((
-            identity,
-            contribution.owner_organism_index,
-            crate::harmonics::ResonanceBodyForce::default(),
-        ));
+        let (existing_identity, owner, current) =
+            self.bodies.get(&body_index).copied().unwrap_or((
+                identity,
+                contribution.owner_organism_index,
+                crate::harmonics::ResonanceBodyForce::default(),
+            ));
         if existing_identity != identity || owner != contribution.owner_organism_index {
             return false;
         }
@@ -858,14 +859,16 @@ impl ResonanceForceAccumulator {
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
         self.bodies
             .into_iter()
-            .map(|(body_index, (environmental_identity, owner_organism_index, force))| {
-                ResonanceWorldBodyForce {
-                    body_index,
-                    environmental_identity,
-                    owner_organism_index,
-                    force,
-                }
-            })
+            .map(
+                |(body_index, (environmental_identity, owner_organism_index, force))| {
+                    ResonanceWorldBodyForce {
+                        body_index,
+                        environmental_identity,
+                        owner_organism_index,
+                        force,
+                    }
+                },
+            )
             .collect()
     }
 
