@@ -1269,6 +1269,8 @@ pub(crate) struct WorldPairPotentialGradient {
     pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
     pub(crate) body_forces: Vec<(f64, f64)>,
+    /// One center-of-mass torque per physical body in the same stable ordering.
+    pub(crate) body_torques: Vec<f64>,
     /// Owner organism index for attached/escrowed bodies; sum every partial
     /// force with the same owner index before moving that organism. None means
     /// the body moves independently. This mapping is stable with body_forces.
@@ -1312,6 +1314,7 @@ fn world_pair_potential_gradient_for_bodies(
     }
 
     let mut body_forces = vec![(0.0, 0.0); bodies.len()];
+    let mut body_torques = vec![0.0; bodies.len()];
     for body_index in 0..bodies.len() {
         let mut translated = bodies.to_vec();
         translated[body_index] =
@@ -1368,11 +1371,47 @@ fn world_pair_potential_gradient_for_bodies(
             return None;
         }
         body_forces[body_index] = (force_x, force_y);
+
+        let rotated_plus = crate::harmonics::rotated_physical_material(
+            &bodies[body_index],
+            DIFFERENCE_STEP,
+            catalog,
+        )?;
+        translated[body_index] = rotated_plus;
+        let plus_rotation = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+        translated[body_index] = crate::harmonics::rotated_physical_material(
+            &bodies[body_index],
+            -DIFFERENCE_STEP,
+            catalog,
+        )?;
+        let minus_rotation = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+        let torque = -(plus_rotation - minus_rotation) / (2.0 * DIFFERENCE_STEP);
+        if !torque.is_finite() {
+            return None;
+        }
+        body_torques[body_index] = torque;
     }
 
     Some(WorldPairPotentialGradient {
         components,
         body_forces,
+        body_torques,
         body_force_owners: force_owners.to_vec(),
     })
 }
