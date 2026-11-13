@@ -176,3 +176,12 @@ Do not enable the approximation in the runtime until it matches the direct oracl
 - Do not omit occluder forces/torques.
 - Keep PR #356 unmerged until its separately approved physical/chemical implementation is complete and green.
 - No extended experiments or benchmark campaign is authorized by this research note.
+
+
+## Implementation update — 2026-11-13
+
+The exact environmental force evaluator now reuses the tick-local `MaterialResonanceEmitter` entries already prepared for free environmental chemistry. Pair source/receiver mass scales and emitted spectra are reused across the finite-difference samples. Center and extent are recalculated from each perturbed body's placements, so cached spectra do not freeze geometry. Receiver response to the incident spectrum, per-boundary projected extent, and exact visibility sampling remain in their original order.
+
+A regression compares the prepared-emitter multi-body force/torque result against the uncached reference evaluator for the same three-body environment, with (10^{-10}) component tolerance. This validates the cache reuse without changing the resonance law. It is still an exact pairwise finite-difference evaluator; it is not a multipole implementation and is not suitable as the live evaluator for the standard environment.
+
+The chemistry-only snapshot that supplies these emitters contains only free environmental atoms and molecules. No organism structures, organism-owned materials, or organism occluders enter the prepared-emitter force path.
