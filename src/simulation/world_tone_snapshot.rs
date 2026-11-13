@@ -1788,7 +1788,8 @@ mod tests {
                     0.25,
                     &simulation.environment.catalog,
                     Some(simulation.environment.height),
-                ).is_some(),
+                )
+                .is_some(),
                 "body {body_index} (identity {}, owner {:?}) must accept its staged force",
                 body.environmental_identity,
                 snapshot.force_owner_indices[body_index],
