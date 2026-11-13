@@ -1457,25 +1457,6 @@ fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBod
 
 /// Evaluate one source against prebuilt world geometry. The receiver must be
 /// the first body in `receiver_bodies`; all remaining bodies are occluders.
-fn material_aura_receptions_with_geometry(
-    source: &crate::physical_material::PhysicalMaterial,
-    receiver: &crate::physical_material::PhysicalMaterial,
-    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
-    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
-    catalog: &[crate::resources::BaseResource],
-    tick: u64,
-) -> Option<Vec<MaterialAuraReception>> {
-    material_aura_receptions_with_geometry_prepared(
-        source,
-        receiver,
-        source_geometry,
-        receiver_bodies,
-        catalog,
-        tick,
-        None,
-    )
-}
-
 fn material_aura_receptions_with_geometry_prepared(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
