@@ -801,7 +801,11 @@ impl ResonanceForceAccumulator {
     pub(crate) fn add(&mut self, contribution: ResonanceWorldBodyForce) -> bool {
         let identity = contribution.environmental_identity;
         let force = contribution.force;
-        if identity == 0 || !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
+        if identity == 0
+            || !force.x.is_finite()
+            || !force.y.is_finite()
+            || !force.torque.is_finite()
+        {
             return false;
         }
         let (owner, current) = self.bodies.get(&identity).copied().unwrap_or((
@@ -832,20 +836,23 @@ impl ResonanceForceAccumulator {
         identity_b: u64,
         catalog: &[BaseResource],
     ) -> bool {
-        let Some(contributions) = snapshot.pair_force_contributions(identity_a, identity_b, catalog) else {
+        let Some(contributions) =
+            snapshot.pair_force_contributions(identity_a, identity_b, catalog)
+        else {
             return false;
         };
         let mut staged = self.clone();
-        if !contributions.into_iter().all(|contribution| staged.add(contribution)) {
+        if !contributions
+            .into_iter()
+            .all(|contribution| staged.add(contribution))
+        {
             return false;
         }
         *self = staged;
         true
     }
 
-    pub(crate) fn into_body_forces(
-        self,
-    ) -> Vec<ResonanceWorldBodyForce> {
+    pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
         self.bodies
             .into_iter()
             .map(|(environmental_identity, (owner_organism_index, force))| {
@@ -1503,7 +1510,6 @@ mod tests {
     use crate::state::{Position, Simulation};
     use crate::structure::{OrganismStructure, StructuralUnit};
 
-
     #[test]
     fn resonance_force_accumulator_sums_each_body_and_rejects_invalid_updates_atomically() {
         let mut accumulator = ResonanceForceAccumulator::default();
@@ -1528,7 +1534,11 @@ mod tests {
         assert_eq!(forces[0].environmental_identity, 11);
         assert_eq!(
             forces[0].force,
-            crate::harmonics::ResonanceBodyForce { x: 1.5, y: 2.0, torque: 2.0 }
+            crate::harmonics::ResonanceBodyForce {
+                x: 1.5,
+                y: 2.0,
+                torque: 2.0,
+            }
         );
         assert_eq!(forces[1].environmental_identity, 12);
         assert_eq!(forces[1].owner_organism_index, Some(4));
