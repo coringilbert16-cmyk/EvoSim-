@@ -593,10 +593,9 @@ mod tests {
             WeightedFarFieldSource { position: FarFieldVector { x: 1.1, y: -0.2 }, weight: 0.4 },
         ];
         let target = FarFieldVector { x: 0.0, y: 8.0 };
-        let evaluation = ResonanceFarFieldExpansion::evaluate_adaptive(
-            &sources, target, 1e-4, 1e-4, 1e-4,
-        )
-        .unwrap();
+        let evaluation =
+            ResonanceFarFieldExpansion::evaluate_adaptive(&sources, target, 1e-4, 1e-4, 1e-4)
+                .unwrap();
         let exact = exact_sum(&sources, target);
         let exact_force = exact_gradient(&sources, target);
         assert!((exact - evaluation.potential).abs() <= evaluation.error.potential + 1e-12);
@@ -608,14 +607,15 @@ mod tests {
         assert!(evaluation.error.potential <= 1e-4);
         assert!(evaluation.error.force <= 1e-4);
         assert!(evaluation.error.torque_about_center <= 1e-4);
-        for (index, (source, force)) in
-            sources.iter().zip(&evaluation.source_forces).enumerate()
-        {
+        for (index, (source, force)) in sources.iter().zip(&evaluation.source_forces).enumerate() {
             let dx = target.x - source.position.x;
             let dy = target.y - source.position.y;
             let distance = dx.hypot(dy);
             let scale = source.weight / (distance * (1.0 + distance).powi(2));
-            let exact_source_force = FarFieldVector { x: scale * dx, y: scale * dy };
+            let exact_source_force = FarFieldVector {
+                x: scale * dx,
+                y: scale * dy,
+            };
             assert!(
                 (exact_source_force.x - force.x).hypot(exact_source_force.y - force.y)
                     <= evaluation.source_force_error_bounds[index] + 1e-12
