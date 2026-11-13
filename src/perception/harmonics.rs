@@ -1497,7 +1497,9 @@ fn material_aura_receptions_with_geometry_prepared(
     let source_mass_scale = prepared_emitter
         .map(|emitter| emitter.mass_scale)
         .unwrap_or_else(|| environmental_mass_scale(source.material.mass(catalog), baselines.mass));
-    if !source_mass_scale.is_finite() || source_mass_scale < 0.0 {
+    if prepared_emitter.is_some()
+        && (!source_mass_scale.is_finite() || source_mass_scale < 0.0)
+    {
         return None;
     }
     if source_mass_scale <= f64::EPSILON {
