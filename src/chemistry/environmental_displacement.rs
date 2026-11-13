@@ -227,8 +227,10 @@ fn evaluate_environmental_displacement_candidate(
             crate::chemistry::CHEMICAL_CONTACT_RADIUS,
             crate::chemistry::CHEMICAL_MAX_FORCE,
         )?;
-        (potential.adhesion.net > 1e-12).then_some(potential)?
-            .into()
+        if potential.adhesion.net <= 1e-12 {
+            return None;
+        }
+        Some(potential)
     } else {
         None
     };
