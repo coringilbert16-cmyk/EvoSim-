@@ -206,7 +206,7 @@ impl ResonanceFarFieldExpansion {
         // For a radial 2-D kernel, bound the spatial derivative of its
         // Hessian by |f'''| + |(f''/r)-(f'/r²)| + 2|f''-(f'/r)|/r.
         let third_derivative_bound = f_third.abs()
-            + (f_second / minimum - f_prime / minimum.powi(2)).abs()
+            + 2.0 * (f_second / minimum - f_prime / minimum.powi(2)).abs()
             + 2.0 * (f_second - f_prime / minimum).abs() / minimum;
         let radius_squared = self.radius * self.radius;
         let potential_error =
