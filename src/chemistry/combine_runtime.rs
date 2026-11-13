@@ -385,7 +385,8 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
 ) -> Option<crate::structure::Bond> {
     admit_selected_candidate_to_trial_structure_diagnostic(
         structure, unit_a, unit_b, candidate, catalog,
-    ).ok()
+    )
+    .ok()
 }
 
 /// Preserve the first admission rejection so coupled chemistry trials can
@@ -398,10 +399,7 @@ pub(crate) fn admit_selected_candidate_to_trial_structure_diagnostic(
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Result<crate::structure::Bond, &'static str> {
-    if unit_a >= structure.units.len()
-        || unit_b >= structure.units.len()
-        || unit_a == unit_b
-    {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return Err("invalid unit indices");
     }
     if !candidate.distance.is_finite()
@@ -437,11 +435,14 @@ pub(crate) fn admit_selected_candidate_to_trial_structure_diagnostic(
         return Err("live contact metrics differ from selected candidate");
     }
 
-    let a = structure.units[unit_a].properties(catalog).ok_or("anchor properties unavailable")?;
-    let b = structure.units[unit_b].properties(catalog).ok_or("incoming properties unavailable")?;
-    let pair_potential =
-        active_pair_potential(structure, unit_a, unit_b, candidate, catalog)
-            .map_err(|_| "active pair potential rejected candidate")?;
+    let a = structure.units[unit_a]
+        .properties(catalog)
+        .ok_or("anchor properties unavailable")?;
+    let b = structure.units[unit_b]
+        .properties(catalog)
+        .ok_or("incoming properties unavailable")?;
+    let pair_potential = active_pair_potential(structure, unit_a, unit_b, candidate, catalog)
+        .map_err(|_| "active pair potential rejected candidate")?;
     let strength = bond_integrity(a, b).ok_or("bond integrity unavailable")?;
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
@@ -456,11 +457,15 @@ pub(crate) fn admit_selected_candidate_to_trial_structure_diagnostic(
 
     let bond = crate::structure::Bond {
         endpoint_a: BondEndpoint::new(
-            structure.physical_id(unit_a).ok_or("anchor identity unavailable")?,
+            structure
+                .physical_id(unit_a)
+                .ok_or("anchor identity unavailable")?,
             candidate.endpoint_a,
         ),
         endpoint_b: BondEndpoint::new(
-            structure.physical_id(unit_b).ok_or("incoming identity unavailable")?,
+            structure
+                .physical_id(unit_b)
+                .ok_or("incoming identity unavailable")?,
             candidate.endpoint_b,
         ),
         strength,
