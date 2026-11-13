@@ -1757,6 +1757,35 @@ mod tests {
         });
         assert!(total_force.0.abs() < 1e-5);
         assert!(total_force.1.abs() < 1e-5);
+
+        let mut accumulator = ResonanceForceAccumulator::default();
+        for contribution in contributions {
+            assert!(accumulator.add(contribution));
+        }
+        let staged_motion = accumulator
+            .stage_motion(
+                &snapshot,
+                0.25,
+                &simulation.environment.catalog,
+                Some(simulation.environment.height),
+            )
+            .expect("all world-body force contributions should stage atomically");
+        assert_eq!(staged_motion.len(), snapshot.bodies.len());
+        assert!(staged_motion.iter().all(|motion| {
+            motion.before.environmental_identity == motion.environmental_identity
+                && motion.after.environmental_identity == motion.environmental_identity
+                && motion.kinetic_energy_before.is_finite()
+                && motion.kinetic_energy_after.is_finite()
+                && motion.kinetic_energy_before >= 0.0
+                && motion.kinetic_energy_after >= 0.0
+        }));
+        assert!(staged_motion.iter().any(|motion| {
+            motion.environmental_identity == identities[0]
+                && motion.owner_organism_index.is_none()
+        }));
+        assert!(staged_motion.iter().any(|motion| {
+            motion.environmental_identity == 0 && motion.owner_organism_index == Some(0)
+        }));
     }
 
     #[test]
