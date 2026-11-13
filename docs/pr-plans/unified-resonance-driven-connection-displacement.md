@@ -254,3 +254,31 @@ Key conclusions:
 - Potential, translational force, torque, linear momentum, angular momentum, and per-body accumulated error all require explicit treatment.
 
 This is a research handoff only. It does not authorize changing the resonance law, adding an arbitrary interaction radius, or enabling an approximate evaluator in the runtime. The existing direct evaluator remains the correctness oracle.
+
+## 7.2 Audited runtime gaps (2026-11-13)
+
+The Phase B runtime audit confirmed that the existing foundations are not yet connected into the approved physical model. These findings supersede any earlier implication that the current ambient transport pass is an acceptable final movement executor for elemental and molecular bodies.
+
+### Verified implemented foundations
+
+- `PhysicalMaterial` persists `InertialMotion` with center-of-mass linear velocity and angular velocity.
+- `InertialMotion::advanced` implements force/mass and torque/inertia acceleration without drag, and kinetic energy can be calculated from realized mass properties.
+- `LocalResonanceWorldSnapshot` can calculate a pair's force/torque contributions for both participants and relevant occluders. `ResonanceForceAccumulator` stages complete multi-body accumulation atomically.
+- `connection_approach.rs` validates face occupancy, approach progress, exact snapped geometry, activation gating, and swept translation/rotation paths.
+- `environmental_displacement.rs` contains displacement discovery, activation/preflight, trial topology construction, and a staged topology/energy commit helper.
+
+### Confirmed runtime gaps
+
+1. **Newtonian state is not advanced in the live tick.** `InertialMotion::advanced` is explicitly marked as awaiting Newtonian runtime integration. The live simulation does not consume `ResonanceForceAccumulator` output or apply its force/torque results to environmental body trajectories.
+2. **Ambient flow still directly moves physical materials.** `Simulation::step_with_transport_reuse` calls `transport_field_with_singleton_center_velocity_reuse`. That function computes `dx = velocity.x * mobility(mass) * FLOW_RESPONSE_SCALE`, applies the flow's `dy` and angular displacement, and commits translated/rotated material placements. This is overdamped tracer advection of the bodies, not Newtonian motion. It conflicts with the approved separation: the environmental flow remains an overdamped field; elemental and molecular bodies retain Newtonian momentum and are not kinematically advected, damped, or velocity-relaxed by that field.
+3. **The face-approach solver is not the live movement controller.** The geometry helper is tested in isolation; the ordinary material transport path does not submit resonance-derived translation/torque to it, does not advance persistent inertial state, and does not couple the same approach progress to reaction activation.
+4. **Displacement remains a chemistry transaction, not the same physical movement.** Environmental displacement discovery currently finds close/contacting candidates and accumulates chemistry activation from static pair potential, contact falloff, facing engagement, and optional local resonance similarity. Its trial/commit path changes topology and energy, but the live movement path does not physically carry the incoming material through the shared face-approach/collision solver while displacing the incumbent. Adjacent reconnection is therefore not yet part of one physical approach transaction.
+5. **The force/energy/pose boundary is incomplete.** The force accumulator and staged energy helpers are foundations, but the live tick has no single transaction that stages force integration, inertial pose, collision/push effects, signed pair-potential change, kinetic-energy change, activation, topology, and field-cell revisions together.
+
+### Implementation order from this audit
+
+1. Establish a live Newtonian environmental-body movement stage at the existing field movement/commit boundary. It must preserve each body's inertial state through field-cell transfers and must not use `mobility` or `FLOW_RESPONSE_SCALE` as a force-to-motion rule.
+2. Connect the existing multi-body resonance force/torque snapshot to that stage, evaluating each pair once and applying every participant/occluder contribution once. Keep the full-world gradient as an oracle, not a per-tick production path.
+3. Route candidate connection approach through the shared exact-face and swept-path solver. Geometry progress, local resonance, and the existing chemistry activation barrier must advance together; no proximity-only activation or snapping correction.
+4. Extend that same staged physical move to incumbent displacement, adjacent reconnection, and weaker-bond fallback, with one atomic commit/rollback boundary.
+5. Only after the above is integrated, validate conservation, rollback, movement, alignment, activation, and displacement with focused tests and full CI. Do not extend experiment duration or introduce runtime multipole approximations during this phase.
