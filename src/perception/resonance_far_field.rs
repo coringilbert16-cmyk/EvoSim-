@@ -216,8 +216,7 @@ impl ResonanceFarFieldExpansion {
         let force_error = 0.5 * self.absolute_weight * third_derivative_bound * radius_squared;
         let mut torque_error = 0.0;
         for (source, source_error) in self.sources.iter().zip(&mut source_force_error_bounds) {
-            *source_error =
-                0.5 * source.weight.abs() * third_derivative_bound * radius_squared;
+            *source_error = 0.5 * source.weight.abs() * third_derivative_bound * radius_squared;
             let offset_x = source.position.x - self.center.x;
             let offset_y = source.position.y - self.center.y;
             torque_error += offset_x.hypot(offset_y) * *source_error;
@@ -339,8 +338,7 @@ mod tests {
                 y: scale * dy,
             };
             assert!(
-                (exact_force.x - approximate_force.x)
-                    .hypot(exact_force.y - approximate_force.y)
+                (exact_force.x - approximate_force.x).hypot(exact_force.y - approximate_force.y)
                     <= *error_bound + 1e-12
             );
         }
