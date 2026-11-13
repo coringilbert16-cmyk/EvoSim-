@@ -321,3 +321,23 @@ The Phase B runtime audit confirmed that the existing foundations are not yet co
 4. Only then combine those proposals with collision/path checks, energy settlement, and field-cell revisions at the live commit boundary.
 
 The exact full-world occlusion-aware gradient remains a correctness oracle / pre-runtime source. This owner mapping work does not authorize calling it unconditionally from the tick loop or changing environmental flow's overdamped behavior.
+
+
+## 7.3 Chemistry-only physical population boundary — 2026-11-13
+
+The resonance movement snapshot is now deliberately assembled from **free physical materials in the environmental field only**. Its emitters, receivers, and occluders all come from that same field-material population.
+
+Explicit exclusions from this snapshot:
+- organism structures and organism-owned physical structures;
+- reproductive/developmental construction material;
+- stored material and transformation escrow;
+- decomposing organism structures;
+- any organism owner-index mapping or owner-level force aggregation.
+
+This is a phase boundary, not a permanent restriction on the generic physics primitives. `PhysicalMaterial`, inertial integration, force/torque accumulation, and staged motion remain reusable for any future physical body. The chemistry movement caller currently supplies only free environmental atoms and molecules. No organism mechanics, state, geometry, movement, or lifecycle code is changed by this boundary.
+
+The older complete-world pair-potential inventory/oracle remains a separate diagnostic/inventory path and is not the active chemistry movement population. Do not route chemistry movement or activation through that mixed population. Future work must preserve this separation rather than broadening the chemistry snapshot to include organism blockers.
+
+Regression coverage now constructs a simulation that also contains its normal organism state, adds three free environmental materials, and verifies that the chemistry snapshot contains exactly those three materials. It checks that all three participate in the multi-body force result and stage together, with no organism-owned force mapping.
+
+**Next gate:** validate the isolation change, then continue auditing the chemistry-only live-tick integration boundary. Do not wire organism movement, owner aggregation, or organism geometry into this phase.
