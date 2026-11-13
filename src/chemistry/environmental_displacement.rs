@@ -67,9 +67,7 @@ fn environmental_displacement_constituent<'a>(
     part_index: usize,
     catalog: &[BaseResource],
 ) -> Option<EnvironmentalDisplacementConstituent<'a>> {
-    if material.owner_relative_origin.is_some()
-        || !material.material.is_valid_for_catalog(catalog)
-    {
+    if material.owner_relative_origin.is_some() || !material.material.is_valid_for_catalog(catalog) {
         return None;
     }
     let (name, amount) = material.material.parts.get(part_index)?;
@@ -128,8 +126,7 @@ fn accumulate_environmental_constituent_activation(
     {
         return None;
     }
-    let static_potential =
-        displacement_pair_static_potential_from_materials(anchor, incoming)?;
+    let static_potential = displacement_pair_static_potential_from_materials(anchor, incoming)?;
     let contact = crate::chemistry::contact_factor(
         candidate.distance,
         crate::chemistry::CHEMICAL_CONTACT_RADIUS,
@@ -150,10 +147,8 @@ fn displacement_reaction_frequency_from_properties(
     catalog: &[BaseResource],
 ) -> Option<f64> {
     let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
-    let frequency_a =
-        crate::harmonics::natural_frequency_cycles_per_day(anchor, baselines);
-    let frequency_b =
-        crate::harmonics::natural_frequency_cycles_per_day(displaced, baselines);
+    let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(anchor, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(displaced, baselines);
     if !frequency_a.is_finite()
         || frequency_a <= 0.0
         || !frequency_b.is_finite()
@@ -243,7 +238,11 @@ fn displacement_reaction_frequency_from_materials(
 ) -> Option<f64> {
     let anchor = environmental_displacement_constituent(anchor, anchor_part, catalog)?;
     let displaced = environmental_displacement_constituent(displaced, displaced_part, catalog)?;
-    displacement_reaction_frequency_from_properties(anchor.properties, displaced.properties, catalog)
+    displacement_reaction_frequency_from_properties(
+        anchor.properties,
+        displaced.properties,
+        catalog,
+    )
 }
 
 /// Accumulate one tick of activation from the incoming constituent's live
@@ -1473,11 +1472,13 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 } else {
                                     0.0
                                 };
-                                let Some(incoming_chemistry) = environmental_displacement_constituent(
-                                    &source_b,
-                                    incoming_part,
-                                    &environment.catalog,
-                                ) else {
+                                let Some(incoming_chemistry) =
+                                    environmental_displacement_constituent(
+                                        &source_b,
+                                        incoming_part,
+                                        &environment.catalog,
+                                    )
+                                else {
                                     continue;
                                 };
                                 let Some(next) = accumulate_environmental_constituent_activation(
