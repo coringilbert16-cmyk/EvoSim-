@@ -1707,6 +1707,12 @@ fn best_replacement_contact(
                         candidate,
                         catalog,
                     )
+                    // The legacy graph evaluator does not expose the formed
+                    // bond energy; this fallback caller only consumes the
+                    // first four values. Native material evaluation supplies it.
+                    .map(|(formation, work, investment, required)| {
+                        (formation, work, investment, required, 0.0)
+                    })
                 }
             })
             .flatten();
@@ -3307,8 +3313,8 @@ mod tests {
         for candidate in &reference {
             assert!(
                 native.iter().any(|other| {
-                    endpoint_matches(candidate.endpoint_a, other.endpoint_a)
-                        && endpoint_matches(candidate.endpoint_b, other.endpoint_b)
+                    candidate.endpoint_a.same_location(other.endpoint_a)
+                        && candidate.endpoint_b.same_location(other.endpoint_b)
                 }),
                 "the native material view must not omit a reference contact candidate"
             );
