@@ -125,9 +125,9 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 
 ### Phase B — environmental energy and movement-boundary foundation
 
-- Keep the independent kinetic-energy inventory restricted to free environmental field materials. Kinetic energy is recomputed from their actual inertial state rather than stored in the shared organism energy ledger.
+- Keep the independent kinetic-energy inventory restricted to free environmental field materials. Kinetic energy is recomputed from their actual inertial state rather than added to the shared energy ledger.
 - Settle signed environmental pair-potential and kinetic-energy changes through the environmental usable-energy holder, environmental resonance reservoir, and heat accounting. The settlement helper stages all holders and ledger counters before commit.
-- Preserve rigid-body momentum when a free environmental molecule is split by BREAK through `break_environmental_internal_bond`. The legacy stored-material `break_internal_bond` path remains unchanged and rejects no new organism movement behavior.
+- Preserve rigid-body momentum when a free environmental molecule is split by BREAK through `break_environmental_internal_bond`. The legacy stored-material `break_internal_bond` path remains unchanged and is not used by chemistry movement.
 - Keep the overdamped environmental flow field separate from the Newtonian body-momentum model. The read-only field sampler is now extracted, but the legacy transport consumer still advects materials; do not remove it until the Newtonian movement transaction is ready.
 - The force/pose/energy helpers remain pre-runtime foundations. The live tick does not yet apply the accumulated resonance force, validate a continuous collision path, settle movement energy, or atomically commit new placements and field-cell revisions.
 - The exact complete-pair evaluator is too expensive for the standard 1,280-material environment. A scalable mutual spectral evaluator and conservative visibility hierarchy, with explicit error bounds against the oracle, are required before live force consumption.
