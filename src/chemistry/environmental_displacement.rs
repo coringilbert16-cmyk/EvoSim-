@@ -748,6 +748,7 @@ pub(crate) struct DisplacementTrial {
     source_units: Vec<crate::structure::StructuralUnit>,
     #[cfg(test)]
     source_bonds: Vec<Bond>,
+    #[cfg(test)]
     pub(crate) products: Vec<crate::physical_material::PhysicalMaterial>,
     #[cfg(test)]
     pub(crate) removed_bond: Bond,
@@ -996,6 +997,7 @@ fn build_displacement_trial_with_activation_status(
         }
         return None;
     };
+    #[cfg(test)]
     let Some(products) =
         crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)
     else {
@@ -1004,6 +1006,7 @@ fn build_displacement_trial_with_activation_status(
         }
         return None;
     };
+    #[cfg(test)]
     if products.len() < 2 {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
@@ -1018,6 +1021,7 @@ fn build_displacement_trial_with_activation_status(
         source_units: source.units.clone(),
         #[cfg(test)]
         source_bonds: source.bonds.clone(),
+        #[cfg(test)]
         products,
         replacement_bond_energy: replacement_bond.bond_energy,
         #[cfg(test)]
