@@ -52,6 +52,8 @@ pub(crate) struct FarFieldEvaluation {
     pub(crate) target_gradient: FarFieldVector,
     /// Approximate force on each source, in the input source order.
     pub(crate) source_forces: Vec<FarFieldVector>,
+    /// Per-source force remainder bounds, in the same stable input order.
+    pub(crate) source_force_error_bounds: Vec<f64>,
     /// Approximate torque of source forces about the expansion center.
     pub(crate) torque_about_center: f64,
     /// Conservative absolute remainder bounds for this expansion.
@@ -176,6 +178,7 @@ impl ResonanceFarFieldExpansion {
         let potential = self.total_weight * kernel - gradient.dot(self.first_moment);
 
         let mut source_forces = Vec::with_capacity(self.sources.len());
+        let mut source_force_error_bounds = Vec::with_capacity(self.sources.len());
         let mut torque_about_center = 0.0;
         for source in &self.sources {
             let offset = FarFieldVector {
@@ -195,6 +198,7 @@ impl ResonanceFarFieldExpansion {
             }
             torque_about_center += offset.cross(force);
             source_forces.push(force);
+            source_force_error_bounds.push(0.0);
         }
 
         let minimum = minimum_distance;
@@ -210,7 +214,14 @@ impl ResonanceFarFieldExpansion {
         let radius_squared = self.radius * self.radius;
         let potential_error = 0.5 * self.absolute_weight * hessian_bound * radius_squared;
         let force_error = 0.5 * self.absolute_weight * third_derivative_bound * radius_squared;
-        let torque_error = self.radius * force_error;
+        let mut torque_error = 0.0;
+        for (source, source_error) in self.sources.iter().zip(&mut source_force_error_bounds) {
+            *source_error =
+                0.5 * source.weight.abs() * third_derivative_bound * radius_squared;
+            let offset_x = source.position.x - self.center.x;
+            let offset_y = source.position.y - self.center.y;
+            torque_error += offset_x.hypot(offset_y) * *source_error;
+        }
         let values = [
             potential,
             target_gradient.x,
@@ -228,6 +239,7 @@ impl ResonanceFarFieldExpansion {
             potential,
             target_gradient,
             source_forces,
+            source_force_error_bounds,
             torque_about_center,
             error: FarFieldErrorBounds {
                 potential: potential_error,
