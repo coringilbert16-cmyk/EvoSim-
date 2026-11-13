@@ -646,6 +646,140 @@ impl PhysicalMaterial {
         Some(pieces)
     }
 
+    /// Split a free environmental molecule while preserving its rigid-body
+    /// momentum across the resulting independent material pieces. Owner-relative
+    /// stored material must use the separate legacy storage path.
+    #[allow(dead_code)] // Used by environmental BREAK when the movement transaction is enabled.
+    pub(crate) fn break_environmental_internal_bond(
+        &self,
+        target: &PhysicalMaterialBond,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Vec<Self>> {
+        // Persisted active transformations can reach completion without passing
+        // through the ordinary source-selection gate. Revalidate the whole
+        // object so malformed bond topology cannot be split into new objects.
+        if !self.is_realized() || self.owner_relative_origin.is_some() {
+            return None;
+        }
+        let source_mass_properties = self.mass_properties(catalog, vertical_period)?;
+        let placements = self.placements.as_ref()?;
+        let connections = self.internal_connections.as_ref()?;
+        if self
+            .realized_shapes
+            .as_ref()
+            .is_some_and(|shapes| shapes.len() != self.material.parts.len())
+        {
+            return None;
+        }
+        let target_index = connections.iter().position(|bond| bond == target)?;
+
+        let mut adjacency = vec![Vec::new(); self.material.parts.len()];
+        for (index, bond) in connections.iter().enumerate() {
+            if index == target_index {
+                continue;
+            }
+            if bond.part_a >= adjacency.len() || bond.part_b >= adjacency.len() {
+                return None;
+            }
+            adjacency[bond.part_a].push(bond.part_b);
+            adjacency[bond.part_b].push(bond.part_a);
+        }
+
+        let mut components = Vec::<Vec<usize>>::new();
+        let mut seen = vec![false; adjacency.len()];
+        for start in 0..adjacency.len() {
+            if seen[start] {
+                continue;
+            }
+            let mut stack = vec![start];
+            let mut members = Vec::new();
+            seen[start] = true;
+            while let Some(current) = stack.pop() {
+                members.push(current);
+                for &next in &adjacency[current] {
+                    if !seen[next] {
+                        seen[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            members.sort_unstable();
+            components.push(members);
+        }
+
+        let mut pieces = Vec::with_capacity(components.len());
+        for members in components {
+            let mut remap = vec![usize::MAX; self.material.parts.len()];
+            let mut parts = Vec::with_capacity(members.len());
+            let mut piece_placements = Vec::with_capacity(members.len());
+            for (new_index, &old_index) in members.iter().enumerate() {
+                remap[old_index] = new_index;
+                parts.push(self.material.parts[old_index].clone());
+                piece_placements.push(*placements.get(old_index)?);
+            }
+            let mut internal_bonds = Vec::new();
+            let mut internal_connections = Vec::new();
+            for bond in connections {
+                if remap.get(bond.part_a).copied() != Some(usize::MAX)
+                    && remap.get(bond.part_b).copied() != Some(usize::MAX)
+                {
+                    internal_bonds.push(crate::resources::InternalBond {
+                        part_a: remap[bond.part_a],
+                        part_b: remap[bond.part_b],
+                    });
+                    internal_connections.push(Self::remapped_bond(bond, &remap));
+                }
+            }
+            // A split component may begin at a different constituent than
+            // the original stored object. Move its owner-relative anchor by
+            // that constituent's source-frame offset, rotated into owner space.
+            // Keep the original owner anchor absent for environmental material.
+            let owner_relative_origin = self.owner_relative_origin.map(|origin| {
+                let first = piece_placements[0];
+                let (sin, cos) = origin.rotation_radians.sin_cos();
+                Placement {
+                    x: origin.x + first.x * cos - first.y * sin,
+                    y: origin.y + first.x * sin + first.y * cos,
+                    rotation_radians: origin.rotation_radians + first.rotation_radians,
+                }
+            });
+            let mut piece = Self {
+                material: Material {
+                    parts,
+                    internal_bonds,
+                },
+                environmental_identity: 0,
+                inertial_motion: self.inertial_motion,
+                placements: Some(piece_placements),
+                internal_connections: Some(internal_connections),
+                owner_relative_origin,
+                realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
+                    members
+                        .iter()
+                        .map(|&old_index| shapes[old_index].clone())
+                        .collect()
+                }),
+            };
+            let piece_mass_properties = piece.mass_properties(catalog, vertical_period)?;
+            let offset_x = piece_mass_properties.center_x - source_mass_properties.center_x;
+            let raw_offset_y = piece_mass_properties.center_y - source_mass_properties.center_y;
+            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
+                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let (velocity_x, velocity_y) = self
+                .inertial_motion
+                .velocity_at_offset(offset_x, offset_y)?;
+            piece.inertial_motion = InertialMotion {
+                velocity_x,
+                velocity_y,
+                angular_velocity: self.inertial_motion.angular_velocity,
+            };
+            pieces.push(piece);
+        }
+        Some(pieces)
+    }
+
     fn remapped_bond(bond: &PhysicalMaterialBond, remap: &[usize]) -> PhysicalMaterialBond {
         PhysicalMaterialBond {
             part_a: remap[bond.part_a],
