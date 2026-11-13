@@ -995,7 +995,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             // precisely the reactants this pass is responsible for finding.
             let Some(body) =
                 crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
-                    &source,
+                    &source_a,
                     &environment.catalog,
                 )
             else {
