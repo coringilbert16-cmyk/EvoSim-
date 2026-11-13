@@ -2277,49 +2277,18 @@ impl Simulation {
     /// Recompute kinetic energy from every currently owned physical material.
     /// Field materials use the world's periodic vertical geometry; stored and
     /// escrowed materials are expressed in their owner's intrinsic frame.
+    /// Recompute kinetic energy for free environmental atoms and molecules only.
+    /// Organism-owned storage, construction, and transformation material are
+    /// deliberately outside the chemistry movement inventory.
     fn current_kinetic_energy_held(&self) -> Option<f64> {
         let catalog = &self.environment.catalog;
-        let vertical_period = Some(self.environment.height);
-        let field_energy = self
-            .environment
+        self.environment
             .field
             .cells
             .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .try_fold(0.0, |total, material| {
-                let energy = material.kinetic_energy(catalog, vertical_period)?;
-                let next = total + energy;
-                (next.is_finite() && next >= 0.0).then_some(next)
-            })?;
-        let stored_energy = self
-            .organisms
-            .iter()
-            .try_fold(field_energy, |total, organism| {
-                let mut next = total + organism.stored_material.kinetic_energy_held(catalog)?;
-                if let Some(construction) = &organism.reproductive_construction {
-                    next += construction
-                        .committed_material
-                        .kinetic_energy_held(catalog)?;
-                }
-                (next.is_finite() && next >= 0.0).then_some(next)
-            })?;
-        self.active_transformations
-            .iter()
-            .try_fold(stored_energy, |total, transformation| {
-                let energy = if let Some(source) = &transformation.stored_material {
-                    source.kinetic_energy(
-                        catalog,
-                        transformation
-                            .environmental_source
-                            .then_some(self.environment.height),
-                    )?
-                } else if let Some((_, source)) = &transformation.combine_environmental_source {
-                    source.kinetic_energy(catalog, Some(self.environment.height))?
-                } else {
-                    // prepared_stored_material is a staged clone of the
-                    // owner's storage, not a second physical energy holder.
-                    0.0
-                };
+                let energy = material.kinetic_energy(catalog, Some(self.environment.height))?;
                 let next = total + energy;
                 (next.is_finite() && next >= 0.0).then_some(next)
             })
