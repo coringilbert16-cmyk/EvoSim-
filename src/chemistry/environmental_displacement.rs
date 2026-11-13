@@ -1030,10 +1030,12 @@ pub(crate) fn accumulate_environmental_with_resonance(
             else {
                 continue;
             };
-            let Some(body) = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
-                &source_a,
-                &environment.catalog,
-            ) else {
+            let Some(body) =
+                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                    &source_a,
+                    &environment.catalog,
+                )
+            else {
                 continue;
             };
             let target_cells = environment.field.cells_intersecting_bounds_limited(
