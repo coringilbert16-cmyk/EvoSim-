@@ -789,7 +789,10 @@ mod tests {
         let expected_velocity = 2.0 / mass * 0.5;
         let expected_displacement = 0.5 * expected_velocity * 0.5;
         assert!((advanced.inertial_motion.velocity_x - expected_velocity).abs() < 1e-12);
-        assert!((advanced.placements.as_ref().unwrap()[0].x - (3.0 + expected_displacement)).abs() < 1e-12);
+        assert!(
+            (advanced.placements.as_ref().unwrap()[0].x - (3.0 + expected_displacement)).abs()
+                < 1e-12
+        );
         assert_eq!(advanced.placements.as_ref().unwrap()[0].y, 4.0);
         assert_eq!(physical.inertial_motion, InertialMotion::default());
         assert_eq!(physical.placements.as_ref().unwrap()[0].x, 3.0);
@@ -804,8 +807,16 @@ mod tests {
                 internal_bonds: Vec::new(),
             },
             vec![
-                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
@@ -853,7 +864,11 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let physical = PhysicalMaterial::realized(
             Material::free_base("Carbon", 1.0),
-            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
             &catalog,
         )
         .expect("carbon should realize");
