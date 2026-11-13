@@ -282,3 +282,16 @@ The Phase B runtime audit confirmed that the existing foundations are not yet co
 3. Route candidate connection approach through the shared exact-face and swept-path solver. Geometry progress, local resonance, and the existing chemistry activation barrier must advance together; no proximity-only activation or snapping correction.
 4. Extend that same staged physical move to incumbent displacement, adjacent reconnection, and weaker-bond fallback, with one atomic commit/rollback boundary.
 5. Only after the above is integrated, validate conservation, rollback, movement, alignment, activation, and displacement with focused tests and full CI. Do not extend experiment duration or introduce runtime multipole approximations during this phase.
+
+### Staged multi-body Newtonian motion bridge (2026-11-13)
+
+- Added `ResonanceForceAccumulator::stage_motion`, which validates every accumulated body index, stable environmental identity, and owner mapping against the immutable resonance snapshot before proposing any motion.
+- The method stages all force/torque-driven rigid-body proposals as one all-or-nothing batch using `PhysicalMaterial::advanced_under_force`, and records before/after kinetic energy for each body. A single invalid mapping, mass-property failure, non-finite result, or invalid proposal rejects the entire batch.
+- Added regression coverage using an identified environmental pair with an organism occluder, verifying that both free materials and the owner-mapped organism receive staged proposals and finite kinetic-energy inventories.
+- This is still a pure staging bridge. It does not commit poses to the environment or organisms, does not validate collisions, and does not settle signed resonance-potential / kinetic-energy changes. It must not be described as live movement integration.
+
+### Remaining blockers before tick integration
+
+- A deterministic, non-arbitrary interaction traversal is still needed to enumerate the resonance interactions that exert force before face contact. The existing chemistry candidate lists are contact/discovery work queues and are not a valid substitute for the physical force interaction set.
+- The world snapshot includes free field materials, organism-owned structures, and other owner-mapped bodies. A live commit must map every staged proposal back to its authoritative owner and stage all affected field-cell revisions, structure geometry, topology, and energy before any mutation.
+- Collision/path validation and energy settlement must be joined to the same commit boundary. Until then, staged proposals remain uncommitted.
