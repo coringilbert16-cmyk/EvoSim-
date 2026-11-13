@@ -3257,10 +3257,9 @@ mod tests {
             assert!((candidate.load_b - matching.load_b).abs() <= 1e-10);
             assert_eq!(candidate.available_a, matching.available_a);
             assert_eq!(candidate.available_b, matching.available_b);
-            let native_evaluation =
-                evaluate_environmental_displacement_candidate(
-                    bonded, 0, 1, incoming, 0, 0, *candidate, &catalog,
-                );
+            let native_evaluation = evaluate_environmental_displacement_candidate(
+                bonded, 0, 1, incoming, 0, 0, *candidate, &catalog,
+            );
             let reference_evaluation = crate::combine_runtime::selected_candidate_evaluation(
                 &graph_trial,
                 0,
