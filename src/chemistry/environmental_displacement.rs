@@ -2390,155 +2390,30 @@ pub(crate) fn resolve_environmental_diagnosed(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> Result<(), &'static str> {
-    let Some(source_a) = environment
+    let source_a = environment
         .field
         .cells
         .get(operation.cell_a)
         .and_then(|cell| cell.physical_materials.get(operation.material_a))
-    else {
-        return Err("stale_source_missing");
-    };
-    let Some(source_b) = environment
+        .cloned()
+        .ok_or("stale_source_missing")?;
+    let source_b = environment
         .field
         .cells
         .get(operation.cell_b)
         .and_then(|cell| cell.physical_materials.get(operation.material_b))
-    else {
-        return Err("stale_source_missing");
-    };
-    if source_a != &operation.source_a || source_b != &operation.source_b {
+        .cloned()
+        .ok_or("stale_source_missing")?;
+    if source_a != operation.source_a || source_b != operation.source_b {
         return Err("stale_source_mismatch");
     }
-
-    let Some((mut combined, indices_a)) =
-        restore_displacement_source(&operation.source_a, environment)
-    else {
-        return Err("source_material_restoration_failed");
-    };
-    let Some(indices_b) = crate::material_restoration::restore_material(
-        &mut combined,
-        &operation.source_b,
-        crate::structure::Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-        &environment.catalog,
-    ) else {
-        return Err("incoming_material_restoration_failed");
-    };
-    if indices_b.iter().any(|index| {
-        crate::construction_runtime::placed_unit_overlaps(
-            &combined,
-            &combined.units[*index],
-            &indices_b,
-            &environment.catalog,
-        )
-    }) {
-        return Err("incoming_geometry_overlap");
-    }
-    let (Some(&anchor_unit), Some(&displaced_unit), Some(&incoming_unit)) = (
-        indices_a.get(operation.anchor_unit),
-        indices_a.get(operation.displaced_unit),
-        indices_b.get(operation.incoming_unit),
-    ) else {
-        return Err("constituent_mapping_invalid");
-    };
-    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let Some(old_connection) = operation
-        .source_a
+    let old_connection = source_a
         .internal_connections
-        .as_ref()
+        .as_deref()
         .and_then(|connections| connections.get(operation.bond_index))
-    else {
-        return Err("old_bond_missing");
-    };
+        .ok_or("old_bond_missing")?;
     if old_connection != &operation.old_connection {
         return Err("old_bond_stale");
-    }
-    let (Some(part_a_unit), Some(part_b_unit)) = (
-        indices_a.get(old_connection.part_a).copied(),
-        indices_a.get(old_connection.part_b).copied(),
-    ) else {
-        return Err("old_bond_endpoint_mapping_invalid");
-    };
-    let (Some(part_a_id), Some(part_b_id)) = (
-        combined.physical_id(part_a_unit),
-        combined.physical_id(part_b_unit),
-    ) else {
-        return Err("old_bond_endpoint_identity_invalid");
-    };
-    let (Some(part_a_properties), Some(part_b_properties)) = (
-        combined.units[part_a_unit].properties(&environment.catalog),
-        combined.units[part_b_unit].properties(&environment.catalog),
-    ) else {
-        return Err("old_bond_properties_missing");
-    };
-    let expected_old_bond = Bond {
-        endpoint_a: crate::structure::BondEndpoint::new(part_a_id, old_connection.endpoint_a),
-        endpoint_b: crate::structure::BondEndpoint::new(part_b_id, old_connection.endpoint_b),
-        strength: bond_strength(part_a_properties, part_b_properties),
-        bond_energy: old_connection.bond_energy,
-    };
-    let Some(old_bond) = combined
-        .bonds
-        .iter()
-        .find(|bond| bond.has_same_identity(&expected_old_bond))
-        .cloned()
-    else {
-        return Err("old_bond_not_restored");
-    };
-    let Some(trial) = build_displacement_trial(
-        &combined,
-        anchor_unit,
-        displaced_unit,
-        incoming_unit,
-        old_bond,
-        operation.candidate,
-        operation.investment,
-        operation.activation_signal,
-        baselines.reactivity,
-        0.0,
-        &environment.catalog,
-    ) else {
-        return Err("replacement_trial_invalid");
-    };
-    let source_structural_energy = environmental_material_structural_energy(source_a)
-        .and_then(|energy_a| {
-            environmental_material_structural_energy(source_b).map(|energy_b| energy_a + energy_b)
-        })
-        .filter(|energy| energy.is_finite())
-        .ok_or("source_material_energy_invalid")?;
-    let native_products = build_environmental_displacement_products(
-        source_a,
-        source_b,
-        operation.bond_index,
-        operation.anchor_unit,
-        operation.displaced_unit,
-        operation.incoming_unit,
-        operation.candidate,
-        trial.replacement_bond_energy,
-        &environment.catalog,
-        environment.height,
-    )
-    .ok_or("native_displacement_products_invalid")?;
-    let product_structural_energy = environmental_products_structural_energy(&native_products)
-        .ok_or("native_product_energy_invalid")?;
-    let structural_energy_tolerance = 1e-9_f64.max(
-        f64::EPSILON
-            * source_structural_energy
-                .abs()
-                .max(product_structural_energy.abs())
-                .max(1.0)
-            * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
-            * 8.0,
-    );
-    if (source_structural_energy - trial.energy.reactant_energy).abs() > structural_energy_tolerance
-        || (product_structural_energy - trial.energy.product_energy).abs()
-            > structural_energy_tolerance
-        || native_products.len() < 2
-    {
-        return Err("native_product_topology_energy_mismatch");
     }
 
     let Some(derived_activation) =
@@ -2550,9 +2425,9 @@ pub(crate) fn resolve_environmental_diagnosed(
         return Err("activation_revalidation_failed");
     }
     let Some(expected_frequency) = displacement_reaction_frequency_from_materials(
-        &operation.source_a,
+        &source_a,
         operation.anchor_unit,
-        &operation.source_a,
+        &source_a,
         operation.displaced_unit,
         &environment.catalog,
     ) else {
@@ -2561,22 +2436,40 @@ pub(crate) fn resolve_environmental_diagnosed(
     if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
         return Err("frequency_revalidation_failed");
     }
-    // Resonance is a named energy reservoir and may fund the complete reaction
-    // deficit, including unfavorable structural change as well as physical work.
-    // Transfer the withdrawn amount into the usable holder before settling the
-    // complete conservative transaction so every destination is accounted once.
+
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let trial = build_native_environmental_displacement_trial(
+        &source_a,
+        &source_b,
+        operation.anchor_unit,
+        operation.displaced_unit,
+        operation.incoming_unit,
+        operation.bond_index,
+        &operation.old_connection,
+        operation.candidate,
+        operation.investment,
+        operation.activation_signal,
+        baselines.reactivity,
+        0.0,
+        &environment.catalog,
+        environment.height,
+    )
+    .ok_or("replacement_trial_invalid")?;
+
+    // Resonance and usable energy fund one complete signed replacement
+    // transaction. No intermediate BREAK or COMBINE settlement is performed.
     let mut staged_resonance = environment.resonant_energy.clone();
-    let Some(resonant_before) = staged_resonance.total_energy() else {
-        return Err("invalid_resonance_state");
-    };
+    let resonant_before = staged_resonance
+        .total_energy()
+        .ok_or("invalid_resonance_state")?;
     let resonance_funding_budget = trial.energy.required_external_input;
     let resonant_funding = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         resonance_funding_budget,
     );
-    let Some(resonant_after) = staged_resonance.total_energy() else {
-        return Err("invalid_resonance_state");
-    };
+    let resonant_after = staged_resonance
+        .total_energy()
+        .ok_or("invalid_resonance_state")?;
     if !resonant_funding.is_finite() || resonant_funding < 0.0 {
         return Err("invalid_resonance_withdrawal");
     }
@@ -2611,12 +2504,10 @@ pub(crate) fn resolve_environmental_diagnosed(
     if remaining_external_deficit > environment.chemistry_usable_energy {
         return Err("insufficient_usable_energy");
     }
-    let Some(transaction) = trial
+    let transaction = trial
         .energy
         .settlement_transaction_conservative(EnergyReason::Combine)
-    else {
-        return Err("energy_settlement_transaction_invalid");
-    };
+        .ok_or("energy_settlement_transaction_invalid")?;
 
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_funding;
@@ -2646,36 +2537,31 @@ pub(crate) fn resolve_environmental_diagnosed(
     staged_ledger.total_structural_energy_held = next_total_structural;
     staged_ledger.total_work_expended = next_total_work;
 
-    let mut staged_products = Vec::with_capacity(native_products.len());
-    for product in native_products {
+    let mut staged_products = Vec::with_capacity(trial.products.len());
+    for product in trial.products {
         if !product.is_realized()
             || product.material.is_empty()
             || !product.material.is_valid_for_catalog(&environment.catalog)
         {
             return Err("product_invalid");
         }
-        let Some(placement) = product
+        let placement = product
             .placements
             .as_ref()
             .and_then(|placements| placements.first())
-        else {
-            return Err("product_placement_missing");
-        };
-        let Some(destination) = environment
+            .ok_or("product_placement_missing")?;
+        let destination = environment
             .field
             .index_for_position(placement.x, placement.y)
-        else {
-            return Err("product_destination_invalid");
-        };
+            .ok_or("product_destination_invalid")?;
         staged_products.push((destination, product));
     }
     if staged_products.len() < 2 {
         return Err("product_set_incomplete");
     }
 
-    // All validation and energy work is staged. Remove both source objects
-    // without index drift, then deposit each physical component at its own
-    // retained world position.
+    // All products and energy ledgers are staged. Source removal and product
+    // insertion now form one field-owned commit.
     if operation.cell_a == operation.cell_b {
         let cell = &mut environment.field.cells[operation.cell_a];
         let high = operation.material_a.max(operation.material_b);
