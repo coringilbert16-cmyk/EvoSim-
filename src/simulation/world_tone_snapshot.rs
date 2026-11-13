@@ -1074,8 +1074,7 @@ impl LocalResonanceWorldSnapshot {
                 let identity_b = self.bodies[index_b].environmental_identity;
                 let contributions =
                     self.pair_force_contributions(identity_a, identity_b, catalog)?;
-                if contributions.len() != self.bodies.len()
-                    || !accumulator.add_all(&contributions)
+                if contributions.len() != self.bodies.len() || !accumulator.add_all(&contributions)
                 {
                     return None;
                 }
@@ -1733,9 +1732,16 @@ mod tests {
         let (pair_count, accumulator) = snapshot
             .accumulate_complete_pair_forces(&simulation.environment.catalog)
             .expect("all unordered environmental pairs should produce finite gradients");
-        assert_eq!(pair_count, 3, "three bodies have exactly three unordered pairs");
+        assert_eq!(
+            pair_count, 3,
+            "three bodies have exactly three unordered pairs"
+        );
         let forces = accumulator.into_body_forces();
-        assert_eq!(forces.len(), 3, "every body receives its accumulated force once");
+        assert_eq!(
+            forces.len(),
+            3,
+            "every body receives its accumulated force once"
+        );
 
         let mut net_force_x = 0.0;
         let mut net_force_y = 0.0;
