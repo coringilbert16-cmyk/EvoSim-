@@ -537,19 +537,13 @@ impl PhysicalMaterial {
 
     /// Break one pre-existing internal bond and return the resulting physically
     /// disconnected pieces. The bond itself must belong to this stored material.
-    pub(crate) fn break_internal_bond(
-        &self,
-        target: &PhysicalMaterialBond,
-        catalog: &[BaseResource],
-        vertical_period: Option<f64>,
-    ) -> Option<Vec<Self>> {
+    pub(crate) fn break_internal_bond(&self, target: &PhysicalMaterialBond) -> Option<Vec<Self>> {
         // Persisted active transformations can reach completion without passing
         // through the ordinary source-selection gate. Revalidate the whole
         // object so malformed bond topology cannot be split into new objects.
         if !self.is_realized() {
             return None;
         }
-        let source_mass_properties = self.mass_properties(catalog, vertical_period)?;
         let placements = self.placements.as_ref()?;
         let connections = self.internal_connections.as_ref()?;
         if self
@@ -631,13 +625,13 @@ impl PhysicalMaterial {
                     rotation_radians: origin.rotation_radians + first.rotation_radians,
                 }
             });
-            let mut piece = Self {
+            pieces.push(Self {
                 material: Material {
                     parts,
                     internal_bonds,
                 },
+                inertial_motion: InertialMotion::default(),
                 environmental_identity: 0,
-                inertial_motion: self.inertial_motion,
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
                 owner_relative_origin,
@@ -647,22 +641,7 @@ impl PhysicalMaterial {
                         .map(|&old_index| shapes[old_index].clone())
                         .collect()
                 }),
-            };
-            let piece_mass_properties = piece.mass_properties(catalog, vertical_period)?;
-            let offset_x = piece_mass_properties.center_x - source_mass_properties.center_x;
-            let raw_offset_y = piece_mass_properties.center_y - source_mass_properties.center_y;
-            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
-                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
             });
-            let (velocity_x, velocity_y) = self
-                .inertial_motion
-                .velocity_at_offset(offset_x, offset_y)?;
-            piece.inertial_motion = InertialMotion {
-                velocity_x,
-                velocity_y,
-                angular_velocity: self.inertial_motion.angular_velocity,
-            };
-            pieces.push(piece);
         }
         Some(pieces)
     }
