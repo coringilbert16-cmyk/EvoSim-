@@ -160,47 +160,68 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - Run focused geometry, force, activation, displacement, rollback, and energy-conservation tests, then the complete CI suite.
 - Do not run extended environmental experiments or benchmarks unless specifically requested; establish correctness and green CI first.
 
-## 7.1 Runtime integration audit (Phase B entry)
+## 7.1 Runtime integration audit (chemistry-only boundary)
 
-The live free-material movement path is `Simulation::step` ->
-`environment_flow::transport_field_with_singleton_center_velocity_reuse` ->
-environmental BREAK/COMBINE discovery. The flow pass already snapshots all
-field materials, computes complete destination proposals, removes source
-entries in reverse index order, deposits destinations, and updates affected
-cell revisions. This is the correct environmental movement boundary to extend;
-a second independent transport pass must not be introduced.
+The current tick calls
+`environment_flow::transport_field_with_singleton_center_velocity_reuse`
+before environmental BREAK/COMBINE discovery. That function currently does
+more than calculate the environmental flow: it directly advects and rotates
+free field materials using overdamped mobility. This is a legacy material
+movement path, not the approved Newtonian movement model. It must eventually
+stop being the authority for elemental/molecular pose changes. The environmental
+flow field itself remains overdamped and can continue to be calculated from
+the surrounding geometry; it must not reset, damp, or replace a material's
+persistent inertial state.
 
-The current world-potential gradient in `world_tone_snapshot.rs` is a
-correctness oracle, not a production force consumer. It perturbs every world
-body and recomputes the full occlusion-aware pair inventory for each axis.
-It must not be called unconditionally from the ordinary tick loop. Production
-integration needs a cached/local interaction evaluation that preserves every
-relevant occluder's contribution and returns balanced forces for all affected
-bodies.
+Do not simply add a second movement pass. The eventual chemistry movement
+transaction must become the sole writer of free-material placements, with
+field-cell membership and revisions committed atomically. Before that
+replacement, separate flow-field evaluation from material advection so the
+flow calculation can continue without silently moving atoms or molecules.
+Do not invent a drag coefficient or an unapproved flow-force law.
 
-The existing `settle_pair_potential_change` helper stages its ledger and
-resonance-holder changes, but its current caller contract accepts one active
-mover's usable-energy holder and eligible biological resonance holders.
-Environmental field materials have no independent usable-energy or retained
-resonance holder. The implementation must therefore preserve the approved
-ownership rule: do not debit an unrelated or distant organism, and do not
-invent a nonliving material energy reserve. A proposed movement whose positive
-pair-potential change has no legitimate source must be rejected before any
-placement or cell-index mutation.
+The direct pair-potential gradient and the new complete unordered-pair force
+sum are correctness oracles for small chemistry worlds, not production force
+consumers. The exact oracle includes every unordered pair once and includes
+each pair's force/torque contribution on every occluding free environmental
+body. It must not be called unconditionally from the ordinary tick loop.
+Production integration needs a scalable evaluator that preserves the exact
+resonance law, visibility behavior, and complete reaction forces, with
+controlled error against the oracle.
 
-The first runtime slice will establish, in dependency order:
-1. A production-scalable force snapshot with stable body identities and
-   complete multi-body occlusion/reaction-force accounting.
-2. A pure movement proposal stage that combines the existing ambient flow,
-   resonance force, collision/path validation, and exact face-pair approach.
-3. A staged before/after pair-potential and mechanical-work settlement that
-   uses only legitimate local holders.
-4. One commit boundary for all moved placements, topology/activation changes,
-   energy holders, ledger counters, and field-cell revisions.
+Energy settlement is environmental-only. The environmental settlement wrapper
+stages the shared environmental usable-energy holder, the environmental
+resonance reservoir, kinetic-energy inventory, and ledger together. It does
+not debit organism energy or deposit into organism resonance storage. Current
+kinetic-energy inventory counts only free physical materials in the
+environmental field; stored material, reproductive construction, and
+transformation escrow are excluded.
 
-Until those prerequisites pass focused rollback and conservation tests, the
-existing ambient flow remains unchanged and the full-world gradient remains
-test/oracle-only.
+The previous connection-approach prototype depended on `OrganismStructure`
+and persisted face bindings in the organism bond graph. That implementation
+has been removed from this phase. Reintroduce approach/snap logic only as a
+chemistry-native mechanism operating on free environmental atoms/molecules
+and their own molecular bond geometry. Do not modify `OrganismStructure`,
+`BondEndpoint`, organism storage, reproduction, or transformation code.
+
+The next implementation sequence is:
+1. Keep the active resonance population strictly to free environmental atoms
+   and molecules; no organism structures, owners, storage, construction,
+   transformation material, or organism occluders.
+2. Separate overdamped environmental-flow-field calculation from the legacy
+   overdamped material-advection behavior.
+3. Build and validate a scalable mutual resonance evaluator against the exact
+   complete-pair oracle, including visibility and per-body force/torque errors.
+4. Stage Newtonian rigid-body movement, collision/path validation, and
+   chemistry-native face approach without modifying organism code.
+5. Settle before/after pair potential and kinetic energy through environmental
+   holders only, then commit all moved placements and field-cell revisions once.
+6. Integrate unified chemical displacement only after movement and energy
+   transactions pass focused rollback and conservation tests.
+
+Until these prerequisites pass, do not activate a live Newtonian movement
+consumer, do not remove the legacy advection pass in isolation, and do not
+connect any organism subsystem to the new physics.
 
 ## 8. Required regression and acceptance coverage
 
