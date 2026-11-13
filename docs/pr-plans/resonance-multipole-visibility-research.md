@@ -249,3 +249,30 @@ near-field geometry. This is the first derivation/prototype step; further work
 must extend the same bounded construction to receiver boundary groups and
 mutual cell-cell interactions, then validate torque and visibility against
 the complete-world oracle before runtime use.
+
+
+### Adaptive subdivision extension — 2026-11-13
+
+The kernel primitive now also exposes `evaluate_adaptive`. It begins with the
+complete source set, tests the same potential/force/torque remainder bounds,
+and deterministically bisects a rejected cluster along its widest spatial
+axis. Stable source indices are retained through subdivision, so per-material
+forces and their error bounds return in original input order. A cluster's
+error allowance is apportioned by its absolute coefficient weight; the torque
+allowance is checked against the sum of each source's force-error bound times
+its distance from the root center. This prevents cancellation and large
+lever-arms from hiding error.
+
+The adaptive result reports torque about the original source-set center and
+converts each accepted subcluster's torque using its net force and offset from
+that center. If a singleton target coincides with its source, evaluation
+returns no result rather than inventing a direction for the nondifferentiable
+radial kernel. Zero-weight groups contribute exactly zero.
+
+Tests now exercise subdivision, global potential/force/torque budgets,
+per-source force bounds, and stable ordering against direct sums. This makes
+the smooth-kernel primitive usable as a bounded hierarchical building block.
+It still does not establish identical visibility, account for source-shape
+projected extent derivatives, or approximate receiver-boundary integration;
+those remain explicit blockers before it can be called a complete resonance
+far-field evaluator.
