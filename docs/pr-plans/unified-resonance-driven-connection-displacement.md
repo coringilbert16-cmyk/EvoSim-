@@ -240,3 +240,17 @@ test/oracle-only.
 - No untraced energy source, negative-cost movement, double charging, or hidden energy sink.
 - No organism-specific chemistry shortcut.
 - No extended experiment-window changes, tick-rate standards changes, or unrelated optimization work as part of this implementation.
+
+
+## 10. Resonance multipole / visibility research handoff
+
+The mathematical research findings for a possible scalable resonance evaluator are recorded separately in [resonance-multipole-visibility-research.md](resonance-multipole-visibility-research.md). Read that note before continuing this line of research.
+
+Key conclusions:
+- The existing mechanical pair potential has a useful frequency-resolved bilinear structure after each material's aggregate emitted spectrum is prepared. Its spatial weighting still includes the exact receiver-boundary samples, projected extent, and two `1/(1+d)` attenuation factors.
+- Reaction activation is a separate nonlinear path: per-emitter receiver response, phasor accumulation, and strongest-component selection cannot generally be replaced by one aggregated source response.
+- Occlusion is geometry-dependent and changes at visibility boundaries. Occluders also receive force and torque contributions from the same potential.
+- The credible candidate is mutual, error-controlled spectral multipoles plus a separate conservative visibility hierarchy, with exact fallback for ambiguous visibility and unbounded error.
+- Potential, translational force, torque, linear momentum, angular momentum, and per-body accumulated error all require explicit treatment.
+
+This is a research handoff only. It does not authorize changing the resonance law, adding an arbitrary interaction radius, or enabling an approximate evaluator in the runtime. The existing direct evaluator remains the correctness oracle.
