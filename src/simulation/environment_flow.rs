@@ -57,6 +57,161 @@ struct Obstacle {
     solidity: f64,
 }
 
+/// Read-only overdamped environmental velocity field. Sampling this field
+/// does not move materials or alter their persistent inertial state; the
+/// legacy transport pass is a separate consumer that still performs advection.
+#[derive(Clone, Debug)]
+pub(crate) struct EnvironmentalFlowField {
+    width: f64,
+    height: f64,
+    cols: usize,
+    rows: usize,
+    obstacle_bins: Vec<Vec<Obstacle>>,
+}
+
+impl EnvironmentalFlowField {
+    /// Build a flow snapshot from the free environmental field without
+    /// assigning identities, changing revisions, or moving any material.
+    #[allow(dead_code)] // Available to the future Newtonian environmental mover.
+    pub(crate) fn from_field(
+        field: &ActiveMaterialField,
+        catalog: &[BaseResource],
+        world_width: f64,
+        world_height: f64,
+    ) -> Option<Self> {
+        let width = world_width.min(field.width_cells as f64 * field.cell_size);
+        let height = world_height.min(field.height_cells as f64 * field.cell_size);
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+            return None;
+        }
+        let obstacles = field
+            .cells
+            .iter()
+            .enumerate()
+            .flat_map(|(cell_index, cell)| {
+                cell.physical_materials
+                    .iter()
+                    .enumerate()
+                    .filter_map(move |(material_index, material)| {
+                        obstacle_for(cell_index, material_index, material, catalog, height)
+                    })
+            })
+            .collect();
+        Self::from_obstacles(obstacles, width, height)
+    }
+
+    fn from_snapshot(
+        snapshot: &[(usize, usize, PhysicalMaterial)],
+        catalog: &[BaseResource],
+        width: f64,
+        height: f64,
+    ) -> Option<Self> {
+        let obstacles = snapshot
+            .iter()
+            .filter_map(|(cell_index, material_index, material)| {
+                obstacle_for(*cell_index, *material_index, material, catalog, height)
+            })
+            .collect();
+        Self::from_obstacles(obstacles, width, height)
+    }
+
+    fn from_obstacles(obstacles: Vec<Obstacle>, width: f64, height: f64) -> Option<Self> {
+        if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+            return None;
+        }
+        let cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
+        let bin_count = cols.checked_mul(rows)?;
+        let mut obstacle_bins = vec![Vec::<Obstacle>::new(); bin_count];
+        for obstacle in obstacles {
+            let radius = obstacle.radius.max(0.5).min(width.max(height));
+            let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col =
+                ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
+            let max_col = max_col.min(cols.saturating_sub(1));
+            if min_col > max_col {
+                continue;
+            }
+            let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
+            let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
+            let bin_rows = if row_count >= rows {
+                (0..rows).collect::<Vec<_>>()
+            } else {
+                (0..row_count)
+                    .map(|offset| (min_row + offset as isize).rem_euclid(rows as isize) as usize)
+                    .collect::<Vec<_>>()
+            };
+            for row in bin_rows {
+                for col in min_col..=max_col {
+                    obstacle_bins[row * cols + col].push(obstacle);
+                }
+            }
+        }
+        Some(Self {
+            width,
+            height,
+            cols,
+            rows,
+            obstacle_bins,
+        })
+    }
+
+    fn obstacles_at(&self, x: f64, y: f64) -> &[Obstacle] {
+        if !x.is_finite() || !y.is_finite() {
+            return &[];
+        }
+        let col = ((x / FLOW_BIN_SIZE).floor() as usize).min(self.cols.saturating_sub(1));
+        let row = ((y / FLOW_BIN_SIZE).floor() as usize).min(self.rows.saturating_sub(1));
+        &self.obstacle_bins[row * self.cols + col]
+    }
+
+    fn sample_for_material(
+        &self,
+        x: f64,
+        y: f64,
+        source_cell: usize,
+        source_index: usize,
+    ) -> Option<(Velocity, &[Obstacle])> {
+        if !x.is_finite() || !y.is_finite() {
+            return None;
+        }
+        let nearby = self.obstacles_at(x, y);
+        let velocity = obstacle_adjusted_velocity(
+            background_velocity(x, y, self.width, self.height),
+            x,
+            y,
+            source_cell,
+            source_index,
+            nearby,
+            self.height,
+        );
+        Some((velocity, nearby))
+    }
+
+    /// Sample the ambient flow velocity at an arbitrary point. All local
+    /// obstacles influence the sample because no source body is being excluded.
+    #[allow(dead_code)] // Available to chemistry movement without applying advection.
+    pub(crate) fn sample_velocity_at(&self, x: f64, y: f64) -> Option<(f64, f64)> {
+        let (velocity, _) = self.sample_for_material(x, y, usize::MAX, usize::MAX)?;
+        Some((velocity.x, velocity.y))
+    }
+
+    /// Sample the ambient flow at a free material's center while excluding
+    /// that material from its own obstacle response.
+    #[allow(dead_code)] // Available to the future Newtonian environmental mover.
+    pub(crate) fn sample_velocity_for_material(
+        &self,
+        x: f64,
+        y: f64,
+        source_cell: usize,
+        source_index: usize,
+    ) -> Option<(f64, f64)> {
+        let (velocity, _) = self.sample_for_material(x, y, source_cell, source_index)?;
+        Some((velocity.x, velocity.y))
+    }
+}
+
 fn resource_for_part<'a>(name: &str, catalog: &'a [BaseResource]) -> Option<&'a BaseResource> {
     catalog.iter().find(|resource| resource.name == name)
 }
@@ -600,43 +755,12 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
         snapshot_material.environmental_identity = identity;
     }
     field.next_material_identity = next_identity;
-    // Use finer bins than the material field. Spatial indexing narrows each
-    // query to the local region, but every obstacle in that region contributes;
-    // do not truncate physical influence with a per-object candidate cap.
-    let obstacles: Vec<Obstacle> = snapshot
-        .iter()
-        .filter_map(|(cell, index, material)| {
-            obstacle_for(*cell, *index, material, catalog, height)
-        })
-        .collect();
-    let flow_cols = (width / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
-    let flow_rows = (height / FLOW_BIN_SIZE).ceil().max(1.0) as usize;
-    let mut obstacle_bins = vec![Vec::<Obstacle>::new(); flow_cols * flow_rows];
-    for obstacle in obstacles {
-        let radius = obstacle.radius.max(0.5).min(width.max(height));
-        let min_col = ((obstacle.x - radius * 2.5).max(0.0) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col =
-            ((obstacle.x + radius * 6.0).min(width - 1e-6) / FLOW_BIN_SIZE).floor() as usize;
-        let max_col = max_col.min(flow_cols.saturating_sub(1));
-        if min_col > max_col {
-            continue;
-        }
-        let min_row = ((obstacle.y - radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let max_row = ((obstacle.y + radius * 2.5) / FLOW_BIN_SIZE).floor() as isize;
-        let row_count = max_row.saturating_sub(min_row).saturating_add(1) as usize;
-        let rows = if row_count >= flow_rows {
-            (0..flow_rows).collect::<Vec<_>>()
-        } else {
-            (0..row_count)
-                .map(|offset| (min_row + offset as isize).rem_euclid(flow_rows as isize) as usize)
-                .collect::<Vec<_>>()
-        };
-        for row in rows {
-            for col in min_col..=max_col {
-                obstacle_bins[row * flow_cols + col].push(obstacle);
-            }
-        }
-    }
+    // Keep flow-field construction separate from the material advection
+    // consumer. The field can be sampled independently by Newtonian movement.
+    let Some(flow_field) = EnvironmentalFlowField::from_snapshot(&snapshot, catalog, width, height)
+    else {
+        return 0;
+    };
     let mut staged = Vec::new();
 
     for (source_cell, source_index, material) in snapshot {
@@ -644,18 +768,11 @@ pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
             continue;
         };
         let mass = material.material.mass(catalog);
-        let flow_col = ((x / FLOW_BIN_SIZE).floor() as usize).min(flow_cols.saturating_sub(1));
-        let flow_row = ((y / FLOW_BIN_SIZE).floor() as usize).min(flow_rows.saturating_sub(1));
-        let nearby = &obstacle_bins[flow_row * flow_cols + flow_col];
-        let velocity = obstacle_adjusted_velocity(
-            background_velocity(x, y, width, height),
-            x,
-            y,
-            source_cell,
-            source_index,
-            nearby,
-            height,
-        );
+        let Some((velocity, nearby)) =
+            flow_field.sample_for_material(x, y, source_cell, source_index)
+        else {
+            continue;
+        };
         let scale = mobility(mass) * FLOW_RESPONSE_SCALE;
         let mut dx = velocity.x * scale;
         let dy = velocity.y * scale;
@@ -830,6 +947,71 @@ mod tests {
         assert_eq!(
             obstacle_adjusted_velocity(free, 15.0, 10.0, 1, 1, &[porous], 100.0),
             free
+        );
+    }
+
+    #[test]
+    fn environmental_flow_field_is_read_only_and_samples_overdamped_velocity() {
+        let catalog = crate::resources::default_catalog();
+        let mut field = ActiveMaterialField::new(100.0, 80.0, 25.0);
+        let mut material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 50.0,
+                y: 40.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("environmental carbon should realize");
+        material.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: 1.25,
+            velocity_y: -0.5,
+            angular_velocity: 0.75,
+        };
+        assert!(field.deposit_physical(50.0, 40.0, material.clone(), &catalog));
+        let materials_before = field
+            .cells
+            .iter()
+            .map(|cell| cell.physical_materials.clone())
+            .collect::<Vec<_>>();
+        let revisions_before = field.cell_revisions.clone();
+        let revision_before = field.revision;
+        let identity_before = field.next_material_identity;
+
+        let flow = EnvironmentalFlowField::from_field(&field, &catalog, 100.0, 80.0)
+            .expect("valid environmental flow field should build");
+        let sampled = flow
+            .sample_velocity_for_material(50.0, 40.0, 0, 0)
+            .expect("finite center sample");
+        let background = background_velocity(50.0, 40.0, 100.0, 80.0);
+        assert!((sampled.0 - background.x).abs() < 1e-12);
+        assert!((sampled.1 - background.y).abs() < 1e-12);
+
+        let obstructed = flow
+            .sample_velocity_at(50.5, 40.5)
+            .expect("finite obstacle-adjusted sample");
+        let unobstructed = background_velocity(50.5, 40.5, 100.0, 80.0);
+        assert!(
+            (obstructed.0 - unobstructed.x).abs() + (obstructed.1 - unobstructed.y).abs()
+                > 1e-6,
+            "the field sample must retain the nearby material's flow obstruction"
+        );
+
+        assert_eq!(
+            field.cells
+                .iter()
+                .map(|cell| cell.physical_materials.clone())
+                .collect::<Vec<_>>(),
+            materials_before
+        );
+        assert_eq!(field.cell_revisions, revisions_before);
+        assert_eq!(field.revision, revision_before);
+        assert_eq!(field.next_material_identity, identity_before);
+        assert_eq!(
+            field.cells[0].physical_materials[0].inertial_motion,
+            material.inertial_motion,
+            "sampling the overdamped flow field must not alter Newtonian momentum"
         );
     }
 
