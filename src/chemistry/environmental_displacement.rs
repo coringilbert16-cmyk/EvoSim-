@@ -1421,26 +1421,27 @@ fn best_replacement_contact(
     topology_trial.break_matching_bond(old_bond)?;
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-    let candidates = if let (Some((source_a, source_b)), Some((anchor_part, incoming_part, old_bond_index))) =
-        (sources, source_parts)
-    {
-        crate::material_contact::connection_pair_candidates_for_material_parts(
-            source_a,
-            anchor_part,
-            Some(old_bond_index),
-            source_b,
-            incoming_part,
-            catalog,
-        )?
-    } else {
-        crate::contact::connection_pair_candidates_cached(
-            &topology_trial,
-            anchor_unit,
-            incoming_unit,
-            catalog,
-            &mut cache,
-        )
-    };
+    let candidates =
+        if let (Some((source_a, source_b)), Some((anchor_part, incoming_part, old_bond_index))) =
+            (sources, source_parts)
+        {
+            crate::material_contact::connection_pair_candidates_for_material_parts(
+                source_a,
+                anchor_part,
+                Some(old_bond_index),
+                source_b,
+                incoming_part,
+                catalog,
+            )?
+        } else {
+            crate::contact::connection_pair_candidates_cached(
+                &topology_trial,
+                anchor_unit,
+                incoming_unit,
+                catalog,
+                &mut cache,
+            )
+        };
     let mut diagnostics = diagnostics;
     for (candidate_index, candidate) in candidates.into_iter().enumerate() {
         let geometry_valid = candidate.available_a
