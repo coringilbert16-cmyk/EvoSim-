@@ -341,3 +341,14 @@ The older complete-world pair-potential inventory/oracle remains a separate diag
 Regression coverage now constructs a simulation that also contains its normal organism state, adds three free environmental materials, and verifies that the chemistry snapshot contains exactly those three materials. It checks that all three participate in the multi-body force result and stage together, with no organism-owned force mapping.
 
 **Next gate:** validate the isolation change, then continue auditing the chemistry-only live-tick integration boundary. Do not wire organism movement, owner aggregation, or organism geometry into this phase.
+
+
+## 7.4 Complete chemistry-world force accounting oracle — 2026-11-13
+
+Added a small-world correctness path that traverses every unordered pair of free environmental materials exactly once. For each pair it evaluates the existing complete occlusion-aware multi-body gradient; every other free environmental body remains an occluder and receives that pair's force/torque contribution. Those contributions are summed by stable environmental identity before any body is advanced.
+
+The three-body regression verifies the exact pair count (3), one accumulated result per body, and near-zero total linear force and total torque about the world origin. This specifically guards against omitting reaction forces on occluders, counting an unordered pair twice, or advancing a body before all of its pair contributions have been accumulated.
+
+**Important limit:** this traversal is a correctness oracle for small test worlds, not a live-tick evaluator. It evaluates every pair and runs multi-body finite differences with all other bodies as occluders; that cost is far too high for the standard 1,280-material environment. Do not connect it to `Simulation::step`. The next required implementation is the research-backed scalable evaluator (mutual spectral multipoles plus conservative visibility handling and exact fallback), with measured error bounds against this oracle. No arbitrary interaction cutoff is allowed.
+
+Organism mechanics and world assembly remain outside this force path. The only participants and occluders are free environmental atoms and molecules.
