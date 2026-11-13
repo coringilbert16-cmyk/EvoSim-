@@ -2286,10 +2286,9 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     let mut relevant_occluder_indices = Vec::new();
     let mut relevant_occluders = Vec::new();
     for (index, blocker) in occluders.iter().enumerate() {
-        let geometry =
-            crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
-                blocker, catalog,
-            )?;
+        let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            blocker, catalog,
+        )?;
         // Rotation is about the center of mass, so expand the broad-phase
         // envelope by a conservative bound on every point's displacement
         // under the finite-difference angular step. The bounding-box diagonal
@@ -2404,10 +2403,16 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
             )
         } else {
             let blocker_index = participant - 2;
-            plus_blockers[blocker_index] =
-                rotated_physical_material(&relevant_occluders[blocker_index], angular_step, catalog)?;
-            minus_blockers[blocker_index] =
-                rotated_physical_material(&relevant_occluders[blocker_index], -angular_step, catalog)?;
+            plus_blockers[blocker_index] = rotated_physical_material(
+                &relevant_occluders[blocker_index],
+                angular_step,
+                catalog,
+            )?;
+            minus_blockers[blocker_index] = rotated_physical_material(
+                &relevant_occluders[blocker_index],
+                -angular_step,
+                catalog,
+            )?;
             (
                 potential(a, b, &plus_blockers)?,
                 potential(a, b, &minus_blockers)?,
