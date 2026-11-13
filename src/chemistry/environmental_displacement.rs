@@ -2227,6 +2227,46 @@ pub(crate) fn resolve_environmental_diagnosed(
     ) else {
         return Err("replacement_trial_invalid");
     };
+    let source_structural_energy = environmental_material_structural_energy(source_a)
+        .and_then(|energy_a| {
+            environmental_material_structural_energy(source_b)
+                .map(|energy_b| energy_a + energy_b)
+        })
+        .filter(|energy| energy.is_finite())
+        .ok_or("source_material_energy_invalid")?;
+    let native_products = build_environmental_displacement_products(
+        source_a,
+        source_b,
+        operation.bond_index,
+        operation.anchor_unit,
+        operation.displaced_unit,
+        operation.incoming_unit,
+        operation.candidate,
+        trial.replacement_bond_energy,
+        &environment.catalog,
+        environment.height,
+    )
+    .ok_or("native_displacement_products_invalid")?;
+    let product_structural_energy = environmental_products_structural_energy(&native_products)
+        .ok_or("native_product_energy_invalid")?;
+    let structural_energy_tolerance = 1e-9_f64.max(
+        f64::EPSILON
+            * source_structural_energy
+                .abs()
+                .max(product_structural_energy.abs())
+                .max(1.0)
+            * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
+            * 8.0,
+    );
+    if (source_structural_energy - trial.energy.reactant_energy).abs()
+        > structural_energy_tolerance
+        || (product_structural_energy - trial.energy.product_energy).abs()
+            > structural_energy_tolerance
+        || native_products.len() < 2
+    {
+        return Err("native_product_topology_energy_mismatch");
+    }
+
     let Some(derived_activation) =
         crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
     else {
@@ -2332,8 +2372,8 @@ pub(crate) fn resolve_environmental_diagnosed(
     staged_ledger.total_structural_energy_held = next_total_structural;
     staged_ledger.total_work_expended = next_total_work;
 
-    let mut staged_products = Vec::with_capacity(trial.products.len());
-    for product in trial.products {
+    let mut staged_products = Vec::with_capacity(native_products.len());
+    for product in native_products {
         if !product.is_realized()
             || product.material.is_empty()
             || !product.material.is_valid_for_catalog(&environment.catalog)
