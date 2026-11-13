@@ -785,6 +785,83 @@ pub(crate) struct ResonanceWorldBodyForce {
     pub(crate) force: crate::harmonics::ResonanceBodyForce,
 }
 
+/// Tick-local net force/torque by stable physical-body identity. Pair gradients
+/// are accumulated before any body is advanced, so a body participating in
+/// several interactions receives their vector sum exactly once.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ResonanceForceAccumulator {
+    bodies: std::collections::BTreeMap<u64, (Option<usize>, crate::harmonics::ResonanceBodyForce)>,
+}
+
+impl ResonanceForceAccumulator {
+    /// Add one body's contribution. Reject ambiguous identities, owner changes,
+    /// non-finite gradients, and overflow without partially modifying the sum.
+    pub(crate) fn add(&mut self, contribution: ResonanceWorldBodyForce) -> bool {
+        let identity = contribution.environmental_identity;
+        let force = contribution.force;
+        if identity == 0 || !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
+            return false;
+        }
+        let (owner, current) = self.bodies.get(&identity).copied().unwrap_or((
+            contribution.owner_organism_index,
+            crate::harmonics::ResonanceBodyForce::default(),
+        ));
+        if owner != contribution.owner_organism_index {
+            return false;
+        }
+        let next = crate::harmonics::ResonanceBodyForce {
+            x: current.x + force.x,
+            y: current.y + force.y,
+            torque: current.torque + force.torque,
+        };
+        if !next.x.is_finite() || !next.y.is_finite() || !next.torque.is_finite() {
+            return false;
+        }
+        self.bodies.insert(identity, (owner, next));
+        true
+    }
+
+    /// Apply a complete pair gradient atomically: either every participant's
+    /// force/torque is accumulated, or the accumulator remains unchanged.
+    pub(crate) fn add_pair(
+        &mut self,
+        snapshot: &LocalResonanceWorldSnapshot,
+        identity_a: u64,
+        identity_b: u64,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let Some(contributions) = snapshot.pair_force_contributions(identity_a, identity_b, catalog) else {
+            return false;
+        };
+        let mut staged = self.clone();
+        if !contributions.into_iter().all(|contribution| staged.add(contribution)) {
+            return false;
+        }
+        *self = staged;
+        true
+    }
+
+    pub(crate) fn into_body_forces(
+        self,
+    ) -> Vec<ResonanceWorldBodyForce> {
+        self.bodies
+            .into_iter()
+            .map(|(environmental_identity, (owner_organism_index, force))| {
+                ResonanceWorldBodyForce {
+                    environmental_identity,
+                    owner_organism_index,
+                    force,
+                }
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.bodies.len()
+    }
+}
+
 impl LocalResonanceWorldSnapshot {
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
         let (bodies, resonant_indices, force_owner_indices) =
@@ -1423,6 +1500,37 @@ mod tests {
     use crate::resources::Material;
     use crate::state::{Position, Simulation};
     use crate::structure::{OrganismStructure, StructuralUnit};
+
+
+    #[test]
+    fn resonance_force_accumulator_sums_each_body_and_rejects_invalid_updates_atomically() {
+        let mut accumulator = ResonanceForceAccumulator::default();
+        let contribution = |identity, owner, x, y, torque| ResonanceWorldBodyForce {
+            environmental_identity: identity,
+            owner_organism_index: owner,
+            force: crate::harmonics::ResonanceBodyForce { x, y, torque },
+        };
+        assert!(accumulator.add(contribution(11, None, 2.0, -1.0, 0.5)));
+        assert!(accumulator.add(contribution(11, None, -0.5, 3.0, 1.5)));
+        assert!(accumulator.add(contribution(12, Some(4), 1.0, 0.0, -2.0)));
+        assert_eq!(accumulator.len(), 2);
+
+        let before = accumulator.clone().into_body_forces();
+        assert!(!accumulator.add(contribution(11, Some(4), 9.0, 9.0, 9.0)));
+        assert!(!accumulator.add(contribution(0, None, 1.0, 1.0, 1.0)));
+        assert!(!accumulator.add(contribution(11, None, f64::NAN, 0.0, 0.0)));
+        assert_eq!(accumulator.clone().into_body_forces(), before);
+
+        let forces = accumulator.into_body_forces();
+        assert_eq!(forces.len(), 2);
+        assert_eq!(forces[0].environmental_identity, 11);
+        assert_eq!(
+            forces[0].force,
+            crate::harmonics::ResonanceBodyForce { x: 1.5, y: 2.0, torque: 2.0 }
+        );
+        assert_eq!(forces[1].environmental_identity, 12);
+        assert_eq!(forces[1].owner_organism_index, Some(4));
+    }
 
     fn sample() -> WorldToneSample {
         WorldToneSample {
