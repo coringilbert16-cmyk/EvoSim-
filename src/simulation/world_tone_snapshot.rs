@@ -896,7 +896,10 @@ impl ResonanceForceAccumulator {
             let kinetic_energy_before = 0.5
                 * properties.mass
                 * (motion.velocity_x * motion.velocity_x + motion.velocity_y * motion.velocity_y)
-                + 0.5 * properties.moment_of_inertia * motion.angular_velocity * motion.angular_velocity;
+                + 0.5
+                    * properties.moment_of_inertia
+                    * motion.angular_velocity
+                    * motion.angular_velocity;
             let after = before.advanced_under_force(
                 force.x,
                 force.y,
@@ -1780,8 +1783,7 @@ mod tests {
                 && motion.kinetic_energy_after >= 0.0
         }));
         assert!(staged_motion.iter().any(|motion| {
-            motion.environmental_identity == identities[0]
-                && motion.owner_organism_index.is_none()
+            motion.environmental_identity == identities[0] && motion.owner_organism_index.is_none()
         }));
         assert!(staged_motion.iter().any(|motion| {
             motion.environmental_identity == 0 && motion.owner_organism_index == Some(0)
