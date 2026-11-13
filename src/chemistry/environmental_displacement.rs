@@ -2079,8 +2079,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                         if *remaining_discovery_work == 0 {
                             break 'anchors;
                         }
-                        diagnostics.bonds_inspected =
-                            diagnostics.bonds_inspected.saturating_add(1);
+                        diagnostics.bonds_inspected = diagnostics.bonds_inspected.saturating_add(1);
                         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
                         let part_count = source_a.material.parts.len();
                         if connection.part_a >= part_count
@@ -2100,13 +2099,11 @@ pub(crate) fn accumulate_environmental_with_resonance(
                             ) else {
                                 continue;
                             };
-                            let Some(displaced_chemistry) =
-                                environmental_displacement_constituent(
-                                    &source_a,
-                                    displaced_part,
-                                    &environment.catalog,
-                                )
-                            else {
+                            let Some(displaced_chemistry) = environmental_displacement_constituent(
+                                &source_a,
+                                displaced_part,
+                                &environment.catalog,
+                            ) else {
                                 continue;
                             };
                             let Some(frequency) = displacement_reaction_frequency_from_properties(
@@ -2213,9 +2210,10 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                                 .local_resonance_samples
                                                 .saturating_add(1);
                                             diagnostics.local_resonance_similarity_sum += value;
-                                            diagnostics.local_resonance_similarity_max = diagnostics
-                                                .local_resonance_similarity_max
-                                                .max(value);
+                                            diagnostics.local_resonance_similarity_max =
+                                                diagnostics
+                                                    .local_resonance_similarity_max
+                                                    .max(value);
                                             value
                                         }
                                         None => {
@@ -2269,16 +2267,20 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     anchor_chemistry.properties,
                                     displaced_chemistry.properties,
                                 );
-                                let activation_sufficient = crate::chemistry::activation_barrier_from_bond_properties(
-                                    old_bond_strength,
-                                    anchor_chemistry.properties.reactivity,
-                                    displaced_chemistry.properties.reactivity,
-                                    baselines.reactivity,
-                                )
-                                .map(|barrier| {
-                                    activation_signal > 0.0
-                                        && crate::chemistry::activated(activation_signal, barrier)
-                                });
+                                let activation_sufficient =
+                                    crate::chemistry::activation_barrier_from_bond_properties(
+                                        old_bond_strength,
+                                        anchor_chemistry.properties.reactivity,
+                                        displaced_chemistry.properties.reactivity,
+                                        baselines.reactivity,
+                                    )
+                                    .map(|barrier| {
+                                        activation_signal > 0.0
+                                            && crate::chemistry::activated(
+                                                activation_signal,
+                                                barrier,
+                                            )
+                                    });
                                 match activation_sufficient {
                                     Some(true) => {
                                         diagnostics.activation_threshold_met =
@@ -2314,8 +2316,8 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     if activation_sufficient == Some(true) {
                                         diagnostics.trial_build_rejections_after_activation =
                                             diagnostics
-                                            .trial_build_rejections_after_activation
-                                            .saturating_add(1);
+                                                .trial_build_rejections_after_activation
+                                                .saturating_add(1);
                                         diagnostics.trial_rejections_other =
                                             diagnostics.trial_rejections_other.saturating_add(1);
                                     }
