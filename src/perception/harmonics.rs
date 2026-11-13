@@ -2060,11 +2060,11 @@ pub(crate) fn resonance_pair_force_with_occluders(
     Some((force_on_a, force_on_b))
 }
 
-/// Derive the translational force on every body participating in an
-/// occluded resonance pair. Unlike the two-body helper, this differentiates
-/// the same occlusion-aware potential with respect to each blocker as well,
-/// preserving the complete multi-body gradient instead of assigning an
-/// unbalanced opposite force to the source/receiver pair alone.
+/// Derive the net force and center-of-mass torque on every body participating
+/// in an occluded resonance pair. Translation and rigid rotation are both
+/// differentiated from the same occlusion-aware potential, preserving the
+/// complete multi-body gradient instead of assigning an unbalanced opposite
+/// force to the source/receiver pair alone.
 #[allow(dead_code)] // Staged for integration with environmental rigid-body movement.
 pub(crate) fn resonance_multi_body_forces_with_occluders(
     a: &crate::physical_material::PhysicalMaterial,
