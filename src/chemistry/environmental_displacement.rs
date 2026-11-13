@@ -1262,7 +1262,6 @@ fn build_displacement_trial_with_activation_status(
         source_bonds: source.bonds.clone(),
         #[cfg(test)]
         products,
-        replacement_bond_energy: replacement_bond.bond_energy,
         #[cfg(test)]
         removed_bond: old_bond,
         #[cfg(test)]
