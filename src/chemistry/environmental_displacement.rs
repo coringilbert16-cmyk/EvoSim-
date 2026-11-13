@@ -3011,12 +3011,17 @@ mod tests {
                     ) {
                         continue;
                     }
+                    // Each pose is mutated directly in this fixture, outside the
+                    // structure mutation APIs that normally invalidate compatibility
+                    // caches. Use a fresh cache so the selected contact describes this
+                    // exact pose and can be revalidated by COMBINE at admission.
+                    let mut pose_cache = crate::contact::ConnectionCompatibilityCache::new();
                     let candidate = crate::contact::connection_pair_candidates_cached(
                         &replacement_trial,
                         0,
                         2,
                         catalog,
-                        &mut cache,
+                        &mut pose_cache,
                     )
                     .into_iter()
                     .find(|candidate| {
