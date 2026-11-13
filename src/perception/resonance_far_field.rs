@@ -325,6 +325,25 @@ mod tests {
                 .hypot(exact_gradient.y - approximation.target_gradient.y)
                 <= approximation.error.force + 1e-12
         );
+        for ((source, approximate_force), error_bound) in sources
+            .iter()
+            .zip(&approximation.source_forces)
+            .zip(&approximation.source_force_error_bounds)
+        {
+            let dx = target.x - source.position.x;
+            let dy = target.y - source.position.y;
+            let distance = dx.hypot(dy);
+            let scale = source.weight / (distance * (1.0 + distance).powi(2));
+            let exact_force = FarFieldVector {
+                x: scale * dx,
+                y: scale * dy,
+            };
+            assert!(
+                (exact_force.x - approximate_force.x)
+                    .hypot(exact_force.y - approximate_force.y)
+                    <= *error_bound + 1e-12
+            );
+        }
     }
 
     #[test]
