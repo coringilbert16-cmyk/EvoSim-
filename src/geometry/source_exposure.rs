@@ -124,6 +124,37 @@ mod tests {
     }
 
     #[test]
+    fn straight_projected_extent_gradient_matches_finite_differences() {
+        let boundary = ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
+            start: (-1.0, 0.0),
+            end: (1.0, 0.0),
+            outward_normal: (0.0, 1.0),
+        };
+        let source = (0.3, 2.0);
+        let (_, gradient) =
+            point_source_projected_extent_with_gradient(boundary, source).unwrap();
+        let step = 1e-6;
+        let dx = (point_source_projected_extent(boundary, (source.0 + step, source.1)).unwrap()
+            - point_source_projected_extent(boundary, (source.0 - step, source.1)).unwrap())
+            / (2.0 * step);
+        let dy = (point_source_projected_extent(boundary, (source.0, source.1 + step)).unwrap()
+            - point_source_projected_extent(boundary, (source.0, source.1 - step)).unwrap())
+            / (2.0 * step);
+        assert!((gradient.0 - dx).abs() <= 1e-8);
+        assert!((gradient.1 - dy).abs() <= 1e-8);
+    }
+
+    #[test]
+    fn straight_projected_extent_gradient_rejects_edge_on_transition() {
+        let boundary = interval((0.0, 1.0));
+        assert!(
+            point_source_projected_extent_with_gradient(boundary, (0.5, 0.0)).is_none()
+        );
+    }
+
+    #[test]
     fn point_source_projection_integrates_varying_direction_along_a_straight_edge() {
         let interval = ExposedBoundaryInterval {
             body_index: 0,
@@ -187,6 +218,52 @@ pub(crate) fn point_source_projected_extent(
     let extent = normal_distance * ((length - along) / normal_distance).asinh()
         + normal_distance * (along / normal_distance).asinh();
     (extent.is_finite() && extent >= 0.0).then_some(extent)
+}
+
+/// Return the exact straight-interval projected extent and its gradient
+/// with respect to the source position, assuming the visible interval and its
+/// outward normal remain unchanged. At an edge-on transition the derivative
+/// is not smooth, so this function fails closed and the caller must use the
+/// exact visibility-aware finite-difference path.
+pub(crate) fn point_source_projected_extent_with_gradient(
+    interval: ExposedBoundaryInterval,
+    source: (f64, f64),
+) -> Option<(f64, (f64, f64))> {
+    let extent = point_source_projected_extent(interval, source)?;
+    let dx = interval.end.0 - interval.start.0;
+    let dy = interval.end.1 - interval.start.1;
+    let length = dx.hypot(dy);
+    let tangent = (dx / length, dy / length);
+    let source_offset = (source.0 - interval.start.0, source.1 - interval.start.1);
+    let along = source_offset.0 * tangent.0 + source_offset.1 * tangent.1;
+    let normal_distance =
+        source_offset.0 * interval.outward_normal.0 + source_offset.1 * interval.outward_normal.1;
+    if !normal_distance.is_finite() || normal_distance.abs() <= 1e-12 {
+        return None;
+    }
+    if normal_distance < 0.0 {
+        return Some((extent, (0.0, 0.0)));
+    }
+
+    let remaining = length - along;
+    let first = (normal_distance * normal_distance + along * along).sqrt();
+    let second = (normal_distance * normal_distance + remaining * remaining).sqrt();
+    if !first.is_finite() || !second.is_finite() || first <= 0.0 || second <= 0.0 {
+        return None;
+    }
+    let derivative_along = normal_distance / first - normal_distance / second;
+    let derivative_normal = (remaining / normal_distance).asinh()
+        + (along / normal_distance).asinh()
+        - remaining / second
+        - along / first;
+    let gradient = (
+        derivative_along * tangent.0 + derivative_normal * interval.outward_normal.0,
+        derivative_along * tangent.1 + derivative_normal * interval.outward_normal.1,
+    );
+    [extent, gradient.0, gradient.1]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some((extent, gradient))
 }
 
 fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
