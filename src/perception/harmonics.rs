@@ -2247,8 +2247,20 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     // zero force slot for each omitted world body. This is exact culling, not
     // a distance cutoff: every possible blocker remains in the evaluation.
     let (source_x, source_y, _) = environmental_material_geometry(a)?;
+    let source_geometry =
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(a, catalog)?;
     let receiver_geometry =
         crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(b, catalog)?;
+    let source_rotation_margin = (source_geometry.max_x - source_geometry.min_x)
+        .hypot(source_geometry.max_y - source_geometry.min_y)
+        * DIFFERENCE_STEP;
+    let receiver_rotation_margin = (receiver_geometry.max_x - receiver_geometry.min_x)
+        .hypot(receiver_geometry.max_y - receiver_geometry.min_y)
+        * DIFFERENCE_STEP;
+    if !source_rotation_margin.is_finite() || !receiver_rotation_margin.is_finite() {
+        return None;
+    }
+    let participant_rotation_margin = source_rotation_margin.max(receiver_rotation_margin);
     let step_points = [
         (source_x - DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
         (source_x - DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
@@ -2282,9 +2294,10 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
         // envelope by a conservative bound on every point's displacement
         // under the finite-difference angular step. The bounding-box diagonal
         // bounds the distance from any point to any center inside the box.
-        let rotation_margin = (geometry.max_x - geometry.min_x)
+        let blocker_rotation_margin = (geometry.max_x - geometry.min_x)
             .hypot(geometry.max_y - geometry.min_y)
             * DIFFERENCE_STEP;
+        let rotation_margin = participant_rotation_margin + blocker_rotation_margin;
         if !rotation_margin.is_finite() {
             return None;
         }
