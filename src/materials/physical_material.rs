@@ -770,6 +770,101 @@ mod tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
+    fn newtonian_step_integrates_force_into_velocity_and_pose() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 3.0,
+                y: 4.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        let mass = physical.mass_properties(&catalog, None).unwrap().mass;
+        let advanced = physical
+            .advanced_under_force(2.0, 0.0, 0.0, 0.5, &catalog, None)
+            .expect("finite force should produce a staged Newtonian step");
+        let expected_velocity = 2.0 / mass * 0.5;
+        let expected_displacement = 0.5 * expected_velocity * 0.5;
+        assert!((advanced.inertial_motion.velocity_x - expected_velocity).abs() < 1e-12);
+        assert!((advanced.placements.as_ref().unwrap()[0].x - (3.0 + expected_displacement)).abs() < 1e-12);
+        assert_eq!(advanced.placements.as_ref().unwrap()[0].y, 4.0);
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, 3.0);
+    }
+
+    #[test]
+    fn newtonian_torque_rotates_about_the_realized_center_of_mass() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 },
+                Placement { x: 2.0, y: 0.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("composite should realize");
+        let before = physical.mass_properties(&catalog, None).unwrap();
+        let advanced = physical
+            .advanced_under_force(0.0, 0.0, 2.0, 0.5, &catalog, None)
+            .expect("finite torque should produce a staged rigid-body step");
+        let after = advanced.mass_properties(&catalog, None).unwrap();
+        assert!((after.center_x - before.center_x).abs() < 1e-12);
+        assert!((after.center_y - before.center_y).abs() < 1e-12);
+        assert!(advanced.inertial_motion.angular_velocity > 0.0);
+        assert!(advanced.placements.as_ref().unwrap()[1].y > 0.0);
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+    }
+
+    #[test]
+    fn newtonian_step_preserves_momentum_without_force_and_wraps_vertical_pose() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 9.8,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        physical.inertial_motion.velocity_x = 2.0;
+        physical.inertial_motion.velocity_y = 1.0;
+        physical.inertial_motion.angular_velocity = 0.25;
+        let advanced = physical
+            .advanced_under_force(0.0, 0.0, 0.0, 0.5, &catalog, Some(10.0))
+            .expect("force-free motion should preserve momentum");
+        assert_eq!(advanced.inertial_motion, physical.inertial_motion);
+        let placement = advanced.placements.as_ref().unwrap()[0];
+        assert!((placement.x - 2.0).abs() < 1e-12);
+        assert!((placement.y - 0.3).abs() < 1e-12);
+        assert!((placement.rotation_radians - 0.125).abs() < 1e-12);
+    }
+
+    #[test]
+    fn newtonian_step_rejects_invalid_force_without_mutating_source() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement { x: 0.0, y: 0.0, rotation_radians: 0.0 }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        assert!(physical
+            .advanced_under_force(f64::NAN, 0.0, 0.0, 1.0, &catalog, None)
+            .is_none());
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, 0.0);
+    }
+
+    #[test]
     fn mass_properties_use_constituent_mass_and_realized_geometry() {
         let catalog = crate::resources::default_catalog();
         let physical = PhysicalMaterial::realized(
