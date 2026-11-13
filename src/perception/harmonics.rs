@@ -2179,34 +2179,42 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
             }
         }
         let angular_step = DIFFERENCE_STEP;
-        let (plus, minus) = if participant == 0 {
-            let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
-            let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
-            (
-                potential(&shifted_plus, b, occluders)?,
-                potential(&shifted_minus, b, occluders)?,
-            )
-        } else if participant == 1 {
-            let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
-            let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
-            (
-                potential(a, &shifted_plus, occluders)?,
-                potential(a, &shifted_minus, occluders)?,
-            )
+        if participant >= 2 && !blocker_can_affect_gradient[participant - 2] {
+            // A body outside the complete source-to-receiver ray envelope
+            // cannot change this pair potential under rigid rotation either.
+            // Its exact angular derivative is zero; do not rotate unrelated
+            // world bodies merely to rediscover that zero.
+            derivatives[2] = 0.0;
         } else {
-            let blocker_index = participant - 2;
-            let shifted_plus =
-                rotated_physical_material(&occluders[blocker_index], angular_step, catalog)?;
-            let shifted_minus =
-                rotated_physical_material(&occluders[blocker_index], -angular_step, catalog)?;
-            plus_blockers[blocker_index] = shifted_plus;
-            minus_blockers[blocker_index] = shifted_minus;
-            (
-                potential(a, b, &plus_blockers)?,
-                potential(a, b, &minus_blockers)?,
-            )
-        };
-        derivatives[2] = -(plus - minus) / (2.0 * angular_step);
+            let (plus, minus) = if participant == 0 {
+                let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
+                let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
+                (
+                    potential(&shifted_plus, b, occluders)?,
+                    potential(&shifted_minus, b, occluders)?,
+                )
+            } else if participant == 1 {
+                let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
+                let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
+                (
+                    potential(a, &shifted_plus, occluders)?,
+                    potential(a, &shifted_minus, occluders)?,
+                )
+            } else {
+                let blocker_index = participant - 2;
+                let shifted_plus =
+                    rotated_physical_material(&occluders[blocker_index], angular_step, catalog)?;
+                let shifted_minus =
+                    rotated_physical_material(&occluders[blocker_index], -angular_step, catalog)?;
+                plus_blockers[blocker_index] = shifted_plus;
+                minus_blockers[blocker_index] = shifted_minus;
+                (
+                    potential(a, b, &plus_blockers)?,
+                    potential(a, b, &minus_blockers)?,
+                )
+            };
+            derivatives[2] = -(plus - minus) / (2.0 * angular_step);
+        }
         if !derivatives[2].is_finite() {
             return None;
         }
@@ -3856,13 +3864,13 @@ mod tests {
             },
             vec![
                 crate::structure::Placement {
-                    x: 4.0,
-                    y: 0.25,
+                    x: 3.8,
+                    y: -0.45,
                     rotation_radians: 0.0,
                 },
                 crate::structure::Placement {
-                    x: 4.0,
-                    y: 1.5,
+                    x: 4.7,
+                    y: 0.95,
                     rotation_radians: 0.0,
                 },
             ],
