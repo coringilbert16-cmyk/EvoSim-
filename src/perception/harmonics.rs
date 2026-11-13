@@ -1347,9 +1347,13 @@ fn material_aura_receptions_with_occluders_prepared(
         return Some(Vec::new());
     }
     let receiver_geometry =
-        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(receiver, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            receiver, catalog,
+        )?;
     let source_geometry =
-        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(source, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            source, catalog,
+        )?;
     let (source_x, source_y, _) = environmental_material_geometry(source)?;
     if !source_x.is_finite() || !source_y.is_finite() {
         return None;
@@ -1430,7 +1434,9 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
-fn receiver_has_curved_boundary(receiver: &crate::physical_body_geometry::PhysicalBodyGeometry) -> bool {
+fn receiver_has_curved_boundary(
+    receiver: &crate::physical_body_geometry::PhysicalBodyGeometry,
+) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
         crate::resources::Form::Fluid {
@@ -2277,9 +2283,10 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     let blocker_can_affect_gradient = occluders
         .iter()
         .map(|blocker| {
-            let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
-                blocker, catalog,
-            )?;
+            let geometry =
+                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                    blocker, catalog,
+                )?;
             Some(geometry_bounds_may_occlude_source_points(
                 (source_x, source_y),
                 &step_points,
