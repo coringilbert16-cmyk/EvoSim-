@@ -121,10 +121,6 @@ impl InertialMotion {
     }
 
     /// Kinetic energy for the supplied authoritative mass and inertia.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
-    )]
     pub(crate) fn kinetic_energy(self, mass: f64, moment_of_inertia: f64) -> Option<f64> {
         if !self.is_finite()
             || !mass.is_finite()
