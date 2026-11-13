@@ -1011,6 +1011,7 @@ struct DisplacementTrialDiagnostic {
     old_bond_energy_stored: Option<f64>,
     old_bond_energy_expected: Option<f64>,
     old_bond_energy_abs_error: Option<f64>,
+    insertion_rejection: Option<&'static str>,
 }
 
 /// Build the proposed topology on a clone. The caller must discover the supplied
@@ -1189,20 +1190,23 @@ fn build_displacement_trial_with_activation_status(
     {
         return None;
     }
-    let Some(replacement_bond) =
-        crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+    let replacement_bond =
+        match crate::combine_runtime::admit_selected_candidate_to_trial_structure_diagnostic(
             &mut trial,
             anchor_unit,
             incoming_unit,
             replacement_candidate,
             catalog,
-        )
-    else {
-        if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Insertion;
-        }
-        return None;
-    };
+        ) {
+            Ok(bond) => bond,
+            Err(reason) => {
+                if let Some(diagnostic) = diagnostic.as_mut() {
+                    diagnostic.failure_stage = DisplacementTrialFailureStage::Insertion;
+                    diagnostic.insertion_rejection = Some(reason);
+                }
+                return None;
+            }
+        };
 
     let (Some(reactant_structural), Some(product_structural)) = (
         crate::energy_ledger::structural_potential(source),
