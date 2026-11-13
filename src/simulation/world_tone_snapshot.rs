@@ -1027,10 +1027,13 @@ impl LocalResonanceWorldSnapshot {
             .iter()
             .map(|index| self.bodies[*index].clone())
             .collect::<Vec<_>>();
-        let forces = crate::harmonics::resonance_multi_body_forces_with_occluders(
+        let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
             &self.bodies[index_a],
             &self.bodies[index_b],
             &occluders,
+            &self.emitters,
+            index_a,
+            index_b,
             catalog,
             self.tick,
         )?;
