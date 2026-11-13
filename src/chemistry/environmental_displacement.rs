@@ -166,12 +166,7 @@ fn environmental_candidate_energy_requirement(
             0.0,
         )
     } else {
-        ReactionEnergyBalance::calculate(
-            reactant_structural_energy,
-            product_energy,
-            work,
-            0.0,
-        )
+        ReactionEnergyBalance::calculate(reactant_structural_energy, product_energy, work, 0.0)
     }?;
     Some(balance.required_external_input)
 }
@@ -211,8 +206,12 @@ fn evaluate_environmental_displacement_candidate(
         .internal_connections
         .as_deref()?
         .get(old_bond_index)?;
-    let resource_a = catalog.iter().find(|resource| resource.name == anchor.name)?;
-    let resource_b = catalog.iter().find(|resource| resource.name == incoming.name)?;
+    let resource_a = catalog
+        .iter()
+        .find(|resource| resource.name == anchor.name)?;
+    let resource_b = catalog
+        .iter()
+        .find(|resource| resource.name == incoming.name)?;
     let active_resource = |name: &str| {
         matches!(
             name,
@@ -268,7 +267,11 @@ fn evaluate_environmental_displacement_candidate(
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
         .unwrap_or_else(|| {
-            crate::combine::intrinsic_bond_potential(anchor.properties, incoming.properties, strength)
+            crate::combine::intrinsic_bond_potential(
+                anchor.properties,
+                incoming.properties,
+                strength,
+            )
         });
     if !strength.is_finite() || !bond_energy.is_finite() || bond_energy < 0.0 {
         return None;
@@ -694,10 +697,7 @@ fn environmental_constituent_endpoint_world_point(
     catalog: &[BaseResource],
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
     crate::material_contact::endpoint_world_point_for_material_part(
-        material,
-        part_index,
-        endpoint,
-        catalog,
+        material, part_index, endpoint, catalog,
     )
 }
 
@@ -1518,29 +1518,28 @@ fn best_replacement_contact(
     topology_trial.break_matching_bond(old_bond)?;
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-    let candidates =
-        if let (
-            Some((source_a, source_b)),
-            Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
-        ) = (sources, source_parts)
-        {
-            crate::material_contact::connection_pair_candidates_for_material_parts(
-                source_a,
-                anchor_part,
-                Some(old_bond_index),
-                source_b,
-                incoming_part,
-                catalog,
-            )?
-        } else {
-            crate::contact::connection_pair_candidates_cached(
-                &topology_trial,
-                anchor_unit,
-                incoming_unit,
-                catalog,
-                &mut cache,
-            )
-        };
+    let candidates = if let (
+        Some((source_a, source_b)),
+        Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
+    ) = (sources, source_parts)
+    {
+        crate::material_contact::connection_pair_candidates_for_material_parts(
+            source_a,
+            anchor_part,
+            Some(old_bond_index),
+            source_b,
+            incoming_part,
+            catalog,
+        )?
+    } else {
+        crate::contact::connection_pair_candidates_cached(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            &mut cache,
+        )
+    };
     let mut diagnostics = diagnostics;
     for (candidate_index, candidate) in candidates.into_iter().enumerate() {
         let geometry_valid = candidate.available_a
@@ -1552,8 +1551,10 @@ fn best_replacement_contact(
             && candidate.facing > 0.0;
         let evaluation = geometry_valid
             .then(|| {
-                if let (Some((source_a, source_b)), Some((anchor_part, displaced_part, incoming_part, old_bond_index))) =
-                    (sources, source_parts)
+                if let (
+                    Some((source_a, source_b)),
+                    Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
+                ) = (sources, source_parts)
                 {
                     evaluate_environmental_displacement_candidate(
                         source_a,
@@ -3478,8 +3479,7 @@ mod tests {
     #[test]
     fn native_displacement_products_match_graph_and_conserve_rigid_body_momentum() {
         let catalog = default_catalog();
-        let (mut source, old_bond, candidate, investment) =
-            three_participant_fixture(&catalog);
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         // Keep the fixture away from the periodic vertical seam so the test's
         // global angular-momentum reference uses one unwrapped coordinate frame.
         for unit in &mut source.units {
