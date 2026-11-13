@@ -185,3 +185,67 @@ The exact environmental force evaluator now reuses the tick-local `MaterialReson
 A regression compares the prepared-emitter multi-body force/torque result against the uncached reference evaluator for the same three-body environment, with (10^{-10}) component tolerance. This validates the cache reuse without changing the resonance law. It is still an exact pairwise finite-difference evaluator; it is not a multipole implementation and is not suitable as the live evaluator for the standard environment.
 
 The chemistry-only snapshot that supplies these emitters contains only free environmental atoms and molecules. No organism structures, organism-owned materials, or organism occluders enter the prepared-emitter force path.
+
+
+## 9. First bounded kernel implementation — 2026-11-13
+
+A first testable mathematical primitive is now implemented in
+`src/perception/resonance_far_field.rs`. It expands only the smooth source-side
+kernel for one receiver boundary sample and one frequency coefficient:
+
+`f(r) = 1 / (1 + |r|)`.
+
+For source positions (x_i=c+y_i), target (p), and signed coefficients
+(w_i), define (R=p-c), (a=max_i |y_i|),
+(M_0=sum_i w_i), (M_1=sum_i w_i y_i), and
+(W_1=sum_i |w_i|). The first-order expansion is
+
+`U ≈ M_0 f(R) - ∇f(R) · M_1`.
+
+Its target gradient is
+
+`∇U ≈ M_0 ∇f(R) - H_f(R) M_1`,
+
+and the corresponding first-order force estimate on each source is
+`F_i ≈ -w_i (∇f(R) - H_f(R)y_i)`. The source forces therefore sum to the
+negative target gradient of this same approximate potential; they are not
+assigned independently by an unrelated force rule.
+
+The expansion is considered only when (d_-=|R|-a>0). With derivatives
+evaluated at (d_-), conservative radial derivative bounds are used:
+
+- (H_{max}=max(|f''(d_-)|, |f'(d_-)|/d_-)).
+- (T_{max}=|f'''|+2|f''/d_- - f'/d_-^2|+
+  2|f''-f'/d_-|/d_-).
+
+The implemented absolute remainder bounds are:
+
+- Potential: (epsilon_U le 	frac12 W_1 H_{max}a^2).
+- Total force: (epsilon_F le 	frac12 W_1 T_{max}a^2).
+- Each source's force: (epsilon_{F_i} le
+  	frac12 |w_i|T_{max}a^2).
+- Torque about the expansion center: sum each source's force-error bound
+  multiplied by that source's distance from the center.
+
+These bounds use absolute coefficient sums, so phase cancellation or signed
+spectral cross-energy cannot make the error estimate artificially small.
+Acceptance checks potential, force, and torque budgets independently.
+Targets inside or touching the source cluster fail closed.
+
+### Explicit limits of this milestone
+
+This is a kernel primitive, not yet a complete mutual evaluator. It handles
+only the source-side (1/(1+d)) factor for a fixed receiver boundary sample
+and frequency coefficient. It does not approximate receiver boundary
+integration, the second distance factor, projected extent, body rotation,
+occlusion, or forces on occluders. No visibility group is certified by this
+module; callers must retain exact visibility and use exact fallback until a
+separate conservative visibility hierarchy is implemented.
+
+The module is not connected to live movement. Its tests compare potential,
+target gradient, and individual source forces against direct sums, verify
+force balance for the approximate interaction, and reject unresolved
+near-field geometry. This is the first derivation/prototype step; further work
+must extend the same bounded construction to receiver boundary groups and
+mutual cell-cell interactions, then validate torque and visibility against
+the complete-world oracle before runtime use.
