@@ -1329,21 +1329,7 @@ fn material_aura_receptions_with_occluders_prepared(
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
     let source_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
-    let source_placements = source.placements.as_ref()?;
-    if source_placements.is_empty() || source_placements.len() != source.material.parts.len() {
-        return None;
-    }
-    let source_count = source_placements.len() as f64;
-    let source_x = source_placements
-        .iter()
-        .map(|placement| placement.x)
-        .sum::<f64>()
-        / source_count;
-    let source_y = source_placements
-        .iter()
-        .map(|placement| placement.y)
-        .sum::<f64>()
-        / source_count;
+    let (source_x, source_y, _) = environmental_material_geometry(source)?;
     if !source_x.is_finite() || !source_y.is_finite() {
         return None;
     }
@@ -2242,7 +2228,7 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
     // (expanded by the finite-difference step) can affect this pair's visibility
     // gradient. Keep every such blocker; distant bodies have an exact zero
     // derivative and do not need four additional potential evaluations.
-    let (source_x, source_y, _, _) = environmental_material_resonance(a, catalog, tick)?;
+    let (source_x, source_y, _) = environmental_material_geometry(a)?;
     let receiver_geometry =
         crate::organism_geometry::OrganismBodyGeometry::from_physical_material(b, catalog)?;
     let step_points = [
