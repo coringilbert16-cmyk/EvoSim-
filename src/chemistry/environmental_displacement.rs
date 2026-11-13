@@ -3279,7 +3279,13 @@ mod tests {
     #[test]
     fn native_displacement_products_match_graph_and_conserve_rigid_body_momentum() {
         let catalog = default_catalog();
-        let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let (mut source, old_bond, candidate, investment) =
+            three_participant_fixture(&catalog);
+        // Keep the fixture away from the periodic vertical seam so the test's
+        // global angular-momentum reference uses one unwrapped coordinate frame.
+        for unit in &mut source.units {
+            unit.placement.y += 20.0;
+        }
         let mut reactants =
             crate::environmental_combine::physical_materials_from_structure_components(
                 &source, &catalog,
