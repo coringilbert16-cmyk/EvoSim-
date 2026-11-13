@@ -156,12 +156,11 @@ impl ResonanceFarFieldExpansion {
         let tangential_eigenvalue = first_derivative / distance;
 
         // H = tangential * I + (radial - tangential) * u * u^T.
-        let h_xx = tangential_eigenvalue
-            + (radial_eigenvalue - tangential_eigenvalue) * unit.x * unit.x;
-        let h_xy =
-            (radial_eigenvalue - tangential_eigenvalue) * unit.x * unit.y;
-        let h_yy = tangential_eigenvalue
-            + (radial_eigenvalue - tangential_eigenvalue) * unit.y * unit.y;
+        let h_xx =
+            tangential_eigenvalue + (radial_eigenvalue - tangential_eigenvalue) * unit.x * unit.x;
+        let h_xy = (radial_eigenvalue - tangential_eigenvalue) * unit.x * unit.y;
+        let h_yy =
+            tangential_eigenvalue + (radial_eigenvalue - tangential_eigenvalue) * unit.y * unit.y;
         let gradient = FarFieldVector {
             x: first_derivative * unit.x,
             y: first_derivative * unit.y,
@@ -209,10 +208,8 @@ impl ResonanceFarFieldExpansion {
             + 2.0 * (f_second / minimum - f_prime / minimum.powi(2)).abs()
             + 2.0 * (f_second - f_prime / minimum).abs() / minimum;
         let radius_squared = self.radius * self.radius;
-        let potential_error =
-            0.5 * self.absolute_weight * hessian_bound * radius_squared;
-        let force_error =
-            0.5 * self.absolute_weight * third_derivative_bound * radius_squared;
+        let potential_error = 0.5 * self.absolute_weight * hessian_bound * radius_squared;
+        let force_error = 0.5 * self.absolute_weight * third_derivative_bound * radius_squared;
         let torque_error = self.radius * force_error;
         let values = [
             potential,
@@ -248,13 +245,9 @@ impl ResonanceFarFieldExpansion {
         force_tolerance: f64,
         torque_tolerance: f64,
     ) -> bool {
-        [
-            potential_tolerance,
-            force_tolerance,
-            torque_tolerance,
-        ]
-        .iter()
-        .all(|value| value.is_finite() && *value >= 0.0)
+        [potential_tolerance, force_tolerance, torque_tolerance]
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
             && evaluation.error.potential <= potential_tolerance
             && evaluation.error.force <= force_tolerance
             && evaluation.error.torque_about_center <= torque_tolerance
@@ -265,10 +258,7 @@ impl ResonanceFarFieldExpansion {
 mod tests {
     use super::*;
 
-    fn exact_sum(
-        sources: &[WeightedFarFieldSource],
-        target: FarFieldVector,
-    ) -> f64 {
+    fn exact_sum(sources: &[WeightedFarFieldSource], target: FarFieldVector) -> f64 {
         sources
             .iter()
             .map(|source| {
@@ -313,19 +303,15 @@ mod tests {
         ];
         let target = FarFieldVector { x: 8.0, y: 3.0 };
         let expansion =
-            ResonanceFarFieldExpansion::new(FarFieldVector::default(), sources.clone())
-                .unwrap();
+            ResonanceFarFieldExpansion::new(FarFieldVector::default(), sources.clone()).unwrap();
         let approximation = expansion.evaluate(target).unwrap();
         let exact = exact_sum(&sources, target);
-        assert!(
-            (exact - approximation.potential).abs()
-                <= approximation.error.potential + 1e-12
-        );
+        assert!((exact - approximation.potential).abs() <= approximation.error.potential + 1e-12);
         let exact_gradient = exact_gradient(&sources, target);
         assert!(
-            (exact_gradient.x - approximation.target_gradient.x).hypot(
-                exact_gradient.y - approximation.target_gradient.y
-            ) <= approximation.error.force + 1e-12
+            (exact_gradient.x - approximation.target_gradient.x)
+                .hypot(exact_gradient.y - approximation.target_gradient.y)
+                <= approximation.error.force + 1e-12
         );
     }
 
@@ -346,14 +332,15 @@ mod tests {
         let evaluation = expansion
             .evaluate(FarFieldVector { x: 12.0, y: -4.0 })
             .unwrap();
-        let sum = evaluation
-            .source_forces
-            .iter()
-            .fold(FarFieldVector::default(), |mut total, force| {
-                total.x += force.x;
-                total.y += force.y;
-                total
-            });
+        let sum =
+            evaluation
+                .source_forces
+                .iter()
+                .fold(FarFieldVector::default(), |mut total, force| {
+                    total.x += force.x;
+                    total.y += force.y;
+                    total
+                });
         assert!((sum.x + evaluation.target_gradient.x).abs() <= 1e-12);
         assert!((sum.y + evaluation.target_gradient.y).abs() <= 1e-12);
     }
