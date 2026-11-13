@@ -1333,8 +1333,8 @@ mod tests {
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
 
         let pieces = physical
-            .break_internal_bond(&target, &catalog, None)
-            .expect("stored bond");
+            .break_environmental_internal_bond(&target, &catalog, None)
+            .expect("free environmental molecule");
         assert_eq!(pieces.len(), 2);
         let offset = 0.838_f64;
         let expected = Placement {
