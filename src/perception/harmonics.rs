@@ -2278,9 +2278,45 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
             crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
                 blocker, catalog,
             )?;
+        // Rotation is about the center of mass, so expand the broad-phase
+        // envelope by a conservative bound on every point's displacement
+        // under the finite-difference angular step. The bounding-box diagonal
+        // bounds the distance from any point to any center inside the box.
+        let rotation_margin = (geometry.max_x - geometry.min_x)
+            .hypot(geometry.max_y - geometry.min_y)
+            * DIFFERENCE_STEP;
+        if !rotation_margin.is_finite() {
+            return None;
+        }
+        let min_x = step_points
+            .iter()
+            .map(|point| point.0)
+            .fold(f64::INFINITY, f64::min)
+            - rotation_margin;
+        let max_x = step_points
+            .iter()
+            .map(|point| point.0)
+            .fold(f64::NEG_INFINITY, f64::max)
+            + rotation_margin;
+        let min_y = step_points
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::INFINITY, f64::min)
+            - rotation_margin;
+        let max_y = step_points
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::NEG_INFINITY, f64::max)
+            + rotation_margin;
+        let expanded_step_points = [
+            (min_x, min_y),
+            (min_x, max_y),
+            (max_x, min_y),
+            (max_x, max_y),
+        ];
         if geometry_bounds_may_occlude_source_points(
             (source_x, source_y),
-            &step_points,
+            &expanded_step_points,
             &geometry,
         ) {
             relevant_occluder_indices.push(index);
