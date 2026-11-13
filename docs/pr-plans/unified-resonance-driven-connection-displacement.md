@@ -295,3 +295,29 @@ The Phase B runtime audit confirmed that the existing foundations are not yet co
 - A deterministic, non-arbitrary interaction traversal is still needed to enumerate the resonance interactions that exert force before face contact. The existing chemistry candidate lists are contact/discovery work queues and are not a valid substitute for the physical force interaction set.
 - The world snapshot includes free field materials, organism-owned structures, and other owner-mapped bodies. A live commit must map every staged proposal back to its authoritative owner and stage all affected field-cell revisions, structure geometry, topology, and energy before any mutation.
 - Collision/path validation and energy settlement must be joined to the same commit boundary. Until then, staged proposals remain uncommitted.
+
+
+## 7.2 Staged-motion validation and owner-level motion audit (2026-11-13)
+
+**Verified green CI after staged-motion regression fix**
+- The multi-body staged-motion regression now passes with the complete Rust test suite and Clippy green.
+- The failure exposed that organism structure proxy bodies were built with `internal_connections: None`. That state is intentionally unrealized; it is not suitable for mass-property or Newtonian motion calculations.
+- `physical_material_from_structure` now uses `internal_connections: Some(Vec::new())`: the proxy is explicitly realized as one rigid physical body with no inferred internal bonds. This fixes the representation rather than weakening the mass-property checks.
+- Keep the per-body mass-property and force-advance assertions in the regression. They make failures identify the exact body index, environmental identity, and owner mapping.
+
+**New owner-level integration blocker**
+- `world_physical_materials_for_pair_potential` places an organism's main structure, reproductive construction material, stored material, and transformation-held material into the world snapshot as separate physical bodies.
+- Attached bodies carry `force_owner_indices = Some(organism_index)`; this is a mapping to their owner, not permission to advance them as independent rigid bodies.
+- `ResonanceForceAccumulator::stage_motion` currently stages every accumulated body independently. If called directly for an owner-attached body, its proposal would move that body separately from the owning organism. That would violate the invariant that attached material follows the owner.
+- `physical_material_from_structure` currently creates a proxy with default inertial motion. The organism does not yet have a demonstrated persistent owner-level inertial state that can be advanced and committed alongside its complete owned geometry.
+- Before live runtime integration, introduce an explicit canonical owner-body mapping. Accumulate forces and torques from all owner-attached bodies onto that owner, including the torque shift from each body's center of mass to the owner's center of mass. Stage one owner-level rigid-body proposal, then derive all attached-body world poses from that same owner transform. Do not independently advance attached construction/storage/transformation bodies.
+- Environmental field bodies with no owner remain independently movable. Decomposing bodies also need an explicit owner/motion policy rather than being accidentally treated as organisms or free field materials.
+- Add regressions with one organism plus at least one owner-relative construction/storage body: force on the attached body must contribute to the owner's net force and torque; every owned placement must undergo the same rigid transform; no duplicate independent motion proposal may be emitted; any invalid member must reject the whole owner batch.
+
+**Next implementation dependency**
+1. Define and test the canonical owner rigid-body state and stable owner/body mapping.
+2. Aggregate attached-body force/torque into the owner frame, preserving net force and torque about the owner's center of mass.
+3. Stage one atomic pose/momentum update per independently movable entity (organism owner, free environmental material, or explicitly modeled decomposing body).
+4. Only then combine those proposals with collision/path checks, energy settlement, and field-cell revisions at the live commit boundary.
+
+The exact full-world occlusion-aware gradient remains a correctness oracle / pre-runtime source. This owner mapping work does not authorize calling it unconditionally from the tick loop or changing environmental flow's overdamped behavior.
