@@ -2285,12 +2285,14 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                             diagnostics.activation_threshold_met.saturating_add(1);
                                     }
                                     Some(false) => {
-                                        diagnostics.activation_below_threshold =
-                                            diagnostics.activation_below_threshold.saturating_add(1);
+                                        diagnostics.activation_below_threshold = diagnostics
+                                            .activation_below_threshold
+                                            .saturating_add(1);
                                     }
                                     None => {
-                                        diagnostics.activation_status_unavailable =
-                                            diagnostics.activation_status_unavailable.saturating_add(1);
+                                        diagnostics.activation_status_unavailable = diagnostics
+                                            .activation_status_unavailable
+                                            .saturating_add(1);
                                     }
                                 }
                                 let Some(trial) = build_native_environmental_displacement_trial(
@@ -2311,7 +2313,9 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 ) else {
                                     if activation_sufficient == Some(true) {
                                         diagnostics.trial_build_rejections_after_activation =
-                                            diagnostics.trial_build_rejections_after_activation.saturating_add(1);
+                                            diagnostics
+                                            .trial_build_rejections_after_activation
+                                            .saturating_add(1);
                                         diagnostics.trial_rejections_other =
                                             diagnostics.trial_rejections_other.saturating_add(1);
                                     }
@@ -3291,9 +3295,7 @@ mod tests {
                 reference_evaluation.is_some(),
                 "material-native COMBINE evaluation must agree with the reference evaluator"
             );
-            if let (Some(native), Some(reference)) =
-                (native_evaluation, reference_evaluation)
-            {
+            if let (Some(native), Some(reference)) = (native_evaluation, reference_evaluation) {
                 assert_eq!(native.0, reference.0);
                 assert!((native.1 - reference.1).abs() <= 1e-10);
                 assert!((native.2 - reference.2).abs() <= 1e-10);
