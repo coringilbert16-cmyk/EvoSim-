@@ -1056,6 +1056,35 @@ impl LocalResonanceWorldSnapshot {
         Some(contributions)
     }
 
+    /// Sum the exact force gradients for the complete environmental pair
+    /// potential. Every unordered pair contributes once; all other bodies are
+    /// occluders and receive that pair's gradient contribution. This is a
+    /// small-world correctness oracle only: the nested pair traversal plus
+    /// per-pair multi-body finite differences is not suitable for live ticks.
+    #[allow(dead_code)] // Used by conservation tests until a scalable evaluator is proven.
+    pub(crate) fn accumulate_complete_pair_forces(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Option<(usize, ResonanceForceAccumulator)> {
+        let mut accumulator = ResonanceForceAccumulator::default();
+        let mut pair_count = 0usize;
+        for index_a in 0..self.bodies.len() {
+            for index_b in index_a + 1..self.bodies.len() {
+                let identity_a = self.bodies[index_a].environmental_identity;
+                let identity_b = self.bodies[index_b].environmental_identity;
+                let contributions =
+                    self.pair_force_contributions(identity_a, identity_b, catalog)?;
+                if contributions.len() != self.bodies.len()
+                    || !accumulator.add_all(&contributions)
+                {
+                    return None;
+                }
+                pair_count = pair_count.checked_add(1)?;
+            }
+        }
+        Some((pair_count, accumulator))
+    }
+
     /// Return the mean endpoint spectral match to a reaction's natural
     /// frequency. This is a dimensionless activation influence, not energy.
     pub(crate) fn reaction_similarity(
@@ -1665,6 +1694,71 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
+    }
+
+    #[test]
+    fn complete_environmental_pair_force_sum_is_balanced_and_counts_each_pair_once() {
+        let mut simulation = Simulation::new(127, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x, y) in [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 14.0, 11.0),
+            ("Oxygen", 12.0, 16.0),
+        ] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("three-body chemistry snapshot should be valid");
+
+        let (pair_count, accumulator) = snapshot
+            .accumulate_complete_pair_forces(&simulation.environment.catalog)
+            .expect("all unordered environmental pairs should produce finite gradients");
+        assert_eq!(pair_count, 3, "three bodies have exactly three unordered pairs");
+        let forces = accumulator.into_body_forces();
+        assert_eq!(forces.len(), 3, "every body receives its accumulated force once");
+
+        let mut net_force_x = 0.0;
+        let mut net_force_y = 0.0;
+        let mut net_torque_about_origin = 0.0;
+        for body_force in &forces {
+            let body = &snapshot.bodies[body_force.body_index];
+            let properties = body
+                .mass_properties(&simulation.environment.catalog, None)
+                .expect("body mass properties should be valid");
+            net_force_x += body_force.force.x;
+            net_force_y += body_force.force.y;
+            net_torque_about_origin += body_force.force.torque
+                + properties.center_x * body_force.force.y
+                - properties.center_y * body_force.force.x;
+        }
+        assert!(
+            net_force_x.abs() < 1.0e-4 && net_force_y.abs() < 1.0e-4,
+            "complete pair traversal must conserve total linear force: ({net_force_x}, {net_force_y})"
+        );
+        assert!(
+            net_torque_about_origin.abs() < 1.0e-3,
+            "complete pair traversal must conserve total angular force: {net_torque_about_origin}"
+        );
     }
 
     #[test]
