@@ -2069,6 +2069,31 @@ pub(crate) fn resonance_pair_potential_with_occluders(
     potential.is_finite().then_some(potential)
 }
 
+fn resonance_pair_potential_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    emitter_a: &MaterialResonanceEmitter,
+    emitter_b: &MaterialResonanceEmitter,
+) -> Option<f64> {
+    let components = resonance_pair_potential_components_with_prepared_emitters(
+        a,
+        b,
+        occluders,
+        catalog,
+        tick,
+        Some(emitter_a),
+        Some(emitter_b),
+    )?;
+    let potential = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+    potential.is_finite().then_some(potential)
+}
+
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
 pub(crate) fn rotated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
@@ -2185,6 +2210,37 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonanceBodyForce>> {
+    resonance_multi_body_forces_with_optional_prepared_emitters(
+        a, b, occluders, catalog, tick, None,
+    )
+}
+
+pub(crate) fn resonance_multi_body_forces_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    emitters: &[MaterialResonanceEmitter],
+    index_a: usize,
+    index_b: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForce>> {
+    let prepared_a = emitters.iter().find(|emitter| emitter.source_index == index_a);
+    let prepared_b = emitters.iter().find(|emitter| emitter.source_index == index_b);
+    let prepared = prepared_a.zip(prepared_b);
+    resonance_multi_body_forces_with_optional_prepared_emitters(
+        a, b, occluders, catalog, tick, prepared,
+    )
+}
+
+fn resonance_multi_body_forces_with_optional_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitters: Option<(&MaterialResonanceEmitter, &MaterialResonanceEmitter)>,
+) -> Option<Vec<ResonanceBodyForce>> {
     if std::ptr::eq(a, b) {
         return None;
     }
@@ -2192,7 +2248,19 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
     let potential = |source: &crate::physical_material::PhysicalMaterial,
                      receiver: &crate::physical_material::PhysicalMaterial,
                      blockers: &[crate::physical_material::PhysicalMaterial]| {
-        resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
+        if let Some((emitter_a, emitter_b)) = prepared_emitters {
+            resonance_pair_potential_with_prepared_emitters(
+                source,
+                receiver,
+                blockers,
+                catalog,
+                tick,
+                emitter_a,
+                emitter_b,
+            )
+        } else {
+            resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
+        }
     };
     let baseline = potential(a, b, occluders)?;
     if !baseline.is_finite() {
