@@ -248,6 +248,214 @@ impl ResonanceFarFieldExpansion {
         })
     }
 
+    /// Evaluate a source set with deterministic adaptive subdivision.
+    ///
+    /// Each accepted cluster receives an error budget proportional to its
+    /// absolute source weight. Clusters that cannot meet all three budgets are
+    /// bisected along their widest spatial axis; singleton clusters are exact.
+    /// The returned torque and torque error are measured about the root center.
+    pub(crate) fn evaluate_adaptive(
+        sources: &[WeightedFarFieldSource],
+        target: FarFieldVector,
+        potential_tolerance: f64,
+        force_tolerance: f64,
+        torque_tolerance: f64,
+    ) -> Option<FarFieldEvaluation> {
+        if sources.is_empty()
+            || !target.x.is_finite()
+            || !target.y.is_finite()
+            || [potential_tolerance, force_tolerance, torque_tolerance]
+                .iter()
+                .any(|value| !value.is_finite() || *value < 0.0)
+        {
+            return None;
+        }
+        let total_absolute_weight = sources.iter().try_fold(0.0, |sum, source| {
+            (source.position.x.is_finite()
+                && source.position.y.is_finite()
+                && source.weight.is_finite())
+            .then_some(sum + source.weight.abs())
+        })?;
+        if !total_absolute_weight.is_finite() {
+            return None;
+        }
+        let root_center = FarFieldVector {
+            x: sources.iter().map(|source| source.position.x).sum::<f64>()
+                / sources.len() as f64,
+            y: sources.iter().map(|source| source.position.y).sum::<f64>()
+                / sources.len() as f64,
+        };
+        if !root_center.x.is_finite() || !root_center.y.is_finite() {
+            return None;
+        }
+
+        let mut result = FarFieldEvaluation {
+            potential: 0.0,
+            target_gradient: FarFieldVector::default(),
+            source_forces: vec![FarFieldVector::default(); sources.len()],
+            source_force_error_bounds: vec![0.0; sources.len()],
+            torque_about_center: 0.0,
+            error: FarFieldErrorBounds::default(),
+        };
+        if total_absolute_weight <= f64::EPSILON {
+            return Some(result);
+        }
+
+        let indexed = sources.iter().copied().enumerate().collect::<Vec<_>>();
+        Self::accumulate_adaptive_cluster(
+            indexed,
+            target,
+            root_center,
+            total_absolute_weight,
+            potential_tolerance,
+            force_tolerance,
+            torque_tolerance,
+            &mut result,
+        )?;
+        Some(result)
+    }
+
+    fn accumulate_adaptive_cluster(
+        mut indexed_sources: Vec<(usize, WeightedFarFieldSource)>,
+        target: FarFieldVector,
+        root_center: FarFieldVector,
+        total_absolute_weight: f64,
+        potential_tolerance: f64,
+        force_tolerance: f64,
+        torque_tolerance: f64,
+        result: &mut FarFieldEvaluation,
+    ) -> Option<()> {
+        let absolute_weight = indexed_sources
+            .iter()
+            .map(|(_, source)| source.weight.abs())
+            .sum::<f64>();
+        if absolute_weight <= f64::EPSILON {
+            return Some(());
+        }
+        let center = FarFieldVector {
+            x: indexed_sources
+                .iter()
+                .map(|(_, source)| source.position.x)
+                .sum::<f64>()
+                / indexed_sources.len() as f64,
+            y: indexed_sources
+                .iter()
+                .map(|(_, source)| source.position.y)
+                .sum::<f64>()
+                / indexed_sources.len() as f64,
+        };
+        let cluster_sources = indexed_sources
+            .iter()
+            .map(|(_, source)| *source)
+            .collect::<Vec<_>>();
+        let expansion = Self::new(center, cluster_sources)?;
+        if let Some(evaluation) = expansion.evaluate(target) {
+            let share = absolute_weight / total_absolute_weight;
+            let budget_met = evaluation.error.potential <= potential_tolerance * share
+                && evaluation.error.force <= force_tolerance * share
+                && indexed_sources
+                    .iter()
+                    .zip(&evaluation.source_force_error_bounds)
+                    .all(|((_, source), source_error)| {
+                        let distance = (source.position.x - root_center.x)
+                            .hypot(source.position.y - root_center.y);
+                        distance * source_error <= torque_tolerance * share
+                    });
+            if budget_met {
+                result.potential += evaluation.potential;
+                result.target_gradient.x += evaluation.target_gradient.x;
+                result.target_gradient.y += evaluation.target_gradient.y;
+                let cluster_force = evaluation
+                    .source_forces
+                    .iter()
+                    .fold(FarFieldVector::default(), |mut sum, force| {
+                        sum.x += force.x;
+                        sum.y += force.y;
+                        sum
+                    });
+                result.torque_about_center += evaluation.torque_about_center
+                    + (center.x - root_center.x) * cluster_force.y
+                    - (center.y - root_center.y) * cluster_force.x;
+                result.error.potential += evaluation.error.potential;
+                result.error.force += evaluation.error.force;
+                for (((source_index, source), force), source_error) in indexed_sources
+                    .drain(..)
+                    .zip(evaluation.source_forces)
+                    .zip(evaluation.source_force_error_bounds)
+                {
+                    let distance =
+                        (source.position.x - root_center.x).hypot(source.position.y - root_center.y);
+                    result.source_forces[source_index] = force;
+                    result.source_force_error_bounds[source_index] = source_error;
+                    result.error.torque_about_center += distance * source_error;
+                }
+                return Some(());
+            }
+        }
+
+        if indexed_sources.len() == 1 {
+            // A singleton has zero cluster radius and is exact unless its
+            // target coincides with the source, where the radial gradient is
+            // undefined and the caller must use a regularized exact policy.
+            return None;
+        }
+
+        let (min_x, max_x, min_y, max_y) = indexed_sources.iter().fold(
+            (
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ),
+            |(min_x, max_x, min_y, max_y), (_, source)| {
+                (
+                    min_x.min(source.position.x),
+                    max_x.max(source.position.x),
+                    min_y.min(source.position.y),
+                    max_y.max(source.position.y),
+                )
+            },
+        );
+        let split_x = max_x - min_x >= max_y - min_y;
+        indexed_sources.sort_by(|(index_a, source_a), (index_b, source_b)| {
+            let coordinate_a = if split_x {
+                source_a.position.x
+            } else {
+                source_a.position.y
+            };
+            let coordinate_b = if split_x {
+                source_b.position.x
+            } else {
+                source_b.position.y
+            };
+            coordinate_a
+                .partial_cmp(&coordinate_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| index_a.cmp(index_b))
+        });
+        let right = indexed_sources.split_off(indexed_sources.len() / 2);
+        Self::accumulate_adaptive_cluster(
+            indexed_sources,
+            target,
+            root_center,
+            total_absolute_weight,
+            potential_tolerance,
+            force_tolerance,
+            torque_tolerance,
+            result,
+        )?;
+        Self::accumulate_adaptive_cluster(
+            right,
+            target,
+            root_center,
+            total_absolute_weight,
+            potential_tolerance,
+            force_tolerance,
+            torque_tolerance,
+            result,
+        )
+    }
+
     /// Accept only when every requested absolute error budget is met.
     pub(crate) fn meets_error_budget(
         &self,
@@ -372,6 +580,43 @@ mod tests {
                 });
         assert!((sum.x + evaluation.target_gradient.x).abs() <= 1e-12);
         assert!((sum.y + evaluation.target_gradient.y).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn adaptive_expansion_subdivides_until_all_error_budgets_are_met() {
+        let sources = vec![
+            WeightedFarFieldSource { position: FarFieldVector { x: -1.2, y: 0.1 }, weight: 0.8 },
+            WeightedFarFieldSource { position: FarFieldVector { x: -0.8, y: -0.1 }, weight: -0.2 },
+            WeightedFarFieldSource { position: FarFieldVector { x: 0.7, y: 0.2 }, weight: 1.1 },
+            WeightedFarFieldSource { position: FarFieldVector { x: 1.1, y: -0.2 }, weight: 0.4 },
+        ];
+        let target = FarFieldVector { x: 0.0, y: 8.0 };
+        let evaluation = ResonanceFarFieldExpansion::evaluate_adaptive(
+            &sources, target, 1e-4, 1e-4, 1e-4,
+        )
+        .unwrap();
+        let exact = exact_sum(&sources, target);
+        let exact_force = exact_gradient(&sources, target);
+        assert!((exact - evaluation.potential).abs() <= evaluation.error.potential + 1e-12);
+        assert!(
+            (exact_force.x - evaluation.target_gradient.x)
+                .hypot(exact_force.y - evaluation.target_gradient.y)
+                <= evaluation.error.force + 1e-12
+        );
+        assert!(evaluation.error.potential <= 1e-4);
+        assert!(evaluation.error.force <= 1e-4);
+        assert!(evaluation.error.torque_about_center <= 1e-4);
+        for (source, force) in sources.iter().zip(&evaluation.source_forces) {
+            let dx = target.x - source.position.x;
+            let dy = target.y - source.position.y;
+            let distance = dx.hypot(dy);
+            let scale = source.weight / (distance * (1.0 + distance).powi(2));
+            let exact_source_force = FarFieldVector { x: scale * dx, y: scale * dy };
+            assert!(
+                (exact_source_force.x - force.x).hypot(exact_source_force.y - force.y)
+                    <= evaluation.source_force_error_bounds[sources.iter().position(|candidate| std::ptr::eq(candidate, source)).unwrap()] + 1e-12
+            );
+        }
     }
 
     #[test]
