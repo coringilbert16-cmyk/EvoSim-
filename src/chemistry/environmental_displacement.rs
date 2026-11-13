@@ -1560,13 +1560,30 @@ fn census_replacement_contacts(
         return census;
     }
 
-    let (candidates, raw_count, limit_reached) = crate::contact::connection_pair_candidates_bounded(
-        &topology_trial,
-        anchor_unit,
-        incoming_unit,
-        catalog,
-        work_limit,
-    );
+    let (candidates, raw_count, limit_reached) = if work_limit == usize::MAX {
+        // The exhaustive test oracle must use the same unbounded candidate
+        // authority that COMBINE uses when it revalidates an admitted pair.
+        // The bounded discovery enumerator is intentionally allowed to prune
+        // work and is not an appropriate source of an admission fixture.
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidates = crate::contact::connection_pair_candidates_cached(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            &mut cache,
+        );
+        let count = candidates.len();
+        (candidates, count, false)
+    } else {
+        crate::contact::connection_pair_candidates_bounded(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            work_limit,
+        )
+    };
     census.raw_candidates_inspected = raw_count;
     census.work_limit_reached = limit_reached;
     let mut seen: Vec<ConnectionPairCandidate> = Vec::new();
