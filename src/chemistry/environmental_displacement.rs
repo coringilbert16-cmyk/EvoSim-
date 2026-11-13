@@ -541,67 +541,12 @@ fn environmental_constituent_endpoint_world_point(
     endpoint: crate::structure::ConnectionEndpoint,
     catalog: &[BaseResource],
 ) -> Option<crate::connection_geometry::WorldConnectionPoint> {
-    if material.owner_relative_origin.is_some() {
-        return None;
-    }
-    let placement = *material.placements.as_ref()?.get(part_index)?;
-    let shape = material.realized_shape_for_part(part_index, catalog)?;
-    match endpoint {
-        crate::structure::ConnectionEndpoint::Corner { point_index } => {
-            crate::connection_geometry::transform_polygon_vertex(
-                &shape,
-                point_index,
-                placement.x,
-                placement.y,
-                placement.rotation_radians,
-            )
-        }
-        crate::structure::ConnectionEndpoint::LineEndpoint { point_index } => {
-            let is_line_like = match &shape.form {
-                crate::resources::Form::Line { .. } => true,
-                crate::resources::Form::Rectangle { width, height } => {
-                    material.material.parts.len() == 1
-                        && material.material.parts[part_index].0 == "Hydrogen"
-                        && *height <= *width * 0.1 + 1e-12
-                }
-                _ => false,
-            };
-            if !is_line_like {
-                return None;
-            }
-            crate::connection_geometry::rigid_endpoint_world_point(
-                &shape,
-                point_index,
-                placement.x,
-                placement.y,
-                placement.rotation_radians,
-            )
-        }
-        crate::structure::ConnectionEndpoint::Boundary { angle_radians } => {
-            let (nx, ny) = (angle_radians.cos(), angle_radians.sin());
-            let point = crate::surface_geometry::boundary_point_toward(&shape, nx, ny)?;
-            Some(crate::connection_geometry::transform_derived_point(
-                point.x,
-                point.y,
-                point.normal_x,
-                point.normal_y,
-                placement.x,
-                placement.y,
-                placement.rotation_radians,
-            ))
-        }
-        crate::structure::ConnectionEndpoint::Fluid { x, y } => {
-            Some(crate::connection_geometry::transform_derived_point(
-                x,
-                y,
-                0.0,
-                0.0,
-                placement.x,
-                placement.y,
-                placement.rotation_radians,
-            ))
-        }
-    }
+    crate::material_contact::endpoint_world_point_for_material_part(
+        material,
+        part_index,
+        endpoint,
+        catalog,
+    )
 }
 
 fn displacement_reaction_frequency_from_materials(
@@ -3112,8 +3057,8 @@ mod tests {
             let matching = reference
                 .iter()
                 .find(|other| {
-                    endpoint_matches(candidate.endpoint_a, other.endpoint_a)
-                        && endpoint_matches(candidate.endpoint_b, other.endpoint_b)
+                    candidate.endpoint_a.same_location(other.endpoint_a)
+                        && candidate.endpoint_b.same_location(other.endpoint_b)
                 })
                 .expect("every material-native endpoint pair should exist in reference geometry");
             assert!((candidate.distance - matching.distance).abs() <= 1e-10);
