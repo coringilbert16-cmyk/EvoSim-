@@ -7,9 +7,7 @@
 use crate::resources::BaseResource;
 use crate::structure::OrganismStructure;
 
-pub use crate::physical_body_geometry::{
-    PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm,
-};
+pub use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
 
 impl crate::physical_body_geometry::PhysicalBodyGeometry {
     pub fn from_structure(structure: &OrganismStructure, catalog: &[BaseResource]) -> Option<Self> {
