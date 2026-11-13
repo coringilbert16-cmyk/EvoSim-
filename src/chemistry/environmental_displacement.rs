@@ -8,7 +8,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+#[cfg(test)]
+use crate::contact::ConnectionCompatibilityCache;
+use crate::contact::ConnectionPairCandidate;
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::state::{EnergyLedger, Environment, EnvironmentalDisplacementDiscoveryDiagnostics};
 
@@ -629,7 +631,7 @@ fn build_environmental_displacement_products(
         .enumerate()
     {
         if bond_index != old_bond_index {
-            bonds.push((bond.clone(), connection.clone()));
+            bonds.push((*bond, connection.clone()));
         }
     }
     for (bond, connection) in source_b
@@ -668,7 +670,7 @@ fn build_environmental_displacement_products(
 
     let material = Material {
         parts,
-        internal_bonds: bonds.iter().map(|(bond, _)| bond.clone()).collect(),
+        internal_bonds: bonds.iter().map(|(bond, _)| *bond).collect(),
     };
     if !material.is_valid_for_catalog(catalog)
         || bonds.iter().any(|(_, connection)| {
@@ -969,6 +971,7 @@ fn accumulate_incoming_activation_with_resonance(
 
 /// Fully evaluated trial topology and its independently exported physical products.
 /// Nothing in this value has been committed to the live environment.
+#[cfg(test)]
 #[derive(Clone, Debug)]
 pub(crate) struct DisplacementTrial {
     #[cfg(test)]
@@ -989,6 +992,7 @@ pub(crate) struct DisplacementTrial {
     pub(crate) disruption_work: f64,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum DisplacementTrialFailureStage {
     Activation,
@@ -1004,6 +1008,7 @@ enum DisplacementTrialFailureStage {
     Other,
 }
 
+#[cfg(test)]
 #[derive(Debug, Default)]
 struct DisplacementTrialDiagnostic {
     activation_sufficient: Option<bool>,
@@ -1017,6 +1022,7 @@ struct DisplacementTrialDiagnostic {
 /// Build the proposed topology on a clone. The caller must discover the supplied
 /// replacement candidate from an equivalent trial graph after removing the old
 /// A-B bond, allowing contact search to consider every newly available endpoint.
+#[cfg(test)]
 pub(crate) fn build_displacement_trial(
     source: &OrganismStructure,
     anchor_unit: usize,
@@ -1046,6 +1052,7 @@ pub(crate) fn build_displacement_trial(
     )
 }
 
+#[cfg(test)]
 fn build_displacement_trial_with_activation_status(
     source: &OrganismStructure,
     anchor_unit: usize,
@@ -1312,6 +1319,7 @@ pub(crate) fn commit_displacement_trial(
 /// A replacement is eligible only when the incoming pair is stronger under
 /// the same bond-strength calculation used to create ordinary bonds. Energy
 /// funding never changes the result of bond competition.
+#[cfg(test)]
 fn replacement_wins_bond_competition(
     anchor: ResourceProperties,
     displaced: ResourceProperties,
@@ -1448,6 +1456,7 @@ pub(crate) struct EnvironmentalDisplacementOperation {
     pub(crate) work_required: f64,
 }
 
+#[cfg(test)]
 fn restore_displacement_source(
     source: &PhysicalMaterial,
     environment: &Environment,
@@ -1674,7 +1683,7 @@ fn best_replacement_contact(
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
     let candidates = if let (
         Some((source_a, source_b)),
-        Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
+        Some((anchor_part, _displaced_part, incoming_part, old_bond_index)),
     ) = (sources, source_parts)
     {
         crate::material_contact::connection_pair_candidates_for_material_parts(
