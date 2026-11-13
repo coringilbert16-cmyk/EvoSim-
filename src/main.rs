@@ -54,6 +54,8 @@ mod construction_material_selection;
 mod construction_runtime;
 #[path = "geometry/contact.rs"]
 mod contact;
+#[path = "geometry/material_contact.rs"]
+mod material_contact;
 #[path = "bob/worker.rs"]
 mod geometry_library_worker;
 #[path = "bob/library.rs"]
