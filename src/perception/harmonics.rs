@@ -1958,7 +1958,7 @@ pub(crate) fn resonance_pair_potential_with_occluders(
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
-fn rotated_physical_material(
+pub(crate) fn rotated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
     angle: f64,
     catalog: &[crate::resources::BaseResource],
