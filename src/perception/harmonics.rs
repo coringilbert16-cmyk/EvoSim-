@@ -3833,6 +3833,57 @@ mod tests {
     }
 
     #[test]
+    fn asymmetric_occluder_receives_resonance_torque() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should realize")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let asymmetric_occluder = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 4.0,
+                    y: 0.25,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 4.0,
+                    y: 1.5,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("asymmetric occluder should realize");
+        let forces = resonance_multi_body_forces_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&asymmetric_occluder),
+            &catalog,
+            0,
+        )
+        .expect("asymmetric multi-body gradient should be valid");
+        assert!(
+            forces[2].torque.abs() > 1e-8,
+            "rotating an asymmetric occluder changes its visibility contribution and must produce torque"
+        );
+    }
+
+    #[test]
     fn different_material_phase_response_can_produce_attraction() {
         let catalog = crate::resources::default_catalog();
         let carbon = crate::physical_material::PhysicalMaterial::realized(
