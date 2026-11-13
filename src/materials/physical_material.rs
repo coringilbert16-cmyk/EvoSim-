@@ -344,6 +344,77 @@ impl PhysicalMaterial {
     /// Derive rigid-body mass, center of mass, and planar moment of inertia
     /// from constituent masses and their authoritative realized geometry.
     /// A vertical period is supplied only for worlds with periodic Y geometry.
+    /// Propose one Newtonian rigid-body step under a constant net force and
+    /// torque. Translation and rotation use midpoint velocity, so a constant
+    /// acceleration advances the pose consistently with the updated momentum.
+    /// This is a pure staged proposal: callers must validate collision/path
+    /// constraints and settle the before/after kinetic and pair-potential energy
+    /// changes before committing the returned material.
+    pub(crate) fn advanced_under_force(
+        &self,
+        force_x: f64,
+        force_y: f64,
+        torque: f64,
+        delta_time: f64,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Self> {
+        if !self.is_realized()
+            || !delta_time.is_finite()
+            || delta_time < 0.0
+            || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        {
+            return None;
+        }
+        let mass_properties = self.mass_properties(catalog, vertical_period)?;
+        let next_motion = self.inertial_motion.advanced(
+            force_x,
+            force_y,
+            torque,
+            mass_properties.mass,
+            mass_properties.moment_of_inertia,
+            delta_time,
+        )?;
+        let dx = 0.5
+            * (self.inertial_motion.velocity_x + next_motion.velocity_x)
+            * delta_time;
+        let dy = 0.5
+            * (self.inertial_motion.velocity_y + next_motion.velocity_y)
+            * delta_time;
+        let angle = 0.5
+            * (self.inertial_motion.angular_velocity + next_motion.angular_velocity)
+            * delta_time;
+        if ![dx, dy, angle].iter().all(|value| value.is_finite()) {
+            return None;
+        }
+
+        let (sin, cos) = angle.sin_cos();
+        let mut advanced = self.clone();
+        let placements = advanced.placements.as_mut()?;
+        for placement in placements {
+            let offset_x = placement.x - mass_properties.center_x;
+            let raw_offset_y = placement.y - mass_properties.center_y;
+            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
+                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let rotated_x = offset_x * cos - offset_y * sin;
+            let rotated_y = offset_x * sin + offset_y * cos;
+            placement.x = mass_properties.center_x + dx + rotated_x;
+            let next_y = mass_properties.center_y + dy + rotated_y;
+            placement.y = vertical_period.map_or(next_y, |period| next_y.rem_euclid(period));
+            placement.rotation_radians =
+                (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+        }
+        advanced.inertial_motion = next_motion;
+        advanced.is_realized().then_some(advanced)
+    }
+
     pub(crate) fn mass_properties(
         &self,
         catalog: &[BaseResource],
