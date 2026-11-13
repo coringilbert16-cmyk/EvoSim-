@@ -659,7 +659,10 @@ impl PhysicalMaterial {
         // Persisted active transformations can reach completion without passing
         // through the ordinary source-selection gate. Revalidate the whole
         // object so malformed bond topology cannot be split into new objects.
-        if !self.is_realized() || self.owner_relative_origin.is_some() {
+        if !self.is_realized()
+            || !self.inertial_motion.is_finite()
+            || self.owner_relative_origin.is_some()
+        {
             return None;
         }
         let source_mass_properties = self.mass_properties(catalog, vertical_period)?;
