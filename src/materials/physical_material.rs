@@ -1767,9 +1767,7 @@ mod tests {
             "persisted connection endpoints must agree with declared material topology"
         );
         assert!(
-            physical
-                .break_internal_bond(&malformed_target)
-                .is_none(),
+            physical.break_internal_bond(&malformed_target).is_none(),
             "stored BREAK completion must fail closed on malformed persisted topology"
         );
     }
