@@ -129,8 +129,6 @@ mod developmental_decision;
 mod genome;
 #[path = "perception/harmonics.rs"]
 mod harmonics;
-#[path = "perception/resonance_far_field.rs"]
-mod resonance_far_field;
 #[path = "organism/memory.rs"]
 mod memory;
 #[path = "perception/movement.rs"]
@@ -143,6 +141,8 @@ mod observation;
 mod recycling;
 #[path = "organism/reproduction.rs"]
 mod reproduction;
+#[path = "perception/resonance_far_field.rs"]
+mod resonance_far_field;
 #[path = "organism/structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
