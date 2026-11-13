@@ -1839,6 +1839,26 @@ mod tests {
                 && contribution.force.y.is_finite()
                 && contribution.force.torque.is_finite()
         }));
+
+        let direct = crate::harmonics::resonance_multi_body_forces_with_occluders(
+            &snapshot.bodies[0],
+            &snapshot.bodies[1],
+            &[snapshot.bodies[2].clone()],
+            &simulation.environment.catalog,
+            snapshot.tick,
+        )
+        .expect("uncached pair evaluator should provide the reference force");
+        assert_eq!(direct.len(), contributions.len());
+        for contribution in &contributions {
+            let reference = direct[contribution.body_index];
+            assert!(
+                (contribution.force.x - reference.x).abs() < 1.0e-10
+                    && (contribution.force.y - reference.y).abs() < 1.0e-10
+                    && (contribution.force.torque - reference.torque).abs() < 1.0e-10,
+                "prepared emitter forces must exactly match the uncached reference"
+            );
+        }
+
         let total_force = contributions.iter().fold((0.0, 0.0), |sum, contribution| {
             (sum.0 + contribution.force.x, sum.1 + contribution.force.y)
         });
