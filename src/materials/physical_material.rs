@@ -377,9 +377,9 @@ impl PhysicalMaterial {
         )?;
         let dx = 0.5 * (self.inertial_motion.velocity_x + next_motion.velocity_x) * delta_time;
         let dy = 0.5 * (self.inertial_motion.velocity_y + next_motion.velocity_y) * delta_time;
-        let angle =
-            0.5 * (self.inertial_motion.angular_velocity + next_motion.angular_velocity)
-                * delta_time;
+        let angle = 0.5
+            * (self.inertial_motion.angular_velocity + next_motion.angular_velocity)
+            * delta_time;
         if ![dx, dy, angle].iter().all(|value| value.is_finite()) {
             return None;
         }
