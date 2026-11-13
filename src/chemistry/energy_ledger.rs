@@ -518,7 +518,7 @@ impl EnergyInventorySnapshot {
 /// Settle a signed change in the conservative resonance pair potential.
 ///
 /// Positive changes are funded only by the active mover's usable energy.
-/// Negative changes are returned across eligible biological resonance stores
+/// Negative changes are returned across eligible resonance stores
 /// in proportion to their negative frequency-resolved contributions. Full
 /// stores are skipped; energy no holder can retain is dissipated as heat. The pair-potential change
 /// is recorded as held energy and is never also counted as expended work.
