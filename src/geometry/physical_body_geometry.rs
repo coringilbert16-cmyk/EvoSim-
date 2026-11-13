@@ -39,13 +39,7 @@ fn point_in_polygon(point: (f64, f64), vertices: &[(f64, f64)]) -> bool {
     inside
 }
 
-impl OrganismBodyGeometry {
-    /// Build a world-space body from every physically realized constituent.
-    ///
-    /// Unlike `from_structure`, this includes unbonded units as well as bonded
-    /// structural components. Sunlight occlusion follows physical presence, not
-    /// the organism's current connectivity classification.
-    /// Used by live world-tone exposure to include every realized structural unit.
+impl PhysicalBodyGeometry {
     /// Build aggregate geometry for a physically realized material in world coordinates.
     ///
     /// Unlike logical material stock, this object has constituent placements and may
@@ -246,7 +240,7 @@ pub(crate) struct SourceFacingSurfacePoint {
 #[allow(dead_code)] // Staged exposure query; energy capture is not wired yet.
 pub(crate) fn visible_source_facing_points(
     source: (f64, f64),
-    bodies: &[OrganismBodyGeometry],
+    bodies: &[PhysicalBodyGeometry],
 ) -> Vec<SourceFacingSurfacePoint> {
     if !source.0.is_finite() || !source.1.is_finite() {
         return Vec::new();
@@ -315,7 +309,7 @@ pub(crate) fn visible_source_facing_points(
 pub(crate) fn source_path_blocked(
     source: (f64, f64),
     target: (f64, f64),
-    bodies: &[OrganismBodyGeometry],
+    bodies: &[PhysicalBodyGeometry],
     target_body_index: usize,
     target_unit_index: usize,
 ) -> bool {
@@ -334,7 +328,7 @@ pub(crate) fn source_path_blocked(
 pub(crate) fn source_path_blocked_for_candidates(
     source: (f64, f64),
     target: (f64, f64),
-    bodies: &[OrganismBodyGeometry],
+    bodies: &[PhysicalBodyGeometry],
     target_body_index: usize,
     target_unit_index: usize,
     candidate_body_indices: &[usize],
@@ -352,7 +346,7 @@ pub(crate) fn source_path_blocked_for_candidates(
 fn source_path_blocked_inner(
     source: (f64, f64),
     target: (f64, f64),
-    bodies: &[OrganismBodyGeometry],
+    bodies: &[PhysicalBodyGeometry],
     target_body_index: usize,
     target_unit_index: usize,
     candidate_body_indices: Option<&[usize]>,
@@ -411,7 +405,7 @@ fn source_path_blocked_inner(
 
 fn body_blocks_segment(
     body_index: usize,
-    body: &OrganismBodyGeometry,
+    body: &PhysicalBodyGeometry,
     source: (f64, f64),
     target: (f64, f64),
     target_body_index: usize,
@@ -630,8 +624,8 @@ mod tests {
     use super::*;
     use crate::resources::Form;
 
-    fn body(form: Form) -> OrganismBodyGeometry {
-        OrganismBodyGeometry {
+    fn body(form: Form) -> PhysicalBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form,
@@ -660,7 +654,7 @@ mod tests {
         )
         .expect("catalog material should have a valid physical realization");
 
-        let geometry = OrganismBodyGeometry::from_physical_material(&physical, &catalog)
+        let geometry = PhysicalBodyGeometry::from_physical_material(&physical, &catalog)
             .expect("realized physical material should expose blocker geometry");
         assert_eq!(geometry.parts.len(), 1);
         assert_eq!(geometry.parts[0].unit_index, 0);
@@ -719,7 +713,7 @@ mod tests {
     #[test]
     fn source_path_detects_an_intervening_circle_without_raster_sampling() {
         let target_body = body(Form::Circle { radius: 1.0 });
-        let blocker = OrganismBodyGeometry {
+        let blocker = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Circle { radius: 1.0 },
@@ -784,7 +778,7 @@ mod tests {
 
     #[test]
     fn containment_is_union_of_realized_parts() {
-        let geometry = OrganismBodyGeometry {
+        let geometry = PhysicalBodyGeometry {
             parts: vec![
                 PlacedForm {
                     unit_index: 0,
