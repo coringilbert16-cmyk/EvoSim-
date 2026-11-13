@@ -587,10 +587,22 @@ mod tests {
     #[test]
     fn adaptive_expansion_subdivides_until_all_error_budgets_are_met() {
         let sources = vec![
-            WeightedFarFieldSource { position: FarFieldVector { x: -1.2, y: 0.1 }, weight: 0.8 },
-            WeightedFarFieldSource { position: FarFieldVector { x: -0.8, y: -0.1 }, weight: -0.2 },
-            WeightedFarFieldSource { position: FarFieldVector { x: 0.7, y: 0.2 }, weight: 1.1 },
-            WeightedFarFieldSource { position: FarFieldVector { x: 1.1, y: -0.2 }, weight: 0.4 },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: -1.2, y: 0.1 },
+                weight: 0.8,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: -0.8, y: -0.1 },
+                weight: -0.2,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 0.7, y: 0.2 },
+                weight: 1.1,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 1.1, y: -0.2 },
+                weight: 0.4,
+            },
         ];
         let target = FarFieldVector { x: 0.0, y: 8.0 };
         let evaluation =
