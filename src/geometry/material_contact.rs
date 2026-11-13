@@ -6,10 +6,10 @@ use crate::connection_geometry::{
     facing_compatibility, point_distance, rigid_endpoint_world_point, transform_derived_point,
     WorldConnectionPoint,
 };
+use crate::contact::ConnectionPairCandidate;
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::resources::{BaseResource, Form, Shape};
 use crate::structure::{ConnectionEndpoint, Placement};
-use crate::contact::ConnectionPairCandidate;
 use crate::surface_geometry::boundary_point_toward;
 
 const ENDPOINT_TOLERANCE: f64 = 1e-8;
@@ -167,8 +167,7 @@ fn endpoint_matches(actual: ConnectionEndpoint, expected: ConnectionEndpoint) ->
             ConnectionEndpoint::Boundary { angle_radians: a },
             ConnectionEndpoint::Boundary { angle_radians: b },
         ) if a.is_finite() && b.is_finite() => {
-            let delta = (a - b + std::f64::consts::PI)
-                .rem_euclid(std::f64::consts::TAU)
+            let delta = (a - b + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
                 - std::f64::consts::PI;
             delta.abs() <= ENDPOINT_TOLERANCE
         }
@@ -176,8 +175,7 @@ fn endpoint_matches(actual: ConnectionEndpoint, expected: ConnectionEndpoint) ->
             ConnectionEndpoint::Fluid { x: ax, y: ay },
             ConnectionEndpoint::Fluid { x: bx, y: by },
         ) if [ax, ay, bx, by].iter().all(|v| v.is_finite()) => {
-            (ax - bx).abs() <= ENDPOINT_TOLERANCE
-                && (ay - by).abs() <= ENDPOINT_TOLERANCE
+            (ax - bx).abs() <= ENDPOINT_TOLERANCE && (ay - by).abs() <= ENDPOINT_TOLERANCE
         }
         _ => actual == expected,
     }
@@ -249,12 +247,7 @@ fn rigid_boundary_endpoint(
 type Point2 = (f64, f64);
 type SegmentPair = (Point2, Point2);
 
-fn segment_feature_contacts(
-    a0: Point2,
-    a1: Point2,
-    b0: Point2,
-    b1: Point2,
-) -> Vec<SegmentPair> {
+fn segment_feature_contacts(a0: Point2, a1: Point2, b0: Point2, b1: Point2) -> Vec<SegmentPair> {
     fn cross(a: Point2, b: Point2) -> f64 {
         a.0 * b.1 - a.1 * b.0
     }
@@ -273,8 +266,7 @@ fn segment_feature_contacts(
         if length_squared <= 1e-24 {
             return None;
         }
-        let t = ((point.0 - start.0) * edge.0 + (point.1 - start.1) * edge.1)
-            / length_squared;
+        let t = ((point.0 - start.0) * edge.0 + (point.1 - start.1) * edge.1) / length_squared;
         if !(-1e-10..=1.0000000001).contains(&t) {
             return None;
         }
@@ -282,8 +274,8 @@ fn segment_feature_contacts(
     }
     fn push_unique(out: &mut Vec<SegmentPair>, pair: SegmentPair) {
         if !out.iter().any(|&(a, b)| {
-            (a.0 - pair.0.0).hypot(a.1 - pair.0.1) <= 1e-10
-                && (b.0 - pair.1.0).hypot(b.1 - pair.1.1) <= 1e-10
+            (a.0 - pair.0 .0).hypot(a.1 - pair.0 .1) <= 1e-10
+                && (b.0 - pair.1 .0).hypot(b.1 - pair.1 .1) <= 1e-10
         }) {
             out.push(pair);
         }
@@ -297,9 +289,7 @@ fn segment_feature_contacts(
         let delta = sub(b0, a0);
         let t = cross(delta, br) / denominator;
         let u = cross(delta, ar) / denominator;
-        if (-1e-10..=1.0000000001).contains(&t)
-            && (-1e-10..=1.0000000001).contains(&u)
-        {
+        if (-1e-10..=1.0000000001).contains(&t) && (-1e-10..=1.0000000001).contains(&u) {
             let point = add(a0, scale(ar, t.clamp(0.0, 1.0)));
             push_unique(&mut out, (point, point));
         }
@@ -323,8 +313,14 @@ fn rigid_surface_candidates(
     limit: usize,
 ) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     if limit == 0
-        || matches!(&a.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
-        || matches!(&b.shape.form, Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. })
+        || matches!(
+            &a.shape.form,
+            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+        )
+        || matches!(
+            &b.shape.form,
+            Form::Circle { .. } | Form::Line { .. } | Form::Fluid { .. }
+        )
     {
         return Vec::new();
     }
@@ -408,8 +404,7 @@ fn multi_contact_fluid_pairs(
             if length_squared <= f64::EPSILON {
                 return false;
             }
-            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared)
-                .clamp(0.0, 1.0);
+            let t = (((x - start_x) * dx + (y - start_y) * dy) / length_squared).clamp(0.0, 1.0);
             let px = start_x + t * dx;
             let py = start_y + t * dy;
             (x - px).hypot(y - py) <= CONTACT_POINT_TOLERANCE
@@ -422,11 +417,14 @@ fn multi_contact_fluid_pairs(
         };
         let local = to_local(world.x, world.y);
         if on_solid_contact(local.0, local.1) {
-            if let Some(point) = crate::surface_geometry::boundary_point_at_multi_contact(
-                boundary, local.0, local.1,
-            ) {
+            if let Some(point) =
+                crate::surface_geometry::boundary_point_at_multi_contact(boundary, local.0, local.1)
+            {
                 out.push((
-                    ConnectionEndpoint::Fluid { x: point.x, y: point.y },
+                    ConnectionEndpoint::Fluid {
+                        x: point.x,
+                        y: point.y,
+                    },
                     rigid_endpoint,
                 ));
                 if out.len() >= limit {
@@ -466,9 +464,7 @@ fn multi_contact_fluid_pairs(
             let Some(rigid_world) = endpoint_world_point(rigid, endpoint) else {
                 continue;
             };
-            if (rigid_world.x - world.0).hypot(rigid_world.y - world.1)
-                <= CONTACT_POINT_TOLERANCE
-            {
+            if (rigid_world.x - world.0).hypot(rigid_world.y - world.1) <= CONTACT_POINT_TOLERANCE {
                 out.push((ConnectionEndpoint::Fluid { x, y }, endpoint));
                 if out.len() >= limit {
                     return out;
@@ -479,7 +475,10 @@ fn multi_contact_fluid_pairs(
     out
 }
 
-fn candidate_endpoints(a: &ConstituentView, b: &ConstituentView) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
+fn candidate_endpoints(
+    a: &ConstituentView,
+    b: &ConstituentView,
+) -> Vec<(ConnectionEndpoint, ConnectionEndpoint)> {
     let mut out = Vec::new();
     let ea = endpoint_indices(a);
     let eb = endpoint_indices(b);
@@ -518,7 +517,10 @@ fn candidate_endpoints(a: &ConstituentView, b: &ConstituentView) -> Vec<(Connect
             normal_x: 0.0,
             normal_y: 0.0,
         };
-        if let (Some(x), Some(y)) = (continuous_endpoint(a, center_b), continuous_endpoint(b, center_a)) {
+        if let (Some(x), Some(y)) = (
+            continuous_endpoint(a, center_b),
+            continuous_endpoint(b, center_a),
+        ) {
             out.push((x, y));
         }
     }
@@ -527,10 +529,26 @@ fn candidate_endpoints(a: &ConstituentView, b: &ConstituentView) -> Vec<(Connect
         b,
         usize::MAX.saturating_sub(out.len()),
     ));
-    if matches!(&a.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
-        out.extend(multi_contact_fluid_pairs(a, b, usize::MAX.saturating_sub(out.len())));
+    if matches!(
+        &a.shape.form,
+        Form::Fluid {
+            multi_contact_boundary: Some(_),
+            ..
+        }
+    ) {
+        out.extend(multi_contact_fluid_pairs(
+            a,
+            b,
+            usize::MAX.saturating_sub(out.len()),
+        ));
     }
-    if matches!(&b.shape.form, Form::Fluid { multi_contact_boundary: Some(_), .. }) {
+    if matches!(
+        &b.shape.form,
+        Form::Fluid {
+            multi_contact_boundary: Some(_),
+            ..
+        }
+    ) {
         out.extend(
             multi_contact_fluid_pairs(b, a, usize::MAX.saturating_sub(out.len()))
                 .into_iter()
