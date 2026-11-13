@@ -526,13 +526,13 @@ impl EnergyInventorySnapshot {
 pub(crate) fn settle_pair_potential_change(
     ledger: &mut EnergyLedger,
     active_mover_usable_energy: &mut f64,
-    biological_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
+    compatible_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
     components: &[crate::harmonics::ResonancePairPotentialComponent],
 ) -> bool {
     settle_pair_potential_and_kinetic_change(
         ledger,
         active_mover_usable_energy,
-        biological_resonance_holders,
+        compatible_resonance_holders,
         0.0,
         components,
     )
@@ -540,11 +540,11 @@ pub(crate) fn settle_pair_potential_change(
 
 /// Atomically settle a signed pair-potential change together with the
 /// corresponding mechanical kinetic-energy change. Their net sum is funded
-/// from usable energy or released to compatible resonance stores and heat.
+/// from usable energy or released to eligible resonance stores and heat.
 pub(crate) fn settle_pair_potential_and_kinetic_change(
     ledger: &mut EnergyLedger,
     active_mover_usable_energy: &mut f64,
-    biological_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
+    compatible_resonance_holders: &mut [&mut crate::harmonics::ResonantEnergyReservoir],
     kinetic_energy_delta: f64,
     components: &[crate::harmonics::ResonancePairPotentialComponent],
 ) -> bool {
@@ -630,15 +630,15 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
     }
     let resonance_release = released.min(negative_component_total);
 
-    for (index, holder) in biological_resonance_holders.iter().enumerate() {
-        if biological_resonance_holders[..index]
+    for (index, holder) in compatible_resonance_holders.iter().enumerate() {
+        if compatible_resonance_holders[..index]
             .iter()
             .any(|previous| std::ptr::eq(&**previous, &**holder))
         {
             return false;
         }
     }
-    let original_resonance_total = biological_resonance_holders
+    let original_resonance_total = compatible_resonance_holders
         .iter()
         .map(|reservoir| reservoir.total_energy())
         .collect::<Option<Vec<_>>>()
@@ -649,7 +649,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
     if !original_resonance_total.is_finite() || original_resonance_total < 0.0 {
         return false;
     }
-    let mut staged_resonance = biological_resonance_holders
+    let mut staged_resonance = compatible_resonance_holders
         .iter()
         .map(|reservoir| (**reservoir).clone())
         .collect::<Vec<_>>();
@@ -730,7 +730,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         return false;
     }
 
-    for (target, staged) in biological_resonance_holders
+    for (target, staged) in compatible_resonance_holders
         .iter_mut()
         .zip(staged_resonance)
     {
