@@ -116,7 +116,7 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 **Current Phase A implementation status**
 - `PhysicalMaterial` carries generic `InertialMotion` and exposes pure drag-free force/torque pose staging through `advanced_under_force`.
 - Geometry-derived mass properties provide mass, center of mass, and planar moment of inertia. Force/torque advancement uses persistent linear/angular momentum.
-- The multi-body resonance gradient includes source, receiver, and every relevant occluding body's force and torque contributions.
+- The multi-body resonance gradient includes source, receiver, and every relevant occluding body's force and torque contributions. Its geometry input is constructed only from free `PhysicalMaterial` values; it never calls the organism-structure geometry constructors.
 - `LocalResonanceWorldSnapshot` contains only free environmental field materials. It excludes organism structures, organism-owned material, storage, construction, transformation escrow, and organism occluders.
 - `ResonanceForceAccumulator` sums contributions by stable environmental identity and stages all proposed free-material poses atomically.
 - The exact small-world oracle traverses each unordered environmental pair once. A three-body regression checks the exact pair count and near-zero total linear force and total torque.
@@ -133,7 +133,7 @@ Keep all work on PR #356 unless a genuinely independent change is required and e
 - The exact complete-pair evaluator is too expensive for the standard 1,280-material environment. A scalable mutual spectral evaluator and conservative visibility hierarchy, with explicit error bounds against the oracle, are required before live force consumption.
 
 ### Phase C — chemistry-native coupled activation and snapping
-- Build approach geometry directly from free environmental atoms, molecular placements, and chemistry-owned bonds. Do not use `OrganismStructure`, `BondEndpoint`, or organism geometry/state.
+- Build approach geometry directly from free environmental atoms, molecular placements, and chemistry-owned bonds. Do not use `OrganismStructure`, `BondEndpoint`, owner-relative storage transforms, or geometry derived from organism structures. Shared physical-material geometry/visibility primitives are permitted only with free field materials.
 - Calculate local spectral interaction and geometric progress for one valid molecular face pair.
 - Couple resonance attraction, physical approach, and the existing chemistry activation barrier through that shared progress.
 - Drive actual movement continuously toward exact snapped geometry.
