@@ -142,6 +142,156 @@ fn accumulate_environmental_constituent_activation(
     )
 }
 
+fn environmental_candidate_energy_requirement(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<f64> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
+        return None;
+    }
+    let product_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        product_structural_energy
+    };
+    let balance = if conservative_deficit {
+        ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    } else {
+        ReactionEnergyBalance::calculate(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    }?;
+    Some(balance.required_external_input)
+}
+
+/// The environmental COMBINE evaluator ported to realized material
+/// constituents. It uses the same pair adhesion, formation threshold, work,
+/// bond-integrity, and signed structural-energy authorities as ordinary COMBINE.
+fn evaluate_environmental_displacement_candidate(
+    source_a: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    source_b: &PhysicalMaterial,
+    incoming_part: usize,
+    old_bond_index: usize,
+    candidate: ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<(crate::combine::FormationEvaluation, f64, f64, f64)> {
+    if !candidate.distance.is_finite()
+        || candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.facing.is_finite()
+        || candidate.facing <= 0.0
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let anchor = environmental_displacement_constituent(source_a, anchor_part, catalog)?;
+    let displaced = environmental_displacement_constituent(source_a, displaced_part, catalog)?;
+    let incoming = environmental_displacement_constituent(source_b, incoming_part, catalog)?;
+    if crate::combine::bond_strength(anchor.properties, incoming.properties)
+        <= crate::combine::bond_strength(anchor.properties, displaced.properties)
+    {
+        return None;
+    }
+    let old_connection = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?;
+    let resource_a = catalog.iter().find(|resource| resource.name == anchor.name)?;
+    let resource_b = catalog.iter().find(|resource| resource.name == incoming.name)?;
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    let pair_potential = if active_resource(&resource_a.name) && active_resource(&resource_b.name) {
+        let potential = crate::combine::conservative_pair_potential(
+            resource_a.adhesion,
+            resource_b.adhesion,
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        (potential.adhesion.net > 1e-12).then_some(potential)?
+            .into()
+    } else {
+        None
+    };
+    if pair_potential.is_none()
+        && anchor.properties.chemical_position.is_some()
+        && incoming.properties.chemical_position.is_some()
+    {
+        let interaction = crate::combine::chemical_interaction(
+            anchor.properties,
+            incoming.properties,
+            candidate,
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        if interaction.attraction <= 1e-12 {
+            return None;
+        }
+    }
+    let formation = crate::combine::evaluate_formation(
+        candidate,
+        anchor.properties.cohesion,
+        incoming.properties.cohesion,
+    );
+    let (work, investment) = if let Some(potential) = pair_potential {
+        (potential.approach_work, formation.threshold)
+    } else {
+        crate::combine::formation_cost(anchor.properties, incoming.properties, formation).ok()?
+    };
+    if !work.is_finite() || work < 0.0 || !investment.is_finite() || investment < 0.0 {
+        return None;
+    }
+    let strength = crate::combine::bond_integrity(anchor.properties, incoming.properties)?;
+    let bond_energy = pair_potential
+        .map(|potential| potential.bond_energy)
+        .unwrap_or_else(|| {
+            crate::combine::intrinsic_bond_potential(anchor.properties, incoming.properties, strength)
+        });
+    if !strength.is_finite() || !bond_energy.is_finite() || bond_energy < 0.0 {
+        return None;
+    }
+    let transient_fluid_bond = resource_a.physical_state == crate::resources::PhysicalState::Fluid
+        && resource_b.physical_state == crate::resources::PhysicalState::Fluid;
+    let reactant_structural_energy = environmental_material_structural_energy(source_a)?
+        + environmental_material_structural_energy(source_b)?
+        + old_connection.bond_energy;
+    let product_structural_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        reactant_structural_energy - bond_energy
+    };
+    let required = environmental_candidate_energy_requirement(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        pair_potential.is_some(),
+    )?;
+    Some((formation, work, investment, required))
+}
+
 fn displacement_reaction_frequency_from_properties(
     anchor: ResourceProperties,
     displaced: ResourceProperties,
@@ -1359,7 +1509,7 @@ fn best_replacement_contact(
     catalog: &[BaseResource],
     diagnostics: Option<&mut crate::state::EnvironmentalDisplacementDiscoveryDiagnostics>,
     sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
-    source_parts: Option<(usize, usize, usize)>,
+    source_parts: Option<(usize, usize, usize, usize)>,
     sample_this_search: bool,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
@@ -1367,8 +1517,10 @@ fn best_replacement_contact(
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
     let candidates =
-        if let (Some((source_a, source_b)), Some((anchor_part, incoming_part, old_bond_index))) =
-            (sources, source_parts)
+        if let (
+            Some((source_a, source_b)),
+            Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
+        ) = (sources, source_parts)
         {
             crate::material_contact::connection_pair_candidates_for_material_parts(
                 source_a,
@@ -1398,13 +1550,28 @@ fn best_replacement_contact(
             && candidate.facing > 0.0;
         let evaluation = geometry_valid
             .then(|| {
-                crate::combine_runtime::selected_candidate_evaluation(
-                    &topology_trial,
-                    anchor_unit,
-                    incoming_unit,
-                    candidate,
-                    catalog,
-                )
+                if let (Some((source_a, source_b)), Some((anchor_part, displaced_part, incoming_part, old_bond_index))) =
+                    (sources, source_parts)
+                {
+                    evaluate_environmental_displacement_candidate(
+                        source_a,
+                        anchor_part,
+                        displaced_part,
+                        source_b,
+                        incoming_part,
+                        old_bond_index,
+                        candidate,
+                        catalog,
+                    )
+                } else {
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &topology_trial,
+                        anchor_unit,
+                        incoming_unit,
+                        candidate,
+                        catalog,
+                    )
+                }
             })
             .flatten();
         let physically_valid = evaluation.is_some();
@@ -1727,7 +1894,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     &environment.catalog,
                                     Some(&mut *diagnostics),
                                     Some((&source_a, &source_b)),
-                                    Some((anchor_part, incoming_part, bond_index)),
+                                    Some((anchor_part, displaced_part, incoming_part, bond_index)),
                                     sample_this_search,
                                 ) else {
                                     continue;
