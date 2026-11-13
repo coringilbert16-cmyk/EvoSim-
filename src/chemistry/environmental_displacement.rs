@@ -3066,6 +3066,74 @@ mod tests {
     }
 
     #[test]
+    fn material_native_contact_candidates_match_structure_contact_oracle() {
+        let catalog = default_catalog();
+        let (source, old_bond, _candidate, _investment) = three_participant_fixture(&catalog);
+        let mut reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source, &catalog,
+            )
+            .expect("fixture should export the bonded and free materials");
+        reactants.sort_by_key(|material| {
+            material
+                .internal_connections
+                .as_ref()
+                .is_some_and(|connections| connections.is_empty())
+        });
+        assert_eq!(reactants.len(), 2);
+        let bonded = &reactants[0];
+        let incoming = &reactants[1];
+        let native = crate::material_contact::connection_pair_candidates_for_material_parts(
+            bonded,
+            0,
+            Some(0),
+            incoming,
+            0,
+            &catalog,
+        )
+        .expect("material-native endpoints should resolve");
+
+        let mut graph_trial = source.clone();
+        graph_trial
+            .break_matching_bond(old_bond)
+            .expect("the old bond should be removed on the reference trial");
+        let mut cache = ConnectionCompatibilityCache::new();
+        let reference = crate::contact::connection_pair_candidates_cached(
+            &graph_trial,
+            0,
+            2,
+            &catalog,
+            &mut cache,
+        );
+        assert!(!native.is_empty());
+        assert!(!reference.is_empty());
+        for candidate in &native {
+            let matching = reference
+                .iter()
+                .find(|other| {
+                    endpoint_matches(candidate.endpoint_a, other.endpoint_a)
+                        && endpoint_matches(candidate.endpoint_b, other.endpoint_b)
+                })
+                .expect("every material-native endpoint pair should exist in reference geometry");
+            assert!((candidate.distance - matching.distance).abs() <= 1e-10);
+            assert!((candidate.facing - matching.facing).abs() <= 1e-10);
+            assert!((candidate.load_a - matching.load_a).abs() <= 1e-10);
+            assert!((candidate.load_b - matching.load_b).abs() <= 1e-10);
+            assert_eq!(candidate.available_a, matching.available_a);
+            assert_eq!(candidate.available_b, matching.available_b);
+        }
+        for candidate in &reference {
+            assert!(
+                native.iter().any(|other| {
+                    endpoint_matches(candidate.endpoint_a, other.endpoint_a)
+                        && endpoint_matches(candidate.endpoint_b, other.endpoint_b)
+                }),
+                "the native material view must not omit a reference contact candidate"
+            );
+        }
+    }
+
+    #[test]
     fn material_native_displacement_chemistry_matches_restored_constituent_authority() {
         let catalog = default_catalog();
         let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
