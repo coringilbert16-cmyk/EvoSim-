@@ -1497,9 +1497,7 @@ fn material_aura_receptions_with_geometry_prepared(
     let source_mass_scale = prepared_emitter
         .map(|emitter| emitter.mass_scale)
         .unwrap_or_else(|| environmental_mass_scale(source.material.mass(catalog), baselines.mass));
-    if prepared_emitter.is_some()
-        && (!source_mass_scale.is_finite() || source_mass_scale < 0.0)
-    {
+    if prepared_emitter.is_some() && (!source_mass_scale.is_finite() || source_mass_scale < 0.0) {
         return None;
     }
     if source_mass_scale <= f64::EPSILON {
@@ -1880,7 +1878,9 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_mass_scale = prepared_receiver
         .map(|emitter| emitter.mass_scale)
-        .unwrap_or_else(|| environmental_mass_scale(receiver.material.mass(catalog), baselines.mass));
+        .unwrap_or_else(|| {
+            environmental_mass_scale(receiver.material.mass(catalog), baselines.mass)
+        });
     if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
         return None;
     }
@@ -1978,22 +1978,10 @@ fn resonance_pair_potential_components_with_prepared_emitters(
         return Some(Vec::new());
     }
     let a_to_b = directional_resonance_pair_potential_components_with_prepared_emitters(
-        a,
-        b,
-        occluders,
-        catalog,
-        tick,
-        prepared_a,
-        prepared_b,
+        a, b, occluders, catalog, tick, prepared_a, prepared_b,
     )?;
     let b_to_a = directional_resonance_pair_potential_components_with_prepared_emitters(
-        b,
-        a,
-        occluders,
-        catalog,
-        tick,
-        prepared_b,
-        prepared_a,
+        b, a, occluders, catalog, tick, prepared_b, prepared_a,
     )?;
     let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
     for component in a_to_b.iter().chain(b_to_a.iter()) {
@@ -2205,8 +2193,12 @@ pub(crate) fn resonance_multi_body_forces_with_prepared_emitters(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonanceBodyForce>> {
-    let prepared_a = emitters.iter().find(|emitter| emitter.source_index == index_a);
-    let prepared_b = emitters.iter().find(|emitter| emitter.source_index == index_b);
+    let prepared_a = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == index_a);
+    let prepared_b = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == index_b);
     let prepared = prepared_a.zip(prepared_b);
     resonance_multi_body_forces_with_optional_prepared_emitters(
         a, b, occluders, catalog, tick, prepared,
@@ -2230,13 +2222,7 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
                      blockers: &[crate::physical_material::PhysicalMaterial]| {
         if let Some((emitter_a, emitter_b)) = prepared_emitters {
             resonance_pair_potential_with_prepared_emitters(
-                source,
-                receiver,
-                blockers,
-                catalog,
-                tick,
-                emitter_a,
-                emitter_b,
+                source, receiver, blockers, catalog, tick, emitter_a, emitter_b,
             )
         } else {
             resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
