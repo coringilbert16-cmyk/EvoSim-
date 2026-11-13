@@ -97,13 +97,11 @@ impl PhysicalBodyGeometry {
         })
     }
 
-    /// Test physical containment against the realized constituent geometry.
+    /// Test containment against the realized material geometry.
     ///
-    /// The organism boundary is the union of its realized material geometry;
-    /// the aggregate bounding box is only a spatial index and is never used as
-    /// the physical authority. Boundary points count as contained so that a
-    /// constituent touching the organism surface is available at constituent
-    /// scale.
+    /// The material boundary is the union of its realized constituents; the
+    /// aggregate bounding box is only a spatial index and is never used as the
+    /// physical authority. Boundary points count as contained.
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
         if !x.is_finite() || !y.is_finite() {
             return false;
