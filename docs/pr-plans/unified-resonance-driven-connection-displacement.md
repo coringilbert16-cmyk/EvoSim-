@@ -373,3 +373,18 @@ The three-body regression verifies the exact pair count (3), one accumulated res
 **Important limit:** this traversal is a correctness oracle for small test worlds, not a live-tick evaluator. It evaluates every pair and runs multi-body finite differences with all other bodies as occluders; that cost is far too high for the standard 1,280-material environment. Do not connect it to `Simulation::step`. The next required implementation is the research-backed scalable evaluator (mutual spectral multipoles plus conservative visibility handling and exact fallback), with measured error bounds against this oracle. No arbitrary interaction cutoff is allowed.
 
 Organism mechanics and world assembly remain outside this force path. The only participants and occluders are free environmental atoms and molecules.
+
+
+## 7.5 Organism subsystem isolation correction — 2026-11-13
+
+The scope audit removed the earlier chemistry prototype's dependency on organism-owned structure and storage mechanics:
+
+- Restored `src/geometry/structure.rs` to the base implementation. No persistent face-binding data is added to `OrganismStructure` or `BondEndpoint`.
+- Removed the previous `connection_approach.rs` prototype because its occupancy model read and wrote the organism bond graph. A future approach solver must be chemistry-native.
+- Restored `src/chemistry/transformation.rs` and the behavior of the legacy stored-material `break_internal_bond` path.
+- Removed kinetic-energy aggregation for organism storage, reproductive construction, and transformation escrow. The current kinetic inventory is calculated from free environmental field materials only.
+- Removed kinetic-energy state from the shared `EnergyLedger`; the independent inventory recomputes current environmental kinetic energy from actual free field bodies. Environmental pair/kinetic settlement accounts for the signed kinetic change without adding an organism-owned kinetic holder.
+- Added a separate `PhysicalMaterial::break_environmental_internal_bond` path for free field molecules. It rejects owner-relative stored material and preserves rigid-body momentum across environmental BREAK products. The legacy stored-material split path remains unchanged.
+
+The generic inertial primitives remain reusable, but the active movement population, force snapshot, kinetic inventory, and momentum-preserving split path are environmental chemistry only. The only residual edit in the material-storage module is a default initializer required because the shared physical-material data type now has a generic inertial-state field; no storage behavior or organism mechanics are changed.
+
