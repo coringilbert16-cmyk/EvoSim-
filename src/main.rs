@@ -74,6 +74,8 @@ mod organism_geometry;
 mod organism_viability;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
+#[path = "geometry/physical_body_geometry.rs"]
+mod physical_body_geometry;
 #[path = "geometry/rigid_boundary.rs"]
 mod rigid_boundary;
 #[path = "geometry/source_exposure.rs"]
