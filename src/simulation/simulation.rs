@@ -361,8 +361,6 @@ impl Simulation {
             crate::reproduction::total_structural_energy_held(std::slice::from_ref(&organism), &[])
                 + Self::environmental_structural_energy_held(&environment);
         energy_ledger.initial_structural_energy_held = energy_ledger.total_structural_energy_held;
-        energy_ledger.total_kinetic_energy_held = 0.0;
-        energy_ledger.initial_kinetic_energy_held = 0.0;
         let hotspot = crate::hotspot::RadialHotspot::right_bend_for_world(
             environment.width,
             environment.height,
@@ -2326,7 +2324,7 @@ impl Simulation {
             current_resonant_energy,
             initial_structural_energy: self.energy_ledger.initial_structural_energy_held,
             current_structural_energy,
-            initial_kinetic_energy: self.energy_ledger.initial_kinetic_energy_held,
+            initial_kinetic_energy: 0.0,
             current_kinetic_energy,
             initial_pair_interaction_potential: self
                 .energy_ledger
@@ -3352,7 +3350,6 @@ mod decomposition_finalization_tests {
         simulation.environment.field.cells[0]
             .physical_materials
             .push(material);
-        simulation.energy_ledger.total_kinetic_energy_held = kinetic_energy;
         simulation.energy_ledger.total_external_energy_input += kinetic_energy;
 
         let inventory = simulation.energy_inventory_snapshot();
