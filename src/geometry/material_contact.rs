@@ -98,8 +98,8 @@ fn endpoint_world_point(
             )
         }
         ConnectionEndpoint::Boundary { angle_radians } => {
-            let (nx, ny) = angle_radians.sin_cos();
-            let point = boundary_point_toward(&view.shape, nx, ny)?;
+            let (sin, cos) = angle_radians.sin_cos();
+            let point = boundary_point_toward(&view.shape, cos, sin)?;
             Some(transform_derived_point(
                 point.x,
                 point.y,
