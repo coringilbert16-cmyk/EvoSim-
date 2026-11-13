@@ -1870,20 +1870,50 @@ fn directional_resonance_pair_potential_components_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
-    let receptions =
-        material_aura_receptions_with_occluders(source, receiver, occluders, catalog, tick)?;
+    directional_resonance_pair_potential_components_with_prepared_emitters(
+        source, receiver, occluders, catalog, tick, None, None,
+    )
+}
+
+fn directional_resonance_pair_potential_components_with_prepared_emitters(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_source: Option<&MaterialResonanceEmitter>,
+    prepared_receiver: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let receptions = material_aura_receptions_with_occluders_prepared(
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_source,
+    )?;
     if receptions.is_empty() {
         return Some(Vec::new());
     }
 
-    let (receiver_x, receiver_y, _, receiver_emission) =
-        environmental_material_resonance(receiver, catalog, tick)?;
+    let (receiver_x, receiver_y, _) = environmental_material_geometry(receiver)?;
     let baselines = ResourceBaselines::from_catalog(catalog);
-    let receiver_mass_scale =
-        environmental_mass_scale(receiver.material.mass(catalog), baselines.mass);
+    let receiver_mass_scale = prepared_receiver
+        .map(|emitter| emitter.mass_scale)
+        .unwrap_or_else(|| environmental_mass_scale(receiver.material.mass(catalog), baselines.mass));
     if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
         return None;
     }
+    let computed_receiver_emission = prepared_receiver.is_none().then(|| {
+        material_response(
+            receiver.material.weighted_properties(catalog),
+            baselines,
+            phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
+        )
+    });
+    let receiver_emission = prepared_receiver
+        .map(|emitter| &emitter.emitted)
+        .or(computed_receiver_emission.as_ref())?;
 
     let mut potential = Vec::<ResonancePairPotentialComponent>::new();
     for sample in receptions {
@@ -1900,7 +1930,7 @@ fn directional_resonance_pair_potential_components_with_occluders(
             return None;
         }
         let mut local_field = ToneSpectrum::empty();
-        add_spectrum(&mut local_field, &receiver_emission, local_scale);
+        add_spectrum(&mut local_field, receiver_emission, local_scale);
         local_field.retain_strongest();
         for contribution in
             spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
