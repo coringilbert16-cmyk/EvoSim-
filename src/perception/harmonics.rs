@@ -1172,9 +1172,6 @@ fn environmental_material_geometry(
         .iter()
         .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
         .fold(0.0_f64, f64::max);
-    if !source_x.is_finite() || !source_y.is_finite() || !extent.is_finite() {
-        return None;
-    }
     Some((source_x, source_y, extent))
 }
 
