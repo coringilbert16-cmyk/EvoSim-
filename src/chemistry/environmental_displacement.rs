@@ -16,7 +16,7 @@ use crate::combine::bond_strength;
 #[cfg(test)]
 use crate::combine::intrinsic_bond_potential;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
-use crate::resources::{BaseResource, ResourceProperties};
+use crate::resources::{BaseResource, InternalBond, Material, ResourceProperties};
 use crate::structure::{Bond, OrganismStructure};
 
 /// Energy and activation assessment for one proposed constituent replacement.
@@ -159,6 +159,384 @@ fn displacement_reaction_frequency_from_properties(
     }
     let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
     (frequency.is_finite() && frequency > 0.0).then_some(frequency)
+}
+
+#[derive(Clone, Copy)]
+struct EnvironmentalPartKinematics {
+    mass: f64,
+    velocity_x: f64,
+    velocity_y: f64,
+    angular_velocity: f64,
+    intrinsic_moment_of_inertia: f64,
+}
+
+fn environmental_part_kinematics(
+    source: &PhysicalMaterial,
+    part_index: usize,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<EnvironmentalPartKinematics> {
+    if !source.is_realized()
+        || source.owner_relative_origin.is_some()
+        || !source.inertial_motion.is_finite()
+    {
+        return None;
+    }
+    let mass_properties = source.mass_properties(catalog, Some(vertical_period))?;
+    let placement = *source.placements.as_ref()?.get(part_index)?;
+    let (name, amount) = source.material.parts.get(part_index)?;
+    let resource = catalog.iter().find(|resource| resource.name == *name)?;
+    let mass = resource.properties.mass * amount;
+    let shape = source.realized_shape_for_part(part_index, catalog)?;
+    let offset_x = placement.x - mass_properties.center_x;
+    let offset_y = (placement.y - mass_properties.center_y + vertical_period * 0.5)
+        .rem_euclid(vertical_period)
+        - vertical_period * 0.5;
+    let (velocity_x, velocity_y) = source
+        .inertial_motion
+        .velocity_at_offset(offset_x, offset_y)?;
+    let intrinsic_moment_of_inertia =
+        crate::physical_material::intrinsic_moment_of_inertia(&shape.form, mass);
+    if ![
+        mass,
+        velocity_x,
+        velocity_y,
+        intrinsic_moment_of_inertia,
+        source.inertial_motion.angular_velocity,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || mass <= 0.0
+        || intrinsic_moment_of_inertia <= 0.0
+    {
+        return None;
+    }
+    Some(EnvironmentalPartKinematics {
+        mass,
+        velocity_x,
+        velocity_y,
+        angular_velocity: source.inertial_motion.angular_velocity,
+        intrinsic_moment_of_inertia,
+    })
+}
+
+fn connection_occupies_endpoint(
+    connection: &PhysicalMaterialBond,
+    part_index: usize,
+    endpoint: crate::structure::ConnectionEndpoint,
+) -> bool {
+    (connection.part_a == part_index && connection.endpoint_a.same_location(endpoint))
+        || (connection.part_b == part_index && connection.endpoint_b.same_location(endpoint))
+}
+
+fn environmental_material_structural_energy(material: &PhysicalMaterial) -> Option<f64> {
+    let connections = material.internal_connections.as_ref()?;
+    let energy = connections.iter().try_fold(0.0, |total, connection| {
+        let next = total - connection.bond_energy;
+        (connection.bond_energy.is_finite()
+            && connection.bond_energy >= 0.0
+            && next.is_finite())
+        .then_some(next)
+    })?;
+    energy.is_finite().then_some(energy)
+}
+
+fn environmental_products_structural_energy(products: &[PhysicalMaterial]) -> Option<f64> {
+    products.iter().try_fold(0.0, |total, product| {
+        let product_energy = environmental_material_structural_energy(product)?;
+        let next = total + product_energy;
+        next.is_finite().then_some(next)
+    })
+}
+
+/// Apply A-B + C -> A-C + B directly to environmental material records.
+/// Constituents retain their exact world geometry; connected components are
+/// exported as new physical molecules without constructing organism graphs.
+fn build_environmental_displacement_products(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    old_bond_index: usize,
+    anchor_part: usize,
+    displaced_part: usize,
+    incoming_part: usize,
+    candidate: ConnectionPairCandidate,
+    replacement_bond_energy: f64,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<Vec<PhysicalMaterial>> {
+    if !source_a.is_realized()
+        || !source_b.is_realized()
+        || source_a.owner_relative_origin.is_some()
+        || source_b.owner_relative_origin.is_some()
+        || !vertical_period.is_finite()
+        || vertical_period <= 0.0
+        || !candidate.distance.is_finite()
+        || candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.facing.is_finite()
+        || candidate.facing <= 0.0
+        || !candidate.available_a
+        || !candidate.available_b
+        || !replacement_bond_energy.is_finite()
+        || replacement_bond_energy < 0.0
+    {
+        return None;
+    }
+
+    let source_a_connections = source_a.internal_connections.as_ref()?;
+    let source_b_connections = source_b.internal_connections.as_ref()?;
+    if source_a_connections.len() != source_a.material.internal_bonds.len()
+        || source_b_connections.len() != source_b.material.internal_bonds.len()
+        || old_bond_index >= source_a_connections.len()
+        || anchor_part >= source_a.material.parts.len()
+        || displaced_part >= source_a.material.parts.len()
+        || incoming_part >= source_b.material.parts.len()
+        || anchor_part == displaced_part
+    {
+        return None;
+    }
+    let old_connection = source_a_connections.get(old_bond_index)?;
+    if !((old_connection.part_a == anchor_part && old_connection.part_b == displaced_part)
+        || (old_connection.part_b == anchor_part && old_connection.part_a == displaced_part))
+    {
+        return None;
+    }
+    if source_a_connections.iter().enumerate().any(|(index, connection)| {
+        index != old_bond_index
+            && connection_occupies_endpoint(connection, anchor_part, candidate.endpoint_a)
+    }) || source_b_connections
+        .iter()
+        .any(|connection| connection_occupies_endpoint(connection, incoming_part, candidate.endpoint_b))
+    {
+        return None;
+    }
+
+    let source_a_count = source_a.material.parts.len();
+    let total_count = source_a_count.checked_add(source_b.material.parts.len())?;
+    let mut parts = Vec::with_capacity(total_count);
+    parts.extend(source_a.material.parts.iter().cloned());
+    parts.extend(source_b.material.parts.iter().cloned());
+
+    let mut placements = Vec::with_capacity(total_count);
+    placements.extend(source_a.placements.as_ref()?.iter().copied());
+    placements.extend(source_b.placements.as_ref()?.iter().copied());
+
+    let mut shapes = Vec::with_capacity(total_count);
+    for part_index in 0..source_a_count {
+        shapes.push(source_a.realized_shape_for_part(part_index, catalog)?);
+    }
+    for part_index in 0..source_b.material.parts.len() {
+        shapes.push(source_b.realized_shape_for_part(part_index, catalog)?);
+    }
+
+    let mut bonds = Vec::<(InternalBond, PhysicalMaterialBond)>::with_capacity(
+        source_a_connections.len() + source_b_connections.len(),
+    );
+    for (bond_index, (bond, connection)) in source_a
+        .material
+        .internal_bonds
+        .iter()
+        .zip(source_a_connections)
+        .enumerate()
+    {
+        if bond_index != old_bond_index {
+            bonds.push((bond.clone(), connection.clone()));
+        }
+    }
+    for (bond, connection) in source_b
+        .material
+        .internal_bonds
+        .iter()
+        .zip(source_b_connections)
+    {
+        let shifted_bond = InternalBond {
+            part_a: bond.part_a.checked_add(source_a_count)?,
+            part_b: bond.part_b.checked_add(source_a_count)?,
+        };
+        let shifted_connection = PhysicalMaterialBond {
+            part_a: connection.part_a.checked_add(source_a_count)?,
+            endpoint_a: connection.endpoint_a,
+            part_b: connection.part_b.checked_add(source_a_count)?,
+            endpoint_b: connection.endpoint_b,
+            bond_energy: connection.bond_energy,
+        };
+        bonds.push((shifted_bond, shifted_connection));
+    }
+    let incoming_global_part = source_a_count.checked_add(incoming_part)?;
+    bonds.push((
+        InternalBond {
+            part_a: anchor_part,
+            part_b: incoming_global_part,
+        },
+        PhysicalMaterialBond {
+            part_a: anchor_part,
+            endpoint_a: candidate.endpoint_a,
+            part_b: incoming_global_part,
+            endpoint_b: candidate.endpoint_b,
+            bond_energy: replacement_bond_energy,
+        },
+    ));
+
+    let material = Material {
+        parts,
+        internal_bonds: bonds.iter().map(|(bond, _)| bond.clone()).collect(),
+    };
+    if !material.is_valid_for_catalog(catalog)
+        || bonds.iter().any(|(_, connection)| {
+            connection.part_a >= total_count
+                || connection.part_b >= total_count
+                || connection.part_a == connection.part_b
+                || !connection.bond_energy.is_finite()
+                || connection.bond_energy < 0.0
+        })
+    {
+        return None;
+    }
+
+    let mut adjacency = vec![Vec::<usize>::new(); total_count];
+    for (bond, _) in &bonds {
+        adjacency[bond.part_a].push(bond.part_b);
+        adjacency[bond.part_b].push(bond.part_a);
+    }
+    let mut seen = vec![false; total_count];
+    let mut components = Vec::<Vec<usize>>::new();
+    for start in 0..total_count {
+        if seen[start] {
+            continue;
+        }
+        let mut pending = vec![start];
+        let mut members = Vec::new();
+        seen[start] = true;
+        while let Some(current) = pending.pop() {
+            members.push(current);
+            for &next in &adjacency[current] {
+                if !seen[next] {
+                    seen[next] = true;
+                    pending.push(next);
+                }
+            }
+        }
+        members.sort_unstable();
+        components.push(members);
+    }
+
+    let mut source_kinematics = Vec::with_capacity(total_count);
+    for part_index in 0..source_a_count {
+        source_kinematics.push(environmental_part_kinematics(
+            source_a,
+            part_index,
+            catalog,
+            vertical_period,
+        )?);
+    }
+    for part_index in 0..source_b.material.parts.len() {
+        source_kinematics.push(environmental_part_kinematics(
+            source_b,
+            part_index,
+            catalog,
+            vertical_period,
+        )?);
+    }
+
+    let mut products = Vec::with_capacity(components.len());
+    for component in components {
+        let mut remap = vec![usize::MAX; total_count];
+        let mut component_parts = Vec::with_capacity(component.len());
+        let mut component_placements = Vec::with_capacity(component.len());
+        let mut component_shapes = Vec::with_capacity(component.len());
+        for (new_index, &old_index) in component.iter().enumerate() {
+            remap[old_index] = new_index;
+            component_parts.push(material.parts[old_index].clone());
+            component_placements.push(placements[old_index]);
+            component_shapes.push(shapes[old_index].clone());
+        }
+        let mut component_bonds = Vec::new();
+        let mut component_connections = Vec::new();
+        for (bond, connection) in &bonds {
+            if remap[bond.part_a] != usize::MAX && remap[bond.part_b] != usize::MAX {
+                component_bonds.push(InternalBond {
+                    part_a: remap[bond.part_a],
+                    part_b: remap[bond.part_b],
+                });
+                component_connections.push(PhysicalMaterialBond {
+                    part_a: remap[connection.part_a],
+                    endpoint_a: connection.endpoint_a,
+                    part_b: remap[connection.part_b],
+                    endpoint_b: connection.endpoint_b,
+                    bond_energy: connection.bond_energy,
+                });
+            }
+        }
+        let product_material = Material {
+            parts: component_parts,
+            internal_bonds: component_bonds,
+        };
+        if !product_material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        let mut product = PhysicalMaterial {
+            material: product_material,
+            inertial_motion: crate::physical_material::InertialMotion::default(),
+            environmental_identity: 0,
+            placements: Some(component_placements),
+            internal_connections: Some(component_connections),
+            owner_relative_origin: None,
+            realized_shapes: Some(component_shapes),
+        };
+        let product_mass_properties = product.mass_properties(catalog, Some(vertical_period))?;
+        let mut total_mass = 0.0;
+        let mut momentum_x = 0.0;
+        let mut momentum_y = 0.0;
+        for &old_index in &component {
+            let kinematics = source_kinematics[old_index];
+            total_mass += kinematics.mass;
+            momentum_x += kinematics.mass * kinematics.velocity_x;
+            momentum_y += kinematics.mass * kinematics.velocity_y;
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
+            return None;
+        }
+        let velocity_x = momentum_x / total_mass;
+        let velocity_y = momentum_y / total_mass;
+        let mut angular_momentum = 0.0;
+        for &old_index in &component {
+            let kinematics = source_kinematics[old_index];
+            let placement = placements[old_index];
+            let offset_x = placement.x - product_mass_properties.center_x;
+            let offset_y = (placement.y - product_mass_properties.center_y
+                + vertical_period * 0.5)
+                .rem_euclid(vertical_period)
+                - vertical_period * 0.5;
+            angular_momentum += kinematics.intrinsic_moment_of_inertia
+                * kinematics.angular_velocity
+                + kinematics.mass
+                    * (offset_x * (kinematics.velocity_y - velocity_y)
+                        - offset_y * (kinematics.velocity_x - velocity_x));
+        }
+        let angular_velocity = angular_momentum / product_mass_properties.moment_of_inertia;
+        if ![
+            velocity_x,
+            velocity_y,
+            angular_momentum,
+            angular_velocity,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+            || product_mass_properties.moment_of_inertia <= 0.0
+        {
+            return None;
+        }
+        product.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x,
+            velocity_y,
+            angular_velocity,
+        };
+        if !product.is_realized() {
+            return None;
+        }
+        products.push(product);
+    }
+    (!products.is_empty()).then_some(products)
 }
 
 fn environmental_constituent_endpoint_world_point(
@@ -380,6 +758,7 @@ pub(crate) struct DisplacementTrial {
     #[cfg(test)]
     pub(crate) replacement_bond: Bond,
     pub(crate) energy: ReactionEnergyBalance,
+    pub(crate) replacement_bond_energy: f64,
     pub(crate) formation_work: f64,
     pub(crate) disruption_work: f64,
 }
@@ -598,8 +977,6 @@ fn build_displacement_trial_with_activation_status(
         }
         return None;
     };
-    #[cfg(not(test))]
-    let _ = replacement_bond;
 
     let (Some(reactant_structural), Some(product_structural)) = (
         crate::energy_ledger::structural_potential(source),
@@ -646,6 +1023,7 @@ fn build_displacement_trial_with_activation_status(
         #[cfg(test)]
         source_bonds: source.bonds.clone(),
         products,
+        replacement_bond_energy: replacement_bond.bond_energy,
         #[cfg(test)]
         removed_bond: old_bond,
         #[cfg(test)]
