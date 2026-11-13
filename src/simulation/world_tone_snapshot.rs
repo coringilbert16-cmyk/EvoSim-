@@ -1258,7 +1258,7 @@ fn physical_material_from_structure(
         inertial_motion: crate::physical_material::InertialMotion::default(),
         environmental_identity: 0,
         placements: Some(placements),
-        internal_connections: None,
+        internal_connections: Some(Vec::new()),
         owner_relative_origin: None,
         realized_shapes: Some(realized_shapes),
     })
