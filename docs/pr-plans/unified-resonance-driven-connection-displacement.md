@@ -106,39 +106,39 @@ Nothing is committed until all physical, geometric, chemical, and energy checks 
 
 Keep all work on PR #356 unless a genuinely independent change is required and explicitly approved.
 
-### Phase A — shared geometry and approach foundation
-- Audit and expose reusable exact face-pair alignment, partial occupancy, and snapped-target calculations.
-- Define a deterministic approach-progress representation for a specific face pair.
-- Add path-validity and multi-body collision checks for the continuous movement toward the target.
-- Keep ordinary collision geometry unchanged.
+### Phase A — chemistry-only physical-body and force foundation
+
+- Keep physical-body state generic, but make the active movement population only free environmental atoms and molecules.
+- Derive resonance force and torque from the existing signed, occlusion-aware pair potential.
+- Accumulate all contributions for each free environmental body before staging any pose.
+- Establish an exact small-world force oracle for correctness; do not use it as the production tick evaluator.
 
 **Current Phase A implementation status**
-- Exact full-face and half-face pairing, stable face identity, snapped target poses, and normalized face occupancy checks are implemented in `src/geometry/connection_approach.rs`.
-- Conservative swept translation and rigid-rotation path checks are implemented. They use the shared material penetration predicate and fail closed when a narrow interval cannot be proven clear.
-- Collision-limited transform fractions and a geometry-only approach step planner are implemented; they return a verified movement proposal and never mutate world state.
-- A shared face-pair evaluation now combines endpoint/angular progress, activation-signal gating, occupancy validation, collision-valid requested movement, and exact-snap eligibility in one result.
-- These helpers are still staged: the live environmental movement/reaction loop does not yet call them. Phase A is not complete until the runtime integration and its atomic rollback tests are implemented.
-- Added an occlusion-aware multi-body resonance-gradient API that differentiates the same symmetric pair potential with respect to the source, receiver, and every occluding body. It returns forces only when the complete finite-difference gradient is finite and translationally balanced. This closes the previous two-body fail-closed limitation at the force-calculation layer; it is not yet connected to the runtime movement loop.
+- `PhysicalMaterial` carries generic `InertialMotion` and exposes pure drag-free force/torque pose staging through `advanced_under_force`.
+- Geometry-derived mass properties provide mass, center of mass, and planar moment of inertia. Force/torque advancement uses persistent linear/angular momentum.
+- The multi-body resonance gradient includes source, receiver, and every relevant occluding body's force and torque contributions.
+- `LocalResonanceWorldSnapshot` contains only free environmental field materials. It excludes organism structures, organism-owned material, storage, construction, transformation escrow, and organism occluders.
+- `ResonanceForceAccumulator` sums contributions by stable environmental identity and stages all proposed free-material poses atomically.
+- The exact small-world oracle traverses each unordered environmental pair once. A three-body regression checks the exact pair count and near-zero total linear force and total torque.
+- The read-only `EnvironmentalFlowField` can build obstacle bins and sample ambient velocity without changing material placements, inertial state, identities, or cell revisions.
+- No chemistry-native face-approach controller is implemented yet. The previous approach prototype was removed because it depended on the organism bond graph.
 
-### Phase B — resonance force and energy integration
-- Integrate the existing pair potential/force into normal environmental physical movement.
-  
-**Persistent inertial-state foundation (implemented; runtime integration pending)**
-- Added serde-compatible `InertialMotion` state to each realized `PhysicalMaterial`, holding center-of-mass linear velocity and angular velocity. Older serialized materials default to rest.
-- Added a drag-free Newtonian force/torque update primitive that accepts the caller's explicit physics-time interval, authoritative mass, and moment of inertia. No timestep, force scale, drag coefficient, or damping law is invented here.
-- Added translational and rotational kinetic-energy calculation, point-velocity evaluation, and coordinate-frame conversion. Intrinsic-frame conversion accounts for both the shifted reference point and rotated axes.
-- Added shared geometry-derived rigid-body mass properties: total constituent mass, center of mass, and planar moment of inertia, including periodic vertical geometry and realized fluid shapes. Environmental-flow rotation now reuses the same inertia calculation, without reusing its overdamped mobility or displacement scaling for Newtonian dynamics.
-- Added explicit current and tick-zero kinetic-energy stores to the energy ledger and included kinetic-energy change in the independent world-inventory conservation residual. The inventory recomputes kinetic energy from field materials, organism-owned storage/construction material, and escrowed transformation sources without double-counting staged COMBINE outputs.
-- Added atomic settlement of pair-potential and kinetic-energy changes: potential can convert directly into motion, kinetic loss can fund potential increase, unretained mechanical loss becomes heat, and insufficient funding rolls back the staged ledger and holders. The environmental wrapper stages its shared usable-energy and resonance pools together.
-- Extended the occlusion-aware multi-body resonance gradient to include each body's torque about its own center of mass, derived by centered finite differences of the same potential under rigid rotation. This supplies rotational force input without a separate torque law; the translational and rotational contributions are tested together for angular-momentum balance. The independent full-world finite-difference oracle now reports the same per-body torque channel and has an asymmetric-occluder regression test.
-- Clone-based material transport preserves the stored state. Bond splitting transfers the rigid body's angular velocity and computes each separated piece's center-of-mass velocity from its offset in the parent's rigid motion; a regression verifies total kinetic energy is conserved across a no-impulse split. Realized-state validation rejects non-finite inertial values.
-- Momentum transfer through COMBINE, environmental displacement, and storage/release transitions is still pending. Those paths must preserve or explicitly settle momentum and kinetic energy before Newtonian movement is activated.
-- Regression tests cover force/torque acceleration, unforced momentum persistence, kinetic-energy calculation, invalid dynamics inputs, frame conversion, and persistence through bond splitting.
-- This remains pre-runtime groundwork: resonance force is not yet applied to live material movement, and the new kinetic settlement API is not yet called by a movement transaction. The legacy overdamped material-advection pass has not yet been separated from the environmental flow field.
-- Resolve occluder-aware multi-body gradients, including reaction forces on blockers; do not use the isolated-pair force in a crowded scene.
-- Ensure the force is the derivative of the same signed potential recorded in the world energy inventory.
-- Settle positive and negative pair-potential changes, mechanical work, resonance storage, usable energy, and heat exactly once.
-- Verify the independent world-potential oracle and performance before enabling tick-loop consumers.
+### Phase B — environmental energy and movement-boundary foundation
+
+- Keep the independent kinetic-energy inventory restricted to free environmental field materials. Kinetic energy is recomputed from their actual inertial state rather than stored in the shared organism energy ledger.
+- Settle signed environmental pair-potential and kinetic-energy changes through the environmental usable-energy holder, environmental resonance reservoir, and heat accounting. The settlement helper stages all holders and ledger counters before commit.
+- Preserve rigid-body momentum when a free environmental molecule is split by BREAK through `break_environmental_internal_bond`. The legacy stored-material `break_internal_bond` path remains unchanged and rejects no new organism movement behavior.
+- Keep the overdamped environmental flow field separate from the Newtonian body-momentum model. The read-only field sampler is now extracted, but the legacy transport consumer still advects materials; do not remove it until the Newtonian movement transaction is ready.
+- The force/pose/energy helpers remain pre-runtime foundations. The live tick does not yet apply the accumulated resonance force, validate a continuous collision path, settle movement energy, or atomically commit new placements and field-cell revisions.
+- The exact complete-pair evaluator is too expensive for the standard 1,280-material environment. A scalable mutual spectral evaluator and conservative visibility hierarchy, with explicit error bounds against the oracle, are required before live force consumption.
+
+### Phase C — chemistry-native coupled activation and snapping
+- Build approach geometry directly from free environmental atoms, molecular placements, and chemistry-owned bonds. Do not use `OrganismStructure`, `BondEndpoint`, or organism geometry/state.
+- Calculate local spectral interaction and geometric progress for one valid molecular face pair.
+- Couple resonance attraction, physical approach, and the existing chemistry activation barrier through that shared progress.
+- Drive actual movement continuously toward exact snapped geometry.
+- Trigger bond formation only when exact geometry, activation, chemistry, and energy conditions are all satisfied.
+- Ensure no post-reaction snapping and no geometry override.
 
 ### Phase C — coupled activation and snapping
 - Calculate local spectral interaction and geometric approach progress for the selected valid face pair.
