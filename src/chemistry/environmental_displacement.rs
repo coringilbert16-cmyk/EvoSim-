@@ -183,7 +183,7 @@ fn evaluate_environmental_displacement_candidate(
     old_bond_index: usize,
     candidate: ConnectionPairCandidate,
     catalog: &[BaseResource],
-) -> Option<(crate::combine::FormationEvaluation, f64, f64, f64)> {
+) -> Option<(crate::combine::FormationEvaluation, f64, f64, f64, f64)> {
     if !candidate.distance.is_finite()
         || candidate.distance < 0.0
         || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
@@ -294,7 +294,7 @@ fn evaluate_environmental_displacement_candidate(
         product_structural_energy,
         pair_potential.is_some(),
     )?;
-    Some((formation, work, investment, required))
+    Some((formation, work, investment, required, bond_energy))
 }
 
 fn displacement_reaction_frequency_from_properties(
@@ -1613,7 +1613,9 @@ fn best_replacement_contact(
                 }
             }
         }
-        let Some((_evaluation, _formation_work, investment, required_energy)) = evaluation else {
+        let Some((_evaluation, _formation_work, investment, required_energy, _bond_energy)) =
+            evaluation
+        else {
             continue;
         };
         let replace = best.map_or(true, |(current, _, current_energy)| {
