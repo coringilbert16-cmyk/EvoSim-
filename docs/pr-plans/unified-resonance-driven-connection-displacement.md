@@ -276,73 +276,77 @@ Key conclusions:
 
 This is a research handoff only. It does not authorize changing the resonance law, adding an arbitrary interaction radius, or enabling an approximate evaluator in the runtime. The existing direct evaluator remains the correctness oracle.
 
-## 7.2 Audited runtime gaps (2026-11-13)
+## 7.2 Chemistry-only runtime audit (2026-11-13)
 
-The Phase B runtime audit confirmed that the existing foundations are not yet connected into the approved physical model. These findings supersede any earlier implication that the current ambient transport pass is an acceptable final movement executor for elemental and molecular bodies.
+This audit supersedes the earlier owner-level movement plan. Organism movement,
+organism owner mapping, organism structures, reproductive construction,
+organism storage, and organism transformation are outside this phase and must
+not be implemented or used as force participants/occluders.
 
-### Verified implemented foundations
+### Verified chemistry foundations
 
-- `PhysicalMaterial` persists `InertialMotion` with center-of-mass linear velocity and angular velocity.
-- `InertialMotion::advanced` implements force/mass and torque/inertia acceleration without drag, and kinetic energy can be calculated from realized mass properties.
-- `LocalResonanceWorldSnapshot` can calculate a pair's force/torque contributions for both participants and relevant occluders. `ResonanceForceAccumulator` stages complete multi-body accumulation atomically.
-- `connection_approach.rs` validates face occupancy, approach progress, exact snapped geometry, activation gating, and swept translation/rotation paths.
-- `environmental_displacement.rs` contains displacement discovery, activation/preflight, trial topology construction, and a staged topology/energy commit helper.
+- `PhysicalMaterial` carries generic persistent inertial state and has a pure
+  force/torque-driven rigid-body proposal method. The active caller is limited
+  to free environmental atoms and molecules.
+- `LocalResonanceWorldSnapshot` is built only from free field materials.
+  Those same materials are the only emitters, receivers, and occluders.
+- `ResonanceForceAccumulator` sums per-body force/torque contributions and
+  stages Newtonian pose proposals against stable environmental identities.
+- The exact small-world force oracle traverses every unordered environmental
+  pair once and includes the force/torque contributions on all other free
+  environmental occluders. Its three-body regression checks pair count and
+  total linear/angular force balance.
+- `break_environmental_internal_bond` is a separate free-field split path
+  that preserves rigid-body momentum across molecular products and rejects
+  owner-relative stored material. The legacy stored-material split method is
+  unchanged.
+- The independent kinetic-energy inventory and environmental settlement path
+  account for free environmental field materials only.
 
 ### Confirmed runtime gaps
 
-1. **Newtonian state is not advanced in the live tick.** `InertialMotion::advanced` is explicitly marked as awaiting Newtonian runtime integration. The live simulation does not consume `ResonanceForceAccumulator` output or apply its force/torque results to environmental body trajectories.
-2. **Ambient flow still directly moves physical materials.** `Simulation::step_with_transport_reuse` calls `transport_field_with_singleton_center_velocity_reuse`. That function computes `dx = velocity.x * mobility(mass) * FLOW_RESPONSE_SCALE`, applies the flow's `dy` and angular displacement, and commits translated/rotated material placements. This is overdamped tracer advection of the bodies, not Newtonian motion. It conflicts with the approved separation: the environmental flow remains an overdamped field; elemental and molecular bodies retain Newtonian momentum and are not kinematically advected, damped, or velocity-relaxed by that field.
-3. **The face-approach solver is not the live movement controller.** The geometry helper is tested in isolation; the ordinary material transport path does not submit resonance-derived translation/torque to it, does not advance persistent inertial state, and does not couple the same approach progress to reaction activation.
-4. **Displacement remains a chemistry transaction, not the same physical movement.** Environmental displacement discovery currently finds close/contacting candidates and accumulates chemistry activation from static pair potential, contact falloff, facing engagement, and optional local resonance similarity. Its trial/commit path changes topology and energy, but the live movement path does not physically carry the incoming material through the shared face-approach/collision solver while displacing the incumbent. Adjacent reconnection is therefore not yet part of one physical approach transaction.
-5. **The force/energy/pose boundary is incomplete.** The force accumulator and staged energy helpers are foundations, but the live tick has no single transaction that stages force integration, inertial pose, collision/push effects, signed pair-potential change, kinetic-energy change, activation, topology, and field-cell revisions together.
+1. **No live Newtonian movement yet.** The force accumulator and pose proposal
+   are not committed to the environmental field. Collision/path validation,
+   signed energy settlement, and field-cell revisions are not in one transaction.
+2. **Legacy flow still advects materials.** The current flow pass calculates
+   an overdamped velocity field but also directly translates/rotates field
+   materials using mobility and response scaling. This is not the approved
+   Newtonian material movement model. Separate flow-field evaluation from
+   material advection before replacing the legacy mover; do not invent a drag
+   law or let flow reset/damp inertial state.
+3. **No scalable all-pairs force consumer.** The exact complete-pair oracle is
+   too expensive for the standard 1,280-material environment. A mutual
+   error-controlled evaluator and conservative visibility hierarchy are
+   required before live force evaluation.
+4. **No chemistry-native face-approach controller.** The earlier prototype
+   depended on `OrganismStructure` and its bond graph; it has been removed.
+   Exact face approach, swept collision checks, and activation progress must
+   be rebuilt around free molecular material geometry and chemistry-owned bonds.
+5. **Displacement is not yet the same physical movement.** The existing
+   environmental displacement discovery/preflight/topology transaction still
+   lacks physical incoming-body approach, incumbent push, adjacent
+   reconnection, and signed pair/kinetic settlement in one atomic move.
 
-### Implementation order from this audit
+### Implementation order
 
-1. Establish a live Newtonian environmental-body movement stage at the existing field movement/commit boundary. It must preserve each body's inertial state through field-cell transfers and must not use `mobility` or `FLOW_RESPONSE_SCALE` as a force-to-motion rule.
-2. Connect the existing multi-body resonance force/torque snapshot to that stage, evaluating each pair once and applying every participant/occluder contribution once. Keep the full-world gradient as an oracle, not a per-tick production path.
-3. Route candidate connection approach through the shared exact-face and swept-path solver. Geometry progress, local resonance, and the existing chemistry activation barrier must advance together; no proximity-only activation or snapping correction.
-4. Extend that same staged physical move to incumbent displacement, adjacent reconnection, and weaker-bond fallback, with one atomic commit/rollback boundary.
-5. Only after the above is integrated, validate conservation, rollback, movement, alignment, activation, and displacement with focused tests and full CI. Do not extend experiment duration or introduce runtime multipole approximations during this phase.
+1. Prove a scalable mutual force evaluator against the exact complete-pair
+   oracle, including visibility and per-body force/torque error.
+2. Separate the overdamped environmental-flow field from legacy
+   overdamped material advection. Keep the field calculation; do not use its
+   velocity as a substitute for Newtonian body momentum.
+3. Connect accumulated resonance forces to one Newtonian rigid-body proposal
+   and atomic environmental-field commit, including collision/path validation,
+   energy settlement, and field-cell revisions.
+4. Implement chemistry-native face approach and synchronize geometric
+   progress, resonance attraction, and existing activation thresholds.
+5. Integrate unified displacement and adjacent reconnection/fallback through
+   the same physical movement and atomic transaction.
+6. Run focused chemistry-only conservation/rollback tests and full CI. No
+   extended experiments or benchmarks unless separately requested.
 
-### Staged multi-body Newtonian motion bridge (2026-11-13)
-
-- Added `ResonanceForceAccumulator::stage_motion`, which validates every accumulated body index, stable environmental identity, and owner mapping against the immutable resonance snapshot before proposing any motion.
-- The method stages all force/torque-driven rigid-body proposals as one all-or-nothing batch using `PhysicalMaterial::advanced_under_force`, and records before/after kinetic energy for each body. A single invalid mapping, mass-property failure, non-finite result, or invalid proposal rejects the entire batch.
-- Added regression coverage using an identified environmental pair with an organism occluder, verifying that both free materials and the owner-mapped organism receive staged proposals and finite kinetic-energy inventories.
-- This is still a pure staging bridge. It does not commit poses to the environment or organisms, does not validate collisions, and does not settle signed resonance-potential / kinetic-energy changes. It must not be described as live movement integration.
-
-### Remaining blockers before tick integration
-
-- A deterministic, non-arbitrary interaction traversal is still needed to enumerate the resonance interactions that exert force before face contact. The existing chemistry candidate lists are contact/discovery work queues and are not a valid substitute for the physical force interaction set.
-- The world snapshot includes free field materials, organism-owned structures, and other owner-mapped bodies. A live commit must map every staged proposal back to its authoritative owner and stage all affected field-cell revisions, structure geometry, topology, and energy before any mutation.
-- Collision/path validation and energy settlement must be joined to the same commit boundary. Until then, staged proposals remain uncommitted.
-
-
-## 7.2 Staged-motion validation and owner-level motion audit (2026-11-13)
-
-**Verified green CI after staged-motion regression fix**
-- The multi-body staged-motion regression now passes with the complete Rust test suite and Clippy green.
-- The failure exposed that organism structure proxy bodies were built with `internal_connections: None`. That state is intentionally unrealized; it is not suitable for mass-property or Newtonian motion calculations.
-- `physical_material_from_structure` now uses `internal_connections: Some(Vec::new())`: the proxy is explicitly realized as one rigid physical body with no inferred internal bonds. This fixes the representation rather than weakening the mass-property checks.
-- Keep the per-body mass-property and force-advance assertions in the regression. They make failures identify the exact body index, environmental identity, and owner mapping.
-
-**New owner-level integration blocker**
-- `world_physical_materials_for_pair_potential` places an organism's main structure, reproductive construction material, stored material, and transformation-held material into the world snapshot as separate physical bodies.
-- Attached bodies carry `force_owner_indices = Some(organism_index)`; this is a mapping to their owner, not permission to advance them as independent rigid bodies.
-- `ResonanceForceAccumulator::stage_motion` currently stages every accumulated body independently. If called directly for an owner-attached body, its proposal would move that body separately from the owning organism. That would violate the invariant that attached material follows the owner.
-- `physical_material_from_structure` currently creates a proxy with default inertial motion. The organism does not yet have a demonstrated persistent owner-level inertial state that can be advanced and committed alongside its complete owned geometry.
-- Before live runtime integration, introduce an explicit canonical owner-body mapping. Accumulate forces and torques from all owner-attached bodies onto that owner, including the torque shift from each body's center of mass to the owner's center of mass. Stage one owner-level rigid-body proposal, then derive all attached-body world poses from that same owner transform. Do not independently advance attached construction/storage/transformation bodies.
-- Environmental field bodies with no owner remain independently movable. Decomposing bodies also need an explicit owner/motion policy rather than being accidentally treated as organisms or free field materials.
-- Add regressions with one organism plus at least one owner-relative construction/storage body: force on the attached body must contribute to the owner's net force and torque; every owned placement must undergo the same rigid transform; no duplicate independent motion proposal may be emitted; any invalid member must reject the whole owner batch.
-
-**Next implementation dependency**
-1. Define and test the canonical owner rigid-body state and stable owner/body mapping.
-2. Aggregate attached-body force/torque into the owner frame, preserving net force and torque about the owner's center of mass.
-3. Stage one atomic pose/momentum update per independently movable entity (organism owner, free environmental material, or explicitly modeled decomposing body).
-4. Only then combine those proposals with collision/path checks, energy settlement, and field-cell revisions at the live commit boundary.
-
-The exact full-world occlusion-aware gradient remains a correctness oracle / pre-runtime source. This owner mapping work does not authorize calling it unconditionally from the tick loop or changing environmental flow's overdamped behavior.
-
+The exact force oracle is test-only. Do not call it unconditionally from the
+live tick loop. Do not add organism force participants, owner mapping,
+organism occluders, or organism movement state.
 
 ## 7.3 Chemistry-only physical population boundary — 2026-11-13
 
