@@ -994,8 +994,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             // from_structure intentionally excludes unbonded components, which are
             // precisely the reactants this pass is responsible for finding.
             let Some(body) =
-                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                    &source_structure,
+                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                    &source,
+                    &environment.catalog,
                 )
             else {
                 continue;
