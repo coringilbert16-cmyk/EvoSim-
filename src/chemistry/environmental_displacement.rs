@@ -297,6 +297,149 @@ fn evaluate_environmental_displacement_candidate(
     Some((formation, work, investment, required, bond_energy))
 }
 
+#[derive(Clone, Debug)]
+struct EnvironmentalDisplacementTrial {
+    products: Vec<PhysicalMaterial>,
+    energy: ReactionEnergyBalance,
+    replacement_bond_energy: f64,
+    formation_work: f64,
+    disruption_work: f64,
+}
+
+/// Revalidate and stage a complete displacement using only environmental
+/// material topology, contact geometry, and catalog chemistry.
+fn build_native_environmental_displacement_trial(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    incoming_part: usize,
+    old_bond_index: usize,
+    old_connection: &PhysicalMaterialBond,
+    candidate: ConnectionPairCandidate,
+    investment: f64,
+    incoming_activation: f64,
+    reactivity_baseline: f64,
+    dissipated_heat: f64,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<EnvironmentalDisplacementTrial> {
+    let current_old_connection = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?;
+    if current_old_connection != old_connection
+        || !((old_connection.part_a == anchor_part && old_connection.part_b == displaced_part)
+            || (old_connection.part_b == anchor_part && old_connection.part_a == displaced_part))
+    {
+        return None;
+    }
+    let candidates = crate::material_contact::connection_pair_candidates_for_material_parts(
+        source_a,
+        anchor_part,
+        Some(old_bond_index),
+        source_b,
+        incoming_part,
+        catalog,
+    )?;
+    let live_candidate = candidates.into_iter().find(|live| {
+        live.endpoint_a.same_location(candidate.endpoint_a)
+            && live.endpoint_b.same_location(candidate.endpoint_b)
+    })?;
+    let candidate_tolerance = 1e-9;
+    if !live_candidate.available_a
+        || !live_candidate.available_b
+        || (live_candidate.distance - candidate.distance).abs() > candidate_tolerance
+        || (live_candidate.facing - candidate.facing).abs() > candidate_tolerance
+        || (live_candidate.load_a - candidate.load_a).abs() > candidate_tolerance
+        || (live_candidate.load_b - candidate.load_b).abs() > candidate_tolerance
+    {
+        return None;
+    }
+    let (formation, formation_work, required_investment, _, replacement_bond_energy) =
+        evaluate_environmental_displacement_candidate(
+            source_a,
+            anchor_part,
+            displaced_part,
+            source_b,
+            incoming_part,
+            old_bond_index,
+            live_candidate,
+            catalog,
+        )?;
+    if !crate::combine::formation_succeeds(formation, investment)
+        || !required_investment.is_finite()
+        || (required_investment - investment).abs() > 1e-9
+    {
+        return None;
+    }
+    let anchor = environmental_displacement_constituent(source_a, anchor_part, catalog)?;
+    let displaced = environmental_displacement_constituent(source_a, displaced_part, catalog)?;
+    let old_bond_strength =
+        crate::combine::bond_strength(anchor.properties, displaced.properties);
+    let preflight = evaluate_displacement_preflight_with_bond_energies(
+        anchor.properties,
+        displaced.properties,
+        old_bond_strength,
+        old_connection.bond_energy,
+        replacement_bond_energy,
+        incoming_activation,
+        reactivity_baseline,
+        formation_work,
+        dissipated_heat,
+    )?;
+    if !preflight.is_activated() {
+        return None;
+    }
+    let source_structural_energy = environmental_material_structural_energy(source_a)?
+        + environmental_material_structural_energy(source_b)?;
+    let products = build_environmental_displacement_products(
+        source_a,
+        source_b,
+        old_bond_index,
+        anchor_part,
+        displaced_part,
+        incoming_part,
+        live_candidate,
+        replacement_bond_energy,
+        catalog,
+        vertical_period,
+    )?;
+    if products.len() < 2 {
+        return None;
+    }
+    let product_structural_energy = environmental_products_structural_energy(&products)?;
+    let total_work = formation_work + preflight.disruption_work;
+    let energy = ReactionEnergyBalance::calculate_conservative(
+        source_structural_energy,
+        product_structural_energy,
+        total_work,
+        dissipated_heat,
+    )?;
+    let tolerance = 1e-9_f64.max(
+        f64::EPSILON
+            * source_structural_energy
+                .abs()
+                .max(product_structural_energy.abs())
+                .max(1.0)
+            * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
+            * 8.0,
+    );
+    if (energy.required_external_input - preflight.energy.required_external_input).abs()
+        > tolerance
+        || (energy.net_reaction_change - preflight.energy.net_reaction_change).abs() > tolerance
+    {
+        return None;
+    }
+    Some(EnvironmentalDisplacementTrial {
+        products,
+        energy,
+        replacement_bond_energy,
+        formation_work,
+        disruption_work: preflight.disruption_work,
+    })
+}
+
 fn displacement_reaction_frequency_from_properties(
     anchor: ResourceProperties,
     displaced: ResourceProperties,
