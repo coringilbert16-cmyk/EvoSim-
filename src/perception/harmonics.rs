@@ -3815,6 +3815,21 @@ mod tests {
         let sum_y = forces.iter().map(|force| force.y).sum::<f64>();
         assert!(sum_x.abs() < 1e-5);
         assert!(sum_y.abs() < 1e-5);
+
+        let bodies = [&source, &receiver, &blockers[0], &blockers[1], &blockers[2]];
+        let total_angular_momentum_derivative = bodies
+            .iter()
+            .zip(&forces)
+            .map(|(body, force)| {
+                let center = body.mass_properties(&catalog, None).unwrap();
+                center.center_x * force.y - center.center_y * force.x + force.torque
+            })
+            .sum::<f64>();
+        assert!(
+            total_angular_momentum_derivative.abs() < 1e-4,
+            "the complete rotational and translational gradient must conserve angular momentum"
+        );
+        assert!(forces.iter().all(|force| force.torque.is_finite()));
     }
 
     #[test]
