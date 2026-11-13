@@ -1517,7 +1517,9 @@ mod tests {
             "the pair and every other physical body must receive one force contribution"
         );
         assert!(contributions.iter().all(|contribution| {
-            contribution.force.x.is_finite() && contribution.force.y.is_finite()
+            contribution.force.x.is_finite()
+                && contribution.force.y.is_finite()
+                && contribution.force.torque.is_finite()
         }));
         assert!(
             contributions.iter().any(|contribution| {
