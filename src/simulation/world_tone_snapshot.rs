@@ -789,10 +789,12 @@ pub(crate) struct ResonanceWorldBodyForce {
 /// are accumulated before any body is advanced, so a body participating in
 /// several interactions receives their vector sum exactly once.
 #[derive(Clone, Debug, Default)]
+#[allow(dead_code)] // Consumed by the forthcoming runtime force-integration stage.
 pub(crate) struct ResonanceForceAccumulator {
     bodies: std::collections::BTreeMap<u64, (Option<usize>, crate::harmonics::ResonanceBodyForce)>,
 }
 
+#[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
 impl ResonanceForceAccumulator {
     /// Add one body's contribution. Reject ambiguous identities, owner changes,
     /// non-finite gradients, and overflow without partially modifying the sum.
