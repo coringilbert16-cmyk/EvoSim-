@@ -1451,6 +1451,26 @@ fn material_aura_receptions_with_geometry(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_geometry_prepared(
+        source,
+        receiver,
+        source_geometry,
+        receiver_bodies,
+        catalog,
+        tick,
+        None,
+    )
+}
+
+fn material_aura_receptions_with_geometry_prepared(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitter: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<MaterialAuraReception>> {
     if source.owner_relative_origin.is_some()
         || receiver.owner_relative_origin.is_some()
         || receiver_bodies.is_empty()
@@ -1458,9 +1478,7 @@ fn material_aura_receptions_with_geometry(
     {
         return None;
     }
-    let (source_x, source_y, source_extent, emitted) =
-        environmental_material_resonance(source, catalog, tick)?;
-
+    let (source_x, source_y, source_extent) = environmental_material_geometry(source)?;
     let target_body_indices = [0];
     let receiver_geometry = receiver_bodies.first()?;
     let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
@@ -1484,10 +1502,25 @@ fn material_aura_receptions_with_geometry(
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
-    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    let source_mass_scale = prepared_emitter
+        .map(|emitter| emitter.mass_scale)
+        .unwrap_or_else(|| environmental_mass_scale(source.material.mass(catalog), baselines.mass));
+    if !source_mass_scale.is_finite() || source_mass_scale < 0.0 {
+        return None;
+    }
     if source_mass_scale <= f64::EPSILON {
         return Some(Vec::new());
     }
+    let computed_emitted = prepared_emitter.is_none().then(|| {
+        material_response(
+            source.material.weighted_properties(catalog),
+            baselines,
+            phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
+        )
+    });
+    let emitted = prepared_emitter
+        .map(|emitter| &emitter.emitted)
+        .or(computed_emitted.as_ref())?;
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
     let mut receive_at = |receiver_x: f64,
@@ -1508,7 +1541,7 @@ fn material_aura_receptions_with_geometry(
             return Some(());
         }
         let mut incident = ToneSpectrum::empty();
-        add_spectrum(&mut incident, &emitted, attenuation);
+        add_spectrum(&mut incident, emitted, attenuation);
         incident.retain_strongest();
         let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
         received.retain_strongest();
