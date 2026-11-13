@@ -338,7 +338,7 @@ fn environmental_part_kinematics(
     let placement = *source.placements.as_ref()?.get(part_index)?;
     let (name, amount) = source.material.parts.get(part_index)?;
     let resource = catalog.iter().find(|resource| resource.name == *name)?;
-    let mass = resource.properties.mass * amount;
+    let mass = resource.properties.mass * *amount;
     let shape = source.realized_shape_for_part(part_index, catalog)?;
     let offset_x = placement.x - mass_properties.center_x;
     let offset_y = (placement.y - mass_properties.center_y + vertical_period * 0.5)
@@ -3236,6 +3236,36 @@ mod tests {
             assert!((candidate.load_b - matching.load_b).abs() <= 1e-10);
             assert_eq!(candidate.available_a, matching.available_a);
             assert_eq!(candidate.available_b, matching.available_b);
+            let native_evaluation = evaluate_environmental_displacement_candidate(
+                bonded,
+                0,
+                1,
+                incoming,
+                0,
+                0,
+                *candidate,
+                &catalog,
+            );
+            let reference_evaluation = crate::combine_runtime::selected_candidate_evaluation(
+                &graph_trial,
+                0,
+                2,
+                *candidate,
+                &catalog,
+            );
+            assert_eq!(
+                native_evaluation.is_some(),
+                reference_evaluation.is_some(),
+                "material-native COMBINE evaluation must agree with the reference evaluator"
+            );
+            if let (Some(native), Some(reference)) =
+                (native_evaluation, reference_evaluation)
+            {
+                assert_eq!(native.0, reference.0);
+                assert!((native.1 - reference.1).abs() <= 1e-10);
+                assert!((native.2 - reference.2).abs() <= 1e-10);
+                assert!((native.3 - reference.3).abs() <= 1e-10);
+            }
         }
         for candidate in &reference {
             assert!(
