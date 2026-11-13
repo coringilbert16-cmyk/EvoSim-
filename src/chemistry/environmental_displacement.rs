@@ -249,6 +249,7 @@ fn displacement_reaction_frequency_from_materials(
 /// Accumulate one tick of activation from the incoming constituent's live
 /// contact with the anchor. This mirrors environmental COMBINE's approved
 /// static-potential, contact-falloff, facing-engagement, and dissipation equation.
+#[cfg(test)]
 fn displacement_chemical_properties(
     unit: &crate::structure::StructuralUnit,
     catalog: &[BaseResource],
@@ -267,6 +268,7 @@ fn displacement_chemical_properties(
 /// contact with the anchor. Elemental chemical positions are read from the
 /// catalog here, without changing aggregate material properties or assigning
 /// an averaged coordinate to a mixed compound.
+#[cfg(test)]
 fn displacement_pair_static_potential(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -318,6 +320,7 @@ fn displacement_pair_static_potential(
     .filter(|potential| potential.is_finite() && *potential > 0.0)
 }
 
+#[cfg(test)]
 pub(crate) fn accumulate_incoming_activation(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -330,6 +333,7 @@ pub(crate) fn accumulate_incoming_activation(
     )
 }
 
+#[cfg(test)]
 fn accumulate_incoming_activation_with_resonance(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -898,6 +902,7 @@ fn dissipate_unupdated_displacement_accumulations(
 /// One unique, fully evaluated replacement endpoint pair found by the
 /// diagnostic all-alternatives census. This value is observational only: it
 /// never changes the production-selected contact or its activation history.
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Copy, Debug)]
 struct DisplacementContactAlternative {
@@ -912,6 +917,7 @@ struct DisplacementContactAlternative {
 /// Bounded diagnostic census of every unique endpoint-pair alternative on the
 /// post-removal trial graph. The budget is charged for each raw generated
 /// candidate, including duplicates and candidates rejected by later stages.
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Debug, Default)]
 struct DisplacementContactCensus {
@@ -923,6 +929,7 @@ struct DisplacementContactCensus {
     work_limit_reached: bool,
 }
 
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 fn census_replacement_contacts(
     combined: &OrganismStructure,
@@ -1120,6 +1127,7 @@ fn best_replacement_contact(
     best.map(|(candidate, investment, _)| (candidate, investment))
 }
 
+#[cfg(test)]
 fn displacement_reaction_frequency(
     anchor: &crate::structure::StructuralUnit,
     displaced: &crate::structure::StructuralUnit,
