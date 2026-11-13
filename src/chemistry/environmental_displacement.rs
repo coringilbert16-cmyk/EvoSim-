@@ -2626,6 +2626,99 @@ mod tests {
     }
 
     #[test]
+    fn material_native_displacement_chemistry_matches_restored_constituent_authority() {
+        let catalog = default_catalog();
+        let (source, _old_bond, candidate, _investment) =
+            three_participant_fixture(&catalog);
+        let anchor_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![source.units[0].placement],
+            &catalog,
+        )
+        .expect("Carbon should realize as a free environmental material");
+        let incoming_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Oxygen", 1.0),
+            vec![source.units[2].placement],
+            &catalog,
+        )
+        .expect("Oxygen should realize as a free environmental material");
+        let anchor = environmental_displacement_constituent(&anchor_material, 0, &catalog)
+            .expect("anchor chemistry should resolve directly from its material");
+        let incoming = environmental_displacement_constituent(&incoming_material, 0, &catalog)
+            .expect("incoming chemistry should resolve directly from its material");
+
+        let legacy_activation = accumulate_incoming_activation_with_resonance(
+            &source.units[0],
+            &source.units[2],
+            candidate,
+            0.0,
+            0.5,
+            &catalog,
+        )
+        .expect("restored-graph authority should accept the fixture contact");
+        let material_activation = accumulate_environmental_constituent_activation(
+            anchor,
+            incoming,
+            candidate,
+            0.0,
+            0.5,
+        )
+        .expect("material-native authority should accept the same contact");
+        assert!(
+            (legacy_activation - material_activation).abs() <= 1e-12,
+            "material-native activation must preserve the approved chemistry equation"
+        );
+
+        let legacy_frequency = displacement_reaction_frequency(
+            &source.units[0],
+            &source.units[1],
+            &catalog,
+        )
+        .expect("legacy reaction frequency should be valid");
+        let material_frequency = displacement_reaction_frequency_from_materials(
+            &PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![source.units[0].placement],
+                &catalog,
+            )
+            .expect("Carbon should realize"),
+            0,
+            &PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Hydrogen", 1.0),
+                vec![source.units[1].placement],
+                &catalog,
+            )
+            .expect("Hydrogen should realize"),
+            0,
+            &catalog,
+        )
+        .expect("material-native reaction frequency should be valid");
+        assert!(
+            (legacy_frequency - material_frequency).abs() <= 1e-12,
+            "material-native frequency must preserve the approved catalog properties"
+        );
+
+        let legacy_anchor_point = crate::contact::endpoint_world_point(
+            candidate.endpoint_a,
+            &source.units[0],
+            &catalog,
+        )
+        .expect("legacy anchor endpoint should resolve");
+        let material_anchor_point = environmental_constituent_endpoint_world_point(
+            &anchor_material,
+            0,
+            candidate.endpoint_a,
+            &catalog,
+        )
+        .expect("material-native anchor endpoint should resolve");
+        assert!(
+            (legacy_anchor_point.x - material_anchor_point.x).abs() <= 1e-12
+                && (legacy_anchor_point.y - material_anchor_point.y).abs() <= 1e-12,
+            "material-native endpoint transform must preserve the physical contact point"
+        );
+    }
+
+    #[test]
     fn incoming_activation_is_accumulated_from_the_replacement_contact() {
         let catalog = default_catalog();
         let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
