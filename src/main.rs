@@ -129,6 +129,8 @@ mod developmental_decision;
 mod genome;
 #[path = "perception/harmonics.rs"]
 mod harmonics;
+#[path = "perception/resonance_far_field.rs"]
+mod resonance_far_field;
 #[path = "organism/memory.rs"]
 mod memory;
 #[path = "perception/movement.rs"]
