@@ -1000,8 +1000,8 @@ impl LocalResonanceWorldSnapshot {
     }
 
     /// Derive the complete force contribution for one environmental material
-    /// pair. Every other physical body remains an occluder and receives its
-    /// own gradient contribution; attached bodies retain their owner mapping.
+    /// pair. Every other free environmental material remains an occluder and
+    /// receives its own gradient contribution. No organism bodies are present.
     pub(crate) fn pair_force_contributions(
         &self,
         identity_a: u64,
