@@ -233,10 +233,8 @@ fn environmental_material_structural_energy(material: &PhysicalMaterial) -> Opti
     let connections = material.internal_connections.as_ref()?;
     let energy = connections.iter().try_fold(0.0, |total, connection| {
         let next = total - connection.bond_energy;
-        (connection.bond_energy.is_finite()
-            && connection.bond_energy >= 0.0
-            && next.is_finite())
-        .then_some(next)
+        (connection.bond_energy.is_finite() && connection.bond_energy >= 0.0 && next.is_finite())
+            .then_some(next)
     })?;
     energy.is_finite().then_some(energy)
 }
@@ -301,12 +299,16 @@ fn build_environmental_displacement_products(
     {
         return None;
     }
-    if source_a_connections.iter().enumerate().any(|(index, connection)| {
-        index != old_bond_index
-            && connection_occupies_endpoint(connection, anchor_part, candidate.endpoint_a)
-    }) || source_b_connections
+    if source_a_connections
         .iter()
-        .any(|connection| connection_occupies_endpoint(connection, incoming_part, candidate.endpoint_b))
+        .enumerate()
+        .any(|(index, connection)| {
+            index != old_bond_index
+                && connection_occupies_endpoint(connection, anchor_part, candidate.endpoint_a)
+        })
+        || source_b_connections.iter().any(|connection| {
+            connection_occupies_endpoint(connection, incoming_part, candidate.endpoint_b)
+        })
     {
         return None;
     }
@@ -503,8 +505,7 @@ fn build_environmental_displacement_products(
             let kinematics = source_kinematics[old_index];
             let placement = placements[old_index];
             let offset_x = placement.x - product_mass_properties.center_x;
-            let offset_y = (placement.y - product_mass_properties.center_y
-                + vertical_period * 0.5)
+            let offset_y = (placement.y - product_mass_properties.center_y + vertical_period * 0.5)
                 .rem_euclid(vertical_period)
                 - vertical_period * 0.5;
             angular_momentum += kinematics.intrinsic_moment_of_inertia
@@ -514,14 +515,9 @@ fn build_environmental_displacement_products(
                         - offset_y * (kinematics.velocity_x - velocity_x));
         }
         let angular_velocity = angular_momentum / product_mass_properties.moment_of_inertia;
-        if ![
-            velocity_x,
-            velocity_y,
-            angular_momentum,
-            angular_velocity,
-        ]
-        .iter()
-        .all(|value| value.is_finite())
+        if ![velocity_x, velocity_y, angular_momentum, angular_velocity]
+            .iter()
+            .all(|value| value.is_finite())
             || product_mass_properties.moment_of_inertia <= 0.0
         {
             return None;
@@ -2229,8 +2225,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     };
     let source_structural_energy = environmental_material_structural_energy(source_a)
         .and_then(|energy_a| {
-            environmental_material_structural_energy(source_b)
-                .map(|energy_b| energy_a + energy_b)
+            environmental_material_structural_energy(source_b).map(|energy_b| energy_a + energy_b)
         })
         .filter(|energy| energy.is_finite())
         .ok_or("source_material_energy_invalid")?;
@@ -2258,8 +2253,7 @@ pub(crate) fn resolve_environmental_diagnosed(
             * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
             * 8.0,
     );
-    if (source_structural_energy - trial.energy.reactant_energy).abs()
-        > structural_energy_tolerance
+    if (source_structural_energy - trial.energy.reactant_energy).abs() > structural_energy_tolerance
         || (product_structural_energy - trial.energy.product_energy).abs()
             > structural_energy_tolerance
         || native_products.len() < 2
@@ -3255,8 +3249,7 @@ mod tests {
         let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
         let mut reactants =
             crate::environmental_combine::physical_materials_from_structure_components(
-                &source,
-                &catalog,
+                &source, &catalog,
             )
             .expect("fixture should export its bonded and free reactants");
         reactants.sort_by_key(|material| {
