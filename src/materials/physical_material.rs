@@ -798,7 +798,6 @@ impl PhysicalMaterial {
             return false;
         };
         if placements.is_empty()
-            || !self.inertial_motion.is_finite()
             || !self.material.is_valid()
             || placements.len() != self.material.parts.len()
             || placements.iter().any(|placement| {
