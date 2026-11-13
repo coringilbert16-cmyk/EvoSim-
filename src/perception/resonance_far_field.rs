@@ -297,7 +297,7 @@ impl ResonanceFarFieldExpansion {
             torque_about_center: 0.0,
             error: FarFieldErrorBounds::default(),
         };
-        if total_absolute_weight <= f64::EPSILON {
+        if total_absolute_weight == 0.0 {
             return Some(result);
         }
 
@@ -329,7 +329,7 @@ impl ResonanceFarFieldExpansion {
             .iter()
             .map(|(_, source)| source.weight.abs())
             .sum::<f64>();
-        if absolute_weight <= f64::EPSILON {
+        if absolute_weight == 0.0 {
             return Some(());
         }
         let center = FarFieldVector {
@@ -351,16 +351,18 @@ impl ResonanceFarFieldExpansion {
         let expansion = Self::new(center, cluster_sources)?;
         if let Some(evaluation) = expansion.evaluate(target) {
             let share = absolute_weight / total_absolute_weight;
+            let cluster_torque_error = indexed_sources
+                .iter()
+                .zip(&evaluation.source_force_error_bounds)
+                .map(|((_, source), source_error)| {
+                    let distance = (source.position.x - root_center.x)
+                        .hypot(source.position.y - root_center.y);
+                    distance * source_error
+                })
+                .sum::<f64>();
             let budget_met = evaluation.error.potential <= potential_tolerance * share
                 && evaluation.error.force <= force_tolerance * share
-                && indexed_sources
-                    .iter()
-                    .zip(&evaluation.source_force_error_bounds)
-                    .all(|((_, source), source_error)| {
-                        let distance = (source.position.x - root_center.x)
-                            .hypot(source.position.y - root_center.y);
-                        distance * source_error <= torque_tolerance * share
-                    });
+                && cluster_torque_error <= torque_tolerance * share;
             if budget_met {
                 result.potential += evaluation.potential;
                 result.target_gradient.x += evaluation.target_gradient.x;
@@ -606,7 +608,9 @@ mod tests {
         assert!(evaluation.error.potential <= 1e-4);
         assert!(evaluation.error.force <= 1e-4);
         assert!(evaluation.error.torque_about_center <= 1e-4);
-        for (source, force) in sources.iter().zip(&evaluation.source_forces) {
+        for (index, (source, force)) in
+            sources.iter().zip(&evaluation.source_forces).enumerate()
+        {
             let dx = target.x - source.position.x;
             let dy = target.y - source.position.y;
             let distance = dx.hypot(dy);
@@ -614,7 +618,7 @@ mod tests {
             let exact_source_force = FarFieldVector { x: scale * dx, y: scale * dy };
             assert!(
                 (exact_source_force.x - force.x).hypot(exact_source_force.y - force.y)
-                    <= evaluation.source_force_error_bounds[sources.iter().position(|candidate| std::ptr::eq(candidate, source)).unwrap()] + 1e-12
+                    <= evaluation.source_force_error_bounds[index] + 1e-12
             );
         }
     }
