@@ -1074,7 +1074,10 @@ impl LocalResonanceWorldSnapshot {
                 let identity_b = self.bodies[index_b].environmental_identity;
                 let contributions =
                     self.pair_force_contributions(identity_a, identity_b, catalog)?;
-                if contributions.len() != self.bodies.len() || !accumulator.add_all(&contributions)
+                if contributions.len() != self.bodies.len()
+                    || !contributions
+                        .into_iter()
+                        .all(|contribution| accumulator.add(contribution))
                 {
                     return None;
                 }
