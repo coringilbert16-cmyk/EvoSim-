@@ -2746,7 +2746,7 @@ mod tests {
     #[test]
     fn resonance_visibility_runs_only_for_boundary_types_present_on_receiver() {
         let polygon = crate::physical_body_geometry::PhysicalBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Rectangle {
                     width: 1.0,
@@ -2762,7 +2762,7 @@ mod tests {
             max_y: 0.5,
         };
         let circle = crate::physical_body_geometry::PhysicalBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Circle { radius: 0.5 },
                 x: 0.0,
@@ -2775,7 +2775,7 @@ mod tests {
             max_y: 0.5,
         };
         let line = crate::physical_body_geometry::PhysicalBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Line { length: 1.0 },
                 x: 0.0,
