@@ -1103,7 +1103,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     {
         return Err("stale_source_or_bond_mismatch");
     }
-    let Some(pieces) = source.break_internal_bond(
+    let Some(pieces) = source.break_environmental_internal_bond(
         &operation.bond,
         &environment.catalog,
         Some(environment.height),
