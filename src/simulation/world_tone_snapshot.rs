@@ -1627,6 +1627,46 @@ mod tests {
         assert_eq!(forces[1].environmental_identity, 12);
     }
 
+    fn sample() -> WorldToneSample {
+        WorldToneSample {
+            source_x: -5.0,
+            source_y: 0.0,
+            frequency_cycles_per_day: 440.0,
+            energy_intensity_per_tick_per_width: 10.0,
+            orbital_phase: 0.75,
+        }
+    }
+
+    fn replace_with_nitrogen_square(
+        organism: &mut Organism,
+        x: f64,
+        y: f64,
+        catalog: &[BaseResource],
+    ) {
+        let mut unit = StructuralUnit::from_material(
+            Material::free_base("Nitrogen", 1.0),
+            Placement {
+                x,
+                y,
+                rotation_radians: 0.0,
+            },
+        )
+        .expect("nitrogen unit should be constructible");
+        assert!(unit.realize_default_geometry(catalog));
+        let mut structure = OrganismStructure::new();
+        structure.add_unit(unit);
+        organism.structure = structure;
+        organism.occupied_cells = vec![Position { x, y }];
+        organism.stored_material.entries.clear();
+        organism.mark_structure_changed();
+    }
+
+    fn clear_environment_physical_material(simulation: &mut Simulation) {
+        for cell in &mut simulation.environment.field.cells {
+            cell.physical_materials.clear();
+        }
+    }
+
     #[test]
     fn chemistry_force_snapshot_contains_only_free_environmental_materials() {
         let mut simulation = Simulation::new(113, 1.0);
