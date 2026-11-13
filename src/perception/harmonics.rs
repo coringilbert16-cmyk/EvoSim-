@@ -449,6 +449,8 @@ pub(crate) struct ResonancePairPotentialComponent {
 pub(crate) struct ResonanceBodyForce {
     pub(crate) x: f64,
     pub(crate) y: f64,
+    /// Torque about the body's center of mass from the same potential gradient.
+    pub(crate) torque: f64,
 }
 
 /// A spatially attributed environmental signal after passing through the
@@ -1956,6 +1958,34 @@ pub(crate) fn resonance_pair_potential_with_occluders(
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
+fn rotated_physical_material(
+    physical: &crate::physical_material::PhysicalMaterial,
+    angle: f64,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<crate::physical_material::PhysicalMaterial> {
+    if !angle.is_finite() {
+        return None;
+    }
+    let properties = physical.mass_properties(catalog, None)?;
+    let (sin, cos) = angle.sin_cos();
+    let mut rotated = physical.clone();
+    let placements = rotated.placements.as_mut()?;
+    for placement in placements {
+        let dx = placement.x - properties.center_x;
+        let dy = placement.y - properties.center_y;
+        placement.x = properties.center_x + dx * cos - dy * sin;
+        placement.y = properties.center_y + dx * sin + dy * cos;
+        placement.rotation_radians += angle;
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
+            return None;
+        }
+    }
+    Some(rotated)
+}
+
 fn translated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
     dx: f64,
@@ -2107,8 +2137,8 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
 
     let mut forces = Vec::with_capacity(occluders.len() + 2);
     for participant in 0..occluders.len() + 2 {
-        let mut derivatives = [0.0; 2];
-        for (axis, derivative) in derivatives.iter_mut().enumerate() {
+        let mut derivatives = [0.0; 3];
+        for (axis, derivative) in derivatives.iter_mut().take(2).enumerate() {
             if participant >= 2 && !blocker_can_affect_gradient[participant - 2] {
                 *derivative = 0.0;
                 continue;
@@ -2148,6 +2178,38 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
                 return None;
             }
         }
+        let angular_step = DIFFERENCE_STEP;
+        let (plus, minus) = if participant == 0 {
+            let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
+            (
+                potential(&shifted_plus, b, occluders)?,
+                potential(&shifted_minus, b, occluders)?,
+            )
+        } else if participant == 1 {
+            let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
+            (
+                potential(a, &shifted_plus, occluders)?,
+                potential(a, &shifted_minus, occluders)?,
+            )
+        } else {
+            let blocker_index = participant - 2;
+            let shifted_plus =
+                rotated_physical_material(&occluders[blocker_index], angular_step, catalog)?;
+            let shifted_minus =
+                rotated_physical_material(&occluders[blocker_index], -angular_step, catalog)?;
+            plus_blockers[blocker_index] = shifted_plus;
+            minus_blockers[blocker_index] = shifted_minus;
+            (
+                potential(a, b, &plus_blockers)?,
+                potential(a, b, &minus_blockers)?,
+            )
+        };
+        derivatives[2] = -(plus - minus) / (2.0 * angular_step);
+        if !derivatives[2].is_finite() {
+            return None;
+        }
         if participant >= 2 {
             let blocker_index = participant - 2;
             plus_blockers[blocker_index] = occluders[blocker_index].clone();
@@ -2156,6 +2218,7 @@ pub(crate) fn resonance_multi_body_forces_with_occluders(
         forces.push(ResonanceBodyForce {
             x: derivatives[0],
             y: derivatives[1],
+            torque: derivatives[2],
         });
     }
     let total_force = forces
