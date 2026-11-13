@@ -1527,12 +1527,12 @@ mod tests {
         };
         assert!(accumulator.add(contribution(11, 11, None, 2.0, -1.0, 0.5)));
         assert!(accumulator.add(contribution(11, 11, None, -0.5, 3.0, 1.5)));
-        assert!(accumulator.add(contribution(12, 12, Some(4), 1.0, 0.0, -2.0)));
+        assert!(accumulator.add(contribution(12, 0, Some(4), 1.0, 0.0, -2.0)));
         assert_eq!(accumulator.len(), 2);
 
         let before = accumulator.clone().into_body_forces();
         assert!(!accumulator.add(contribution(11, 11, Some(4), 9.0, 9.0, 9.0)));
-        assert!(!accumulator.add(contribution(0, 0, None, 1.0, 1.0, 1.0)));
+        assert!(!accumulator.add(contribution(11, 99, None, 1.0, 1.0, 1.0)));
         assert!(!accumulator.add(contribution(11, 11, None, f64::NAN, 0.0, 0.0)));
         assert_eq!(accumulator.clone().into_body_forces(), before);
 
@@ -1548,7 +1548,7 @@ mod tests {
                 torque: 2.0,
             }
         );
-        assert_eq!(forces[1].environmental_identity, 12);
+        assert_eq!(forces[1].environmental_identity, 0);
         assert_eq!(forces[1].owner_organism_index, Some(4));
     }
 
