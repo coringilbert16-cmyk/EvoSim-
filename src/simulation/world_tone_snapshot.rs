@@ -1774,7 +1774,8 @@ mod tests {
                 body.mass_properties(
                     &simulation.environment.catalog,
                     Some(simulation.environment.height),
-                ).is_some(),
+                )
+                .is_some(),
                 "body {body_index} (identity {}, owner {:?}) must have valid mass properties",
                 body.environmental_identity,
                 snapshot.force_owner_indices[body_index],
