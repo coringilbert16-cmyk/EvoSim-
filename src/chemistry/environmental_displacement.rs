@@ -1414,19 +1414,33 @@ fn best_replacement_contact(
     catalog: &[BaseResource],
     diagnostics: Option<&mut crate::state::EnvironmentalDisplacementDiscoveryDiagnostics>,
     sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
+    source_parts: Option<(usize, usize, usize)>,
     sample_this_search: bool,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
     topology_trial.break_matching_bond(old_bond)?;
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-    let candidates = crate::contact::connection_pair_candidates_cached(
-        &topology_trial,
-        anchor_unit,
-        incoming_unit,
-        catalog,
-        &mut cache,
-    );
+    let candidates = if let (Some((source_a, source_b)), Some((anchor_part, incoming_part, old_bond_index))) =
+        (sources, source_parts)
+    {
+        crate::material_contact::connection_pair_candidates_for_material_parts(
+            source_a,
+            anchor_part,
+            Some(old_bond_index),
+            source_b,
+            incoming_part,
+            catalog,
+        )?
+    } else {
+        crate::contact::connection_pair_candidates_cached(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            &mut cache,
+        )
+    };
     let mut diagnostics = diagnostics;
     for (candidate_index, candidate) in candidates.into_iter().enumerate() {
         let geometry_valid = candidate.available_a
@@ -1767,6 +1781,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     &environment.catalog,
                                     Some(&mut *diagnostics),
                                     Some((&source_a, &source_b)),
+                                    Some((anchor_part, incoming_part, bond_index)),
                                     sample_this_search,
                                 ) else {
                                     continue;
@@ -2927,7 +2942,7 @@ mod tests {
         );
 
         let (production_selected, _) =
-            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
+            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, None, false)
                 .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
@@ -3493,6 +3508,7 @@ mod tests {
             incoming_unit,
             old_bond,
             &catalog,
+            None,
             None,
             None,
             false,
