@@ -133,8 +133,7 @@ mod tests {
             outward_normal: (0.0, 1.0),
         };
         let source = (0.3, 2.0);
-        let (_, gradient) =
-            point_source_projected_extent_with_gradient(boundary, source).unwrap();
+        let (_, gradient) = point_source_projected_extent_with_gradient(boundary, source).unwrap();
         let step = 1e-6;
         let dx = (point_source_projected_extent(boundary, (source.0 + step, source.1)).unwrap()
             - point_source_projected_extent(boundary, (source.0 - step, source.1)).unwrap())
@@ -149,9 +148,7 @@ mod tests {
     #[test]
     fn straight_projected_extent_gradient_rejects_edge_on_transition() {
         let boundary = interval((0.0, 1.0));
-        assert!(
-            point_source_projected_extent_with_gradient(boundary, (0.5, 0.0)).is_none()
-        );
+        assert!(point_source_projected_extent_with_gradient(boundary, (0.5, 0.0)).is_none());
     }
 
     #[test]
