@@ -2241,20 +2241,11 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
             resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
         }
     };
-    let baseline = potential(a, b, occluders)?;
-    if !baseline.is_finite() {
-        return None;
-    }
-
-    // Reuse the blocker vectors across finite-difference samples. Cloning
-    // the complete occluder inventory for every blocker and axis made this
-    // otherwise local derivative allocate quadratically in blocker count.
-    let mut plus_blockers = occluders.to_vec();
-    let mut minus_blockers = occluders.to_vec();
-    // Only blockers whose bounds intersect the source-to-receiver envelope
-    // (expanded by the finite-difference step) can affect this pair's visibility
-    // gradient. Keep every such blocker; distant bodies have an exact zero
-    // derivative and do not need four additional potential evaluations.
+    // Build the conservative visibility broad phase once. Bodies outside the
+    // source-to-receiver ray envelope cannot change this pair potential, so
+    // omit them from every finite-difference evaluation while retaining a
+    // zero force slot for each omitted world body. This is exact culling, not
+    // a distance cutoff: every possible blocker remains in the evaluation.
     let (source_x, source_y, _) = environmental_material_geometry(a)?;
     let receiver_geometry =
         crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(b, catalog)?;
@@ -2280,29 +2271,37 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
             receiver_geometry.max_y + DIFFERENCE_STEP,
         ),
     ];
-    let blocker_can_affect_gradient = occluders
-        .iter()
-        .map(|blocker| {
-            let geometry =
-                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
-                    blocker, catalog,
-                )?;
-            Some(geometry_bounds_may_occlude_source_points(
-                (source_x, source_y),
-                &step_points,
-                &geometry,
-            ))
-        })
-        .collect::<Option<Vec<_>>>()?;
+    let mut relevant_occluder_indices = Vec::new();
+    let mut relevant_occluders = Vec::new();
+    for (index, blocker) in occluders.iter().enumerate() {
+        let geometry =
+            crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                blocker, catalog,
+            )?;
+        if geometry_bounds_may_occlude_source_points(
+            (source_x, source_y),
+            &step_points,
+            &geometry,
+        ) {
+            relevant_occluder_indices.push(index);
+            relevant_occluders.push(blocker.clone());
+        }
+    }
 
-    let mut forces = Vec::with_capacity(occluders.len() + 2);
-    for participant in 0..occluders.len() + 2 {
+    let baseline = potential(a, b, &relevant_occluders)?;
+    if !baseline.is_finite() {
+        return None;
+    }
+
+    // Only geometrically relevant blockers need perturbed copies. Keeping the
+    // original world ordering in the result preserves stable body identity.
+    let mut plus_blockers = relevant_occluders.clone();
+    let mut minus_blockers = relevant_occluders.clone();
+    let mut forces = vec![ResonanceBodyForce::default(); occluders.len() + 2];
+
+    for participant in 0..relevant_occluders.len() + 2 {
         let mut derivatives = [0.0; 3];
         for (axis, derivative) in derivatives.iter_mut().take(2).enumerate() {
-            if participant >= 2 && !blocker_can_affect_gradient[participant - 2] {
-                *derivative = 0.0;
-                continue;
-            }
             let (dx, dy) = if axis == 0 {
                 (DIFFERENCE_STEP, 0.0)
             } else {
@@ -2312,22 +2311,22 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
                 let shifted_plus = translated_physical_material(a, dx, dy)?;
                 let shifted_minus = translated_physical_material(a, -dx, -dy)?;
                 (
-                    potential(&shifted_plus, b, occluders)?,
-                    potential(&shifted_minus, b, occluders)?,
+                    potential(&shifted_plus, b, &relevant_occluders)?,
+                    potential(&shifted_minus, b, &relevant_occluders)?,
                 )
             } else if participant == 1 {
                 let shifted_plus = translated_physical_material(b, dx, dy)?;
                 let shifted_minus = translated_physical_material(b, -dx, -dy)?;
                 (
-                    potential(a, &shifted_plus, occluders)?,
-                    potential(a, &shifted_minus, occluders)?,
+                    potential(a, &shifted_plus, &relevant_occluders)?,
+                    potential(a, &shifted_minus, &relevant_occluders)?,
                 )
             } else {
                 let blocker_index = participant - 2;
                 plus_blockers[blocker_index] =
-                    translated_physical_material(&occluders[blocker_index], dx, dy)?;
+                    translated_physical_material(&relevant_occluders[blocker_index], dx, dy)?;
                 minus_blockers[blocker_index] =
-                    translated_physical_material(&occluders[blocker_index], -dx, -dy)?;
+                    translated_physical_material(&relevant_occluders[blocker_index], -dx, -dy)?;
                 (
                     potential(a, b, &plus_blockers)?,
                     potential(a, b, &minus_blockers)?,
@@ -2338,57 +2337,57 @@ fn resonance_multi_body_forces_with_optional_prepared_emitters(
                 return None;
             }
         }
+
         let angular_step = DIFFERENCE_STEP;
-        if participant >= 2 && !blocker_can_affect_gradient[participant - 2] {
-            // A body outside the complete source-to-receiver ray envelope
-            // cannot change this pair potential under rigid rotation either.
-            // Its exact angular derivative is zero; do not rotate unrelated
-            // world bodies merely to rediscover that zero.
-            derivatives[2] = 0.0;
+        let (plus, minus) = if participant == 0 {
+            let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
+            (
+                potential(&shifted_plus, b, &relevant_occluders)?,
+                potential(&shifted_minus, b, &relevant_occluders)?,
+            )
+        } else if participant == 1 {
+            let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
+            (
+                potential(a, &shifted_plus, &relevant_occluders)?,
+                potential(a, &shifted_minus, &relevant_occluders)?,
+            )
         } else {
-            let (plus, minus) = if participant == 0 {
-                let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
-                let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
-                (
-                    potential(&shifted_plus, b, occluders)?,
-                    potential(&shifted_minus, b, occluders)?,
-                )
-            } else if participant == 1 {
-                let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
-                let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
-                (
-                    potential(a, &shifted_plus, occluders)?,
-                    potential(a, &shifted_minus, occluders)?,
-                )
-            } else {
-                let blocker_index = participant - 2;
-                let shifted_plus =
-                    rotated_physical_material(&occluders[blocker_index], angular_step, catalog)?;
-                let shifted_minus =
-                    rotated_physical_material(&occluders[blocker_index], -angular_step, catalog)?;
-                plus_blockers[blocker_index] = shifted_plus;
-                minus_blockers[blocker_index] = shifted_minus;
-                (
-                    potential(a, b, &plus_blockers)?,
-                    potential(a, b, &minus_blockers)?,
-                )
-            };
-            derivatives[2] = -(plus - minus) / (2.0 * angular_step);
-        }
+            let blocker_index = participant - 2;
+            plus_blockers[blocker_index] =
+                rotated_physical_material(&relevant_occluders[blocker_index], angular_step, catalog)?;
+            minus_blockers[blocker_index] =
+                rotated_physical_material(&relevant_occluders[blocker_index], -angular_step, catalog)?;
+            (
+                potential(a, b, &plus_blockers)?,
+                potential(a, b, &minus_blockers)?,
+            )
+        };
+        derivatives[2] = -(plus - minus) / (2.0 * angular_step);
         if !derivatives[2].is_finite() {
             return None;
         }
+
         if participant >= 2 {
             let blocker_index = participant - 2;
-            plus_blockers[blocker_index] = occluders[blocker_index].clone();
-            minus_blockers[blocker_index] = occluders[blocker_index].clone();
+            plus_blockers[blocker_index] = relevant_occluders[blocker_index].clone();
+            minus_blockers[blocker_index] = relevant_occluders[blocker_index].clone();
+            let world_index = relevant_occluder_indices[blocker_index];
+            forces[world_index + 2] = ResonanceBodyForce {
+                x: derivatives[0],
+                y: derivatives[1],
+                torque: derivatives[2],
+            };
+        } else {
+            forces[participant] = ResonanceBodyForce {
+                x: derivatives[0],
+                y: derivatives[1],
+                torque: derivatives[2],
+            };
         }
-        forces.push(ResonanceBodyForce {
-            x: derivatives[0],
-            y: derivatives[1],
-            torque: derivatives[2],
-        });
     }
+
     let total_force = forces
         .iter()
         .fold((0.0, 0.0), |sum, force| (sum.0 + force.x, sum.1 + force.y));
