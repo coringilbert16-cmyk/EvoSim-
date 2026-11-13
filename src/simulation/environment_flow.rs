@@ -89,12 +89,11 @@ impl EnvironmentalFlowField {
             .iter()
             .enumerate()
             .flat_map(|(cell_index, cell)| {
-                cell.physical_materials
-                    .iter()
-                    .enumerate()
-                    .filter_map(move |(material_index, material)| {
+                cell.physical_materials.iter().enumerate().filter_map(
+                    move |(material_index, material)| {
                         obstacle_for(cell_index, material_index, material, catalog, height)
-                    })
+                    },
+                )
             })
             .collect();
         Self::from_obstacles(obstacles, width, height)
@@ -996,13 +995,13 @@ mod tests {
             .expect("finite obstacle-adjusted sample");
         let unobstructed = background_velocity(50.5, 40.5, 100.0, 80.0);
         assert!(
-            (obstructed.0 - unobstructed.x).abs() + (obstructed.1 - unobstructed.y).abs()
-                > 1e-6,
+            (obstructed.0 - unobstructed.x).abs() + (obstructed.1 - unobstructed.y).abs() > 1e-6,
             "the field sample must retain the nearby material's flow obstruction"
         );
 
         assert_eq!(
-            field.cells
+            field
+                .cells
                 .iter()
                 .map(|cell| cell.physical_materials.clone())
                 .collect::<Vec<_>>(),
