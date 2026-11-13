@@ -67,7 +67,8 @@ fn environmental_displacement_constituent<'a>(
     part_index: usize,
     catalog: &[BaseResource],
 ) -> Option<EnvironmentalDisplacementConstituent<'a>> {
-    if material.owner_relative_origin.is_some() || !material.material.is_valid_for_catalog(catalog) {
+    if material.owner_relative_origin.is_some() || !material.material.is_valid_for_catalog(catalog)
+    {
         return None;
     }
     let (name, amount) = material.material.parts.get(part_index)?;
