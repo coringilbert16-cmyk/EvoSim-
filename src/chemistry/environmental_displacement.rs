@@ -3250,6 +3250,163 @@ mod tests {
     }
 
     #[test]
+    fn native_displacement_products_match_graph_and_conserve_rigid_body_momentum() {
+        let catalog = default_catalog();
+        let (source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let mut reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source,
+                &catalog,
+            )
+            .expect("fixture should export its bonded and free reactants");
+        reactants.sort_by_key(|material| {
+            material
+                .internal_connections
+                .as_ref()
+                .is_some_and(|connections| connections.is_empty())
+        });
+        assert_eq!(reactants.len(), 2);
+        let mut bonded_source = reactants[0].clone();
+        let mut incoming_source = reactants[1].clone();
+        assert_eq!(
+            bonded_source.internal_connections.as_ref().unwrap().len(),
+            1
+        );
+
+        let replacement_bond_energy = crate::combine_runtime::bond_energy_for_pair(
+            &source.units[0],
+            &source.units[2],
+            &catalog,
+        )
+        .expect("replacement bond energy should use ordinary COMBINE authority");
+        let native_rest_products = build_environmental_displacement_products(
+            &bonded_source,
+            &incoming_source,
+            0,
+            0,
+            1,
+            0,
+            candidate,
+            replacement_bond_energy,
+            &catalog,
+            100.0,
+        )
+        .expect("native material topology should produce a valid displacement");
+
+        let graph_trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("reference trial graph should accept the same replacement");
+        assert_eq!(native_rest_products.len(), graph_trial.products.len());
+        let native_bonded = native_rest_products
+            .iter()
+            .find(|product| !product.material.internal_bonds.is_empty())
+            .expect("native result should contain the replacement molecule");
+        let graph_bonded = graph_trial
+            .products
+            .iter()
+            .find(|product| !product.material.internal_bonds.is_empty())
+            .expect("reference result should contain the replacement molecule");
+        assert_eq!(native_bonded.material, graph_bonded.material);
+        assert_eq!(
+            native_bonded.internal_connections,
+            graph_bonded.internal_connections
+        );
+        assert_eq!(native_bonded.placements, graph_bonded.placements);
+        assert_eq!(native_bonded.realized_shapes, graph_bonded.realized_shapes);
+        let native_free = native_rest_products
+            .iter()
+            .find(|product| product.material.internal_bonds.is_empty())
+            .expect("displaced constituent should remain a free physical product");
+        let graph_free = graph_trial
+            .products
+            .iter()
+            .find(|product| product.material.internal_bonds.is_empty())
+            .expect("reference trial should release the displaced constituent");
+        assert_eq!(native_free.material, graph_free.material);
+        assert_eq!(native_free.placements, graph_free.placements);
+
+        bonded_source.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: 0.65,
+            velocity_y: -0.2,
+            angular_velocity: 0.035,
+        };
+        incoming_source.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: -0.4,
+            velocity_y: 0.3,
+            angular_velocity: -0.02,
+        };
+        let source_mass_properties = [
+            bonded_source
+                .mass_properties(&catalog, Some(100.0))
+                .expect("bonded source mass properties"),
+            incoming_source
+                .mass_properties(&catalog, Some(100.0))
+                .expect("incoming source mass properties"),
+        ];
+        let source_materials = [&bonded_source, &incoming_source];
+        let mut momentum_before = (0.0, 0.0);
+        let mut angular_momentum_before = 0.0;
+        for (material, properties) in source_materials.into_iter().zip(source_mass_properties) {
+            let mass = material.material.mass(&catalog);
+            let motion = material.inertial_motion;
+            let px = mass * motion.velocity_x;
+            let py = mass * motion.velocity_y;
+            momentum_before.0 += px;
+            momentum_before.1 += py;
+            angular_momentum_before += properties.moment_of_inertia * motion.angular_velocity
+                + properties.center_x * py
+                - properties.center_y * px;
+        }
+
+        let moving_products = build_environmental_displacement_products(
+            &bonded_source,
+            &incoming_source,
+            0,
+            0,
+            1,
+            0,
+            candidate,
+            replacement_bond_energy,
+            &catalog,
+            100.0,
+        )
+        .expect("native displacement should retain constituent momentum");
+        let mut momentum_after = (0.0, 0.0);
+        let mut angular_momentum_after = 0.0;
+        for product in &moving_products {
+            let properties = product
+                .mass_properties(&catalog, Some(100.0))
+                .expect("product mass properties");
+            let mass = product.material.mass(&catalog);
+            let motion = product.inertial_motion;
+            let px = mass * motion.velocity_x;
+            let py = mass * motion.velocity_y;
+            momentum_after.0 += px;
+            momentum_after.1 += py;
+            angular_momentum_after += properties.moment_of_inertia * motion.angular_velocity
+                + properties.center_x * py
+                - properties.center_y * px;
+        }
+        assert!((momentum_after.0 - momentum_before.0).abs() <= 1e-10);
+        assert!((momentum_after.1 - momentum_before.1).abs() <= 1e-10);
+        assert!(
+            (angular_momentum_after - angular_momentum_before).abs() <= 1e-9,
+            "the native split/replacement must conserve total angular momentum"
+        );
+    }
+
+    #[test]
     fn live_displacement_replaces_zero_allocated_seed_bond_with_resonance_funding() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
