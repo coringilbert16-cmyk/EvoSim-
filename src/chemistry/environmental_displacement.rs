@@ -1004,7 +1004,7 @@ enum DisplacementTrialFailureStage {
     Other,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct DisplacementTrialDiagnostic {
     activation_sufficient: Option<bool>,
     failure_stage: DisplacementTrialFailureStage,
@@ -3566,7 +3566,8 @@ mod tests {
         )
         .expect("native material topology should produce a valid displacement");
 
-        let graph_trial = build_displacement_trial(
+        let mut graph_diagnostic = DisplacementTrialDiagnostic::default();
+        let graph_trial = build_displacement_trial_with_activation_status(
             &source,
             0,
             1,
@@ -3578,8 +3579,11 @@ mod tests {
             catalog_reactivity_baseline(),
             0.0,
             &catalog,
+            Some(&mut graph_diagnostic),
         )
-        .expect("reference trial graph should accept the same replacement");
+        .unwrap_or_else(|| {
+            panic!("reference trial graph rejected replacement: {graph_diagnostic:?}")
+        });
         assert_eq!(native_rest_products.len(), graph_trial.products.len());
         let native_bonded = native_rest_products
             .iter()
