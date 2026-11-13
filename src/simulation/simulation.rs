@@ -2272,9 +2272,6 @@ impl Simulation {
             })
             .sum()
     }
-    /// Recompute kinetic energy from every currently owned physical material.
-    /// Field materials use the world's periodic vertical geometry; stored and
-    /// escrowed materials are expressed in their owner's intrinsic frame.
     /// Recompute kinetic energy for free environmental atoms and molecules only.
     /// Organism-owned storage, construction, and transformation material are
     /// deliberately outside the chemistry movement inventory.
