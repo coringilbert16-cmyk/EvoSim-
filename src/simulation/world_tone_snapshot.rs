@@ -773,7 +773,6 @@ pub(crate) struct LocalResonanceWorldSnapshot {
     resonant_indices: Vec<usize>,
     resonant_index_set: HashSet<usize>,
     receiver_indices: HashMap<u64, Option<usize>>,
-    force_owner_indices: Vec<Option<usize>>,
     emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
 }
 
@@ -783,7 +782,6 @@ pub(crate) struct ResonanceWorldBodyForce {
     /// Stable index in the immutable tick-local world snapshot.
     pub(crate) body_index: usize,
     pub(crate) environmental_identity: u64,
-    pub(crate) owner_organism_index: Option<usize>,
     pub(crate) force: crate::harmonics::ResonanceBodyForce,
 }
 
@@ -794,7 +792,6 @@ pub(crate) struct ResonanceWorldBodyForce {
 pub(crate) struct ResonanceWorldBodyMotion {
     pub(crate) body_index: usize,
     pub(crate) environmental_identity: u64,
-    pub(crate) owner_organism_index: Option<usize>,
     pub(crate) before: PhysicalMaterial,
     pub(crate) after: PhysicalMaterial,
     pub(crate) kinetic_energy_before: f64,
@@ -807,15 +804,12 @@ pub(crate) struct ResonanceWorldBodyMotion {
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)] // Consumed by the forthcoming runtime force-integration stage.
 pub(crate) struct ResonanceForceAccumulator {
-    bodies: std::collections::BTreeMap<
-        usize,
-        (u64, Option<usize>, crate::harmonics::ResonanceBodyForce),
-    >,
+    bodies: std::collections::BTreeMap<usize, (u64, crate::harmonics::ResonanceBodyForce)>,
 }
 
 #[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
 impl ResonanceForceAccumulator {
-    /// Add one body's contribution. Reject ambiguous identities, owner changes,
+    /// Add one environmental body's contribution. Reject identity changes,
     /// non-finite gradients, and overflow without partially modifying the sum.
     pub(crate) fn add(&mut self, contribution: ResonanceWorldBodyForce) -> bool {
         let body_index = contribution.body_index;
@@ -824,13 +818,12 @@ impl ResonanceForceAccumulator {
         if !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
             return false;
         }
-        let (existing_identity, owner, current) =
-            self.bodies.get(&body_index).copied().unwrap_or((
-                identity,
-                contribution.owner_organism_index,
-                crate::harmonics::ResonanceBodyForce::default(),
-            ));
-        if existing_identity != identity || owner != contribution.owner_organism_index {
+        let (existing_identity, current) = self
+            .bodies
+            .get(&body_index)
+            .copied()
+            .unwrap_or((identity, crate::harmonics::ResonanceBodyForce::default()));
+        if existing_identity != identity {
             return false;
         }
         let next = crate::harmonics::ResonanceBodyForce {
@@ -841,7 +834,7 @@ impl ResonanceForceAccumulator {
         if !next.x.is_finite() || !next.y.is_finite() || !next.torque.is_finite() {
             return false;
         }
-        self.bodies.insert(body_index, (identity, owner, next));
+        self.bodies.insert(body_index, (identity, next));
         true
     }
 
@@ -871,7 +864,7 @@ impl ResonanceForceAccumulator {
     }
 
     /// Stage every accumulated body's Newtonian pose and momentum together.
-    /// Identity/owner mappings are revalidated against the immutable snapshot;
+    /// Environmental identities are revalidated against the immutable snapshot;
     /// any invalid body or proposal rejects the entire batch without mutation.
     pub(crate) fn stage_motion(
         &self,
@@ -884,11 +877,9 @@ impl ResonanceForceAccumulator {
             return None;
         }
         let mut staged = Vec::with_capacity(self.bodies.len());
-        for (body_index, (identity, owner, force)) in &self.bodies {
+        for (body_index, (identity, force)) in &self.bodies {
             let before = snapshot.bodies.get(*body_index)?;
-            if before.environmental_identity != *identity
-                || snapshot.force_owner_indices.get(*body_index).copied() != Some(*owner)
-            {
+            if before.environmental_identity != *identity {
                 return None;
             }
             let properties = before.mass_properties(catalog, vertical_period)?;
@@ -928,7 +919,6 @@ impl ResonanceForceAccumulator {
             staged.push(ResonanceWorldBodyMotion {
                 body_index: *body_index,
                 environmental_identity: *identity,
-                owner_organism_index: *owner,
                 before: before.clone(),
                 after,
                 kinetic_energy_before,
@@ -942,13 +932,10 @@ impl ResonanceForceAccumulator {
         self.bodies
             .into_iter()
             .map(
-                |(body_index, (environmental_identity, owner_organism_index, force))| {
-                    ResonanceWorldBodyForce {
-                        body_index,
-                        environmental_identity,
-                        owner_organism_index,
-                        force,
-                    }
+                |(body_index, (environmental_identity, force))| ResonanceWorldBodyForce {
+                    body_index,
+                    environmental_identity,
+                    force,
                 },
             )
             .collect()
@@ -961,9 +948,22 @@ impl ResonanceForceAccumulator {
 }
 
 impl LocalResonanceWorldSnapshot {
+    /// Build the chemistry-only physical world from free environmental atoms
+    /// and molecules. Organisms, construction, storage, transformations, and
+    /// decomposing structures are deliberately outside this snapshot: they are
+    /// isolated and must not act as emitters, receivers, or occluders here.
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
-        let (bodies, resonant_indices, force_owner_indices) =
-            world_physical_materials_for_pair_potential(simulation)?;
+        let bodies = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter().cloned())
+            .collect::<Vec<_>>();
+        if bodies.is_empty() {
+            return None;
+        }
+        let resonant_indices = (0..bodies.len()).collect::<Vec<_>>();
         let emitters = crate::harmonics::material_resonance_emitters_at_tick(
             &bodies,
             &resonant_indices,
@@ -995,7 +995,6 @@ impl LocalResonanceWorldSnapshot {
             resonant_indices,
             resonant_index_set,
             receiver_indices,
-            force_owner_indices,
             emitters,
         })
     }
@@ -1009,11 +1008,7 @@ impl LocalResonanceWorldSnapshot {
         identity_b: u64,
         catalog: &[BaseResource],
     ) -> Option<Vec<ResonanceWorldBodyForce>> {
-        if identity_a == 0
-            || identity_b == 0
-            || identity_a == identity_b
-            || self.force_owner_indices.len() != self.bodies.len()
-        {
+        if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
             return None;
         }
         let index_a = self.receiver_indices.get(&identity_a).copied().flatten()?;
@@ -1048,7 +1043,6 @@ impl LocalResonanceWorldSnapshot {
             contributions.push(ResonanceWorldBodyForce {
                 body_index,
                 environmental_identity: self.bodies[body_index].environmental_identity,
-                owner_organism_index: self.force_owner_indices[body_index],
                 force,
             });
         }
@@ -1056,7 +1050,6 @@ impl LocalResonanceWorldSnapshot {
             contributions.push(ResonanceWorldBodyForce {
                 body_index,
                 environmental_identity: self.bodies[body_index].environmental_identity,
-                owner_organism_index: self.force_owner_indices[body_index],
                 force: forces[offset + 2],
             });
         }
@@ -1604,21 +1597,19 @@ mod tests {
     #[test]
     fn resonance_force_accumulator_sums_each_body_and_rejects_invalid_updates_atomically() {
         let mut accumulator = ResonanceForceAccumulator::default();
-        let contribution = |body_index, identity, owner, x, y, torque| ResonanceWorldBodyForce {
+        let contribution = |body_index, identity, x, y, torque| ResonanceWorldBodyForce {
             body_index,
             environmental_identity: identity,
-            owner_organism_index: owner,
             force: crate::harmonics::ResonanceBodyForce { x, y, torque },
         };
-        assert!(accumulator.add(contribution(11, 11, None, 2.0, -1.0, 0.5)));
-        assert!(accumulator.add(contribution(11, 11, None, -0.5, 3.0, 1.5)));
-        assert!(accumulator.add(contribution(12, 0, Some(4), 1.0, 0.0, -2.0)));
+        assert!(accumulator.add(contribution(11, 11, 2.0, -1.0, 0.5)));
+        assert!(accumulator.add(contribution(11, 11, -0.5, 3.0, 1.5)));
+        assert!(accumulator.add(contribution(12, 12, 1.0, 0.0, -2.0)));
         assert_eq!(accumulator.len(), 2);
 
         let before = accumulator.clone().into_body_forces();
-        assert!(!accumulator.add(contribution(11, 11, Some(4), 9.0, 9.0, 9.0)));
-        assert!(!accumulator.add(contribution(11, 99, None, 1.0, 1.0, 1.0)));
-        assert!(!accumulator.add(contribution(11, 11, None, f64::NAN, 0.0, 0.0)));
+        assert!(!accumulator.add(contribution(11, 99, 9.0, 9.0, 9.0)));
+        assert!(!accumulator.add(contribution(11, 11, f64::NAN, 0.0, 0.0)));
         assert_eq!(accumulator.clone().into_body_forces(), before);
 
         let forces = accumulator.into_body_forces();
@@ -1633,56 +1624,15 @@ mod tests {
                 torque: 2.0,
             }
         );
-        assert_eq!(forces[1].environmental_identity, 0);
-        assert_eq!(forces[1].owner_organism_index, Some(4));
-    }
-
-    fn sample() -> WorldToneSample {
-        WorldToneSample {
-            source_x: -5.0,
-            source_y: 0.0,
-            frequency_cycles_per_day: 440.0,
-            energy_intensity_per_tick_per_width: 10.0,
-            orbital_phase: 0.75,
-        }
-    }
-
-    fn replace_with_nitrogen_square(
-        organism: &mut Organism,
-        x: f64,
-        y: f64,
-        catalog: &[BaseResource],
-    ) {
-        let mut unit = StructuralUnit::from_material(
-            Material::free_base("Nitrogen", 1.0),
-            Placement {
-                x,
-                y,
-                rotation_radians: 0.0,
-            },
-        )
-        .expect("nitrogen unit should be constructible");
-        assert!(unit.realize_default_geometry(catalog));
-        let mut structure = OrganismStructure::new();
-        structure.add_unit(unit);
-        organism.structure = structure;
-        organism.occupied_cells = vec![Position { x, y }];
-        organism.stored_material.entries.clear();
-        organism.mark_structure_changed();
-    }
-
-    fn clear_environment_physical_material(simulation: &mut Simulation) {
-        for cell in &mut simulation.environment.field.cells {
-            cell.physical_materials.clear();
-        }
+        assert_eq!(forces[1].environmental_identity, 12);
     }
 
     #[test]
-    fn identified_environmental_pair_force_maps_every_occluder_and_owner() {
+    fn chemistry_force_snapshot_contains_only_free_environmental_materials() {
         let mut simulation = Simulation::new(113, 1.0);
         clear_environment_physical_material(&mut simulation);
         let catalog = simulation.environment.catalog.clone();
-        for (name, x) in [("Carbon", 10.0), ("Hydrogen", 14.0)] {
+        for (name, x) in [("Carbon", 10.0), ("Hydrogen", 14.0), ("Oxygen", 12.0)] {
             let physical = PhysicalMaterial::realized(
                 Material::free_base(name, 1.0),
                 vec![Placement {
@@ -1692,7 +1642,7 @@ mod tests {
                 }],
                 &catalog,
             )
-            .expect("environmental pair member should be physically realized");
+            .expect("environmental material should be physically realized");
             assert!(simulation.environment.field.deposit_physical(
                 x,
                 10.0,
@@ -1700,10 +1650,7 @@ mod tests {
                 &simulation.environment.catalog,
             ));
         }
-        simulation
-            .environment
-            .field
-            .assign_missing_material_identities();
+        simulation.environment.field.assign_missing_material_identities();
         let identities = simulation
             .environment
             .field
@@ -1712,49 +1659,34 @@ mod tests {
             .flat_map(|cell| cell.physical_materials.iter())
             .map(|material| material.environmental_identity)
             .collect::<Vec<_>>();
-        assert_eq!(identities.len(), 2);
+        assert_eq!(identities.len(), 3);
         assert!(identities.iter().all(|identity| *identity != 0));
 
         let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
-            .expect("world resonance snapshot should be valid");
+            .expect("free environmental chemistry snapshot should be valid");
+        assert_eq!(
+            snapshot.bodies.len(),
+            identities.len(),
+            "organisms and all organism-associated material must remain outside the chemistry snapshot"
+        );
+        assert_eq!(snapshot.resonant_indices, vec![0, 1, 2]);
+        assert!(snapshot.bodies.iter().all(|body| identities.contains(&body.environmental_identity)));
+
         let contributions = snapshot
             .pair_force_contributions(
                 identities[0],
                 identities[1],
                 &simulation.environment.catalog,
             )
-            .expect("identified pair should produce a complete multi-body force");
-        assert_eq!(
-            contributions.len(),
-            snapshot.bodies.len(),
-            "the pair and every other physical body must receive one force contribution"
-        );
+            .expect("identified environmental pair should produce a complete multi-body force");
+        assert_eq!(contributions.len(), snapshot.bodies.len());
         assert!(contributions.iter().all(|contribution| {
-            contribution.force.x.is_finite()
+            contribution.body_index < snapshot.bodies.len()
+                && identities.contains(&contribution.environmental_identity)
+                && contribution.force.x.is_finite()
                 && contribution.force.y.is_finite()
                 && contribution.force.torque.is_finite()
         }));
-        assert!(
-            contributions.iter().any(|contribution| {
-                contribution.environmental_identity == identities[0]
-                    && contribution.owner_organism_index.is_none()
-            }),
-            "the first field material must retain its stable identity and independent ownership"
-        );
-        assert!(
-            contributions.iter().any(|contribution| {
-                contribution.environmental_identity == identities[1]
-                    && contribution.owner_organism_index.is_none()
-            }),
-            "the second field material must retain its stable identity and independent ownership"
-        );
-        assert!(
-            contributions.iter().any(|contribution| {
-                contribution.environmental_identity == 0
-                    && contribution.owner_organism_index == Some(0)
-            }),
-            "the organism's partial occlusion force must map back to its owner"
-        );
         let total_force = contributions.iter().fold((0.0, 0.0), |sum, contribution| {
             (sum.0 + contribution.force.x, sum.1 + contribution.force.y)
         });
@@ -1765,36 +1697,6 @@ mod tests {
         for contribution in contributions {
             assert!(accumulator.add(contribution));
         }
-        for (body_index, body) in snapshot.bodies.iter().enumerate() {
-            let (_, _, force) = accumulator
-                .bodies
-                .get(&body_index)
-                .expect("every world body should have an accumulated force");
-            assert!(
-                body.mass_properties(
-                    &simulation.environment.catalog,
-                    Some(simulation.environment.height),
-                )
-                .is_some(),
-                "body {body_index} (identity {}, owner {:?}) must have valid mass properties",
-                body.environmental_identity,
-                snapshot.force_owner_indices[body_index],
-            );
-            assert!(
-                body.advanced_under_force(
-                    force.x,
-                    force.y,
-                    force.torque,
-                    0.25,
-                    &simulation.environment.catalog,
-                    Some(simulation.environment.height),
-                )
-                .is_some(),
-                "body {body_index} (identity {}, owner {:?}) must accept its staged force",
-                body.environmental_identity,
-                snapshot.force_owner_indices[body_index],
-            );
-        }
         let staged_motion = accumulator
             .stage_motion(
                 &snapshot,
@@ -1802,7 +1704,7 @@ mod tests {
                 &simulation.environment.catalog,
                 Some(simulation.environment.height),
             )
-            .expect("all world-body force contributions should stage atomically");
+            .expect("all environmental body proposals should stage atomically");
         assert_eq!(staged_motion.len(), snapshot.bodies.len());
         assert!(staged_motion.iter().all(|motion| {
             motion.before.environmental_identity == motion.environmental_identity
@@ -1811,12 +1713,6 @@ mod tests {
                 && motion.kinetic_energy_after.is_finite()
                 && motion.kinetic_energy_before >= 0.0
                 && motion.kinetic_energy_after >= 0.0
-        }));
-        assert!(staged_motion.iter().any(|motion| {
-            motion.environmental_identity == identities[0] && motion.owner_organism_index.is_none()
-        }));
-        assert!(staged_motion.iter().any(|motion| {
-            motion.environmental_identity == 0 && motion.owner_organism_index == Some(0)
         }));
     }
 
