@@ -787,6 +787,20 @@ pub(crate) struct ResonanceWorldBodyForce {
     pub(crate) force: crate::harmonics::ResonanceBodyForce,
 }
 
+/// A validated, immutable proposal for advancing one world body. The caller
+/// still owns collision checks, energy settlement, and the eventual atomic commit.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Consumed by the live movement/energy transaction being integrated.
+pub(crate) struct ResonanceWorldBodyMotion {
+    pub(crate) body_index: usize,
+    pub(crate) environmental_identity: u64,
+    pub(crate) owner_organism_index: Option<usize>,
+    pub(crate) before: PhysicalMaterial,
+    pub(crate) after: PhysicalMaterial,
+    pub(crate) kinetic_energy_before: f64,
+    pub(crate) kinetic_energy_after: f64,
+}
+
 /// Tick-local net force/torque by stable physical-body identity. Pair gradients
 /// are accumulated before any body is advanced, so a body participating in
 /// several interactions receives their vector sum exactly once.
@@ -854,6 +868,71 @@ impl ResonanceForceAccumulator {
         }
         *self = staged;
         true
+    }
+
+    /// Stage every accumulated body's Newtonian pose and momentum together.
+    /// Identity/owner mappings are revalidated against the immutable snapshot;
+    /// any invalid body or proposal rejects the entire batch without mutation.
+    pub(crate) fn stage_motion(
+        &self,
+        snapshot: &LocalResonanceWorldSnapshot,
+        delta_time: f64,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Vec<ResonanceWorldBodyMotion>> {
+        if !delta_time.is_finite() || delta_time < 0.0 {
+            return None;
+        }
+        let mut staged = Vec::with_capacity(self.bodies.len());
+        for (body_index, (identity, owner, force)) in &self.bodies {
+            let before = snapshot.bodies.get(*body_index)?;
+            if before.environmental_identity != *identity
+                || snapshot.force_owner_indices.get(*body_index).copied() != Some(*owner)
+            {
+                return None;
+            }
+            let properties = before.mass_properties(catalog, vertical_period)?;
+            let motion = before.inertial_motion;
+            let kinetic_energy_before = 0.5
+                * properties.mass
+                * (motion.velocity_x * motion.velocity_x + motion.velocity_y * motion.velocity_y)
+                + 0.5 * properties.moment_of_inertia * motion.angular_velocity * motion.angular_velocity;
+            let after = before.advanced_under_force(
+                force.x,
+                force.y,
+                force.torque,
+                delta_time,
+                catalog,
+                vertical_period,
+            )?;
+            let next_properties = after.mass_properties(catalog, vertical_period)?;
+            let next_motion = after.inertial_motion;
+            let kinetic_energy_after = 0.5
+                * next_properties.mass
+                * (next_motion.velocity_x * next_motion.velocity_x
+                    + next_motion.velocity_y * next_motion.velocity_y)
+                + 0.5
+                    * next_properties.moment_of_inertia
+                    * next_motion.angular_velocity
+                    * next_motion.angular_velocity;
+            if !kinetic_energy_before.is_finite()
+                || !kinetic_energy_after.is_finite()
+                || kinetic_energy_before < 0.0
+                || kinetic_energy_after < 0.0
+            {
+                return None;
+            }
+            staged.push(ResonanceWorldBodyMotion {
+                body_index: *body_index,
+                environmental_identity: *identity,
+                owner_organism_index: *owner,
+                before: before.clone(),
+                after,
+                kinetic_energy_before,
+                kinetic_energy_after,
+            });
+        }
+        Some(staged)
     }
 
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
