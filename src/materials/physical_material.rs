@@ -1392,7 +1392,7 @@ mod tests {
         let expected_motion = physical.inertial_motion;
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
         let pieces = physical
-            .break_internal_bond(&target, &catalog, None)
+            .break_environmental_internal_bond(&target, &catalog, None)
             .expect("stored bond");
         assert_eq!(pieces.len(), 2);
         let source_kinetic_energy = expected_motion
@@ -1768,7 +1768,7 @@ mod tests {
         );
         assert!(
             physical
-                .break_internal_bond(&malformed_target, &catalog, None)
+                .break_internal_bond(&malformed_target)
                 .is_none(),
             "stored BREAK completion must fail closed on malformed persisted topology"
         );
