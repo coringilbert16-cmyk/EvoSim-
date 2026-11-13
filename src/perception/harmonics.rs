@@ -1980,14 +1980,40 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
+    resonance_pair_potential_components_with_prepared_emitters(
+        a, b, occluders, catalog, tick, None, None,
+    )
+}
+
+fn resonance_pair_potential_components_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_a: Option<&MaterialResonanceEmitter>,
+    prepared_b: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
     if std::ptr::eq(a, b) {
         return Some(Vec::new());
     }
-    let a_to_b = directional_resonance_pair_potential_components_with_occluders(
-        a, b, occluders, catalog, tick,
+    let a_to_b = directional_resonance_pair_potential_components_with_prepared_emitters(
+        a,
+        b,
+        occluders,
+        catalog,
+        tick,
+        prepared_a,
+        prepared_b,
     )?;
-    let b_to_a = directional_resonance_pair_potential_components_with_occluders(
-        b, a, occluders, catalog, tick,
+    let b_to_a = directional_resonance_pair_potential_components_with_prepared_emitters(
+        b,
+        a,
+        occluders,
+        catalog,
+        tick,
+        prepared_b,
+        prepared_a,
     )?;
     let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
     for component in a_to_b.iter().chain(b_to_a.iter()) {
