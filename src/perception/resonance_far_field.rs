@@ -280,10 +280,8 @@ impl ResonanceFarFieldExpansion {
             return None;
         }
         let root_center = FarFieldVector {
-            x: sources.iter().map(|source| source.position.x).sum::<f64>()
-                / sources.len() as f64,
-            y: sources.iter().map(|source| source.position.y).sum::<f64>()
-                / sources.len() as f64,
+            x: sources.iter().map(|source| source.position.x).sum::<f64>() / sources.len() as f64,
+            y: sources.iter().map(|source| source.position.y).sum::<f64>() / sources.len() as f64,
         };
         if !root_center.x.is_finite() || !root_center.y.is_finite() {
             return None;
@@ -367,14 +365,14 @@ impl ResonanceFarFieldExpansion {
                 result.potential += evaluation.potential;
                 result.target_gradient.x += evaluation.target_gradient.x;
                 result.target_gradient.y += evaluation.target_gradient.y;
-                let cluster_force = evaluation
-                    .source_forces
-                    .iter()
-                    .fold(FarFieldVector::default(), |mut sum, force| {
+                let cluster_force = evaluation.source_forces.iter().fold(
+                    FarFieldVector::default(),
+                    |mut sum, force| {
                         sum.x += force.x;
                         sum.y += force.y;
                         sum
-                    });
+                    },
+                );
                 result.torque_about_center += evaluation.torque_about_center
                     + (center.x - root_center.x) * cluster_force.y
                     - (center.y - root_center.y) * cluster_force.x;
