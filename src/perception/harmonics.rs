@@ -1148,11 +1148,9 @@ fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
 /// A realized environmental material emits one spectrum as a whole material.
 /// Composition is evaluated through the material's aggregate properties; the
 /// material is never split into independent environmental sensory sources.
-fn environmental_material_resonance(
+fn environmental_material_geometry(
     physical: &crate::physical_material::PhysicalMaterial,
-    catalog: &[crate::resources::BaseResource],
-    tick: u64,
-) -> Option<(f64, f64, f64, ToneSpectrum)> {
+) -> Option<(f64, f64, f64)> {
     if !physical.material.is_valid() || physical.material.is_empty() {
         return None;
     }
@@ -1170,17 +1168,28 @@ fn environmental_material_resonance(
     let count = placements.len() as f64;
     source_x /= count;
     source_y /= count;
+    let extent = placements
+        .iter()
+        .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
+        .fold(0.0_f64, f64::max);
+    if !source_x.is_finite() || !source_y.is_finite() || !extent.is_finite() {
+        return None;
+    }
+    Some((source_x, source_y, extent))
+}
 
+fn environmental_material_resonance(
+    physical: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<(f64, f64, f64, ToneSpectrum)> {
+    let (source_x, source_y, extent) = environmental_material_geometry(physical)?;
     let baselines = ResourceBaselines::from_catalog(catalog);
     let spectrum = material_response(
         physical.material.weighted_properties(catalog),
         baselines,
         phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
     );
-    let extent = placements
-        .iter()
-        .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
-        .fold(0.0_f64, f64::max);
     Some((source_x, source_y, extent, spectrum))
 }
 
