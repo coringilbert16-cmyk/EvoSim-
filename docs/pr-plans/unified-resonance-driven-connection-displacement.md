@@ -395,3 +395,10 @@ The scope audit removed the earlier chemistry prototype's dependency on organism
 
 The generic inertial primitives remain reusable, but the active movement population, force snapshot, kinetic inventory, and momentum-preserving split path are environmental chemistry only. The only residual edit in the material-storage module is a default initializer required because the shared physical-material data type now has a generic inertial-state field; no storage behavior or organism mechanics are changed.
 
+
+
+## 7.6 Reuse prepared spectra in exact force evaluation — 2026-11-13
+
+The tick-local `MaterialResonanceEmitter` cache is now used by the environmental pair-force path, not only by chemistry activation queries. For each pair and every finite-difference perturbation, the source and receiver reuse their already-prepared composition/tick mass scale and emitted spectrum. Their center and extent are still recomputed from the perturbed placements, so translation and rotation derivatives use current geometry rather than stale emitter coordinates. Receiver response to the incident spectrum and all exact boundary/visibility sampling remain unchanged; no emitter aggregation or activation Top-K ordering was altered.
+
+The chemistry snapshot regression evaluates the same three-body pair both through prepared emitters and through the uncached reference path, then compares every body's force and torque to (10^{-10}). This is an exactness-preserving preparation step for the future multipole evaluator, not a multipole approximation. It does not change the force law or make the all-pairs oracle suitable for live ticks.
