@@ -552,8 +552,6 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         || *active_mover_usable_energy < 0.0
         || !ledger.total_pair_interaction_potential_held.is_finite()
         || !ledger.initial_pair_interaction_potential_held.is_finite()
-        || !ledger.total_kinetic_energy_held.is_finite()
-        || ledger.total_kinetic_energy_held < 0.0
         || !kinetic_energy_delta.is_finite()
         || !ledger.total_usable_energy_gained.is_finite()
         || !ledger.total_resonant_energy_held.is_finite()
@@ -578,17 +576,13 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         return false;
     }
     let next_pair_potential = ledger.total_pair_interaction_potential_held + pair_delta;
-    let next_kinetic_energy = ledger.total_kinetic_energy_held + kinetic_energy_delta;
     if !next_pair_potential.is_finite()
-        || !next_kinetic_energy.is_finite()
-        || next_kinetic_energy < 0.0
     {
         return false;
     }
 
     if net_delta == 0.0 {
         ledger.total_pair_interaction_potential_held = next_pair_potential;
-        ledger.total_kinetic_energy_held = next_kinetic_energy;
         return true;
     }
 
@@ -603,8 +597,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         }
         let actual_usable_delta = next_usable - *active_mover_usable_energy;
         let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
-        let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
-        let residual = actual_usable_delta + actual_pair_delta + actual_kinetic_delta;
+        let residual = actual_usable_delta + actual_pair_delta + kinetic_energy_delta;
         if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
             return false;
         }
@@ -612,8 +605,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         *active_mover_usable_energy = next_usable;
         ledger.total_usable_energy_gained = next_usable_gained;
         ledger.total_pair_interaction_potential_held = next_pair_potential;
-        ledger.total_kinetic_energy_held = next_kinetic_energy;
-        return true;
+            return true;
     }
 
     let released = -net_delta;
@@ -707,11 +699,10 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
     }
 
     let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
-    let actual_kinetic_delta = next_kinetic_energy - ledger.total_kinetic_energy_held;
     let actual_resonant_delta = next_resonant_held - ledger.total_resonant_energy_held;
     let mut actual_heat_delta = next_heat - ledger.total_heat_dissipated;
     let mut residual =
-        actual_pair_delta + actual_kinetic_delta + actual_resonant_delta + actual_heat_delta;
+        actual_pair_delta + kinetic_energy_delta + actual_resonant_delta + actual_heat_delta;
     if !residual.is_finite() {
         return false;
     }
@@ -724,7 +715,7 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
         }
         actual_heat_delta = next_heat - ledger.total_heat_dissipated;
         residual =
-            actual_pair_delta + actual_kinetic_delta + actual_resonant_delta + actual_heat_delta;
+            actual_pair_delta + kinetic_energy_delta + actual_resonant_delta + actual_heat_delta;
     }
     if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
         return false;
@@ -1173,7 +1164,6 @@ mod tests {
     fn pair_potential_can_convert_directly_into_kinetic_energy() {
         let mut ledger = EnergyLedger {
             total_pair_interaction_potential_held: 0.0,
-            total_kinetic_energy_held: 0.0,
             ..EnergyLedger::default()
         };
         let mut usable = 0.0;
@@ -1189,7 +1179,6 @@ mod tests {
             &components,
         ));
         assert_eq!(ledger.total_pair_interaction_potential_held, -3.0);
-        assert_eq!(ledger.total_kinetic_energy_held, 3.0);
         assert_eq!(ledger.total_heat_dissipated, 0.0);
         assert_eq!(usable, 0.0);
     }
@@ -1197,7 +1186,6 @@ mod tests {
     #[test]
     fn kinetic_energy_loss_can_fund_pair_potential_increase() {
         let mut ledger = EnergyLedger {
-            total_kinetic_energy_held: 5.0,
             ..EnergyLedger::default()
         };
         let mut usable = 5.0;
@@ -1213,14 +1201,12 @@ mod tests {
             &components,
         ));
         assert_eq!(ledger.total_pair_interaction_potential_held, 5.0);
-        assert_eq!(ledger.total_kinetic_energy_held, 2.0);
         assert_eq!(usable, 3.0);
     }
 
     #[test]
     fn isolated_kinetic_energy_loss_becomes_heat() {
         let mut ledger = EnergyLedger {
-            total_kinetic_energy_held: 2.0,
             ..EnergyLedger::default()
         };
         let mut usable = 0.0;
@@ -1231,7 +1217,6 @@ mod tests {
             -2.0,
             &[],
         ));
-        assert_eq!(ledger.total_kinetic_energy_held, 0.0);
         assert_eq!(ledger.total_heat_dissipated, 2.0);
     }
 
