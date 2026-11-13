@@ -1765,6 +1765,34 @@ mod tests {
         for contribution in contributions {
             assert!(accumulator.add(contribution));
         }
+        for (body_index, body) in snapshot.bodies.iter().enumerate() {
+            let (_, _, force) = accumulator
+                .bodies
+                .get(&body_index)
+                .expect("every world body should have an accumulated force");
+            assert!(
+                body.mass_properties(
+                    &simulation.environment.catalog,
+                    Some(simulation.environment.height),
+                ).is_some(),
+                "body {body_index} (identity {}, owner {:?}) must have valid mass properties",
+                body.environmental_identity,
+                snapshot.force_owner_indices[body_index],
+            );
+            assert!(
+                body.advanced_under_force(
+                    force.x,
+                    force.y,
+                    force.torque,
+                    0.25,
+                    &simulation.environment.catalog,
+                    Some(simulation.environment.height),
+                ).is_some(),
+                "body {body_index} (identity {}, owner {:?}) must accept its staged force",
+                body.environmental_identity,
+                snapshot.force_owner_indices[body_index],
+            );
+        }
         let staged_motion = accumulator
             .stage_motion(
                 &snapshot,
