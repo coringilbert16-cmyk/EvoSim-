@@ -1750,6 +1750,75 @@ mod tests {
     }
 
     #[test]
+    fn world_gradient_oracle_includes_asymmetric_body_torque() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should realize")
+        };
+        let asymmetric = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 4.0,
+                    y: 0.25,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 4.0,
+                    y: 1.5,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("asymmetric occluder should realize");
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Carbon", 8.0, 0.0),
+            asymmetric,
+        ];
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &[None, None, None],
+            &catalog,
+            0,
+        )
+        .expect("world gradient should include finite rotational derivatives");
+        assert_eq!(gradient.body_forces.len(), bodies.len());
+        assert_eq!(gradient.body_torques.len(), bodies.len());
+        assert!(
+            gradient.body_torques[2].abs() > 1e-8,
+            "the asymmetric occluder must receive torque from the same potential gradient"
+        );
+        let angular_balance = bodies
+            .iter()
+            .zip(&gradient.body_forces)
+            .zip(&gradient.body_torques)
+            .map(|((body, force), torque)| {
+                let center = body.mass_properties(&catalog, None).unwrap();
+                center.center_x * force.1 - center.center_y * force.0 + torque
+            })
+            .sum::<f64>();
+        assert!(
+            angular_balance.abs() < 1e-4,
+            "world force and torque gradients must conserve total angular momentum"
+        );
+    }
+
+    #[test]
     fn pair_potential_oracle_delta_settles_against_the_world_energy_inventory() {
         let mut simulation = Simulation::new(78, 1.0);
         clear_environment_physical_material(&mut simulation);
