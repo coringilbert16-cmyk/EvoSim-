@@ -1773,13 +1773,13 @@ mod tests {
             },
             vec![
                 Placement {
-                    x: 4.0,
-                    y: 0.25,
+                    x: 3.8,
+                    y: -0.45,
                     rotation_radians: 0.0,
                 },
                 Placement {
-                    x: 4.0,
-                    y: 1.5,
+                    x: 4.7,
+                    y: 0.95,
                     rotation_radians: 0.0,
                 },
             ],
