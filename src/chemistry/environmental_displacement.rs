@@ -372,8 +372,7 @@ fn build_native_environmental_displacement_trial(
     }
     let anchor = environmental_displacement_constituent(source_a, anchor_part, catalog)?;
     let displaced = environmental_displacement_constituent(source_a, displaced_part, catalog)?;
-    let old_bond_strength =
-        crate::combine::bond_strength(anchor.properties, displaced.properties);
+    let old_bond_strength = crate::combine::bond_strength(anchor.properties, displaced.properties);
     let preflight = evaluate_displacement_preflight_with_bond_energies(
         anchor.properties,
         displaced.properties,
@@ -422,8 +421,7 @@ fn build_native_environmental_displacement_trial(
             * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
             * 8.0,
     );
-    if (energy.required_external_input - preflight.energy.required_external_input).abs()
-        > tolerance
+    if (energy.required_external_input - preflight.energy.required_external_input).abs() > tolerance
         || (energy.net_reaction_change - preflight.energy.net_reaction_change).abs() > tolerance
     {
         return None;
@@ -3259,16 +3257,10 @@ mod tests {
             assert!((candidate.load_b - matching.load_b).abs() <= 1e-10);
             assert_eq!(candidate.available_a, matching.available_a);
             assert_eq!(candidate.available_b, matching.available_b);
-            let native_evaluation = evaluate_environmental_displacement_candidate(
-                bonded,
-                0,
-                1,
-                incoming,
-                0,
-                0,
-                *candidate,
-                &catalog,
-            );
+            let native_evaluation =
+                evaluate_environmental_displacement_candidate(
+                    bonded, 0, 1, incoming, 0, 0, *candidate, &catalog,
+                );
             let reference_evaluation = crate::combine_runtime::selected_candidate_evaluation(
                 &graph_trial,
                 0,
