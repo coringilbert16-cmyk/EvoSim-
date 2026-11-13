@@ -1650,7 +1650,10 @@ mod tests {
                 &simulation.environment.catalog,
             ));
         }
-        simulation.environment.field.assign_missing_material_identities();
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
         let identities = simulation
             .environment
             .field
@@ -1670,7 +1673,10 @@ mod tests {
             "organisms and all organism-associated material must remain outside the chemistry snapshot"
         );
         assert_eq!(snapshot.resonant_indices, vec![0, 1, 2]);
-        assert!(snapshot.bodies.iter().all(|body| identities.contains(&body.environmental_identity)));
+        assert!(snapshot
+            .bodies
+            .iter()
+            .all(|body| identities.contains(&body.environmental_identity)));
 
         let contributions = snapshot
             .pair_force_contributions(
