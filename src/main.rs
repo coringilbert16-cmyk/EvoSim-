@@ -44,8 +44,6 @@ mod capillary_geometry;
 mod cavity;
 // Geometry foundation is intentionally staged ahead of its movement-loop integration.
 #[allow(dead_code)]
-#[path = "geometry/connection_approach.rs"]
-mod connection_approach;
 #[path = "geometry/connection_faces.rs"]
 mod connection_faces;
 #[path = "geometry/connection_geometry.rs"]
