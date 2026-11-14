@@ -212,9 +212,7 @@ fn sample_geometry_differs(left: &[BoundarySampleRecord], right: &[BoundarySampl
             (a.normal.1, b.normal.1),
             (a.projected_extent, b.projected_extent),
         ];
-        scalar_pairs
-            .iter()
-            .any(|(x, y)| (x - y).abs() > 1.0e-12)
+        scalar_pairs.iter().any(|(x, y)| (x - y).abs() > 1.0e-12)
             || a.boundary_geometry.len() != b.boundary_geometry.len()
             || a.boundary_geometry
                 .iter()
@@ -225,9 +223,10 @@ fn sample_geometry_differs(left: &[BoundarySampleRecord], right: &[BoundarySampl
 
 fn potential_differs(left: &[(f64, f64)], right: &[(f64, f64)]) -> bool {
     left.len() != right.len()
-        || left.iter().zip(right).any(|(a, b)| {
-            (a.0 - b.0).abs() > 1.0e-9 || (a.1 - b.1).abs() > 1.0e-12
-        })
+        || left
+            .iter()
+            .zip(right)
+            .any(|(a, b)| (a.0 - b.0).abs() > 1.0e-9 || (a.1 - b.1).abs() > 1.0e-12)
 }
 
 #[test]
@@ -256,8 +255,7 @@ fn multi_pair_probe_records_source_specific_receiver_quadrature() {
     let source_zero_to_receiver = pair_record(&baseline, 0, 2);
     let source_one_to_receiver = pair_record(&baseline, 1, 2);
     assert!(
-        !source_zero_to_receiver.samples.is_empty()
-            && !source_one_to_receiver.samples.is_empty(),
+        !source_zero_to_receiver.samples.is_empty() && !source_one_to_receiver.samples.is_empty(),
         "both independent sources must expose the asymmetric receiver"
     );
     assert!(
@@ -288,11 +286,7 @@ fn multi_pair_probe_records_source_specific_receiver_quadrature() {
     // itself an endpoint. At least one source/receiver pair must therefore
     // retain a distinct visibility result rather than sharing samples by
     // receiver identity alone.
-    let unblocked = record_world_pairs(
-        &baseline_bodies[..3],
-        &catalog,
-        0,
-    );
+    let unblocked = record_world_pairs(&baseline_bodies[..3], &catalog, 0);
     let blocked_pair = pair_record(&baseline, 0, 2);
     let unblocked_pair = pair_record(&unblocked, 0, 2);
     assert!(
