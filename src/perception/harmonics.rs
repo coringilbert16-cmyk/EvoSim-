@@ -4911,3 +4911,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "harmonics_pair_probe.rs"]
+mod pair_probe;
