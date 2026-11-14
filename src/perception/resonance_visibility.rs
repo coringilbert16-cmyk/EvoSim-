@@ -75,6 +75,7 @@ struct Node {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ResonanceVisibilityHierarchy {
     nodes: Vec<Node>,
+    body_bounds: Vec<VisibilityBounds>,
     root: Option<usize>,
 }
 
@@ -85,7 +86,11 @@ impl ResonanceVisibilityHierarchy {
         if bounds.iter().any(|bound| !bound.is_valid()) {
             return None;
         }
-        let mut hierarchy = Self::default();
+        let mut hierarchy = Self {
+            nodes: Vec::new(),
+            body_bounds: bounds.to_vec(),
+            root: None,
+        };
         if bounds.is_empty() {
             return Some(hierarchy);
         }
@@ -150,12 +155,9 @@ impl ResonanceVisibilityHierarchy {
             }
             match &node.kind {
                 NodeKind::Leaf(indices) => {
-                    matches.extend(
-                        indices
-                            .iter()
-                            .copied()
-                            .filter(|index| self.nodes_bounds_intersect(*index, envelope)),
-                    );
+                    matches.extend(indices.iter().copied().filter(|index| {
+                        self.body_bounds[*index].intersects(envelope)
+                    }));
                 }
                 NodeKind::Branch { left, right } => {
                     pending.push(*right);
@@ -167,27 +169,7 @@ impl ResonanceVisibilityHierarchy {
         Some(matches)
     }
 
-    fn nodes_bounds_intersect(&self, _index: usize, _envelope: VisibilityBounds) -> bool {
-        // Leaf membership is already covered by the leaf's aggregate bounds.
-        // Individual body bounds are checked by query_with_bounds below.
-        true
-    }
 
-    pub(crate) fn query_with_bounds(
-        &self,
-        indexed_bounds: &[VisibilityBounds],
-        envelope: VisibilityBounds,
-    ) -> Option<Vec<usize>> {
-        if indexed_bounds.iter().any(|bound| !bound.is_valid()) {
-            return None;
-        }
-        self.query(envelope).map(|indices| {
-            indices
-                .into_iter()
-                .filter(|index| indexed_bounds[*index].intersects(envelope))
-                .collect()
-        })
-    }
 }
 
 #[cfg(test)]
