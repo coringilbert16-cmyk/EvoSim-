@@ -774,6 +774,9 @@ pub(crate) struct LocalResonanceWorldSnapshot {
     resonant_index_set: HashSet<usize>,
     receiver_indices: HashMap<u64, Option<usize>>,
     emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
+    visibility_bounds: Vec<crate::resonance_visibility::VisibilityBounds>,
+    visibility_hierarchy: crate::resonance_visibility::ResonanceVisibilityHierarchy,
+    maximum_rotation_margin: f64,
 }
 
 /// One body contribution to a candidate pair's complete occlusion-aware force.
@@ -988,6 +991,34 @@ impl LocalResonanceWorldSnapshot {
                 }
             }
         }
+        let visibility_bounds = bodies
+            .iter()
+            .map(|body| {
+                let geometry =
+                    crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                        body,
+                        &simulation.environment.catalog,
+                    )?;
+                crate::resonance_visibility::VisibilityBounds::new(
+                    geometry.min_x,
+                    geometry.min_y,
+                    geometry.max_x,
+                    geometry.max_y,
+                )
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let maximum_rotation_margin = visibility_bounds
+            .iter()
+            .map(|bounds| {
+                (bounds.max_x - bounds.min_x).hypot(bounds.max_y - bounds.min_y)
+                    * 1.0e-4
+            })
+            .fold(0.0, f64::max);
+        if !maximum_rotation_margin.is_finite() {
+            return None;
+        }
+        let visibility_hierarchy =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&visibility_bounds)?;
         let resonant_index_set = resonant_indices.iter().copied().collect();
         Some(Self {
             tick: simulation.tick,
@@ -996,6 +1027,9 @@ impl LocalResonanceWorldSnapshot {
             resonant_index_set,
             receiver_indices,
             emitters,
+            visibility_bounds,
+            visibility_hierarchy,
+            maximum_rotation_margin,
         })
     }
 
@@ -1020,7 +1054,24 @@ impl LocalResonanceWorldSnapshot {
             return None;
         }
 
-        let occluder_indices = (0..self.bodies.len())
+        // The union of the participant AABBs contains every straight
+        // source-to-receiver ray. Expand it by the maximum finite-difference
+        // translation/rotation displacement of any body before querying the
+        // tick-local BVH. This is deliberately conservative; the exact
+        // visibility path performs its own tighter filtering afterward.
+        let bounds_a = self.visibility_bounds[index_a];
+        let bounds_b = self.visibility_bounds[index_b];
+        let expansion = self.maximum_rotation_margin + 1.0e-4;
+        let envelope = crate::resonance_visibility::VisibilityBounds::new(
+            bounds_a.min_x.min(bounds_b.min_x) - expansion,
+            bounds_a.min_y.min(bounds_b.min_y) - expansion,
+            bounds_a.max_x.max(bounds_b.max_x) + expansion,
+            bounds_a.max_y.max(bounds_b.max_y) + expansion,
+        )?;
+        let occluder_indices = self
+            .visibility_hierarchy
+            .query(envelope)?
+            .into_iter()
             .filter(|index| *index != index_a && *index != index_b)
             .collect::<Vec<_>>();
         let occluders = occluder_indices
