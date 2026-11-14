@@ -56,6 +56,23 @@ impl VisibilityBounds {
             self.min_y + (self.max_y - self.min_y) * 0.5
         }
     }
+
+    fn segment_envelope(
+        source: Self,
+        receiver: Self,
+        expansion: f64,
+    ) -> Option<Self> {
+        if !expansion.is_finite() || expansion < 0.0 {
+            return None;
+        }
+        let combined = source.union(receiver);
+        Self::new(
+            combined.min_x - expansion,
+            combined.min_y - expansion,
+            combined.max_x + expansion,
+            combined.max_y + expansion,
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -135,6 +152,39 @@ impl ResonanceVisibilityHierarchy {
             kind: NodeKind::Branch { left, right },
         });
         Some(node_index)
+    }
+
+    /// Return every indexed body that could intersect any segment joining
+    /// a point in the source group to a point in the receiver group. The
+    /// expanded union AABB contains that complete segment family.
+    pub(crate) fn query_between_bounds(
+        &self,
+        source: VisibilityBounds,
+        receiver: VisibilityBounds,
+        expansion: f64,
+    ) -> Option<Vec<usize>> {
+        let envelope = VisibilityBounds::segment_envelope(source, receiver, expansion)?;
+        self.query(envelope)
+    }
+
+    /// Certify that every source-to-receiver segment is unobstructed by all
+    /// nonparticipant bodies. Any AABB overlap is ambiguous and returns false;
+    /// callers must then subdivide or use exact visibility.
+    pub(crate) fn certify_unoccluded_between_bounds(
+        &self,
+        source: VisibilityBounds,
+        receiver: VisibilityBounds,
+        expansion: f64,
+        participants: &[usize],
+    ) -> Option<bool> {
+        if participants
+            .iter()
+            .any(|index| *index >= self.body_bounds.len())
+        {
+            return None;
+        }
+        let candidates = self.query_between_bounds(source, receiver, expansion)?;
+        Some(candidates.iter().all(|index| participants.contains(index)))
     }
 
     /// Return every indexed bound intersecting the query envelope. A false
@@ -226,4 +276,56 @@ mod tests {
         }])
         .is_none());
     }
+    #[test]
+    fn group_visibility_certificate_fails_closed_for_possible_occluders() {
+        let bounds = [
+            VisibilityBounds::new(0.0, 0.0, 1.0, 1.0).unwrap(),
+            VisibilityBounds::new(8.0, 0.0, 9.0, 1.0).unwrap(),
+            VisibilityBounds::new(4.0, 0.2, 4.5, 0.8).unwrap(),
+            VisibilityBounds::new(4.0, 3.0, 4.5, 3.5).unwrap(),
+        ];
+        let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
+        let source = bounds[0];
+        let receiver = bounds[1];
+
+        assert_eq!(
+            hierarchy.query_between_bounds(source, receiver, 0.0),
+            Some(vec![0, 1, 2])
+        );
+        assert_eq!(
+            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 1]),
+            Some(false),
+            "a possible intervening body must force exact visibility"
+        );
+        assert_eq!(
+            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 1, 2]),
+            Some(true),
+            "explicitly included group members are not third-party occluders"
+        );
+        assert_eq!(
+            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 99]),
+            None,
+            "invalid participant indices must fail closed"
+        );
+    }
+
+    #[test]
+    fn group_visibility_certificate_accounts_for_perturbation_margin() {
+        let bounds = [
+            VisibilityBounds::new(0.0, 0.0, 1.0, 1.0).unwrap(),
+            VisibilityBounds::new(8.0, 0.0, 9.0, 1.0).unwrap(),
+            VisibilityBounds::new(4.0, 1.01, 4.5, 1.5).unwrap(),
+        ];
+        let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
+        assert_eq!(
+            hierarchy.certify_unoccluded_between_bounds(bounds[0], bounds[1], 0.0, &[0, 1]),
+            Some(true)
+        );
+        assert_eq!(
+            hierarchy.certify_unoccluded_between_bounds(bounds[0], bounds[1], 0.02, &[0, 1]),
+            Some(false),
+            "the expansion margin must include bodies reached by finite-difference perturbations"
+        );
+    }
+
 }
