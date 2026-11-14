@@ -628,6 +628,133 @@ mod tests {
         assert!(rigid_pose_point_displacement_bound(1.0, f64::NAN, 0.0).is_none());
         assert!(rigid_pose_point_displacement_bound(1.0, 0.0, -0.1).is_none());
     }
+    #[test]
+    fn ray_edge_intersection_motion_bound_contains_perturbed_cuts() {
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let critical = BoundaryKernelVector { x: 1.0, y: 0.5 };
+        let start = BoundaryKernelVector { x: 2.0, y: -2.0 };
+        let end = BoundaryKernelVector { x: 2.0, y: 2.0 };
+        let motion = RayEdgeIntersectionMotion {
+            source_displacement: 0.01,
+            critical_point_displacement: 0.015,
+            edge_start_displacement: 0.005,
+            edge_end_displacement: 0.005,
+        };
+        let bound = ray_edge_intersection_displacement_bound(
+            source, critical, start, end, motion,
+        )
+        .expect("strict ray-edge intersection should have a finite motion bound");
+
+        let intersection = |s: BoundaryKernelVector,
+                            v: BoundaryKernelVector,
+                            a: BoundaryKernelVector,
+                            b: BoundaryKernelVector| {
+            let q = BoundaryKernelVector {
+                x: a.x - s.x,
+                y: a.y - s.y,
+            };
+            let r = BoundaryKernelVector {
+                x: v.x - s.x,
+                y: v.y - s.y,
+            };
+            let e = BoundaryKernelVector {
+                x: b.x - a.x,
+                y: b.y - a.y,
+            };
+            let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+                left.x * right.y - left.y * right.x
+            };
+            let denominator = cross(e, r);
+            let t = -cross(q, r) / denominator;
+            let u = -cross(q, e) / denominator;
+            assert!(t > 0.0 && t < 1.0 && u > 1.0);
+            BoundaryKernelVector {
+                x: a.x + t * e.x,
+                y: a.y + t * e.y,
+            }
+        };
+        let original = intersection(source, critical, start, end);
+        let mut state = 0x4d59_5df4_d0f3_3173_u64;
+        let mut next_direction = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let angle = ((state >> 32) as u32) as f64 / u32::MAX as f64
+                * std::f64::consts::TAU;
+            (angle.cos(), angle.sin())
+        };
+
+        for _ in 0..256 {
+            let (sx, sy) = next_direction();
+            let (vx, vy) = next_direction();
+            let (ax, ay) = next_direction();
+            let (bx, by) = next_direction();
+            let moved_source = BoundaryKernelVector {
+                x: source.x + sx * motion.source_displacement * 0.8,
+                y: source.y + sy * motion.source_displacement * 0.8,
+            };
+            let moved_critical = BoundaryKernelVector {
+                x: critical.x + vx * motion.critical_point_displacement * 0.8,
+                y: critical.y + vy * motion.critical_point_displacement * 0.8,
+            };
+            let moved_start = BoundaryKernelVector {
+                x: start.x + ax * motion.edge_start_displacement * 0.8,
+                y: start.y + ay * motion.edge_start_displacement * 0.8,
+            };
+            let moved_end = BoundaryKernelVector {
+                x: end.x + bx * motion.edge_end_displacement * 0.8,
+                y: end.y + by * motion.edge_end_displacement * 0.8,
+            };
+            let moved = intersection(moved_source, moved_critical, moved_start, moved_end);
+            assert!(
+                (moved.x - original.x).hypot(moved.y - original.y) <= bound,
+                "perturbed cut exceeded certified displacement"
+            );
+        }
+    }
+
+    #[test]
+    fn ray_edge_intersection_motion_bound_rejects_singular_or_transitioning_cuts() {
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let critical = BoundaryKernelVector { x: 1.0, y: 0.5 };
+        let start = BoundaryKernelVector { x: 2.0, y: -2.0 };
+        let end = BoundaryKernelVector { x: 2.0, y: 2.0 };
+        let valid = RayEdgeIntersectionMotion {
+            source_displacement: 0.01,
+            critical_point_displacement: 0.015,
+            edge_start_displacement: 0.005,
+            edge_end_displacement: 0.005,
+        };
+        assert!(ray_edge_intersection_displacement_bound(
+            source,
+            critical,
+            start,
+            end,
+            RayEdgeIntersectionMotion {
+                source_displacement: f64::NAN,
+                ..valid
+            },
+        )
+        .is_none());
+        assert!(ray_edge_intersection_displacement_bound(
+            source,
+            critical,
+            start,
+            end,
+            RayEdgeIntersectionMotion {
+                source_displacement: 10.0,
+                ..valid
+            },
+        )
+        .is_none());
+        assert!(ray_edge_intersection_displacement_bound(
+            source,
+            source,
+            start,
+            end,
+            valid,
+        )
+        .is_none());
+    }
+
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
         WeightedBoundaryKernelSample {
             position: BoundaryKernelVector { x, y },
