@@ -3060,4 +3060,104 @@ mod tests {
             "an impossible heat allocation must fail closed"
         );
     }
+
+    #[test]
+    fn visibility_hierarchy_pair_forces_match_all_occluder_reference() {
+        let mut simulation = Simulation::new(211, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        let placements = [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 22.0, 10.0),
+            ("Nitrogen", 16.0, 10.0),
+            ("Oxygen", 16.0, 11.0),
+            ("Sulfur", 16.0, 12.0),
+            ("Phosphorus", 16.0, 13.0),
+            ("Carbon", 16.0, 14.0),
+            ("Hydrogen", 16.0, 15.0),
+            ("Nitrogen", 16.0, 16.0),
+            ("Oxygen", 16.0, 17.0),
+            ("Sulfur", 16.0, 18.0),
+            ("Phosphorus", 16.0, 19.0),
+            ("Carbon", 16.0, 20.0),
+            ("Hydrogen", 16.0, 21.0),
+            ("Nitrogen", 16.0, 22.0),
+            ("Oxygen", 16.0, 23.0),
+            ("Sulfur", 16.0, 24.0),
+            ("Phosphorus", 16.0, 25.0),
+            ("Carbon", 16.0, 26.0),
+            ("Hydrogen", 16.0, 27.0),
+            ("Nitrogen", 16.0, 28.0),
+            ("Oxygen", 16.0, 29.0),
+            ("Sulfur", 16.0, 30.0),
+            ("Phosphorus", 16.0, 31.0),
+            ("Carbon", 16.0, 32.0),
+            ("Hydrogen", 16.0, 33.0),
+            ("Nitrogen", 16.0, 34.0),
+            ("Oxygen", 16.0, 35.0),
+            ("Sulfur", 16.0, 36.0),
+            ("Phosphorus", 16.0, 37.0),
+            ("Carbon", 16.0, 38.0),
+            ("Hydrogen", 16.0, 39.0),
+        ];
+        for (name, x, y) in placements {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("multi-body chemistry snapshot should be valid");
+        let identity_a = snapshot.bodies[0].environmental_identity;
+        let identity_b = snapshot.bodies[1].environmental_identity;
+        let indexed = snapshot
+            .pair_force_contributions(identity_a, identity_b, &simulation.environment.catalog)
+            .expect("hierarchy-filtered pair evaluation should succeed");
+
+        let all_occluders = snapshot
+            .bodies
+            .iter()
+            .enumerate()
+            .filter_map(|(index, body)| (index >= 2).then_some(body.clone()))
+            .collect::<Vec<_>>();
+        let reference = crate::harmonics::resonance_multi_body_forces_with_occluders(
+            &snapshot.bodies[0],
+            &snapshot.bodies[1],
+            &all_occluders,
+            &simulation.environment.catalog,
+            snapshot.tick,
+        )
+        .expect("all-occluder reference evaluation should succeed");
+        assert_eq!(reference.len(), snapshot.bodies.len());
+
+        for contribution in &indexed {
+            let expected = reference[contribution.body_index];
+            assert!(
+                (contribution.force.x - expected.x).abs() < 1.0e-10
+                    && (contribution.force.y - expected.y).abs() < 1.0e-10
+                    && (contribution.force.torque - expected.torque).abs() < 1.0e-10,
+                "hierarchy result diverged from all-occluder reference for body {}: indexed={:?}, reference={:?}",
+                contribution.body_index,
+                contribution.force,
+                expected
+            );
+        }
+    }
+
 }
