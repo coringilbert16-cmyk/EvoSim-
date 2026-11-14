@@ -4428,11 +4428,15 @@ mod tests {
         }
 
         assert!(
-            observations.iter().any(|observation| !observation.1.is_empty()),
+            observations
+                .iter()
+                .any(|observation| !observation.1.is_empty()),
             "at least one blocker pose must expose receiver boundary samples"
         );
         assert!(
-            observations.iter().any(|observation| !observation.2.is_empty()),
+            observations
+                .iter()
+                .any(|observation| !observation.2.is_empty()),
             "at least one blocker pose must produce a frequency-resolved potential"
         );
 
