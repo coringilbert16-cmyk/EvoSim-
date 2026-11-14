@@ -517,8 +517,7 @@ fn smooth_boundary_geometry_derivatives_match_refined_differences() {
         let coarse = derivative(axis, 2.0e-4);
         let fine = derivative(axis, 1.0e-4);
         assert_eq!(coarse.len(), fine.len());
-        for (component, (coarse_value, fine_value)) in coarse.iter().zip(&fine).enumerate()
-        {
+        for (component, (coarse_value, fine_value)) in coarse.iter().zip(&fine).enumerate() {
             assert!(
                 coarse_value.is_finite() && fine_value.is_finite(),
                 "non-finite geometry derivative at axis {axis}, component {component}"
