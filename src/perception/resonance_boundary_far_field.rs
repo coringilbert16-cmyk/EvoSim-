@@ -6,10 +6,11 @@
 //! a cluster of those already-established samples. Visibility and interval
 //! generation remain exact and outside this module.
 //!
-//! Only scalar potential is produced. Force and torque bounds require
-//! differentiating this same expansion with respect to both body poses and
-//! projected-extent geometry. Until those bounds exist, this result must not
-//! feed movement or be treated as an accepted mutual force.
+//! The fixed-sample result includes scalar potential and source/receiver
+//! center-gradient estimates with independent remainder bounds. These bounds
+//! hold only while sample positions and weights are fixed. Pose-dependent
+//! boundary geometry, projected extents, visibility, and torque remain outside
+//! this primitive; it must not feed live movement.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct BoundaryKernelVector {
@@ -39,11 +40,17 @@ pub(crate) struct WeightedBoundaryKernelSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct BoundaryPotentialError {
     pub(crate) potential: f64,
+    pub(crate) source_force: f64,
+    pub(crate) receiver_force: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BoundaryPotentialEvaluation {
     pub(crate) potential: f64,
+    /// Derivatives of the same approximate scalar potential with respect to
+    /// the source and receiver reference positions.
+    pub(crate) source_gradient: BoundaryKernelVector,
+    pub(crate) receiver_gradient: BoundaryKernelVector,
     pub(crate) error: BoundaryPotentialError,
     pub(crate) center: BoundaryKernelVector,
     pub(crate) radius: f64,
@@ -154,31 +161,85 @@ impl BoundaryKernelExpansion {
         };
         let potential = self.total_weight * kernel + gradient.dot(self.first_moment);
 
-        // For f(r)=1/(1+r), ||grad f|| <= (1+d)^-2 and
-        // ||H_f|| <= max(2(1+d)^-3, 1/(d(1+d)^2)) whenever r >= d.
+        // Differentiate the same first-order sample-cluster expansion with
+        // respect to each body center, holding exact sample positions/weights
+        // fixed. H_f M_1 is evaluated as a radial Hessian-vector product.
+        let source_hessian_moment =
+            radial_hessian_apply(source_delta, source_distance, self.first_moment);
+        let receiver_hessian_moment =
+            radial_hessian_apply(receiver_delta, receiver_distance, self.first_moment);
+        let source_gradient_moment = source_gradient.dot(self.first_moment);
+        let receiver_gradient_moment = receiver_gradient.dot(self.first_moment);
+        let source_center_gradient = BoundaryKernelVector {
+            x: -self.total_weight * source_gradient.x * receiver_value
+                - receiver_value * source_hessian_moment.x
+                - receiver_gradient.x * source_gradient_moment,
+            y: -self.total_weight * source_gradient.y * receiver_value
+                - receiver_value * source_hessian_moment.y
+                - receiver_gradient.y * source_gradient_moment,
+        };
+        let receiver_center_gradient = BoundaryKernelVector {
+            x: -self.total_weight * receiver_gradient.x * source_value
+                - source_value * receiver_hessian_moment.x
+                - source_gradient.x * receiver_gradient_moment,
+            y: -self.total_weight * receiver_gradient.y * source_value
+                - source_value * receiver_hessian_moment.y
+                - source_gradient.y * receiver_gradient_moment,
+        };
+
+        // Bounds for the fixed-sample center-gradient remainders. For
+        // h_a(p)=d[g(p)]/d(c_a)=-grad(f_a) f_b, bound its spatial Hessian by
+        // T_a F_b + 3 H_a G_b + 3 G_a H_b. The factor 3 deliberately
+        // overbounds the mixed tensor contractions in two dimensions.
         let source_value_bound = 1.0 / (1.0 + source_min);
         let receiver_value_bound = 1.0 / (1.0 + receiver_min);
         let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
         let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
         let source_hessian_bound = radial_hessian_bound(source_min);
         let receiver_hessian_bound = radial_hessian_bound(receiver_min);
-        // Product rule: H(fg)=g Hf + f Hg + grad(f)grad(g)^T
-        // + grad(g)grad(f)^T. The operator norm of the last two terms
-        // is bounded by twice the product of gradient norms.
+        let source_third_bound = radial_third_bound(source_min);
+        let receiver_third_bound = radial_third_bound(receiver_min);
         let product_hessian_bound = receiver_value_bound * source_hessian_bound
             + source_value_bound * receiver_hessian_bound
             + 2.0 * source_gradient_bound * receiver_gradient_bound;
-        let analytic_error =
-            0.5 * self.absolute_weight * product_hessian_bound * self.radius * self.radius;
-        let roundoff_guard = 32.0 * f64::EPSILON * (potential.abs() + self.absolute_weight + 1.0);
-        let error = analytic_error + roundoff_guard;
-        if !potential.is_finite() || !error.is_finite() {
+        let source_gradient_remainder = source_third_bound * receiver_value_bound
+            + 3.0 * source_hessian_bound * receiver_gradient_bound
+            + 3.0 * source_gradient_bound * receiver_hessian_bound;
+        let receiver_gradient_remainder = receiver_third_bound * source_value_bound
+            + 3.0 * receiver_hessian_bound * source_gradient_bound
+            + 3.0 * receiver_gradient_bound * source_hessian_bound;
+        let scale = 0.5 * self.absolute_weight * self.radius * self.radius;
+        let potential_analytic_error = scale * product_hessian_bound;
+        let source_analytic_error = scale * source_gradient_remainder;
+        let receiver_analytic_error = scale * receiver_gradient_remainder;
+        let roundoff_guard = 64.0 * f64::EPSILON
+            * (potential.abs()
+                + source_center_gradient.norm()
+                + receiver_center_gradient.norm()
+                + self.absolute_weight
+                + 1.0);
+        let error = BoundaryPotentialError {
+            potential: potential_analytic_error + roundoff_guard,
+            source_force: source_analytic_error + roundoff_guard,
+            receiver_force: receiver_analytic_error + roundoff_guard,
+        };
+        if !potential.is_finite()
+            || !source_center_gradient.x.is_finite()
+            || !source_center_gradient.y.is_finite()
+            || !receiver_center_gradient.x.is_finite()
+            || !receiver_center_gradient.y.is_finite()
+            || !error.potential.is_finite()
+            || !error.source_force.is_finite()
+            || !error.receiver_force.is_finite()
+        {
             return None;
         }
 
         Some(BoundaryPotentialEvaluation {
             potential,
-            error: BoundaryPotentialError { potential: error },
+            source_gradient: source_center_gradient,
+            receiver_gradient: receiver_center_gradient,
+            error,
             center,
             radius: self.radius,
         })
@@ -204,6 +265,34 @@ impl BoundaryKernelExpansion {
             })
             .sum()
     }
+
+    /// Exact fixed-sample derivatives with respect to both body centers.
+    #[cfg(test)]
+    fn exact_center_gradients(&self) -> (BoundaryKernelVector, BoundaryKernelVector) {
+        let mut source = BoundaryKernelVector::default();
+        let mut receiver = BoundaryKernelVector::default();
+        for sample in &self.samples {
+            let source_delta = BoundaryKernelVector {
+                x: sample.position.x - self.source_center.x,
+                y: sample.position.y - self.source_center.y,
+            };
+            let receiver_delta = BoundaryKernelVector {
+                x: sample.position.x - self.receiver_center.x,
+                y: sample.position.y - self.receiver_center.y,
+            };
+            let source_distance = source_delta.norm();
+            let receiver_distance = receiver_delta.norm();
+            let (source_value, source_gradient) =
+                radial_kernel_value_gradient(source_delta, source_distance);
+            let (receiver_value, receiver_gradient) =
+                radial_kernel_value_gradient(receiver_delta, receiver_distance);
+            source.x -= sample.weight * source_gradient.x * receiver_value;
+            source.y -= sample.weight * source_gradient.y * receiver_value;
+            receiver.x -= sample.weight * receiver_gradient.x * source_value;
+            receiver.y -= sample.weight * receiver_gradient.y * source_value;
+        }
+        (source, receiver)
+    }
 }
 
 fn radial_kernel_value_gradient(
@@ -225,6 +314,31 @@ fn radial_hessian_bound(minimum_distance: f64) -> f64 {
     let first = -1.0 / (1.0 + minimum_distance).powi(2);
     let second = 2.0 / (1.0 + minimum_distance).powi(3);
     second.abs().max((first / minimum_distance).abs())
+}
+
+fn radial_third_bound(minimum_distance: f64) -> f64 {
+    let d = minimum_distance;
+    6.0 / (1.0 + d).powi(4)
+        + 3.0 * (2.0 / (d * (1.0 + d).powi(3)) + 1.0 / (d * d * (1.0 + d).powi(2)))
+}
+
+fn radial_hessian_apply(
+    delta: BoundaryKernelVector,
+    distance: f64,
+    vector: BoundaryKernelVector,
+) -> BoundaryKernelVector {
+    let radial_unit = BoundaryKernelVector {
+        x: delta.x / distance,
+        y: delta.y / distance,
+    };
+    let first = -1.0 / (1.0 + distance).powi(2);
+    let second = 2.0 / (1.0 + distance).powi(3);
+    let tangential = first / distance;
+    let radial_component = radial_unit.dot(vector);
+    BoundaryKernelVector {
+        x: tangential * vector.x + (second - tangential) * radial_unit.x * radial_component,
+        y: tangential * vector.y + (second - tangential) * radial_unit.y * radial_component,
+    }
 }
 
 #[cfg(test)]
@@ -304,6 +418,96 @@ mod tests {
         )
         .expect("valid sample input");
         assert!(receiver_touching.evaluate().is_none());
+    }
+
+    #[test]
+    fn fixed_sample_center_gradient_bounds_contain_exact_derivatives() {
+        let samples = vec![
+            sample(5.0, 1.0, 0.8),
+            sample(5.4, 1.3, -0.25),
+            sample(4.7, 1.8, 0.35),
+            sample(5.2, 2.1, -0.15),
+        ];
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 10.0, y: 0.5 },
+            BoundaryKernelVector { x: 5.075, y: 1.55 },
+            samples,
+        )
+        .expect("finite exact pair samples should form a cluster");
+        let approximate = expansion.evaluate().expect("cluster is separated");
+        let (exact_source, exact_receiver) = expansion.exact_center_gradients();
+        let source_error = BoundaryKernelVector {
+            x: approximate.source_gradient.x - exact_source.x,
+            y: approximate.source_gradient.y - exact_source.y,
+        }
+        .norm();
+        let receiver_error = BoundaryKernelVector {
+            x: approximate.receiver_gradient.x - exact_receiver.x,
+            y: approximate.receiver_gradient.y - exact_receiver.y,
+        }
+        .norm();
+        assert!(
+            source_error <= approximate.error.source_force,
+            "source error={source_error} bound={}",
+            approximate.error.source_force
+        );
+        assert!(
+            receiver_error <= approximate.error.receiver_force,
+            "receiver error={receiver_error} bound={}",
+            approximate.error.receiver_force
+        );
+    }
+
+    #[test]
+    fn randomized_fixed_sample_center_gradient_bounds_contain_exact_derivatives() {
+        let mut state = 0x9e37_79b9_u64;
+        let mut next = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((state >> 33) as u32) as f64 / u32::MAX as f64
+        };
+        for _ in 0..256 {
+            let source = BoundaryKernelVector { x: -2.0, y: -1.0 };
+            let receiver = BoundaryKernelVector { x: 12.0, y: 2.0 };
+            let center = BoundaryKernelVector {
+                x: 5.0 + next(),
+                y: 0.5 + next(),
+            };
+            let mut samples = Vec::new();
+            for _ in 0..8 {
+                samples.push(sample(
+                    center.x + (next() - 0.5) * 0.8,
+                    center.y + (next() - 0.5) * 0.8,
+                    (next() - 0.5) * 4.0,
+                ));
+            }
+            let expansion = BoundaryKernelExpansion::new(source, receiver, center, samples)
+                .expect("finite randomized samples should form a cluster");
+            let approximate = expansion.evaluate().expect("cluster remains separated");
+            let (exact_source, exact_receiver) = expansion.exact_center_gradients();
+            let source_error = BoundaryKernelVector {
+                x: approximate.source_gradient.x - exact_source.x,
+                y: approximate.source_gradient.y - exact_source.y,
+            }
+            .norm();
+            let receiver_error = BoundaryKernelVector {
+                x: approximate.receiver_gradient.x - exact_receiver.x,
+                y: approximate.receiver_gradient.y - exact_receiver.y,
+            }
+            .norm();
+            assert!(
+                source_error <= approximate.error.source_force,
+                "source error={source_error} bound={} iteration={}",
+                approximate.error.source_force,
+                _
+            );
+            assert!(
+                receiver_error <= approximate.error.receiver_force,
+                "receiver error={receiver_error} bound={} iteration={}",
+                approximate.error.receiver_force,
+                _
+            );
+        }
     }
 
     #[test]
