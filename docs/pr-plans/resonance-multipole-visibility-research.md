@@ -1023,3 +1023,67 @@ derivatives must then be checked against independent finite differences in
 smooth visibility cells. Any topology event or unbounded sensitivity remains
 an exact/subdivision fallback.
 
+## 23. Straight-boundary pose Jacobians — 2026-11-14
+
+The next geometry layer now has analytic first derivatives for two smooth
+straight-boundary constructions.
+
+### Ray/edge visibility cut
+
+For a source s, critical point v, receiver-edge start a, and edge vector e=b-a,
+the existing cut is defined by
+
+D = cross(e, v-s),
+N = -cross(a-s, v-s),
+t = N/D,
+p = a + t e.
+
+For one generalized coordinate q, the implementation differentiates the
+numerator and denominator directly:
+
+D' = cross(e', v-s) + cross(e, v'-s'),
+N' = -cross(a'-s', v-s) - cross(a-s, v'-s'),
+t' = (N'D - ND')/D^2,
+p' = a' + t'e + te'.
+
+The helper preserves the same strict interior-edge and beyond-edge conditions
+as the visibility cut. Singular determinants, endpoint cuts, and invalid
+derivatives fail closed. The caller supplies v', which is valid for a rigid
+polygon vertex and must be separately derived for source-dependent tangencies
+or curved features. A central-difference regression checks the full cut-point
+Jacobian under simultaneous source, critical-point, and edge motion.
+
+### Straight interval midpoint and point-source projected extent
+
+For an already-corresponding straight interval [a,b], the midpoint derivative
+is (a'+b')/2. The interval's tangent and outward normal derivatives are
+derived from e=b-a and e'=b'-a', preserving the current normal orientation.
+
+With source offset r=s-a, tangent t, outward normal n, length L, along-edge
+coordinate u=r dot t, and front-side distance d=r dot n, the exact point-source
+projected extent is
+
+E = d [asinh((L-u)/d) + asinh(u/d)].
+
+The implementation differentiates L, u, and d through source and endpoint
+motion, then applies the analytic partial derivatives of E with respect to
+those three scalars. Edge-on transitions, degenerate edges, and invalid normal
+orientation reject the derivative. A central-difference test exercises
+simultaneous source translation and unequal endpoint motion.
+
+### Scope boundary
+
+These helpers provide local Jacobians, not a complete visibility certificate.
+The ray/edge helper covers one known straight-edge cut; it does not enumerate
+all cuts or classify every interval. The interval helper assumes the two
+endpoints remain corresponding throughout the pose cell. Circle tangencies,
+circle/edge intersections, curved receiver arcs, and cut-order/topology events
+still need their own derivatives or exact/subdivision fallback.
+
+The next step is to connect these local derivatives to the actual straight
+visibility interval provenance without changing the public interval result,
+then derive the signed sample-weight derivative from projected extent and the
+frequency-resolved cross coefficient. Only after all endpoint types are
+covered can the pose-coordinate chain-rule evaluator be fed by production
+geometry.
+
