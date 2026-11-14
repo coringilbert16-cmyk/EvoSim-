@@ -708,11 +708,11 @@ fn add_circle_tangent_points_tagged(
     radius: f64,
     source: (f64, f64),
     body_index: usize,
-    critical_points: &mut Vec<(usize, f64, f64)>,
+    critical_points: &mut Vec<(usize, usize, f64, f64)>,
 ) {
     let mut points = Vec::with_capacity(2);
     add_circle_tangent_points(center, radius, source, &mut points);
-    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, x, y)));
+    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, 0, x, y)));
 }
 
 pub(crate) fn visible_polygonal_intervals(
@@ -747,7 +747,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
-    let mut critical_points: Vec<(usize, f64, f64)> = Vec::new();
+    let mut critical_points: Vec<(usize, usize, f64, f64)> = Vec::new();
 
     for (body_index, body) in bodies.iter().enumerate() {
         let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
@@ -851,7 +851,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 {
                     return None;
                 }
-                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, x, y)));
+                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, part.unit_index, x, y)));
                 for index in 0..vertices.len() {
                     straight_edges.push((
                         body_index,
@@ -876,7 +876,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let start = (part.x - half * cos, part.y - half * sin);
                     let end = (part.x + half * cos, part.y + half * sin);
                     critical_points
-                        .extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
+                        .extend([(body_index, part.unit_index, start.0, start.1), (body_index, part.unit_index, end.0, end.1)]);
                     straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
@@ -918,7 +918,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         let world = arc.transformed(part.x, part.y, part.rotation_radians)?;
                         critical_points.extend(
                             [world.start_point(), world.end_point()]
-                                .map(|(x, y)| (body_index, x, y)),
+                                .map(|(x, y)| (body_index, part.unit_index, x, y)),
                         );
                         add_circle_tangent_points_tagged(
                             (world.center_x, world.center_y),
@@ -951,8 +951,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                     let start = transform(*start_x, *start_y);
                                     let end = transform(*end_x, *end_y);
                                     critical_points.extend([
-                                        (body_index, start.0, start.1),
-                                        (body_index, end.0, end.1),
+                                        (body_index, part.unit_index, start.0, start.1),
+                                        (body_index, part.unit_index, end.0, end.1),
                                     ]);
                                     straight_edges.push((body_index, part.unit_index, start, end));
                                 }
@@ -995,7 +995,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
     if critical_points
         .iter()
-        .any(|(_, x, y)| !x.is_finite() || !y.is_finite())
+        .any(|(_, _, x, y)| !x.is_finite() || !y.is_finite())
         || straight_edges.iter().any(|(_, _, a, b)| {
             !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
         })
@@ -1003,10 +1003,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         return None;
     }
 
-    let mut critical_points_by_body: Vec<Vec<(f64, f64)>> =
+    let mut critical_points_by_body: Vec<Vec<(usize, f64, f64)>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
-    for (body_index, x, y) in critical_points {
-        critical_points_by_body[body_index].push((x, y));
+    for (body_index, unit_index, x, y) in critical_points {
+        critical_points_by_body[body_index].push((unit_index, x, y));
     }
     type StraightEdge = (usize, (f64, f64), (f64, f64));
     let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
@@ -1089,7 +1089,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 ),
             ];
             for &candidate_body in &candidate_body_indices {
-                for &(vx, vy) in &critical_points_by_body[candidate_body] {
+                for &(blocker_unit_index, vx, vy) in &critical_points_by_body[candidate_body] {
                     let dx = vx - source.0;
                     let dy = vy - source.1;
                     let denominator = ex * dy - ey * dx;
@@ -1108,7 +1108,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                             t,
                             VisibilityCutEvent::Unresolved {
                                 blocker_body_index: Some(candidate_body),
-                                blocker_unit_index: None,
+                                blocker_unit_index: Some(blocker_unit_index),
                             },
                         ));
                     }
