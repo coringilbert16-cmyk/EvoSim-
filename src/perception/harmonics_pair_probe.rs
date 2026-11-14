@@ -444,3 +444,92 @@ fn complete_world_pose_derivatives_match_refined_central_differences() {
         "the asymmetric complete-world fixture should exercise at least five independent pose derivatives; got {nonzero_derivatives}"
     );
 }
+
+
+#[test]
+fn smooth_boundary_geometry_derivatives_match_refined_differences() {
+    let catalog = crate::resources::default_catalog();
+    let baseline_pose = [0.0; 12];
+    let baseline = record_world_pairs(&probe_world(baseline_pose, &catalog), &catalog, 0);
+    let base_pair = pair_record(&baseline, 0, 2);
+
+    let flatten_geometry = |sample: &BoundarySampleRecord| {
+        let mut values = vec![
+            sample.midpoint.0,
+            sample.midpoint.1,
+            sample.normal.0,
+            sample.normal.1,
+            sample.projected_extent,
+        ];
+        values.extend(sample.boundary_geometry.iter().skip(1).copied());
+        values
+    };
+    let derivative = |axis: usize, step: f64| {
+        let mut plus_pose = baseline_pose;
+        let mut minus_pose = baseline_pose;
+        plus_pose[axis] = step;
+        minus_pose[axis] = -step;
+        let plus_world = probe_world(plus_pose, &catalog);
+        let minus_world = probe_world(minus_pose, &catalog);
+        let plus_records = record_world_pairs(&plus_world, &catalog, 0);
+        let minus_records = record_world_pairs(&minus_world, &catalog, 0);
+        let plus = pair_record(&plus_records, 0, 2);
+        let minus = pair_record(&minus_records, 0, 2);
+        assert_eq!(plus.samples.len(), base_pair.samples.len());
+        assert_eq!(minus.samples.len(), base_pair.samples.len());
+
+        let mut values = Vec::new();
+        for ((base, positive), negative) in base_pair
+            .samples
+            .iter()
+            .zip(&plus.samples)
+            .zip(&minus.samples)
+        {
+            assert_eq!(
+                positive.boundary_geometry.first(),
+                base.boundary_geometry.first()
+            );
+            assert_eq!(
+                negative.boundary_geometry.first(),
+                base.boundary_geometry.first()
+            );
+            assert_eq!(
+                positive.boundary_geometry.len(),
+                base.boundary_geometry.len()
+            );
+            assert_eq!(
+                negative.boundary_geometry.len(),
+                base.boundary_geometry.len()
+            );
+            let positive_values = flatten_geometry(positive);
+            let negative_values = flatten_geometry(negative);
+            assert_eq!(positive_values.len(), negative_values.len());
+            values.extend(
+                positive_values
+                    .iter()
+                    .zip(&negative_values)
+                    .map(|(p, n)| (p - n) / (2.0 * step)),
+            );
+        }
+        values
+    };
+
+    for axis in [0, 1, 2, 6, 7, 8] {
+        let coarse = derivative(axis, 2.0e-4);
+        let fine = derivative(axis, 1.0e-4);
+        assert_eq!(coarse.len(), fine.len());
+        for (component, (coarse_value, fine_value)) in
+            coarse.iter().zip(&fine).enumerate()
+        {
+            assert!(
+                coarse_value.is_finite() && fine_value.is_finite(),
+                "non-finite geometry derivative at axis {axis}, component {component}"
+            );
+            let scale = coarse_value.abs().max(fine_value.abs()).max(1.0e-6);
+            assert!(
+                (coarse_value - fine_value).abs() <= 5.0e-2 * scale + 1.0e-7,
+                "geometry derivative did not refine at axis {axis}, component {component}: coarse={coarse_value} fine={fine_value}"
+            );
+        }
+    }
+}
