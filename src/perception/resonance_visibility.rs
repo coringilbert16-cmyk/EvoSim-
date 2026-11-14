@@ -155,9 +155,12 @@ impl ResonanceVisibilityHierarchy {
             }
             match &node.kind {
                 NodeKind::Leaf(indices) => {
-                    matches.extend(indices.iter().copied().filter(|index| {
-                        self.body_bounds[*index].intersects(envelope)
-                    }));
+                    matches.extend(
+                        indices
+                            .iter()
+                            .copied()
+                            .filter(|index| self.body_bounds[*index].intersects(envelope)),
+                    );
                 }
                 NodeKind::Branch { left, right } => {
                     pending.push(*right);
@@ -168,8 +171,6 @@ impl ResonanceVisibilityHierarchy {
         matches.sort_unstable();
         Some(matches)
     }
-
-
 }
 
 #[cfg(test)]
