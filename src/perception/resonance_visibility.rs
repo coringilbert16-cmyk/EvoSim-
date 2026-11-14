@@ -178,9 +178,11 @@ impl ResonanceVisibilityHierarchy {
         let source = *self.body_bounds.get(source_index)?;
         let receiver = *self.body_bounds.get(receiver_index)?;
         let candidates = self.query_between_bounds(source, receiver, expansion)?;
-        Some(candidates.iter().all(|index| {
-            *index == source_index || *index == receiver_index
-        }))
+        Some(
+            candidates
+                .iter()
+                .all(|index| *index == source_index || *index == receiver_index),
+        )
     }
 
     /// Return every indexed bound intersecting the query envelope. A false
