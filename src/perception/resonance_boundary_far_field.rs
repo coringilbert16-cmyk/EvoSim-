@@ -87,6 +87,31 @@ pub(crate) struct BoundaryKernelExpansion {
     radius: f64,
 }
 
+/// Conservative displacement of a point attached to a rigid body when its
+/// reference point translates by at most `translation_bound` and its
+/// orientation changes by at most `rotation_bound_radians`. The point is
+/// at most `maximum_radius` from the rotation pivot. This bounds only the
+/// rigid transport contribution; source-ray intersection changes and
+/// visibility/topology changes require separate certificates.
+pub(crate) fn rigid_pose_point_displacement_bound(
+    maximum_radius: f64,
+    translation_bound: f64,
+    rotation_bound_radians: f64,
+) -> Option<f64> {
+    if !maximum_radius.is_finite()
+        || maximum_radius < 0.0
+        || !translation_bound.is_finite()
+        || translation_bound < 0.0
+        || !rotation_bound_radians.is_finite()
+        || rotation_bound_radians < 0.0
+    {
+        return None;
+    }
+    let angular_displacement =
+        2.0 * maximum_radius * (0.5 * rotation_bound_radians.min(std::f64::consts::PI)).sin();
+    let bound = translation_bound + angular_displacement;
+    bound.is_finite().then_some(bound)
+}
 impl BoundaryKernelExpansion {
     /// Retain exact sample correspondence for this ordered pair. The
     /// expansion disk is centered at sample_center and contains every midpoint.
@@ -452,6 +477,49 @@ fn radial_hessian_apply(
 mod tests {
     use super::*;
 
+    #[test]
+    fn rigid_pose_displacement_bound_contains_transformed_boundary_points() {
+        let translation_bound = 0.35;
+        let rotation_bound = 0.8;
+        let maximum_radius: f64 = 3.2;
+        let bound = rigid_pose_point_displacement_bound(
+            maximum_radius,
+            translation_bound,
+            rotation_bound,
+        )
+        .expect("finite rigid-pose envelope");
+        for index in 0..128 {
+            let radius = maximum_radius * (index as f64 / 127.0);
+            let angle = index as f64 * 0.173;
+            let point = (radius * angle.cos(), radius * angle.sin());
+            let translation_angle = index as f64 * 0.071;
+            let translation = (
+                translation_bound * translation_angle.cos(),
+                translation_bound * translation_angle.sin(),
+            );
+            let rotation = rotation_bound * (index as f64 / 127.0);
+            let moved = (
+                point.0 * rotation.cos() - point.1 * rotation.sin() + translation.0,
+                point.0 * rotation.sin() + point.1 * rotation.cos() + translation.1,
+            );
+            let displacement = (moved.0 - point.0).hypot(moved.1 - point.1);
+            assert!(displacement <= bound + 1e-12);
+        }
+        let full_turn_bound = rigid_pose_point_displacement_bound(
+            maximum_radius,
+            0.0,
+            4.0 * std::f64::consts::PI,
+        )
+        .expect("large angular envelope");
+        assert!((full_turn_bound - 2.0 * maximum_radius).abs() < 1e-12);
+    }
+
+    #[test]
+    fn rigid_pose_displacement_bound_rejects_invalid_inputs() {
+        assert!(rigid_pose_point_displacement_bound(-1.0, 0.0, 0.0).is_none());
+        assert!(rigid_pose_point_displacement_bound(1.0, f64::NAN, 0.0).is_none());
+        assert!(rigid_pose_point_displacement_bound(1.0, 0.0, -0.1).is_none());
+    }
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
         WeightedBoundaryKernelSample {
             position: BoundaryKernelVector { x, y },
