@@ -288,7 +288,7 @@ mod tests {
     #[test]
     fn cluster_touching_either_body_fails_closed() {
         let source_touching = BoundaryKernelExpansion::new(
-            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 0.5, y: 0.0 },
             BoundaryKernelVector { x: 10.0, y: 0.0 },
             BoundaryKernelVector { x: 1.0, y: 0.0 },
             vec![sample(0.5, 0.0, 1.0)],
@@ -298,7 +298,7 @@ mod tests {
 
         let receiver_touching = BoundaryKernelExpansion::new(
             BoundaryKernelVector { x: 0.0, y: 0.0 },
-            BoundaryKernelVector { x: 10.0, y: 0.0 },
+            BoundaryKernelVector { x: 9.5, y: 0.0 },
             BoundaryKernelVector { x: 9.0, y: 0.0 },
             vec![sample(9.5, 0.0, 1.0)],
         )
