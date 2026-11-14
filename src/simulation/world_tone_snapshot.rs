@@ -1009,10 +1009,7 @@ impl LocalResonanceWorldSnapshot {
             .collect::<Option<Vec<_>>>()?;
         let maximum_rotation_margin = visibility_bounds
             .iter()
-            .map(|bounds| {
-                (bounds.max_x - bounds.min_x).hypot(bounds.max_y - bounds.min_y)
-                    * 1.0e-4
-            })
+            .map(|bounds| (bounds.max_x - bounds.min_x).hypot(bounds.max_y - bounds.min_y) * 1.0e-4)
             .fold(0.0, f64::max);
         if !maximum_rotation_margin.is_finite() {
             return None;
