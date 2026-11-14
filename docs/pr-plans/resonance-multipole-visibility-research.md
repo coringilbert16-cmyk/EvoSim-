@@ -1179,3 +1179,39 @@ can be differentiated without guessing which geometric feature generated an
 endpoint. Line/line and circle/edge cuts, curved boundaries, and visibility
 topology transitions remain separately handled or exact/subdivision cases.
 
+## 26. Rigid-feature and circle-tangent critical-point Jacobians — 2026-11-14
+
+Two analytic critical-point derivative primitives now cover the main point
+features used by the straight visibility partition.
+
+For a rigidly attached point p about pivot c, with translational derivative
+c' and angular derivative omega, the world-point derivative is
+
+p' = c' + omega J(p-c),
+
+where J rotates a vector by +90 degrees. This is the exact rigid transform
+derivative and is checked against central differences of combined translation
+and rotation.
+
+For a source-dependent tangent point on a circle with center c, radius R, and
+external source s, let d=s-c, D=|d|, u=d/D, n=J u,
+k=R/D, and h=sqrt(1-k^2). The two tangent points are
+
+p = c + R(k u +/- h n).
+
+Given source and circle-center derivatives, the implementation differentiates
+D, u, k, h, and n analytically, then forms p'. It rejects sources on or inside
+the circle, degenerate tangency (h approaching zero), invalid radii, and
+malformed tangent-side selection. A two-branch finite-difference regression
+checks the derivative while both source and circle move.
+
+These primitives provide exact point derivatives for rigid polygon/line/arc
+features and source-dependent circle tangencies. They do not yet retain the
+feature identity in the production visibility solver, nor do they cover
+circle/edge intersections, line/line intersections, or the motion of curved
+receiver interval endpoints. The next step remains endpoint provenance: each
+cut returned by the straight visibility partition must identify the feature
+that generated it, so the appropriate derivative can be selected without
+guessing. Unsupported provenance must fail closed to exact evaluation or
+subdivision.
+
