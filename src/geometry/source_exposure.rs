@@ -321,16 +321,14 @@ pub(crate) fn point_source_projected_extent_change_bound(
     }
 
     let source_offset = (source.0 - interval.start.0, source.1 - interval.start.1);
-    let parameter = ((source_offset.0 * edge.0 + source_offset.1 * edge.1)
-        / (length * length))
-        .clamp(0.0, 1.0);
+    let parameter =
+        ((source_offset.0 * edge.0 + source_offset.1 * edge.1) / (length * length)).clamp(0.0, 1.0);
     let closest = (
         interval.start.0 + parameter * edge.0,
         interval.start.1 + parameter * edge.1,
     );
     let source_distance = (source.0 - closest.0).hypot(source.1 - closest.1);
-    let maximum_point_displacement =
-        source_displacement + start_displacement.max(end_displacement);
+    let maximum_point_displacement = source_displacement + start_displacement.max(end_displacement);
     let minimum_distance = source_distance - maximum_point_displacement;
     if !source_distance.is_finite()
         || !maximum_point_displacement.is_finite()
@@ -341,15 +339,13 @@ pub(crate) fn point_source_projected_extent_change_bound(
     }
 
     let normal_change = (2.0 * edge_displacement / minimum_length).min(2.0);
-    let direction_change =
-        (2.0 * maximum_point_displacement / minimum_distance).min(2.0);
+    let direction_change = (2.0 * maximum_point_displacement / minimum_distance).min(2.0);
     let facing_change = (normal_change + direction_change).min(1.0);
 
     // E = L * integral_0^1 max(0, n dot direction(s)) ds. The facing
     // integrand is in [0,1] and is Lipschitz in both unit vectors.
     let extent_change = edge_displacement + length * facing_change;
-    let roundoff_guard =
-        64.0 * f64::EPSILON * (extent_change + length + source_distance + 1.0);
+    let roundoff_guard = 64.0 * f64::EPSILON * (extent_change + length + source_distance + 1.0);
     let result = extent_change + roundoff_guard;
     result.is_finite().then_some(result)
 }
