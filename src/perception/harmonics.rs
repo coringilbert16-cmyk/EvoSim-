@@ -4403,7 +4403,10 @@ mod tests {
             let (carbon_x, carbon_y) = rotate(8.0, 0.0);
             let (hydrogen_x, hydrogen_y) = rotate(9.5, 0.7);
             crate::physical_material::PhysicalMaterial::realized(
-                crate::resources::Material::free_base("Carbon", 2.0),
+                crate::resources::Material {
+                    parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                    internal_bonds: Vec::new(),
+                },
                 vec![
                     crate::structure::Placement {
                         x: carbon_x,
