@@ -1056,8 +1056,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     use crate::resources::Form;
 
-    let intervals =
-        visible_polygonal_intervals_for_targets(source, bodies, target_body_indices)?;
+    let intervals = visible_polygonal_intervals_for_targets(source, bodies, target_body_indices)?;
     let mut result = Vec::with_capacity(intervals.len());
     for interval in intervals {
         let body = bodies.get(interval.body_index)?;
