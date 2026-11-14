@@ -466,7 +466,7 @@ mod tests {
             state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
             ((state >> 33) as u32) as f64 / u32::MAX as f64
         };
-        for _ in 0..256 {
+        for iteration in 0..256 {
             let source = BoundaryKernelVector { x: -2.0, y: -1.0 };
             let receiver = BoundaryKernelVector { x: 12.0, y: 2.0 };
             let center = BoundaryKernelVector {
@@ -499,7 +499,7 @@ mod tests {
                 source_error <= approximate.error.source_force,
                 "source error={source_error} bound={} iteration={}",
                 approximate.error.source_force,
-                _
+                iteration
             );
             assert!(
                 receiver_error <= approximate.error.receiver_force,
