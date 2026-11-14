@@ -165,6 +165,233 @@ pub(crate) struct RayEdgeIntersectionMotion {
     pub(crate) edge_end_displacement: f64,
 }
 
+/// Exact first derivative of one strict ray/edge cut for one generalized
+/// pose coordinate. The critical-point derivative is supplied by the caller;
+/// for a polygon vertex it is the vertex's rigid-pose derivative.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RayEdgeIntersectionPoseDerivative {
+    pub(crate) edge_parameter_derivative: f64,
+    pub(crate) point_derivative: BoundaryKernelVector,
+}
+
+/// Differentiate the existing source-ray/receiver-edge intersection
+/// construction while its strict interior/beyond-edge classification holds.
+#[allow(dead_code)]
+pub(crate) fn ray_edge_intersection_pose_derivative(
+    source: BoundaryKernelVector,
+    critical_point: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    source_derivative: BoundaryKernelVector,
+    critical_point_derivative: BoundaryKernelVector,
+    edge_start_derivative: BoundaryKernelVector,
+    edge_end_derivative: BoundaryKernelVector,
+) -> Option<RayEdgeIntersectionPoseDerivative> {
+    let points = [
+        source,
+        critical_point,
+        edge_start,
+        edge_end,
+        source_derivative,
+        critical_point_derivative,
+        edge_start_derivative,
+        edge_end_derivative,
+    ];
+    if points
+        .iter()
+        .any(|point| !point.x.is_finite() || !point.y.is_finite())
+    {
+        return None;
+    }
+    let subtract = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        BoundaryKernelVector {
+            x: left.x - right.x,
+            y: left.y - right.y,
+        }
+    };
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let q = subtract(edge_start, source);
+    let r = subtract(critical_point, source);
+    let edge = subtract(edge_end, edge_start);
+    let q_derivative = subtract(edge_start_derivative, source_derivative);
+    let r_derivative = subtract(critical_point_derivative, source_derivative);
+    let edge_derivative = subtract(edge_end_derivative, edge_start_derivative);
+    let denominator = cross(edge, r);
+    let numerator = -cross(q, r);
+    if !denominator.is_finite()
+        || !numerator.is_finite()
+        || denominator.abs() <= f64::EPSILON
+    {
+        return None;
+    }
+    let t = numerator / denominator;
+    let u = -cross(q, edge) / denominator;
+    if !t.is_finite()
+        || !u.is_finite()
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&t)
+        || u <= 1.0 + 1.0e-10
+    {
+        return None;
+    }
+    let numerator_derivative = -cross(q_derivative, r) - cross(q, r_derivative);
+    let denominator_derivative = cross(edge_derivative, r) + cross(edge, r_derivative);
+    let t_derivative = (numerator_derivative * denominator
+        - numerator * denominator_derivative)
+        / (denominator * denominator);
+    let point_derivative = BoundaryKernelVector {
+        x: edge_start_derivative.x + t_derivative * edge.x + t * edge_derivative.x,
+        y: edge_start_derivative.y + t_derivative * edge.y + t * edge_derivative.y,
+    };
+    [t_derivative, point_derivative.x, point_derivative.y]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(RayEdgeIntersectionPoseDerivative {
+            edge_parameter_derivative: t_derivative,
+            point_derivative,
+        })
+}
+
+/// Midpoint and exact point-source projected-extent derivatives for one
+/// already-corresponding straight exposed interval. The interval normal is
+/// transported from its edge orientation; edge-on transitions fail closed.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct StraightIntervalPoseDerivative {
+    pub(crate) midpoint_derivative: BoundaryKernelVector,
+    pub(crate) projected_extent: f64,
+    pub(crate) projected_extent_derivative: f64,
+}
+
+/// Differentiate the closed-form point-source projected extent with respect
+/// to source and both edge endpoints. This includes rigid edge translation
+/// and rotation; it does not discover or differentiate visibility cuts.
+#[allow(dead_code)]
+pub(crate) fn straight_interval_pose_derivative(
+    source: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    outward_normal: BoundaryKernelVector,
+    source_derivative: BoundaryKernelVector,
+    edge_start_derivative: BoundaryKernelVector,
+    edge_end_derivative: BoundaryKernelVector,
+) -> Option<StraightIntervalPoseDerivative> {
+    let points = [
+        source,
+        edge_start,
+        edge_end,
+        outward_normal,
+        source_derivative,
+        edge_start_derivative,
+        edge_end_derivative,
+    ];
+    if points
+        .iter()
+        .any(|point| !point.x.is_finite() || !point.y.is_finite())
+    {
+        return None;
+    }
+    let edge = BoundaryKernelVector {
+        x: edge_end.x - edge_start.x,
+        y: edge_end.y - edge_start.y,
+    };
+    let edge_rate = BoundaryKernelVector {
+        x: edge_end_derivative.x - edge_start_derivative.x,
+        y: edge_end_derivative.y - edge_start_derivative.y,
+    };
+    let length = edge.norm();
+    let normal_length = outward_normal.norm();
+    if !length.is_finite()
+        || length <= f64::EPSILON
+        || (normal_length - 1.0).abs() > 1.0e-9
+    {
+        return None;
+    }
+    let tangent = BoundaryKernelVector {
+        x: edge.x / length,
+        y: edge.y / length,
+    };
+    let perpendicular = BoundaryKernelVector {
+        x: -tangent.y,
+        y: tangent.x,
+    };
+    let orientation = outward_normal.dot(perpendicular);
+    if !orientation.is_finite() || orientation.abs() < 1.0 - 1.0e-9 {
+        return None;
+    }
+    let length_rate = tangent.dot(edge_rate);
+    let tangent_rate = BoundaryKernelVector {
+        x: (edge_rate.x - tangent.x * length_rate) / length,
+        y: (edge_rate.y - tangent.y * length_rate) / length,
+    };
+    let normal_rate = BoundaryKernelVector {
+        x: -orientation.signum() * tangent_rate.y,
+        y: orientation.signum() * tangent_rate.x,
+    };
+    let source_offset = BoundaryKernelVector {
+        x: source.x - edge_start.x,
+        y: source.y - edge_start.y,
+    };
+    let relative_rate = BoundaryKernelVector {
+        x: source_derivative.x - edge_start_derivative.x,
+        y: source_derivative.y - edge_start_derivative.y,
+    };
+    let along = source_offset.dot(tangent);
+    let normal_distance = source_offset.dot(outward_normal);
+    let along_rate = relative_rate.dot(tangent) + source_offset.dot(tangent_rate);
+    let normal_rate_distance = relative_rate.dot(outward_normal) + source_offset.dot(normal_rate);
+    if !along.is_finite() || !normal_distance.is_finite() {
+        return None;
+    }
+    let midpoint_derivative = BoundaryKernelVector {
+        x: 0.5 * (edge_start_derivative.x + edge_end_derivative.x),
+        y: 0.5 * (edge_start_derivative.y + edge_end_derivative.y),
+    };
+    if normal_distance < -1.0e-12 {
+        return Some(StraightIntervalPoseDerivative {
+            midpoint_derivative,
+            projected_extent: 0.0,
+            projected_extent_derivative: 0.0,
+        });
+    }
+    if normal_distance <= 1.0e-12 {
+        return None;
+    }
+
+    let remaining = length - along;
+    let first = normal_distance.hypot(along);
+    let second = normal_distance.hypot(remaining);
+    if !first.is_finite() || !second.is_finite() || first <= 0.0 || second <= 0.0 {
+        return None;
+    }
+    let projected_extent = normal_distance
+        * ((remaining / normal_distance).asinh() + (along / normal_distance).asinh());
+    let derivative_length = normal_distance / second;
+    let derivative_along = normal_distance / first - normal_distance / second;
+    let derivative_normal = (remaining / normal_distance).asinh()
+        + (along / normal_distance).asinh()
+        - remaining / second
+        - along / first;
+    let projected_extent_derivative = derivative_length * length_rate
+        + derivative_along * along_rate
+        + derivative_normal * normal_rate_distance;
+    [
+        projected_extent,
+        projected_extent_derivative,
+        midpoint_derivative.x,
+        midpoint_derivative.y,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+    .then_some(StraightIntervalPoseDerivative {
+        midpoint_derivative,
+        projected_extent,
+        projected_extent_derivative,
+    })
+}
+
 /// Bound movement of a ray/edge cut while it remains a strict interior
 /// intersection and the critical point remains beyond the receiver edge.
 ///
@@ -999,6 +1226,78 @@ mod tests {
         assert!(
             ray_edge_intersection_displacement_bound(source, source, start, end, valid,).is_none()
         );
+    }
+
+    #[test]
+    fn ray_edge_pose_derivative_matches_finite_difference() {
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let critical = BoundaryKernelVector { x: 1.0, y: 0.5 };
+        let start = BoundaryKernelVector { x: 2.0, y: -2.0 };
+        let end = BoundaryKernelVector { x: 2.0, y: 2.0 };
+        let ds = BoundaryKernelVector { x: 0.1, y: -0.04 };
+        let dv = BoundaryKernelVector { x: -0.02, y: 0.03 };
+        let da = BoundaryKernelVector { x: 0.01, y: 0.02 };
+        let db = BoundaryKernelVector { x: -0.01, y: 0.01 };
+        let derivative = ray_edge_intersection_pose_derivative(
+            source, critical, start, end, ds, dv, da, db,
+        )
+        .expect("strict cut should have a derivative");
+        let intersect = |q: f64| {
+            let s = BoundaryKernelVector { x: source.x + q * ds.x, y: source.y + q * ds.y };
+            let v = BoundaryKernelVector { x: critical.x + q * dv.x, y: critical.y + q * dv.y };
+            let a = BoundaryKernelVector { x: start.x + q * da.x, y: start.y + q * da.y };
+            let b = BoundaryKernelVector { x: end.x + q * db.x, y: end.y + q * db.y };
+            let cross = |l: BoundaryKernelVector, r: BoundaryKernelVector| l.x * r.y - l.y * r.x;
+            let sub = |l: BoundaryKernelVector, r: BoundaryKernelVector| BoundaryKernelVector { x: l.x-r.x, y:l.y-r.y };
+            let e = sub(b, a);
+            let r = sub(v, s);
+            let qv = sub(a, s);
+            let t = -cross(qv, r) / cross(e, r);
+            BoundaryKernelVector { x: a.x + t*e.x, y:a.y+t*e.y }
+        };
+        let step = 1.0e-6;
+        let plus = intersect(step);
+        let minus = intersect(-step);
+        let finite_difference = BoundaryKernelVector {
+            x: (plus.x - minus.x) / (2.0 * step),
+            y: (plus.y - minus.y) / (2.0 * step),
+        };
+        assert!((finite_difference.x - derivative.point_derivative.x).abs() < 1.0e-8);
+        assert!((finite_difference.y - derivative.point_derivative.y).abs() < 1.0e-8);
+    }
+
+    #[test]
+    fn straight_interval_pose_derivative_matches_finite_differences() {
+        let source = BoundaryKernelVector { x: 0.3, y: 2.0 };
+        let start = BoundaryKernelVector { x: -1.0, y: 0.0 };
+        let end = BoundaryKernelVector { x: 1.0, y: 0.0 };
+        let normal = BoundaryKernelVector { x: 0.0, y: 1.0 };
+        let ds = BoundaryKernelVector { x: 0.07, y: -0.03 };
+        let da = BoundaryKernelVector { x: -0.02, y: 0.04 };
+        let db = BoundaryKernelVector { x: 0.03, y: 0.01 };
+        let derivative = straight_interval_pose_derivative(source, start, end, normal, ds, da, db)
+            .expect("smooth front-facing interval should differentiate");
+        let extent = |q: f64| {
+            let s = BoundaryKernelVector { x: source.x + q * ds.x, y: source.y + q * ds.y };
+            let a = BoundaryKernelVector { x: start.x + q * da.x, y: start.y + q * da.y };
+            let b = BoundaryKernelVector { x: end.x + q * db.x, y: end.y + q * db.y };
+            let e = BoundaryKernelVector { x: b.x-a.x, y:b.y-a.y };
+            let length = e.norm();
+            let n = BoundaryKernelVector { x: -e.y/length, y:e.x/length };
+            let r = BoundaryKernelVector { x:s.x-a.x, y:s.y-a.y };
+            let along = r.x*e.x/length + r.y*e.y/length;
+            let normal_distance = r.dot(n);
+            normal_distance * (((length-along)/normal_distance).asinh() + (along/normal_distance).asinh())
+        };
+        let step = 1.0e-6;
+        let finite_difference = (extent(step) - extent(-step)) / (2.0 * step);
+        assert!((finite_difference - derivative.projected_extent_derivative).abs() < 1.0e-8);
+        let midpoint_fd = BoundaryKernelVector {
+            x: 0.5 * (da.x + db.x),
+            y: 0.5 * (da.y + db.y),
+        };
+        assert!((midpoint_fd.x - derivative.midpoint_derivative.x).abs() < 1.0e-12);
+        assert!((midpoint_fd.y - derivative.midpoint_derivative.y).abs() < 1.0e-12);
     }
 
     #[test]
