@@ -244,6 +244,60 @@ pub(crate) fn certify_cut_parameter_order(cuts: &[(f64, f64)]) -> Option<()> {
     Some(())
 }
 
+
+/// Combined error certificate for one ordered pair over a pose cell whose
+/// visibility topology and exact sample correspondence have been established
+/// by the caller. The cut-order check verifies supplied cut envelopes; it does
+/// not prove that every geometric cut was enumerated or blocker labels stayed
+/// unchanged.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct BoundaryPoseCellError {
+    pub(crate) potential: f64,
+    pub(crate) source_force: f64,
+    pub(crate) receiver_force: f64,
+}
+
+/// Composition of the sample-cluster Taylor remainder and the pose-driven
+/// sample/weight-change envelope. Forces are center-translation derivatives
+/// only; pose-chain-rule terms and torque are not included.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct BoundaryPoseCellEvaluation {
+    pub(crate) evaluation: BoundaryPotentialEvaluation,
+    pub(crate) error: BoundaryPoseCellError,
+}
+
+/// Validate supplied visibility-cut ordering and compose all currently
+/// available scalar-potential and center-gradient error terms for one
+/// source-specific ordered pair.
+///
+/// The caller must additionally establish complete cut enumeration, stable
+/// blocker classification on every open interval, and one-to-one sample
+/// correspondence. Each sample displacement must include rigid transport,
+/// moving ray/edge intersections, and interval geometry. Each weight-change
+/// bound must include projected-extent and signed spectral-coefficient
+/// changes. Missing or invalid local certificates fail closed.
+///
+/// This is not a complete rigid-pose force/torque certificate.
+#[allow(dead_code)]
+pub(crate) fn certify_boundary_pose_cell(
+    expansion: &BoundaryKernelExpansion,
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: &[BoundarySampleMotionBound],
+) -> Option<BoundaryPoseCellEvaluation> {
+    certify_cut_parameter_order(ordered_visibility_cuts)?;
+    let evaluation = expansion.evaluate()?;
+    let geometry = expansion.bound_sample_geometry_change(sample_motion)?;
+    let error = BoundaryPoseCellError {
+        potential: evaluation.error.potential + geometry.potential,
+        source_force: evaluation.error.source_force + geometry.source_force,
+        receiver_force: evaluation.error.receiver_force + geometry.receiver_force,
+    };
+    [error.potential, error.source_force, error.receiver_force]
+        .iter()
+        .all(|bound| bound.is_finite())
+        .then_some(BoundaryPoseCellEvaluation { evaluation, error })
+}
+
 impl BoundaryKernelExpansion {
     /// Retain exact sample correspondence for this ordered pair. The
     /// expansion disk is centered at sample_center and contains every midpoint.
@@ -1043,6 +1097,67 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn pose_cell_certificate_composes_cluster_and_geometry_errors() {
+        let samples = vec![
+            sample(5.0, 1.0, 0.8),
+            sample(5.4, 1.3, -0.25),
+            sample(4.7, 1.8, 0.35),
+            sample(5.2, 2.1, -0.15),
+        ];
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 10.0, y: 0.5 },
+            BoundaryKernelVector { x: 5.075, y: 1.55 },
+            samples,
+        )
+        .expect("finite exact pair samples");
+        let motion = vec![
+            BoundarySampleMotionBound { position_displacement: 0.03, absolute_weight_change: 0.02 },
+            BoundarySampleMotionBound { position_displacement: 0.02, absolute_weight_change: 0.01 },
+            BoundarySampleMotionBound { position_displacement: 0.04, absolute_weight_change: 0.015 },
+            BoundarySampleMotionBound { position_displacement: 0.01, absolute_weight_change: 0.005 },
+        ];
+        let cluster = expansion.evaluate().unwrap();
+        let geometry = expansion.bound_sample_geometry_change(&motion).unwrap();
+        let certified = certify_boundary_pose_cell(
+            &expansion,
+            &[(0.2, 0.01), (0.6, 0.02)],
+            &motion,
+        )
+        .expect("stable supplied cut order and sample-motion envelope");
+        assert_eq!(certified.evaluation, cluster);
+        assert!((certified.error.potential - cluster.error.potential - geometry.potential).abs() < 1e-12);
+        assert!((certified.error.source_force - cluster.error.source_force - geometry.source_force).abs() < 1e-12);
+        assert!((certified.error.receiver_force - cluster.error.receiver_force - geometry.receiver_force).abs() < 1e-12);
+    }
+
+    #[test]
+    fn pose_cell_certificate_rejects_cut_or_sample_correspondence_transitions() {
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 10.0, y: 0.0 },
+            BoundaryKernelVector { x: 5.0, y: 1.0 },
+            vec![sample(5.0, 1.0, 1.0)],
+        )
+        .expect("valid sample input");
+        let motion = [BoundarySampleMotionBound {
+            position_displacement: 0.01,
+            absolute_weight_change: 0.01,
+        }];
+        assert!(certify_boundary_pose_cell(&expansion, &[(0.2, 0.1), (0.3, 0.1)], &motion).is_none());
+        assert!(certify_boundary_pose_cell(&expansion, &[(0.2, 0.01)], &[]).is_none());
+        assert!(certify_boundary_pose_cell(
+            &expansion,
+            &[(0.2, 0.01)],
+            &[BoundarySampleMotionBound {
+                position_displacement: 6.0,
+                absolute_weight_change: 0.0,
+            }],
+        ).is_none());
+    }
+
     fn zero_radius_cluster_is_exact_up_to_roundoff_guard() {
         let expansion = BoundaryKernelExpansion::new(
             BoundaryKernelVector { x: 0.0, y: 0.0 },
