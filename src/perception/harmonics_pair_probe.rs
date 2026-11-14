@@ -717,10 +717,7 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
                 2 => accumulated[body_index].torque,
                 _ => unreachable!(),
             };
-            let scale = expected_force
-                .abs()
-                .max(actual_force.abs())
-                .max(1.0e-7);
+            let scale = expected_force.abs().max(actual_force.abs()).max(1.0e-7);
             assert!(
                 (actual_force - expected_force).abs() <= 5.0e-2 * scale + 1.0e-7,
                 "complete-world gradient mismatch for body {body_index}, component {component}: pair sum={actual_force}, independent potential derivative={expected_force}"
@@ -728,7 +725,7 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
         }
     }
 
-    assert!(accumulated.iter().all(|force| {
-        force.x.is_finite() && force.y.is_finite() && force.torque.is_finite()
-    }));
+    assert!(accumulated
+        .iter()
+        .all(|force| { force.x.is_finite() && force.y.is_finite() && force.torque.is_finite() }));
 }
