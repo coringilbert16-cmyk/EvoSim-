@@ -304,6 +304,94 @@ fn world_potential(records: &[OrderedPairRecord]) -> f64 {
 }
 
 #[test]
+fn smooth_pose_sweep_records_boundary_and_extent_derivatives() {
+    let catalog = crate::resources::default_catalog();
+    let baseline_pose = [0.0; 12];
+    let baseline_bodies = probe_world(baseline_pose, &catalog);
+    let baseline = record_world_pairs(&baseline_bodies, &catalog, 0);
+    let base_pair = pair_record(&baseline, 0, 2);
+    assert!(!base_pair.samples.is_empty());
+
+    let step = 1.0e-4;
+    let mut midpoint_derivative = 0.0;
+    let mut normal_derivative = 0.0;
+    let mut extent_derivative = 0.0;
+    let mut boundary_derivative = 0.0;
+
+    // Perturb the source and receiver's x/y/rotation coordinates independently.
+    // The fixture is deliberately kept inside one visibility-topology region;
+    // endpoint creation/removal is handled by exact fallback, not derivatives.
+    for axis in [0, 1, 2, 6, 7, 8] {
+        let mut plus_pose = baseline_pose;
+        let mut minus_pose = baseline_pose;
+        plus_pose[axis] = step;
+        minus_pose[axis] = -step;
+        let plus_bodies = probe_world(plus_pose, &catalog);
+        let minus_bodies = probe_world(minus_pose, &catalog);
+        let plus_records = record_world_pairs(&plus_bodies, &catalog, 0);
+        let minus_records = record_world_pairs(&minus_bodies, &catalog, 0);
+        let plus = pair_record(&plus_records, 0, 2);
+        let minus = pair_record(&minus_records, 0, 2);
+
+        assert_eq!(
+            plus.samples.len(),
+            base_pair.samples.len(),
+            "positive perturbation changed visibility topology on axis {axis}"
+        );
+        assert_eq!(
+            minus.samples.len(),
+            base_pair.samples.len(),
+            "negative perturbation changed visibility topology on axis {axis}"
+        );
+
+        for ((base, positive), negative) in
+            base_pair.samples.iter().zip(&plus.samples).zip(&minus.samples)
+        {
+            assert_eq!(positive.boundary_geometry.first(), base.boundary_geometry.first());
+            assert_eq!(negative.boundary_geometry.first(), base.boundary_geometry.first());
+            assert_eq!(positive.boundary_geometry.len(), base.boundary_geometry.len());
+            assert_eq!(negative.boundary_geometry.len(), base.boundary_geometry.len());
+
+            midpoint_derivative += (positive.midpoint.0 - negative.midpoint.0).abs()
+                / (2.0 * step)
+                + (positive.midpoint.1 - negative.midpoint.1).abs() / (2.0 * step);
+            normal_derivative += (positive.normal.0 - negative.normal.0).abs()
+                / (2.0 * step)
+                + (positive.normal.1 - negative.normal.1).abs() / (2.0 * step);
+            extent_derivative +=
+                (positive.projected_extent - negative.projected_extent).abs() / (2.0 * step);
+            for ((positive_value, negative_value), _) in positive
+                .boundary_geometry
+                .iter()
+                .zip(&negative.boundary_geometry)
+                .zip(&base.boundary_geometry)
+            {
+                boundary_derivative += (positive_value - negative_value).abs() / (2.0 * step);
+            }
+        }
+    }
+
+    assert!(
+        midpoint_derivative.is_finite()
+            && normal_derivative.is_finite()
+            && extent_derivative.is_finite()
+            && boundary_derivative.is_finite()
+    );
+    assert!(
+        midpoint_derivative > 1.0e-8,
+        "source/receiver pose changes must move exact boundary sample locations"
+    );
+    assert!(
+        extent_derivative > 1.0e-8,
+        "source/receiver pose changes must change projected boundary extent"
+    );
+    assert!(
+        boundary_derivative > 1.0e-8,
+        "source/receiver pose changes must alter exact boundary interval geometry"
+    );
+}
+
+#[test]
 fn complete_world_pose_derivatives_match_refined_central_differences() {
     let catalog = crate::resources::default_catalog();
     // Each body contributes independent x/y/rotation coordinates in world order.
