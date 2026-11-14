@@ -476,3 +476,42 @@ source-side Taylor primitive remains a fixed-sample kernel experiment only.
 It must not be described as a mutual evaluator, report complete receiver
 forces, or feed the movement accumulator. The exact world evaluator remains
 authoritative and runtime integration remains blocked.
+
+
+## 12. Multi-pair receiver-sample correspondence probe — 2026-11-14
+
+A test-only probe now evaluates every ordered source/receiver pair in a
+four-body deterministic world. Two independent emitters target an asymmetric,
+two-part receiver while a third body acts as a possible occluder. For each
+ordered pair, the probe retains the exact production reception records:
+
+- receiver sample midpoint and outward normal;
+- the underlying straight interval endpoints and normal, or exact circular
+  arc center, radius, start angle, and sweep;
+- point-source projected extent;
+- incident frequency, amplitude, and phase components;
+- frequency-resolved directional pair-potential contributions.
+
+The probe repeats the complete ordered-pair evaluation after translating and
+rotating one source and rotating the receiver. It also compares the blocked
+world against the same world without the blocker. The test asserts that the
+two independent sources aimed at the same receiver retain different exact
+quadrature, and that pose changes and the third body affect the recorded
+geometry or potential.
+
+This is deliberately a differential observation test. It does not construct a
+shared quadrature, average samples, aggregate source spectra, estimate
+derivatives, or implement an approximation. It records twelve directed
+interactions for the four-body world, preserving empty results as meaningful
+fully occluded or non-contributing pair outcomes rather than fabricating
+samples.
+
+The implementation confirms that receiver identity alone is insufficient to
+identify a common quadrature: each ordered source/receiver pair must retain its
+own exact sample correspondence. The next mathematical task is therefore a
+conservative approximation of source-dependent boundary integration that
+preserves each pair's discrete correspondence, or a separately proven shared
+quadrature with a conservative error bound against these exact records.
+Potential, every participating body's force, and every body's torque still
+need independent bounds before any mutual evaluator or runtime force path is
+authorized.
