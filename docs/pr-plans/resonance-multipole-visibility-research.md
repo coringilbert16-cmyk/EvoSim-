@@ -862,4 +862,44 @@ blocker classification between adjacent cuts is unchanged. A complete
 visibility certificate must also bound every feature's motion, retain all
 candidate cuts, and prove the visibility state on each open interval. No
 approximate evaluator or live movement integration is authorized.
+## 20. Straight-interval projected-extent motion bound — 2026-11-14
 
+The exact point-source projected extent of a straight exposed interval now has
+a conservative change envelope under bounded source and endpoint motion. For
+edge vector e=b-a, length L, outward unit normal n, and source direction u(s)
+along the edge, the existing extent is
+
+`E = L integral_0^1 max(0, n dot u(s)) ds`.
+
+Given source displacement ds and endpoint displacements da and db, define
+
+`de = da + db`,
+`dx = ds + max(da,db)`,
+`L_min = L - de`,
+`d_min = distance(source, segment[a,b]) - dx`.
+
+The path rejects unless L_min and d_min are strictly positive. The edge-normal
+change is bounded by `min(2, 2 de/L_min)`. Every corresponding edge point
+moves by at most `max(da,db)`, so the source-direction change is bounded by
+`min(2, 2 dx/d_min)`. Since the positive-part dot product is Lipschitz in both
+unit vectors and lies in [0,1], the facing-factor change is bounded by the
+minimum of one and the sum of those two direction changes.
+
+Using `|L'-L| <= de`, the resulting extent-change bound is
+
+`|E'-E| <= de + L min(1, 2 de/L_min + 2 dx/d_min)`,
+
+plus an outward floating-point guard. A deterministic 256-pose test moves the
+source and both endpoints independently and verifies the exact projected
+extent remains inside the envelope. Edge collapse, source/edge collision,
+invalid normals, and non-finite inputs fail closed.
+
+### Scope
+
+This bounds only the geometric projected extent of one already-corresponding
+straight interval. It does not prove that interval endpoints remain
+corresponding, certify visibility or cut ordering, cover curved intervals, or
+bound the complete signed frequency-resolved sample weight. The latter also
+depends on the pose-dependent source/receiver spectra and local attenuation.
+It is one composable contribution to the future sample-weight envelope, not
+a complete evaluator certificate.
