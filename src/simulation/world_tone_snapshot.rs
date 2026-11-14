@@ -3124,30 +3124,60 @@ mod tests {
             .assign_missing_material_identities();
         let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
             .expect("multi-body chemistry snapshot should be valid");
-        let identity_a = snapshot.bodies[0].environmental_identity;
-        let identity_b = snapshot.bodies[1].environmental_identity;
+        let index_a = snapshot
+            .bodies
+            .iter()
+            .position(|body| {
+                body.placements.as_ref().is_some_and(|placements| {
+                    placements
+                        .first()
+                        .is_some_and(|placement| placement.x == 10.0 && placement.y == 10.0)
+                })
+            })
+            .expect("source material should be present in the snapshot");
+        let index_b = snapshot
+            .bodies
+            .iter()
+            .position(|body| {
+                body.placements.as_ref().is_some_and(|placements| {
+                    placements
+                        .first()
+                        .is_some_and(|placement| placement.x == 22.0 && placement.y == 10.0)
+                })
+            })
+            .expect("receiver material should be present in the snapshot");
+        let identity_a = snapshot.bodies[index_a].environmental_identity;
+        let identity_b = snapshot.bodies[index_b].environmental_identity;
         let indexed = snapshot
             .pair_force_contributions(identity_a, identity_b, &simulation.environment.catalog)
             .expect("hierarchy-filtered pair evaluation should succeed");
 
-        let all_occluders = snapshot
-            .bodies
+        let other_indices = (0..snapshot.bodies.len())
+            .filter(|index| *index != index_a && *index != index_b)
+            .collect::<Vec<_>>();
+        let all_occluders = other_indices
             .iter()
-            .enumerate()
-            .filter_map(|(index, body)| (index >= 2).then_some(body.clone()))
+            .map(|index| snapshot.bodies[*index].clone())
             .collect::<Vec<_>>();
         let reference = crate::harmonics::resonance_multi_body_forces_with_occluders(
-            &snapshot.bodies[0],
-            &snapshot.bodies[1],
+            &snapshot.bodies[index_a],
+            &snapshot.bodies[index_b],
             &all_occluders,
             &simulation.environment.catalog,
             snapshot.tick,
         )
         .expect("all-occluder reference evaluation should succeed");
         assert_eq!(reference.len(), snapshot.bodies.len());
+        let mut expected_by_body =
+            vec![crate::harmonics::ResonanceBodyForce::default(); snapshot.bodies.len()];
+        expected_by_body[index_a] = reference[0];
+        expected_by_body[index_b] = reference[1];
+        for (offset, body_index) in other_indices.into_iter().enumerate() {
+            expected_by_body[body_index] = reference[offset + 2];
+        }
 
         for contribution in &indexed {
-            let expected = reference[contribution.body_index];
+            let expected = expected_by_body[contribution.body_index];
             assert!(
                 (contribution.force.x - expected.x).abs() < 1.0e-10
                     && (contribution.force.y - expected.y).abs() < 1.0e-10
