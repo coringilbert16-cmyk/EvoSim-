@@ -708,11 +708,12 @@ fn add_circle_tangent_points_tagged(
     radius: f64,
     source: (f64, f64),
     body_index: usize,
+    unit_index: usize,
     critical_points: &mut Vec<(usize, usize, f64, f64)>,
 ) {
     let mut points = Vec::with_capacity(2);
     add_circle_tangent_points(center, radius, source, &mut points);
-    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, 0, x, y)));
+    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, unit_index, x, y)));
 }
 
 pub(crate) fn visible_polygonal_intervals(
@@ -885,6 +886,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         *radius,
                         source,
                         body_index,
+                        part.unit_index,
                         &mut critical_points,
                     );
                 }
@@ -925,6 +927,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                             world.radius,
                             source,
                             body_index,
+                            part.unit_index,
                             &mut critical_points,
                         );
                         straight_edges.push((
