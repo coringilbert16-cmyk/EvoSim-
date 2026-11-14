@@ -4298,6 +4298,46 @@ mod tests {
     }
 
     #[test]
+    fn receiver_boundary_samples_depend_on_individual_source_pose() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let source_level = make_material("Hydrogen", 0.0, 0.0);
+        let source_elevated = make_material("Hydrogen", 0.0, 10.0);
+
+        let level_samples =
+            material_aura_receptions(&source_level, &receiver, &catalog, 0)
+                .expect("level source should produce exact receiver samples");
+        let elevated_samples =
+            material_aura_receptions(&source_elevated, &receiver, &catalog, 0)
+                .expect("elevated source should produce exact receiver samples");
+
+        assert!(!level_samples.is_empty());
+        assert!(!elevated_samples.is_empty());
+        let same_correspondence = level_samples.len() == elevated_samples.len()
+            && level_samples.iter().zip(&elevated_samples).all(|(left, right)| {
+                (left.receiver_x - right.receiver_x).abs() <= 1e-12
+                    && (left.receiver_y - right.receiver_y).abs() <= 1e-12
+                    && (left.projected_extent - right.projected_extent).abs() <= 1e-12
+            });
+        assert!(
+            !same_correspondence,
+            "moving one source must not be assumed to preserve another source's receiver-boundary samples"
+        );
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
