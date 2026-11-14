@@ -198,9 +198,9 @@ impl ResonanceVisibilityHierarchy {
                 return None;
             }
             let bounds = *self.body_bounds.get(*index)?;
-            source_bounds = Some(source_bounds.map_or(bounds, |current: VisibilityBounds| {
-                current.union(bounds)
-            }));
+            source_bounds = Some(
+                source_bounds.map_or(bounds, |current: VisibilityBounds| current.union(bounds)),
+            );
         }
 
         let mut receiver_bounds = None;
@@ -209,16 +209,12 @@ impl ResonanceVisibilityHierarchy {
                 return None;
             }
             let bounds = *self.body_bounds.get(*index)?;
-            receiver_bounds = Some(receiver_bounds.map_or(bounds, |current: VisibilityBounds| {
-                current.union(bounds)
-            }));
+            receiver_bounds = Some(
+                receiver_bounds.map_or(bounds, |current: VisibilityBounds| current.union(bounds)),
+            );
         }
 
-        let candidates = self.query_between_bounds(
-            source_bounds?,
-            receiver_bounds?,
-            expansion,
-        )?;
+        let candidates = self.query_between_bounds(source_bounds?, receiver_bounds?, expansion)?;
         Some(candidates.iter().all(|index| participants.contains(index)))
     }
 
