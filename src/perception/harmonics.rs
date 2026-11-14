@@ -4373,6 +4373,109 @@ mod tests {
     }
 
     #[test]
+    fn occlusion_transition_probe_records_exact_quadrature_and_frequency_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let mut observations = Vec::new();
+
+        // Sweep a third body's center from the direct visibility path toward
+        // the silhouette and then fully clear of the receiver's exposure.
+        // Every observation comes from the exact production visibility and
+        // directional-potential paths; no sampled or approximated geometry is
+        // substituted by this probe.
+        for blocker_y in [0.0, 0.35, 0.7, 1.0, 5.0] {
+            let blocker = make_material("Nitrogen", 4.0, blocker_y);
+            let occluders = std::slice::from_ref(&blocker);
+            let samples = material_aura_receptions_with_occluders(
+                &source,
+                &receiver,
+                occluders,
+                &catalog,
+                0,
+            )
+            .expect("blocker pose should produce exact receiver samples");
+            let potential =
+                directional_resonance_pair_potential_components_with_occluders(
+                    &source,
+                    &receiver,
+                    occluders,
+                    &catalog,
+                    0,
+                )
+                .expect("blocker pose should produce frequency-resolved potential");
+
+            assert!(!samples.is_empty());
+            assert!(!potential.is_empty());
+            let sample_record: Vec<_> = samples
+                .iter()
+                .map(|sample| {
+                    (
+                        sample.receiver_x,
+                        sample.receiver_y,
+                        sample.receiver_normal_x,
+                        sample.receiver_normal_y,
+                        sample.projected_extent,
+                        sample.incident_spectrum.components.clone(),
+                    )
+                })
+                .collect();
+            let potential_record: Vec<_> = potential
+                .iter()
+                .map(|component| (component.frequency_cycles_per_day, component.energy))
+                .collect();
+            observations.push((blocker_y, sample_record, potential_record));
+        }
+
+        let centered = &observations[0];
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.1.len() != centered.1.len()
+                    || observation.1.iter().zip(&centered.1).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-12
+                            || (left.1 - right.1).abs() > 1e-12
+                            || (left.4 - right.4).abs() > 1e-12
+                    })
+            }),
+            "moving an occluder across the visibility boundary must change exact receiver quadrature"
+        );
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.2.len() != centered.2.len()
+                    || observation.2.iter().zip(&centered.2).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-9 || (left.1 - right.1).abs() > 1e-12
+                    })
+            }),
+            "occlusion transitions must be reflected in the frequency-resolved potential"
+        );
+
+        let clear = observations.last().expect("clear blocker pose should be recorded");
+        let unobstructed =
+            directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                .expect("unobstructed pair should produce a frequency-resolved potential");
+        assert_eq!(clear.2.len(), unobstructed.len());
+        for (blocked, unblocked) in clear.2.iter().zip(&unobstructed) {
+            assert!((blocked.0 - unblocked.frequency_cycles_per_day).abs() < 1e-9);
+            assert!(
+                (blocked.1 - unblocked.energy).abs() < 1e-9,
+                "a blocker outside the visibility path must preserve the unobstructed potential"
+            );
+        }
+    }
+
+    #[test]
     fn oscillator_phase_lag_tracks_below_at_and_above_resonance() {
         let natural = 440.0;
         let damping = 0.15;
