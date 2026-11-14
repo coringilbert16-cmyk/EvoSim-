@@ -1061,7 +1061,7 @@ impl LocalResonanceWorldSnapshot {
         // visibility path performs its own tighter filtering afterward.
         let bounds_a = self.visibility_bounds[index_a];
         let bounds_b = self.visibility_bounds[index_b];
-        let expansion = self.maximum_rotation_margin + 1.0e-4;
+        let expansion = 2.0 * self.maximum_rotation_margin + 1.0e-4;
         let envelope = crate::resonance_visibility::VisibilityBounds::new(
             bounds_a.min_x.min(bounds_b.min_x) - expansion,
             bounds_a.min_y.min(bounds_b.min_y) - expansion,
@@ -1092,22 +1092,24 @@ impl LocalResonanceWorldSnapshot {
             return None;
         }
 
-        let mut contributions = Vec::with_capacity(forces.len());
-        for (body_index, force) in [(index_a, forces[0]), (index_b, forces[1])] {
-            contributions.push(ResonanceWorldBodyForce {
-                body_index,
-                environmental_identity: self.bodies[body_index].environmental_identity,
-                force,
-            });
-        }
+        let mut force_by_index =
+            vec![crate::harmonics::ResonanceBodyForce::default(); self.bodies.len()];
+        force_by_index[index_a] = forces[0];
+        force_by_index[index_b] = forces[1];
         for (offset, body_index) in occluder_indices.into_iter().enumerate() {
-            contributions.push(ResonanceWorldBodyForce {
-                body_index,
-                environmental_identity: self.bodies[body_index].environmental_identity,
-                force: forces[offset + 2],
-            });
+            force_by_index[body_index] = forces[offset + 2];
         }
-        Some(contributions)
+        Some(
+            force_by_index
+                .into_iter()
+                .enumerate()
+                .map(|(body_index, force)| ResonanceWorldBodyForce {
+                    body_index,
+                    environmental_identity: self.bodies[body_index].environmental_identity,
+                    force,
+                })
+                .collect(),
+        )
     }
 
     /// Sum the exact force gradients for the complete environmental pair
