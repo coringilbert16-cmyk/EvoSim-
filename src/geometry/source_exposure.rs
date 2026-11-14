@@ -1005,21 +1005,43 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 &body_intervals,
                 &body_min_distances,
             )?;
-            let mut cuts = vec![0.0_f64, 1.0_f64];
+            let target_part = bodies[body_index]
+                .parts
+                .iter()
+                .find(|part| part.unit_index == unit_index)?;
+            let (target_sin, target_cos) = target_part.rotation_radians.sin_cos();
+            let local_target_point = |point: (f64, f64)| {
+                let dx = point.0 - target_part.x;
+                let dy = point.1 - target_part.y;
+                (dx * target_cos + dy * target_sin, -dx * target_sin + dy * target_cos)
+            };
+            let mut cuts = vec![
+                VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                    body_index, unit_index, vertex_index: edge_index,
+                    local_point: local_target_point(a),
+                }),
+                VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                    body_index, unit_index, vertex_index: (edge_index + 1) % vertices.len(),
+                    local_point: local_target_point(b),
+                }),
+            ];
             for &candidate_body in &candidate_body_indices {
                 for &(vx, vy) in &critical_points_by_body[candidate_body] {
                     let dx = vx - source.0;
                     let dy = vy - source.1;
                     let denominator = ex * dy - ey * dx;
-                    if denominator.abs() <= 1e-12 {
-                        continue;
-                    }
+                    if denominator.abs() <= 1e-12 { continue; }
                     let ax = a.0 - source.0;
                     let ay = a.1 - source.1;
                     let t = -(ax * dy - ay * dx) / denominator;
                     let u = -(ax * ey - ay * ex) / denominator;
                     if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
-                        cuts.push(t);
+                        // Critical-point construction currently has not yet
+                        // retained its constituent/feature identity. Preserve
+                        // the blocker body and explicitly fail closed.
+                        cuts.push(VisibilityCutRecord::new(t, VisibilityCutEvent::Unresolved {
+                            blocker_body_index: Some(candidate_body), blocker_unit_index: None,
+                        }));
                     }
                 }
             }
@@ -1028,9 +1050,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
             // contact chords. Collinear overlaps are split at both endpoints.
             for &block_body in &candidate_body_indices {
                 for &(block_unit, c, d) in &straight_edges_by_body[block_body] {
-                    if block_body == body_index && block_unit == unit_index {
-                        continue;
-                    }
+                    if block_body == body_index && block_unit == unit_index { continue; }
                     let sx = d.0 - c.0;
                     let sy = d.1 - c.1;
                     let qx = c.0 - a.0;
@@ -1039,11 +1059,13 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     if denominator.abs() <= 1e-12 {
                         if (qx * ey - qy * ex).abs() <= 1e-9 {
                             let length_squared = ex * ex + ey * ey;
-                            for point in [c, d] {
-                                let t =
-                                    ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
+                            for (point, blocker_parameter) in [(c, 0.0), (d, 1.0)] {
+                                let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / length_squared;
                                 if t > 1e-10 && t < 1.0 - 1e-10 {
-                                    cuts.push(t);
+                                    cuts.push(VisibilityCutRecord::new(t, VisibilityCutEvent::StraightBoundaryIntersection {
+                                        blocker_body_index: block_body, blocker_unit_index: block_unit,
+                                        target_parameter: t, blocker_parameter,
+                                    }));
                                 }
                             }
                         }
@@ -1052,47 +1074,42 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let t = (qx * sy - qy * sx) / denominator;
                     let u = (qx * ey - qy * ex) / denominator;
                     if t > 1e-10 && t < 1.0 - 1e-10 && (-1e-10..=1.0 + 1e-10).contains(&u) {
-                        cuts.push(t);
+                        cuts.push(VisibilityCutRecord::new(t, VisibilityCutEvent::StraightBoundaryIntersection {
+                            blocker_body_index: block_body, blocker_unit_index: block_unit,
+                            target_parameter: t, blocker_parameter: u,
+                        }));
                     }
                 }
             }
 
-            // Curved-boundary intersections with this straight target edge are
-            // exact cut points, not a reason to approximate the curve.
+            // Curved-boundary intersections retain the blocker constituent and
+            // arc parameter. The analytic arc Jacobian is still a separate
+            // certificate obligation, so these events remain unresolved later.
             for &block_body_index in &candidate_body_indices {
                 let block_body = bodies.get(block_body_index)?;
                 for blocker in &block_body.parts {
-                    if block_body_index == body_index && blocker.unit_index == unit_index {
-                        continue;
-                    }
+                    if block_body_index == body_index && blocker.unit_index == unit_index { continue; }
                     for arc in realized_circle_arcs(block_body_index, blocker)? {
                         let mut intersections = Vec::with_capacity(2);
-                        add_circle_segment_intersections(
-                            arc.center,
-                            arc.radius,
-                            a,
-                            b,
-                            &mut intersections,
-                        )?;
+                        add_circle_segment_intersections(arc.center, arc.radius, a, b, &mut intersections)?;
                         for point in intersections {
                             let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
-                            if !arc_has_angle(arc, angle) {
-                                continue;
-                            }
-                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
-                                / (edge_length * edge_length);
+                            if !arc_has_angle(arc, angle) { continue; }
+                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey) / (edge_length * edge_length);
                             if t > 1e-10 && t < 1.0 - 1e-10 {
-                                cuts.push(t);
+                                cuts.push(VisibilityCutRecord::new(t, VisibilityCutEvent::CircleStraightIntersection {
+                                    blocker_body_index: block_body_index, blocker_unit_index: blocker.unit_index,
+                                    target_parameter: t, arc_angle: angle,
+                                }));
                             }
                         }
                     }
                 }
             }
 
-            cuts.sort_by(f64::total_cmp);
-            cuts.dedup_by(|a, b| (*a - *b).abs() <= 1e-10);
+            let cuts = merge_visibility_cuts(cuts);
             for pair in cuts.windows(2) {
-                let (t0, t1) = (pair[0], pair[1]);
+                let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 {
                     continue;
                 }
