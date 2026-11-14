@@ -903,3 +903,47 @@ bound the complete signed frequency-resolved sample weight. The latter also
 depends on the pose-dependent source/receiver spectra and local attenuation.
 It is one composable contribution to the future sample-weight envelope, not
 a complete evaluator certificate.
+
+
+## 21. Composed ordered-pair pose-cell error certificate — 2026-11-14
+
+The boundary primitive now exposes a single composition point for the
+certificates established by the preceding milestones. For one exact
+source-specific ordered pair, `certify_boundary_pose_cell`:
+
+1. Rejects supplied visibility-cut envelopes unless their order remains
+   strictly separated and interior to the receiver edge.
+2. Evaluates the existing first-order sample-cluster expansion and retains its
+   independent potential, source-center-gradient, and receiver-center-gradient
+   Taylor remainders.
+3. Applies the per-sample motion/weight envelope to the exact discrete
+   potential and both fixed-sample center gradients.
+4. Adds the two independent error contributions componentwise, with no
+   cancellation between them.
+
+The returned error tuple is therefore
+
+`epsilon_total = epsilon_cluster + epsilon_sample_geometry`
+
+for potential, source translation gradient, and receiver translation gradient
+separately. Invalid cut order, missing sample correspondence, singular sample
+motion disks, non-finite bounds, and unresolved cut envelopes reject the
+certificate.
+
+### Explicit contract boundary
+
+This is a composition layer, not proof that the caller supplied a complete
+visibility description. The caller must still establish that every blocker
+feature and visibility cut was enumerated, blocker classification is stable on
+every open interval, and each sample has one-to-one correspondence throughout
+the pose cell. The sample displacement bounds must include rigid transport,
+ray/edge intersection motion, and interval geometry. Weight-change bounds must
+include projected extent and signed spectral-coefficient changes.
+
+The composed force bounds remain fixed-sample center-translation bounds. They
+do not include the chain-rule force from moving sample positions/weights with
+body pose, do not include torque, and do not cover curved-boundary endpoint
+certificates. A complete mutual evaluator must add those independently bounded
+pose derivatives for every affected body. Until then this API remains
+non-live; exact evaluation or subdivision remains mandatory whenever any
+precondition cannot be established.
