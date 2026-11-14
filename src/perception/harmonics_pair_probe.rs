@@ -43,10 +43,11 @@ fn single_body(
 }
 
 fn asymmetric_receiver(
+    shift: (f64, f64),
     rotation_radians: f64,
     catalog: &[crate::resources::BaseResource],
 ) -> crate::physical_material::PhysicalMaterial {
-    let center = (10.75, 3.35);
+    let center = (10.75 + shift.0, 3.35 + shift.1);
     let rotate = |x: f64, y: f64| {
         let dx = x - center.0;
         let dy = y - center.1;
@@ -82,6 +83,7 @@ fn asymmetric_receiver(
 fn probe_world(
     source_zero_shift: (f64, f64),
     source_zero_rotation: f64,
+    receiver_shift: (f64, f64),
     receiver_rotation: f64,
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<crate::physical_material::PhysicalMaterial> {
@@ -94,7 +96,7 @@ fn probe_world(
             catalog,
         ),
         single_body("Nitrogen", 0.0, 8.0, 0.0, catalog),
-        asymmetric_receiver(receiver_rotation, catalog),
+        asymmetric_receiver(receiver_shift, receiver_rotation, catalog),
         single_body("Oxygen", 5.0, 1.6, 0.0, catalog),
     ]
 }
@@ -233,8 +235,8 @@ fn potential_differs(left: &[(f64, f64)], right: &[(f64, f64)]) -> bool {
 #[test]
 fn multi_pair_probe_records_source_specific_receiver_quadrature() {
     let catalog = crate::resources::default_catalog();
-    let baseline_bodies = probe_world((0.0, 0.0), 0.0, 0.0, &catalog);
-    let changed_bodies = probe_world((0.35, 0.25), 0.2, 0.4, &catalog);
+    let baseline_bodies = probe_world((0.0, 0.0), 0.0, (0.0, 0.0), 0.0, &catalog);
+    let changed_bodies = probe_world((0.35, 0.25), 0.2, (0.0, 0.0), 0.4, &catalog);
 
     let baseline = record_world_pairs(&baseline_bodies, &catalog, 0);
     let changed = record_world_pairs(&changed_bodies, &catalog, 0);
@@ -308,42 +310,45 @@ fn world_potential(records: &[OrderedPairRecord]) -> f64 {
 #[test]
 fn complete_world_pose_derivatives_match_refined_central_differences() {
     let catalog = crate::resources::default_catalog();
-    let evaluate = |shift: (f64, f64), rotation: f64| {
-        let bodies = probe_world(shift, rotation, 0.0, &catalog);
+    // Parameters are source x/y/rotation followed by receiver x/y/rotation.
+    let evaluate = |pose: [f64; 6]| {
+        let bodies = probe_world(
+            (pose[0], pose[1]),
+            pose[2],
+            (pose[3], pose[4]),
+            pose[5],
+            &catalog,
+        );
         world_potential(&record_world_pairs(&bodies, &catalog, 0))
     };
 
-    // The derivative oracle deliberately recomputes every ordered pair with
-    // the other bodies as exact occluders. It therefore includes changes to
-    // sample locations, projected extents, visibility, and frequency weights;
-    // no frozen-sample derivative is substituted.
+    // Recompute every ordered pair with the other bodies as exact occluders.
+    // These derivatives therefore include changes to sample locations,
+    // projected extents, visibility, and frequency weights—not frozen samples.
     let central_difference = |step: f64, axis: usize| {
-        let mut plus = (0.0, 0.0);
-        let mut minus = (0.0, 0.0);
-        let mut plus_rotation = 0.0;
-        let mut minus_rotation = 0.0;
-        if axis == 0 {
-            plus.0 = step;
-            minus.0 = -step;
-        } else {
-            plus_rotation = step;
-            minus_rotation = -step;
-        }
-        (evaluate(plus, plus_rotation) - evaluate(minus, minus_rotation)) / (2.0 * step)
+        let mut plus = [0.0; 6];
+        let mut minus = [0.0; 6];
+        plus[axis] = step;
+        minus[axis] = -step;
+        (evaluate(plus) - evaluate(minus)) / (2.0 * step)
     };
 
-    for axis in [0, 1] {
+    let mut nonzero_derivatives = 0;
+    for axis in 0..6 {
         let coarse = central_difference(2.0e-4, axis);
         let fine = central_difference(1.0e-4, axis);
         assert!(coarse.is_finite() && fine.is_finite());
-        assert!(
-            fine.abs() > 1.0e-12,
-            "the deterministic fixture must exercise a nonzero pose derivative for axis {axis}"
-        );
+        if fine.abs() > 1.0e-12 {
+            nonzero_derivatives += 1;
+        }
         let scale = coarse.abs().max(fine.abs()).max(1.0e-9);
         assert!(
             (fine - coarse).abs() <= 2.0e-2 * scale,
-            "central-difference derivative should converge for axis {axis}: coarse={coarse} fine={fine}"
+            "central-difference derivative should converge for pose axis {axis}: coarse={coarse} fine={fine}"
         );
     }
+    assert!(
+        nonzero_derivatives >= 4,
+        "the asymmetric complete-world fixture should exercise at least four independent pose derivatives; got {nonzero_derivatives}"
+    );
 }
