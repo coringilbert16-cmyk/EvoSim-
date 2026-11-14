@@ -163,24 +163,24 @@ impl ResonanceVisibilityHierarchy {
         self.query(envelope)
     }
 
-    /// Certify that every source-to-receiver segment is unobstructed by all
-    /// nonparticipant bodies. Any AABB overlap is ambiguous and returns false;
-    /// callers must then subdivide or use exact visibility.
-    pub(crate) fn certify_unoccluded_between_bounds(
+    /// Certify that every segment between one source body and one receiver
+    /// body is clear of all third-party body bounds. Any AABB overlap is
+    /// ambiguous and returns false; callers must then use exact visibility.
+    pub(crate) fn certify_pair_unoccluded(
         &self,
-        source: VisibilityBounds,
-        receiver: VisibilityBounds,
+        source_index: usize,
+        receiver_index: usize,
         expansion: f64,
-        participants: &[usize],
     ) -> Option<bool> {
-        if participants
-            .iter()
-            .any(|index| *index >= self.body_bounds.len())
-        {
+        if source_index == receiver_index {
             return None;
         }
+        let source = *self.body_bounds.get(source_index)?;
+        let receiver = *self.body_bounds.get(receiver_index)?;
         let candidates = self.query_between_bounds(source, receiver, expansion)?;
-        Some(candidates.iter().all(|index| participants.contains(index)))
+        Some(candidates.iter().all(|index| {
+            *index == source_index || *index == receiver_index
+        }))
     }
 
     /// Return every indexed bound intersecting the query envelope. A false
@@ -289,19 +289,19 @@ mod tests {
             Some(vec![0, 1, 2])
         );
         assert_eq!(
-            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 1]),
+            hierarchy.certify_pair_unoccluded(0, 1, 0.0),
             Some(false),
             "a possible intervening body must force exact visibility"
         );
         assert_eq!(
-            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 1, 2]),
-            Some(true),
-            "explicitly included group members are not third-party occluders"
+            hierarchy.certify_pair_unoccluded(0, 3, 0.0),
+            Some(false),
+            "an overlapping source/receiver envelope remains ambiguous"
         );
         assert_eq!(
-            hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 99]),
+            hierarchy.certify_pair_unoccluded(0, 99, 0.0),
             None,
-            "invalid participant indices must fail closed"
+            "invalid pair indices must fail closed"
         );
         let invalid_source = VisibilityBounds {
             min_x: f64::NAN,
@@ -324,12 +324,9 @@ mod tests {
             VisibilityBounds::new(4.0, 1.01, 4.5, 1.5).unwrap(),
         ];
         let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
+        assert_eq!(hierarchy.certify_pair_unoccluded(0, 1, 0.0), Some(true));
         assert_eq!(
-            hierarchy.certify_unoccluded_between_bounds(bounds[0], bounds[1], 0.0, &[0, 1]),
-            Some(true)
-        );
-        assert_eq!(
-            hierarchy.certify_unoccluded_between_bounds(bounds[0], bounds[1], 0.02, &[0, 1]),
+            hierarchy.certify_pair_unoccluded(0, 1, 0.02),
             Some(false),
             "the expansion margin must include bodies reached by finite-difference perturbations"
         );
