@@ -728,4 +728,41 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
     assert!(accumulated
         .iter()
         .all(|force| { force.x.is_finite() && force.y.is_finite() && force.torque.is_finite() }));
+
+    // The complete scalar world potential is invariant under a common
+    // translation and rotation. Its summed per-body gradient must therefore
+    // conserve linear and angular momentum, including reactions on occluders.
+    let centers = [
+        (baseline_pose[0], baseline_pose[1]),
+        (baseline_pose[3], 8.0 + baseline_pose[4]),
+        (10.75 + baseline_pose[6], 3.35 + baseline_pose[7]),
+        (5.0 + baseline_pose[9], 1.6 + baseline_pose[10]),
+    ];
+    let net_force_x = accumulated.iter().map(|force| force.x).sum::<f64>();
+    let net_force_y = accumulated.iter().map(|force| force.y).sum::<f64>();
+    let force_scale = accumulated
+        .iter()
+        .map(|force| force.x.abs() + force.y.abs())
+        .sum::<f64>();
+    assert!(
+        net_force_x.abs() + net_force_y.abs() <= 5.0e-2 * force_scale + 1.0e-7,
+        "complete-world pair gradients must balance linear momentum: net=({net_force_x}, {net_force_y}), scale={force_scale}"
+    );
+
+    let net_angular_momentum = accumulated
+        .iter()
+        .zip(centers)
+        .map(|(force, (x, y))| x * force.y - y * force.x + force.torque)
+        .sum::<f64>();
+    let angular_scale = accumulated
+        .iter()
+        .zip(centers)
+        .map(|(force, (x, y))| {
+            (x * force.y).abs() + (y * force.x).abs() + force.torque.abs()
+        })
+        .sum::<f64>();
+    assert!(
+        net_angular_momentum.abs() <= 5.0e-2 * angular_scale + 1.0e-7,
+        "complete-world pair gradients must balance angular momentum: net={net_angular_momentum}, scale={angular_scale}"
+    );
 }
