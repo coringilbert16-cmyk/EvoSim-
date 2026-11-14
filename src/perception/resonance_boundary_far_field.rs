@@ -244,7 +244,6 @@ pub(crate) fn certify_cut_parameter_order(cuts: &[(f64, f64)]) -> Option<()> {
     Some(())
 }
 
-
 /// Combined error certificate for one ordered pair over a pose cell whose
 /// visibility topology and exact sample correspondence have been established
 /// by the caller. The cut-order check verifies supplied cut envelopes; it does
@@ -1097,8 +1096,6 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn pose_cell_certificate_composes_cluster_and_geometry_errors() {
         let samples = vec![
             sample(5.0, 1.0, 0.8),
@@ -1114,23 +1111,45 @@ mod tests {
         )
         .expect("finite exact pair samples");
         let motion = vec![
-            BoundarySampleMotionBound { position_displacement: 0.03, absolute_weight_change: 0.02 },
-            BoundarySampleMotionBound { position_displacement: 0.02, absolute_weight_change: 0.01 },
-            BoundarySampleMotionBound { position_displacement: 0.04, absolute_weight_change: 0.015 },
-            BoundarySampleMotionBound { position_displacement: 0.01, absolute_weight_change: 0.005 },
+            BoundarySampleMotionBound {
+                position_displacement: 0.03,
+                absolute_weight_change: 0.02,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.02,
+                absolute_weight_change: 0.01,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.04,
+                absolute_weight_change: 0.015,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.01,
+                absolute_weight_change: 0.005,
+            },
         ];
         let cluster = expansion.evaluate().unwrap();
         let geometry = expansion.bound_sample_geometry_change(&motion).unwrap();
-        let certified = certify_boundary_pose_cell(
-            &expansion,
-            &[(0.2, 0.01), (0.6, 0.02)],
-            &motion,
-        )
-        .expect("stable supplied cut order and sample-motion envelope");
+        let certified =
+            certify_boundary_pose_cell(&expansion, &[(0.2, 0.01), (0.6, 0.02)], &motion)
+                .expect("stable supplied cut order and sample-motion envelope");
         assert_eq!(certified.evaluation, cluster);
-        assert!((certified.error.potential - cluster.error.potential - geometry.potential).abs() < 1e-12);
-        assert!((certified.error.source_force - cluster.error.source_force - geometry.source_force).abs() < 1e-12);
-        assert!((certified.error.receiver_force - cluster.error.receiver_force - geometry.receiver_force).abs() < 1e-12);
+        assert!(
+            (certified.error.potential - cluster.error.potential - geometry.potential).abs()
+                < 1e-12
+        );
+        assert!(
+            (certified.error.source_force - cluster.error.source_force - geometry.source_force)
+                .abs()
+                < 1e-12
+        );
+        assert!(
+            (certified.error.receiver_force
+                - cluster.error.receiver_force
+                - geometry.receiver_force)
+                .abs()
+                < 1e-12
+        );
     }
 
     #[test]
@@ -1146,7 +1165,9 @@ mod tests {
             position_displacement: 0.01,
             absolute_weight_change: 0.01,
         }];
-        assert!(certify_boundary_pose_cell(&expansion, &[(0.2, 0.1), (0.3, 0.1)], &motion).is_none());
+        assert!(
+            certify_boundary_pose_cell(&expansion, &[(0.2, 0.1), (0.3, 0.1)], &motion).is_none()
+        );
         assert!(certify_boundary_pose_cell(&expansion, &[(0.2, 0.01)], &[]).is_none());
         assert!(certify_boundary_pose_cell(
             &expansion,
@@ -1155,7 +1176,8 @@ mod tests {
                 position_displacement: 6.0,
                 absolute_weight_change: 0.0,
             }],
-        ).is_none());
+        )
+        .is_none());
     }
 
     fn zero_radius_cluster_is_exact_up_to_roundoff_guard() {
