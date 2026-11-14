@@ -1248,3 +1248,72 @@ feature; line/line and circle/edge intersections need explicit feature pairs
 and derivative rules. Until each endpoint is either certified or explicitly
 unsupported, no pose derivative may be supplied to the approximate evaluator.
 
+## 28. Visibility-cut construction audit and event-identity contract — 2026-11-14
+
+The first implementation audit of the straight visibility partition confirms
+that endpoint provenance is currently lost in two distinct places:
+
+1. Critical features are flattened into `(body_index, world_x, world_y)`
+   tuples. Polygon and line feature identity (constituent and local feature
+   coordinate) is discarded before the target-edge partition is built.
+2. Each target edge accumulates scalar `t` values from source-ray/critical-
+   point cuts, straight-boundary intersections, and curved-boundary
+   intersections. Sorting and tolerance-based deduplication then discard which
+   event or events generated each cut.
+
+The provenance wrapper runs only after the exact intervals have been emitted.
+It can uniquely match an endpoint to a target vertex, but it cannot recover a
+blocker feature or distinguish a source-ray cut from a line/line or circle/edge
+intersection. This confirms that the next change belongs inside construction,
+not in the wrapper.
+
+### Required construction representation
+
+Replace the scalar cut list with a typed cut record containing:
+
+- the target-edge parameter;
+- one or more construction-event records;
+- the event's exact participating feature identities and local parameters
+  wherever the event is differentiable;
+- an explicit unsupported/unresolved marker for event classes whose
+  derivatives are not yet implemented.
+
+The initial edge endpoints are target-vertex events and must retain the
+target constituent identity and local vertex coordinate. A source ray through
+a rigid polygon/line feature must retain the blocker body, constituent, and
+local critical-point coordinate. Source-dependent circle tangencies must
+retain circle identity and tangent branch/side, not masquerade as rigid points.
+Straight/straight and circle/straight intersections must retain both feature
+identities and their two intersection parameters/arc angle when available.
+
+### Coincident-event policy
+
+Cut deduplication must not choose an arbitrary event when two events coincide.
+Merge their event sets deterministically. If the event set is incomplete,
+contradictory, or cannot be represented, mark the resulting endpoint
+unresolved. In particular, a target vertex coincident with an occluder cut, or
+two different blocker features producing the same cut, must not inherit one
+event's derivative by insertion order.
+
+The exact interval coordinates and exposure classification must remain
+unchanged by this refactor. Existing exact consumers continue to receive the
+same `ExposedBoundaryInterval` values. The provenance-aware path is additive.
+Tests must cover ordinary target vertices, rigid-feature ray cuts, duplicate
+ray cuts from distinct blockers, ray/intersection coincidence, and unresolved
+line/line and circle/edge events. The output must preserve every event or fail
+closed; no coordinate-nearest fallback is permitted.
+
+### Relation to the evaluator
+
+This is a geometry-provenance prerequisite, not a new approximation. Once
+event identity is retained, the existing rigid-point, source-dependent
+circle-tangent, ray/edge-intersection, and straight-interval Jacobians can be
+selected from construction data. Unsupported event classes still force exact
+evaluation or subdivision. No live movement or approximate force integration
+is authorized by this audit.
+
+Separately, the full-world exact force oracle is now green with independent
+finite-difference comparisons for every body's x/y force and torque, plus
+whole-world linear- and angular-momentum balance including occluder reactions.
+This validates the direct reference path; it does not validate a scalable
+approximation or relax any of the event-provenance requirements above.
