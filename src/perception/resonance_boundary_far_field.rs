@@ -143,7 +143,8 @@ impl BoundaryKernelExpansion {
             return None;
         }
 
-        let (source_value, source_gradient) = radial_kernel_value_gradient(source_delta, source_distance);
+        let (source_value, source_gradient) =
+            radial_kernel_value_gradient(source_delta, source_distance);
         let (receiver_value, receiver_gradient) =
             radial_kernel_value_gradient(receiver_delta, receiver_distance);
         let kernel = source_value * receiver_value;
@@ -169,8 +170,7 @@ impl BoundaryKernelExpansion {
             + 2.0 * source_gradient_bound * receiver_gradient_bound;
         let analytic_error =
             0.5 * self.absolute_weight * product_hessian_bound * self.radius * self.radius;
-        let roundoff_guard =
-            32.0 * f64::EPSILON * (potential.abs() + self.absolute_weight + 1.0);
+        let roundoff_guard = 32.0 * f64::EPSILON * (potential.abs() + self.absolute_weight + 1.0);
         let error = analytic_error + roundoff_guard;
         if !potential.is_finite() || !error.is_finite() {
             return None;
