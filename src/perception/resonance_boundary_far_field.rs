@@ -173,18 +173,18 @@ impl BoundaryKernelExpansion {
         let source_center_gradient = BoundaryKernelVector {
             x: -self.total_weight * source_gradient.x * receiver_value
                 - receiver_value * source_hessian_moment.x
-                - receiver_gradient.x * source_gradient_moment,
+                - source_gradient.x * receiver_gradient_moment,
             y: -self.total_weight * source_gradient.y * receiver_value
                 - receiver_value * source_hessian_moment.y
-                - receiver_gradient.y * source_gradient_moment,
+                - source_gradient.y * receiver_gradient_moment,
         };
         let receiver_center_gradient = BoundaryKernelVector {
             x: -self.total_weight * receiver_gradient.x * source_value
                 - source_value * receiver_hessian_moment.x
-                - source_gradient.x * receiver_gradient_moment,
+                - receiver_gradient.x * source_gradient_moment,
             y: -self.total_weight * receiver_gradient.y * source_value
                 - source_value * receiver_hessian_moment.y
-                - source_gradient.y * receiver_gradient_moment,
+                - receiver_gradient.y * source_gradient_moment,
         };
 
         // Bounds for the fixed-sample center-gradient remainders. For
