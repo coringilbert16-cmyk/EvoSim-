@@ -344,19 +344,32 @@ fn smooth_pose_sweep_records_boundary_and_extent_derivatives() {
             "negative perturbation changed visibility topology on axis {axis}"
         );
 
-        for ((base, positive), negative) in
-            base_pair.samples.iter().zip(&plus.samples).zip(&minus.samples)
+        for ((base, positive), negative) in base_pair
+            .samples
+            .iter()
+            .zip(&plus.samples)
+            .zip(&minus.samples)
         {
-            assert_eq!(positive.boundary_geometry.first(), base.boundary_geometry.first());
-            assert_eq!(negative.boundary_geometry.first(), base.boundary_geometry.first());
-            assert_eq!(positive.boundary_geometry.len(), base.boundary_geometry.len());
-            assert_eq!(negative.boundary_geometry.len(), base.boundary_geometry.len());
+            assert_eq!(
+                positive.boundary_geometry.first(),
+                base.boundary_geometry.first()
+            );
+            assert_eq!(
+                negative.boundary_geometry.first(),
+                base.boundary_geometry.first()
+            );
+            assert_eq!(
+                positive.boundary_geometry.len(),
+                base.boundary_geometry.len()
+            );
+            assert_eq!(
+                negative.boundary_geometry.len(),
+                base.boundary_geometry.len()
+            );
 
-            midpoint_derivative += (positive.midpoint.0 - negative.midpoint.0).abs()
-                / (2.0 * step)
+            midpoint_derivative += (positive.midpoint.0 - negative.midpoint.0).abs() / (2.0 * step)
                 + (positive.midpoint.1 - negative.midpoint.1).abs() / (2.0 * step);
-            normal_derivative += (positive.normal.0 - negative.normal.0).abs()
-                / (2.0 * step)
+            normal_derivative += (positive.normal.0 - negative.normal.0).abs() / (2.0 * step)
                 + (positive.normal.1 - negative.normal.1).abs() / (2.0 * step);
             extent_derivative +=
                 (positive.projected_extent - negative.projected_extent).abs() / (2.0 * step);
