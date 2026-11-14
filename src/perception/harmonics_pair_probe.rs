@@ -101,9 +101,9 @@ fn probe_world(
 
 fn boundary_geometry(boundary: MaterialAuraBoundary) -> Vec<f64> {
     match boundary {
-        MaterialAuraBoundary::Straight { start, end, normal } => vec![
-            0.0, start.0, start.1, end.0, end.1, normal.0, normal.1,
-        ],
+        MaterialAuraBoundary::Straight { start, end, normal } => {
+            vec![0.0, start.0, start.1, end.0, end.1, normal.0, normal.1]
+        }
         MaterialAuraBoundary::Arc(arc) => vec![
             1.0,
             arc.center_x,
@@ -135,19 +135,11 @@ fn record_world_pairs(
             let source = &bodies[source_index];
             let receiver = &bodies[receiver_index];
             let receptions = material_aura_receptions_with_occluders(
-                source,
-                receiver,
-                &occluders,
-                catalog,
-                tick,
+                source, receiver, &occluders, catalog, tick,
             )
             .expect("every valid ordered pair should produce an exact reception result");
             let potential = directional_resonance_pair_potential_components_with_occluders(
-                source,
-                receiver,
-                &occluders,
-                catalog,
-                tick,
+                source, receiver, &occluders, catalog, tick,
             )
             .expect("every valid ordered pair should produce an exact potential result");
 
