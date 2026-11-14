@@ -263,6 +263,97 @@ pub(crate) fn point_source_projected_extent_with_gradient(
         .then_some((extent, gradient))
 }
 
+/// Bound the change in straight-edge projected extent under certified
+/// source and endpoint displacement. The edge normal is assumed to remain the
+/// consistently oriented unit normal of the moving edge; edge collapse and a
+/// source/edge collision fail closed.
+#[allow(dead_code)]
+pub(crate) fn point_source_projected_extent_change_bound(
+    interval: ExposedBoundaryInterval,
+    source: (f64, f64),
+    source_displacement: f64,
+    start_displacement: f64,
+    end_displacement: f64,
+) -> Option<f64> {
+    let values = [
+        interval.start.0,
+        interval.start.1,
+        interval.end.0,
+        interval.end.1,
+        interval.outward_normal.0,
+        interval.outward_normal.1,
+        source.0,
+        source.1,
+        source_displacement,
+        start_displacement,
+        end_displacement,
+    ];
+    if values.iter().any(|value| !value.is_finite())
+        || source_displacement < 0.0
+        || start_displacement < 0.0
+        || end_displacement < 0.0
+    {
+        return None;
+    }
+
+    let edge = (
+        interval.end.0 - interval.start.0,
+        interval.end.1 - interval.start.1,
+    );
+    let length = edge.0.hypot(edge.1);
+    let normal_length = interval.outward_normal.0.hypot(interval.outward_normal.1);
+    if !length.is_finite()
+        || length <= f64::EPSILON
+        || (normal_length - 1.0).abs() > 1e-9
+        || (interval.outward_normal.0 * edge.0 + interval.outward_normal.1 * edge.1).abs()
+            > 1e-9 * length.max(1.0)
+    {
+        return None;
+    }
+
+    let edge_displacement = start_displacement + end_displacement;
+    let minimum_length = length - edge_displacement;
+    if !edge_displacement.is_finite()
+        || !minimum_length.is_finite()
+        || minimum_length <= f64::EPSILON
+    {
+        return None;
+    }
+
+    let source_offset = (source.0 - interval.start.0, source.1 - interval.start.1);
+    let parameter = ((source_offset.0 * edge.0 + source_offset.1 * edge.1)
+        / (length * length))
+        .clamp(0.0, 1.0);
+    let closest = (
+        interval.start.0 + parameter * edge.0,
+        interval.start.1 + parameter * edge.1,
+    );
+    let source_distance = (source.0 - closest.0).hypot(source.1 - closest.1);
+    let maximum_point_displacement =
+        source_displacement + start_displacement.max(end_displacement);
+    let minimum_distance = source_distance - maximum_point_displacement;
+    if !source_distance.is_finite()
+        || !maximum_point_displacement.is_finite()
+        || !minimum_distance.is_finite()
+        || minimum_distance <= f64::EPSILON
+    {
+        return None;
+    }
+
+    let normal_change = (2.0 * edge_displacement / minimum_length).min(2.0);
+    let direction_change =
+        (2.0 * maximum_point_displacement / minimum_distance).min(2.0);
+    let facing_change = (normal_change + direction_change).min(1.0);
+
+    // E = L * integral_0^1 max(0, n dot direction(s)) ds. The facing
+    // integrand is in [0,1] and is Lipschitz in both unit vectors.
+    let extent_change = edge_displacement + length * facing_change;
+    let roundoff_guard =
+        64.0 * f64::EPSILON * (extent_change + length + source_distance + 1.0);
+    let result = extent_change + roundoff_guard;
+    result.is_finite().then_some(result)
+}
+
 fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
     if vertices.len() < 3 {
         return false;
