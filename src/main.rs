@@ -42,6 +42,8 @@ mod world_tone_snapshot;
 mod capillary_geometry;
 #[path = "geometry/cavity.rs"]
 mod cavity;
+// Geometry foundation is intentionally staged ahead of its movement-loop integration.
+#[allow(dead_code)]
 #[path = "geometry/connection_faces.rs"]
 mod connection_faces;
 #[path = "geometry/connection_geometry.rs"]
@@ -64,12 +66,16 @@ mod initial_organism_constructor;
 mod interior_geometry;
 #[path = "organism/juvenile.rs"]
 mod juvenile;
+#[path = "geometry/material_contact.rs"]
+mod material_contact;
 #[path = "geometry/molecular_layout.rs"]
 mod molecular_layout;
 #[path = "geometry/organism_geometry.rs"]
 mod organism_geometry;
 #[path = "organism/viability.rs"]
 mod organism_viability;
+#[path = "geometry/physical_body_geometry.rs"]
+mod physical_body_geometry;
 #[path = "geometry/physical_geometry.rs"]
 mod physical_geometry;
 #[path = "geometry/rigid_boundary.rs"]
@@ -135,6 +141,15 @@ mod observation;
 mod recycling;
 #[path = "organism/reproduction.rs"]
 mod reproduction;
+#[allow(dead_code)] // Potential-only boundary expansion; force/torque bounds remain pending.
+#[path = "perception/resonance_boundary_far_field.rs"]
+mod resonance_boundary_far_field;
+#[allow(dead_code)] // Mathematical primitive is validated before live evaluator integration.
+#[path = "perception/resonance_far_field.rs"]
+mod resonance_far_field;
+#[path = "perception/resonance_visibility.rs"]
+#[allow(dead_code)]
+mod resonance_visibility;
 #[path = "organism/structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;

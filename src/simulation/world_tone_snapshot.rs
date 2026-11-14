@@ -768,17 +768,205 @@ type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Optio
 /// candidates. Build the physical world inventory once, then query each bond
 /// against the same emitters and occluders.
 pub(crate) struct LocalResonanceWorldSnapshot {
+    tick: u64,
     bodies: Vec<PhysicalMaterial>,
     resonant_indices: Vec<usize>,
     resonant_index_set: HashSet<usize>,
     receiver_indices: HashMap<u64, Option<usize>>,
     emitters: Vec<crate::harmonics::MaterialResonanceEmitter>,
+    visibility_bounds: Vec<crate::resonance_visibility::VisibilityBounds>,
+    visibility_hierarchy: crate::resonance_visibility::ResonanceVisibilityHierarchy,
+    maximum_rotation_margin: f64,
+}
+
+/// One body contribution to a candidate pair's complete occlusion-aware force.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonanceWorldBodyForce {
+    /// Stable index in the immutable tick-local world snapshot.
+    pub(crate) body_index: usize,
+    pub(crate) environmental_identity: u64,
+    pub(crate) force: crate::harmonics::ResonanceBodyForce,
+}
+
+/// A validated, immutable proposal for advancing one world body. The caller
+/// still owns collision checks, energy settlement, and the eventual atomic commit.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Consumed by the live movement/energy transaction being integrated.
+pub(crate) struct ResonanceWorldBodyMotion {
+    pub(crate) body_index: usize,
+    pub(crate) environmental_identity: u64,
+    pub(crate) before: PhysicalMaterial,
+    pub(crate) after: PhysicalMaterial,
+    pub(crate) kinetic_energy_before: f64,
+    pub(crate) kinetic_energy_after: f64,
+}
+
+/// Tick-local net force/torque by stable physical-body identity. Pair gradients
+/// are accumulated before any body is advanced, so a body participating in
+/// several interactions receives their vector sum exactly once.
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)] // Consumed by the forthcoming runtime force-integration stage.
+pub(crate) struct ResonanceForceAccumulator {
+    bodies: std::collections::BTreeMap<usize, (u64, crate::harmonics::ResonanceBodyForce)>,
+}
+
+#[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
+impl ResonanceForceAccumulator {
+    /// Add one environmental body's contribution. Reject identity changes,
+    /// non-finite gradients, and overflow without partially modifying the sum.
+    pub(crate) fn add(&mut self, contribution: ResonanceWorldBodyForce) -> bool {
+        let body_index = contribution.body_index;
+        let identity = contribution.environmental_identity;
+        let force = contribution.force;
+        if !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
+            return false;
+        }
+        let (existing_identity, current) = self
+            .bodies
+            .get(&body_index)
+            .copied()
+            .unwrap_or((identity, crate::harmonics::ResonanceBodyForce::default()));
+        if existing_identity != identity {
+            return false;
+        }
+        let next = crate::harmonics::ResonanceBodyForce {
+            x: current.x + force.x,
+            y: current.y + force.y,
+            torque: current.torque + force.torque,
+        };
+        if !next.x.is_finite() || !next.y.is_finite() || !next.torque.is_finite() {
+            return false;
+        }
+        self.bodies.insert(body_index, (identity, next));
+        true
+    }
+
+    /// Apply a complete pair gradient atomically: either every participant's
+    /// force/torque is accumulated, or the accumulator remains unchanged.
+    pub(crate) fn add_pair(
+        &mut self,
+        snapshot: &LocalResonanceWorldSnapshot,
+        identity_a: u64,
+        identity_b: u64,
+        catalog: &[BaseResource],
+    ) -> bool {
+        let Some(contributions) =
+            snapshot.pair_force_contributions(identity_a, identity_b, catalog)
+        else {
+            return false;
+        };
+        let mut staged = self.clone();
+        if !contributions
+            .into_iter()
+            .all(|contribution| staged.add(contribution))
+        {
+            return false;
+        }
+        *self = staged;
+        true
+    }
+
+    /// Stage every accumulated body's Newtonian pose and momentum together.
+    /// Environmental identities are revalidated against the immutable snapshot;
+    /// any invalid body or proposal rejects the entire batch without mutation.
+    pub(crate) fn stage_motion(
+        &self,
+        snapshot: &LocalResonanceWorldSnapshot,
+        delta_time: f64,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Vec<ResonanceWorldBodyMotion>> {
+        if !delta_time.is_finite() || delta_time < 0.0 {
+            return None;
+        }
+        let mut staged = Vec::with_capacity(self.bodies.len());
+        for (body_index, (identity, force)) in &self.bodies {
+            let before = snapshot.bodies.get(*body_index)?;
+            if before.environmental_identity != *identity {
+                return None;
+            }
+            let properties = before.mass_properties(catalog, vertical_period)?;
+            let motion = before.inertial_motion;
+            let kinetic_energy_before = 0.5
+                * properties.mass
+                * (motion.velocity_x * motion.velocity_x + motion.velocity_y * motion.velocity_y)
+                + 0.5
+                    * properties.moment_of_inertia
+                    * motion.angular_velocity
+                    * motion.angular_velocity;
+            let after = before.advanced_under_force(
+                force.x,
+                force.y,
+                force.torque,
+                delta_time,
+                catalog,
+                vertical_period,
+            )?;
+            let next_properties = after.mass_properties(catalog, vertical_period)?;
+            let next_motion = after.inertial_motion;
+            let kinetic_energy_after = 0.5
+                * next_properties.mass
+                * (next_motion.velocity_x * next_motion.velocity_x
+                    + next_motion.velocity_y * next_motion.velocity_y)
+                + 0.5
+                    * next_properties.moment_of_inertia
+                    * next_motion.angular_velocity
+                    * next_motion.angular_velocity;
+            if !kinetic_energy_before.is_finite()
+                || !kinetic_energy_after.is_finite()
+                || kinetic_energy_before < 0.0
+                || kinetic_energy_after < 0.0
+            {
+                return None;
+            }
+            staged.push(ResonanceWorldBodyMotion {
+                body_index: *body_index,
+                environmental_identity: *identity,
+                before: before.clone(),
+                after,
+                kinetic_energy_before,
+                kinetic_energy_after,
+            });
+        }
+        Some(staged)
+    }
+
+    pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
+        self.bodies
+            .into_iter()
+            .map(
+                |(body_index, (environmental_identity, force))| ResonanceWorldBodyForce {
+                    body_index,
+                    environmental_identity,
+                    force,
+                },
+            )
+            .collect()
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.bodies.len()
+    }
 }
 
 impl LocalResonanceWorldSnapshot {
+    /// Build the chemistry-only physical world from free environmental atoms
+    /// and molecules. Organisms, construction, storage, transformations, and
+    /// decomposing structures are deliberately outside this snapshot: they are
+    /// isolated and must not act as emitters, receivers, or occluders here.
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
-        let (bodies, resonant_indices, _) =
-            world_physical_materials_for_pair_potential(simulation)?;
+        let bodies = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter().cloned())
+            .collect::<Vec<_>>();
+        if bodies.is_empty() {
+            return None;
+        }
+        let resonant_indices = (0..bodies.len()).collect::<Vec<_>>();
         let emitters = crate::harmonics::material_resonance_emitters_at_tick(
             &bodies,
             &resonant_indices,
@@ -803,14 +991,147 @@ impl LocalResonanceWorldSnapshot {
                 }
             }
         }
+        let visibility_bounds = bodies
+            .iter()
+            .map(|body| {
+                let geometry =
+                    crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                        body,
+                        &simulation.environment.catalog,
+                    )?;
+                crate::resonance_visibility::VisibilityBounds::new(
+                    geometry.min_x,
+                    geometry.min_y,
+                    geometry.max_x,
+                    geometry.max_y,
+                )
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let maximum_rotation_margin = visibility_bounds
+            .iter()
+            .map(|bounds| (bounds.max_x - bounds.min_x).hypot(bounds.max_y - bounds.min_y) * 1.0e-4)
+            .fold(0.0, f64::max);
+        if !maximum_rotation_margin.is_finite() {
+            return None;
+        }
+        let visibility_hierarchy =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&visibility_bounds)?;
         let resonant_index_set = resonant_indices.iter().copied().collect();
         Some(Self {
+            tick: simulation.tick,
             bodies,
             resonant_indices,
             resonant_index_set,
             receiver_indices,
             emitters,
+            visibility_bounds,
+            visibility_hierarchy,
+            maximum_rotation_margin,
         })
+    }
+
+    /// Derive the complete force contribution for one environmental material
+    /// pair. Every other free environmental material remains an occluder and
+    /// receives its own gradient contribution. No organism bodies are present.
+    pub(crate) fn pair_force_contributions(
+        &self,
+        identity_a: u64,
+        identity_b: u64,
+        catalog: &[BaseResource],
+    ) -> Option<Vec<ResonanceWorldBodyForce>> {
+        if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
+            return None;
+        }
+        let index_a = self.receiver_indices.get(&identity_a).copied().flatten()?;
+        let index_b = self.receiver_indices.get(&identity_b).copied().flatten()?;
+        if index_a == index_b
+            || !self.resonant_index_set.contains(&index_a)
+            || !self.resonant_index_set.contains(&index_b)
+        {
+            return None;
+        }
+
+        // The union of the participant AABBs contains every straight
+        // source-to-receiver ray. Expand it by the maximum finite-difference
+        // translation/rotation displacement of any body before querying the
+        // tick-local BVH. This is deliberately conservative; the exact
+        // visibility path performs its own tighter filtering afterward.
+        let bounds_a = self.visibility_bounds[index_a];
+        let bounds_b = self.visibility_bounds[index_b];
+        let expansion = 2.0 * self.maximum_rotation_margin + 1.0e-4;
+        let occluder_indices = self
+            .visibility_hierarchy
+            .query_between_bounds(bounds_a, bounds_b, expansion)?
+            .into_iter()
+            .filter(|index| *index != index_a && *index != index_b)
+            .collect::<Vec<_>>();
+        let occluders = occluder_indices
+            .iter()
+            .map(|index| self.bodies[*index].clone())
+            .collect::<Vec<_>>();
+        let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
+            &self.bodies[index_a],
+            &self.bodies[index_b],
+            &occluders,
+            &self.emitters,
+            index_a,
+            index_b,
+            catalog,
+            self.tick,
+        )?;
+        if forces.len() != occluder_indices.len() + 2 {
+            return None;
+        }
+
+        let mut force_by_index =
+            vec![crate::harmonics::ResonanceBodyForce::default(); self.bodies.len()];
+        force_by_index[index_a] = forces[0];
+        force_by_index[index_b] = forces[1];
+        for (offset, body_index) in occluder_indices.into_iter().enumerate() {
+            force_by_index[body_index] = forces[offset + 2];
+        }
+        Some(
+            force_by_index
+                .into_iter()
+                .enumerate()
+                .map(|(body_index, force)| ResonanceWorldBodyForce {
+                    body_index,
+                    environmental_identity: self.bodies[body_index].environmental_identity,
+                    force,
+                })
+                .collect(),
+        )
+    }
+
+    /// Sum the exact force gradients for the complete environmental pair
+    /// potential. Every unordered pair contributes once; all other bodies are
+    /// occluders and receive that pair's gradient contribution. This is a
+    /// small-world correctness oracle only: the nested pair traversal plus
+    /// per-pair multi-body finite differences is not suitable for live ticks.
+    #[allow(dead_code)] // Used by conservation tests until a scalable evaluator is proven.
+    pub(crate) fn accumulate_complete_pair_forces(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Option<(usize, ResonanceForceAccumulator)> {
+        let mut accumulator = ResonanceForceAccumulator::default();
+        let mut pair_count = 0usize;
+        for index_a in 0..self.bodies.len() {
+            for index_b in index_a + 1..self.bodies.len() {
+                let identity_a = self.bodies[index_a].environmental_identity;
+                let identity_b = self.bodies[index_b].environmental_identity;
+                let contributions =
+                    self.pair_force_contributions(identity_a, identity_b, catalog)?;
+                if contributions.len() != self.bodies.len()
+                    || !contributions
+                        .into_iter()
+                        .all(|contribution| accumulator.add(contribution))
+                {
+                    return None;
+                }
+                pair_count = pair_count.checked_add(1)?;
+            }
+        }
+        Some((pair_count, accumulator))
     }
 
     /// Return the mean endpoint spectral match to a reaction's natural
@@ -1005,9 +1326,10 @@ fn physical_material_from_structure(
     }
     Some(PhysicalMaterial {
         material,
+        inertial_motion: crate::physical_material::InertialMotion::default(),
         environmental_identity: 0,
         placements: Some(placements),
-        internal_connections: None,
+        internal_connections: Some(Vec::new()),
         owner_relative_origin: None,
         realized_shapes: Some(realized_shapes),
     })
@@ -1195,6 +1517,8 @@ pub(crate) struct WorldPairPotentialGradient {
     pub(crate) components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// One (Fx, Fy) per physical body in the oracle's stable body ordering.
     pub(crate) body_forces: Vec<(f64, f64)>,
+    /// One center-of-mass torque per physical body in the same stable ordering.
+    pub(crate) body_torques: Vec<f64>,
     /// Owner organism index for attached/escrowed bodies; sum every partial
     /// force with the same owner index before moving that organism. None means
     /// the body moves independently. This mapping is stable with body_forces.
@@ -1238,6 +1562,7 @@ fn world_pair_potential_gradient_for_bodies(
     }
 
     let mut body_forces = vec![(0.0, 0.0); bodies.len()];
+    let mut body_torques = vec![0.0; bodies.len()];
     for body_index in 0..bodies.len() {
         let mut translated = bodies.to_vec();
         translated[body_index] =
@@ -1294,11 +1619,47 @@ fn world_pair_potential_gradient_for_bodies(
             return None;
         }
         body_forces[body_index] = (force_x, force_y);
+
+        let rotated_plus = crate::harmonics::rotated_physical_material(
+            &bodies[body_index],
+            DIFFERENCE_STEP,
+            catalog,
+        )?;
+        translated[body_index] = rotated_plus;
+        let plus_rotation = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+        translated[body_index] = crate::harmonics::rotated_physical_material(
+            &bodies[body_index],
+            -DIFFERENCE_STEP,
+            catalog,
+        )?;
+        let minus_rotation = world_pair_potential_components_for_bodies(
+            &translated,
+            resonant_indices,
+            catalog,
+            tick,
+        )?
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+        let torque = -(plus_rotation - minus_rotation) / (2.0 * DIFFERENCE_STEP);
+        if !torque.is_finite() {
+            return None;
+        }
+        body_torques[body_index] = torque;
     }
 
     Some(WorldPairPotentialGradient {
         components,
         body_forces,
+        body_torques,
         body_force_owners: force_owners.to_vec(),
     })
 }
@@ -1310,6 +1671,39 @@ mod tests {
     use crate::resources::Material;
     use crate::state::{Position, Simulation};
     use crate::structure::{OrganismStructure, StructuralUnit};
+
+    #[test]
+    fn resonance_force_accumulator_sums_each_body_and_rejects_invalid_updates_atomically() {
+        let mut accumulator = ResonanceForceAccumulator::default();
+        let contribution = |body_index, identity, x, y, torque| ResonanceWorldBodyForce {
+            body_index,
+            environmental_identity: identity,
+            force: crate::harmonics::ResonanceBodyForce { x, y, torque },
+        };
+        assert!(accumulator.add(contribution(11, 11, 2.0, -1.0, 0.5)));
+        assert!(accumulator.add(contribution(11, 11, -0.5, 3.0, 1.5)));
+        assert!(accumulator.add(contribution(12, 12, 1.0, 0.0, -2.0)));
+        assert_eq!(accumulator.len(), 2);
+
+        let before = accumulator.clone().into_body_forces();
+        assert!(!accumulator.add(contribution(11, 99, 9.0, 9.0, 9.0)));
+        assert!(!accumulator.add(contribution(11, 11, f64::NAN, 0.0, 0.0)));
+        assert_eq!(accumulator.clone().into_body_forces(), before);
+
+        let forces = accumulator.into_body_forces();
+        assert_eq!(forces.len(), 2);
+        assert_eq!(forces[0].body_index, 11);
+        assert_eq!(forces[0].environmental_identity, 11);
+        assert_eq!(
+            forces[0].force,
+            crate::harmonics::ResonanceBodyForce {
+                x: 1.5,
+                y: 2.0,
+                torque: 2.0,
+            }
+        );
+        assert_eq!(forces[1].environmental_identity, 12);
+    }
 
     fn sample() -> WorldToneSample {
         WorldToneSample {
@@ -1349,6 +1743,193 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
+    }
+
+    #[test]
+    fn complete_environmental_pair_force_sum_is_balanced_and_counts_each_pair_once() {
+        let mut simulation = Simulation::new(127, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x, y) in [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 14.0, 11.0),
+            ("Oxygen", 12.0, 16.0),
+        ] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("three-body chemistry snapshot should be valid");
+
+        let (pair_count, accumulator) = snapshot
+            .accumulate_complete_pair_forces(&simulation.environment.catalog)
+            .expect("all unordered environmental pairs should produce finite gradients");
+        assert_eq!(
+            pair_count, 3,
+            "three bodies have exactly three unordered pairs"
+        );
+        let forces = accumulator.into_body_forces();
+        assert_eq!(
+            forces.len(),
+            3,
+            "every body receives its accumulated force once"
+        );
+
+        let mut net_force_x = 0.0;
+        let mut net_force_y = 0.0;
+        let mut net_torque_about_origin = 0.0;
+        for body_force in &forces {
+            let body = &snapshot.bodies[body_force.body_index];
+            let properties = body
+                .mass_properties(&simulation.environment.catalog, None)
+                .expect("body mass properties should be valid");
+            net_force_x += body_force.force.x;
+            net_force_y += body_force.force.y;
+            net_torque_about_origin += body_force.force.torque
+                + properties.center_x * body_force.force.y
+                - properties.center_y * body_force.force.x;
+        }
+        assert!(
+            net_force_x.abs() < 1.0e-4 && net_force_y.abs() < 1.0e-4,
+            "complete pair traversal must conserve total linear force: ({net_force_x}, {net_force_y})"
+        );
+        assert!(
+            net_torque_about_origin.abs() < 1.0e-3,
+            "complete pair traversal must conserve total angular force: {net_torque_about_origin}"
+        );
+    }
+
+    #[test]
+    fn chemistry_force_snapshot_contains_only_free_environmental_materials() {
+        let mut simulation = Simulation::new(113, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x) in [("Carbon", 10.0), ("Hydrogen", 14.0), ("Oxygen", 12.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                10.0,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let identities = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| material.environmental_identity)
+            .collect::<Vec<_>>();
+        assert_eq!(identities.len(), 3);
+        assert!(identities.iter().all(|identity| *identity != 0));
+
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("free environmental chemistry snapshot should be valid");
+        assert_eq!(
+            snapshot.bodies.len(),
+            identities.len(),
+            "organisms and all organism-associated material must remain outside the chemistry snapshot"
+        );
+        assert_eq!(snapshot.resonant_indices, vec![0, 1, 2]);
+        assert!(snapshot
+            .bodies
+            .iter()
+            .all(|body| identities.contains(&body.environmental_identity)));
+
+        let contributions = snapshot
+            .pair_force_contributions(
+                identities[0],
+                identities[1],
+                &simulation.environment.catalog,
+            )
+            .expect("identified environmental pair should produce a complete multi-body force");
+        assert_eq!(contributions.len(), snapshot.bodies.len());
+        assert!(contributions.iter().all(|contribution| {
+            contribution.body_index < snapshot.bodies.len()
+                && identities.contains(&contribution.environmental_identity)
+                && contribution.force.x.is_finite()
+                && contribution.force.y.is_finite()
+                && contribution.force.torque.is_finite()
+        }));
+
+        let direct = crate::harmonics::resonance_multi_body_forces_with_occluders(
+            &snapshot.bodies[0],
+            &snapshot.bodies[1],
+            &[snapshot.bodies[2].clone()],
+            &simulation.environment.catalog,
+            snapshot.tick,
+        )
+        .expect("uncached pair evaluator should provide the reference force");
+        assert_eq!(direct.len(), contributions.len());
+        for contribution in &contributions {
+            let reference = direct[contribution.body_index];
+            assert!(
+                (contribution.force.x - reference.x).abs() < 1.0e-10
+                    && (contribution.force.y - reference.y).abs() < 1.0e-10
+                    && (contribution.force.torque - reference.torque).abs() < 1.0e-10,
+                "prepared emitter forces must exactly match the uncached reference"
+            );
+        }
+
+        let total_force = contributions.iter().fold((0.0, 0.0), |sum, contribution| {
+            (sum.0 + contribution.force.x, sum.1 + contribution.force.y)
+        });
+        assert!(total_force.0.abs() < 1e-5);
+        assert!(total_force.1.abs() < 1e-5);
+
+        let mut accumulator = ResonanceForceAccumulator::default();
+        for contribution in contributions {
+            assert!(accumulator.add(contribution));
+        }
+        let staged_motion = accumulator
+            .stage_motion(
+                &snapshot,
+                0.25,
+                &simulation.environment.catalog,
+                Some(simulation.environment.height),
+            )
+            .expect("all environmental body proposals should stage atomically");
+        assert_eq!(staged_motion.len(), snapshot.bodies.len());
+        assert!(staged_motion.iter().all(|motion| {
+            motion.before.environmental_identity == motion.environmental_identity
+                && motion.after.environmental_identity == motion.environmental_identity
+                && motion.kinetic_energy_before.is_finite()
+                && motion.kinetic_energy_after.is_finite()
+                && motion.kinetic_energy_before >= 0.0
+                && motion.kinetic_energy_after >= 0.0
+        }));
     }
 
     #[test]
@@ -1554,6 +2135,75 @@ mod tests {
     }
 
     #[test]
+    fn world_gradient_oracle_includes_asymmetric_body_torque() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("test material should realize")
+        };
+        let asymmetric = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 3.8,
+                    y: -0.45,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 4.7,
+                    y: 0.95,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("asymmetric occluder should realize");
+        let bodies = vec![
+            make_material("Carbon", 0.0, 0.0),
+            make_material("Carbon", 8.0, 0.0),
+            asymmetric,
+        ];
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &bodies,
+            &[0, 1],
+            &[None, None, None],
+            &catalog,
+            0,
+        )
+        .expect("world gradient should include finite rotational derivatives");
+        assert_eq!(gradient.body_forces.len(), bodies.len());
+        assert_eq!(gradient.body_torques.len(), bodies.len());
+        assert!(
+            gradient.body_torques[2].abs() > 1e-8,
+            "the asymmetric occluder must receive torque from the same potential gradient"
+        );
+        let angular_balance = bodies
+            .iter()
+            .zip(&gradient.body_forces)
+            .zip(&gradient.body_torques)
+            .map(|((body, force), torque)| {
+                let center = body.mass_properties(&catalog, None).unwrap();
+                center.center_x * force.1 - center.center_y * force.0 + torque
+            })
+            .sum::<f64>();
+        assert!(
+            angular_balance.abs() < 1e-4,
+            "world force and torque gradients must conserve total angular momentum"
+        );
+    }
+
+    #[test]
     fn pair_potential_oracle_delta_settles_against_the_world_energy_inventory() {
         let mut simulation = Simulation::new(78, 1.0);
         clear_environment_physical_material(&mut simulation);
@@ -1686,6 +2336,8 @@ mod tests {
             current_resonant_energy: current_resonant,
             initial_structural_energy: 0.0,
             current_structural_energy: 0.0,
+            initial_kinetic_energy: 0.0,
+            current_kinetic_energy: 0.0,
             initial_pair_interaction_potential: 0.0,
             current_pair_interaction_potential: ledger.total_pair_interaction_potential_held,
             external_energy_input: 0.0,
@@ -2401,5 +3053,134 @@ mod tests {
             None,
             "an impossible heat allocation must fail closed"
         );
+    }
+
+    #[test]
+    fn visibility_hierarchy_pair_forces_match_all_occluder_reference() {
+        let mut simulation = Simulation::new(211, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        let placements = [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 22.0, 10.0),
+            ("Nitrogen", 16.0, 10.0),
+            ("Oxygen", 16.0, 11.0),
+            ("Sulfur", 16.0, 12.0),
+            ("Phosphorus", 16.0, 13.0),
+            ("Carbon", 16.0, 14.0),
+            ("Hydrogen", 16.0, 15.0),
+            ("Nitrogen", 16.0, 16.0),
+            ("Oxygen", 16.0, 17.0),
+            ("Sulfur", 16.0, 18.0),
+            ("Phosphorus", 16.0, 19.0),
+            ("Carbon", 16.0, 20.0),
+            ("Hydrogen", 16.0, 21.0),
+            ("Nitrogen", 16.0, 22.0),
+            ("Oxygen", 16.0, 23.0),
+            ("Sulfur", 16.0, 24.0),
+            ("Phosphorus", 16.0, 25.0),
+            ("Carbon", 16.0, 26.0),
+            ("Hydrogen", 16.0, 27.0),
+            ("Nitrogen", 16.0, 28.0),
+            ("Oxygen", 16.0, 29.0),
+            ("Sulfur", 16.0, 30.0),
+            ("Phosphorus", 16.0, 31.0),
+            ("Carbon", 16.0, 32.0),
+            ("Hydrogen", 16.0, 33.0),
+            ("Nitrogen", 16.0, 34.0),
+            ("Oxygen", 16.0, 35.0),
+            ("Sulfur", 16.0, 36.0),
+            ("Phosphorus", 16.0, 37.0),
+            ("Carbon", 16.0, 38.0),
+            ("Hydrogen", 16.0, 39.0),
+        ];
+        for (name, x, y) in placements {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &simulation.environment.catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("multi-body chemistry snapshot should be valid");
+        let index_a = snapshot
+            .bodies
+            .iter()
+            .position(|body| {
+                body.placements.as_ref().is_some_and(|placements| {
+                    placements
+                        .first()
+                        .is_some_and(|placement| placement.x == 10.0 && placement.y == 10.0)
+                })
+            })
+            .expect("source material should be present in the snapshot");
+        let index_b = snapshot
+            .bodies
+            .iter()
+            .position(|body| {
+                body.placements.as_ref().is_some_and(|placements| {
+                    placements
+                        .first()
+                        .is_some_and(|placement| placement.x == 22.0 && placement.y == 10.0)
+                })
+            })
+            .expect("receiver material should be present in the snapshot");
+        let identity_a = snapshot.bodies[index_a].environmental_identity;
+        let identity_b = snapshot.bodies[index_b].environmental_identity;
+        let indexed = snapshot
+            .pair_force_contributions(identity_a, identity_b, &simulation.environment.catalog)
+            .expect("hierarchy-filtered pair evaluation should succeed");
+
+        let other_indices = (0..snapshot.bodies.len())
+            .filter(|index| *index != index_a && *index != index_b)
+            .collect::<Vec<_>>();
+        let all_occluders = other_indices
+            .iter()
+            .map(|index| snapshot.bodies[*index].clone())
+            .collect::<Vec<_>>();
+        let reference = crate::harmonics::resonance_multi_body_forces_with_occluders(
+            &snapshot.bodies[index_a],
+            &snapshot.bodies[index_b],
+            &all_occluders,
+            &simulation.environment.catalog,
+            snapshot.tick,
+        )
+        .expect("all-occluder reference evaluation should succeed");
+        assert_eq!(reference.len(), snapshot.bodies.len());
+        let mut expected_by_body =
+            vec![crate::harmonics::ResonanceBodyForce::default(); snapshot.bodies.len()];
+        expected_by_body[index_a] = reference[0];
+        expected_by_body[index_b] = reference[1];
+        for (offset, body_index) in other_indices.into_iter().enumerate() {
+            expected_by_body[body_index] = reference[offset + 2];
+        }
+
+        for contribution in &indexed {
+            let expected = expected_by_body[contribution.body_index];
+            assert!(
+                (contribution.force.x - expected.x).abs() < 1.0e-10
+                    && (contribution.force.y - expected.y).abs() < 1.0e-10
+                    && (contribution.force.torque - expected.torque).abs() < 1.0e-10,
+                "hierarchy result diverged from all-occluder reference for body {}: indexed={:?}, reference={:?}",
+                contribution.body_index,
+                contribution.force,
+                expected
+            );
+        }
     }
 }

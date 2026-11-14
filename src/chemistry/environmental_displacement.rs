@@ -8,7 +8,9 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use crate::contact::{ConnectionCompatibilityCache, ConnectionPairCandidate};
+#[cfg(test)]
+use crate::contact::ConnectionCompatibilityCache;
+use crate::contact::ConnectionPairCandidate;
 use crate::physical_material::{PhysicalMaterial, PhysicalMaterialBond};
 use crate::state::{EnergyLedger, Environment, EnvironmentalDisplacementDiscoveryDiagnostics};
 
@@ -16,7 +18,8 @@ use crate::combine::bond_strength;
 #[cfg(test)]
 use crate::combine::intrinsic_bond_potential;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
-use crate::resources::{BaseResource, ResourceProperties};
+use crate::resources::{BaseResource, InternalBond, Material, ResourceProperties};
+#[cfg(test)]
 use crate::structure::{Bond, OrganismStructure};
 
 /// Energy and activation assessment for one proposed constituent replacement.
@@ -53,9 +56,806 @@ impl DisplacementPreflight {
     }
 }
 
+/// Chemistry-only view of one constituent in a free environmental material.
+/// It carries catalog chemistry directly and deliberately has no organism graph.
+#[derive(Clone, Copy)]
+struct EnvironmentalDisplacementConstituent<'a> {
+    name: &'a str,
+    properties: ResourceProperties,
+    adhesion: crate::resources::AdhesionDescriptors,
+}
+
+fn environmental_displacement_constituent<'a>(
+    material: &'a PhysicalMaterial,
+    part_index: usize,
+    catalog: &[BaseResource],
+) -> Option<EnvironmentalDisplacementConstituent<'a>> {
+    if material.owner_relative_origin.is_some() || !material.material.is_valid_for_catalog(catalog)
+    {
+        return None;
+    }
+    let (name, amount) = material.material.parts.get(part_index)?;
+    if !amount.is_finite() || *amount <= 0.0 {
+        return None;
+    }
+    let mut matches = catalog.iter().filter(|resource| resource.name == *name);
+    let resource = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(EnvironmentalDisplacementConstituent {
+        name,
+        properties: resource.properties,
+        adhesion: resource.adhesion,
+    })
+}
+
+fn displacement_pair_static_potential_from_materials(
+    anchor: EnvironmentalDisplacementConstituent<'_>,
+    incoming: EnvironmentalDisplacementConstituent<'_>,
+) -> Option<f64> {
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    if active_resource(anchor.name) && active_resource(incoming.name) {
+        return crate::resources::pair_adhesion(anchor.adhesion, incoming.adhesion)
+            .map(|adhesion| adhesion.net)
+            .filter(|potential| potential.is_finite() && *potential > 0.0);
+    }
+    let position_a = anchor.properties.chemical_position?;
+    let position_b = incoming.properties.chemical_position?;
+    crate::chemistry::interaction_potential(
+        position_a,
+        position_b,
+        crate::chemistry::CHEMICAL_K,
+        crate::chemistry::CHEMICAL_D_MAX,
+    )
+    .filter(|potential| potential.is_finite() && *potential > 0.0)
+}
+
+fn accumulate_environmental_constituent_activation(
+    anchor: EnvironmentalDisplacementConstituent<'_>,
+    incoming: EnvironmentalDisplacementConstituent<'_>,
+    candidate: ConnectionPairCandidate,
+    previous: f64,
+    local_resonance_similarity: f64,
+) -> Option<f64> {
+    if candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let static_potential = displacement_pair_static_potential_from_materials(anchor, incoming)?;
+    let contact = crate::chemistry::contact_factor(
+        candidate.distance,
+        crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+    )?;
+    let engagement = crate::chemistry::interface_engagement(candidate.facing)?;
+    crate::chemistry::accumulate_reaction(
+        previous,
+        static_potential * (1.0 + local_resonance_similarity.clamp(0.0, 1.0)),
+        contact,
+        engagement,
+        crate::chemistry::CHEMICAL_DISSIPATION,
+    )
+}
+
+fn environmental_candidate_energy_requirement(
+    bond_energy: f64,
+    work: f64,
+    transient_fluid_bond: bool,
+    reactant_structural_energy: f64,
+    product_structural_energy: f64,
+    conservative_deficit: bool,
+) -> Option<f64> {
+    if !bond_energy.is_finite() || bond_energy < 0.0 || !work.is_finite() || work < 0.0 {
+        return None;
+    }
+    let product_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        product_structural_energy
+    };
+    let balance = if conservative_deficit {
+        ReactionEnergyBalance::calculate_conservative(
+            reactant_structural_energy,
+            product_energy,
+            work,
+            0.0,
+        )
+    } else {
+        ReactionEnergyBalance::calculate(reactant_structural_energy, product_energy, work, 0.0)
+    }?;
+    Some(balance.required_external_input)
+}
+
+/// The environmental COMBINE evaluator ported to realized material
+/// constituents. It uses the same pair adhesion, formation threshold, work,
+/// bond-integrity, and signed structural-energy authorities as ordinary COMBINE.
+fn evaluate_environmental_displacement_candidate(
+    source_a: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    source_b: &PhysicalMaterial,
+    incoming_part: usize,
+    old_bond_index: usize,
+    candidate: ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Option<(crate::combine::FormationEvaluation, f64, f64, f64, f64)> {
+    if !candidate.distance.is_finite()
+        || candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.facing.is_finite()
+        || candidate.facing <= 0.0
+        || !candidate.available_a
+        || !candidate.available_b
+    {
+        return None;
+    }
+    let anchor = environmental_displacement_constituent(source_a, anchor_part, catalog)?;
+    let displaced = environmental_displacement_constituent(source_a, displaced_part, catalog)?;
+    let incoming = environmental_displacement_constituent(source_b, incoming_part, catalog)?;
+    if crate::combine::bond_strength(anchor.properties, incoming.properties)
+        <= crate::combine::bond_strength(anchor.properties, displaced.properties)
+    {
+        return None;
+    }
+    let old_connection = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?;
+    let resource_a = catalog
+        .iter()
+        .find(|resource| resource.name == anchor.name)?;
+    let resource_b = catalog
+        .iter()
+        .find(|resource| resource.name == incoming.name)?;
+    let active_resource = |name: &str| {
+        matches!(
+            name,
+            "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
+        )
+    };
+    let pair_potential = if active_resource(&resource_a.name) && active_resource(&resource_b.name) {
+        let potential = crate::combine::conservative_pair_potential(
+            resource_a.adhesion,
+            resource_b.adhesion,
+            candidate.distance,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        if potential.adhesion.net <= 1e-12 {
+            return None;
+        }
+        Some(potential)
+    } else {
+        None
+    };
+    if pair_potential.is_none()
+        && anchor.properties.chemical_position.is_some()
+        && incoming.properties.chemical_position.is_some()
+    {
+        let interaction = crate::combine::chemical_interaction(
+            anchor.properties,
+            incoming.properties,
+            candidate,
+            crate::chemistry::CHEMICAL_K,
+            crate::chemistry::CHEMICAL_D_MAX,
+            crate::chemistry::CHEMICAL_CONTACT_RADIUS,
+            crate::chemistry::CHEMICAL_MAX_FORCE,
+        )?;
+        if interaction.attraction <= 1e-12 {
+            return None;
+        }
+    }
+    let formation = crate::combine::evaluate_formation(
+        candidate,
+        anchor.properties.cohesion,
+        incoming.properties.cohesion,
+    );
+    let (work, investment) = if let Some(potential) = pair_potential {
+        (potential.approach_work, formation.threshold)
+    } else {
+        crate::combine::formation_cost(anchor.properties, incoming.properties, formation).ok()?
+    };
+    if !work.is_finite() || work < 0.0 || !investment.is_finite() || investment < 0.0 {
+        return None;
+    }
+    let strength = crate::combine::bond_integrity(anchor.properties, incoming.properties)?;
+    let bond_energy = pair_potential
+        .map(|potential| potential.bond_energy)
+        .unwrap_or_else(|| {
+            crate::combine::intrinsic_bond_potential(
+                anchor.properties,
+                incoming.properties,
+                strength,
+            )
+        });
+    if !strength.is_finite() || !bond_energy.is_finite() || bond_energy < 0.0 {
+        return None;
+    }
+    let transient_fluid_bond = resource_a.physical_state == crate::resources::PhysicalState::Fluid
+        && resource_b.physical_state == crate::resources::PhysicalState::Fluid;
+    let reactant_structural_energy = environmental_material_structural_energy(source_a)?
+        + environmental_material_structural_energy(source_b)?
+        + old_connection.bond_energy;
+    let product_structural_energy = if transient_fluid_bond {
+        reactant_structural_energy
+    } else {
+        reactant_structural_energy - bond_energy
+    };
+    let required = environmental_candidate_energy_requirement(
+        bond_energy,
+        work,
+        transient_fluid_bond,
+        reactant_structural_energy,
+        product_structural_energy,
+        pair_potential.is_some(),
+    )?;
+    Some((formation, work, investment, required, bond_energy))
+}
+
+#[derive(Clone, Debug)]
+struct EnvironmentalDisplacementTrial {
+    products: Vec<PhysicalMaterial>,
+    energy: ReactionEnergyBalance,
+}
+
+/// Revalidate and stage a complete displacement using only environmental
+/// material topology, contact geometry, and catalog chemistry.
+fn build_native_environmental_displacement_trial(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    incoming_part: usize,
+    old_bond_index: usize,
+    old_connection: &PhysicalMaterialBond,
+    candidate: ConnectionPairCandidate,
+    investment: f64,
+    incoming_activation: f64,
+    reactivity_baseline: f64,
+    dissipated_heat: f64,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<EnvironmentalDisplacementTrial> {
+    let current_old_connection = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?;
+    if current_old_connection != old_connection
+        || !((old_connection.part_a == anchor_part && old_connection.part_b == displaced_part)
+            || (old_connection.part_b == anchor_part && old_connection.part_a == displaced_part))
+    {
+        return None;
+    }
+    let candidates = crate::material_contact::connection_pair_candidates_for_material_parts(
+        source_a,
+        anchor_part,
+        Some(old_bond_index),
+        source_b,
+        incoming_part,
+        catalog,
+    )?;
+    let live_candidate = candidates.into_iter().find(|live| {
+        live.endpoint_a.same_location(candidate.endpoint_a)
+            && live.endpoint_b.same_location(candidate.endpoint_b)
+    })?;
+    let candidate_tolerance = 1e-9;
+    if !live_candidate.available_a
+        || !live_candidate.available_b
+        || (live_candidate.distance - candidate.distance).abs() > candidate_tolerance
+        || (live_candidate.facing - candidate.facing).abs() > candidate_tolerance
+        || (live_candidate.load_a - candidate.load_a).abs() > candidate_tolerance
+        || (live_candidate.load_b - candidate.load_b).abs() > candidate_tolerance
+    {
+        return None;
+    }
+    let (formation, formation_work, required_investment, _, replacement_bond_energy) =
+        evaluate_environmental_displacement_candidate(
+            source_a,
+            anchor_part,
+            displaced_part,
+            source_b,
+            incoming_part,
+            old_bond_index,
+            live_candidate,
+            catalog,
+        )?;
+    if !crate::combine::formation_succeeds(formation, investment)
+        || !required_investment.is_finite()
+        || (required_investment - investment).abs() > 1e-9
+    {
+        return None;
+    }
+    let anchor = environmental_displacement_constituent(source_a, anchor_part, catalog)?;
+    let displaced = environmental_displacement_constituent(source_a, displaced_part, catalog)?;
+    let old_bond_strength = crate::combine::bond_strength(anchor.properties, displaced.properties);
+    let preflight = evaluate_displacement_preflight_with_bond_energies(
+        anchor.properties,
+        displaced.properties,
+        old_bond_strength,
+        old_connection.bond_energy,
+        replacement_bond_energy,
+        incoming_activation,
+        reactivity_baseline,
+        formation_work,
+        dissipated_heat,
+    )?;
+    if !preflight.is_activated() {
+        return None;
+    }
+    let source_structural_energy = environmental_material_structural_energy(source_a)?
+        + environmental_material_structural_energy(source_b)?;
+    let products = build_environmental_displacement_products(
+        source_a,
+        source_b,
+        old_bond_index,
+        anchor_part,
+        displaced_part,
+        incoming_part,
+        live_candidate,
+        replacement_bond_energy,
+        catalog,
+        vertical_period,
+    )?;
+    if products.len() < 2 {
+        return None;
+    }
+    let product_structural_energy = environmental_products_structural_energy(&products)?;
+    let total_work = formation_work + preflight.disruption_work;
+    let energy = ReactionEnergyBalance::calculate_conservative(
+        source_structural_energy,
+        product_structural_energy,
+        total_work,
+        dissipated_heat,
+    )?;
+    let tolerance = 1e-9_f64.max(
+        f64::EPSILON
+            * source_structural_energy
+                .abs()
+                .max(product_structural_energy.abs())
+                .max(1.0)
+            * (source_a.material.parts.len() + source_b.material.parts.len()).max(1) as f64
+            * 8.0,
+    );
+    if (energy.required_external_input - preflight.energy.required_external_input).abs() > tolerance
+        || (energy.net_reaction_change - preflight.energy.net_reaction_change).abs() > tolerance
+    {
+        return None;
+    }
+    Some(EnvironmentalDisplacementTrial { products, energy })
+}
+
+fn displacement_reaction_frequency_from_properties(
+    anchor: ResourceProperties,
+    displaced: ResourceProperties,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let baselines = crate::resources::ResourceBaselines::from_catalog(catalog);
+    let frequency_a = crate::harmonics::natural_frequency_cycles_per_day(anchor, baselines);
+    let frequency_b = crate::harmonics::natural_frequency_cycles_per_day(displaced, baselines);
+    if !frequency_a.is_finite()
+        || frequency_a <= 0.0
+        || !frequency_b.is_finite()
+        || frequency_b <= 0.0
+    {
+        return None;
+    }
+    let frequency = (0.5 * frequency_a.ln() + 0.5 * frequency_b.ln()).exp();
+    (frequency.is_finite() && frequency > 0.0).then_some(frequency)
+}
+
+#[derive(Clone, Copy)]
+struct EnvironmentalPartKinematics {
+    mass: f64,
+    velocity_x: f64,
+    velocity_y: f64,
+    angular_velocity: f64,
+    intrinsic_moment_of_inertia: f64,
+}
+
+fn environmental_part_kinematics(
+    source: &PhysicalMaterial,
+    part_index: usize,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<EnvironmentalPartKinematics> {
+    if !source.is_realized()
+        || source.owner_relative_origin.is_some()
+        || !source.inertial_motion.is_finite()
+    {
+        return None;
+    }
+    let mass_properties = source.mass_properties(catalog, Some(vertical_period))?;
+    let placement = *source.placements.as_ref()?.get(part_index)?;
+    let (name, amount) = source.material.parts.get(part_index)?;
+    let resource = catalog.iter().find(|resource| resource.name == *name)?;
+    let mass = resource.properties.mass * *amount;
+    let shape = source.realized_shape_for_part(part_index, catalog)?;
+    let offset_x = placement.x - mass_properties.center_x;
+    let offset_y = (placement.y - mass_properties.center_y + vertical_period * 0.5)
+        .rem_euclid(vertical_period)
+        - vertical_period * 0.5;
+    let (velocity_x, velocity_y) = source
+        .inertial_motion
+        .velocity_at_offset(offset_x, offset_y)?;
+    let intrinsic_moment_of_inertia =
+        crate::physical_material::intrinsic_moment_of_inertia(&shape.form, mass);
+    if ![
+        mass,
+        velocity_x,
+        velocity_y,
+        intrinsic_moment_of_inertia,
+        source.inertial_motion.angular_velocity,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || mass <= 0.0
+        || intrinsic_moment_of_inertia <= 0.0
+    {
+        return None;
+    }
+    Some(EnvironmentalPartKinematics {
+        mass,
+        velocity_x,
+        velocity_y,
+        angular_velocity: source.inertial_motion.angular_velocity,
+        intrinsic_moment_of_inertia,
+    })
+}
+
+fn connection_occupies_endpoint(
+    connection: &PhysicalMaterialBond,
+    part_index: usize,
+    endpoint: crate::structure::ConnectionEndpoint,
+) -> bool {
+    (connection.part_a == part_index && connection.endpoint_a.same_location(endpoint))
+        || (connection.part_b == part_index && connection.endpoint_b.same_location(endpoint))
+}
+
+fn environmental_material_structural_energy(material: &PhysicalMaterial) -> Option<f64> {
+    let connections = material.internal_connections.as_ref()?;
+    let energy = connections.iter().try_fold(0.0, |total, connection| {
+        let next = total - connection.bond_energy;
+        (connection.bond_energy.is_finite() && connection.bond_energy >= 0.0 && next.is_finite())
+            .then_some(next)
+    })?;
+    energy.is_finite().then_some(energy)
+}
+
+fn environmental_products_structural_energy(products: &[PhysicalMaterial]) -> Option<f64> {
+    products.iter().try_fold(0.0, |total, product| {
+        let product_energy = environmental_material_structural_energy(product)?;
+        let next = total + product_energy;
+        next.is_finite().then_some(next)
+    })
+}
+
+/// Apply A-B + C -> A-C + B directly to environmental material records.
+/// Constituents retain their exact world geometry; connected components are
+/// exported as new physical molecules without constructing organism graphs.
+fn build_environmental_displacement_products(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    old_bond_index: usize,
+    anchor_part: usize,
+    displaced_part: usize,
+    incoming_part: usize,
+    candidate: ConnectionPairCandidate,
+    replacement_bond_energy: f64,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<Vec<PhysicalMaterial>> {
+    if !source_a.is_realized()
+        || !source_b.is_realized()
+        || source_a.owner_relative_origin.is_some()
+        || source_b.owner_relative_origin.is_some()
+        || !vertical_period.is_finite()
+        || vertical_period <= 0.0
+        || !candidate.distance.is_finite()
+        || candidate.distance < 0.0
+        || candidate.distance > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+        || !candidate.facing.is_finite()
+        || candidate.facing <= 0.0
+        || !candidate.available_a
+        || !candidate.available_b
+        || !replacement_bond_energy.is_finite()
+        || replacement_bond_energy < 0.0
+    {
+        return None;
+    }
+
+    let source_a_connections = source_a.internal_connections.as_ref()?;
+    let source_b_connections = source_b.internal_connections.as_ref()?;
+    if source_a_connections.len() != source_a.material.internal_bonds.len()
+        || source_b_connections.len() != source_b.material.internal_bonds.len()
+        || old_bond_index >= source_a_connections.len()
+        || anchor_part >= source_a.material.parts.len()
+        || displaced_part >= source_a.material.parts.len()
+        || incoming_part >= source_b.material.parts.len()
+        || anchor_part == displaced_part
+    {
+        return None;
+    }
+    let old_connection = source_a_connections.get(old_bond_index)?;
+    if !((old_connection.part_a == anchor_part && old_connection.part_b == displaced_part)
+        || (old_connection.part_b == anchor_part && old_connection.part_a == displaced_part))
+    {
+        return None;
+    }
+    if source_a_connections
+        .iter()
+        .enumerate()
+        .any(|(index, connection)| {
+            index != old_bond_index
+                && connection_occupies_endpoint(connection, anchor_part, candidate.endpoint_a)
+        })
+        || source_b_connections.iter().any(|connection| {
+            connection_occupies_endpoint(connection, incoming_part, candidate.endpoint_b)
+        })
+    {
+        return None;
+    }
+
+    let source_a_count = source_a.material.parts.len();
+    let total_count = source_a_count.checked_add(source_b.material.parts.len())?;
+    let mut parts = Vec::with_capacity(total_count);
+    parts.extend(source_a.material.parts.iter().cloned());
+    parts.extend(source_b.material.parts.iter().cloned());
+
+    let mut placements = Vec::with_capacity(total_count);
+    placements.extend(source_a.placements.as_ref()?.iter().copied());
+    placements.extend(source_b.placements.as_ref()?.iter().copied());
+
+    let mut shapes = Vec::with_capacity(total_count);
+    for part_index in 0..source_a_count {
+        shapes.push(source_a.realized_shape_for_part(part_index, catalog)?);
+    }
+    for part_index in 0..source_b.material.parts.len() {
+        shapes.push(source_b.realized_shape_for_part(part_index, catalog)?);
+    }
+
+    let mut bonds = Vec::<(InternalBond, PhysicalMaterialBond)>::with_capacity(
+        source_a_connections.len() + source_b_connections.len(),
+    );
+    for (bond_index, (bond, connection)) in source_a
+        .material
+        .internal_bonds
+        .iter()
+        .zip(source_a_connections)
+        .enumerate()
+    {
+        if bond_index != old_bond_index {
+            bonds.push((*bond, connection.clone()));
+        }
+    }
+    for (bond, connection) in source_b
+        .material
+        .internal_bonds
+        .iter()
+        .zip(source_b_connections)
+    {
+        let shifted_bond = InternalBond {
+            part_a: bond.part_a.checked_add(source_a_count)?,
+            part_b: bond.part_b.checked_add(source_a_count)?,
+        };
+        let shifted_connection = PhysicalMaterialBond {
+            part_a: connection.part_a.checked_add(source_a_count)?,
+            endpoint_a: connection.endpoint_a,
+            part_b: connection.part_b.checked_add(source_a_count)?,
+            endpoint_b: connection.endpoint_b,
+            bond_energy: connection.bond_energy,
+        };
+        bonds.push((shifted_bond, shifted_connection));
+    }
+    let incoming_global_part = source_a_count.checked_add(incoming_part)?;
+    bonds.push((
+        InternalBond {
+            part_a: anchor_part,
+            part_b: incoming_global_part,
+        },
+        PhysicalMaterialBond {
+            part_a: anchor_part,
+            endpoint_a: candidate.endpoint_a,
+            part_b: incoming_global_part,
+            endpoint_b: candidate.endpoint_b,
+            bond_energy: replacement_bond_energy,
+        },
+    ));
+
+    let material = Material {
+        parts,
+        internal_bonds: bonds.iter().map(|(bond, _)| *bond).collect(),
+    };
+    if !material.is_valid_for_catalog(catalog)
+        || bonds.iter().any(|(_, connection)| {
+            connection.part_a >= total_count
+                || connection.part_b >= total_count
+                || connection.part_a == connection.part_b
+                || !connection.bond_energy.is_finite()
+                || connection.bond_energy < 0.0
+        })
+    {
+        return None;
+    }
+
+    let mut adjacency = vec![Vec::<usize>::new(); total_count];
+    for (bond, _) in &bonds {
+        adjacency[bond.part_a].push(bond.part_b);
+        adjacency[bond.part_b].push(bond.part_a);
+    }
+    let mut seen = vec![false; total_count];
+    let mut components = Vec::<Vec<usize>>::new();
+    for start in 0..total_count {
+        if seen[start] {
+            continue;
+        }
+        let mut pending = vec![start];
+        let mut members = Vec::new();
+        seen[start] = true;
+        while let Some(current) = pending.pop() {
+            members.push(current);
+            for &next in &adjacency[current] {
+                if !seen[next] {
+                    seen[next] = true;
+                    pending.push(next);
+                }
+            }
+        }
+        members.sort_unstable();
+        components.push(members);
+    }
+
+    let mut source_kinematics = Vec::with_capacity(total_count);
+    for part_index in 0..source_a_count {
+        source_kinematics.push(environmental_part_kinematics(
+            source_a,
+            part_index,
+            catalog,
+            vertical_period,
+        )?);
+    }
+    for part_index in 0..source_b.material.parts.len() {
+        source_kinematics.push(environmental_part_kinematics(
+            source_b,
+            part_index,
+            catalog,
+            vertical_period,
+        )?);
+    }
+
+    let mut products = Vec::with_capacity(components.len());
+    for component in components {
+        let mut remap = vec![usize::MAX; total_count];
+        let mut component_parts = Vec::with_capacity(component.len());
+        let mut component_placements = Vec::with_capacity(component.len());
+        let mut component_shapes = Vec::with_capacity(component.len());
+        for (new_index, &old_index) in component.iter().enumerate() {
+            remap[old_index] = new_index;
+            component_parts.push(material.parts[old_index].clone());
+            component_placements.push(placements[old_index]);
+            component_shapes.push(shapes[old_index].clone());
+        }
+        let mut component_bonds = Vec::new();
+        let mut component_connections = Vec::new();
+        for (bond, connection) in &bonds {
+            if remap[bond.part_a] != usize::MAX && remap[bond.part_b] != usize::MAX {
+                component_bonds.push(InternalBond {
+                    part_a: remap[bond.part_a],
+                    part_b: remap[bond.part_b],
+                });
+                component_connections.push(PhysicalMaterialBond {
+                    part_a: remap[connection.part_a],
+                    endpoint_a: connection.endpoint_a,
+                    part_b: remap[connection.part_b],
+                    endpoint_b: connection.endpoint_b,
+                    bond_energy: connection.bond_energy,
+                });
+            }
+        }
+        let product_material = Material {
+            parts: component_parts,
+            internal_bonds: component_bonds,
+        };
+        if !product_material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        let mut product = PhysicalMaterial {
+            material: product_material,
+            inertial_motion: crate::physical_material::InertialMotion::default(),
+            environmental_identity: 0,
+            placements: Some(component_placements),
+            internal_connections: Some(component_connections),
+            owner_relative_origin: None,
+            realized_shapes: Some(component_shapes),
+        };
+        let product_mass_properties = product.mass_properties(catalog, Some(vertical_period))?;
+        let mut total_mass = 0.0;
+        let mut momentum_x = 0.0;
+        let mut momentum_y = 0.0;
+        for &old_index in &component {
+            let kinematics = source_kinematics[old_index];
+            total_mass += kinematics.mass;
+            momentum_x += kinematics.mass * kinematics.velocity_x;
+            momentum_y += kinematics.mass * kinematics.velocity_y;
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
+            return None;
+        }
+        let velocity_x = momentum_x / total_mass;
+        let velocity_y = momentum_y / total_mass;
+        let mut angular_momentum = 0.0;
+        for &old_index in &component {
+            let kinematics = source_kinematics[old_index];
+            let placement = placements[old_index];
+            let offset_x = placement.x - product_mass_properties.center_x;
+            let offset_y = (placement.y - product_mass_properties.center_y + vertical_period * 0.5)
+                .rem_euclid(vertical_period)
+                - vertical_period * 0.5;
+            angular_momentum += kinematics.intrinsic_moment_of_inertia
+                * kinematics.angular_velocity
+                + kinematics.mass
+                    * (offset_x * (kinematics.velocity_y - velocity_y)
+                        - offset_y * (kinematics.velocity_x - velocity_x));
+        }
+        let angular_velocity = angular_momentum / product_mass_properties.moment_of_inertia;
+        if ![velocity_x, velocity_y, angular_momentum, angular_velocity]
+            .iter()
+            .all(|value| value.is_finite())
+            || product_mass_properties.moment_of_inertia <= 0.0
+        {
+            return None;
+        }
+        product.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x,
+            velocity_y,
+            angular_velocity,
+        };
+        if !product.is_realized() {
+            return None;
+        }
+        products.push(product);
+    }
+    (!products.is_empty()).then_some(products)
+}
+
+fn environmental_constituent_endpoint_world_point(
+    material: &PhysicalMaterial,
+    part_index: usize,
+    endpoint: crate::structure::ConnectionEndpoint,
+    catalog: &[BaseResource],
+) -> Option<crate::connection_geometry::WorldConnectionPoint> {
+    crate::material_contact::endpoint_world_point_for_material_part(
+        material, part_index, endpoint, catalog,
+    )
+}
+
+fn displacement_reaction_frequency_from_materials(
+    anchor: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced: &PhysicalMaterial,
+    displaced_part: usize,
+    catalog: &[BaseResource],
+) -> Option<f64> {
+    let anchor = environmental_displacement_constituent(anchor, anchor_part, catalog)?;
+    let displaced = environmental_displacement_constituent(displaced, displaced_part, catalog)?;
+    displacement_reaction_frequency_from_properties(
+        anchor.properties,
+        displaced.properties,
+        catalog,
+    )
+}
+
 /// Accumulate one tick of activation from the incoming constituent's live
 /// contact with the anchor. This mirrors environmental COMBINE's approved
 /// static-potential, contact-falloff, facing-engagement, and dissipation equation.
+#[cfg(test)]
 fn displacement_chemical_properties(
     unit: &crate::structure::StructuralUnit,
     catalog: &[BaseResource],
@@ -74,6 +874,7 @@ fn displacement_chemical_properties(
 /// contact with the anchor. Elemental chemical positions are read from the
 /// catalog here, without changing aggregate material properties or assigning
 /// an averaged coordinate to a mixed compound.
+#[cfg(test)]
 fn displacement_pair_static_potential(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -125,6 +926,7 @@ fn displacement_pair_static_potential(
     .filter(|potential| potential.is_finite() && *potential > 0.0)
 }
 
+#[cfg(test)]
 pub(crate) fn accumulate_incoming_activation(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -137,6 +939,7 @@ pub(crate) fn accumulate_incoming_activation(
     )
 }
 
+#[cfg(test)]
 fn accumulate_incoming_activation_with_resonance(
     anchor: &crate::structure::StructuralUnit,
     incoming: &crate::structure::StructuralUnit,
@@ -169,6 +972,7 @@ fn accumulate_incoming_activation_with_resonance(
 
 /// Fully evaluated trial topology and its independently exported physical products.
 /// Nothing in this value has been committed to the live environment.
+#[cfg(test)]
 #[derive(Clone, Debug)]
 pub(crate) struct DisplacementTrial {
     #[cfg(test)]
@@ -177,6 +981,7 @@ pub(crate) struct DisplacementTrial {
     source_units: Vec<crate::structure::StructuralUnit>,
     #[cfg(test)]
     source_bonds: Vec<Bond>,
+    #[cfg(test)]
     pub(crate) products: Vec<crate::physical_material::PhysicalMaterial>,
     #[cfg(test)]
     pub(crate) removed_bond: Bond,
@@ -187,9 +992,11 @@ pub(crate) struct DisplacementTrial {
     pub(crate) disruption_work: f64,
 }
 
+#[cfg(test)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum DisplacementTrialFailureStage {
     Activation,
+    BondCompetition,
     InvalidStoredBondEnergy,
     Topology,
     CandidateCheck,
@@ -201,18 +1008,21 @@ enum DisplacementTrialFailureStage {
     Other,
 }
 
-#[derive(Default)]
+#[cfg(test)]
+#[derive(Debug, Default)]
 struct DisplacementTrialDiagnostic {
     activation_sufficient: Option<bool>,
     failure_stage: DisplacementTrialFailureStage,
     old_bond_energy_stored: Option<f64>,
     old_bond_energy_expected: Option<f64>,
     old_bond_energy_abs_error: Option<f64>,
+    insertion_rejection: Option<&'static str>,
 }
 
 /// Build the proposed topology on a clone. The caller must discover the supplied
 /// replacement candidate from an equivalent trial graph after removing the old
 /// A-B bond, allowing contact search to consider every newly available endpoint.
+#[cfg(test)]
 pub(crate) fn build_displacement_trial(
     source: &OrganismStructure,
     anchor_unit: usize,
@@ -242,6 +1052,7 @@ pub(crate) fn build_displacement_trial(
     )
 }
 
+#[cfg(test)]
 fn build_displacement_trial_with_activation_status(
     source: &OrganismStructure,
     anchor_unit: usize,
@@ -287,7 +1098,14 @@ fn build_displacement_trial_with_activation_status(
 
     let anchor = source.units[anchor_unit].properties(catalog)?;
     let displaced = source.units[displaced_unit].properties(catalog)?;
+    let incoming = source.units[incoming_unit].properties(catalog)?;
     let old_strength = old_bond.strength;
+    if !replacement_wins_bond_competition(anchor, displaced, incoming) {
+        if let Some(diagnostic) = diagnostic.as_mut() {
+            diagnostic.failure_stage = DisplacementTrialFailureStage::BondCompetition;
+        }
+        return None;
+    }
     // The recorded value is the only energy actually allocated to this
     // existing bond. Historical/seeded composition bonds legitimately carry
     // zero; do not manufacture a stored-energy allocation from descriptors.
@@ -336,10 +1154,8 @@ fn build_displacement_trial_with_activation_status(
         return None;
     }
 
-    // Replacement strength is not a separate eligibility gate. The signed
-    // pre/post structural-energy change and physical work are settled together
-    // below; a weaker replacement is valid only when legitimate energy funds
-    // the resulting deficit at the atomic transaction boundary.
+    // Bond competition is decided by the existing bond-strength authority.
+    // Energy funding is evaluated separately and cannot make a weaker bond win.
 
     let mut trial = source.clone();
     if trial.break_matching_bond(old_bond).is_none() {
@@ -381,22 +1197,23 @@ fn build_displacement_trial_with_activation_status(
     {
         return None;
     }
-    let Some(replacement_bond) =
-        crate::combine_runtime::admit_selected_candidate_to_trial_structure(
+    let replacement_bond =
+        match crate::combine_runtime::admit_selected_candidate_to_trial_structure_diagnostic(
             &mut trial,
             anchor_unit,
             incoming_unit,
             replacement_candidate,
             catalog,
-        )
-    else {
-        if let Some(diagnostic) = diagnostic.as_mut() {
-            diagnostic.failure_stage = DisplacementTrialFailureStage::Insertion;
-        }
-        return None;
-    };
-    #[cfg(not(test))]
-    let _ = replacement_bond;
+        ) {
+            Ok(bond) => bond,
+            Err(reason) => {
+                if let Some(diagnostic) = diagnostic.as_mut() {
+                    diagnostic.failure_stage = DisplacementTrialFailureStage::Insertion;
+                    diagnostic.insertion_rejection = Some(reason);
+                }
+                return None;
+            }
+        };
 
     let (Some(reactant_structural), Some(product_structural)) = (
         crate::energy_ledger::structural_potential(source),
@@ -420,6 +1237,7 @@ fn build_displacement_trial_with_activation_status(
         }
         return None;
     };
+    #[cfg(test)]
     let Some(products) =
         crate::environmental_combine::physical_materials_from_structure_components(&trial, catalog)
     else {
@@ -428,6 +1246,7 @@ fn build_displacement_trial_with_activation_status(
         }
         return None;
     };
+    #[cfg(test)]
     if products.len() < 2 {
         if let Some(diagnostic) = diagnostic.as_mut() {
             diagnostic.failure_stage = DisplacementTrialFailureStage::Products;
@@ -442,6 +1261,7 @@ fn build_displacement_trial_with_activation_status(
         source_units: source.units.clone(),
         #[cfg(test)]
         source_bonds: source.bonds.clone(),
+        #[cfg(test)]
         products,
         #[cfg(test)]
         removed_bond: old_bond,
@@ -493,6 +1313,20 @@ pub(crate) fn commit_displacement_trial(
     *ledger = staged_ledger;
     *usable_energy = staged_usable_energy;
     Some(trial.products)
+}
+
+/// A replacement is eligible only when the incoming pair is stronger under
+/// the same bond-strength calculation used to create ordinary bonds. Energy
+/// funding never changes the result of bond competition.
+#[cfg(test)]
+fn replacement_wins_bond_competition(
+    anchor: ResourceProperties,
+    displaced: ResourceProperties,
+    incoming: ResourceProperties,
+) -> bool {
+    let old_strength = bond_strength(anchor, displaced);
+    let incoming_strength = bond_strength(anchor, incoming);
+    old_strength.is_finite() && incoming_strength.is_finite() && incoming_strength > old_strength
 }
 
 /// Evaluate the coupled A-B -> A-C replacement without mutating any graph or
@@ -621,6 +1455,7 @@ pub(crate) struct EnvironmentalDisplacementOperation {
     pub(crate) work_required: f64,
 }
 
+#[cfg(test)]
 fn restore_displacement_source(
     source: &PhysicalMaterial,
     environment: &Environment,
@@ -686,6 +1521,7 @@ fn dissipate_unupdated_displacement_accumulations(
 /// One unique, fully evaluated replacement endpoint pair found by the
 /// diagnostic all-alternatives census. This value is observational only: it
 /// never changes the production-selected contact or its activation history.
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Copy, Debug)]
 struct DisplacementContactAlternative {
@@ -700,6 +1536,7 @@ struct DisplacementContactAlternative {
 /// Bounded diagnostic census of every unique endpoint-pair alternative on the
 /// post-removal trial graph. The budget is charged for each raw generated
 /// candidate, including duplicates and candidates rejected by later stages.
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 #[derive(Clone, Debug, Default)]
 struct DisplacementContactCensus {
@@ -711,6 +1548,7 @@ struct DisplacementContactCensus {
     work_limit_reached: bool,
 }
 
+#[cfg(test)]
 #[allow(dead_code)] // Diagnostic-only until the census is explicitly integrated.
 fn census_replacement_contacts(
     combined: &OrganismStructure,
@@ -730,13 +1568,30 @@ fn census_replacement_contacts(
         return census;
     }
 
-    let (candidates, raw_count, limit_reached) = crate::contact::connection_pair_candidates_bounded(
-        &topology_trial,
-        anchor_unit,
-        incoming_unit,
-        catalog,
-        work_limit,
-    );
+    let (candidates, raw_count, limit_reached) = if work_limit == usize::MAX {
+        // The exhaustive test oracle must use the same unbounded candidate
+        // authority that COMBINE uses when it revalidates an admitted pair.
+        // The bounded discovery enumerator is intentionally allowed to prune
+        // work and is not an appropriate source of an admission fixture.
+        let mut cache = ConnectionCompatibilityCache::new();
+        let candidates = crate::contact::connection_pair_candidates_cached(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            &mut cache,
+        );
+        let count = candidates.len();
+        (candidates, count, false)
+    } else {
+        crate::contact::connection_pair_candidates_bounded(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            work_limit,
+        )
+    };
     census.raw_candidates_inspected = raw_count;
     census.work_limit_reached = limit_reached;
     let mut seen: Vec<ConnectionPairCandidate> = Vec::new();
@@ -809,6 +1664,7 @@ fn diagnostic_material_signature(source: &PhysicalMaterial) -> u64 {
         })
 }
 
+#[cfg(test)]
 fn best_replacement_contact(
     combined: &OrganismStructure,
     anchor_unit: usize,
@@ -817,19 +1673,35 @@ fn best_replacement_contact(
     catalog: &[BaseResource],
     diagnostics: Option<&mut crate::state::EnvironmentalDisplacementDiscoveryDiagnostics>,
     sources: Option<(&PhysicalMaterial, &PhysicalMaterial)>,
+    source_parts: Option<(usize, usize, usize, usize)>,
     sample_this_search: bool,
 ) -> Option<(ConnectionPairCandidate, f64)> {
     let mut topology_trial = combined.clone();
     topology_trial.break_matching_bond(old_bond)?;
     let mut cache = ConnectionCompatibilityCache::new();
     let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
-    let candidates = crate::contact::connection_pair_candidates_cached(
-        &topology_trial,
-        anchor_unit,
-        incoming_unit,
-        catalog,
-        &mut cache,
-    );
+    let candidates = if let (
+        Some((source_a, source_b)),
+        Some((anchor_part, _displaced_part, incoming_part, old_bond_index)),
+    ) = (sources, source_parts)
+    {
+        crate::material_contact::connection_pair_candidates_for_material_parts(
+            source_a,
+            anchor_part,
+            Some(old_bond_index),
+            source_b,
+            incoming_part,
+            catalog,
+        )?
+    } else {
+        crate::contact::connection_pair_candidates_cached(
+            &topology_trial,
+            anchor_unit,
+            incoming_unit,
+            catalog,
+            &mut cache,
+        )
+    };
     let mut diagnostics = diagnostics;
     for (candidate_index, candidate) in candidates.into_iter().enumerate() {
         let geometry_valid = candidate.available_a
@@ -841,13 +1713,36 @@ fn best_replacement_contact(
             && candidate.facing > 0.0;
         let evaluation = geometry_valid
             .then(|| {
-                crate::combine_runtime::selected_candidate_evaluation(
-                    &topology_trial,
-                    anchor_unit,
-                    incoming_unit,
-                    candidate,
-                    catalog,
-                )
+                if let (
+                    Some((source_a, source_b)),
+                    Some((anchor_part, displaced_part, incoming_part, old_bond_index)),
+                ) = (sources, source_parts)
+                {
+                    evaluate_environmental_displacement_candidate(
+                        source_a,
+                        anchor_part,
+                        displaced_part,
+                        source_b,
+                        incoming_part,
+                        old_bond_index,
+                        candidate,
+                        catalog,
+                    )
+                } else {
+                    crate::combine_runtime::selected_candidate_evaluation(
+                        &topology_trial,
+                        anchor_unit,
+                        incoming_unit,
+                        candidate,
+                        catalog,
+                    )
+                    // The legacy graph evaluator does not expose the formed
+                    // bond energy; this fallback caller only consumes the
+                    // first four values. Native material evaluation supplies it.
+                    .map(|(formation, work, investment, required)| {
+                        (formation, work, investment, required, 0.0)
+                    })
+                }
             })
             .flatten();
         let physically_valid = evaluation.is_some();
@@ -886,7 +1781,9 @@ fn best_replacement_contact(
                 }
             }
         }
-        let Some((_evaluation, _formation_work, investment, required_energy)) = evaluation else {
+        let Some((_evaluation, _formation_work, investment, required_energy, _bond_energy)) =
+            evaluation
+        else {
             continue;
         };
         let replace = best.map_or(true, |(current, _, current_energy)| {
@@ -908,6 +1805,149 @@ fn best_replacement_contact(
     best.map(|(candidate, investment, _)| (candidate, investment))
 }
 
+fn environmental_material_pair_penetrates(
+    source_a: &PhysicalMaterial,
+    source_b: &PhysicalMaterial,
+    catalog: &[BaseResource],
+) -> Option<bool> {
+    if !source_a.is_realized()
+        || !source_b.is_realized()
+        || source_a.owner_relative_origin.is_some()
+        || source_b.owner_relative_origin.is_some()
+    {
+        return None;
+    }
+    let placements_a = source_a.placements.as_ref()?;
+    let placements_b = source_b.placements.as_ref()?;
+    for (part_a, placement_a) in placements_a.iter().copied().enumerate() {
+        let shape_a = source_a.realized_shape_for_part(part_a, catalog)?;
+        let placed_a = crate::material_geometry::PlacedMaterialPart {
+            part_index: part_a,
+            form: shape_a.form,
+            placement: placement_a,
+        };
+        for (part_b, placement_b) in placements_b.iter().copied().enumerate() {
+            let shape_b = source_b.realized_shape_for_part(part_b, catalog)?;
+            let placed_b = crate::material_geometry::PlacedMaterialPart {
+                part_index: part_b,
+                form: shape_b.form,
+                placement: placement_b,
+            };
+            if crate::material_geometry::placed_forms_penetrate(
+                &placed_a,
+                &placed_b,
+                crate::material_geometry::GEOMETRY_EPSILON,
+            ) {
+                return Some(true);
+            }
+        }
+    }
+    Some(false)
+}
+
+fn best_environmental_replacement_contact(
+    source_a: &PhysicalMaterial,
+    anchor_part: usize,
+    displaced_part: usize,
+    source_b: &PhysicalMaterial,
+    incoming_part: usize,
+    old_bond_index: usize,
+    catalog: &[BaseResource],
+    mut diagnostics: Option<&mut EnvironmentalDisplacementDiscoveryDiagnostics>,
+    sample_this_search: bool,
+) -> Option<(ConnectionPairCandidate, f64)> {
+    let candidates = crate::material_contact::connection_pair_candidates_for_material_parts(
+        source_a,
+        anchor_part,
+        Some(old_bond_index),
+        source_b,
+        incoming_part,
+        catalog,
+    )?;
+    let mut best: Option<(ConnectionPairCandidate, f64, f64)> = None;
+    let old_bond_energy = source_a
+        .internal_connections
+        .as_deref()?
+        .get(old_bond_index)?
+        .bond_energy;
+    for (candidate_index, candidate) in candidates.into_iter().enumerate() {
+        let evaluation = evaluate_environmental_displacement_candidate(
+            source_a,
+            anchor_part,
+            displaced_part,
+            source_b,
+            incoming_part,
+            old_bond_index,
+            candidate,
+            catalog,
+        );
+        let physically_valid = evaluation.is_some();
+        if sample_this_search && candidate_index == 0 {
+            if let Some(diagnostics) = diagnostics.as_deref_mut() {
+                if diagnostics.opportunity_sample_count < diagnostics.opportunity_samples.len() {
+                    let Some(position_a) = source_a
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.get(anchor_part))
+                    else {
+                        continue;
+                    };
+                    let Some(position_b) = source_b
+                        .placements
+                        .as_ref()
+                        .and_then(|placements| placements.get(incoming_part))
+                    else {
+                        continue;
+                    };
+                    diagnostics.opportunity_samples[diagnostics.opportunity_sample_count] =
+                        Some(crate::state::EnvironmentalContactOpportunitySample {
+                            source_a_identity: source_a.environmental_identity,
+                            source_b_identity: source_b.environmental_identity,
+                            source_a_signature: diagnostic_material_signature(source_a),
+                            source_b_signature: diagnostic_material_signature(source_b),
+                            unit_a: anchor_part,
+                            unit_b: incoming_part,
+                            position_a_x: position_a.x,
+                            position_a_y: position_a.y,
+                            position_a_rotation: position_a.rotation_radians,
+                            position_b_x: position_b.x,
+                            position_b_y: position_b.y,
+                            position_b_rotation: position_b.rotation_radians,
+                            endpoint_a: candidate.endpoint_a,
+                            endpoint_b: candidate.endpoint_b,
+                            endpoint_distance: candidate.distance,
+                            physically_valid,
+                            reaction_kind: 1,
+                            old_bond_energy,
+                        });
+                    diagnostics.opportunity_sample_count += 1;
+                }
+            }
+        }
+        let Some((_formation, _work, investment, required_energy, _bond_energy)) = evaluation
+        else {
+            continue;
+        };
+        let replace = best.map_or(true, |(current, _, current_energy)| {
+            required_energy
+                .partial_cmp(&current_energy)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    candidate
+                        .distance
+                        .partial_cmp(&current.distance)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .is_lt()
+        });
+        if replace {
+            best = Some((candidate, investment, required_energy));
+        }
+    }
+    best.map(|(candidate, investment, _)| (candidate, investment))
+}
+
+#[cfg(test)]
 fn displacement_reaction_frequency(
     anchor: &crate::structure::StructuralUnit,
     displaced: &crate::structure::StructuralUnit,
@@ -1001,19 +2041,19 @@ pub(crate) fn accumulate_environmental_with_resonance(
             let Some(connections) = source_a.internal_connections.as_ref() else {
                 continue;
             };
-            if connections.is_empty() {
+            if connections.is_empty()
+                || !source_a.is_realized()
+                || source_a.owner_relative_origin.is_some()
+                || !source_a.material.is_valid_for_catalog(&environment.catalog)
+            {
                 continue;
             }
             diagnostics.bonded_anchor_materials =
                 diagnostics.bonded_anchor_materials.saturating_add(1);
-            let Some((source_structure, indices_a)) =
-                restore_displacement_source(&source_a, environment)
-            else {
-                continue;
-            };
             let Some(body) =
-                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                    &source_structure,
+                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                    &source_a,
+                    &environment.catalog,
                 )
             else {
                 continue;
@@ -1054,27 +2094,19 @@ pub(crate) fn accumulate_environmental_with_resonance(
                     }
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
-                    let mut combined = source_structure.clone();
-                    let Some(indices_b) = crate::material_restoration::restore_material(
-                        &mut combined,
-                        &source_b,
-                        crate::structure::Placement {
-                            x: 0.0,
-                            y: 0.0,
-                            rotation_radians: 0.0,
-                        },
-                        &environment.catalog,
-                    ) else {
+                    if !source_b.is_realized()
+                        || source_b.owner_relative_origin.is_some()
+                        || !source_b.material.is_valid_for_catalog(&environment.catalog)
+                    {
                         continue;
-                    };
-                    if indices_b.iter().any(|index| {
-                        crate::construction_runtime::placed_unit_overlaps(
-                            &combined,
-                            &combined.units[*index],
-                            &indices_b,
-                            &environment.catalog,
-                        )
-                    }) {
+                    }
+                    if environmental_material_pair_penetrates(
+                        &source_a,
+                        &source_b,
+                        &environment.catalog,
+                    )
+                    .unwrap_or(true)
+                    {
                         continue;
                     }
 
@@ -1084,59 +2116,39 @@ pub(crate) fn accumulate_environmental_with_resonance(
                         }
                         diagnostics.bonds_inspected = diagnostics.bonds_inspected.saturating_add(1);
                         *remaining_discovery_work = remaining_discovery_work.saturating_sub(1);
-                        let (Some(&part_a), Some(&part_b)) = (
-                            indices_a.get(connection.part_a),
-                            indices_a.get(connection.part_b),
-                        ) else {
+                        let part_count = source_a.material.parts.len();
+                        if connection.part_a >= part_count
+                            || connection.part_b >= part_count
+                            || connection.part_a == connection.part_b
+                        {
                             continue;
-                        };
-                        let (Some(id_a), Some(id_b)) =
-                            (combined.physical_id(part_a), combined.physical_id(part_b))
-                        else {
-                            continue;
-                        };
-                        let expected_bond = Bond {
-                            endpoint_a: crate::structure::BondEndpoint::new(
-                                id_a,
-                                connection.endpoint_a,
-                            ),
-                            endpoint_b: crate::structure::BondEndpoint::new(
-                                id_b,
-                                connection.endpoint_b,
-                            ),
-                            strength: combined.units[part_a]
-                                .properties(&environment.catalog)
-                                .zip(combined.units[part_b].properties(&environment.catalog))
-                                .map(|(a, b)| bond_strength(a, b))
-                                .unwrap_or(f64::NAN),
-                            bond_energy: connection.bond_energy,
-                        };
-                        let Some(old_bond) = combined
-                            .bonds
-                            .iter()
-                            .find(|bond| bond.has_same_identity(&expected_bond))
-                            .cloned()
-                        else {
-                            continue;
-                        };
-
+                        }
                         for (anchor_part, displaced_part) in [
                             (connection.part_a, connection.part_b),
                             (connection.part_b, connection.part_a),
                         ] {
-                            let (Some(&anchor_unit), Some(&displaced_unit)) =
-                                (indices_a.get(anchor_part), indices_a.get(displaced_part))
-                            else {
-                                continue;
-                            };
-                            let Some(frequency) = displacement_reaction_frequency(
-                                &combined.units[anchor_unit],
-                                &combined.units[displaced_unit],
+                            let Some(anchor_chemistry) = environmental_displacement_constituent(
+                                &source_a,
+                                anchor_part,
                                 &environment.catalog,
                             ) else {
                                 continue;
                             };
-                            for (incoming_part, &incoming_unit) in indices_b.iter().enumerate() {
+                            let Some(displaced_chemistry) = environmental_displacement_constituent(
+                                &source_a,
+                                displaced_part,
+                                &environment.catalog,
+                            ) else {
+                                continue;
+                            };
+                            let Some(frequency) = displacement_reaction_frequency_from_properties(
+                                anchor_chemistry.properties,
+                                displaced_chemistry.properties,
+                                &environment.catalog,
+                            ) else {
+                                continue;
+                            };
+                            for incoming_part in 0..source_b.material.parts.len() {
                                 if *remaining_discovery_work == 0 {
                                     break 'anchors;
                                 }
@@ -1146,16 +2158,19 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                     remaining_discovery_work.saturating_sub(1);
                                 let sample_this_search =
                                     diagnostics.replacement_contact_searches % 17 == 0;
-                                let Some((candidate, investment)) = best_replacement_contact(
-                                    &combined,
-                                    anchor_unit,
-                                    incoming_unit,
-                                    old_bond,
-                                    &environment.catalog,
-                                    Some(&mut *diagnostics),
-                                    Some((&source_a, &source_b)),
-                                    sample_this_search,
-                                ) else {
+                                let Some((candidate, investment)) =
+                                    best_environmental_replacement_contact(
+                                        &source_a,
+                                        anchor_part,
+                                        displaced_part,
+                                        &source_b,
+                                        incoming_part,
+                                        bond_index,
+                                        &environment.catalog,
+                                        Some(&mut *diagnostics),
+                                        sample_this_search,
+                                    )
+                                else {
                                     continue;
                                 };
                                 diagnostics.replacement_contacts_found =
@@ -1179,20 +2194,30 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                         .local_resonance_sample_attempts
                                         .saturating_add(1);
                                     local_resonance_sampled_this_tick = true;
-                                    let incoming_frequency = displacement_reaction_frequency(
-                                        &combined.units[anchor_unit],
-                                        &combined.units[incoming_unit],
+                                    let incoming_chemistry = environmental_displacement_constituent(
+                                        &source_b,
+                                        incoming_part,
                                         &environment.catalog,
-                                    )
-                                    .unwrap_or(frequency);
-                                    let sampled = crate::contact::endpoint_world_point(
+                                    );
+                                    let incoming_frequency = incoming_chemistry
+                                        .and_then(|incoming| {
+                                            displacement_reaction_frequency_from_properties(
+                                                anchor_chemistry.properties,
+                                                incoming.properties,
+                                                &environment.catalog,
+                                            )
+                                        })
+                                        .unwrap_or(frequency);
+                                    let sampled = environmental_constituent_endpoint_world_point(
+                                        &source_a,
+                                        anchor_part,
                                         candidate.endpoint_a,
-                                        &combined.units[anchor_unit],
                                         &environment.catalog,
                                     )
-                                    .zip(crate::contact::endpoint_world_point(
+                                    .zip(environmental_constituent_endpoint_world_point(
+                                        &source_b,
+                                        incoming_part,
                                         candidate.endpoint_b,
-                                        &combined.units[incoming_unit],
                                         &environment.catalog,
                                     ))
                                     .and_then(|(point_a, point_b)| {
@@ -1236,13 +2261,21 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 } else {
                                     0.0
                                 };
-                                let Some(next) = accumulate_incoming_activation_with_resonance(
-                                    &combined.units[anchor_unit],
-                                    &combined.units[incoming_unit],
+                                let Some(incoming_chemistry) =
+                                    environmental_displacement_constituent(
+                                        &source_b,
+                                        incoming_part,
+                                        &environment.catalog,
+                                    )
+                                else {
+                                    continue;
+                                };
+                                let Some(next) = accumulate_environmental_constituent_activation(
+                                    anchor_chemistry,
+                                    incoming_chemistry,
                                     candidate,
                                     previous,
                                     local_resonance_similarity,
-                                    &environment.catalog,
                                 ) else {
                                     continue;
                                 };
@@ -1264,22 +2297,26 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                 else {
                                     continue;
                                 };
-                                let mut trial_diagnostic = DisplacementTrialDiagnostic::default();
-                                let trial = build_displacement_trial_with_activation_status(
-                                    &combined,
-                                    anchor_unit,
-                                    displaced_unit,
-                                    incoming_unit,
-                                    old_bond,
-                                    candidate,
-                                    investment,
-                                    activation_signal,
-                                    baselines.reactivity,
-                                    0.0,
-                                    &environment.catalog,
-                                    Some(&mut trial_diagnostic),
+
+                                let old_bond_strength = crate::combine::bond_strength(
+                                    anchor_chemistry.properties,
+                                    displaced_chemistry.properties,
                                 );
-                                match trial_diagnostic.activation_sufficient {
+                                let activation_sufficient =
+                                    crate::chemistry::activation_barrier_from_bond_properties(
+                                        old_bond_strength,
+                                        anchor_chemistry.properties.reactivity,
+                                        displaced_chemistry.properties.reactivity,
+                                        baselines.reactivity,
+                                    )
+                                    .map(|barrier| {
+                                        activation_signal > 0.0
+                                            && crate::chemistry::activated(
+                                                activation_signal,
+                                                barrier,
+                                            )
+                                    });
+                                match activation_sufficient {
                                     Some(true) => {
                                         diagnostics.activation_threshold_met =
                                             diagnostics.activation_threshold_met.saturating_add(1);
@@ -1295,110 +2332,34 @@ pub(crate) fn accumulate_environmental_with_resonance(
                                             .saturating_add(1);
                                     }
                                 }
-                                if let (Some(stored), Some(expected), Some(abs_error)) = (
-                                    trial_diagnostic.old_bond_energy_stored,
-                                    trial_diagnostic.old_bond_energy_expected,
-                                    trial_diagnostic.old_bond_energy_abs_error,
-                                ) {
-                                    if abs_error > diagnostics.old_bond_energy_max_abs_error {
-                                        diagnostics.old_bond_energy_max_abs_error = abs_error;
-                                        diagnostics.old_bond_energy_stored_at_max_error = stored;
-                                        diagnostics.old_bond_energy_expected_at_max_error =
-                                            expected;
-                                    }
-                                }
-                                let Some(trial) = trial else {
-                                    if trial_diagnostic.activation_sufficient == Some(true) {
+                                let Some(trial) = build_native_environmental_displacement_trial(
+                                    &source_a,
+                                    &source_b,
+                                    anchor_part,
+                                    displaced_part,
+                                    incoming_part,
+                                    bond_index,
+                                    connection,
+                                    candidate,
+                                    investment,
+                                    activation_signal,
+                                    baselines.reactivity,
+                                    0.0,
+                                    &environment.catalog,
+                                    environment.height,
+                                ) else {
+                                    if activation_sufficient == Some(true) {
                                         diagnostics.trial_build_rejections_after_activation =
                                             diagnostics
                                                 .trial_build_rejections_after_activation
                                                 .saturating_add(1);
-                                        match trial_diagnostic.failure_stage {
-                                            DisplacementTrialFailureStage::Activation => {}
-                                            DisplacementTrialFailureStage::InvalidStoredBondEnergy => {
-                                                diagnostics.trial_rejections_old_bond_energy =
-                                                    diagnostics
-                                                        .trial_rejections_old_bond_energy
-                                                        .saturating_add(1);
-                                                if let (
-                                                    Some(stored),
-                                                    Some(expected),
-                                                    Some(abs_error),
-                                                ) = (
-                                                    trial_diagnostic.old_bond_energy_stored,
-                                                    trial_diagnostic.old_bond_energy_expected,
-                                                    trial_diagnostic.old_bond_energy_abs_error,
-                                                ) {
-                                                    let previous_max_error =
-                                                        diagnostics.old_bond_energy_max_abs_error;
-                                                    if abs_error > previous_max_error {
-                                                        diagnostics.old_bond_energy_max_abs_error =
-                                                            abs_error;
-                                                        diagnostics
-                                                            .old_bond_energy_stored_at_max_error =
-                                                            stored;
-                                                        diagnostics
-                                                            .old_bond_energy_expected_at_max_error =
-                                                            expected;
-                                                    }
-                                                }
-                                            }
-                                            DisplacementTrialFailureStage::Topology => {
-                                                diagnostics.trial_rejections_topology = diagnostics
-                                                    .trial_rejections_topology
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::CandidateCheck => {
-                                                let replacement_counter =
-                                                    &mut diagnostics.trial_rejections_replacement;
-                                                *replacement_counter =
-                                                    replacement_counter.saturating_add(1);
-                                                let candidate_counter = &mut diagnostics
-                                                    .trial_rejections_candidate_revalidation;
-                                                *candidate_counter =
-                                                    (*candidate_counter).saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Formation => {
-                                                diagnostics.trial_rejections_replacement =
-                                                    diagnostics
-                                                        .trial_rejections_replacement
-                                                        .saturating_add(1);
-                                                diagnostics.trial_rejections_formation_investment =
-                                                    diagnostics
-                                                        .trial_rejections_formation_investment
-                                                        .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Insertion => {
-                                                let replacement_counter =
-                                                    &mut diagnostics.trial_rejections_replacement;
-                                                *replacement_counter =
-                                                    replacement_counter.saturating_add(1);
-                                                let insertion_counter = &mut diagnostics
-                                                    .trial_rejections_physical_insertion;
-                                                *insertion_counter =
-                                                    (*insertion_counter).saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Energy => {
-                                                diagnostics.trial_rejections_energy = diagnostics
-                                                    .trial_rejections_energy
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Products => {
-                                                diagnostics.trial_rejections_products = diagnostics
-                                                    .trial_rejections_products
-                                                    .saturating_add(1);
-                                            }
-                                            DisplacementTrialFailureStage::Other => {
-                                                diagnostics.trial_rejections_other = diagnostics
-                                                    .trial_rejections_other
-                                                    .saturating_add(1);
-                                            }
-                                        }
+                                        diagnostics.trial_rejections_other =
+                                            diagnostics.trial_rejections_other.saturating_add(1);
                                     }
                                     accumulation.insert(key, next);
                                     continue;
                                 };
-                                let work_required = trial.formation_work + trial.disruption_work;
+                                let work_required = trial.energy.physical_work;
                                 operations.push(EnvironmentalDisplacementOperation {
                                     cell_a,
                                     material_a,
@@ -1478,119 +2439,32 @@ pub(crate) fn resolve_environmental_diagnosed(
     environment: &mut Environment,
     ledger: &mut EnergyLedger,
 ) -> Result<(), &'static str> {
-    let Some(source_a) = environment
+    let source_a = environment
         .field
         .cells
         .get(operation.cell_a)
         .and_then(|cell| cell.physical_materials.get(operation.material_a))
-    else {
-        return Err("stale_source_missing");
-    };
-    let Some(source_b) = environment
+        .cloned()
+        .ok_or("stale_source_missing")?;
+    let source_b = environment
         .field
         .cells
         .get(operation.cell_b)
         .and_then(|cell| cell.physical_materials.get(operation.material_b))
-    else {
-        return Err("stale_source_missing");
-    };
-    if source_a != &operation.source_a || source_b != &operation.source_b {
+        .cloned()
+        .ok_or("stale_source_missing")?;
+    if source_a != operation.source_a || source_b != operation.source_b {
         return Err("stale_source_mismatch");
     }
-
-    let Some((mut combined, indices_a)) =
-        restore_displacement_source(&operation.source_a, environment)
-    else {
-        return Err("source_material_restoration_failed");
-    };
-    let Some(indices_b) = crate::material_restoration::restore_material(
-        &mut combined,
-        &operation.source_b,
-        crate::structure::Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        },
-        &environment.catalog,
-    ) else {
-        return Err("incoming_material_restoration_failed");
-    };
-    if indices_b.iter().any(|index| {
-        crate::construction_runtime::placed_unit_overlaps(
-            &combined,
-            &combined.units[*index],
-            &indices_b,
-            &environment.catalog,
-        )
-    }) {
-        return Err("incoming_geometry_overlap");
-    }
-    let (Some(&anchor_unit), Some(&displaced_unit), Some(&incoming_unit)) = (
-        indices_a.get(operation.anchor_unit),
-        indices_a.get(operation.displaced_unit),
-        indices_b.get(operation.incoming_unit),
-    ) else {
-        return Err("constituent_mapping_invalid");
-    };
-    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
-    let Some(old_connection) = operation
-        .source_a
+    let old_connection = source_a
         .internal_connections
-        .as_ref()
+        .as_deref()
         .and_then(|connections| connections.get(operation.bond_index))
-    else {
-        return Err("old_bond_missing");
-    };
+        .ok_or("old_bond_missing")?;
     if old_connection != &operation.old_connection {
         return Err("old_bond_stale");
     }
-    let (Some(part_a_unit), Some(part_b_unit)) = (
-        indices_a.get(old_connection.part_a).copied(),
-        indices_a.get(old_connection.part_b).copied(),
-    ) else {
-        return Err("old_bond_endpoint_mapping_invalid");
-    };
-    let (Some(part_a_id), Some(part_b_id)) = (
-        combined.physical_id(part_a_unit),
-        combined.physical_id(part_b_unit),
-    ) else {
-        return Err("old_bond_endpoint_identity_invalid");
-    };
-    let (Some(part_a_properties), Some(part_b_properties)) = (
-        combined.units[part_a_unit].properties(&environment.catalog),
-        combined.units[part_b_unit].properties(&environment.catalog),
-    ) else {
-        return Err("old_bond_properties_missing");
-    };
-    let expected_old_bond = Bond {
-        endpoint_a: crate::structure::BondEndpoint::new(part_a_id, old_connection.endpoint_a),
-        endpoint_b: crate::structure::BondEndpoint::new(part_b_id, old_connection.endpoint_b),
-        strength: bond_strength(part_a_properties, part_b_properties),
-        bond_energy: old_connection.bond_energy,
-    };
-    let Some(old_bond) = combined
-        .bonds
-        .iter()
-        .find(|bond| bond.has_same_identity(&expected_old_bond))
-        .cloned()
-    else {
-        return Err("old_bond_not_restored");
-    };
-    let Some(trial) = build_displacement_trial(
-        &combined,
-        anchor_unit,
-        displaced_unit,
-        incoming_unit,
-        old_bond,
-        operation.candidate,
-        operation.investment,
-        operation.activation_signal,
-        baselines.reactivity,
-        0.0,
-        &environment.catalog,
-    ) else {
-        return Err("replacement_trial_invalid");
-    };
+
     let Some(derived_activation) =
         crate::chemistry::normalized_chemistry_to_activation_signal(operation.accumulated_reaction)
     else {
@@ -1599,9 +2473,11 @@ pub(crate) fn resolve_environmental_diagnosed(
     if (derived_activation - operation.activation_signal).abs() > 1e-9 {
         return Err("activation_revalidation_failed");
     }
-    let Some(expected_frequency) = displacement_reaction_frequency(
-        &combined.units[anchor_unit],
-        &combined.units[displaced_unit],
+    let Some(expected_frequency) = displacement_reaction_frequency_from_materials(
+        &source_a,
+        operation.anchor_unit,
+        &source_a,
+        operation.displaced_unit,
         &environment.catalog,
     ) else {
         return Err("frequency_revalidation_failed");
@@ -1609,22 +2485,40 @@ pub(crate) fn resolve_environmental_diagnosed(
     if (expected_frequency - operation.reaction_frequency_cycles_per_day).abs() > 1e-9 {
         return Err("frequency_revalidation_failed");
     }
-    // Resonance is a named energy reservoir and may fund the complete reaction
-    // deficit, including unfavorable structural change as well as physical work.
-    // Transfer the withdrawn amount into the usable holder before settling the
-    // complete conservative transaction so every destination is accounted once.
+
+    let baselines = crate::resources::ResourceBaselines::from_catalog(&environment.catalog);
+    let trial = build_native_environmental_displacement_trial(
+        &source_a,
+        &source_b,
+        operation.anchor_unit,
+        operation.displaced_unit,
+        operation.incoming_unit,
+        operation.bond_index,
+        &operation.old_connection,
+        operation.candidate,
+        operation.investment,
+        operation.activation_signal,
+        baselines.reactivity,
+        0.0,
+        &environment.catalog,
+        environment.height,
+    )
+    .ok_or("replacement_trial_invalid")?;
+
+    // Resonance and usable energy fund one complete signed replacement
+    // transaction. No intermediate BREAK or COMBINE settlement is performed.
     let mut staged_resonance = environment.resonant_energy.clone();
-    let Some(resonant_before) = staged_resonance.total_energy() else {
-        return Err("invalid_resonance_state");
-    };
+    let resonant_before = staged_resonance
+        .total_energy()
+        .ok_or("invalid_resonance_state")?;
     let resonance_funding_budget = trial.energy.required_external_input;
     let resonant_funding = staged_resonance.withdraw_compatible(
         operation.reaction_frequency_cycles_per_day,
         resonance_funding_budget,
     );
-    let Some(resonant_after) = staged_resonance.total_energy() else {
-        return Err("invalid_resonance_state");
-    };
+    let resonant_after = staged_resonance
+        .total_energy()
+        .ok_or("invalid_resonance_state")?;
     if !resonant_funding.is_finite() || resonant_funding < 0.0 {
         return Err("invalid_resonance_withdrawal");
     }
@@ -1659,12 +2553,10 @@ pub(crate) fn resolve_environmental_diagnosed(
     if remaining_external_deficit > environment.chemistry_usable_energy {
         return Err("insufficient_usable_energy");
     }
-    let Some(transaction) = trial
+    let transaction = trial
         .energy
         .settlement_transaction_conservative(EnergyReason::Combine)
-    else {
-        return Err("energy_settlement_transaction_invalid");
-    };
+        .ok_or("energy_settlement_transaction_invalid")?;
 
     let mut staged_ledger = *ledger;
     let mut staged_usable_energy = environment.chemistry_usable_energy + resonant_funding;
@@ -1702,28 +2594,23 @@ pub(crate) fn resolve_environmental_diagnosed(
         {
             return Err("product_invalid");
         }
-        let Some(placement) = product
+        let placement = product
             .placements
             .as_ref()
             .and_then(|placements| placements.first())
-        else {
-            return Err("product_placement_missing");
-        };
-        let Some(destination) = environment
+            .ok_or("product_placement_missing")?;
+        let destination = environment
             .field
             .index_for_position(placement.x, placement.y)
-        else {
-            return Err("product_destination_invalid");
-        };
+            .ok_or("product_destination_invalid")?;
         staged_products.push((destination, product));
     }
     if staged_products.len() < 2 {
         return Err("product_set_incomplete");
     }
 
-    // All validation and energy work is staged. Remove both source objects
-    // without index drift, then deposit each physical component at its own
-    // retained world position.
+    // All products and energy ledgers are staged. Source removal and product
+    // insertion now form one field-owned commit.
     if operation.cell_a == operation.cell_b {
         let cell = &mut environment.field.cells[operation.cell_a];
         let high = operation.material_a.max(operation.material_b);
@@ -1993,6 +2880,31 @@ mod tests {
     }
 
     #[test]
+    fn energy_funding_cannot_make_a_weaker_incoming_bond_win_competition() {
+        let carbon = properties("Carbon");
+        let mut displaced = properties("Oxygen");
+        let mut incoming = properties("Nitrogen");
+        let mut stronger_incoming = properties("Hydrogen");
+
+        // Isolate the competition rule from catalog tuning: the incumbent
+        // bond is deliberately stronger than the weaker incoming bond, while
+        // the control incoming bond is deliberately stronger than the incumbent.
+        displaced.cohesion = 0.9;
+        incoming.cohesion = 0.1;
+        stronger_incoming.cohesion = 1.0;
+        assert!(bond_strength(carbon, displaced) > bond_strength(carbon, incoming));
+        assert!(!replacement_wins_bond_competition(
+            carbon, displaced, incoming
+        ));
+        assert!(bond_strength(carbon, stronger_incoming) > bond_strength(carbon, displaced));
+        assert!(replacement_wins_bond_competition(
+            carbon,
+            displaced,
+            stronger_incoming
+        ));
+    }
+
+    #[test]
     fn favorable_replacement_is_rejected_without_sufficient_incoming_activation() {
         let anchor = properties("Carbon");
         let displaced = properties("Hydrogen");
@@ -2124,12 +3036,17 @@ mod tests {
                     ) {
                         continue;
                     }
+                    // Each pose is mutated directly in this fixture, outside the
+                    // structure mutation APIs that normally invalidate compatibility
+                    // caches. Use a fresh cache so the selected contact describes this
+                    // exact pose and can be revalidated by COMBINE at admission.
+                    let mut pose_cache = crate::contact::ConnectionCompatibilityCache::new();
                     let candidate = crate::contact::connection_pair_candidates_cached(
                         &replacement_trial,
                         0,
                         2,
                         catalog,
-                        &mut cache,
+                        &mut pose_cache,
                     )
                     .into_iter()
                     .find(|candidate| {
@@ -2226,7 +3143,7 @@ mod tests {
         );
 
         let (production_selected, _) =
-            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, false)
+            best_replacement_contact(&source, 0, 2, old_bond, &catalog, None, None, None, false)
                 .expect("the production selector must find a valid replacement");
         let selected_alternative = complete
             .alternatives
@@ -2350,6 +3267,176 @@ mod tests {
     }
 
     #[test]
+    fn material_native_contact_candidates_match_structure_contact_oracle() {
+        let catalog = default_catalog();
+        let (source, old_bond, _candidate, _investment) = three_participant_fixture(&catalog);
+        let mut reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source, &catalog,
+            )
+            .expect("fixture should export the bonded and free materials");
+        reactants.sort_by_key(|material| {
+            material
+                .internal_connections
+                .as_ref()
+                .is_some_and(|connections| connections.is_empty())
+        });
+        assert_eq!(reactants.len(), 2);
+        let bonded = &reactants[0];
+        let incoming = &reactants[1];
+        let native = crate::material_contact::connection_pair_candidates_for_material_parts(
+            bonded,
+            0,
+            Some(0),
+            incoming,
+            0,
+            &catalog,
+        )
+        .expect("material-native endpoints should resolve");
+
+        let mut graph_trial = source.clone();
+        graph_trial
+            .break_matching_bond(old_bond)
+            .expect("the old bond should be removed on the reference trial");
+        let mut cache = ConnectionCompatibilityCache::new();
+        let reference = crate::contact::connection_pair_candidates_cached(
+            &graph_trial,
+            0,
+            2,
+            &catalog,
+            &mut cache,
+        );
+        assert!(!native.is_empty());
+        assert!(!reference.is_empty());
+        for candidate in &native {
+            let matching = reference
+                .iter()
+                .find(|other| {
+                    candidate.endpoint_a.same_location(other.endpoint_a)
+                        && candidate.endpoint_b.same_location(other.endpoint_b)
+                })
+                .expect("every material-native endpoint pair should exist in reference geometry");
+            assert!((candidate.distance - matching.distance).abs() <= 1e-10);
+            assert!((candidate.facing - matching.facing).abs() <= 1e-10);
+            assert!((candidate.load_a - matching.load_a).abs() <= 1e-10);
+            assert!((candidate.load_b - matching.load_b).abs() <= 1e-10);
+            assert_eq!(candidate.available_a, matching.available_a);
+            assert_eq!(candidate.available_b, matching.available_b);
+            let native_evaluation = evaluate_environmental_displacement_candidate(
+                bonded, 0, 1, incoming, 0, 0, *candidate, &catalog,
+            );
+            let reference_evaluation = crate::combine_runtime::selected_candidate_evaluation(
+                &graph_trial,
+                0,
+                2,
+                *candidate,
+                &catalog,
+            );
+            assert_eq!(
+                native_evaluation.is_some(),
+                reference_evaluation.is_some(),
+                "material-native COMBINE evaluation must agree with the reference evaluator"
+            );
+            if let (Some(native), Some(reference)) = (native_evaluation, reference_evaluation) {
+                assert_eq!(native.0, reference.0);
+                assert!((native.1 - reference.1).abs() <= 1e-10);
+                assert!((native.2 - reference.2).abs() <= 1e-10);
+                assert!((native.3 - reference.3).abs() <= 1e-10);
+            }
+        }
+        for candidate in &reference {
+            assert!(
+                native.iter().any(|other| {
+                    candidate.endpoint_a.same_location(other.endpoint_a)
+                        && candidate.endpoint_b.same_location(other.endpoint_b)
+                }),
+                "the native material view must not omit a reference contact candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn material_native_displacement_chemistry_matches_restored_constituent_authority() {
+        let catalog = default_catalog();
+        let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
+        let anchor_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![source.units[0].placement],
+            &catalog,
+        )
+        .expect("Carbon should realize as a free environmental material");
+        let incoming_material = PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Oxygen", 1.0),
+            vec![source.units[2].placement],
+            &catalog,
+        )
+        .expect("Oxygen should realize as a free environmental material");
+        let anchor = environmental_displacement_constituent(&anchor_material, 0, &catalog)
+            .expect("anchor chemistry should resolve directly from its material");
+        let incoming = environmental_displacement_constituent(&incoming_material, 0, &catalog)
+            .expect("incoming chemistry should resolve directly from its material");
+
+        let legacy_activation = accumulate_incoming_activation_with_resonance(
+            &source.units[0],
+            &source.units[2],
+            candidate,
+            0.0,
+            0.5,
+            &catalog,
+        )
+        .expect("restored-graph authority should accept the fixture contact");
+        let material_activation =
+            accumulate_environmental_constituent_activation(anchor, incoming, candidate, 0.0, 0.5)
+                .expect("material-native authority should accept the same contact");
+        assert!(
+            (legacy_activation - material_activation).abs() <= 1e-12,
+            "material-native activation must preserve the approved chemistry equation"
+        );
+
+        let legacy_frequency =
+            displacement_reaction_frequency(&source.units[0], &source.units[1], &catalog)
+                .expect("legacy reaction frequency should be valid");
+        let material_frequency = displacement_reaction_frequency_from_materials(
+            &PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![source.units[0].placement],
+                &catalog,
+            )
+            .expect("Carbon should realize"),
+            0,
+            &PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Hydrogen", 1.0),
+                vec![source.units[1].placement],
+                &catalog,
+            )
+            .expect("Hydrogen should realize"),
+            0,
+            &catalog,
+        )
+        .expect("material-native reaction frequency should be valid");
+        assert!(
+            (legacy_frequency - material_frequency).abs() <= 1e-12,
+            "material-native frequency must preserve the approved catalog properties"
+        );
+
+        let legacy_anchor_point =
+            crate::contact::endpoint_world_point(candidate.endpoint_a, &source.units[0], &catalog)
+                .expect("legacy anchor endpoint should resolve");
+        let material_anchor_point = environmental_constituent_endpoint_world_point(
+            &anchor_material,
+            0,
+            candidate.endpoint_a,
+            &catalog,
+        )
+        .expect("material-native anchor endpoint should resolve");
+        assert!(
+            (legacy_anchor_point.x - material_anchor_point.x).abs() <= 1e-12
+                && (legacy_anchor_point.y - material_anchor_point.y).abs() <= 1e-12,
+            "material-native endpoint transform must preserve the physical contact point"
+        );
+    }
+
+    #[test]
     fn incoming_activation_is_accumulated_from_the_replacement_contact() {
         let catalog = default_catalog();
         let (source, _old_bond, candidate, _investment) = three_participant_fixture(&catalog);
@@ -2466,6 +3553,171 @@ mod tests {
     }
 
     #[test]
+    fn native_displacement_products_match_graph_and_conserve_rigid_body_momentum() {
+        let catalog = default_catalog();
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        // Keep the fixture away from the periodic vertical seam so the test's
+        // global angular-momentum reference uses one unwrapped coordinate frame.
+        for unit in &mut source.units {
+            unit.placement.y += 20.0;
+        }
+        let mut reactants =
+            crate::environmental_combine::physical_materials_from_structure_components(
+                &source, &catalog,
+            )
+            .expect("fixture should export its bonded and free reactants");
+        reactants.sort_by_key(|material| {
+            material
+                .internal_connections
+                .as_ref()
+                .is_some_and(|connections| connections.is_empty())
+        });
+        assert_eq!(reactants.len(), 2);
+        let mut bonded_source = reactants[0].clone();
+        let mut incoming_source = reactants[1].clone();
+        assert_eq!(
+            bonded_source.internal_connections.as_ref().unwrap().len(),
+            1
+        );
+
+        let replacement_bond_energy = crate::combine_runtime::bond_energy_for_pair(
+            &source.units[0],
+            &source.units[2],
+            &catalog,
+        )
+        .expect("replacement bond energy should use ordinary COMBINE authority");
+        let native_rest_products = build_environmental_displacement_products(
+            &bonded_source,
+            &incoming_source,
+            0,
+            0,
+            1,
+            0,
+            candidate,
+            replacement_bond_energy,
+            &catalog,
+            100.0,
+        )
+        .expect("native material topology should produce a valid displacement");
+
+        let mut graph_diagnostic = DisplacementTrialDiagnostic::default();
+        let graph_trial = build_displacement_trial_with_activation_status(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+            Some(&mut graph_diagnostic),
+        )
+        .unwrap_or_else(|| {
+            panic!("reference trial graph rejected replacement: {graph_diagnostic:?}")
+        });
+        assert_eq!(native_rest_products.len(), graph_trial.products.len());
+        let native_bonded = native_rest_products
+            .iter()
+            .find(|product| !product.material.internal_bonds.is_empty())
+            .expect("native result should contain the replacement molecule");
+        let graph_bonded = graph_trial
+            .products
+            .iter()
+            .find(|product| !product.material.internal_bonds.is_empty())
+            .expect("reference result should contain the replacement molecule");
+        assert_eq!(native_bonded.material, graph_bonded.material);
+        assert_eq!(
+            native_bonded.internal_connections,
+            graph_bonded.internal_connections
+        );
+        assert_eq!(native_bonded.placements, graph_bonded.placements);
+        assert_eq!(native_bonded.realized_shapes, graph_bonded.realized_shapes);
+        let native_free = native_rest_products
+            .iter()
+            .find(|product| product.material.internal_bonds.is_empty())
+            .expect("displaced constituent should remain a free physical product");
+        let graph_free = graph_trial
+            .products
+            .iter()
+            .find(|product| product.material.internal_bonds.is_empty())
+            .expect("reference trial should release the displaced constituent");
+        assert_eq!(native_free.material, graph_free.material);
+        assert_eq!(native_free.placements, graph_free.placements);
+
+        bonded_source.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: 0.65,
+            velocity_y: -0.2,
+            angular_velocity: 0.035,
+        };
+        incoming_source.inertial_motion = crate::physical_material::InertialMotion {
+            velocity_x: -0.4,
+            velocity_y: 0.3,
+            angular_velocity: -0.02,
+        };
+        let source_mass_properties = [
+            bonded_source
+                .mass_properties(&catalog, Some(100.0))
+                .expect("bonded source mass properties"),
+            incoming_source
+                .mass_properties(&catalog, Some(100.0))
+                .expect("incoming source mass properties"),
+        ];
+        let source_materials = [&bonded_source, &incoming_source];
+        let mut momentum_before = (0.0, 0.0);
+        let mut angular_momentum_before = 0.0;
+        for (material, properties) in source_materials.into_iter().zip(source_mass_properties) {
+            let mass = material.material.mass(&catalog);
+            let motion = material.inertial_motion;
+            let px = mass * motion.velocity_x;
+            let py = mass * motion.velocity_y;
+            momentum_before.0 += px;
+            momentum_before.1 += py;
+            angular_momentum_before += properties.moment_of_inertia * motion.angular_velocity
+                + properties.center_x * py
+                - properties.center_y * px;
+        }
+
+        let moving_products = build_environmental_displacement_products(
+            &bonded_source,
+            &incoming_source,
+            0,
+            0,
+            1,
+            0,
+            candidate,
+            replacement_bond_energy,
+            &catalog,
+            100.0,
+        )
+        .expect("native displacement should retain constituent momentum");
+        let mut momentum_after = (0.0, 0.0);
+        let mut angular_momentum_after = 0.0;
+        for product in &moving_products {
+            let properties = product
+                .mass_properties(&catalog, Some(100.0))
+                .expect("product mass properties");
+            let mass = product.material.mass(&catalog);
+            let motion = product.inertial_motion;
+            let px = mass * motion.velocity_x;
+            let py = mass * motion.velocity_y;
+            momentum_after.0 += px;
+            momentum_after.1 += py;
+            angular_momentum_after += properties.moment_of_inertia * motion.angular_velocity
+                + properties.center_x * py
+                - properties.center_y * px;
+        }
+        assert!((momentum_after.0 - momentum_before.0).abs() <= 1e-10);
+        assert!((momentum_after.1 - momentum_before.1).abs() <= 1e-10);
+        assert!(
+            (angular_momentum_after - angular_momentum_before).abs() <= 1e-9,
+            "the native split/replacement must conserve total angular momentum"
+        );
+    }
+
+    #[test]
     fn live_displacement_replaces_zero_allocated_seed_bond_with_resonance_funding() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         let catalog = simulation.environment.catalog.clone();
@@ -2555,6 +3807,7 @@ mod tests {
             incoming_unit,
             old_bond,
             &catalog,
+            None,
             None,
             None,
             false,

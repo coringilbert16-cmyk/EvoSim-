@@ -1471,6 +1471,7 @@ mod tests {
     fn physical(identity: u64, name: &str) -> PhysicalMaterial {
         PhysicalMaterial {
             material: Material::free_base(name.to_owned(), 1.0),
+            inertial_motion: crate::physical_material::InertialMotion::default(),
             environmental_identity: identity,
             placements: None,
             internal_connections: None,

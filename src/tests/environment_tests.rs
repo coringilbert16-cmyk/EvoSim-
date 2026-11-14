@@ -270,6 +270,7 @@ fn physical_batch_deposit_rejects_late_malformed_object_without_partial_commit()
     .expect("carbon should be physically realizable");
     let malformed = PhysicalMaterial {
         material: Material::free_base("Carbon", 1.0),
+        inertial_motion: crate::physical_material::InertialMotion::default(),
         environmental_identity: 0,
         placements: None,
         internal_connections: None,
@@ -701,7 +702,7 @@ fn environmental_break_split_retires_parent_and_assigns_distinct_child_ids() {
     let parent = field.cells[0].physical_materials[0].clone();
     let bond = parent.internal_connections.as_ref().unwrap()[0].clone();
     let pieces = parent
-        .break_internal_bond(&bond)
+        .break_environmental_internal_bond(&bond, &catalog, None)
         .expect("the single internal bond should split into two products");
 
     assert!(field.split_physical_at_index(0, 0, &parent, pieces, &catalog));

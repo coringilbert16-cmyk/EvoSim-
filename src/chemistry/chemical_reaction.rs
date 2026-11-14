@@ -1103,7 +1103,11 @@ pub(crate) fn resolve_environmental_diagnosed(
     {
         return Err("stale_source_or_bond_mismatch");
     }
-    let Some(pieces) = source.break_internal_bond(&operation.bond) else {
+    let Some(pieces) = source.break_environmental_internal_bond(
+        &operation.bond,
+        &environment.catalog,
+        Some(environment.height),
+    ) else {
         return Err("bond_cannot_be_split");
     };
     // Environmental chemistry may spend only energy that actually reached
@@ -2151,6 +2155,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                inertial_motion: crate::physical_material::InertialMotion::default(),
                 environmental_identity: 0,
                 placements: None,
                 internal_connections: None,
@@ -2205,6 +2210,7 @@ mod material_identity_tests {
             bond_index: 0,
             source_material: crate::physical_material::PhysicalMaterial {
                 material: Material::free_base("Carbon", 1.0),
+                inertial_motion: crate::physical_material::InertialMotion::default(),
                 environmental_identity: 0,
                 placements: None,
                 internal_connections: None,

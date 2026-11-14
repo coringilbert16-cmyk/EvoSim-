@@ -31,9 +31,145 @@ fn connection_endpoint_is_finite(endpoint: ConnectionEndpoint) -> bool {
     }
 }
 
+/// Approximate planar intrinsic inertia using the same realized-shape
+/// convention used by environmental transport. The result is independent of
+/// the flow mobility/response model and is suitable for Newtonian rotation.
+pub(crate) fn intrinsic_moment_of_inertia(form: &crate::resources::Form, mass: f64) -> f64 {
+    use crate::resources::Form;
+    match form {
+        Form::Circle { radius } => 0.5 * mass * radius * radius,
+        Form::Line { length } => mass * length * length / 12.0,
+        Form::Rectangle { width, height } => mass * (width * width + height * height) / 12.0,
+        Form::RegularPolygon { radius, .. } => 0.5 * mass * radius * radius,
+        Form::Polygon { vertices } => {
+            let mean_radius_sq = vertices.iter().map(|(x, y)| x * x + y * y).sum::<f64>()
+                / vertices.len().max(1) as f64;
+            0.5 * mass * mean_radius_sq
+        }
+        Form::Fluid { nominal_area, .. } => {
+            let radius_sq = nominal_area.max(0.0) / std::f64::consts::PI;
+            0.5 * mass * radius_sq
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct RigidBodyMassProperties {
+    pub(crate) mass: f64,
+    pub(crate) center_x: f64,
+    pub(crate) center_y: f64,
+    pub(crate) moment_of_inertia: f64,
+}
+
+/// Persistent Newtonian state for one realized elemental or molecular body.
+/// Linear velocity is the center-of-mass velocity in world axes; angular
+/// velocity is radians per physics-time unit. Environmental flow does not
+/// modify this state. Legacy serialized materials begin at rest.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct InertialMotion {
+    pub(crate) velocity_x: f64,
+    pub(crate) velocity_y: f64,
+    pub(crate) angular_velocity: f64,
+}
+
+impl InertialMotion {
+    pub(crate) fn is_finite(self) -> bool {
+        self.velocity_x.is_finite()
+            && self.velocity_y.is_finite()
+            && self.angular_velocity.is_finite()
+    }
+
+    /// Apply a constant net force and torque over an explicitly supplied
+    /// physics-time interval. No drag or damping is applied. The caller owns
+    /// the timestep and the authoritative mass/inertia calculation.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
+    )]
+    pub(crate) fn advanced(
+        self,
+        force_x: f64,
+        force_y: f64,
+        torque: f64,
+        mass: f64,
+        moment_of_inertia: f64,
+        delta_time: f64,
+    ) -> Option<Self> {
+        if !self.is_finite()
+            || ![
+                force_x,
+                force_y,
+                torque,
+                mass,
+                moment_of_inertia,
+                delta_time,
+            ]
+            .iter()
+            .all(|value| value.is_finite())
+            || mass <= 0.0
+            || moment_of_inertia <= 0.0
+            || delta_time < 0.0
+        {
+            return None;
+        }
+        let next = Self {
+            velocity_x: self.velocity_x + force_x / mass * delta_time,
+            velocity_y: self.velocity_y + force_y / mass * delta_time,
+            angular_velocity: self.angular_velocity + torque / moment_of_inertia * delta_time,
+        };
+        next.is_finite().then_some(next)
+    }
+
+    /// Kinetic energy for the supplied authoritative mass and inertia.
+    pub(crate) fn kinetic_energy(self, mass: f64, moment_of_inertia: f64) -> Option<f64> {
+        if !self.is_finite()
+            || !mass.is_finite()
+            || !moment_of_inertia.is_finite()
+            || mass <= 0.0
+            || moment_of_inertia < 0.0
+        {
+            return None;
+        }
+        let energy = 0.5
+            * (mass
+                * self
+                    .velocity_x
+                    .mul_add(self.velocity_x, self.velocity_y * self.velocity_y)
+                + moment_of_inertia * self.angular_velocity * self.angular_velocity);
+        (energy.is_finite() && energy >= 0.0).then_some(energy)
+    }
+
+    /// Velocity of a point offset from the center of mass.
+    pub(crate) fn velocity_at_offset(self, offset_x: f64, offset_y: f64) -> Option<(f64, f64)> {
+        if !self.is_finite() || !offset_x.is_finite() || !offset_y.is_finite() {
+            return None;
+        }
+        Some((
+            self.velocity_x - self.angular_velocity * offset_y,
+            self.velocity_y + self.angular_velocity * offset_x,
+        ))
+    }
+
+    /// Express the same physical velocity in axes rotated by the supplied angle.
+    pub(crate) fn rotated_axes(self, angle: f64) -> Option<Self> {
+        if !self.is_finite() || !angle.is_finite() {
+            return None;
+        }
+        let (sin, cos) = angle.sin_cos();
+        Some(Self {
+            velocity_x: self.velocity_x * cos - self.velocity_y * sin,
+            velocity_y: self.velocity_x * sin + self.velocity_y * cos,
+            angular_velocity: self.angular_velocity,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub(crate) struct PhysicalMaterial {
     pub(crate) material: Material,
+    /// Persistent rigid-body momentum state; unaffected by ambient flow.
+    #[serde(default)]
+    pub(crate) inertial_motion: InertialMotion,
     /// Stable identity for environmental chemistry; preserved by transport.
     /// Zero means not yet assigned to an active field instance.
     #[serde(default)]
@@ -141,6 +277,7 @@ impl PhysicalMaterial {
 
         Some(Self {
             material,
+            inertial_motion: InertialMotion::default(),
             environmental_identity: 0,
             placements: Some(placements),
             internal_connections: Some(internal_connections),
@@ -204,6 +341,156 @@ impl PhysicalMaterial {
 
     /// Resolve the stored physical shape for one constituent, validating any
     /// override against the catalog's material state and conserved fluid area.
+    /// Derive rigid-body mass, center of mass, and planar moment of inertia
+    /// from constituent masses and their authoritative realized geometry.
+    /// A vertical period is supplied only for worlds with periodic Y geometry.
+    /// Propose one Newtonian rigid-body step under a constant net force and
+    /// torque. Translation and rotation use midpoint velocity, so a constant
+    /// acceleration advances the pose consistently with the updated momentum.
+    /// This is a pure staged proposal: callers must validate collision/path
+    /// constraints and settle the before/after kinetic and pair-potential energy
+    /// changes before committing the returned material.
+    pub(crate) fn advanced_under_force(
+        &self,
+        force_x: f64,
+        force_y: f64,
+        torque: f64,
+        delta_time: f64,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Self> {
+        if !self.is_realized()
+            || !delta_time.is_finite()
+            || delta_time < 0.0
+            || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        {
+            return None;
+        }
+        let mass_properties = self.mass_properties(catalog, vertical_period)?;
+        let next_motion = self.inertial_motion.advanced(
+            force_x,
+            force_y,
+            torque,
+            mass_properties.mass,
+            mass_properties.moment_of_inertia,
+            delta_time,
+        )?;
+        let dx = 0.5 * (self.inertial_motion.velocity_x + next_motion.velocity_x) * delta_time;
+        let dy = 0.5 * (self.inertial_motion.velocity_y + next_motion.velocity_y) * delta_time;
+        let angle = 0.5
+            * (self.inertial_motion.angular_velocity + next_motion.angular_velocity)
+            * delta_time;
+        if ![dx, dy, angle].iter().all(|value| value.is_finite()) {
+            return None;
+        }
+
+        let (sin, cos) = angle.sin_cos();
+        let mut advanced = self.clone();
+        let placements = advanced.placements.as_mut()?;
+        for placement in placements {
+            let offset_x = placement.x - mass_properties.center_x;
+            let raw_offset_y = placement.y - mass_properties.center_y;
+            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
+                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let rotated_x = offset_x * cos - offset_y * sin;
+            let rotated_y = offset_x * sin + offset_y * cos;
+            placement.x = mass_properties.center_x + dx + rotated_x;
+            let next_y = mass_properties.center_y + dy + rotated_y;
+            placement.y = vertical_period.map_or(next_y, |period| next_y.rem_euclid(period));
+            placement.rotation_radians =
+                (placement.rotation_radians + angle).rem_euclid(std::f64::consts::TAU);
+            if !placement.x.is_finite()
+                || !placement.y.is_finite()
+                || !placement.rotation_radians.is_finite()
+            {
+                return None;
+            }
+        }
+        advanced.inertial_motion = next_motion;
+        advanced.is_realized().then_some(advanced)
+    }
+
+    pub(crate) fn mass_properties(
+        &self,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<RigidBodyMassProperties> {
+        if !self.is_realized()
+            || !self.material.is_valid_for_catalog(catalog)
+            || vertical_period.is_some_and(|period| !period.is_finite() || period <= 0.0)
+        {
+            return None;
+        }
+        let placements = self.placements.as_ref()?;
+        if placements.len() != self.material.parts.len() {
+            return None;
+        }
+        let origin = *placements.first()?;
+        let mut constituents = Vec::with_capacity(placements.len());
+        let mut total_mass = 0.0;
+        let mut weighted_x = 0.0;
+        let mut weighted_y = 0.0;
+        for (index, ((name, amount), placement)) in
+            self.material.parts.iter().zip(placements).enumerate()
+        {
+            let resource = catalog.iter().find(|resource| resource.name == *name)?;
+            let part_mass = resource.properties.mass * *amount;
+            if !part_mass.is_finite() || part_mass <= 0.0 {
+                return None;
+            }
+            let dx = placement.x - origin.x;
+            let raw_dy = placement.y - origin.y;
+            let dy = vertical_period.map_or(raw_dy, |period| {
+                (raw_dy + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let shape = self.realized_shape_for_part(index, catalog)?;
+            total_mass += part_mass;
+            weighted_x += dx * part_mass;
+            weighted_y += dy * part_mass;
+            constituents.push((part_mass, dx, dy, shape));
+        }
+        if !total_mass.is_finite() || total_mass <= 0.0 {
+            return None;
+        }
+        let center_offset_x = weighted_x / total_mass;
+        let center_offset_y = weighted_y / total_mass;
+        let mut moment_of_inertia = 0.0;
+        for (part_mass, dx, dy, shape) in constituents {
+            let rx = dx - center_offset_x;
+            let ry = dy - center_offset_y;
+            moment_of_inertia += part_mass * rx.mul_add(rx, ry * ry)
+                + intrinsic_moment_of_inertia(&shape.form, part_mass);
+        }
+        let center_y = vertical_period.map_or(origin.y + center_offset_y, |period| {
+            (origin.y + center_offset_y).rem_euclid(period)
+        });
+        let properties = RigidBodyMassProperties {
+            mass: total_mass,
+            center_x: origin.x + center_offset_x,
+            center_y,
+            moment_of_inertia,
+        };
+        (properties.mass.is_finite()
+            && properties.center_x.is_finite()
+            && properties.center_y.is_finite()
+            && properties.moment_of_inertia.is_finite()
+            && properties.moment_of_inertia > 0.0)
+            .then_some(properties)
+    }
+
+    /// Translational plus rotational kinetic energy from authoritative
+    /// realized mass properties.
+    pub(crate) fn kinetic_energy(
+        &self,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<f64> {
+        let properties = self.mass_properties(catalog, vertical_period)?;
+        self.inertial_motion
+            .kinetic_energy(properties.mass, properties.moment_of_inertia)
+    }
+
     pub(crate) fn realized_shape_for_part(
         &self,
         part_index: usize,
@@ -343,6 +630,7 @@ impl PhysicalMaterial {
                     parts,
                     internal_bonds,
                 },
+                inertial_motion: InertialMotion::default(),
                 environmental_identity: 0,
                 placements: Some(piece_placements),
                 internal_connections: Some(internal_connections),
@@ -354,6 +642,143 @@ impl PhysicalMaterial {
                         .collect()
                 }),
             });
+        }
+        Some(pieces)
+    }
+
+    /// Split a free environmental molecule while preserving its rigid-body
+    /// momentum across the resulting independent material pieces. Owner-relative
+    /// stored material must use the separate legacy storage path.
+    #[allow(dead_code)] // Used by environmental BREAK when the movement transaction is enabled.
+    pub(crate) fn break_environmental_internal_bond(
+        &self,
+        target: &PhysicalMaterialBond,
+        catalog: &[BaseResource],
+        vertical_period: Option<f64>,
+    ) -> Option<Vec<Self>> {
+        // Persisted active transformations can reach completion without passing
+        // through the ordinary source-selection gate. Revalidate the whole
+        // object so malformed bond topology cannot be split into new objects.
+        if !self.is_realized()
+            || !self.inertial_motion.is_finite()
+            || self.owner_relative_origin.is_some()
+        {
+            return None;
+        }
+        let source_mass_properties = self.mass_properties(catalog, vertical_period)?;
+        let placements = self.placements.as_ref()?;
+        let connections = self.internal_connections.as_ref()?;
+        if self
+            .realized_shapes
+            .as_ref()
+            .is_some_and(|shapes| shapes.len() != self.material.parts.len())
+        {
+            return None;
+        }
+        let target_index = connections.iter().position(|bond| bond == target)?;
+
+        let mut adjacency = vec![Vec::new(); self.material.parts.len()];
+        for (index, bond) in connections.iter().enumerate() {
+            if index == target_index {
+                continue;
+            }
+            if bond.part_a >= adjacency.len() || bond.part_b >= adjacency.len() {
+                return None;
+            }
+            adjacency[bond.part_a].push(bond.part_b);
+            adjacency[bond.part_b].push(bond.part_a);
+        }
+
+        let mut components = Vec::<Vec<usize>>::new();
+        let mut seen = vec![false; adjacency.len()];
+        for start in 0..adjacency.len() {
+            if seen[start] {
+                continue;
+            }
+            let mut stack = vec![start];
+            let mut members = Vec::new();
+            seen[start] = true;
+            while let Some(current) = stack.pop() {
+                members.push(current);
+                for &next in &adjacency[current] {
+                    if !seen[next] {
+                        seen[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            members.sort_unstable();
+            components.push(members);
+        }
+
+        let mut pieces = Vec::with_capacity(components.len());
+        for members in components {
+            let mut remap = vec![usize::MAX; self.material.parts.len()];
+            let mut parts = Vec::with_capacity(members.len());
+            let mut piece_placements = Vec::with_capacity(members.len());
+            for (new_index, &old_index) in members.iter().enumerate() {
+                remap[old_index] = new_index;
+                parts.push(self.material.parts[old_index].clone());
+                piece_placements.push(*placements.get(old_index)?);
+            }
+            let mut internal_bonds = Vec::new();
+            let mut internal_connections = Vec::new();
+            for bond in connections {
+                if remap.get(bond.part_a).copied() != Some(usize::MAX)
+                    && remap.get(bond.part_b).copied() != Some(usize::MAX)
+                {
+                    internal_bonds.push(crate::resources::InternalBond {
+                        part_a: remap[bond.part_a],
+                        part_b: remap[bond.part_b],
+                    });
+                    internal_connections.push(Self::remapped_bond(bond, &remap));
+                }
+            }
+            // A split component may begin at a different constituent than
+            // the original stored object. Move its owner-relative anchor by
+            // that constituent's source-frame offset, rotated into owner space.
+            // Keep the original owner anchor absent for environmental material.
+            let owner_relative_origin = self.owner_relative_origin.map(|origin| {
+                let first = piece_placements[0];
+                let (sin, cos) = origin.rotation_radians.sin_cos();
+                Placement {
+                    x: origin.x + first.x * cos - first.y * sin,
+                    y: origin.y + first.x * sin + first.y * cos,
+                    rotation_radians: origin.rotation_radians + first.rotation_radians,
+                }
+            });
+            let mut piece = Self {
+                material: Material {
+                    parts,
+                    internal_bonds,
+                },
+                environmental_identity: 0,
+                inertial_motion: self.inertial_motion,
+                placements: Some(piece_placements),
+                internal_connections: Some(internal_connections),
+                owner_relative_origin,
+                realized_shapes: self.realized_shapes.as_ref().map(|shapes| {
+                    members
+                        .iter()
+                        .map(|&old_index| shapes[old_index].clone())
+                        .collect()
+                }),
+            };
+            let piece_mass_properties = piece.mass_properties(catalog, vertical_period)?;
+            let offset_x = piece_mass_properties.center_x - source_mass_properties.center_x;
+            let raw_offset_y = piece_mass_properties.center_y - source_mass_properties.center_y;
+            let offset_y = vertical_period.map_or(raw_offset_y, |period| {
+                (raw_offset_y + period * 0.5).rem_euclid(period) - period * 0.5
+            });
+            let (velocity_x, velocity_y) = self
+                .inertial_motion
+                .velocity_at_offset(offset_x, offset_y)?;
+            piece.inertial_motion = InertialMotion {
+                velocity_x,
+                velocity_y,
+                angular_velocity: self.inertial_motion.angular_velocity,
+            };
+            pieces.push(piece);
         }
         Some(pieces)
     }
@@ -435,8 +860,12 @@ impl PhysicalMaterial {
                 }
             })
             .collect();
+        let inertial_motion = self
+            .inertial_motion
+            .rotated_axes(-origin.rotation_radians)?;
         Some(Self {
             material: self.material,
+            inertial_motion,
             environmental_identity: self.environmental_identity,
             placements: Some(rebased),
             internal_connections: self.internal_connections,
@@ -450,6 +879,249 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn newtonian_step_integrates_force_into_velocity_and_pose() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 3.0,
+                y: 4.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        let mass = physical.mass_properties(&catalog, None).unwrap().mass;
+        let advanced = physical
+            .advanced_under_force(2.0, 0.0, 0.0, 0.5, &catalog, None)
+            .expect("finite force should produce a staged Newtonian step");
+        let expected_velocity = 2.0 / mass * 0.5;
+        let expected_displacement = 0.5 * expected_velocity * 0.5;
+        assert!((advanced.inertial_motion.velocity_x - expected_velocity).abs() < 1e-12);
+        assert!(
+            (advanced.placements.as_ref().unwrap()[0].x - (3.0 + expected_displacement)).abs()
+                < 1e-12
+        );
+        assert_eq!(advanced.placements.as_ref().unwrap()[0].y, 4.0);
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, 3.0);
+    }
+
+    #[test]
+    fn newtonian_torque_rotates_about_the_realized_center_of_mass() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("composite should realize");
+        let before = physical.mass_properties(&catalog, None).unwrap();
+        let advanced = physical
+            .advanced_under_force(0.0, 0.0, 2.0, 0.5, &catalog, None)
+            .expect("finite torque should produce a staged rigid-body step");
+        let after = advanced.mass_properties(&catalog, None).unwrap();
+        assert!((after.center_x - before.center_x).abs() < 1e-12);
+        assert!((after.center_y - before.center_y).abs() < 1e-12);
+        assert!(advanced.inertial_motion.angular_velocity > 0.0);
+        assert!(advanced.placements.as_ref().unwrap()[1].y > 0.0);
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+    }
+
+    #[test]
+    fn newtonian_step_preserves_momentum_without_force_and_wraps_vertical_pose() {
+        let catalog = crate::resources::default_catalog();
+        let mut physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 1.0,
+                y: 9.8,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        physical.inertial_motion.velocity_x = 2.0;
+        physical.inertial_motion.velocity_y = 1.0;
+        physical.inertial_motion.angular_velocity = 0.25;
+        let advanced = physical
+            .advanced_under_force(0.0, 0.0, 0.0, 0.5, &catalog, Some(10.0))
+            .expect("force-free motion should preserve momentum");
+        assert_eq!(advanced.inertial_motion, physical.inertial_motion);
+        let placement = advanced.placements.as_ref().unwrap()[0];
+        assert!((placement.x - 2.0).abs() < 1e-12);
+        assert!((placement.y - 0.3).abs() < 1e-12);
+        assert!((placement.rotation_radians - 0.125).abs() < 1e-12);
+    }
+
+    #[test]
+    fn newtonian_step_rejects_invalid_force_without_mutating_source() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should realize");
+        assert!(physical
+            .advanced_under_force(f64::NAN, 0.0, 0.0, 1.0, &catalog, None)
+            .is_none());
+        assert_eq!(physical.inertial_motion, InertialMotion::default());
+        assert_eq!(physical.placements.as_ref().unwrap()[0].x, 0.0);
+    }
+
+    #[test]
+    fn mass_properties_use_constituent_mass_and_realized_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("unbonded composite should realize");
+        let properties = physical
+            .mass_properties(&catalog, None)
+            .expect("realized geometry should have mass properties");
+        assert!((properties.mass - 1.25).abs() < 1e-12);
+        assert!((properties.center_x - 0.4).abs() < 1e-12);
+        assert_eq!(properties.center_y, 0.0);
+        let carbon_form = &catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap()
+            .shape
+            .form;
+        let hydrogen_form = &catalog
+            .iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap()
+            .shape
+            .form;
+        let expected_inertia = 0.8
+            + intrinsic_moment_of_inertia(carbon_form, 1.0)
+            + intrinsic_moment_of_inertia(hydrogen_form, 0.25);
+        assert!((properties.moment_of_inertia - expected_inertia).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mass_properties_respect_periodic_vertical_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 0.0,
+                    y: 0.1,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 0.0,
+                    y: 99.9,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("unbonded composite should realize");
+        let properties = physical
+            .mass_properties(&catalog, Some(100.0))
+            .expect("periodic geometry should have mass properties");
+        assert!((properties.center_y - 0.06).abs() < 1e-12);
+        assert!(physical.mass_properties(&catalog, Some(0.0)).is_none());
+    }
+
+    #[test]
+    fn inertial_motion_integrates_force_and_torque_without_drag() {
+        let initial = InertialMotion {
+            velocity_x: 2.0,
+            velocity_y: -1.0,
+            angular_velocity: 0.5,
+        };
+        let next = initial
+            .advanced(4.0, -2.0, 3.0, 2.0, 1.5, 0.25)
+            .expect("finite Newtonian update should succeed");
+        assert_eq!(next.velocity_x, 2.5);
+        assert_eq!(next.velocity_y, -1.25);
+        assert_eq!(next.angular_velocity, 1.0);
+
+        let coasting = next
+            .advanced(0.0, 0.0, 0.0, 2.0, 1.5, 10.0)
+            .expect("unforced motion should persist");
+        assert_eq!(coasting, next);
+    }
+
+    #[test]
+    fn inertial_motion_kinetic_energy_includes_translation_and_rotation() {
+        let motion = InertialMotion {
+            velocity_x: 3.0,
+            velocity_y: 4.0,
+            angular_velocity: 2.0,
+        };
+        assert_eq!(motion.kinetic_energy(2.0, 0.5), Some(26.0));
+        assert_eq!(
+            InertialMotion::default().kinetic_energy(2.0, 0.5),
+            Some(0.0)
+        );
+    }
+
+    #[test]
+    fn inertial_motion_rejects_invalid_dynamics_inputs() {
+        let motion = InertialMotion::default();
+        assert!(motion.advanced(1.0, 0.0, 0.0, 0.0, 1.0, 1.0).is_none());
+        assert!(motion.advanced(1.0, 0.0, 0.0, 1.0, 0.0, 1.0).is_none());
+        assert!(motion.advanced(1.0, 0.0, 0.0, 1.0, 1.0, f64::NAN).is_none());
+        assert!(motion.kinetic_energy(-1.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn intrinsic_frame_conversion_preserves_center_of_mass_velocity() {
+        let motion = InertialMotion {
+            velocity_x: 1.0,
+            velocity_y: 2.0,
+            angular_velocity: 3.0,
+        };
+        let local = motion.rotated_axes(-std::f64::consts::FRAC_PI_2).unwrap();
+        assert!((local.velocity_x - 2.0).abs() < 1e-12);
+        assert!((local.velocity_y + 1.0).abs() < 1e-12);
+        assert_eq!(local.angular_velocity, motion.angular_velocity);
+    }
 
     #[test]
     fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {
@@ -518,6 +1190,7 @@ mod tests {
         };
         let physical = PhysicalMaterial {
             material: Material::free_base("Water", 2.0),
+            inertial_motion: InertialMotion::default(),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -548,6 +1221,7 @@ mod tests {
         };
         let underfilled = PhysicalMaterial {
             material: Material::free_base("Water", 2.0),
+            inertial_motion: InertialMotion::default(),
             placements: Some(vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -659,8 +1333,16 @@ mod tests {
             rotation_radians: owner_rotation,
         });
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
+        assert!(
+            physical
+                .break_environmental_internal_bond(&target, &catalog, None)
+                .is_none(),
+            "owner-relative stored material must never enter the environmental movement path"
+        );
 
-        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        let pieces = physical
+            .break_internal_bond(&target)
+            .expect("legacy stored-material split");
         assert_eq!(pieces.len(), 2);
         let offset = 0.838_f64;
         let expected = Placement {
@@ -708,9 +1390,49 @@ mod tests {
             &catalog,
         )
         .expect("stored compound should be realizable");
+        let mut physical = physical;
+        physical.inertial_motion = InertialMotion {
+            velocity_x: 1.25,
+            velocity_y: -0.5,
+            angular_velocity: 0.75,
+        };
+        let source_mass_properties = physical.mass_properties(&catalog, None).unwrap();
+        let expected_motion = physical.inertial_motion;
         let target = physical.internal_connections.as_ref().unwrap()[0].clone();
-        let pieces = physical.break_internal_bond(&target).expect("stored bond");
+        let pieces = physical
+            .break_environmental_internal_bond(&target, &catalog, None)
+            .expect("stored bond");
         assert_eq!(pieces.len(), 2);
+        let source_kinetic_energy = expected_motion
+            .kinetic_energy(
+                source_mass_properties.mass,
+                source_mass_properties.moment_of_inertia,
+            )
+            .unwrap();
+        let mut pieces_kinetic_energy = 0.0;
+        for piece in &pieces {
+            let properties = piece.mass_properties(&catalog, None).unwrap();
+            let expected = expected_motion
+                .velocity_at_offset(
+                    properties.center_x - source_mass_properties.center_x,
+                    properties.center_y - source_mass_properties.center_y,
+                )
+                .unwrap();
+            assert!((piece.inertial_motion.velocity_x - expected.0).abs() < 1e-12);
+            assert!((piece.inertial_motion.velocity_y - expected.1).abs() < 1e-12);
+            assert_eq!(
+                piece.inertial_motion.angular_velocity,
+                expected_motion.angular_velocity
+            );
+            pieces_kinetic_energy += piece
+                .inertial_motion
+                .kinetic_energy(properties.mass, properties.moment_of_inertia)
+                .unwrap();
+        }
+        assert!(
+            (pieces_kinetic_energy - source_kinetic_energy).abs() < 1e-12,
+            "splitting a rigid body without an impulse must conserve total kinetic energy"
+        );
         assert!(pieces
             .iter()
             .all(|piece| piece.material.internal_bonds.is_empty()));

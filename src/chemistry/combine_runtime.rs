@@ -383,10 +383,26 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
     candidate: crate::contact::ConnectionPairCandidate,
     catalog: &[BaseResource],
 ) -> Option<crate::structure::Bond> {
-    if unit_a >= structure.units.len()
-        || unit_b >= structure.units.len()
-        || unit_a == unit_b
-        || !candidate.distance.is_finite()
+    admit_selected_candidate_to_trial_structure_diagnostic(
+        structure, unit_a, unit_b, candidate, catalog,
+    )
+    .ok()
+}
+
+/// Preserve the first admission rejection so coupled chemistry trials can
+/// distinguish stale contact geometry, unavailable endpoints, invalid bond
+/// energy, and topology rejection without weakening COMBINE validation.
+pub(crate) fn admit_selected_candidate_to_trial_structure_diagnostic(
+    structure: &mut crate::structure::OrganismStructure,
+    unit_a: usize,
+    unit_b: usize,
+    candidate: crate::contact::ConnectionPairCandidate,
+    catalog: &[BaseResource],
+) -> Result<crate::structure::Bond, &'static str> {
+    if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
+        return Err("invalid unit indices");
+    }
+    if !candidate.distance.is_finite()
         || candidate.distance < 0.0
         || candidate.distance > COMBINE_CONTACT_TOLERANCE
         || !candidate.facing.is_finite()
@@ -395,7 +411,7 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
         || !candidate.available_a
         || !candidate.available_b
     {
-        return None;
+        return Err("candidate metrics invalid or endpoints unavailable");
     }
 
     let mut cache = ConnectionCompatibilityCache::new();
@@ -404,25 +420,30 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
     )
     .into_iter()
     .find(|live| {
-        live.endpoint_a == candidate.endpoint_a
-            && live.endpoint_b == candidate.endpoint_b
+        live.endpoint_a.same_location(candidate.endpoint_a)
+            && live.endpoint_b.same_location(candidate.endpoint_b)
             && live.distance <= COMBINE_CONTACT_TOLERANCE
             && live.available_a
             && live.available_b
-    })?;
+    })
+    .ok_or("selected endpoint pair is no longer an eligible live contact")?;
     if (live_candidate.distance - candidate.distance).abs() > EPSILON
         || (live_candidate.facing - candidate.facing).abs() > EPSILON
         || (live_candidate.load_a - candidate.load_a).abs() > EPSILON
         || (live_candidate.load_b - candidate.load_b).abs() > EPSILON
     {
-        return None;
+        return Err("live contact metrics differ from selected candidate");
     }
 
-    let a = structure.units[unit_a].properties(catalog)?;
-    let b = structure.units[unit_b].properties(catalog)?;
-    let pair_potential =
-        active_pair_potential(structure, unit_a, unit_b, candidate, catalog).ok()?;
-    let strength = bond_integrity(a, b)?;
+    let a = structure.units[unit_a]
+        .properties(catalog)
+        .ok_or("anchor properties unavailable")?;
+    let b = structure.units[unit_b]
+        .properties(catalog)
+        .ok_or("incoming properties unavailable")?;
+    let pair_potential = active_pair_potential(structure, unit_a, unit_b, candidate, catalog)
+        .map_err(|_| "active pair potential rejected candidate")?;
+    let strength = bond_integrity(a, b).ok_or("bond integrity unavailable")?;
     let bond_energy = pair_potential
         .map(|potential| potential.bond_energy)
         .unwrap_or_else(|| crate::combine::intrinsic_bond_potential(a, b, strength));
@@ -431,17 +452,28 @@ pub(crate) fn admit_selected_candidate_to_trial_structure(
         || !bond_energy.is_finite()
         || bond_energy < 0.0
     {
-        return None;
+        return Err("replacement bond strength or energy invalid");
     }
 
     let bond = crate::structure::Bond {
-        endpoint_a: BondEndpoint::new(structure.physical_id(unit_a)?, candidate.endpoint_a),
-        endpoint_b: BondEndpoint::new(structure.physical_id(unit_b)?, candidate.endpoint_b),
+        endpoint_a: BondEndpoint::new(
+            structure
+                .physical_id(unit_a)
+                .ok_or("anchor identity unavailable")?,
+            candidate.endpoint_a,
+        ),
+        endpoint_b: BondEndpoint::new(
+            structure
+                .physical_id(unit_b)
+                .ok_or("incoming identity unavailable")?,
+            candidate.endpoint_b,
+        ),
         strength,
         bond_energy,
     };
-    crate::contact::try_add_bond(structure, bond, catalog).ok()?;
-    Some(bond)
+    crate::contact::try_add_bond(structure, bond, catalog)
+        .map_err(|_| "replacement bond rejected by topology/contact authority")?;
+    Ok(bond)
 }
 
 pub(crate) fn form_specific_bond(

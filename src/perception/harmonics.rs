@@ -440,6 +440,19 @@ pub(crate) struct ResonancePairPotentialComponent {
     pub(crate) energy: f64,
 }
 
+/// Translation force on one participant in a resonance interaction.
+///
+/// The order returned by the multi-body gradient is source, receiver, then
+/// occluders in caller-supplied order. Forces are all derived from the same
+/// frequency-resolved symmetric potential.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ResonanceBodyForce {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    /// Torque about the body's center of mass from the same potential gradient.
+    pub(crate) torque: f64,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -1135,6 +1148,33 @@ fn environmental_mass_scale(mass: f64, baseline_mass: f64) -> f64 {
 /// A realized environmental material emits one spectrum as a whole material.
 /// Composition is evaluated through the material's aggregate properties; the
 /// material is never split into independent environmental sensory sources.
+fn environmental_material_geometry(
+    physical: &crate::physical_material::PhysicalMaterial,
+) -> Option<(f64, f64, f64)> {
+    if !physical.material.is_valid() || physical.material.is_empty() {
+        return None;
+    }
+    let placements = physical.placements.as_ref()?;
+    if placements.len() != physical.material.parts.len() || placements.is_empty() {
+        return None;
+    }
+
+    let mut source_x = 0.0;
+    let mut source_y = 0.0;
+    for placement in placements {
+        source_x += placement.x;
+        source_y += placement.y;
+    }
+    let count = placements.len() as f64;
+    source_x /= count;
+    source_y /= count;
+    let extent = placements
+        .iter()
+        .map(|placement| (placement.x - source_x).hypot(placement.y - source_y))
+        .fold(0.0_f64, f64::max);
+    Some((source_x, source_y, extent))
+}
+
 fn environmental_material_resonance(
     physical: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
@@ -1280,6 +1320,19 @@ pub(crate) fn material_aura_receptions_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_occluders_prepared(
+        source, receiver, occluders, catalog, tick, None,
+    )
+}
+
+fn material_aura_receptions_with_occluders_prepared(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitter: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<MaterialAuraReception>> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -1294,9 +1347,27 @@ pub(crate) fn material_aura_receptions_with_occluders(
         return Some(Vec::new());
     }
     let receiver_geometry =
-        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(receiver, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            receiver, catalog,
+        )?;
     let source_geometry =
-        crate::organism_geometry::OrganismBodyGeometry::from_physical_material(source, catalog)?;
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            source, catalog,
+        )?;
+    let (source_x, source_y, _) = environmental_material_geometry(source)?;
+    if !source_x.is_finite() || !source_y.is_finite() {
+        return None;
+    }
+    // Every source-to-receiver-boundary segment lies inside this AABB. A body
+    // outside it cannot occlude any sampled ray, so retain only geometries
+    // whose bounds intersect the conservative envelope. No relevant blocker
+    // is truncated and no distance cutoff is introduced.
+    let receiver_envelope = [
+        (receiver_geometry.min_x, receiver_geometry.min_y),
+        (receiver_geometry.min_x, receiver_geometry.max_y),
+        (receiver_geometry.max_x, receiver_geometry.min_y),
+        (receiver_geometry.max_x, receiver_geometry.max_y),
+    ];
 
     // Keep the receiver first as the only target. Other bodies remain exact
     // occluders; the source itself is excluded because its aura originates
@@ -1307,31 +1378,36 @@ pub(crate) fn material_aura_receptions_with_occluders(
         if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
             continue;
         }
-        receiver_bodies.push(
-            crate::organism_geometry::OrganismBodyGeometry::from_physical_material(
-                occluder, catalog,
-            )?,
-        );
+        let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            occluder, catalog,
+        )?;
+        if geometry_bounds_may_occlude_source_points(
+            (source_x, source_y),
+            &receiver_envelope,
+            &geometry,
+        ) {
+            receiver_bodies.push(geometry);
+        }
     }
 
-    material_aura_receptions_with_geometry(
+    material_aura_receptions_with_geometry_prepared(
         source,
         receiver,
         &source_geometry,
         &receiver_bodies,
         catalog,
         tick,
+        prepared_emitter,
     )
 }
 
 /// Conservative AABB broad phase for possible occluders between a point
 /// source and the sampled receiver endpoints. Every source-to-endpoint segment
 /// lies inside the envelope of the source and requested points.
-#[allow(dead_code)] // Retained for later organism-scale occlusion geometry.
 fn geometry_bounds_may_occlude_source_points(
     source: (f64, f64),
     points: &[(f64, f64)],
-    candidate: &crate::organism_geometry::OrganismBodyGeometry,
+    candidate: &crate::physical_body_geometry::PhysicalBodyGeometry,
 ) -> bool {
     let mut min_x = source.0;
     let mut max_x = source.0;
@@ -1350,7 +1426,7 @@ fn geometry_bounds_may_occlude_source_points(
 }
 
 fn receiver_has_straight_boundary(
-    receiver: &crate::organism_geometry::OrganismBodyGeometry,
+    receiver: &crate::physical_body_geometry::PhysicalBodyGeometry,
 ) -> bool {
     receiver
         .parts
@@ -1358,7 +1434,9 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
-fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
+fn receiver_has_curved_boundary(
+    receiver: &crate::physical_body_geometry::PhysicalBodyGeometry,
+) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
         crate::resources::Form::Fluid {
@@ -1389,13 +1467,14 @@ fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBod
 
 /// Evaluate one source against prebuilt world geometry. The receiver must be
 /// the first body in `receiver_bodies`; all remaining bodies are occluders.
-fn material_aura_receptions_with_geometry(
+fn material_aura_receptions_with_geometry_prepared(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
-    source_geometry: &crate::organism_geometry::OrganismBodyGeometry,
-    receiver_bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    source_geometry: &crate::physical_body_geometry::PhysicalBodyGeometry,
+    receiver_bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     catalog: &[crate::resources::BaseResource],
     tick: u64,
+    prepared_emitter: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<MaterialAuraReception>> {
     if source.owner_relative_origin.is_some()
         || receiver.owner_relative_origin.is_some()
@@ -1404,9 +1483,7 @@ fn material_aura_receptions_with_geometry(
     {
         return None;
     }
-    let (source_x, source_y, source_extent, emitted) =
-        environmental_material_resonance(source, catalog, tick)?;
-
+    let (source_x, source_y, source_extent) = environmental_material_geometry(source)?;
     let target_body_indices = [0];
     let receiver_geometry = receiver_bodies.first()?;
     let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
@@ -1430,10 +1507,25 @@ fn material_aura_receptions_with_geometry(
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
-    let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
+    let source_mass_scale = prepared_emitter
+        .map(|emitter| emitter.mass_scale)
+        .unwrap_or_else(|| environmental_mass_scale(source.material.mass(catalog), baselines.mass));
+    if prepared_emitter.is_some() && (!source_mass_scale.is_finite() || source_mass_scale < 0.0) {
+        return None;
+    }
     if source_mass_scale <= f64::EPSILON {
         return Some(Vec::new());
     }
+    let computed_emitted = prepared_emitter.is_none().then(|| {
+        material_response(
+            source.material.weighted_properties(catalog),
+            baselines,
+            phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
+        )
+    });
+    let emitted = prepared_emitter
+        .map(|emitter| &emitter.emitted)
+        .or(computed_emitted.as_ref())?;
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
     let mut receive_at = |receiver_x: f64,
@@ -1454,7 +1546,7 @@ fn material_aura_receptions_with_geometry(
             return Some(());
         }
         let mut incident = ToneSpectrum::empty();
-        add_spectrum(&mut incident, &emitted, attenuation);
+        add_spectrum(&mut incident, emitted, attenuation);
         incident.retain_strongest();
         let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
         received.retain_strongest();
@@ -1769,20 +1861,52 @@ fn directional_resonance_pair_potential_components_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
-    let receptions =
-        material_aura_receptions_with_occluders(source, receiver, occluders, catalog, tick)?;
+    directional_resonance_pair_potential_components_with_prepared_emitters(
+        source, receiver, occluders, catalog, tick, None, None,
+    )
+}
+
+fn directional_resonance_pair_potential_components_with_prepared_emitters(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_source: Option<&MaterialResonanceEmitter>,
+    prepared_receiver: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let receptions = material_aura_receptions_with_occluders_prepared(
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_source,
+    )?;
     if receptions.is_empty() {
         return Some(Vec::new());
     }
 
-    let (receiver_x, receiver_y, _, receiver_emission) =
-        environmental_material_resonance(receiver, catalog, tick)?;
+    let (receiver_x, receiver_y, _) = environmental_material_geometry(receiver)?;
     let baselines = ResourceBaselines::from_catalog(catalog);
-    let receiver_mass_scale =
-        environmental_mass_scale(receiver.material.mass(catalog), baselines.mass);
+    let receiver_mass_scale = prepared_receiver
+        .map(|emitter| emitter.mass_scale)
+        .unwrap_or_else(|| {
+            environmental_mass_scale(receiver.material.mass(catalog), baselines.mass)
+        });
     if !receiver_mass_scale.is_finite() || receiver_mass_scale < 0.0 {
         return None;
     }
+    let computed_receiver_emission = prepared_receiver.is_none().then(|| {
+        material_response(
+            receiver.material.weighted_properties(catalog),
+            baselines,
+            phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
+        )
+    });
+    let receiver_emission = prepared_receiver
+        .map(|emitter| &emitter.emitted)
+        .or(computed_receiver_emission.as_ref())?;
 
     let mut potential = Vec::<ResonancePairPotentialComponent>::new();
     for sample in receptions {
@@ -1799,7 +1923,7 @@ fn directional_resonance_pair_potential_components_with_occluders(
             return None;
         }
         let mut local_field = ToneSpectrum::empty();
-        add_spectrum(&mut local_field, &receiver_emission, local_scale);
+        add_spectrum(&mut local_field, receiver_emission, local_scale);
         local_field.retain_strongest();
         for contribution in
             spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
@@ -1849,14 +1973,28 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
+    resonance_pair_potential_components_with_prepared_emitters(
+        a, b, occluders, catalog, tick, None, None,
+    )
+}
+
+fn resonance_pair_potential_components_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_a: Option<&MaterialResonanceEmitter>,
+    prepared_b: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
     if std::ptr::eq(a, b) {
         return Some(Vec::new());
     }
-    let a_to_b = directional_resonance_pair_potential_components_with_occluders(
-        a, b, occluders, catalog, tick,
+    let a_to_b = directional_resonance_pair_potential_components_with_prepared_emitters(
+        a, b, occluders, catalog, tick, prepared_a, prepared_b,
     )?;
-    let b_to_a = directional_resonance_pair_potential_components_with_occluders(
-        b, a, occluders, catalog, tick,
+    let b_to_a = directional_resonance_pair_potential_components_with_prepared_emitters(
+        b, a, occluders, catalog, tick, prepared_b, prepared_a,
     )?;
     let mut symmetric = Vec::<ResonancePairPotentialComponent>::new();
     for component in a_to_b.iter().chain(b_to_a.iter()) {
@@ -1912,7 +2050,60 @@ pub(crate) fn resonance_pair_potential_with_occluders(
     potential.is_finite().then_some(potential)
 }
 
+fn resonance_pair_potential_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    emitter_a: &MaterialResonanceEmitter,
+    emitter_b: &MaterialResonanceEmitter,
+) -> Option<f64> {
+    let components = resonance_pair_potential_components_with_prepared_emitters(
+        a,
+        b,
+        occluders,
+        catalog,
+        tick,
+        Some(emitter_a),
+        Some(emitter_b),
+    )?;
+    let potential = components
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+    potential.is_finite().then_some(potential)
+}
+
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
+pub(crate) fn rotated_physical_material(
+    physical: &crate::physical_material::PhysicalMaterial,
+    angle: f64,
+    catalog: &[crate::resources::BaseResource],
+) -> Option<crate::physical_material::PhysicalMaterial> {
+    if !angle.is_finite() {
+        return None;
+    }
+    let properties = physical.mass_properties(catalog, None)?;
+    let (sin, cos) = angle.sin_cos();
+    let mut rotated = physical.clone();
+    let placements = rotated.placements.as_mut()?;
+    for placement in placements {
+        let dx = placement.x - properties.center_x;
+        let dy = placement.y - properties.center_y;
+        placement.x = properties.center_x + dx * cos - dy * sin;
+        placement.y = properties.center_y + dx * sin + dy * cos;
+        placement.rotation_radians += angle;
+        if !placement.x.is_finite()
+            || !placement.y.is_finite()
+            || !placement.rotation_radians.is_finite()
+        {
+            return None;
+        }
+    }
+    Some(rotated)
+}
+
 fn translated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
     dx: f64,
@@ -1985,6 +2176,287 @@ pub(crate) fn resonance_pair_force_with_occluders(
     let force_on_b = (-gradient_x, -gradient_y);
     let force_on_a = (gradient_x, gradient_y);
     Some((force_on_a, force_on_b))
+}
+
+/// Derive the net force and center-of-mass torque on every body participating
+/// in an occluded resonance pair. Translation and rigid rotation are both
+/// differentiated from the same occlusion-aware potential, preserving the
+/// complete multi-body gradient instead of assigning an unbalanced opposite
+/// force to the source/receiver pair alone.
+#[allow(dead_code)] // Staged for integration with environmental rigid-body movement.
+pub(crate) fn resonance_multi_body_forces_with_occluders(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForce>> {
+    resonance_multi_body_forces_with_optional_prepared_emitters(
+        a, b, occluders, catalog, tick, None,
+    )
+}
+
+pub(crate) fn resonance_multi_body_forces_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    emitters: &[MaterialResonanceEmitter],
+    index_a: usize,
+    index_b: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForce>> {
+    let prepared_a = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == index_a);
+    let prepared_b = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == index_b);
+    let prepared = prepared_a.zip(prepared_b);
+    resonance_multi_body_forces_with_optional_prepared_emitters(
+        a, b, occluders, catalog, tick, prepared,
+    )
+}
+
+fn resonance_multi_body_forces_with_optional_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitters: Option<(&MaterialResonanceEmitter, &MaterialResonanceEmitter)>,
+) -> Option<Vec<ResonanceBodyForce>> {
+    if std::ptr::eq(a, b) {
+        return None;
+    }
+    const DIFFERENCE_STEP: f64 = 1.0e-4;
+    let potential = |source: &crate::physical_material::PhysicalMaterial,
+                     receiver: &crate::physical_material::PhysicalMaterial,
+                     blockers: &[crate::physical_material::PhysicalMaterial]| {
+        if let Some((emitter_a, emitter_b)) = prepared_emitters {
+            resonance_pair_potential_with_prepared_emitters(
+                source, receiver, blockers, catalog, tick, emitter_a, emitter_b,
+            )
+        } else {
+            resonance_pair_potential_with_occluders(source, receiver, blockers, catalog, tick)
+        }
+    };
+    // Build the conservative visibility broad phase once. Bodies outside the
+    // source-to-receiver ray envelope cannot change this pair potential, so
+    // omit them from every finite-difference evaluation while retaining a
+    // zero force slot for each omitted world body. This is exact culling, not
+    // a distance cutoff: every possible blocker remains in the evaluation.
+    let (source_x, source_y, _) = environmental_material_geometry(a)?;
+    let source_geometry =
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(a, catalog)?;
+    let receiver_geometry =
+        crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(b, catalog)?;
+    let source_rotation_margin = (source_geometry.max_x - source_geometry.min_x)
+        .hypot(source_geometry.max_y - source_geometry.min_y)
+        * DIFFERENCE_STEP;
+    let receiver_rotation_margin = (receiver_geometry.max_x - receiver_geometry.min_x)
+        .hypot(receiver_geometry.max_y - receiver_geometry.min_y)
+        * DIFFERENCE_STEP;
+    if !source_rotation_margin.is_finite() || !receiver_rotation_margin.is_finite() {
+        return None;
+    }
+    let participant_rotation_margin = source_rotation_margin.max(receiver_rotation_margin);
+    let step_points = [
+        (source_x - DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
+        (source_x - DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
+        (source_x + DIFFERENCE_STEP, source_y - DIFFERENCE_STEP),
+        (source_x + DIFFERENCE_STEP, source_y + DIFFERENCE_STEP),
+        (
+            receiver_geometry.min_x - DIFFERENCE_STEP,
+            receiver_geometry.min_y - DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.min_x - DIFFERENCE_STEP,
+            receiver_geometry.max_y + DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.max_x + DIFFERENCE_STEP,
+            receiver_geometry.min_y - DIFFERENCE_STEP,
+        ),
+        (
+            receiver_geometry.max_x + DIFFERENCE_STEP,
+            receiver_geometry.max_y + DIFFERENCE_STEP,
+        ),
+    ];
+    let mut relevant_occluder_indices = Vec::new();
+    let mut relevant_occluders = Vec::new();
+    for (index, blocker) in occluders.iter().enumerate() {
+        let geometry = crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+            blocker, catalog,
+        )?;
+        // Rotation is about the center of mass, so expand the broad-phase
+        // envelope by a conservative bound on every point's displacement
+        // under the finite-difference angular step. The bounding-box diagonal
+        // bounds the distance from any point to any center inside the box.
+        let blocker_rotation_margin = (geometry.max_x - geometry.min_x)
+            .hypot(geometry.max_y - geometry.min_y)
+            * DIFFERENCE_STEP;
+        let rotation_margin = participant_rotation_margin + blocker_rotation_margin;
+        if !rotation_margin.is_finite() {
+            return None;
+        }
+        let min_x = step_points
+            .iter()
+            .map(|point| point.0)
+            .fold(f64::INFINITY, f64::min)
+            - rotation_margin;
+        let max_x = step_points
+            .iter()
+            .map(|point| point.0)
+            .fold(f64::NEG_INFINITY, f64::max)
+            + rotation_margin;
+        let min_y = step_points
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::INFINITY, f64::min)
+            - rotation_margin;
+        let max_y = step_points
+            .iter()
+            .map(|point| point.1)
+            .fold(f64::NEG_INFINITY, f64::max)
+            + rotation_margin;
+        let expanded_step_points = [
+            (min_x, min_y),
+            (min_x, max_y),
+            (max_x, min_y),
+            (max_x, max_y),
+        ];
+        if geometry_bounds_may_occlude_source_points(
+            (source_x, source_y),
+            &expanded_step_points,
+            &geometry,
+        ) {
+            relevant_occluder_indices.push(index);
+            relevant_occluders.push(blocker.clone());
+        }
+    }
+
+    let baseline = potential(a, b, &relevant_occluders)?;
+    if !baseline.is_finite() {
+        return None;
+    }
+
+    // Only geometrically relevant blockers need perturbed copies. Keeping the
+    // original world ordering in the result preserves stable body identity.
+    let mut plus_blockers = relevant_occluders.clone();
+    let mut minus_blockers = relevant_occluders.clone();
+    let mut forces = vec![ResonanceBodyForce::default(); occluders.len() + 2];
+
+    for participant in 0..relevant_occluders.len() + 2 {
+        let mut derivatives = [0.0; 3];
+        for (axis, derivative) in derivatives.iter_mut().take(2).enumerate() {
+            let (dx, dy) = if axis == 0 {
+                (DIFFERENCE_STEP, 0.0)
+            } else {
+                (0.0, DIFFERENCE_STEP)
+            };
+            let (plus, minus) = if participant == 0 {
+                let shifted_plus = translated_physical_material(a, dx, dy)?;
+                let shifted_minus = translated_physical_material(a, -dx, -dy)?;
+                (
+                    potential(&shifted_plus, b, &relevant_occluders)?,
+                    potential(&shifted_minus, b, &relevant_occluders)?,
+                )
+            } else if participant == 1 {
+                let shifted_plus = translated_physical_material(b, dx, dy)?;
+                let shifted_minus = translated_physical_material(b, -dx, -dy)?;
+                (
+                    potential(a, &shifted_plus, &relevant_occluders)?,
+                    potential(a, &shifted_minus, &relevant_occluders)?,
+                )
+            } else {
+                let blocker_index = participant - 2;
+                plus_blockers[blocker_index] =
+                    translated_physical_material(&relevant_occluders[blocker_index], dx, dy)?;
+                minus_blockers[blocker_index] =
+                    translated_physical_material(&relevant_occluders[blocker_index], -dx, -dy)?;
+                (
+                    potential(a, b, &plus_blockers)?,
+                    potential(a, b, &minus_blockers)?,
+                )
+            };
+            *derivative = -(plus - minus) / (2.0 * DIFFERENCE_STEP);
+            if !derivative.is_finite() {
+                return None;
+            }
+        }
+
+        let angular_step = DIFFERENCE_STEP;
+        let (plus, minus) = if participant == 0 {
+            let shifted_plus = rotated_physical_material(a, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(a, -angular_step, catalog)?;
+            (
+                potential(&shifted_plus, b, &relevant_occluders)?,
+                potential(&shifted_minus, b, &relevant_occluders)?,
+            )
+        } else if participant == 1 {
+            let shifted_plus = rotated_physical_material(b, angular_step, catalog)?;
+            let shifted_minus = rotated_physical_material(b, -angular_step, catalog)?;
+            (
+                potential(a, &shifted_plus, &relevant_occluders)?,
+                potential(a, &shifted_minus, &relevant_occluders)?,
+            )
+        } else {
+            let blocker_index = participant - 2;
+            plus_blockers[blocker_index] = rotated_physical_material(
+                &relevant_occluders[blocker_index],
+                angular_step,
+                catalog,
+            )?;
+            minus_blockers[blocker_index] = rotated_physical_material(
+                &relevant_occluders[blocker_index],
+                -angular_step,
+                catalog,
+            )?;
+            (
+                potential(a, b, &plus_blockers)?,
+                potential(a, b, &minus_blockers)?,
+            )
+        };
+        derivatives[2] = -(plus - minus) / (2.0 * angular_step);
+        if !derivatives[2].is_finite() {
+            return None;
+        }
+
+        if participant >= 2 {
+            let blocker_index = participant - 2;
+            plus_blockers[blocker_index] = relevant_occluders[blocker_index].clone();
+            minus_blockers[blocker_index] = relevant_occluders[blocker_index].clone();
+            let world_index = relevant_occluder_indices[blocker_index];
+            forces[world_index + 2] = ResonanceBodyForce {
+                x: derivatives[0],
+                y: derivatives[1],
+                torque: derivatives[2],
+            };
+        } else {
+            forces[participant] = ResonanceBodyForce {
+                x: derivatives[0],
+                y: derivatives[1],
+                torque: derivatives[2],
+            };
+        }
+    }
+
+    let total_force = forces
+        .iter()
+        .fold((0.0, 0.0), |sum, force| (sum.0 + force.x, sum.1 + force.y));
+    let scale = forces
+        .iter()
+        .map(|force| force.x.abs().max(force.y.abs()))
+        .fold(1.0_f64, f64::max);
+    if !total_force.0.is_finite()
+        || !total_force.1.is_finite()
+        || total_force.0.abs() > scale * 1e-5
+        || total_force.1.abs() > scale * 1e-5
+    {
+        return None;
+    }
+    Some(forces)
 }
 
 fn cavity_center(cavity: &crate::cavity::GenomeCavity) -> (f64, f64) {
@@ -2285,21 +2757,21 @@ mod tests {
     #[test]
     fn resonance_occluder_broad_phase_keeps_endpoint_path_bounds_and_discards_disjoint_bounds() {
         let endpoint_points = [(4.0, 0.0), (4.0, 1.0)];
-        let crossing = crate::organism_geometry::OrganismBodyGeometry {
+        let crossing = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 2.0,
             max_x: 3.0,
             min_y: 0.25,
             max_y: 0.75,
         };
-        let outside_y = crate::organism_geometry::OrganismBodyGeometry {
+        let outside_y = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 1.0,
             max_x: 3.0,
             min_y: 2.0,
             max_y: 3.0,
         };
-        let outside_x = crate::organism_geometry::OrganismBodyGeometry {
+        let outside_x = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: Vec::new(),
             min_x: 5.0,
             max_x: 6.0,
@@ -2326,8 +2798,8 @@ mod tests {
 
     #[test]
     fn resonance_visibility_runs_only_for_boundary_types_present_on_receiver() {
-        let polygon = crate::organism_geometry::OrganismBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+        let polygon = crate::physical_body_geometry::PhysicalBodyGeometry {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Rectangle {
                     width: 1.0,
@@ -2342,8 +2814,8 @@ mod tests {
             min_y: -0.5,
             max_y: 0.5,
         };
-        let circle = crate::organism_geometry::OrganismBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+        let circle = crate::physical_body_geometry::PhysicalBodyGeometry {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Circle { radius: 0.5 },
                 x: 0.0,
@@ -2355,8 +2827,8 @@ mod tests {
             min_y: -0.5,
             max_y: 0.5,
         };
-        let line = crate::organism_geometry::OrganismBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+        let line = crate::physical_body_geometry::PhysicalBodyGeometry {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Line { length: 1.0 },
                 x: 0.0,
@@ -3459,6 +3931,37 @@ mod tests {
     }
 
     #[test]
+    fn distant_non_occluding_body_does_not_change_pair_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let distant = make_material("Nitrogen", 50.0, 50.0);
+        let baseline = resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+            .expect("unoccluded pair potential should be valid");
+        let with_distant = resonance_pair_potential_components_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&distant),
+            &catalog,
+            0,
+        )
+        .expect("distant body should be excluded by the conservative occluder broad phase");
+        assert_eq!(with_distant, baseline);
+    }
+
+    #[test]
     fn occluded_pair_does_not_claim_an_unbalanced_two_body_force() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x| {
@@ -3485,6 +3988,120 @@ mod tests {
             0,
         )
         .is_none());
+    }
+
+    #[test]
+    fn occluded_resonance_gradient_assigns_force_to_blocker_and_balances_all_bodies() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let blocker = make_material("Nitrogen", 4.0, 0.35);
+        let second_blocker = make_material("Hydrogen", 4.5, -0.4);
+        let distant_blocker = make_material("Sulfur", 50.0, 50.0);
+        let blockers = vec![blocker, second_blocker, distant_blocker];
+        let forces =
+            resonance_multi_body_forces_with_occluders(&source, &receiver, &blockers, &catalog, 0)
+                .expect("the full multi-body gradient should be finite and balanced");
+        assert_eq!(forces.len(), 5);
+        assert!(
+            forces[2..]
+                .iter()
+                .any(|force| force.x.abs() + force.y.abs() > 1e-8),
+            "occluding bodies must receive their own derived forces"
+        );
+        assert!(
+            forces
+                .iter()
+                .all(|force| force.x.is_finite() && force.y.is_finite()),
+            "reused blocker snapshots must not leak one participant's perturbation into another"
+        );
+        assert_eq!(
+            forces[4],
+            ResonanceBodyForce::default(),
+            "a body outside the expanded ray envelope has an exact zero gradient"
+        );
+        let sum_x = forces.iter().map(|force| force.x).sum::<f64>();
+        let sum_y = forces.iter().map(|force| force.y).sum::<f64>();
+        assert!(sum_x.abs() < 1e-5);
+        assert!(sum_y.abs() < 1e-5);
+
+        let bodies = [&source, &receiver, &blockers[0], &blockers[1], &blockers[2]];
+        let total_angular_momentum_derivative = bodies
+            .iter()
+            .zip(&forces)
+            .map(|(body, force)| {
+                let center = body.mass_properties(&catalog, None).unwrap();
+                center.center_x * force.y - center.center_y * force.x + force.torque
+            })
+            .sum::<f64>();
+        assert!(
+            total_angular_momentum_derivative.abs() < 1e-4,
+            "the complete rotational and translational gradient must conserve angular momentum"
+        );
+        assert!(forces.iter().all(|force| force.torque.is_finite()));
+    }
+
+    #[test]
+    fn asymmetric_occluder_receives_resonance_torque() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should realize")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let asymmetric_occluder = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                crate::structure::Placement {
+                    x: 3.8,
+                    y: -0.45,
+                    rotation_radians: 0.0,
+                },
+                crate::structure::Placement {
+                    x: 4.7,
+                    y: 0.95,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("asymmetric occluder should realize");
+        let forces = resonance_multi_body_forces_with_occluders(
+            &source,
+            &receiver,
+            std::slice::from_ref(&asymmetric_occluder),
+            &catalog,
+            0,
+        )
+        .expect("asymmetric multi-body gradient should be valid");
+        assert!(
+            forces[2].torque.abs() > 1e-8,
+            "rotating an asymmetric occluder changes its visibility contribution and must produce torque"
+        );
     }
 
     #[test]
@@ -3678,6 +4295,306 @@ mod tests {
             (clear - unobstructed).abs() < 1e-9,
             "a body outside the source-receiver visibility path must not change the pair potential"
         );
+    }
+
+    #[test]
+    fn source_pose_sweep_records_boundary_quadrature_and_frequency_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let mut observations = Vec::new();
+
+        // This deterministic differential probe records the exact quadrature
+        // generated by the production path at several source poses. Each
+        // record retains interval geometry, incident spectral samples, and
+        // the resulting frequency-resolved directional potential.
+        for source_y in [0.0, 2.0, 5.0, 10.0] {
+            let source = make_material("Hydrogen", 0.0, source_y);
+            let samples = material_aura_receptions(&source, &receiver, &catalog, 0)
+                .expect("source pose should produce exact receiver samples");
+            let potential =
+                directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                    .expect("source pose should produce frequency-resolved potential");
+
+            assert!(!samples.is_empty());
+            assert!(!potential.is_empty());
+            let sample_record: Vec<_> = samples
+                .iter()
+                .map(|sample| {
+                    (
+                        sample.receiver_x,
+                        sample.receiver_y,
+                        sample.receiver_normal_x,
+                        sample.receiver_normal_y,
+                        sample.projected_extent,
+                        sample.incident_spectrum.components.clone(),
+                    )
+                })
+                .collect();
+            let potential_record: Vec<_> = potential
+                .iter()
+                .map(|component| (component.frequency_cycles_per_day, component.energy))
+                .collect();
+            observations.push((sample_record, potential_record));
+        }
+
+        let first = &observations[0];
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.0.len() != first.0.len()
+                    || observation.0.iter().zip(&first.0).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-12
+                            || (left.1 - right.1).abs() > 1e-12
+                            || (left.4 - right.4).abs() > 1e-12
+                    })
+            }),
+            "source translation must change the exact receiver quadrature in at least one pose"
+        );
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.1.len() != first.1.len()
+                    || observation.1.iter().zip(&first.1).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-9 || (left.1 - right.1).abs() > 1e-12
+                    })
+            }),
+            "source translation must be reflected in the frequency-resolved potential"
+        );
+    }
+
+    #[test]
+    fn receiver_rotation_probe_records_boundary_quadrature_and_frequency_potential() {
+        let catalog = crate::resources::default_catalog();
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("source should have a valid realized physical shape");
+
+        // The receiver is deliberately asymmetric and multi-part. Rotate its
+        // complete rigid pose about its center so both boundary geometry and
+        // constituent orientations follow the same physical transform.
+        let receiver_at_rotation = |rotation_radians: f64| {
+            let center_x = 8.75;
+            let center_y = 0.35;
+            let rotate = |x: f64, y: f64| {
+                let dx = x - center_x;
+                let dy = y - center_y;
+                (
+                    center_x + dx * rotation_radians.cos() - dy * rotation_radians.sin(),
+                    center_y + dx * rotation_radians.sin() + dy * rotation_radians.cos(),
+                )
+            };
+            let (carbon_x, carbon_y) = rotate(8.0, 0.0);
+            let (hydrogen_x, hydrogen_y) = rotate(9.5, 0.7);
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material {
+                    parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
+                    internal_bonds: Vec::new(),
+                },
+                vec![
+                    crate::structure::Placement {
+                        x: carbon_x,
+                        y: carbon_y,
+                        rotation_radians,
+                    },
+                    crate::structure::Placement {
+                        x: hydrogen_x,
+                        y: hydrogen_y,
+                        rotation_radians,
+                    },
+                ],
+                &catalog,
+            )
+            .expect("rotated receiver should have a valid realized physical shape")
+        };
+        let mut observations = Vec::new();
+
+        for rotation in [0.0, 0.3, 0.7, 1.1, 1.5] {
+            let receiver = receiver_at_rotation(rotation);
+            let samples = material_aura_receptions(&source, &receiver, &catalog, 0)
+                .expect("receiver rotation should produce exact boundary samples");
+            let potential =
+                directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                    .expect("receiver rotation should produce frequency-resolved potential");
+
+            let sample_record: Vec<_> = samples
+                .iter()
+                .map(|sample| {
+                    (
+                        sample.receiver_x,
+                        sample.receiver_y,
+                        sample.receiver_normal_x,
+                        sample.receiver_normal_y,
+                        sample.projected_extent,
+                        sample.incident_spectrum.components.clone(),
+                    )
+                })
+                .collect();
+            let potential_record: Vec<_> = potential
+                .iter()
+                .map(|component| (component.frequency_cycles_per_day, component.energy))
+                .collect();
+            observations.push((rotation, sample_record, potential_record));
+        }
+
+        assert!(
+            observations
+                .iter()
+                .any(|observation| !observation.1.is_empty()),
+            "at least one receiver orientation must expose boundary samples"
+        );
+        assert!(
+            observations
+                .iter()
+                .any(|observation| !observation.2.is_empty()),
+            "at least one receiver orientation must produce a frequency-resolved potential"
+        );
+
+        let first = &observations[0];
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.1.len() != first.1.len()
+                    || observation.1.iter().zip(&first.1).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-12
+                            || (left.1 - right.1).abs() > 1e-12
+                            || (left.2 - right.2).abs() > 1e-12
+                            || (left.3 - right.3).abs() > 1e-12
+                            || (left.4 - right.4).abs() > 1e-12
+                    })
+            }),
+            "receiver rotation must change exact boundary sample geometry"
+        );
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.2.len() != first.2.len()
+                    || observation.2.iter().zip(&first.2).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-9 || (left.1 - right.1).abs() > 1e-12
+                    })
+            }),
+            "receiver rotation must be reflected in the frequency-resolved potential"
+        );
+    }
+
+    #[test]
+    fn occlusion_transition_probe_records_exact_quadrature_and_frequency_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x, y| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let source = make_material("Carbon", 0.0, 0.0);
+        let receiver = make_material("Carbon", 8.0, 0.0);
+        let mut observations = Vec::new();
+
+        // Sweep a third body's center from the direct visibility path toward
+        // the silhouette and then fully clear of the receiver's exposure.
+        // Every observation comes from the exact production visibility and
+        // directional-potential paths; no sampled or approximated geometry is
+        // substituted by this probe.
+        for blocker_y in [0.0, 0.35, 0.7, 1.0, 5.0] {
+            let blocker = make_material("Nitrogen", 4.0, blocker_y);
+            let occluders = std::slice::from_ref(&blocker);
+            let samples =
+                material_aura_receptions_with_occluders(&source, &receiver, occluders, &catalog, 0)
+                    .expect("blocker pose should produce exact receiver samples");
+            let potential = directional_resonance_pair_potential_components_with_occluders(
+                &source, &receiver, occluders, &catalog, 0,
+            )
+            .expect("blocker pose should produce frequency-resolved potential");
+
+            let sample_record: Vec<_> = samples
+                .iter()
+                .map(|sample| {
+                    (
+                        sample.receiver_x,
+                        sample.receiver_y,
+                        sample.receiver_normal_x,
+                        sample.receiver_normal_y,
+                        sample.projected_extent,
+                        sample.incident_spectrum.components.clone(),
+                    )
+                })
+                .collect();
+            let potential_record: Vec<_> = potential
+                .iter()
+                .map(|component| (component.frequency_cycles_per_day, component.energy))
+                .collect();
+            observations.push((blocker_y, sample_record, potential_record));
+        }
+
+        assert!(
+            observations
+                .iter()
+                .any(|observation| !observation.1.is_empty()),
+            "at least one blocker pose must expose receiver boundary samples"
+        );
+        assert!(
+            observations
+                .iter()
+                .any(|observation| !observation.2.is_empty()),
+            "at least one blocker pose must produce a frequency-resolved potential"
+        );
+
+        let centered = &observations[0];
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.1.len() != centered.1.len()
+                    || observation.1.iter().zip(&centered.1).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-12
+                            || (left.1 - right.1).abs() > 1e-12
+                            || (left.4 - right.4).abs() > 1e-12
+                    })
+            }),
+            "moving an occluder across the visibility boundary must change exact receiver quadrature"
+        );
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.2.len() != centered.2.len()
+                    || observation.2.iter().zip(&centered.2).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-9 || (left.1 - right.1).abs() > 1e-12
+                    })
+            }),
+            "occlusion transitions must be reflected in the frequency-resolved potential"
+        );
+
+        let clear = observations
+            .last()
+            .expect("clear blocker pose should be recorded");
+        let unobstructed =
+            directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                .expect("unobstructed pair should produce a frequency-resolved potential");
+        assert_eq!(clear.2.len(), unobstructed.len());
+        for (blocked, unblocked) in clear.2.iter().zip(&unobstructed) {
+            assert!((blocked.0 - unblocked.frequency_cycles_per_day).abs() < 1e-9);
+            assert!(
+                (blocked.1 - unblocked.energy).abs() < 1e-9,
+                "a blocker outside the visibility path must preserve the unobstructed potential"
+            );
+        }
     }
 
     #[test]
@@ -3994,3 +4911,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "harmonics_pair_probe.rs"]
+mod pair_probe;

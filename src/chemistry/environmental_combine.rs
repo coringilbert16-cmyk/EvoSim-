@@ -994,8 +994,9 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             // from_structure intentionally excludes unbonded components, which are
             // precisely the reactants this pass is responsible for finding.
             let Some(body) =
-                crate::organism_geometry::OrganismBodyGeometry::from_all_realized_units(
-                    &source_structure,
+                crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                    &source_a,
+                    &environment.catalog,
                 )
             else {
                 continue;
@@ -1258,6 +1259,7 @@ fn physical_material_from_structure(
     }
     let physical = PhysicalMaterial {
         material,
+        inertial_motion: crate::physical_material::InertialMotion::default(),
         environmental_identity: 0,
         placements: Some(placements),
         internal_connections: Some(internal_connections),
