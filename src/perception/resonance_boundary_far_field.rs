@@ -357,6 +357,83 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
     (result.is_finite() && roundoff_guard.is_finite()).then_some(result + roundoff_guard)
 }
 
+/// Compose straight-interval midpoint and projected-extent derivatives
+/// into the sample-coordinate input consumed by the discrete chain-rule
+/// evaluator. The signed spectral coefficient is treated as pose-invariant.
+#[allow(dead_code)]
+pub(crate) fn straight_interval_sample_pose_derivative(
+    source: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    outward_normal: BoundaryKernelVector,
+    source_derivative: BoundaryKernelVector,
+    edge_start_derivative: BoundaryKernelVector,
+    edge_end_derivative: BoundaryKernelVector,
+    source_displacement: f64,
+    edge_start_displacement: f64,
+    edge_end_displacement: f64,
+    source_derivative_bound: f64,
+    edge_start_derivative_bound: f64,
+    edge_end_derivative_bound: f64,
+    coordinate_displacement: f64,
+    signed_weight_scale: f64,
+) -> Option<BoundarySamplePoseDerivative> {
+    if !coordinate_displacement.is_finite()
+        || coordinate_displacement < 0.0
+        || !signed_weight_scale.is_finite()
+    {
+        return None;
+    }
+    let geometry = straight_interval_pose_derivative(
+        source,
+        edge_start,
+        edge_end,
+        outward_normal,
+        source_derivative,
+        edge_start_derivative,
+        edge_end_derivative,
+    )?;
+    let extent_derivative_bound = straight_interval_projected_extent_derivative_bound(
+        source,
+        edge_start,
+        edge_end,
+        outward_normal,
+        source_displacement,
+        edge_start_displacement,
+        edge_end_displacement,
+        source_derivative_bound,
+        edge_start_derivative_bound,
+        edge_end_derivative_bound,
+    )?;
+    let position_derivative_bound =
+        0.5 * (edge_start_derivative_bound + edge_end_derivative_bound);
+    let position_displacement_bound =
+        0.5 * (edge_start_displacement + edge_end_displacement);
+    let absolute_weight_derivative_bound = signed_weight_scale.abs() * extent_derivative_bound;
+    let absolute_weight_change_bound =
+        absolute_weight_derivative_bound * coordinate_displacement;
+    let result = BoundarySamplePoseDerivative {
+        position_derivative: geometry.midpoint_derivative,
+        weight_derivative: signed_weight_scale * geometry.projected_extent_derivative,
+        position_derivative_bound,
+        absolute_weight_derivative_bound,
+        position_displacement_bound,
+        absolute_weight_change_bound,
+    };
+    [
+        result.position_derivative.x,
+        result.position_derivative.y,
+        result.weight_derivative,
+        result.position_derivative_bound,
+        result.absolute_weight_derivative_bound,
+        result.position_displacement_bound,
+        result.absolute_weight_change_bound,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+    .then_some(result)
+}
+
 /// Differentiate the closed-form point-source projected extent with respect
 /// to source and both edge endpoints. This includes rigid edge translation
 /// and rotation; it does not discover or differentiate visibility cuts.
@@ -1313,6 +1390,32 @@ mod tests {
         assert!(
             ray_edge_intersection_displacement_bound(source, source, start, end, valid,).is_none()
         );
+    }
+
+    #[test]
+    fn straight_interval_sample_pose_derivative_composes_midpoint_and_weight() {
+        let source = BoundaryKernelVector { x: 0.3, y: 2.0 };
+        let start = BoundaryKernelVector { x: -1.0, y: 0.0 };
+        let end = BoundaryKernelVector { x: 1.0, y: 0.0 };
+        let normal = BoundaryKernelVector { x: 0.0, y: 1.0 };
+        let ds = BoundaryKernelVector { x: 0.07, y: -0.03 };
+        let da = BoundaryKernelVector { x: -0.02, y: 0.04 };
+        let db = BoundaryKernelVector { x: 0.03, y: 0.01 };
+        let sample_pose = straight_interval_sample_pose_derivative(
+            source, start, end, normal, ds, da, db, 0.01, 0.01, 0.01, 0.4, 0.2, 0.3, 0.05,
+            -0.75,
+        )
+        .expect("straight interval should produce a complete sample pose derivative");
+        assert_eq!(
+            sample_pose.position_derivative,
+            BoundaryKernelVector {
+                x: 0.5 * (da.x + db.x),
+                y: 0.5 * (da.y + db.y),
+            }
+        );
+        assert!(sample_pose.absolute_weight_derivative_bound >= sample_pose.weight_derivative.abs());
+        assert!(sample_pose.absolute_weight_change_bound > 0.0);
+        assert!(sample_pose.position_derivative_bound >= sample_pose.position_derivative.norm());
     }
 
     #[test]
