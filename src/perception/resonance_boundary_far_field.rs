@@ -1400,6 +1400,103 @@ mod tests {
     }
 
     #[test]
+    fn angular_pose_derivative_includes_boundary_motion_and_projected_extent_torque() {
+        let source = BoundaryKernelVector { x: 0.3, y: 2.0 };
+        let receiver_center = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let start = BoundaryKernelVector { x: -1.0, y: -3.0 };
+        let end = BoundaryKernelVector { x: 1.0, y: -3.0 };
+        let normal = BoundaryKernelVector { x: 0.0, y: 1.0 };
+        let start_derivative = BoundaryKernelVector { x: 3.0, y: -1.0 };
+        let end_derivative = BoundaryKernelVector { x: 3.0, y: 1.0 };
+        let geometry = straight_interval_pose_derivative(
+            source,
+            start,
+            end,
+            normal,
+            BoundaryKernelVector::default(),
+            start_derivative,
+            end_derivative,
+        )
+        .expect("rotating straight interval should have a smooth derivative");
+        let midpoint = BoundaryKernelVector {
+            x: 0.5 * (start.x + end.x),
+            y: 0.5 * (start.y + end.y),
+        };
+        let coefficient = 0.7;
+        let expansion = BoundaryKernelExpansion::new(
+            source,
+            receiver_center,
+            midpoint,
+            vec![sample(
+                midpoint.x,
+                midpoint.y,
+                coefficient * geometry.projected_extent,
+            )],
+        )
+        .expect("rotating interval sample should form a valid cluster");
+        let coordinate = BoundaryPoseCoordinateDerivative {
+            source_center_derivative: BoundaryKernelVector::default(),
+            receiver_center_derivative: BoundaryKernelVector::default(),
+            source_center_derivative_bound: 0.0,
+            receiver_center_derivative_bound: 0.0,
+            samples: vec![BoundarySamplePoseDerivative {
+                position_derivative: geometry.midpoint_derivative,
+                weight_derivative: coefficient * geometry.projected_extent_derivative,
+                position_derivative_bound: 4.0,
+                absolute_weight_derivative_bound: 2.0,
+                position_displacement_bound: 0.001,
+                absolute_weight_change_bound: 0.001,
+            }],
+        };
+        let evaluation = expansion
+            .evaluate_pose_coordinate_derivative(&coordinate)
+            .expect("angular coordinate should have a certified magnitude bound");
+
+        let potential_at_angle = |angle: f64| {
+            let (sin, cos) = angle.sin_cos();
+            let rotate = |point: BoundaryKernelVector| BoundaryKernelVector {
+                x: point.x * cos - point.y * sin,
+                y: point.x * sin + point.y * cos,
+            };
+            let moved_start = rotate(start);
+            let moved_end = rotate(end);
+            let moved_normal = rotate(normal);
+            let moved_midpoint = rotate(midpoint);
+            let moved_geometry = straight_interval_pose_derivative(
+                source,
+                moved_start,
+                moved_end,
+                moved_normal,
+                BoundaryKernelVector::default(),
+                BoundaryKernelVector::default(),
+                BoundaryKernelVector::default(),
+            )
+            .expect("small angular perturbation remains smooth");
+            BoundaryKernelExpansion::new(
+                source,
+                receiver_center,
+                moved_midpoint,
+                vec![sample(
+                    moved_midpoint.x,
+                    moved_midpoint.y,
+                    coefficient * moved_geometry.projected_extent,
+                )],
+            )
+            .expect("perturbed interval remains valid")
+            .exact_potential()
+        };
+        let step = 1.0e-6;
+        let finite_difference =
+            (potential_at_angle(step) - potential_at_angle(-step)) / (2.0 * step);
+        assert!(
+            (evaluation.derivative - finite_difference).abs() < 1.0e-8,
+            "analytic torque={} finite-difference torque={finite_difference}",
+            evaluation.derivative
+        );
+        assert!(evaluation.absolute_bound >= evaluation.derivative.abs());
+    }
+
+    #[test]
     fn pose_coordinate_derivative_rejects_incomplete_or_understated_envelopes() {
         let expansion = BoundaryKernelExpansion::new(
             BoundaryKernelVector { x: 0.0, y: 0.0 },
