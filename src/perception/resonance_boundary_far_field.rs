@@ -112,6 +112,120 @@ pub(crate) fn rigid_pose_point_displacement_bound(
     let bound = translation_bound + angular_displacement;
     bound.is_finite().then_some(bound)
 }
+
+/// Pose envelope for one source ray intersecting one receiver edge. The
+/// critical point is the blocker feature defining the ray; its displacement
+/// bound must include its own rigid motion and any source-dependent tangent
+/// construction. This helper certifies only this one intersection, not the
+/// ordering of multiple cuts or the complete visibility topology.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RayEdgeIntersectionMotion {
+    pub(crate) source_displacement: f64,
+    pub(crate) critical_point_displacement: f64,
+    pub(crate) edge_start_displacement: f64,
+    pub(crate) edge_end_displacement: f64,
+}
+
+/// Bound movement of a ray/edge cut while it remains a strict interior
+/// intersection and the critical point remains beyond the receiver edge.
+///
+/// The exact construction is s + u(v-s) = a + t(b-a). A denominator interval
+/// excluding zero and strict t/u margins are required; near-parallel rays,
+/// endpoint events, and cut-order transitions fail closed.
+#[allow(dead_code)]
+pub(crate) fn ray_edge_intersection_displacement_bound(
+    source: BoundaryKernelVector,
+    critical_point: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    motion: RayEdgeIntersectionMotion,
+) -> Option<f64> {
+    let points = [source, critical_point, edge_start, edge_end];
+    if points
+        .iter()
+        .any(|point| !point.x.is_finite() || !point.y.is_finite())
+    {
+        return None;
+    }
+    let bounds = [
+        motion.source_displacement,
+        motion.critical_point_displacement,
+        motion.edge_start_displacement,
+        motion.edge_end_displacement,
+    ];
+    if bounds.iter().any(|bound| !bound.is_finite() || *bound < 0.0) {
+        return None;
+    }
+
+    let q = BoundaryKernelVector {
+        x: edge_start.x - source.x,
+        y: edge_start.y - source.y,
+    };
+    let r = BoundaryKernelVector {
+        x: critical_point.x - source.x,
+        y: critical_point.y - source.y,
+    };
+    let e = BoundaryKernelVector {
+        x: edge_end.x - edge_start.x,
+        y: edge_end.y - edge_start.y,
+    };
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let denominator = cross(e, r);
+    let numerator_t = -cross(q, r);
+    let numerator_u = -cross(q, e);
+    if !denominator.is_finite() || !numerator_t.is_finite() || !numerator_u.is_finite() {
+        return None;
+    }
+    let t = numerator_t / denominator;
+    let u = numerator_u / denominator;
+    if !t.is_finite()
+        || !u.is_finite()
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&t)
+        || u <= 1.0 + 1.0e-10
+    {
+        return None;
+    }
+
+    let delta_q = motion.edge_start_displacement + motion.source_displacement;
+    let delta_r = motion.critical_point_displacement + motion.source_displacement;
+    let delta_e = motion.edge_start_displacement + motion.edge_end_displacement;
+    let q_norm = q.norm();
+    let r_norm = r.norm();
+    let e_norm = e.norm();
+    let denominator_change = delta_e * r_norm + e_norm * delta_r + delta_e * delta_r;
+    let denominator_min = denominator.abs() - denominator_change;
+    if !denominator_min.is_finite() || denominator_min <= f64::EPSILON {
+        return None;
+    }
+
+    let numerator_t_change = delta_q * r_norm + q_norm * delta_r + delta_q * delta_r;
+    let numerator_u_change = delta_q * e_norm + q_norm * delta_e + delta_q * delta_e;
+    let t_change =
+        (numerator_t_change + t.abs() * denominator_change) / denominator_min;
+    let u_change =
+        (numerator_u_change + u.abs() * denominator_change) / denominator_min;
+    if !t_change.is_finite()
+        || !u_change.is_finite()
+        || t_change >= t.min(1.0 - t)
+        || u_change >= u - 1.0
+    {
+        return None;
+    }
+
+    // p = a + t e. Bound all products including simultaneous changes in t
+    // and the edge vector.
+    let point_change = motion.edge_start_displacement
+        + t.abs() * delta_e
+        + e_norm * t_change
+        + delta_e * t_change;
+    let roundoff_guard =
+        64.0 * f64::EPSILON * (point_change + q_norm + r_norm + e_norm + 1.0);
+    let result = point_change + roundoff_guard;
+    result.is_finite().then_some(result)
+}
+
 impl BoundaryKernelExpansion {
     /// Retain exact sample correspondence for this ordered pair. The
     /// expansion disk is centered at sample_center and contains every midpoint.
