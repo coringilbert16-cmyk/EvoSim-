@@ -255,15 +255,10 @@ pub(crate) fn circle_tangent_point_pose_derivative(
                         * (transverse_derivative * perpendicular.y
                             + transverse * perpendicular_derivative.y)),
     };
-    [
-        point.x,
-        point.y,
-        derivative.x,
-        derivative.y,
-    ]
-    .iter()
-    .all(|value| value.is_finite())
-    .then_some(CircleTangentPointPoseDerivative { point, derivative })
+    [point.x, point.y, derivative.x, derivative.y]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(CircleTangentPointPoseDerivative { point, derivative })
 }
 
 /// Conservative displacement of a point attached to a rigid body when its
@@ -1380,8 +1375,7 @@ mod tests {
         let pivot = BoundaryKernelVector { x: 0.5, y: 1.0 };
         let translation = BoundaryKernelVector { x: 0.2, y: -0.1 };
         let angular = 0.7;
-        let derivative =
-            rigid_pose_point_derivative(point, pivot, translation, angular).unwrap();
+        let derivative = rigid_pose_point_derivative(point, pivot, translation, angular).unwrap();
         let transform = |q: f64| {
             let offset = BoundaryKernelVector {
                 x: point.x - pivot.x,
@@ -1397,12 +1391,8 @@ mod tests {
         let step = 1.0e-6;
         let plus = transform(step);
         let minus = transform(-step);
-        assert!(
-            ((plus.x - minus.x) / (2.0 * step) - derivative.x).abs() < 1.0e-8
-        );
-        assert!(
-            ((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8
-        );
+        assert!(((plus.x - minus.x) / (2.0 * step) - derivative.x).abs() < 1.0e-8);
+        assert!(((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8);
     }
 
     #[test]
@@ -1443,12 +1433,8 @@ mod tests {
             let step = 1.0e-6;
             let plus = tangent(step);
             let minus = tangent(-step);
-            assert!(
-                ((plus.x - minus.x) / (2.0 * step) - base.derivative.x).abs() < 1.0e-8
-            );
-            assert!(
-                ((plus.y - minus.y) / (2.0 * step) - base.derivative.y).abs() < 1.0e-8
-            );
+            assert!(((plus.x - minus.x) / (2.0 * step) - base.derivative.x).abs() < 1.0e-8);
+            assert!(((plus.y - minus.y) / (2.0 * step) - base.derivative.y).abs() < 1.0e-8);
         }
     }
 
