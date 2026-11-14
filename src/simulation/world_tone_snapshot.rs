@@ -1059,15 +1059,9 @@ impl LocalResonanceWorldSnapshot {
         let bounds_a = self.visibility_bounds[index_a];
         let bounds_b = self.visibility_bounds[index_b];
         let expansion = 2.0 * self.maximum_rotation_margin + 1.0e-4;
-        let envelope = crate::resonance_visibility::VisibilityBounds::new(
-            bounds_a.min_x.min(bounds_b.min_x) - expansion,
-            bounds_a.min_y.min(bounds_b.min_y) - expansion,
-            bounds_a.max_x.max(bounds_b.max_x) + expansion,
-            bounds_a.max_y.max(bounds_b.max_y) + expansion,
-        )?;
         let occluder_indices = self
             .visibility_hierarchy
-            .query(envelope)?
+            .query_between_bounds(bounds_a, bounds_b, expansion)?
             .into_iter()
             .filter(|index| *index != index_a && *index != index_b)
             .collect::<Vec<_>>();
