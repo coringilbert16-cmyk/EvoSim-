@@ -58,11 +58,7 @@ impl VisibilityBounds {
     }
 
     fn segment_envelope(source: Self, receiver: Self, expansion: f64) -> Option<Self> {
-        if !source.is_valid()
-            || !receiver.is_valid()
-            || !expansion.is_finite()
-            || expansion < 0.0
-        {
+        if !source.is_valid() || !receiver.is_valid() || !expansion.is_finite() || expansion < 0.0 {
             return None;
         }
         let combined = source.union(receiver);
