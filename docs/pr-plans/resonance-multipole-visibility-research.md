@@ -1215,3 +1215,36 @@ that generated it, so the appropriate derivative can be selected without
 guessing. Unsupported provenance must fail closed to exact evaluation or
 subdivision.
 
+## 27. Conservative endpoint provenance for straight visibility intervals — 2026-11-14
+
+The straight visibility solver now has an additive provenance-aware wrapper;
+the existing exact interval API and its result type remain unchanged. The
+wrapper pairs each returned interval with provenance for its start and end.
+
+At this stage, an endpoint is labeled RigidTargetVertex only when its world
+coordinate uniquely matches a local vertex of the target constituent after
+the same rigid transform used by visibility construction. The record retains
+body index, constituent index, and the exact local feature coordinate.
+Every endpoint that does not meet this exact identity test—including
+source-ray/occluder cuts and line/circle intersections—is labeled
+UnresolvedVisibilityCut.
+
+This deliberately conservative first pass avoids reconstructing provenance
+from approximate coordinate guesses. A rigid target vertex can now be passed
+to the rigid-point Jacobian from Section 26. An unresolved endpoint cannot be
+differentiated through this wrapper and must remain on exact evaluation or
+subdivision. Existing interval consumers are unaffected.
+
+Two regressions cover the contract: an unoccluded polygon target yields rigid
+vertex provenance for both endpoints, while an occluded target retains
+unresolved provenance for at least one occlusion-generated cut.
+
+### Next extension
+
+The next geometry milestone is to preserve the identity of each generated
+visibility cut at construction time, rather than only identifying unchanged
+target vertices after the fact. Ray cuts must retain their blocker critical
+feature; line/line and circle/edge intersections need explicit feature pairs
+and derivative rules. Until each endpoint is either certified or explicitly
+unsupported, no pose derivative may be supplied to the approximate evaluator.
+
