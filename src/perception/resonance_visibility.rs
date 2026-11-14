@@ -218,14 +218,12 @@ mod tests {
     #[test]
     fn invalid_bounds_fail_closed() {
         assert!(VisibilityBounds::new(2.0, 0.0, 1.0, 1.0).is_none());
-        assert!(ResonanceVisibilityHierarchy::new(&[
-            VisibilityBounds {
-                min_x: f64::NAN,
-                min_y: 0.0,
-                max_x: 1.0,
-                max_y: 1.0,
-            }
-        ])
+        assert!(ResonanceVisibilityHierarchy::new(&[VisibilityBounds {
+            min_x: f64::NAN,
+            min_y: 0.0,
+            max_x: 1.0,
+            max_y: 1.0,
+        }])
         .is_none());
     }
 }
