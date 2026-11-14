@@ -19,6 +19,7 @@ use crate::combine::bond_strength;
 use crate::combine::intrinsic_bond_potential;
 use crate::energy_ledger::{EnergyLedgerAuthority, EnergyReason, ReactionEnergyBalance};
 use crate::resources::{BaseResource, InternalBond, Material, ResourceProperties};
+#[cfg(test)]
 use crate::structure::{Bond, OrganismStructure};
 
 /// Energy and activation assessment for one proposed constituent replacement.
