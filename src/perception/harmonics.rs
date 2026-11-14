@@ -4323,10 +4323,9 @@ mod tests {
             let source = make_material("Hydrogen", 0.0, source_y);
             let samples = material_aura_receptions(&source, &receiver, &catalog, 0)
                 .expect("source pose should produce exact receiver samples");
-            let potential = directional_resonance_pair_potential_components(
-                &source, &receiver, &catalog, 0,
-            )
-            .expect("source pose should produce frequency-resolved potential");
+            let potential =
+                directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                    .expect("source pose should produce frequency-resolved potential");
 
             assert!(!samples.is_empty());
             assert!(!potential.is_empty());
