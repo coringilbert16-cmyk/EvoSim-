@@ -4373,6 +4373,118 @@ mod tests {
     }
 
     #[test]
+    fn receiver_rotation_probe_records_boundary_quadrature_and_frequency_potential() {
+        let catalog = crate::resources::default_catalog();
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("source should have a valid realized physical shape");
+
+        // The receiver is deliberately asymmetric and multi-part. Rotate its
+        // complete rigid pose about its center so both boundary geometry and
+        // constituent orientations follow the same physical transform.
+        let receiver_at_rotation = |rotation_radians: f64| {
+            let center_x = 8.75;
+            let center_y = 0.35;
+            let rotate = |x: f64, y: f64| {
+                let dx = x - center_x;
+                let dy = y - center_y;
+                (
+                    center_x + dx * rotation_radians.cos() - dy * rotation_radians.sin(),
+                    center_y + dx * rotation_radians.sin() + dy * rotation_radians.cos(),
+                )
+            };
+            let (carbon_x, carbon_y) = rotate(8.0, 0.0);
+            let (hydrogen_x, hydrogen_y) = rotate(9.5, 0.7);
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("receiver", 1.0),
+                vec![
+                    crate::structure::Placement {
+                        x: carbon_x,
+                        y: carbon_y,
+                        rotation_radians,
+                    },
+                    crate::structure::Placement {
+                        x: hydrogen_x,
+                        y: hydrogen_y,
+                        rotation_radians,
+                    },
+                ],
+                &catalog,
+            )
+            .expect("rotated receiver should have a valid realized physical shape")
+        };
+        let mut observations = Vec::new();
+
+        for rotation in [0.0, 0.3, 0.7, 1.1, 1.5] {
+            let receiver = receiver_at_rotation(rotation);
+            let samples = material_aura_receptions(&source, &receiver, &catalog, 0)
+                .expect("receiver rotation should produce exact boundary samples");
+            let potential =
+                directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                    .expect("receiver rotation should produce frequency-resolved potential");
+
+            let sample_record: Vec<_> = samples
+                .iter()
+                .map(|sample| {
+                    (
+                        sample.receiver_x,
+                        sample.receiver_y,
+                        sample.receiver_normal_x,
+                        sample.receiver_normal_y,
+                        sample.projected_extent,
+                        sample.incident_spectrum.components.clone(),
+                    )
+                })
+                .collect();
+            let potential_record: Vec<_> = potential
+                .iter()
+                .map(|component| (component.frequency_cycles_per_day, component.energy))
+                .collect();
+            observations.push((rotation, sample_record, potential_record));
+        }
+
+        assert!(
+            observations.iter().any(|observation| !observation.1.is_empty()),
+            "at least one receiver orientation must expose boundary samples"
+        );
+        assert!(
+            observations.iter().any(|observation| !observation.2.is_empty()),
+            "at least one receiver orientation must produce a frequency-resolved potential"
+        );
+
+        let first = &observations[0];
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.1.len() != first.1.len()
+                    || observation.1.iter().zip(&first.1).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-12
+                            || (left.1 - right.1).abs() > 1e-12
+                            || (left.2 - right.2).abs() > 1e-12
+                            || (left.3 - right.3).abs() > 1e-12
+                            || (left.4 - right.4).abs() > 1e-12
+                    })
+            }),
+            "receiver rotation must change exact boundary sample geometry"
+        );
+        assert!(
+            observations.iter().skip(1).any(|observation| {
+                observation.2.len() != first.2.len()
+                    || observation.2.iter().zip(&first.2).any(|(left, right)| {
+                        (left.0 - right.0).abs() > 1e-9 || (left.1 - right.1).abs() > 1e-12
+                    })
+            }),
+            "receiver rotation must be reflected in the frequency-resolved potential"
+        );
+    }
+
+    #[test]
     fn occlusion_transition_probe_records_exact_quadrature_and_frequency_potential() {
         let catalog = crate::resources::default_catalog();
         let make_material = |name: &str, x, y| {
