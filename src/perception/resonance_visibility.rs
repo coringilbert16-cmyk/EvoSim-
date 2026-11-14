@@ -57,11 +57,7 @@ impl VisibilityBounds {
         }
     }
 
-    fn segment_envelope(
-        source: Self,
-        receiver: Self,
-        expansion: f64,
-    ) -> Option<Self> {
+    fn segment_envelope(source: Self, receiver: Self, expansion: f64) -> Option<Self> {
         if !expansion.is_finite() || expansion < 0.0 {
             return None;
         }
@@ -327,5 +323,4 @@ mod tests {
             "the expansion margin must include bodies reached by finite-difference perturbations"
         );
     }
-
 }
