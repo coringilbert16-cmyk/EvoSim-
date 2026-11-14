@@ -675,14 +675,14 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
             accumulated[index_b].torque += pair_forces[1].torque;
 
             let mut occluder_index = 0;
-            for world_index in 0..baseline_bodies.len() {
+            for (world_index, accumulated_force) in accumulated.iter_mut().enumerate() {
                 if world_index == index_a || world_index == index_b {
                     continue;
                 }
                 let force = pair_forces[occluder_index + 2];
-                accumulated[world_index].x += force.x;
-                accumulated[world_index].y += force.y;
-                accumulated[world_index].torque += force.torque;
+                accumulated_force.x += force.x;
+                accumulated_force.y += force.y;
+                accumulated_force.torque += force.torque;
                 occluder_index += 1;
             }
         }
@@ -703,7 +703,7 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
     };
     let step = 1.0e-4;
 
-    for body_index in 0..baseline_bodies.len() {
+    for (body_index, accumulated_force) in accumulated.iter().enumerate() {
         for component in 0..3 {
             let plus = evaluate(body_index, component, step)
                 .expect("positive rigid-pose perturbation should be valid");
@@ -712,9 +712,9 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
             let derivative = (plus - minus) / (2.0 * step);
             let expected_force = -derivative;
             let actual_force = match component {
-                0 => accumulated[body_index].x,
-                1 => accumulated[body_index].y,
-                2 => accumulated[body_index].torque,
+                0 => accumulated_force.x,
+                1 => accumulated_force.y,
+                2 => accumulated_force.torque,
                 _ => unreachable!(),
             };
             let scale = expected_force.abs().max(actual_force.abs()).max(1.0e-7);
