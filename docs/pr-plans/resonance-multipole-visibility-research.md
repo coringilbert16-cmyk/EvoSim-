@@ -276,3 +276,141 @@ It still does not establish identical visibility, account for source-shape
 projected extent derivatives, or approximate receiver-boundary integration;
 those remain explicit blockers before it can be called a complete resonance
 far-field evaluator.
+
+
+
+## 10. Exact discrete pair-kernel contract for the mutual evaluator — 2026-11-14
+
+This section fixes the mathematical target before extending the source-only
+Taylor primitive. It describes the current implementation, not a replacement
+resonance law.
+
+### 10.1 Directional sample contribution
+
+For one directional interaction from material a to material b, let:
+
+- A_a(f), phi_a(f) be the prepared emitted amplitude and phase of a at
+  frequency f;
+- A_b(f), phi_b(f) be the prepared emitted amplitude and phase of b;
+- m_a and m_b be their existing environmental mass scales;
+- p_j be the midpoint of one exact visible receiver-boundary interval;
+- e_j be that interval's existing point-source projected extent;
+- d_aj = |p_j - c_a| and d_bj = |p_j - c_b|, where c_a and c_b are
+  the current environmental material reference positions.
+
+The current directional implementation first scales each amplitude by its
+own mass and square-root projected-extent/distance factor. Its same-frequency
+cross-energy is therefore exactly
+
+`u_{a->b,j}(f) =
+  2 A_a(f) A_b(f) cos(phi_a(f)-phi_b(f))
+  m_a m_b e_j /
+  ((1+d_aj)(1+d_bj))`.
+
+The directional potential is the sum over the exact visible intervals and
+the matching frequency components. The symmetric pair potential is
+
+`U_ab = 1/2 (U_{a->b} + U_{b->a})`.
+
+Frequency matching retains the current 1e-9 absolute comparison rule. The
+per-body emitted spectra, strongest-component selection, mass scaling,
+boundary interval generation, projected-extent calculation, and visibility
+semantics remain authoritative. No constituent-level emitter expansion or
+spectral aggregation across bodies is permitted.
+
+### 10.2 What the smooth kernel does and does not permit
+
+For a fixed receiver sample p_j and fixed projected extent e_j, the spatial
+factor is the product
+
+`K(a,b,p_j) = 1 / ((1+|p_j-c_a|)(1+|p_j-c_b|))`.
+
+The existing source-only expansion approximates only the first factor. A
+complete evaluator must account for both factors in the same scalar potential.
+It must not approximate the source factor for forces and then independently
+invent receiver forces. Every translational force and body torque must be
+obtained by differentiating the same accepted approximate scalar potential.
+
+For a fixed p_j, define r_a=p_j-c_a and r_b=p_j-c_b. The position gradients
+of the two smooth factors are
+
+`grad_{c_a} (1+|r_a|)^-1 = r_a/(|r_a|(1+|r_a|)^2)`
+
+and the analogous expression holds for c_b. These are only the fixed-sample
+terms. They are **not** the complete receiver derivative: p_j and e_j are
+functions of the realized receiver geometry and the source-dependent visible
+intervals. The total derivative must also include the motion of the sample
+location and projected extent, plus changes in the visible interval endpoints
+where the visibility classification is differentiable.
+
+At visibility topology changes, tangencies, interval creation/removal, or
+other non-differentiable configurations, a Taylor cell is not accepted.
+It must subdivide or use the existing exact finite-difference/world-potential
+path. No derivative may be silently dropped to make a cell acceptable.
+
+### 10.3 Group acceptance has two independent obligations
+
+A mutual evaluator may accept a source/receiver cell interaction only when both
+conditions hold:
+
+1. **Visibility consistency:** every relevant source-to-receiver-boundary
+   path is certified free of third-party occluders, or the cell is subdivided
+   until that is proven. The visibility hierarchy's group certificate proves
+   only this clear-path condition. An AABB overlap is ambiguous and requires
+   exact evaluation or subdivision.
+2. **Kernel approximation validity:** the full two-distance-factor,
+   projected-extent-weighted, boundary-sample potential has conservative
+   remainder bounds for potential, every participating body's force, and
+   every participating body's torque. Visibility certification alone does not
+   bound any of these errors and does not establish that different source
+   bodies share identical receiver-boundary samples.
+
+In particular, a group certificate does not authorize replacing the exact
+receiver-boundary intervals by one representative sample, averaging
+projected extents, or treating all members as if they shared one boundary
+correspondence. The sample construction is source- and pose-dependent.
+
+### 10.4 Required mutual approximation structure
+
+The next evaluator prototype must approximate the complete scalar pair
+potential above, not a stand-alone force kernel. Its accepted cell interaction
+must retain enough information to recover:
+
+- the frequency-resolved signed cross-energy coefficients;
+- source and receiver spatial distributions;
+- the exact receiver boundary/sample correspondence or a separately bounded
+  approximation to it;
+- derivatives of both distance factors;
+- derivatives of projected extent and sample position;
+- rigid-body rotational derivatives for every source and receiver;
+- visibility status and the derivative validity region.
+
+A candidate design may use tensor/product moments for the two distance factors,
+but it must demonstrate a convergent expansion domain for the actual extended
+body/sample geometry. It must not assume that multiplying two individually
+bounded first-order expansions automatically gives a valid bound for their
+product. Product remainder terms and cross terms must be included explicitly.
+
+The exact small-world evaluator remains the oracle. Potential, per-body force,
+and per-body torque errors are checked independently, including the worst
+individual body rather than only aggregate error. Linear and angular momentum
+balance are separate invariants. The evaluator remains test-only until all
+bounds are proven and the live movement transaction can consume its output
+atomically.
+
+### 10.5 Immediate engineering gate
+
+Before adding another approximation implementation, build adversarial
+differential tests from the exact pair-potential API for:
+
+- asymmetric multi-part source and receiver bodies;
+- source and receiver rotations with nonzero torque;
+- source-dependent changes in visible interval count and endpoints;
+- projected-extent variation across a receiver boundary;
+- clear group visibility and ambiguous third-party blockers;
+- near-tangent and visibility-transition poses;
+- strong positive/negative frequency cancellation and near-matched frequencies.
+
+These tests must expose the exact potential and the complete-world per-body
+finite-difference gradient. A proposed mutual evaluator must pass these cases
+with reported conservative bounds before it can be connected to movement.
