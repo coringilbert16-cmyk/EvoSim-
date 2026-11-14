@@ -196,7 +196,7 @@ mod tests {
                 .enumerate()
                 .filter_map(|(index, bound)| bound.intersects(query).then_some(index))
                 .collect::<Vec<_>>();
-            assert_eq!(hierarchy.query_with_bounds(&bounds, query), Some(expected));
+            assert_eq!(hierarchy.query(query), Some(expected));
         }
     }
 
@@ -208,12 +208,9 @@ mod tests {
 
         let bounds = [VisibilityBounds::new(1.0, 1.0, 1.0, 1.0).unwrap()];
         let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
-        assert_eq!(hierarchy.query_with_bounds(&bounds, query), Some(Vec::new()));
+        assert_eq!(hierarchy.query(query), Some(Vec::new()));
         assert_eq!(
-            hierarchy.query_with_bounds(
-                &bounds,
-                VisibilityBounds::new(1.0, 1.0, 1.0, 1.0).unwrap()
-            ),
+            hierarchy.query(VisibilityBounds::new(1.0, 1.0, 1.0, 1.0).unwrap()),
             Some(vec![0])
         );
     }
