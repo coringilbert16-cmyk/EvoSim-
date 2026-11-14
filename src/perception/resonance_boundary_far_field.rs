@@ -7,10 +7,11 @@
 //! generation remain exact and outside this module.
 //!
 //! The fixed-sample result includes scalar potential and source/receiver
-//! center-gradient estimates with independent remainder bounds. These bounds
-//! hold only while sample positions and weights are fixed. Pose-dependent
-//! boundary geometry, projected extents, visibility, and torque remain outside
-//! this primitive; it must not feed live movement.
+//! center-gradient estimates with independent remainder bounds. A separate
+//! generalized-coordinate path differentiates the exact discrete sum through
+//! caller-supplied sample-position and signed-weight Jacobians, with a
+//! conservative magnitude envelope. Geometry Jacobians and complete visibility
+//! certification remain caller obligations; this module must not feed live movement.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct BoundaryKernelVector {
@@ -68,6 +69,7 @@ pub(crate) struct BoundaryGeometryError {
 /// or angle). The caller supplies geometry derivatives from the exact
 /// visibility/sample construction; this module does not infer them.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct BoundarySamplePoseDerivative {
     pub(crate) position_derivative: BoundaryKernelVector,
     pub(crate) weight_derivative: f64,
@@ -80,6 +82,7 @@ pub(crate) struct BoundarySamplePoseDerivative {
 /// Derivative of both body reference positions and all matched boundary
 /// samples with respect to one generalized pose coordinate.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct BoundaryPoseCoordinateDerivative {
     pub(crate) source_center_derivative: BoundaryKernelVector,
     pub(crate) receiver_center_derivative: BoundaryKernelVector,
@@ -91,6 +94,7 @@ pub(crate) struct BoundaryPoseCoordinateDerivative {
 /// Exact discrete derivative at the reference pose and an absolute bound
 /// valid throughout the caller-certified smooth pose cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct BoundaryPoseDerivativeEvaluation {
     pub(crate) derivative: f64,
     pub(crate) absolute_bound: f64,
@@ -606,6 +610,7 @@ impl BoundaryKernelExpansion {
     /// supplied smooth pose cell, using each sample's displacement,
     /// derivative, and signed-weight envelopes. Callers must establish
     /// complete visibility topology and exact sample correspondence.
+    #[allow(dead_code)]
     pub(crate) fn evaluate_pose_coordinate_derivative(
         &self,
         coordinate: &BoundaryPoseCoordinateDerivative,
