@@ -224,6 +224,27 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
     result.is_finite().then_some(result)
 }
 
+
+/// Certify that a supplied ordered list of visibility-cut parameters cannot
+/// cross or reach an edge endpoint anywhere inside their individual motion
+/// envelopes. This does not prove that the list contains every geometric cut.
+#[allow(dead_code)]
+pub(crate) fn certify_cut_parameter_order(cuts: &[(f64, f64)]) -> Option<()> {
+    let mut previous_upper = 1.0e-10;
+    for &(parameter, displacement) in cuts {
+        if !parameter.is_finite()
+            || !displacement.is_finite()
+            || displacement < 0.0
+            || parameter - displacement <= previous_upper
+            || parameter + displacement >= 1.0 - 1.0e-10
+        {
+            return None;
+        }
+        previous_upper = parameter + displacement;
+    }
+    Some(())
+}
+
 impl BoundaryKernelExpansion {
     /// Retain exact sample correspondence for this ordered pair. The
     /// expansion disk is centered at sample_center and contains every midpoint.
@@ -743,6 +764,15 @@ mod tests {
         assert!(
             ray_edge_intersection_displacement_bound(source, source, start, end, valid,).is_none()
         );
+    }
+
+    #[test]
+    fn cut_parameter_order_certificate_rejects_overlap_and_edge_events() {
+        assert!(certify_cut_parameter_order(&[(0.2, 0.01), (0.5, 0.02)]).is_some());
+        assert!(certify_cut_parameter_order(&[(0.2, 0.1), (0.3, 0.1)]).is_none());
+        assert!(certify_cut_parameter_order(&[(0.2, 0.01), (0.99, 0.02)]).is_none());
+        assert!(certify_cut_parameter_order(&[(f64::NAN, 0.0)]).is_none());
+        assert!(certify_cut_parameter_order(&[(0.2, -0.01)]).is_none());
     }
 
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
