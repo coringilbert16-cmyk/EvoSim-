@@ -752,3 +752,32 @@ body torque. Those terms require per-body pose derivatives of the same scalar
 potential and independent remainder bounds. Visibility tangencies, interval
 creation/removal, edge-on projection transitions, and occlusion topology
 changes remain exact/subdivision cases. The evaluator remains non-live.
+## 17. Rigid-pose contribution to boundary-sample displacement — 2026-11-14
+
+A first analytic component of the missing midpoint-displacement certificate is
+now implemented in `resonance_boundary_far_field.rs`. For a point attached to
+a rigid receiver, let R be its maximum distance from the body's rotation
+pivot, let delta_t bound reference-point translation, and let delta_theta
+bound the absolute angular change. The point's displacement is bounded by
+
+`eta_rigid <= delta_t + 2 R sin(min(delta_theta, pi)/2)`.
+
+The angular term is the maximum chord length swept by a point at radius R.
+For angular bounds at or above pi, the expression saturates at the full
+diameter 2R; this remains conservative for arbitrarily large rotations.
+Non-finite or negative inputs fail closed. A deterministic test checks the
+bound against 128 transformed points with varied radii, point angles,
+translation directions, and rotation magnitudes, and checks the large-angle
+saturation and invalid-input rejection.
+
+### Scope of this component
+
+This certifies only rigid transport of an already-corresponding boundary
+point. It can contribute to eta for a receiver pose cell when the sample is
+known to remain attached to the same local boundary feature. It does not
+bound changes in the source-to-boundary ray intersection, interval endpoint
+creation/removal, projected extent, or signed frequency weight. Those terms
+must be added separately; a visibility or correspondence transition still
+forces subdivision or exact evaluation. The helper is not yet wired into the
+sample-motion envelope and does not authorize runtime approximation or
+movement integration.
