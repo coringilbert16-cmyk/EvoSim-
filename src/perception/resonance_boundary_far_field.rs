@@ -212,7 +212,8 @@ impl BoundaryKernelExpansion {
         let potential_analytic_error = scale * product_hessian_bound;
         let source_analytic_error = scale * source_gradient_remainder;
         let receiver_analytic_error = scale * receiver_gradient_remainder;
-        let roundoff_guard = 64.0 * f64::EPSILON
+        let roundoff_guard = 64.0
+            * f64::EPSILON
             * (potential.abs()
                 + source_center_gradient.norm()
                 + receiver_center_gradient.norm()
