@@ -297,7 +297,6 @@ fn multi_pair_probe_records_source_specific_receiver_quadrature() {
     );
 }
 
-
 fn world_potential(records: &[OrderedPairRecord]) -> f64 {
     0.5 * records
         .iter()
