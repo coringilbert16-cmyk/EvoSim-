@@ -21,6 +21,27 @@ pub(crate) struct ExposedBoundaryInterval {
     pub outward_normal: (f64, f64),
 }
 
+/// Provenance for one endpoint of an exposed straight interval. Only endpoints
+/// that match a rigid target-feature vertex are currently certified; all cuts
+/// created by occluders or intersections remain explicitly unresolved.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum BoundaryEndpointProvenance {
+    RigidTargetVertex {
+        body_index: usize,
+        unit_index: usize,
+        local_point: (f64, f64),
+    },
+    UnresolvedVisibilityCut,
+}
+
+/// Exact exposed interval paired with conservative endpoint provenance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ExposedBoundaryIntervalWithProvenance {
+    pub(crate) interval: ExposedBoundaryInterval,
+    pub(crate) start_provenance: BoundaryEndpointProvenance,
+    pub(crate) end_provenance: BoundaryEndpointProvenance,
+}
+
 /// Return the interval's contribution to projected extent for a directional
 /// source. toward_source is the unit direction from the interval toward the
 /// source. The result is length * max(0, n dot s), the 2-D analogue of
@@ -1022,6 +1043,71 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     Some(result)
 }
 
+/// Return the existing exact straight visibility intervals with conservative
+/// endpoint identity. A returned endpoint is marked as a rigid target vertex
+/// only when its world coordinate uniquely matches a local target vertex.
+/// Ray cuts and all other intersections are marked unresolved and must use
+/// exact evaluation or subdivision until their own provenance is available.
+#[allow(dead_code)]
+pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
+    use crate::resources::Form;
+
+    let intervals =
+        visible_polygonal_intervals_for_targets(source, bodies, target_body_indices)?;
+    let mut result = Vec::with_capacity(intervals.len());
+    for interval in intervals {
+        let body = bodies.get(interval.body_index)?;
+        let part = body
+            .parts
+            .iter()
+            .find(|part| part.unit_index == interval.unit_index)?;
+        let local_vertices = match &part.form {
+            Form::Fluid {
+                boundary: Some(vertices),
+                arc_boundary: None,
+                multi_contact_boundary: None,
+                ..
+            } => Some(vertices.clone()),
+            _ => part.form.polygon_vertices(),
+        }?;
+        let (sin, cos) = part.rotation_radians.sin_cos();
+        let identify = |world_point: (f64, f64)| {
+            let tolerance = 1.0e-8 * world_point.0.abs().max(world_point.1.abs()).max(1.0);
+            let mut matched = None;
+            for &(local_x, local_y) in &local_vertices {
+                let candidate = (
+                    part.x + local_x * cos - local_y * sin,
+                    part.y + local_x * sin + local_y * cos,
+                );
+                if (candidate.0 - world_point.0).hypot(candidate.1 - world_point.1) <= tolerance {
+                    if matched.is_some() {
+                        return BoundaryEndpointProvenance::UnresolvedVisibilityCut;
+                    }
+                    matched = Some((local_x, local_y));
+                }
+            }
+            matched.map_or(
+                BoundaryEndpointProvenance::UnresolvedVisibilityCut,
+                |local_point| BoundaryEndpointProvenance::RigidTargetVertex {
+                    body_index: interval.body_index,
+                    unit_index: interval.unit_index,
+                    local_point,
+                },
+            )
+        };
+        result.push(ExposedBoundaryIntervalWithProvenance {
+            interval,
+            start_provenance: identify(interval.start),
+            end_provenance: identify(interval.end),
+        });
+    }
+    Some(result)
+}
+
 #[cfg(test)]
 mod visibility_tests {
     use super::*;
@@ -1048,6 +1134,60 @@ mod visibility_tests {
             min_y: y - height * 0.5,
             max_y: y + height * 0.5,
         }
+    }
+
+    #[test]
+    fn visibility_provenance_identifies_unoccluded_rigid_target_vertices() {
+        let source = (-5.0, 0.0);
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let intervals =
+            visible_polygonal_intervals_for_targets_with_provenance(source, &[target], &[0])
+                .expect("valid target should produce provenance-aware intervals");
+        assert!(!intervals.is_empty());
+        for interval in intervals {
+            assert!(matches!(
+                interval.start_provenance,
+                BoundaryEndpointProvenance::RigidTargetVertex {
+                    body_index: 0,
+                    unit_index: 0,
+                    ..
+                }
+            ));
+            assert!(matches!(
+                interval.end_provenance,
+                BoundaryEndpointProvenance::RigidTargetVertex {
+                    body_index: 0,
+                    unit_index: 0,
+                    ..
+                }
+            ));
+        }
+    }
+
+    #[test]
+    fn visibility_provenance_fails_closed_for_occlusion_generated_cuts() {
+        let source = (-5.0, 0.0);
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(1, 2.0, 0.0, 1.0, 1.0);
+        let intervals = visible_polygonal_intervals_for_targets_with_provenance(
+            source,
+            &[target, blocker],
+            &[0],
+        )
+        .expect("valid target and blocker should produce exact intervals");
+        assert!(!intervals.is_empty());
+        assert!(
+            intervals.iter().any(|interval| {
+                matches!(
+                    interval.start_provenance,
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                ) || matches!(
+                    interval.end_provenance,
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                )
+            }),
+            "occluder-generated cuts must not be mislabeled as rigid target vertices"
+        );
     }
 
     #[test]
