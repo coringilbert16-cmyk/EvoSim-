@@ -947,3 +947,77 @@ certificates. A complete mutual evaluator must add those independently bounded
 pose derivatives for every affected body. Until then this API remains
 non-live; exact evaluation or subdivision remains mandatory whenever any
 precondition cannot be established.
+
+## 22. Generalized pose chain-rule derivative and magnitude certificate — 2026-11-14
+
+The ordered-pair boundary primitive now evaluates the exact discrete derivative
+through one caller-supplied generalized pose coordinate. For each sample,
+the caller supplies the derivative of its midpoint and signed weight with
+respect to that coordinate, plus certified upper bounds for those derivatives,
+the sample displacement, and the absolute weight change over the pose cell.
+The caller also supplies source/receiver reference-point derivatives and
+their magnitude bounds.
+
+For one sample, write g_j = f_a(p_j) f_b(p_j), where
+f_i(p)=1/(1+|p-c_i|). The exact derivative contribution is
+
+dU_j/dq =
+ w_j [(-grad f_a f_b) dot (dc_a/dq)
+    + (-grad f_b f_a) dot (dc_b/dq)
+    + grad_p(g_j) dot (dp_j/dq)]
+ + g_j (dw_j/dq).
+
+The implementation evaluates this expression sample-by-sample, preserving
+signed weights and the exact ordered-pair sample correspondence. The last two
+terms are the sample-position and projected/spectral-weight chain rule. They
+are not inferred from finite differences and are not folded into a center
+translation derivative. The same coordinate can represent x translation,
+y translation, or body angle. For an angular coordinate, the caller supplies
+the rigid and intersection-induced midpoint derivative and the weight
+derivative; the resulting scalar is the corresponding torque contribution
+about the declared pose pivot.
+
+A separate absolute-magnitude envelope is accumulated over the complete
+caller-certified pose cell. With d_a=|p_j-c_a|-eta_j and
+d_b=|p_j-c_b|-eta_j, define F(d)=1/(1+d), G(d)=1/(1+d)^2.
+The sample kernel and its spatial gradient satisfy
+
+|g_j| <= F(d_a)F(d_b),
+
+|grad_p g_j| <= G(d_a)F(d_b)+F(d_a)G(d_b).
+
+Using W_j=|w_j|+the certified absolute weight-change bound, and caller-
+supplied coordinate derivative bounds J_p,j and J_w,j, the chain-rule
+magnitude is bounded by
+
+sum_j W_j [
+  G(d_a)F(d_b) J_c,a
+ +G(d_b)F(d_a) J_c,b
+ +(G(d_a)F(d_b)+F(d_a)G(d_b)) J_p,j
+] + F(d_a)F(d_b) J_w,j,
+
+where J_c,a and J_c,b bound the reference-point derivatives. The
+implementation rejects missing samples, non-finite/negative envelopes,
+understated derivative bounds, and sample motion disks that touch either
+body. An outward floating-point guard is added.
+
+### Contract and remaining work
+
+This closes the analytic chain-rule evaluation and a conservative magnitude
+bound for one generalized coordinate, including the angular/torque coordinate.
+It does not derive the caller's midpoint or signed-weight Jacobians, certify
+their variation over the pose cell, or prove visibility topology completeness.
+Those remain upstream geometry obligations. The magnitude bound is not a
+Taylor remainder for the approximate cluster derivative; this implementation
+evaluates the exact discrete sample derivative and keeps it separate from the
+cluster approximation. It therefore does not yet make the cluster hierarchy
+scalable for pose derivatives and does not authorize live force integration.
+
+The next step is to derive and test the missing caller-side Jacobians and
+their pose-cell envelopes for the actual straight and curved boundary
+constructions, including source-dependent ray/tangent intersections and
+projected-extent/spectral-weight derivatives. The complete per-body x/y/angle
+derivatives must then be checked against independent finite differences in
+smooth visibility cells. Any topology event or unbounded sensitivity remains
+an exact/subdivision fallback.
+
