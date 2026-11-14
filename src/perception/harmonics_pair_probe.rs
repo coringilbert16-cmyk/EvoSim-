@@ -210,6 +210,15 @@ fn sample_geometry_differs(left: &[BoundarySampleRecord], right: &[BoundarySampl
                 .iter()
                 .zip(&b.boundary_geometry)
                 .any(|(x, y)| (x - y).abs() > 1.0e-12)
+            || a.incident_components.len() != b.incident_components.len()
+            || a.incident_components
+                .iter()
+                .zip(&b.incident_components)
+                .any(|(x, y)| {
+                    (x.0 - y.0).abs() > 1.0e-9
+                        || (x.1 - y.1).abs() > 1.0e-12
+                        || (x.2 - y.2).abs() > 1.0e-12
+                })
     })
 }
 
