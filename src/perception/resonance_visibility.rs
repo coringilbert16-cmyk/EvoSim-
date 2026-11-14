@@ -359,7 +359,7 @@ mod tests {
             VisibilityBounds::new(8.0, 0.0, 9.0, 1.0).unwrap(),
             VisibilityBounds::new(8.0, 4.0, 9.0, 5.0).unwrap(),
             VisibilityBounds::new(4.0, 2.0, 4.5, 2.5).unwrap(),
-            VisibilityBounds::new(4.0, 7.0, 4.5, 7.5).unwrap(),
+            VisibilityBounds::new(4.0, 3.0, 4.5, 3.5).unwrap(),
         ];
         let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
 
@@ -374,7 +374,7 @@ mod tests {
             "adding a participant does not hide another third-party blocker"
         );
         assert_eq!(
-            hierarchy.certify_groups_unoccluded(&[0, 1, 4], &[2, 3], 0.0),
+            hierarchy.certify_groups_unoccluded(&[0, 1, 4], &[2, 3, 5], 0.0),
             Some(true),
             "a blocker explicitly belonging to a participant group is not a third-party occluder"
         );
