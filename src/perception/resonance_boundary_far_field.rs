@@ -63,6 +63,41 @@ pub(crate) struct BoundaryGeometryError {
     pub(crate) receiver_force: f64,
 }
 
+/// One sample's generalized pose derivative and certified pose-cell envelopes.
+/// Derivatives are with respect to one scalar coordinate (for example x, y,
+/// or angle). The caller supplies geometry derivatives from the exact
+/// visibility/sample construction; this module does not infer them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct BoundarySamplePoseDerivative {
+    pub(crate) position_derivative: BoundaryKernelVector,
+    pub(crate) weight_derivative: f64,
+    pub(crate) position_derivative_bound: f64,
+    pub(crate) absolute_weight_derivative_bound: f64,
+    pub(crate) position_displacement_bound: f64,
+    pub(crate) absolute_weight_change_bound: f64,
+}
+
+/// Derivative of both body reference positions and all matched boundary
+/// samples with respect to one generalized pose coordinate.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct BoundaryPoseCoordinateDerivative {
+    pub(crate) source_center_derivative: BoundaryKernelVector,
+    pub(crate) receiver_center_derivative: BoundaryKernelVector,
+    pub(crate) source_center_derivative_bound: f64,
+    pub(crate) receiver_center_derivative_bound: f64,
+    pub(crate) samples: Vec<BoundarySamplePoseDerivative>,
+}
+
+/// Exact discrete derivative at the reference pose and an absolute bound
+/// valid throughout the caller-certified smooth pose cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct BoundaryPoseDerivativeEvaluation {
+    pub(crate) derivative: f64,
+    pub(crate) absolute_bound: f64,
+    pub(crate) sample_position_derivative: f64,
+    pub(crate) sample_weight_derivative: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BoundaryPotentialEvaluation {
     pub(crate) potential: f64,
@@ -562,6 +597,149 @@ impl BoundaryKernelExpansion {
             .then_some(result)
     }
 
+    /// Differentiate the exact discrete boundary-sample potential through
+    /// one generalized pose coordinate. This includes both body-center
+    /// derivatives and the sample-position/projected-weight chain rule.
+    ///
+    /// The returned derivative is exact for the supplied reference-pose
+    /// samples and derivatives. The absolute bound is conservative over the
+    /// supplied smooth pose cell, using each sample's displacement,
+    /// derivative, and signed-weight envelopes. Callers must establish
+    /// complete visibility topology and exact sample correspondence.
+    pub(crate) fn evaluate_pose_coordinate_derivative(
+        &self,
+        coordinate: &BoundaryPoseCoordinateDerivative,
+    ) -> Option<BoundaryPoseDerivativeEvaluation> {
+        if coordinate.samples.len() != self.samples.len()
+            || !coordinate.source_center_derivative.x.is_finite()
+            || !coordinate.source_center_derivative.y.is_finite()
+            || !coordinate.receiver_center_derivative.x.is_finite()
+            || !coordinate.receiver_center_derivative.y.is_finite()
+            || !coordinate.source_center_derivative_bound.is_finite()
+            || coordinate.source_center_derivative_bound < 0.0
+            || !coordinate.receiver_center_derivative_bound.is_finite()
+            || coordinate.receiver_center_derivative_bound < 0.0
+            || coordinate.source_center_derivative.norm()
+                > coordinate.source_center_derivative_bound + 64.0 * f64::EPSILON
+            || coordinate.receiver_center_derivative.norm()
+                > coordinate.receiver_center_derivative_bound + 64.0 * f64::EPSILON
+        {
+            return None;
+        }
+
+        let mut derivative = 0.0;
+        let mut absolute_bound = 0.0;
+        let mut sample_position_derivative = 0.0;
+        let mut sample_weight_derivative = 0.0;
+        for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+            let values = [
+                pose.position_derivative.x,
+                pose.position_derivative.y,
+                pose.weight_derivative,
+                pose.position_derivative_bound,
+                pose.absolute_weight_derivative_bound,
+                pose.position_displacement_bound,
+                pose.absolute_weight_change_bound,
+            ];
+            if values.iter().any(|value| !value.is_finite())
+                || pose.position_derivative_bound < 0.0
+                || pose.absolute_weight_derivative_bound < 0.0
+                || pose.position_displacement_bound < 0.0
+                || pose.absolute_weight_change_bound < 0.0
+                || pose.position_derivative.norm()
+                    > pose.position_derivative_bound + 64.0 * f64::EPSILON
+                || pose.weight_derivative.abs()
+                    > pose.absolute_weight_derivative_bound + 64.0 * f64::EPSILON
+            {
+                return None;
+            }
+
+            let source_delta = BoundaryKernelVector {
+                x: sample.position.x - self.source_center.x,
+                y: sample.position.y - self.source_center.y,
+            };
+            let receiver_delta = BoundaryKernelVector {
+                x: sample.position.x - self.receiver_center.x,
+                y: sample.position.y - self.receiver_center.y,
+            };
+            let source_distance = source_delta.norm();
+            let receiver_distance = receiver_delta.norm();
+            let source_min = source_distance - pose.position_displacement_bound;
+            let receiver_min = receiver_distance - pose.position_displacement_bound;
+            if !source_min.is_finite()
+                || !receiver_min.is_finite()
+                || source_min <= f64::EPSILON
+                || receiver_min <= f64::EPSILON
+            {
+                return None;
+            }
+
+            let (source_value, source_gradient) =
+                radial_kernel_value_gradient(source_delta, source_distance);
+            let (receiver_value, receiver_gradient) =
+                radial_kernel_value_gradient(receiver_delta, receiver_distance);
+            let kernel = source_value * receiver_value;
+            let sample_gradient = BoundaryKernelVector {
+                x: source_gradient.x * receiver_value + receiver_gradient.x * source_value,
+                y: source_gradient.y * receiver_value + receiver_gradient.y * source_value,
+            };
+            let source_center_gradient = BoundaryKernelVector {
+                x: -sample.weight * source_gradient.x * receiver_value,
+                y: -sample.weight * source_gradient.y * receiver_value,
+            };
+            let receiver_center_gradient = BoundaryKernelVector {
+                x: -sample.weight * receiver_gradient.x * source_value,
+                y: -sample.weight * receiver_gradient.y * source_value,
+            };
+            let position_term = sample.weight * sample_gradient.dot(pose.position_derivative);
+            let weight_term = kernel * pose.weight_derivative;
+            derivative += source_center_gradient.dot(coordinate.source_center_derivative)
+                + receiver_center_gradient.dot(coordinate.receiver_center_derivative)
+                + position_term
+                + weight_term;
+            sample_position_derivative += position_term;
+            sample_weight_derivative += weight_term;
+
+            let source_value_bound = 1.0 / (1.0 + source_min);
+            let receiver_value_bound = 1.0 / (1.0 + receiver_min);
+            let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
+            let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
+            let kernel_bound = source_value_bound * receiver_value_bound;
+            let sample_gradient_bound = source_gradient_bound * receiver_value_bound
+                + receiver_gradient_bound * source_value_bound;
+            let maximum_absolute_weight =
+                sample.weight.abs() + pose.absolute_weight_change_bound;
+            absolute_bound += maximum_absolute_weight
+                * (source_gradient_bound
+                    * receiver_value_bound
+                    * coordinate.source_center_derivative_bound
+                    + receiver_gradient_bound
+                        * source_value_bound
+                        * coordinate.receiver_center_derivative_bound
+                    + sample_gradient_bound * pose.position_derivative_bound)
+                + kernel_bound * pose.absolute_weight_derivative_bound;
+        }
+
+        let roundoff_guard = 128.0
+            * f64::EPSILON
+            * (derivative.abs() + absolute_bound + self.absolute_weight + 1.0);
+        let result = BoundaryPoseDerivativeEvaluation {
+            derivative,
+            absolute_bound: absolute_bound + roundoff_guard,
+            sample_position_derivative,
+            sample_weight_derivative,
+        };
+        [
+            result.derivative,
+            result.absolute_bound,
+            result.sample_position_derivative,
+            result.sample_weight_derivative,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(result)
+    }
+
     /// Exact discrete sum, retained as the differential oracle.
     #[cfg(test)]
     fn exact_potential(&self) -> f64 {
@@ -825,6 +1003,104 @@ mod tests {
         assert!(certify_cut_parameter_order(&[(0.2, 0.01), (0.99, 0.02)]).is_none());
         assert!(certify_cut_parameter_order(&[(f64::NAN, 0.0)]).is_none());
         assert!(certify_cut_parameter_order(&[(0.2, -0.01)]).is_none());
+    }
+
+    #[test]
+    fn pose_coordinate_derivative_includes_sample_motion_weight_motion_and_torque_terms() {
+        let source_center = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let receiver_center = BoundaryKernelVector { x: 9.0, y: 0.5 };
+        let sample_position = BoundaryKernelVector { x: 4.0, y: 1.5 };
+        let expansion = BoundaryKernelExpansion::new(
+            source_center,
+            receiver_center,
+            sample_position,
+            vec![sample(sample_position.x, sample_position.y, 1.7)],
+        )
+        .expect("valid one-sample expansion");
+        let coordinate = BoundaryPoseCoordinateDerivative {
+            source_center_derivative: BoundaryKernelVector { x: 0.4, y: -0.2 },
+            receiver_center_derivative: BoundaryKernelVector { x: 0.0, y: 0.0 },
+            source_center_derivative_bound: 0.5,
+            receiver_center_derivative_bound: 0.0,
+            samples: vec![BoundarySamplePoseDerivative {
+                position_derivative: BoundaryKernelVector { x: -0.3, y: 0.8 },
+                weight_derivative: 0.12,
+                position_derivative_bound: 1.0,
+                absolute_weight_derivative_bound: 0.2,
+                position_displacement_bound: 0.01,
+                absolute_weight_change_bound: 0.01,
+            }],
+        };
+        let evaluation = expansion
+            .evaluate_pose_coordinate_derivative(&coordinate)
+            .expect("smooth pose coordinate should be certifiable");
+        let step = 1.0e-6;
+        let moved = |direction: f64| {
+            let moved_source = BoundaryKernelVector {
+                x: source_center.x + direction * step * coordinate.source_center_derivative.x,
+                y: source_center.y + direction * step * coordinate.source_center_derivative.y,
+            };
+            let moved_sample = BoundaryKernelVector {
+                x: sample_position.x
+                    + direction * step * coordinate.samples[0].position_derivative.x,
+                y: sample_position.y
+                    + direction * step * coordinate.samples[0].position_derivative.y,
+            };
+            BoundaryKernelExpansion::new(
+                moved_source,
+                receiver_center,
+                moved_sample,
+                vec![sample(
+                    moved_sample.x,
+                    moved_sample.y,
+                    1.7 + direction * step * coordinate.samples[0].weight_derivative,
+                )],
+            )
+            .expect("perturbed sample remains valid")
+            .exact_potential()
+        };
+        let finite_difference = (moved(1.0) - moved(-1.0)) / (2.0 * step);
+        assert!(
+            (evaluation.derivative - finite_difference).abs() < 1.0e-8,
+            "analytic={} finite_difference={finite_difference}",
+            evaluation.derivative
+        );
+        assert!(evaluation.absolute_bound >= evaluation.derivative.abs());
+        assert!(evaluation.sample_position_derivative.abs() > 0.0);
+        assert!(evaluation.sample_weight_derivative.abs() > 0.0);
+    }
+
+    #[test]
+    fn pose_coordinate_derivative_rejects_incomplete_or_understated_envelopes() {
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 9.0, y: 0.0 },
+            BoundaryKernelVector { x: 4.0, y: 1.0 },
+            vec![sample(4.0, 1.0, 1.0)],
+        )
+        .expect("valid sample");
+        let mut coordinate = BoundaryPoseCoordinateDerivative {
+            source_center_derivative: BoundaryKernelVector { x: 1.0, y: 0.0 },
+            receiver_center_derivative: BoundaryKernelVector::default(),
+            source_center_derivative_bound: 1.0,
+            receiver_center_derivative_bound: 0.0,
+            samples: vec![BoundarySamplePoseDerivative {
+                position_derivative: BoundaryKernelVector { x: 0.0, y: 1.0 },
+                weight_derivative: 0.0,
+                position_derivative_bound: 1.0,
+                absolute_weight_derivative_bound: 0.0,
+                position_displacement_bound: 0.01,
+                absolute_weight_change_bound: 0.0,
+            }],
+        };
+        assert!(expansion.evaluate_pose_coordinate_derivative(&coordinate).is_some());
+        coordinate.samples.clear();
+        assert!(expansion.evaluate_pose_coordinate_derivative(&coordinate).is_none());
+        coordinate.samples = vec![BoundarySamplePoseDerivative {
+            position_derivative: BoundaryKernelVector { x: 0.0, y: 1.1 },
+            ..BoundarySamplePoseDerivative::default()
+        }];
+        assert!(expansion.evaluate_pose_coordinate_derivative(&coordinate).is_none());
     }
 
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
