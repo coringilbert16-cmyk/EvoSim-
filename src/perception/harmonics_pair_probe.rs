@@ -81,23 +81,20 @@ fn asymmetric_receiver(
 }
 
 fn probe_world(
-    source_zero_shift: (f64, f64),
-    source_zero_rotation: f64,
-    receiver_shift: (f64, f64),
-    receiver_rotation: f64,
+    pose: [f64; 12],
     catalog: &[crate::resources::BaseResource],
 ) -> Vec<crate::physical_material::PhysicalMaterial> {
     vec![
+        single_body("Hydrogen", pose[0], pose[1], pose[2], catalog),
+        single_body("Nitrogen", pose[3], 8.0 + pose[4], pose[5], catalog),
+        asymmetric_receiver((pose[6], pose[7]), pose[8], catalog),
         single_body(
-            "Hydrogen",
-            source_zero_shift.0,
-            source_zero_shift.1,
-            source_zero_rotation,
+            "Oxygen",
+            5.0 + pose[9],
+            1.6 + pose[10],
+            pose[11],
             catalog,
         ),
-        single_body("Nitrogen", 0.0, 8.0, 0.0, catalog),
-        asymmetric_receiver(receiver_shift, receiver_rotation, catalog),
-        single_body("Oxygen", 5.0, 1.6, 0.0, catalog),
     ]
 }
 
@@ -235,8 +232,13 @@ fn potential_differs(left: &[(f64, f64)], right: &[(f64, f64)]) -> bool {
 #[test]
 fn multi_pair_probe_records_source_specific_receiver_quadrature() {
     let catalog = crate::resources::default_catalog();
-    let baseline_bodies = probe_world((0.0, 0.0), 0.0, (0.0, 0.0), 0.0, &catalog);
-    let changed_bodies = probe_world((0.35, 0.25), 0.2, (0.0, 0.0), 0.4, &catalog);
+    let baseline_bodies = probe_world([0.0; 12], &catalog);
+    let mut changed_pose = [0.0; 12];
+    changed_pose[0] = 0.35;
+    changed_pose[1] = 0.25;
+    changed_pose[2] = 0.2;
+    changed_pose[8] = 0.4;
+    let changed_bodies = probe_world(changed_pose, &catalog);
 
     let baseline = record_world_pairs(&baseline_bodies, &catalog, 0);
     let changed = record_world_pairs(&changed_bodies, &catalog, 0);
@@ -310,15 +312,10 @@ fn world_potential(records: &[OrderedPairRecord]) -> f64 {
 #[test]
 fn complete_world_pose_derivatives_match_refined_central_differences() {
     let catalog = crate::resources::default_catalog();
-    // Parameters are source x/y/rotation followed by receiver x/y/rotation.
-    let evaluate = |pose: [f64; 6]| {
-        let bodies = probe_world(
-            (pose[0], pose[1]),
-            pose[2],
-            (pose[3], pose[4]),
-            pose[5],
-            &catalog,
-        );
+    // Each body contributes independent x/y/rotation coordinates in world order.
+    // This includes the third-body blocker and its occlusion reactions.
+    let evaluate = |pose: [f64; 12]| {
+        let bodies = probe_world(pose, &catalog);
         world_potential(&record_world_pairs(&bodies, &catalog, 0))
     };
 
@@ -326,15 +323,15 @@ fn complete_world_pose_derivatives_match_refined_central_differences() {
     // These derivatives therefore include changes to sample locations,
     // projected extents, visibility, and frequency weights—not frozen samples.
     let central_difference = |step: f64, axis: usize| {
-        let mut plus = [0.0; 6];
-        let mut minus = [0.0; 6];
+        let mut plus = [0.0; 12];
+        let mut minus = [0.0; 12];
         plus[axis] = step;
         minus[axis] = -step;
         (evaluate(plus) - evaluate(minus)) / (2.0 * step)
     };
 
     let mut nonzero_derivatives = 0;
-    for axis in 0..6 {
+    for axis in 0..12 {
         let coarse = central_difference(2.0e-4, axis);
         let fine = central_difference(1.0e-4, axis);
         assert!(coarse.is_finite() && fine.is_finite());
@@ -348,7 +345,7 @@ fn complete_world_pose_derivatives_match_refined_central_differences() {
         );
     }
     assert!(
-        nonzero_derivatives >= 4,
-        "the asymmetric complete-world fixture should exercise at least four independent pose derivatives; got {nonzero_derivatives}"
+        nonzero_derivatives >= 5,
+        "the asymmetric complete-world fixture should exercise at least five independent pose derivatives; got {nonzero_derivatives}"
     );
 }
