@@ -531,7 +531,6 @@ fn smooth_boundary_geometry_derivatives_match_refined_differences() {
     }
 }
 
-
 #[test]
 fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
     let catalog = crate::resources::default_catalog();
