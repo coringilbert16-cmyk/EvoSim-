@@ -4470,3 +4470,109 @@ mod parallel_polygonal_visibility_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod projected_extent_motion_tests {
+    use super::*;
+
+    #[test]
+    fn projected_extent_motion_bound_contains_source_and_endpoint_perturbations() {
+        let interval = ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
+            start: (-1.0, 0.0),
+            end: (1.0, 0.0),
+            outward_normal: (0.0, 1.0),
+        };
+        let source = (0.3, 2.0);
+        let source_bound = 0.01;
+        let start_bound = 0.005;
+        let end_bound = 0.007;
+        let bound = point_source_projected_extent_change_bound(
+            interval,
+            source,
+            source_bound,
+            start_bound,
+            end_bound,
+        )
+        .expect("non-singular straight interval should have a finite extent bound");
+        let baseline =
+            point_source_projected_extent(interval, source).expect("baseline extent");
+
+        let mut state = 0x8f3f_73b5_cf1c_9ade_u64;
+        let mut next_direction = || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let angle =
+                ((state >> 32) as u32) as f64 / u32::MAX as f64 * std::f64::consts::TAU;
+            (angle.cos(), angle.sin())
+        };
+        for _ in 0..256 {
+            let (sx, sy) = next_direction();
+            let (ax, ay) = next_direction();
+            let (bx, by) = next_direction();
+            let moved_start = (
+                interval.start.0 + ax * start_bound * 0.8,
+                interval.start.1 + ay * start_bound * 0.8,
+            );
+            let moved_end = (
+                interval.end.0 + bx * end_bound * 0.8,
+                interval.end.1 + by * end_bound * 0.8,
+            );
+            let dx = moved_end.0 - moved_start.0;
+            let dy = moved_end.1 - moved_start.1;
+            let length = dx.hypot(dy);
+            let moved_interval = ExposedBoundaryInterval {
+                start: moved_start,
+                end: moved_end,
+                outward_normal: (-dy / length, dx / length),
+                ..interval
+            };
+            let moved_source = (
+                source.0 + sx * source_bound * 0.8,
+                source.1 + sy * source_bound * 0.8,
+            );
+            let moved_extent =
+                point_source_projected_extent(moved_interval, moved_source).unwrap();
+            assert!(
+                (moved_extent - baseline).abs() <= bound,
+                "projected extent change exceeded certified envelope"
+            );
+        }
+    }
+
+    #[test]
+    fn projected_extent_motion_bound_rejects_collapsed_or_singular_geometry() {
+        let interval = ExposedBoundaryInterval {
+            body_index: 0,
+            unit_index: 0,
+            start: (-1.0, 0.0),
+            end: (1.0, 0.0),
+            outward_normal: (0.0, 1.0),
+        };
+        assert!(point_source_projected_extent_change_bound(
+            interval,
+            (0.0, 0.0),
+            0.0,
+            0.0,
+            0.0,
+        )
+        .is_none());
+        assert!(point_source_projected_extent_change_bound(
+            interval,
+            (0.0, 2.0),
+            0.0,
+            1.0,
+            1.0,
+        )
+        .is_none());
+        assert!(point_source_projected_extent_change_bound(
+            interval,
+            (0.0, 2.0),
+            f64::NAN,
+            0.0,
+            0.0,
+        )
+        .is_none());
+    }
+}
+
