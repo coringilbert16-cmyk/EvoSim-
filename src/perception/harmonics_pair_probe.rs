@@ -88,13 +88,7 @@ fn probe_world(
         single_body("Hydrogen", pose[0], pose[1], pose[2], catalog),
         single_body("Nitrogen", pose[3], 8.0 + pose[4], pose[5], catalog),
         asymmetric_receiver((pose[6], pose[7]), pose[8], catalog),
-        single_body(
-            "Oxygen",
-            5.0 + pose[9],
-            1.6 + pose[10],
-            pose[11],
-            catalog,
-        ),
+        single_body("Oxygen", 5.0 + pose[9], 1.6 + pose[10], pose[11], catalog),
     ]
 }
 
