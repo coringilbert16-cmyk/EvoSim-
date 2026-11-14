@@ -638,3 +638,98 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
                 .all(|(frequency, energy)| frequency.is_finite() && energy.is_finite())
     }));
 }
+
+#[test]
+fn complete_world_pair_force_and_torque_match_independent_potential_differences() {
+    let catalog = crate::resources::default_catalog();
+    let baseline_pose = [0.0; 12];
+    let baseline_bodies = probe_world(baseline_pose, &catalog);
+    let mut accumulated = vec![crate::harmonics::ResonanceBodyForce::default(); baseline_bodies.len()];
+
+    // Build the complete exact gradient by summing each unordered pair once.
+    // Every other body remains an occluder and receives its own derivative.
+    for index_a in 0..baseline_bodies.len() {
+        for index_b in index_a + 1..baseline_bodies.len() {
+            let occluders = baseline_bodies
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != index_a && *index != index_b)
+                .map(|(_, body)| body.clone())
+                .collect::<Vec<_>>();
+            let pair_forces = super::resonance_multi_body_forces_with_occluders(
+                &baseline_bodies[index_a],
+                &baseline_bodies[index_b],
+                &occluders,
+                &catalog,
+                0,
+            )
+            .expect("every exact unordered pair should yield its complete multi-body gradient");
+            assert_eq!(pair_forces.len(), baseline_bodies.len());
+
+            accumulated[index_a].x += pair_forces[0].x;
+            accumulated[index_a].y += pair_forces[0].y;
+            accumulated[index_a].torque += pair_forces[0].torque;
+            accumulated[index_b].x += pair_forces[1].x;
+            accumulated[index_b].y += pair_forces[1].y;
+            accumulated[index_b].torque += pair_forces[1].torque;
+
+            let mut occluder_index = 0;
+            for world_index in 0..baseline_bodies.len() {
+                if world_index == index_a || world_index == index_b {
+                    continue;
+                }
+                let force = pair_forces[occluder_index + 2];
+                accumulated[world_index].x += force.x;
+                accumulated[world_index].y += force.y;
+                accumulated[world_index].torque += force.torque;
+                occluder_index += 1;
+            }
+        }
+    }
+
+    // The oracle independently rebuilds every ordered directional reception
+    // and sums them into the complete unordered-pair world potential.
+    let evaluate = |pose: [f64; 12]| {
+        let bodies = probe_world(pose, &catalog);
+        world_potential(&record_world_pairs(&bodies, &catalog, 0))
+    };
+    let step = 1.0e-4;
+    let coordinate_map = [
+        (0usize, 0usize, 0usize),
+        (1, 0, 1),
+        (2, 0, 2),
+        (3, 1, 0),
+        (4, 1, 1),
+        (5, 1, 2),
+        (6, 2, 0),
+        (7, 2, 1),
+        (8, 2, 2),
+        (9, 3, 0),
+        (10, 3, 1),
+        (11, 3, 2),
+    ];
+
+    for (pose_axis, body_index, component) in coordinate_map {
+        let mut plus_pose = baseline_pose;
+        let mut minus_pose = baseline_pose;
+        plus_pose[pose_axis] = step;
+        minus_pose[pose_axis] = -step;
+        let derivative = (evaluate(plus_pose) - evaluate(minus_pose)) / (2.0 * step);
+        let expected_force = -derivative;
+        let actual_force = match component {
+            0 => accumulated[body_index].x,
+            1 => accumulated[body_index].y,
+            2 => accumulated[body_index].torque,
+            _ => unreachable!(),
+        };
+        let scale = expected_force.abs().max(actual_force.abs()).max(1.0e-7);
+        assert!(
+            (actual_force - expected_force).abs() <= 5.0e-2 * scale + 1.0e-7,
+            "complete-world gradient mismatch for body {body_index}, component {component}: pair sum={actual_force}, independent potential derivative={expected_force}"
+        );
+    }
+
+    assert!(accumulated.iter().all(|force| {
+        force.x.is_finite() && force.y.is_finite() && force.torque.is_finite()
+    }));
+}
