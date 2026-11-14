@@ -482,12 +482,9 @@ mod tests {
         let translation_bound = 0.35;
         let rotation_bound = 0.8;
         let maximum_radius: f64 = 3.2;
-        let bound = rigid_pose_point_displacement_bound(
-            maximum_radius,
-            translation_bound,
-            rotation_bound,
-        )
-        .expect("finite rigid-pose envelope");
+        let bound =
+            rigid_pose_point_displacement_bound(maximum_radius, translation_bound, rotation_bound)
+                .expect("finite rigid-pose envelope");
         for index in 0..128 {
             let radius = maximum_radius * (index as f64 / 127.0);
             let angle = index as f64 * 0.173;
@@ -505,12 +502,9 @@ mod tests {
             let displacement = (moved.0 - point.0).hypot(moved.1 - point.1);
             assert!(displacement <= bound + 1e-12);
         }
-        let full_turn_bound = rigid_pose_point_displacement_bound(
-            maximum_radius,
-            0.0,
-            4.0 * std::f64::consts::PI,
-        )
-        .expect("large angular envelope");
+        let full_turn_bound =
+            rigid_pose_point_displacement_bound(maximum_radius, 0.0, 4.0 * std::f64::consts::PI)
+                .expect("large angular envelope");
         assert!((full_turn_bound - 2.0 * maximum_radius).abs() < 1e-12);
     }
 
