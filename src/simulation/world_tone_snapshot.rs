@@ -3188,6 +3188,4 @@ mod tests {
                 expected
             );
         }
-    }
-
-}
+    }}
