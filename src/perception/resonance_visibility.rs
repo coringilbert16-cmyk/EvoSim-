@@ -172,17 +172,54 @@ impl ResonanceVisibilityHierarchy {
         receiver_index: usize,
         expansion: f64,
     ) -> Option<bool> {
-        if source_index == receiver_index {
+        self.certify_groups_unoccluded(&[source_index], &[receiver_index], expansion)
+    }
+
+    /// Certify that no body outside either participant group can intersect
+    /// any segment joining the groups. Group bounds are derived from the
+    /// indexed physical-body bounds, never supplied independently.
+    ///
+    /// This is deliberately conservative: an AABB overlap is ambiguous and
+    /// returns false, requiring subdivision or exact visibility evaluation.
+    pub(crate) fn certify_groups_unoccluded(
+        &self,
+        source_indices: &[usize],
+        receiver_indices: &[usize],
+        expansion: f64,
+    ) -> Option<bool> {
+        if source_indices.is_empty() || receiver_indices.is_empty() {
             return None;
         }
-        let source = *self.body_bounds.get(source_index)?;
-        let receiver = *self.body_bounds.get(receiver_index)?;
-        let candidates = self.query_between_bounds(source, receiver, expansion)?;
-        Some(
-            candidates
-                .iter()
-                .all(|index| *index == source_index || *index == receiver_index),
-        )
+
+        let mut participants = std::collections::HashSet::new();
+        let mut source_bounds = None;
+        for index in source_indices {
+            if !participants.insert(*index) {
+                return None;
+            }
+            let bounds = *self.body_bounds.get(*index)?;
+            source_bounds = Some(source_bounds.map_or(bounds, |current: VisibilityBounds| {
+                current.union(bounds)
+            }));
+        }
+
+        let mut receiver_bounds = None;
+        for index in receiver_indices {
+            if !participants.insert(*index) {
+                return None;
+            }
+            let bounds = *self.body_bounds.get(*index)?;
+            receiver_bounds = Some(receiver_bounds.map_or(bounds, |current: VisibilityBounds| {
+                current.union(bounds)
+            }));
+        }
+
+        let candidates = self.query_between_bounds(
+            source_bounds?,
+            receiver_bounds?,
+            expansion,
+        )?;
+        Some(candidates.iter().all(|index| participants.contains(index)))
     }
 
     /// Return every indexed bound intersecting the query envelope. A false
@@ -315,6 +352,50 @@ mod tests {
             hierarchy.query_between_bounds(invalid_source, receiver, 0.0),
             None,
             "invalid group bounds must fail closed"
+        );
+    }
+
+    #[test]
+    fn multi_body_group_visibility_certificate_uses_all_group_bounds() {
+        let bounds = [
+            VisibilityBounds::new(0.0, 0.0, 1.0, 1.0).unwrap(),
+            VisibilityBounds::new(0.0, 4.0, 1.0, 5.0).unwrap(),
+            VisibilityBounds::new(8.0, 0.0, 9.0, 1.0).unwrap(),
+            VisibilityBounds::new(8.0, 4.0, 9.0, 5.0).unwrap(),
+            VisibilityBounds::new(4.0, 2.0, 4.5, 2.5).unwrap(),
+            VisibilityBounds::new(4.0, 7.0, 4.5, 7.5).unwrap(),
+        ];
+        let hierarchy = ResonanceVisibilityHierarchy::new(&bounds).unwrap();
+
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[0, 1], &[2, 3], 0.0),
+            Some(false),
+            "a third-party body intersecting any possible group-to-group segment is ambiguous"
+        );
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[0, 1], &[2, 3, 4], 0.0),
+            Some(false),
+            "adding a participant does not hide another third-party blocker"
+        );
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[0, 1, 4], &[2, 3], 0.0),
+            Some(true),
+            "a blocker explicitly belonging to a participant group is not a third-party occluder"
+        );
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[0, 0], &[2], 0.0),
+            None,
+            "duplicate group members fail closed"
+        );
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[0], &[0], 0.0),
+            None,
+            "overlapping source and receiver groups fail closed"
+        );
+        assert_eq!(
+            hierarchy.certify_groups_unoccluded(&[], &[2], 0.0),
+            None,
+            "empty groups fail closed"
         );
     }
 
