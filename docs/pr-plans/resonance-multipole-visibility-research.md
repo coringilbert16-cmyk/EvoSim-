@@ -1087,3 +1087,60 @@ frequency-resolved cross coefficient. Only after all endpoint types are
 covered can the pose-coordinate chain-rule evaluator be fed by production
 geometry.
 
+## 24. Straight projected-weight derivative magnitude envelope — 2026-11-14
+
+The straight-interval pose derivative now has an independent conservative
+magnitude bound over a smooth pose cell. Inputs include source and endpoint
+displacement envelopes, plus upper bounds on their derivatives with respect
+to one generalized coordinate. The certificate rejects edge collapse,
+invalid normal orientation, a back-facing or edge-on base configuration, and
+any pose cell whose normal-distance lower bound reaches zero.
+
+Let e=b-a, L=|e|, t=e/L, r=s-a, u=r dot t, d=r dot n,
+and delta_e=delta_a+delta_b. The edge-length lower bound is
+L_min=L-delta_e. The normal-direction change is bounded by
+
+delta_n <= min(2, 2 delta_e/L_min).
+
+With delta_r=delta_s+delta_a and R_max=|r|+delta_r, the front-side
+distance lower bound is
+
+d_min = d-delta_r-R_max delta_n.
+
+The path rejects unless L_min and d_min are positive. It bounds the maximum
+absolute along-edge coordinate by
+
+u_max = |u|+delta_r+R_max delta_n,
+
+and uses L_max=L+delta_e. For the exact projected extent
+
+E=d[asinh((L-u)/d)+asinh(u/d)],
+
+the partial derivatives obey |E_L|<=1, |E_u|<=2, and
+
+|E_d| <= asinh(u_max/d_min)
+       + asinh((L_max+u_max)/d_min) + 2.
+
+If J_e bounds |b'-a'| and J_r bounds |s'-a'|, then
+
+|L'| <= J_e,
+|t'| <= 2 J_e/L_min,
+|u'|, |d'| <= J_r + R_max |t'|,
+
+so the implementation returns the conservative envelope
+
+|E'| <= J_e + 2(J_r+R_max|t'|)
+             + |E_d| (J_r+R_max|t'|),
+
+with an outward floating-point guard. A deterministic perturbation test checks
+the bound against 96 independently moved source/endpoint configurations and
+their analytic directional derivatives.
+
+This closes a local magnitude bound for the projected-extent derivative of
+one already-corresponding straight interval. Multiplying by the absolute
+frequency-resolved signed cross coefficient gives the corresponding projected
+weight-derivative bound when that coefficient is pose-invariant. It does not
+certify interval endpoint provenance, visibility completeness, spectral
+coefficient variation, or curved-boundary weights. Those remain separate
+inputs or exact/subdivision cases.
+
