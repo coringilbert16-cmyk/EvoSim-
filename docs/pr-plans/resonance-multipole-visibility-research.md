@@ -414,3 +414,73 @@ differential tests from the exact pair-potential API for:
 These tests must expose the exact potential and the complete-world per-body
 finite-difference gradient. A proposed mutual evaluator must pass these cases
 with reported conservative bounds before it can be connected to movement.
+
+
+## 11. Candidate mutual traversal that preserves exact receiver geometry — 2026-11-14
+
+A viable intermediate architecture is a **bidirectional source-cluster traversal
+with exact receiver bodies**, rather than immediately aggregating both sides'
+boundary geometry into one cell-cell sample. This is a candidate test-only
+design, not yet proven or implemented.
+
+For two disjoint body groups A and B:
+
+1. For each receiver body b in B, retain its exact current receiver geometry,
+   exact visible boundary intervals, interval midpoints, and projected extents.
+   For each frequency, build the signed source coefficients for every a in A.
+   At a fixed receiver sample p on b, the receiver-side attenuation and
+   projected extent are part of each source coefficient; the remaining
+   source-side factor is exactly the existing 1/(1+|p-c_a|) kernel.
+   Evaluate that source sum with the bounded source expansion, subdividing or
+   falling back to exact summation when its potential/force/torque budgets fail.
+2. Repeat in the reverse direction: each a in A is an exact receiver while B
+   is the source cluster. This preserves the symmetric half-weighted pair
+   potential and avoids treating one direction as if it represented the other.
+3. Sum the two directional scalar-potential estimates. The receiver boundary
+   construction is never replaced by a representative group sample.
+4. Derive all participant forces and torques from this same approximate scalar
+   potential. The source-side primitive already returns source translation
+   forces and target-sample gradients for its fixed-sample kernel. The
+   receiver-body derivative must additionally include its sample positions,
+   projected extents, local-distance attenuation, and any visibility changes.
+   A derivative implementation that omits these terms is invalid.
+5. If a third-party blocker could intersect any path between the groups, the
+   visibility certificate rejects the group interaction. Subdivide or use
+   exact pair visibility. A clear certificate removes only the occlusion
+   ambiguity; exact receiver samples and their pose dependence remain.
+
+This traversal can reduce the number of source evaluations per receiver from
+one per source body to one accepted cluster evaluation, while retaining exact
+receiver geometry. It is not yet a full dual-tree method: the receiver bodies
+are still visited individually. A later cell-cell method may compress receiver
+boundary integration only after it has its own conservative sample-correspondence
+and projected-extent remainder bounds.
+
+### 11.1 Error propagation gate
+
+The source expansion's existing bounds cover its fixed-sample scalar potential,
+target gradient, source forces, and source-force torque. They do not by
+themselves bound the complete receiver pose derivative. In particular,
+dividing a potential remainder by a finite-difference step is not a valid
+force bound unless the finite-difference truncation and the derivative of the
+remainder are also bounded.
+
+Therefore, the first prototype must report separate bounds for:
+
+- directional potential approximation;
+- every source body's translation force;
+- every source body's torque;
+- every receiver body's translation force;
+- every receiver body's torque;
+- the final symmetric pair/world totals.
+
+Until receiver-derivative bounds are derived, the prototype may be used only
+to compare scalar potentials and source-side gradients. It must not report a
+complete force evaluation or feed the movement accumulator. Exact receiver
+derivatives remain authoritative.
+
+The first acceptance experiment should compare this traversal with exact
+pair enumeration on small deterministic worlds. It should verify that the
+approximation reduces source-kernel evaluations while keeping the exact
+receiver sample path, and that every reported bound encloses the measured
+error. No runtime integration is authorized by this intermediate result.
