@@ -292,9 +292,7 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
         edge_start_derivative_bound,
         edge_end_derivative_bound,
     ];
-    if values.iter().any(|value| !value.is_finite())
-        || values[8..].iter().any(|value| *value < 0.0)
-    {
+    if values.iter().any(|value| !value.is_finite()) || values[8..].iter().any(|value| *value < 0.0) {
         return None;
     }
     let edge = BoundaryKernelVector {
@@ -303,10 +301,7 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
     };
     let length = edge.norm();
     let normal_length = outward_normal.norm();
-    if !length.is_finite()
-        || length <= f64::EPSILON
-        || (normal_length - 1.0).abs() > 1.0e-9
-    {
+    if !length.is_finite() || length <= f64::EPSILON || (normal_length - 1.0).abs() > 1.0e-9 {
         return None;
     }
     let tangent = BoundaryKernelVector {
@@ -344,8 +339,7 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
         return None;
     }
     let along = source_offset.dot(tangent);
-    let maximum_absolute_along =
-        along.abs() + relative_displacement + radius_max * normal_change;
+    let maximum_absolute_along = along.abs() + relative_displacement + radius_max * normal_change;
     let maximum_length = length + edge_displacement;
     let normal_partial_bound = (maximum_absolute_along / minimum_normal_distance).asinh()
         + ((maximum_length + maximum_absolute_along) / minimum_normal_distance).asinh()
@@ -354,14 +348,12 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
     let edge_derivative_bound = edge_start_derivative_bound + edge_end_derivative_bound;
     let relative_derivative_bound = source_derivative_bound + edge_start_derivative_bound;
     let tangent_derivative_bound = 2.0 * edge_derivative_bound / minimum_length;
-    let along_derivative_bound =
-        relative_derivative_bound + radius_max * tangent_derivative_bound;
+    let along_derivative_bound = relative_derivative_bound + radius_max * tangent_derivative_bound;
     let normal_derivative_bound = along_derivative_bound;
     let result = edge_derivative_bound
         + 2.0 * along_derivative_bound
         + normal_partial_bound * normal_derivative_bound;
-    let roundoff_guard =
-        128.0 * f64::EPSILON * (result + radius_max + maximum_length + 1.0);
+    let roundoff_guard = 128.0 * f64::EPSILON * (result + radius_max + maximum_length + 1.0);
     (result.is_finite() && roundoff_guard.is_finite()).then_some(result + roundoff_guard)
 }
 
