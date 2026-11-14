@@ -747,7 +747,17 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
-    let mut critical_points: Vec<(usize, f64, f64)> = Vec::new();
+    #[derive(Clone, Copy)]
+    struct CriticalPoint {
+        body_index: usize,
+        unit_index: usize,
+        world_point: (f64, f64),
+        local_point: (f64, f64),
+        tangent_side: Option<i8>,
+        local_center: Option<(f64, f64)>,
+        radius: Option<f64>,
+    }
+    let mut critical_points: Vec<CriticalPoint> = Vec::new();
 
     for (body_index, body) in bodies.iter().enumerate() {
         let mut seen_unit_indices = Vec::with_capacity(body.parts.len());
@@ -851,7 +861,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 {
                     return None;
                 }
-                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, x, y)));
+                critical_points.extend(local_vertices_for_critical_points(&part.form).into_iter().zip(vertices.iter().copied()).map(|(local_point, world_point)| CriticalPoint {
+                    body_index, unit_index: part.unit_index, world_point, local_point,
+                    tangent_side: None, local_center: None, radius: None,
+                }));
                 for index in 0..vertices.len() {
                     straight_edges.push((
                         body_index,
@@ -875,18 +888,27 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let half = *length * 0.5;
                     let start = (part.x - half * cos, part.y - half * sin);
                     let end = (part.x + half * cos, part.y + half * sin);
-                    critical_points
-                        .extend([(body_index, start.0, start.1), (body_index, end.0, end.1)]);
+                    let half_local = *length * 0.5;
+                    critical_points.extend([
+                        CriticalPoint { body_index, unit_index: part.unit_index, world_point: start, local_point: (-half_local, 0.0), tangent_side: None, local_center: None, radius: None },
+                        CriticalPoint { body_index, unit_index: part.unit_index, world_point: end, local_point: (half_local, 0.0), tangent_side: None, local_center: None, radius: None },
+                    ]);
                     straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
-                    add_circle_tangent_points_tagged(
-                        (part.x, part.y),
-                        *radius,
-                        source,
-                        body_index,
-                        &mut critical_points,
-                    );
+                    let mut tangents = Vec::with_capacity(2);
+                    add_circle_tangent_points((part.x, part.y), *radius, source, &mut tangents);
+                    for (side, world_point) in tangents.into_iter().enumerate() {
+                        let dx = world_point.0 - part.x;
+                        let dy = world_point.1 - part.y;
+                        let (sin, cos) = part.rotation_radians.sin_cos();
+                        critical_points.push(CriticalPoint {
+                            body_index, unit_index: part.unit_index, world_point,
+                            local_point: (dx * cos + dy * sin, -dx * sin + dy * cos),
+                            tangent_side: Some(if side == 0 { -1 } else { 1 }),
+                            local_center: Some((0.0, 0.0)), radius: Some(*radius),
+                        });
+                    }
                 }
                 Form::Fluid {
                     nominal_area,
@@ -993,9 +1015,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         }
     }
 
-    if critical_points
-        .iter()
-        .any(|(_, x, y)| !x.is_finite() || !y.is_finite())
+    if critical_points.iter().any(|point| {
+        !point.world_point.0.is_finite() || !point.world_point.1.is_finite()
+            || !point.local_point.0.is_finite() || !point.local_point.1.is_finite()
+    })
         || straight_edges.iter().any(|(_, _, a, b)| {
             !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
         })
@@ -1003,10 +1026,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
         return None;
     }
 
-    let mut critical_points_by_body: Vec<Vec<(f64, f64)>> =
+    let mut critical_points_by_body: Vec<Vec<CriticalPoint>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
-    for (body_index, x, y) in critical_points {
-        critical_points_by_body[body_index].push((x, y));
+    for point in critical_points {
+        critical_points_by_body[point.body_index].push(point);
     }
     type StraightEdge = (usize, (f64, f64), (f64, f64));
     let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
@@ -1089,7 +1112,8 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 ),
             ];
             for &candidate_body in &candidate_body_indices {
-                for &(vx, vy) in &critical_points_by_body[candidate_body] {
+                for blocker_point in &critical_points_by_body[candidate_body] {
+                    let (vx, vy) = blocker_point.world_point;
                     let dx = vx - source.0;
                     let dy = vy - source.1;
                     let denominator = ex * dy - ey * dx;
@@ -1104,13 +1128,19 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         // Critical-point construction currently has not yet
                         // retained its constituent/feature identity. Preserve
                         // the blocker body and explicitly fail closed.
-                        cuts.push(VisibilityCutRecord::new(
-                            t,
-                            VisibilityCutEvent::Unresolved {
-                                blocker_body_index: Some(candidate_body),
-                                blocker_unit_index: None,
+                        let event = match (blocker_point.tangent_side, blocker_point.local_center, blocker_point.radius) {
+                            (Some(tangent_side), Some(local_center), Some(radius)) => VisibilityCutEvent::RayThroughCircleTangent {
+                                blocker_body_index: candidate_body,
+                                blocker_unit_index: blocker_point.unit_index,
+                                tangent_side, local_center, radius,
                             },
-                        ));
+                            _ => VisibilityCutEvent::RayThroughRigidFeature {
+                                blocker_body_index: candidate_body,
+                                blocker_unit_index: blocker_point.unit_index,
+                                local_point: blocker_point.local_point,
+                            },
+                        };
+                        cuts.push(VisibilityCutRecord::new(t, event));
                     }
                 }
             }
