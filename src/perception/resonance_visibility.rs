@@ -58,7 +58,11 @@ impl VisibilityBounds {
     }
 
     fn segment_envelope(source: Self, receiver: Self, expansion: f64) -> Option<Self> {
-        if !expansion.is_finite() || expansion < 0.0 {
+        if !source.is_valid()
+            || !receiver.is_valid()
+            || !expansion.is_finite()
+            || expansion < 0.0
+        {
             return None;
         }
         let combined = source.union(receiver);
@@ -302,6 +306,17 @@ mod tests {
             hierarchy.certify_unoccluded_between_bounds(source, receiver, 0.0, &[0, 99]),
             None,
             "invalid participant indices must fail closed"
+        );
+        let invalid_source = VisibilityBounds {
+            min_x: f64::NAN,
+            min_y: 0.0,
+            max_x: 1.0,
+            max_y: 1.0,
+        };
+        assert_eq!(
+            hierarchy.query_between_bounds(invalid_source, receiver, 0.0),
+            None,
+            "invalid group bounds must fail closed"
         );
     }
 
