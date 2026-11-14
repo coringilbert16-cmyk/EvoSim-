@@ -530,3 +530,109 @@ fn smooth_boundary_geometry_derivatives_match_refined_differences() {
         }
     }
 }
+
+
+#[test]
+fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
+    let catalog = crate::resources::default_catalog();
+    let source = single_body("Carbon", 0.0, 0.0, 0.0, &catalog);
+    let receiver = single_body("Carbon", 8.0, 0.0, 0.0, &catalog);
+    let mut observations = Vec::new();
+
+    // The dense offset sweep resolves the transition region instead of
+    // treating one arbitrary offset as representative of every partial view.
+    for blocker_y in [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0, 5.0] {
+        let blocker = single_body("Nitrogen", 4.0, blocker_y, 0.0, &catalog);
+        let occluders = std::slice::from_ref(&blocker);
+        let receptions = material_aura_receptions_with_occluders(
+            &source, &receiver, occluders, &catalog, 0,
+        )
+        .expect("blocker pose should produce exact receiver samples");
+        let potential = directional_resonance_pair_potential_components_with_occluders(
+            &source, &receiver, occluders, &catalog, 0,
+        )
+        .expect("blocker pose should produce exact frequency-resolved potential");
+
+        let visible_extent = receptions
+            .iter()
+            .map(|sample| sample.projected_extent)
+            .sum::<f64>();
+        let samples = receptions
+            .iter()
+            .map(|sample| BoundarySampleRecord {
+                midpoint: (sample.receiver_x, sample.receiver_y),
+                normal: (sample.receiver_normal_x, sample.receiver_normal_y),
+                projected_extent: sample.projected_extent,
+                boundary_geometry: boundary_geometry(sample.boundary),
+                incident_components: sample
+                    .incident_spectrum
+                    .components
+                    .iter()
+                    .map(|component| (
+                        component.frequency_cycles_per_day,
+                        component.amplitude,
+                        component.phase_radians,
+                    ))
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+        let potential = potential
+            .into_iter()
+            .map(|component| (component.frequency_cycles_per_day, component.energy))
+            .collect::<Vec<_>>();
+        observations.push((blocker_y, visible_extent, samples, potential));
+    }
+
+    let centered = &observations[0];
+    let clear = observations.last().expect("clear pose should be recorded");
+    assert!(centered.1 < clear.1, "centered occlusion must reduce visible boundary extent");
+    assert!(potential_differs(&centered.3, &clear.3));
+
+    // Identify the actual partial-visibility samples from the exact production
+    // output. The closest partial sample to the clear exposure is the
+    // near-silhouette observation; no assumed blocker radius or analytic
+    // silhouette approximation is substituted for production geometry.
+    let partial = observations
+        .iter()
+        .filter(|observation| observation.1 > centered.1 + 1.0e-12
+            && observation.1 < clear.1 - 1.0e-12)
+        .collect::<Vec<_>>();
+    assert!(
+        !partial.is_empty(),
+        "the offset sweep must contain a partially exposed receiver"
+    );
+    let near_silhouette = partial
+        .iter()
+        .min_by(|left, right| {
+            (clear.1 - left.1)
+                .total_cmp(&(clear.1 - right.1))
+        })
+        .expect("partial observations should identify a near-silhouette case");
+
+    assert!(
+        sample_geometry_differs(&centered.2, &partial[0].2),
+        "partial visibility must change exact receiver interval geometry"
+    );
+    assert!(
+        sample_geometry_differs(&near_silhouette.2, &clear.2),
+        "near-silhouette visibility must retain a distinct exact boundary representation"
+    );
+    assert!(
+        potential_differs(&near_silhouette.3, &clear.3),
+        "near-silhouette visibility must change frequency-resolved potential"
+    );
+
+    // Keep the full sweep observable: every retained pose has its own exact
+    // quadrature and frequency-resolved potential record.
+    assert!(observations.iter().all(|observation| {
+        observation.1.is_finite()
+            && observation.2.iter().all(|sample| {
+                sample.midpoint.0.is_finite()
+                    && sample.midpoint.1.is_finite()
+                    && sample.projected_extent.is_finite()
+            })
+            && observation.3.iter().all(|(frequency, energy)| {
+                frequency.is_finite() && energy.is_finite()
+            })
+    }));
+}
