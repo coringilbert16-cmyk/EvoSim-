@@ -1144,3 +1144,38 @@ certify interval endpoint provenance, visibility completeness, spectral
 coefficient variation, or curved-boundary weights. Those remain separate
 inputs or exact/subdivision cases.
 
+## 25. Straight-interval sample pose derivative composition — 2026-11-14
+
+A composition helper now connects the straight-interval geometry derivatives to
+the generalized discrete-potential chain-rule input. Given the exact source,
+interval endpoints and normal; their derivatives; displacement envelopes;
+derivative magnitude bounds; a scalar coordinate displacement; and a
+pose-invariant signed spectral coefficient, it returns one
+BoundarySamplePoseDerivative containing:
+
+- midpoint derivative (the average of the two endpoint derivatives);
+- projected-weight derivative (the signed coefficient times the exact
+  projected-extent derivative);
+- midpoint derivative and displacement bounds;
+- projected-weight derivative and coordinate-span change bounds.
+
+The projected-weight derivative magnitude uses the straight-interval
+certificate from Section 24. Its coordinate-span change bound multiplies that
+uniform derivative bound by the supplied maximum coordinate displacement.
+This is valid only when the same coefficient remains constant over that
+coordinate span. If the frequency-resolved coefficient changes with pose, its
+derivative and change envelope must be added separately.
+
+A focused test verifies the midpoint and signed projected-weight fields are
+composed consistently and that their supplied bounds dominate the reference
+derivatives.
+
+This closes the local straight-interval-to-pose-chain-rule data path. It still
+does not supply endpoint derivatives automatically from the visibility
+solver, and therefore does not close production visibility provenance. The
+next implementation step is to preserve endpoint source identity for each
+returned interval cut, so rigid target vertices and source-ray/blocker cuts
+can be differentiated without guessing which geometric feature generated an
+endpoint. Line/line and circle/edge cuts, curved boundaries, and visibility
+topology transitions remain separately handled or exact/subdivision cases.
+
