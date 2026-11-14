@@ -224,7 +224,6 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
     result.is_finite().then_some(result)
 }
 
-
 /// Certify that a supplied ordered list of visibility-cut parameters cannot
 /// cross or reach an edge endpoint anywhere inside their individual motion
 /// envelopes. This does not prove that the list contains every geometric cut.
