@@ -841,3 +841,25 @@ motion bounds, then derive projected-extent sensitivity from the moving
 interval endpoints and source direction. Any unresolved event remains an
 exact/subdivision case; no live evaluator or movement integration is
 authorized.
+
+## 19. Cut-order separation certificate — 2026-11-14
+
+The local ray/edge intersection envelope now composes with a strict ordering
+check for an already-enumerated list of cuts along one receiver edge. Each
+cut is represented by its base edge parameter t_i and a certified absolute
+parameter displacement delta_i. The certificate requires every interval
+
+`[t_i-delta_i, t_i+delta_i]`
+
+to remain strictly inside the edge and strictly separated from the preceding
+cut interval. This proves that the supplied cuts cannot cross, merge, or reach
+an edge endpoint inside the pose cell. Empty lists are valid; malformed,
+overlapping, unsorted, and endpoint-touching envelopes fail closed.
+
+This is only an ordering certificate for the supplied cuts. It does not prove
+that all blocker features or geometric events were enumerated, nor that the
+blocker classification between adjacent cuts is unchanged. A complete
+visibility certificate must also bound every feature's motion, retain all
+candidate cuts, and prove the visibility state on each open interval. No
+approximate evaluator or live movement integration is authorized.
+
