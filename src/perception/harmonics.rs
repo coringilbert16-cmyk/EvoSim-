@@ -4316,21 +4316,22 @@ mod tests {
         let source_level = make_material("Hydrogen", 0.0, 0.0);
         let source_elevated = make_material("Hydrogen", 0.0, 10.0);
 
-        let level_samples =
-            material_aura_receptions(&source_level, &receiver, &catalog, 0)
-                .expect("level source should produce exact receiver samples");
-        let elevated_samples =
-            material_aura_receptions(&source_elevated, &receiver, &catalog, 0)
-                .expect("elevated source should produce exact receiver samples");
+        let level_samples = material_aura_receptions(&source_level, &receiver, &catalog, 0)
+            .expect("level source should produce exact receiver samples");
+        let elevated_samples = material_aura_receptions(&source_elevated, &receiver, &catalog, 0)
+            .expect("elevated source should produce exact receiver samples");
 
         assert!(!level_samples.is_empty());
         assert!(!elevated_samples.is_empty());
         let same_correspondence = level_samples.len() == elevated_samples.len()
-            && level_samples.iter().zip(&elevated_samples).all(|(left, right)| {
-                (left.receiver_x - right.receiver_x).abs() <= 1e-12
-                    && (left.receiver_y - right.receiver_y).abs() <= 1e-12
-                    && (left.projected_extent - right.projected_extent).abs() <= 1e-12
-            });
+            && level_samples
+                .iter()
+                .zip(&elevated_samples)
+                .all(|(left, right)| {
+                    (left.receiver_x - right.receiver_x).abs() <= 1e-12
+                        && (left.receiver_y - right.receiver_y).abs() <= 1e-12
+                        && (left.projected_extent - right.projected_extent).abs() <= 1e-12
+                });
         assert!(
             !same_correspondence,
             "moving one source must not be assumed to preserve another source's receiver-boundary samples"
