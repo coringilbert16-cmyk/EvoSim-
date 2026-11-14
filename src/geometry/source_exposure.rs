@@ -34,6 +34,58 @@ pub(crate) enum BoundaryEndpointProvenance {
     UnresolvedVisibilityCut,
 }
 
+/// Construction event that introduced a visibility partition endpoint.
+/// Unsupported event classes remain explicit so pose certificates can fail closed.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum VisibilityCutEvent {
+    TargetVertex { body_index: usize, unit_index: usize, vertex_index: usize, local_point: (f64, f64) },
+    RayThroughRigidFeature { blocker_body_index: usize, blocker_unit_index: usize, local_point: (f64, f64) },
+    RayThroughCircleTangent { blocker_body_index: usize, blocker_unit_index: usize, tangent_side: i8, local_center: (f64, f64), radius: f64 },
+    StraightBoundaryIntersection { blocker_body_index: usize, blocker_unit_index: usize, target_parameter: f64, blocker_parameter: f64 },
+    CircleStraightIntersection { blocker_body_index: usize, blocker_unit_index: usize, target_parameter: f64, arc_angle: f64 },
+    Unresolved { blocker_body_index: Option<usize>, blocker_unit_index: Option<usize> },
+}
+
+/// A partition location retaining every event that generated the cut.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct VisibilityCutRecord {
+    pub(crate) parameter: f64,
+    pub(crate) events: Vec<VisibilityCutEvent>,
+    pub(crate) unresolved: bool,
+}
+
+impl VisibilityCutRecord {
+    fn new(parameter: f64, event: VisibilityCutEvent) -> Self {
+        let unresolved = matches!(event, VisibilityCutEvent::Unresolved { .. });
+        Self { parameter, events: vec![event], unresolved }
+    }
+
+    fn merge_coincident(&mut self, other: Self) {
+        for event in other.events {
+            if !self.events.contains(&event) { self.events.push(event); }
+        }
+        self.unresolved |= other.unresolved;
+        if self.events.len() > 1 { self.unresolved = true; }
+    }
+}
+
+/// Merge coincident cuts with the legacy tolerance. The first sorted parameter
+/// remains the representative, preserving the existing interval coordinates.
+fn merge_visibility_cuts(mut cuts: Vec<VisibilityCutRecord>) -> Vec<VisibilityCutRecord> {
+    cuts.sort_by(|left, right| left.parameter.total_cmp(&right.parameter));
+    let mut merged: Vec<VisibilityCutRecord> = Vec::with_capacity(cuts.len());
+    for cut in cuts {
+        if let Some(previous) = merged.last_mut() {
+            if (previous.parameter - cut.parameter).abs() <= 1.0e-10 {
+                previous.merge_coincident(cut);
+                continue;
+            }
+        }
+        merged.push(cut);
+    }
+    merged
+}
+
 /// Exact exposed interval paired with conservative endpoint provenance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryIntervalWithProvenance {
@@ -90,6 +142,32 @@ pub(crate) fn projected_extent(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn coincident_visibility_cuts_preserve_distinct_events_and_fail_closed() {
+        let first = VisibilityCutRecord::new(0.25, VisibilityCutEvent::RayThroughRigidFeature {
+            blocker_body_index: 2, blocker_unit_index: 7, local_point: (0.5, -0.25),
+        });
+        let second = VisibilityCutRecord::new(0.25 + 5.0e-11, VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 3, blocker_unit_index: 9, target_parameter: 0.25, blocker_parameter: 0.75,
+        });
+        let merged = merge_visibility_cuts(vec![second, first]);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].events.len(), 2);
+        assert!(merged[0].unresolved);
+    }
+
+    #[test]
+    fn duplicate_visibility_events_are_deduplicated() {
+        let event = VisibilityCutEvent::Unresolved { blocker_body_index: Some(4), blocker_unit_index: Some(11) };
+        let merged = merge_visibility_cuts(vec![
+            VisibilityCutRecord::new(0.5, event.clone()),
+            VisibilityCutRecord::new(0.5, event),
+        ]);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].events.len(), 1);
+        assert!(merged[0].unresolved);
+    }
 
     fn interval(normal: (f64, f64)) -> ExposedBoundaryInterval {
         ExposedBoundaryInterval {
