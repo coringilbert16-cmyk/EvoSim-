@@ -181,7 +181,7 @@ pub(crate) fn circle_tangent_point_pose_derivative(
     if !radius.is_finite()
         || radius <= 0.0
         || !tangent_side.is_finite()
-        || tangent_side.abs() != 1.0
+        || (tangent_side.abs() - 1.0).abs() > 1.0e-12
     {
         return None;
     }
