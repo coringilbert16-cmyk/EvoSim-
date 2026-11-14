@@ -1433,7 +1433,9 @@ mod tests {
             position_derivative: BoundaryKernelVector { x: 0.0, y: 1.1 },
             ..BoundarySamplePoseDerivative::default()
         }];
-        assert!(expansion.evaluate_pose_coordinate_derivative(&coordinate).is_none());
+        assert!(expansion
+            .evaluate_pose_coordinate_derivative(&coordinate)
+            .is_none());
     }
 
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
