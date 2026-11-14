@@ -144,6 +144,9 @@ mod reproduction;
 #[allow(dead_code)] // Mathematical primitive is validated before live evaluator integration.
 #[path = "perception/resonance_far_field.rs"]
 mod resonance_far_field;
+#[path = "perception/resonance_visibility.rs"]
+#[allow(dead_code)]
+mod resonance_visibility;
 #[path = "organism/structural_blueprint_unified.rs"]
 #[allow(clippy::needless_range_loop, unused_variables)]
 mod structural_blueprint;
