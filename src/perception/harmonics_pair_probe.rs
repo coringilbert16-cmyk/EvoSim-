@@ -689,32 +689,24 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
 
     // The oracle independently rebuilds every ordered directional reception
     // and sums them into the complete unordered-pair world potential.
-    let evaluate = |pose: [f64; 12]| {
-        let bodies = probe_world(pose, &catalog);
-        world_potential(&record_world_pairs(&bodies, &catalog, 0))
+    let evaluate = |body_index: usize, component: usize, displacement: f64| {
+        let mut bodies = baseline_bodies.clone();
+        let body = &baseline_bodies[body_index];
+        bodies[body_index] = match component {
+            0 => super::translated_physical_material(body, displacement, 0.0)?,
+            1 => super::translated_physical_material(body, 0.0, displacement)?,
+            2 => super::rotated_physical_material(body, displacement, &catalog)?,
+            _ => return None,
+        };
+        Some(world_potential(&record_world_pairs(&bodies, &catalog, 0)))
     };
     let step = 1.0e-4;
-    let coordinate_map = [
-        (0usize, 0usize, 0usize),
-        (1, 0, 1),
-        (2, 0, 2),
-        (3, 1, 0),
-        (4, 1, 1),
-        (5, 1, 2),
-        (6, 2, 0),
-        (7, 2, 1),
-        (8, 2, 2),
-        (9, 3, 0),
-        (10, 3, 1),
-        (11, 3, 2),
-    ];
 
-    for (pose_axis, body_index, component) in coordinate_map {
-        let mut plus_pose = baseline_pose;
-        let mut minus_pose = baseline_pose;
-        plus_pose[pose_axis] = step;
-        minus_pose[pose_axis] = -step;
-        let derivative = (evaluate(plus_pose) - evaluate(minus_pose)) / (2.0 * step);
+    for body_index in 0..baseline_bodies.len() {
+        for component in 0..3 {
+        let derivative = (evaluate(body_index, component, step)?
+            - evaluate(body_index, component, -step)?)
+            / (2.0 * step);
         let expected_force = -derivative;
         let actual_force = match component {
             0 => accumulated[body_index].x,
@@ -727,6 +719,7 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
             (actual_force - expected_force).abs() <= 5.0e-2 * scale + 1.0e-7,
             "complete-world gradient mismatch for body {body_index}, component {component}: pair sum={actual_force}, independent potential derivative={expected_force}"
         );
+        }
     }
 
     assert!(accumulated.iter().all(|force| {
