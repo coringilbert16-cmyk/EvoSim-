@@ -44,6 +44,25 @@ pub(crate) struct BoundaryPotentialError {
     pub(crate) receiver_force: f64,
 }
 
+/// Certified per-sample envelope between two poses inside one smooth
+/// visibility/topology region. The caller must preserve sample ordering and
+/// prove these bounds for the complete pose cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct BoundarySampleMotionBound {
+    pub(crate) position_displacement: f64,
+    pub(crate) absolute_weight_change: f64,
+}
+
+/// Change bound caused only by moving the exact boundary samples and changing
+/// their signed weights. It does not include the chain-rule force/torque from
+/// differentiating sample position or weight with respect to body pose.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct BoundaryGeometryError {
+    pub(crate) potential: f64,
+    pub(crate) source_force: f64,
+    pub(crate) receiver_force: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BoundaryPotentialEvaluation {
     pub(crate) potential: f64,
@@ -244,6 +263,97 @@ impl BoundaryKernelExpansion {
             center,
             radius: self.radius,
         })
+    }
+
+    /// Bound the change in the exact discrete potential and its fixed-sample
+    /// source/receiver center gradients under certified sample motion.
+    ///
+    /// For every sample, the caller supplies eta >= |p' - p| and
+    /// omega >= |w' - w|. The closed disk of radius eta around p must remain
+    /// separated from both body centers. Sample correspondence and visibility
+    /// topology must be unchanged throughout the pose cell; otherwise callers
+    /// must reject this path and use exact evaluation.
+    pub(crate) fn bound_sample_geometry_change(
+        &self,
+        motion: &[BoundarySampleMotionBound],
+    ) -> Option<BoundaryGeometryError> {
+        if motion.len() != self.samples.len() {
+            return None;
+        }
+
+        let mut potential_error = 0.0;
+        let mut source_force_error = 0.0;
+        let mut receiver_force_error = 0.0;
+        for (sample, bound) in self.samples.iter().zip(motion) {
+            let eta = bound.position_displacement;
+            let omega = bound.absolute_weight_change;
+            if !eta.is_finite() || eta < 0.0 || !omega.is_finite() || omega < 0.0 {
+                return None;
+            }
+            let source_distance = BoundaryKernelVector {
+                x: sample.position.x - self.source_center.x,
+                y: sample.position.y - self.source_center.y,
+            }
+            .norm();
+            let receiver_distance = BoundaryKernelVector {
+                x: sample.position.x - self.receiver_center.x,
+                y: sample.position.y - self.receiver_center.y,
+            }
+            .norm();
+            let source_min = source_distance - eta;
+            let receiver_min = receiver_distance - eta;
+            if !source_min.is_finite()
+                || !receiver_min.is_finite()
+                || source_min <= f64::EPSILON
+                || receiver_min <= f64::EPSILON
+            {
+                return None;
+            }
+
+            let source_value = 1.0 / (1.0 + source_min);
+            let receiver_value = 1.0 / (1.0 + receiver_min);
+            let source_gradient = 1.0 / (1.0 + source_min).powi(2);
+            let receiver_gradient = 1.0 / (1.0 + receiver_min).powi(2);
+            let source_hessian = radial_hessian_bound(source_min);
+            let receiver_hessian = radial_hessian_bound(receiver_min);
+
+            // g = f_a f_b; h_a = -grad(f_a) f_b and
+            // h_b = -grad(f_b) f_a. Their spatial Lipschitz bounds follow
+            // from the product rule and radial Hessian operator bounds.
+            let kernel_bound = source_value * receiver_value;
+            let kernel_lipschitz =
+                source_gradient * receiver_value + source_value * receiver_gradient;
+            let source_gradient_bound = source_gradient * receiver_value;
+            let receiver_gradient_bound = receiver_gradient * source_value;
+            let source_gradient_lipschitz =
+                source_hessian * receiver_value + source_gradient * receiver_gradient;
+            let receiver_gradient_lipschitz =
+                receiver_hessian * source_value + receiver_gradient * source_gradient;
+
+            let weight = sample.weight.abs();
+            potential_error += omega * kernel_bound + weight * kernel_lipschitz * eta;
+            source_force_error +=
+                omega * source_gradient_bound + weight * source_gradient_lipschitz * eta;
+            receiver_force_error +=
+                omega * receiver_gradient_bound + weight * receiver_gradient_lipschitz * eta;
+        }
+
+        let roundoff_guard = 64.0
+            * f64::EPSILON
+            * (potential_error + source_force_error + receiver_force_error + 1.0);
+        let result = BoundaryGeometryError {
+            potential: potential_error + roundoff_guard,
+            source_force: source_force_error + roundoff_guard,
+            receiver_force: receiver_force_error + roundoff_guard,
+        };
+        [
+            result.potential,
+            result.source_force,
+            result.receiver_force,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(result)
     }
 
     /// Exact discrete sum, retained as the differential oracle.
@@ -457,6 +567,101 @@ mod tests {
             receiver_error <= approximate.error.receiver_force,
             "receiver error={receiver_error} bound={}",
             approximate.error.receiver_force
+        );
+    }
+
+    #[test]
+    fn sample_geometry_change_bounds_contain_exact_potential_and_center_gradient_changes() {
+        let samples = vec![
+            sample(5.0, 1.0, 0.8),
+            sample(5.4, 1.3, -0.25),
+            sample(4.7, 1.8, 0.35),
+            sample(5.2, 2.1, -0.15),
+        ];
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 10.0, y: 0.5 },
+            BoundaryKernelVector { x: 5.075, y: 1.55 },
+            samples.clone(),
+        )
+        .expect("finite exact pair samples should form a cluster");
+        let motion = vec![
+            BoundarySampleMotionBound { position_displacement: 0.03, absolute_weight_change: 0.02 },
+            BoundarySampleMotionBound { position_displacement: 0.02, absolute_weight_change: 0.01 },
+            BoundarySampleMotionBound { position_displacement: 0.04, absolute_weight_change: 0.015 },
+            BoundarySampleMotionBound { position_displacement: 0.01, absolute_weight_change: 0.005 },
+        ];
+        let bound = expansion
+            .bound_sample_geometry_change(&motion)
+            .expect("all sample-motion disks remain separated");
+
+        let moved = samples
+            .iter()
+            .zip(&motion)
+            .enumerate()
+            .map(|(index, (sample, change))| {
+                let direction = if index % 2 == 0 { 1.0 } else { -1.0 };
+                WeightedBoundaryKernelSample {
+                    position: BoundaryKernelVector {
+                        x: sample.position.x + direction * change.position_displacement * 0.7,
+                        y: sample.position.y - direction * change.position_displacement * 0.7,
+                    },
+                    weight: sample.weight + direction * change.absolute_weight_change * 0.8,
+                }
+            })
+            .collect();
+        let moved_expansion = BoundaryKernelExpansion::new(
+            expansion.source_center,
+            expansion.receiver_center,
+            expansion.sample_center,
+            moved,
+        )
+        .expect("moved samples remain finite");
+        let potential_change =
+            (moved_expansion.exact_potential() - expansion.exact_potential()).abs();
+        let (base_source, base_receiver) = expansion.exact_center_gradients();
+        let (moved_source, moved_receiver) = moved_expansion.exact_center_gradients();
+        let source_change = BoundaryKernelVector {
+            x: moved_source.x - base_source.x,
+            y: moved_source.y - base_source.y,
+        }
+        .norm();
+        let receiver_change = BoundaryKernelVector {
+            x: moved_receiver.x - base_receiver.x,
+            y: moved_receiver.y - base_receiver.y,
+        }
+        .norm();
+
+        assert!(potential_change <= bound.potential);
+        assert!(source_change <= bound.source_force);
+        assert!(receiver_change <= bound.receiver_force);
+    }
+
+    #[test]
+    fn sample_geometry_change_bound_rejects_missing_or_singular_envelopes() {
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 10.0, y: 0.0 },
+            BoundaryKernelVector { x: 5.0, y: 1.0 },
+            vec![sample(5.0, 1.0, 1.0)],
+        )
+        .expect("valid sample input");
+        assert!(expansion.bound_sample_geometry_change(&[]).is_none());
+        assert!(
+            expansion
+                .bound_sample_geometry_change(&[BoundarySampleMotionBound {
+                    position_displacement: f64::NAN,
+                    absolute_weight_change: 0.0,
+                }])
+                .is_none()
+        );
+        assert!(
+            expansion
+                .bound_sample_geometry_change(&[BoundarySampleMotionBound {
+                    position_displacement: 1.0,
+                    absolute_weight_change: 0.0,
+                }])
+                .is_none()
         );
     }
 
