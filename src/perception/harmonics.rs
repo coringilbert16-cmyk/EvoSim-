@@ -4399,23 +4399,13 @@ mod tests {
         for blocker_y in [0.0, 0.35, 0.7, 1.0, 5.0] {
             let blocker = make_material("Nitrogen", 4.0, blocker_y);
             let occluders = std::slice::from_ref(&blocker);
-            let samples = material_aura_receptions_with_occluders(
-                &source,
-                &receiver,
-                occluders,
-                &catalog,
-                0,
+            let samples =
+                material_aura_receptions_with_occluders(&source, &receiver, occluders, &catalog, 0)
+                    .expect("blocker pose should produce exact receiver samples");
+            let potential = directional_resonance_pair_potential_components_with_occluders(
+                &source, &receiver, occluders, &catalog, 0,
             )
-            .expect("blocker pose should produce exact receiver samples");
-            let potential =
-                directional_resonance_pair_potential_components_with_occluders(
-                    &source,
-                    &receiver,
-                    occluders,
-                    &catalog,
-                    0,
-                )
-                .expect("blocker pose should produce frequency-resolved potential");
+            .expect("blocker pose should produce frequency-resolved potential");
 
             assert!(!samples.is_empty());
             assert!(!potential.is_empty());
@@ -4461,7 +4451,9 @@ mod tests {
             "occlusion transitions must be reflected in the frequency-resolved potential"
         );
 
-        let clear = observations.last().expect("clear blocker pose should be recorded");
+        let clear = observations
+            .last()
+            .expect("clear blocker pose should be recorded");
         let unobstructed =
             directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
                 .expect("unobstructed pair should produce a frequency-resolved potential");
