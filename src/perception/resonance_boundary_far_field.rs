@@ -292,7 +292,8 @@ pub(crate) fn straight_interval_projected_extent_derivative_bound(
         edge_start_derivative_bound,
         edge_end_derivative_bound,
     ];
-    if values.iter().any(|value| !value.is_finite()) || values[8..].iter().any(|value| *value < 0.0) {
+    if values.iter().any(|value| !value.is_finite()) || values[8..].iter().any(|value| *value < 0.0)
+    {
         return None;
     }
     let edge = BoundaryKernelVector {
@@ -405,13 +406,10 @@ pub(crate) fn straight_interval_sample_pose_derivative(
         edge_start_derivative_bound,
         edge_end_derivative_bound,
     )?;
-    let position_derivative_bound =
-        0.5 * (edge_start_derivative_bound + edge_end_derivative_bound);
-    let position_displacement_bound =
-        0.5 * (edge_start_displacement + edge_end_displacement);
+    let position_derivative_bound = 0.5 * (edge_start_derivative_bound + edge_end_derivative_bound);
+    let position_displacement_bound = 0.5 * (edge_start_displacement + edge_end_displacement);
     let absolute_weight_derivative_bound = signed_weight_scale.abs() * extent_derivative_bound;
-    let absolute_weight_change_bound =
-        absolute_weight_derivative_bound * coordinate_displacement;
+    let absolute_weight_change_bound = absolute_weight_derivative_bound * coordinate_displacement;
     let result = BoundarySamplePoseDerivative {
         position_derivative: geometry.midpoint_derivative,
         weight_derivative: signed_weight_scale * geometry.projected_extent_derivative,
@@ -1402,8 +1400,7 @@ mod tests {
         let da = BoundaryKernelVector { x: -0.02, y: 0.04 };
         let db = BoundaryKernelVector { x: 0.03, y: 0.01 };
         let sample_pose = straight_interval_sample_pose_derivative(
-            source, start, end, normal, ds, da, db, 0.01, 0.01, 0.01, 0.4, 0.2, 0.3, 0.05,
-            -0.75,
+            source, start, end, normal, ds, da, db, 0.01, 0.01, 0.01, 0.4, 0.2, 0.3, 0.05, -0.75,
         )
         .expect("straight interval should produce a complete sample pose derivative");
         assert_eq!(
@@ -1413,7 +1410,9 @@ mod tests {
                 y: 0.5 * (da.y + db.y),
             }
         );
-        assert!(sample_pose.absolute_weight_derivative_bound >= sample_pose.weight_derivative.abs());
+        assert!(
+            sample_pose.absolute_weight_derivative_bound >= sample_pose.weight_derivative.abs()
+        );
         assert!(sample_pose.absolute_weight_change_bound > 0.0);
         assert!(sample_pose.position_derivative_bound >= sample_pose.position_derivative.norm());
     }
