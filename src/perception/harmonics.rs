@@ -4451,11 +4451,15 @@ mod tests {
         }
 
         assert!(
-            observations.iter().any(|observation| !observation.1.is_empty()),
+            observations
+                .iter()
+                .any(|observation| !observation.1.is_empty()),
             "at least one receiver orientation must expose boundary samples"
         );
         assert!(
-            observations.iter().any(|observation| !observation.2.is_empty()),
+            observations
+                .iter()
+                .any(|observation| !observation.2.is_empty()),
             "at least one receiver orientation must produce a frequency-resolved potential"
         );
 
