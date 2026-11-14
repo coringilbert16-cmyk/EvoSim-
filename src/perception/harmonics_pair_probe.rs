@@ -757,9 +757,7 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
     let angular_scale = accumulated
         .iter()
         .zip(centers)
-        .map(|(force, (x, y))| {
-            (x * force.y).abs() + (y * force.x).abs() + force.torque.abs()
-        })
+        .map(|(force, (x, y))| (x * force.y).abs() + (y * force.x).abs() + force.torque.abs())
         .sum::<f64>();
     assert!(
         net_angular_momentum.abs() <= 5.0e-2 * angular_scale + 1.0e-7,
