@@ -4492,14 +4492,12 @@ mod projected_extent_motion_tests {
             end_bound,
         )
         .expect("non-singular straight interval should have a finite extent bound");
-        let baseline =
-            point_source_projected_extent(interval, source).expect("baseline extent");
+        let baseline = point_source_projected_extent(interval, source).expect("baseline extent");
 
         let mut state = 0x8f3f_73b5_cf1c_9ade_u64;
         let mut next_direction = || {
             state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
-            let angle =
-                ((state >> 32) as u32) as f64 / u32::MAX as f64 * std::f64::consts::TAU;
+            let angle = ((state >> 32) as u32) as f64 / u32::MAX as f64 * std::f64::consts::TAU;
             (angle.cos(), angle.sin())
         };
         for _ in 0..256 {
@@ -4527,8 +4525,7 @@ mod projected_extent_motion_tests {
                 source.0 + sx * source_bound * 0.8,
                 source.1 + sy * source_bound * 0.8,
             );
-            let moved_extent =
-                point_source_projected_extent(moved_interval, moved_source).unwrap();
+            let moved_extent = point_source_projected_extent(moved_interval, moved_source).unwrap();
             assert!(
                 (moved_extent - baseline).abs() <= bound,
                 "projected extent change exceeded certified envelope"
@@ -4545,22 +4542,14 @@ mod projected_extent_motion_tests {
             end: (1.0, 0.0),
             outward_normal: (0.0, 1.0),
         };
-        assert!(point_source_projected_extent_change_bound(
-            interval,
-            (0.0, 0.0),
-            0.0,
-            0.0,
-            0.0,
-        )
-        .is_none());
-        assert!(point_source_projected_extent_change_bound(
-            interval,
-            (0.0, 2.0),
-            0.0,
-            1.0,
-            1.0,
-        )
-        .is_none());
+        assert!(
+            point_source_projected_extent_change_bound(interval, (0.0, 0.0), 0.0, 0.0, 0.0,)
+                .is_none()
+        );
+        assert!(
+            point_source_projected_extent_change_bound(interval, (0.0, 2.0), 0.0, 1.0, 1.0,)
+                .is_none()
+        );
         assert!(point_source_projected_extent_change_bound(
             interval,
             (0.0, 2.0),
@@ -4571,4 +4560,3 @@ mod projected_extent_motion_tests {
         .is_none());
     }
 }
-
