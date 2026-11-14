@@ -543,10 +543,9 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
     for blocker_y in [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0, 5.0] {
         let blocker = single_body("Nitrogen", 4.0, blocker_y, 0.0, &catalog);
         let occluders = std::slice::from_ref(&blocker);
-        let receptions = material_aura_receptions_with_occluders(
-            &source, &receiver, occluders, &catalog, 0,
-        )
-        .expect("blocker pose should produce exact receiver samples");
+        let receptions =
+            material_aura_receptions_with_occluders(&source, &receiver, occluders, &catalog, 0)
+                .expect("blocker pose should produce exact receiver samples");
         let potential = directional_resonance_pair_potential_components_with_occluders(
             &source, &receiver, occluders, &catalog, 0,
         )
@@ -567,11 +566,13 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
                     .incident_spectrum
                     .components
                     .iter()
-                    .map(|component| (
-                        component.frequency_cycles_per_day,
-                        component.amplitude,
-                        component.phase_radians,
-                    ))
+                    .map(|component| {
+                        (
+                            component.frequency_cycles_per_day,
+                            component.amplitude,
+                            component.phase_radians,
+                        )
+                    })
                     .collect(),
             })
             .collect::<Vec<_>>();
@@ -584,7 +585,10 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
 
     let centered = &observations[0];
     let clear = observations.last().expect("clear pose should be recorded");
-    assert!(centered.1 < clear.1, "centered occlusion must reduce visible boundary extent");
+    assert!(
+        centered.1 < clear.1,
+        "centered occlusion must reduce visible boundary extent"
+    );
     assert!(potential_differs(&centered.3, &clear.3));
 
     // Identify the actual partial-visibility samples from the exact production
@@ -593,8 +597,9 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
     // silhouette approximation is substituted for production geometry.
     let partial = observations
         .iter()
-        .filter(|observation| observation.1 > centered.1 + 1.0e-12
-            && observation.1 < clear.1 - 1.0e-12)
+        .filter(|observation| {
+            observation.1 > centered.1 + 1.0e-12 && observation.1 < clear.1 - 1.0e-12
+        })
         .collect::<Vec<_>>();
     assert!(
         !partial.is_empty(),
@@ -602,10 +607,7 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
     );
     let near_silhouette = partial
         .iter()
-        .min_by(|left, right| {
-            (clear.1 - left.1)
-                .total_cmp(&(clear.1 - right.1))
-        })
+        .min_by(|left, right| (clear.1 - left.1).total_cmp(&(clear.1 - right.1)))
         .expect("partial observations should identify a near-silhouette case");
 
     assert!(
@@ -630,8 +632,9 @@ fn occlusion_sweep_resolves_partial_and_near_silhouette_quadrature() {
                     && sample.midpoint.1.is_finite()
                     && sample.projected_extent.is_finite()
             })
-            && observation.3.iter().all(|(frequency, energy)| {
-                frequency.is_finite() && energy.is_finite()
-            })
+            && observation
+                .3
+                .iter()
+                .all(|(frequency, energy)| frequency.is_finite() && energy.is_finite())
     }));
 }
