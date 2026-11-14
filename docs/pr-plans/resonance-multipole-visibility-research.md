@@ -990,11 +990,13 @@ Using W_j=|w_j|+the certified absolute weight-change bound, and caller-
 supplied coordinate derivative bounds J_p,j and J_w,j, the chain-rule
 magnitude is bounded by
 
-sum_j W_j [
-  G(d_a)F(d_b) J_c,a
- +G(d_b)F(d_a) J_c,b
- +(G(d_a)F(d_b)+F(d_a)G(d_b)) J_p,j
-] + F(d_a)F(d_b) J_w,j,
+sum_j {
+  W_j [
+    G(d_a)F(d_b) J_c,a
+   +G(d_b)F(d_a) J_c,b
+   +(G(d_a)F(d_b)+F(d_a)G(d_b)) J_p,j
+  ] + F(d_a)F(d_b) J_w,j
+},
 
 where J_c,a and J_c,b bound the reference-point derivatives. The
 implementation rejects missing samples, non-finite/negative envelopes,
