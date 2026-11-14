@@ -346,14 +346,10 @@ impl BoundaryKernelExpansion {
             source_force: source_force_error + roundoff_guard,
             receiver_force: receiver_force_error + roundoff_guard,
         };
-        [
-            result.potential,
-            result.source_force,
-            result.receiver_force,
-        ]
-        .iter()
-        .all(|value| value.is_finite())
-        .then_some(result)
+        [result.potential, result.source_force, result.receiver_force]
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(result)
     }
 
     /// Exact discrete sum, retained as the differential oracle.
@@ -586,10 +582,22 @@ mod tests {
         )
         .expect("finite exact pair samples should form a cluster");
         let motion = vec![
-            BoundarySampleMotionBound { position_displacement: 0.03, absolute_weight_change: 0.02 },
-            BoundarySampleMotionBound { position_displacement: 0.02, absolute_weight_change: 0.01 },
-            BoundarySampleMotionBound { position_displacement: 0.04, absolute_weight_change: 0.015 },
-            BoundarySampleMotionBound { position_displacement: 0.01, absolute_weight_change: 0.005 },
+            BoundarySampleMotionBound {
+                position_displacement: 0.03,
+                absolute_weight_change: 0.02,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.02,
+                absolute_weight_change: 0.01,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.04,
+                absolute_weight_change: 0.015,
+            },
+            BoundarySampleMotionBound {
+                position_displacement: 0.01,
+                absolute_weight_change: 0.005,
+            },
         ];
         let bound = expansion
             .bound_sample_geometry_change(&motion)
@@ -647,22 +655,18 @@ mod tests {
         )
         .expect("valid sample input");
         assert!(expansion.bound_sample_geometry_change(&[]).is_none());
-        assert!(
-            expansion
-                .bound_sample_geometry_change(&[BoundarySampleMotionBound {
-                    position_displacement: f64::NAN,
-                    absolute_weight_change: 0.0,
-                }])
-                .is_none()
-        );
-        assert!(
-            expansion
-                .bound_sample_geometry_change(&[BoundarySampleMotionBound {
-                    position_displacement: 1.0,
-                    absolute_weight_change: 0.0,
-                }])
-                .is_none()
-        );
+        assert!(expansion
+            .bound_sample_geometry_change(&[BoundarySampleMotionBound {
+                position_displacement: f64::NAN,
+                absolute_weight_change: 0.0,
+            }])
+            .is_none());
+        assert!(expansion
+            .bound_sample_geometry_change(&[BoundarySampleMotionBound {
+                position_displacement: 1.0,
+                absolute_weight_change: 0.0,
+            }])
+            .is_none());
     }
 
     #[test]
