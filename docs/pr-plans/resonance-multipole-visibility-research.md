@@ -646,3 +646,32 @@ a conservative error bound. No live force or movement integration is
 authorized by this milestone. The next work must separately derive and bound
 the boundary-geometry/weight pose derivatives and per-body torque, with exact
 fallback at visibility transitions.
+
+## 15. Smooth boundary-pose derivative probe — 2026-11-14
+
+A further test-only probe now isolates the geometric terms omitted by the
+fixed-sample center-gradient bound. In the existing four-body asymmetric
+fixture, it perturbs the source and receiver x/y/rotation coordinates
+independently while remaining inside one visibility-topology region.
+
+For every exact ordered source/receiver sample, it records central differences
+of the receiver midpoint, outward normal, projected extent, and underlying
+boundary representation (straight interval endpoints/normal or curved-arc
+parameters). The probe requires sample counts and boundary types to remain
+stable across both perturbations. A topology change is not differentiated;
+it belongs to the exact/subdivision fallback path.
+
+This separates four distinct pose-dependent quantities that the scalar
+fixed-sample kernel expansion deliberately freezes: sample location, boundary
+orientation, projected extent, and interval geometry. It confirms that
+nonzero geometric derivatives exist in the actual production sample path and
+therefore cannot be omitted from a complete force or torque evaluator.
+
+This remains a differential observation test, not a conservative bound.
+The next derivation must bound the derivatives of the interval endpoints and
+their projected-extent weights inside a certified smooth visibility region.
+At tangencies, edge-on transitions, interval creation/removal, or occlusion
+topology changes, the evaluator must reject the derivative expansion and
+retain exact evaluation or subdivide. Rigid-body torque must then be derived
+from the same scalar potential, including both sample-motion and weight-motion
+terms. No live integration is authorized.
