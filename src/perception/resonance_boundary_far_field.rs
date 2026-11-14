@@ -663,7 +663,7 @@ mod tests {
             .is_none());
         assert!(expansion
             .bound_sample_geometry_change(&[BoundarySampleMotionBound {
-                position_displacement: 1.0,
+                position_displacement: 6.0,
                 absolute_weight_change: 0.0,
             }])
             .is_none());
