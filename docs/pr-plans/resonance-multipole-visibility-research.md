@@ -582,3 +582,67 @@ for every body's force and torque are derived and tested, this primitive must
 remain test-only and must not feed the movement accumulator or mutual
 hierarchy. Ambiguous visibility and visibility-topology transitions remain
 exact/subdivision cases.
+
+## 14. Fixed-sample translational-gradient bounds — 2026-11-14
+
+The source-specific boundary-sample expansion now differentiates its own
+first-order scalar approximation with respect to both body reference
+positions. These are not independently assigned forces: each gradient is
+the analytic derivative of the same approximate scalar potential.
+
+For fixed sample positions and weights, write `g(p)=f_a(p)f_b(p)` and
+`f_i(p)=1/(1+|p-c_i|)`. The exact center gradients are
+
+`dS/dc_a = -sum_j w_j f_b(p_j) grad(f_a)(p_j)`
+
+and the corresponding expression with a and b exchanged.
+
+The approximation differentiates
+`S_hat=M_0 g(q)+grad(g)(q) dot M_1` while holding the exact
+sample positions and signed weights fixed. Its source derivative is
+
+`dS_hat/dc_a = -M_0 f_b grad(f_a) - f_b H_a M_1
+                - grad(f_b) (grad(f_a) dot M_1)`,
+
+with the receiver derivative obtained by exchanging a and b. The Hessian-vector
+products are evaluated analytically for the radial kernel.
+
+The force-error estimate applies Taylor's theorem to the center-gradient
+integrand itself. For `h_a(p)=d[g(p)]/d(c_a)`, the implementation
+uses the conservative spatial-Hessian bound
+
+`K_a = T(d_a) F(d_b) + 3 H(d_a) G(d_b) + 3 G(d_a) H(d_b)`,
+
+where `F(d)=1/(1+d)`, `G(d)=1/(1+d)^2`,
+`H(d)=max(2/(1+d)^3,1/(d(1+d)^2))`, and
+
+`T(d)=6/(1+d)^4 + 3(2/(d(1+d)^3)+1/(d^2(1+d)^2))`.
+
+The receiver bound exchanges a and b. With `W=sum |w_j|` and
+sample-cluster radius rho, the independent remainder estimates are
+
+`epsilon_(grad_a) <= 0.5 W rho^2 K_a`
+
+and
+
+`epsilon_(grad_b) <= 0.5 W rho^2 K_b`.
+
+The factor-three mixed-term coefficients deliberately overbound the tensor
+contractions. Signed cancellation cannot reduce these bounds.
+
+Tests compare both approximate center gradients with exact discrete
+fixed-sample derivatives, including 256 deterministic randomized clusters.
+The bounds are independent for source and receiver and are checked separately.
+
+### Explicit limit
+
+These are **fixed-sample center-translation** bounds only. Sample positions,
+projected extents, signed frequency weights, visibility, and interval topology
+are held fixed during differentiation. They do not bound the complete rigid
+body pose derivative, sample motion, projected-extent derivative, or torque.
+The complete-world finite-difference probe remains the oracle for those
+omitted pose-dependent terms, but a converged finite difference is not itself
+a conservative error bound. No live force or movement integration is
+authorized by this milestone. The next work must separately derive and bound
+the boundary-geometry/weight pose derivatives and per-body torque, with exact
+fallback at visibility transitions.
