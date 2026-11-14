@@ -153,7 +153,10 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
         motion.edge_start_displacement,
         motion.edge_end_displacement,
     ];
-    if bounds.iter().any(|bound| !bound.is_finite() || *bound < 0.0) {
+    if bounds
+        .iter()
+        .any(|bound| !bound.is_finite() || *bound < 0.0)
+    {
         return None;
     }
 
@@ -202,10 +205,8 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
 
     let numerator_t_change = delta_q * r_norm + q_norm * delta_r + delta_q * delta_r;
     let numerator_u_change = delta_q * e_norm + q_norm * delta_e + delta_q * delta_e;
-    let t_change =
-        (numerator_t_change + t.abs() * denominator_change) / denominator_min;
-    let u_change =
-        (numerator_u_change + u.abs() * denominator_change) / denominator_min;
+    let t_change = (numerator_t_change + t.abs() * denominator_change) / denominator_min;
+    let u_change = (numerator_u_change + u.abs() * denominator_change) / denominator_min;
     if !t_change.is_finite()
         || !u_change.is_finite()
         || t_change >= t.min(1.0 - t)
@@ -216,12 +217,9 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
 
     // p = a + t e. Bound all products including simultaneous changes in t
     // and the edge vector.
-    let point_change = motion.edge_start_displacement
-        + t.abs() * delta_e
-        + e_norm * t_change
-        + delta_e * t_change;
-    let roundoff_guard =
-        64.0 * f64::EPSILON * (point_change + q_norm + r_norm + e_norm + 1.0);
+    let point_change =
+        motion.edge_start_displacement + t.abs() * delta_e + e_norm * t_change + delta_e * t_change;
+    let roundoff_guard = 64.0 * f64::EPSILON * (point_change + q_norm + r_norm + e_norm + 1.0);
     let result = point_change + roundoff_guard;
     result.is_finite().then_some(result)
 }
@@ -640,10 +638,8 @@ mod tests {
             edge_start_displacement: 0.005,
             edge_end_displacement: 0.005,
         };
-        let bound = ray_edge_intersection_displacement_bound(
-            source, critical, start, end, motion,
-        )
-        .expect("strict ray-edge intersection should have a finite motion bound");
+        let bound = ray_edge_intersection_displacement_bound(source, critical, start, end, motion)
+            .expect("strict ray-edge intersection should have a finite motion bound");
 
         let intersection = |s: BoundaryKernelVector,
                             v: BoundaryKernelVector,
@@ -677,8 +673,7 @@ mod tests {
         let mut state = 0x4d59_5df4_d0f3_3173_u64;
         let mut next_direction = || {
             state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
-            let angle = ((state >> 32) as u32) as f64 / u32::MAX as f64
-                * std::f64::consts::TAU;
+            let angle = ((state >> 32) as u32) as f64 / u32::MAX as f64 * std::f64::consts::TAU;
             (angle.cos(), angle.sin())
         };
 
@@ -745,14 +740,9 @@ mod tests {
             },
         )
         .is_none());
-        assert!(ray_edge_intersection_displacement_bound(
-            source,
-            source,
-            start,
-            end,
-            valid,
-        )
-        .is_none());
+        assert!(
+            ray_edge_intersection_displacement_bound(source, source, start, end, valid,).is_none()
+        );
     }
 
     fn sample(x: f64, y: f64, weight: f64) -> WeightedBoundaryKernelSample {
