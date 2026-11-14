@@ -126,6 +126,146 @@ pub(crate) struct BoundaryKernelExpansion {
     radius: f64,
 }
 
+/// Exact derivative of a rigidly attached point for one generalized pose
+/// coordinate. Angular velocity is measured about the supplied rigid-body
+/// pivot; the caller chooses the body's reference point and motion authority.
+#[allow(dead_code)]
+pub(crate) fn rigid_pose_point_derivative(
+    point: BoundaryKernelVector,
+    pivot: BoundaryKernelVector,
+    translation_derivative: BoundaryKernelVector,
+    angular_derivative: f64,
+) -> Option<BoundaryKernelVector> {
+    let values = [
+        point.x,
+        point.y,
+        pivot.x,
+        pivot.y,
+        translation_derivative.x,
+        translation_derivative.y,
+        angular_derivative,
+    ];
+    if values.iter().any(|value| !value.is_finite()) {
+        return None;
+    }
+    let offset = BoundaryKernelVector {
+        x: point.x - pivot.x,
+        y: point.y - pivot.y,
+    };
+    let derivative = BoundaryKernelVector {
+        x: translation_derivative.x - angular_derivative * offset.y,
+        y: translation_derivative.y + angular_derivative * offset.x,
+    };
+    (derivative.x.is_finite() && derivative.y.is_finite()).then_some(derivative)
+}
+
+/// One source-dependent tangent point on a rigid circle and its exact
+/// generalized-coordinate derivative. tangent_side must be +1 or -1 and
+/// source/circle separation must remain strictly greater than the radius.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct CircleTangentPointPoseDerivative {
+    pub(crate) point: BoundaryKernelVector,
+    pub(crate) derivative: BoundaryKernelVector,
+}
+
+#[allow(dead_code)]
+pub(crate) fn circle_tangent_point_pose_derivative(
+    center: BoundaryKernelVector,
+    radius: f64,
+    source: BoundaryKernelVector,
+    center_derivative: BoundaryKernelVector,
+    source_derivative: BoundaryKernelVector,
+    tangent_side: f64,
+) -> Option<CircleTangentPointPoseDerivative> {
+    if !radius.is_finite()
+        || radius <= 0.0
+        || !tangent_side.is_finite()
+        || tangent_side.abs() != 1.0
+    {
+        return None;
+    }
+    let delta = BoundaryKernelVector {
+        x: source.x - center.x,
+        y: source.y - center.y,
+    };
+    let delta_derivative = BoundaryKernelVector {
+        x: source_derivative.x - center_derivative.x,
+        y: source_derivative.y - center_derivative.y,
+    };
+    let distance = delta.norm();
+    if !distance.is_finite()
+        || distance <= radius + f64::EPSILON
+        || [
+            center.x,
+            center.y,
+            source.x,
+            source.y,
+            center_derivative.x,
+            center_derivative.y,
+            source_derivative.x,
+            source_derivative.y,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+    {
+        return None;
+    }
+    let unit = BoundaryKernelVector {
+        x: delta.x / distance,
+        y: delta.y / distance,
+    };
+    let perpendicular = BoundaryKernelVector {
+        x: -unit.y,
+        y: unit.x,
+    };
+    let distance_derivative = unit.dot(delta_derivative);
+    let unit_derivative = BoundaryKernelVector {
+        x: (delta_derivative.x - unit.x * distance_derivative) / distance,
+        y: (delta_derivative.y - unit.y * distance_derivative) / distance,
+    };
+    let ratio = radius / distance;
+    let transverse = (1.0 - ratio * ratio).sqrt();
+    if !transverse.is_finite() || transverse <= f64::EPSILON {
+        return None;
+    }
+    let ratio_derivative = -ratio * distance_derivative / distance;
+    let transverse_derivative = -ratio * ratio_derivative / transverse;
+    let perpendicular_derivative = BoundaryKernelVector {
+        x: -unit_derivative.y,
+        y: unit_derivative.x,
+    };
+    let point = BoundaryKernelVector {
+        x: center.x + radius * (ratio * unit.x + tangent_side * transverse * perpendicular.x),
+        y: center.y + radius * (ratio * unit.y + tangent_side * transverse * perpendicular.y),
+    };
+    let derivative = BoundaryKernelVector {
+        x: center_derivative.x
+            + radius
+                * (ratio_derivative * unit.x
+                    + ratio * unit_derivative.x
+                    + tangent_side
+                        * (transverse_derivative * perpendicular.x
+                            + transverse * perpendicular_derivative.x)),
+        y: center_derivative.y
+            + radius
+                * (ratio_derivative * unit.y
+                    + ratio * unit_derivative.y
+                    + tangent_side
+                        * (transverse_derivative * perpendicular.y
+                            + transverse * perpendicular_derivative.y)),
+    };
+    [
+        point.x,
+        point.y,
+        derivative.x,
+        derivative.y,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+    .then_some(CircleTangentPointPoseDerivative { point, derivative })
+}
+
 /// Conservative displacement of a point attached to a rigid body when its
 /// reference point translates by at most `translation_bound` and its
 /// orientation changes by at most `rotation_bound_radians`. The point is
@@ -1233,6 +1373,84 @@ fn radial_hessian_apply(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rigid_point_pose_derivative_matches_finite_difference() {
+        let point = BoundaryKernelVector { x: 3.0, y: -2.0 };
+        let pivot = BoundaryKernelVector { x: 0.5, y: 1.0 };
+        let translation = BoundaryKernelVector { x: 0.2, y: -0.1 };
+        let angular = 0.7;
+        let derivative =
+            rigid_pose_point_derivative(point, pivot, translation, angular).unwrap();
+        let transform = |q: f64| {
+            let offset = BoundaryKernelVector {
+                x: point.x - pivot.x,
+                y: point.y - pivot.y,
+            };
+            let angle = q * angular;
+            let (sin, cos) = angle.sin_cos();
+            BoundaryKernelVector {
+                x: pivot.x + q * translation.x + offset.x * cos - offset.y * sin,
+                y: pivot.y + q * translation.y + offset.x * sin + offset.y * cos,
+            }
+        };
+        let step = 1.0e-6;
+        let plus = transform(step);
+        let minus = transform(-step);
+        assert!(
+            ((plus.x - minus.x) / (2.0 * step) - derivative.x).abs() < 1.0e-8
+        );
+        assert!(
+            ((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8
+        );
+    }
+
+    #[test]
+    fn circle_tangent_pose_derivative_matches_finite_difference() {
+        let center = BoundaryKernelVector { x: 1.0, y: -0.5 };
+        let source = BoundaryKernelVector { x: 5.0, y: 2.0 };
+        let center_derivative = BoundaryKernelVector { x: -0.1, y: 0.2 };
+        let source_derivative = BoundaryKernelVector { x: 0.3, y: -0.15 };
+        let radius = 1.25;
+        for side in [-1.0, 1.0] {
+            let base = circle_tangent_point_pose_derivative(
+                center,
+                radius,
+                source,
+                center_derivative,
+                source_derivative,
+                side,
+            )
+            .expect("external circle tangent should be differentiable");
+            let tangent = |q: f64| {
+                circle_tangent_point_pose_derivative(
+                    BoundaryKernelVector {
+                        x: center.x + q * center_derivative.x,
+                        y: center.y + q * center_derivative.y,
+                    },
+                    radius,
+                    BoundaryKernelVector {
+                        x: source.x + q * source_derivative.x,
+                        y: source.y + q * source_derivative.y,
+                    },
+                    BoundaryKernelVector::default(),
+                    BoundaryKernelVector::default(),
+                    side,
+                )
+                .expect("small pose perturbation preserves external tangency")
+                .point
+            };
+            let step = 1.0e-6;
+            let plus = tangent(step);
+            let minus = tangent(-step);
+            assert!(
+                ((plus.x - minus.x) / (2.0 * step) - base.derivative.x).abs() < 1.0e-8
+            );
+            assert!(
+                ((plus.y - minus.y) / (2.0 * step) - base.derivative.y).abs() < 1.0e-8
+            );
+        }
+    }
 
     #[test]
     fn rigid_pose_displacement_bound_contains_transformed_boundary_points() {
