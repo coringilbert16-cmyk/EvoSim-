@@ -4327,6 +4327,8 @@ mod tests {
                 directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
                     .expect("source pose should produce frequency-resolved potential");
 
+            assert!(!samples.is_empty());
+            assert!(!potential.is_empty());
             let sample_record: Vec<_> = samples
                 .iter()
                 .map(|sample| {
@@ -4405,8 +4407,6 @@ mod tests {
             )
             .expect("blocker pose should produce frequency-resolved potential");
 
-            assert!(!samples.is_empty());
-            assert!(!potential.is_empty());
             let sample_record: Vec<_> = samples
                 .iter()
                 .map(|sample| {
