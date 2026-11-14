@@ -259,6 +259,112 @@ pub(crate) struct StraightIntervalPoseDerivative {
     pub(crate) projected_extent_derivative: f64,
 }
 
+/// Conservative magnitude bound for the straight-interval projected-extent
+/// derivative over a smooth pose cell. Source/endpoint displacement envelopes
+/// preserve front-facing separation; derivative bounds apply to the same
+/// generalized coordinate throughout the cell.
+#[allow(dead_code)]
+pub(crate) fn straight_interval_projected_extent_derivative_bound(
+    source: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    outward_normal: BoundaryKernelVector,
+    source_displacement: f64,
+    edge_start_displacement: f64,
+    edge_end_displacement: f64,
+    source_derivative_bound: f64,
+    edge_start_derivative_bound: f64,
+    edge_end_derivative_bound: f64,
+) -> Option<f64> {
+    let values = [
+        source.x,
+        source.y,
+        edge_start.x,
+        edge_start.y,
+        edge_end.x,
+        edge_end.y,
+        outward_normal.x,
+        outward_normal.y,
+        source_displacement,
+        edge_start_displacement,
+        edge_end_displacement,
+        source_derivative_bound,
+        edge_start_derivative_bound,
+        edge_end_derivative_bound,
+    ];
+    if values.iter().any(|value| !value.is_finite())
+        || values[8..].iter().any(|value| *value < 0.0)
+    {
+        return None;
+    }
+    let edge = BoundaryKernelVector {
+        x: edge_end.x - edge_start.x,
+        y: edge_end.y - edge_start.y,
+    };
+    let length = edge.norm();
+    let normal_length = outward_normal.norm();
+    if !length.is_finite()
+        || length <= f64::EPSILON
+        || (normal_length - 1.0).abs() > 1.0e-9
+    {
+        return None;
+    }
+    let tangent = BoundaryKernelVector {
+        x: edge.x / length,
+        y: edge.y / length,
+    };
+    let perpendicular = BoundaryKernelVector {
+        x: -tangent.y,
+        y: tangent.x,
+    };
+    let orientation = outward_normal.dot(perpendicular);
+    if !orientation.is_finite() || orientation.abs() < 1.0 - 1.0e-9 {
+        return None;
+    }
+
+    let edge_displacement = edge_start_displacement + edge_end_displacement;
+    let minimum_length = length - edge_displacement;
+    if !minimum_length.is_finite() || minimum_length <= f64::EPSILON {
+        return None;
+    }
+    let relative_displacement = source_displacement + edge_start_displacement;
+    let source_offset = BoundaryKernelVector {
+        x: source.x - edge_start.x,
+        y: source.y - edge_start.y,
+    };
+    let radius_max = source_offset.norm() + relative_displacement;
+    let normal_distance = source_offset.dot(outward_normal);
+    if !radius_max.is_finite() || !normal_distance.is_finite() || normal_distance <= 0.0 {
+        return None;
+    }
+    let normal_change = (2.0 * edge_displacement / minimum_length).min(2.0);
+    let minimum_normal_distance =
+        normal_distance - relative_displacement - radius_max * normal_change;
+    if !minimum_normal_distance.is_finite() || minimum_normal_distance <= f64::EPSILON {
+        return None;
+    }
+    let along = source_offset.dot(tangent);
+    let maximum_absolute_along =
+        along.abs() + relative_displacement + radius_max * normal_change;
+    let maximum_length = length + edge_displacement;
+    let normal_partial_bound = (maximum_absolute_along / minimum_normal_distance).asinh()
+        + ((maximum_length + maximum_absolute_along) / minimum_normal_distance).asinh()
+        + 2.0;
+
+    let edge_derivative_bound = edge_start_derivative_bound + edge_end_derivative_bound;
+    let relative_derivative_bound = source_derivative_bound + edge_start_derivative_bound;
+    let tangent_derivative_bound = 2.0 * edge_derivative_bound / minimum_length;
+    let along_derivative_bound =
+        relative_derivative_bound + radius_max * tangent_derivative_bound;
+    let normal_derivative_bound = along_derivative_bound;
+    let result = edge_derivative_bound
+        + 2.0 * along_derivative_bound
+        + normal_partial_bound * normal_derivative_bound;
+    let roundoff_guard =
+        128.0 * f64::EPSILON * (result + radius_max + maximum_length + 1.0);
+    (result.is_finite() && roundoff_guard.is_finite()).then_some(result + roundoff_guard)
+}
+
 /// Differentiate the closed-form point-source projected extent with respect
 /// to source and both edge endpoints. This includes rigid edge translation
 /// and rotation; it does not discover or differentiate visibility cuts.
@@ -1215,6 +1321,75 @@ mod tests {
         assert!(
             ray_edge_intersection_displacement_bound(source, source, start, end, valid,).is_none()
         );
+    }
+
+    #[test]
+    fn straight_interval_projected_extent_derivative_bound_contains_pose_samples() {
+        let source = BoundaryKernelVector { x: 0.3, y: 2.0 };
+        let start = BoundaryKernelVector { x: -1.0, y: 0.0 };
+        let end = BoundaryKernelVector { x: 1.0, y: 0.0 };
+        let normal = BoundaryKernelVector { x: 0.0, y: 1.0 };
+        let source_displacement = 0.05;
+        let start_displacement = 0.02;
+        let end_displacement = 0.03;
+        let source_derivative_bound = 0.4;
+        let start_derivative_bound = 0.2;
+        let end_derivative_bound = 0.3;
+        let bound = straight_interval_projected_extent_derivative_bound(
+            source,
+            start,
+            end,
+            normal,
+            source_displacement,
+            start_displacement,
+            end_displacement,
+            source_derivative_bound,
+            start_derivative_bound,
+            end_derivative_bound,
+        )
+        .expect("front-facing interval should have a finite derivative bound");
+        let ds = BoundaryKernelVector { x: 0.3, y: 0.2 };
+        let da = BoundaryKernelVector { x: 0.1, y: 0.1 };
+        let db = BoundaryKernelVector { x: 0.2, y: 0.1 };
+        for index in 0..96 {
+            let angle = index as f64 * 0.618_033_988_75;
+            let moved_source = BoundaryKernelVector {
+                x: source.x + source_displacement * 0.8 * angle.cos(),
+                y: source.y + source_displacement * 0.8 * angle.sin(),
+            };
+            let moved_start = BoundaryKernelVector {
+                x: start.x + start_displacement * 0.8 * (angle + 0.7).cos(),
+                y: start.y + start_displacement * 0.8 * (angle + 0.7).sin(),
+            };
+            let moved_end = BoundaryKernelVector {
+                x: end.x + end_displacement * 0.8 * (angle + 1.3).cos(),
+                y: end.y + end_displacement * 0.8 * (angle + 1.3).sin(),
+            };
+            let edge = BoundaryKernelVector {
+                x: moved_end.x - moved_start.x,
+                y: moved_end.y - moved_start.y,
+            };
+            let length = edge.norm();
+            let moved_normal = BoundaryKernelVector {
+                x: -edge.y / length,
+                y: edge.x / length,
+            };
+            let derivative = straight_interval_pose_derivative(
+                moved_source,
+                moved_start,
+                moved_end,
+                moved_normal,
+                ds,
+                da,
+                db,
+            )
+            .expect("bounded perturbation should remain in the smooth front-facing cell");
+            assert!(
+                derivative.projected_extent_derivative.abs() <= bound,
+                "derivative {} exceeded bound {bound}",
+                derivative.projected_extent_derivative
+            );
+        }
     }
 
     #[test]
