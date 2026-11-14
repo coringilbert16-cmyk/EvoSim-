@@ -704,21 +704,23 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
 
     for body_index in 0..baseline_bodies.len() {
         for component in 0..3 {
-        let derivative = (evaluate(body_index, component, step)?
-            - evaluate(body_index, component, -step)?)
-            / (2.0 * step);
-        let expected_force = -derivative;
-        let actual_force = match component {
-            0 => accumulated[body_index].x,
-            1 => accumulated[body_index].y,
-            2 => accumulated[body_index].torque,
-            _ => unreachable!(),
-        };
-        let scale = expected_force.abs().max(actual_force.abs()).max(1.0e-7);
-        assert!(
-            (actual_force - expected_force).abs() <= 5.0e-2 * scale + 1.0e-7,
-            "complete-world gradient mismatch for body {body_index}, component {component}: pair sum={actual_force}, independent potential derivative={expected_force}"
-        );
+            let plus = evaluate(body_index, component, step)
+                .expect("positive rigid-pose perturbation should be valid");
+            let minus = evaluate(body_index, component, -step)
+                .expect("negative rigid-pose perturbation should be valid");
+            let derivative = (plus - minus) / (2.0 * step);
+            let expected_force = -derivative;
+            let actual_force = match component {
+                0 => accumulated[body_index].x,
+                1 => accumulated[body_index].y,
+                2 => accumulated[body_index].torque,
+                _ => unreachable!(),
+            };
+            let scale = expected_force.abs().max(actual_force.abs()).max(1.0e-7);
+            assert!(
+                (actual_force - expected_force).abs() <= 5.0e-2 * scale + 1.0e-7,
+                "complete-world gradient mismatch for body {body_index}, component {component}: pair sum={actual_force}, independent potential derivative={expected_force}"
+            );
         }
     }
 
