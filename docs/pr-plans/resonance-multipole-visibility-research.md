@@ -515,3 +515,70 @@ quadrature with a conservative error bound against these exact records.
 Potential, every participating body's force, and every body's torque still
 need independent bounds before any mutual evaluator or runtime force path is
 authorized.
+
+
+## 13. Bounded source-specific boundary-sample expansion — 2026-11-14
+
+The first conservative treatment of the source-dependent boundary sum is now
+implemented as a testable scalar-potential primitive in
+`src/perception/resonance_boundary_far_field.rs`. It does not construct a
+shared quadrature. Each instance belongs to exactly one ordered source/receiver
+pair and one frequency, and retains that pair's exact production interval
+midpoints. The signed sample weight contains the existing spectral cross
+coefficient, both environmental mass scales, and that interval's exact
+projected extent.
+
+For sample midpoint p_j, source center c_a, receiver center c_b, and signed
+weight w_j, the target discrete sum is
+
+`S = sum_j w_j f(|p_j-c_a|) f(|p_j-c_b|)`, with `f(r)=1/(1+r)`.
+
+For a disk centered at q with radius rho containing every exact p_j, define
+`delta_j=p_j-q`, `M_0=sum_j w_j`,
+`M_1=sum_j w_j delta_j`, and `W=sum_j |w_j|`.
+The first-order sample-cluster approximation is
+
+`S_hat = M_0 g(q) + grad(g)(q) dot M_1`,
+where `g(p)=f(|p-c_a|)f(|p-c_b|)`.
+
+The Taylor remainder is bounded over the complete disk by
+
+`|S-S_hat| <= 0.5 W rho^2 H_g,max`.
+
+Let `d_a=|q-c_a|-rho` and `d_b=|q-c_b|-rho`. The evaluator rejects
+unless both are strictly positive. For either radial factor, conservative
+bounds throughout the disk are
+
+`F(d)=1/(1+d)`,
+`G(d)=1/(1+d)^2`,
+`H(d)=max(2/(1+d)^3, 1/(d(1+d)^2))`.
+
+The product Hessian operator norm is bounded by
+
+`H_g,max = F(d_b)H(d_a) + F(d_a)H(d_b) + 2G(d_a)G(d_b)`.
+
+The implementation uses absolute sample weights, so signed spectral
+cancellation cannot shrink the remainder estimate. It adds a small outward
+floating-point accumulation guard. Non-finite inputs, overflow, and disks
+touching either body fail closed.
+
+The test-only differential suite compares the approximation with the exact
+discrete sum for mixed-sign samples, strong cancellation, and a zero-radius
+cluster; it also verifies rejection when the sample disk touches either body.
+The production visibility and interval construction are untouched. No sample
+is moved, merged across ordered pairs, or assigned another pair's geometry.
+
+### Explicit limit of this milestone
+
+This is a bounded approximation of the discrete boundary-sample sum for one
+ordered pair and one frequency. It is not a continuous boundary integral and
+does not approximate visibility or interval endpoints. It returns a scalar
+potential estimate and a conservative scalar-potential remainder only.
+It does not yet return body forces or torques. Those require differentiating
+the same expansion with respect to source and receiver translations and
+rotations, including the pose dependence of the exact projected extents and
+the validity region of the sample disk. Until independent conservative bounds
+for every body's force and torque are derived and tested, this primitive must
+remain test-only and must not feed the movement accumulator or mutual
+hierarchy. Ambiguous visibility and visibility-topology transitions remain
+exact/subdivision cases.
