@@ -296,3 +296,55 @@ fn multi_pair_probe_records_source_specific_receiver_quadrature() {
         "the third-body blocker must affect exact visibility or pair potential"
     );
 }
+
+
+fn world_potential(records: &[OrderedPairRecord]) -> f64 {
+    0.5 * records
+        .iter()
+        .flat_map(|record| record.potential.iter())
+        .map(|(_, energy)| energy)
+        .sum::<f64>()
+}
+
+#[test]
+fn complete_world_pose_derivatives_match_refined_central_differences() {
+    let catalog = crate::resources::default_catalog();
+    let evaluate = |shift: (f64, f64), rotation: f64| {
+        let bodies = probe_world(shift, rotation, 0.0, &catalog);
+        world_potential(&record_world_pairs(&bodies, &catalog, 0))
+    };
+
+    // The derivative oracle deliberately recomputes every ordered pair with
+    // the other bodies as exact occluders. It therefore includes changes to
+    // sample locations, projected extents, visibility, and frequency weights;
+    // no frozen-sample derivative is substituted.
+    let central_difference = |step: f64, axis: usize| {
+        let mut plus = (0.0, 0.0);
+        let mut minus = (0.0, 0.0);
+        let mut plus_rotation = 0.0;
+        let mut minus_rotation = 0.0;
+        if axis == 0 {
+            plus.0 = step;
+            minus.0 = -step;
+        } else {
+            plus_rotation = step;
+            minus_rotation = -step;
+        }
+        (evaluate(plus, plus_rotation) - evaluate(minus, minus_rotation)) / (2.0 * step)
+    };
+
+    for axis in [0, 1] {
+        let coarse = central_difference(2.0e-4, axis);
+        let fine = central_difference(1.0e-4, axis);
+        assert!(coarse.is_finite() && fine.is_finite());
+        assert!(
+            fine.abs() > 1.0e-12,
+            "the deterministic fixture must exercise a nonzero pose derivative for axis {axis}"
+        );
+        let scale = coarse.abs().max(fine.abs()).max(1.0e-9);
+        assert!(
+            (fine - coarse).abs() <= 2.0e-2 * scale,
+            "central-difference derivative should converge for axis {axis}: coarse={coarse} fine={fine}"
+        );
+    }
+}
