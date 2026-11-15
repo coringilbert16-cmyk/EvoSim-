@@ -2289,13 +2289,9 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
         budget: super::resonance_boundary_far_field::BoundaryPotentialError,
     ) -> Option<BoundaryPotentialEvaluation> {
         if samples.is_empty()
-            || ![
-                budget.potential,
-                budget.source_force,
-                budget.receiver_force,
-            ]
-            .iter()
-            .all(|value| value.is_finite() && *value >= 0.0)
+            || ![budget.potential, budget.source_force, budget.receiver_force]
+                .iter()
+                .all(|value| value.is_finite() && *value >= 0.0)
         {
             return None;
         }
@@ -2315,10 +2311,22 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
             return None;
         }
 
-        let min_x = samples.iter().map(|sample| sample.position.x).fold(f64::INFINITY, f64::min);
-        let max_x = samples.iter().map(|sample| sample.position.x).fold(f64::NEG_INFINITY, f64::max);
-        let min_y = samples.iter().map(|sample| sample.position.y).fold(f64::INFINITY, f64::min);
-        let max_y = samples.iter().map(|sample| sample.position.y).fold(f64::NEG_INFINITY, f64::max);
+        let min_x = samples
+            .iter()
+            .map(|sample| sample.position.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = samples
+            .iter()
+            .map(|sample| sample.position.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = samples
+            .iter()
+            .map(|sample| sample.position.y)
+            .fold(f64::INFINITY, f64::min);
+        let max_y = samples
+            .iter()
+            .map(|sample| sample.position.y)
+            .fold(f64::NEG_INFINITY, f64::max);
         let mut samples = samples;
         if max_x - min_x >= max_y - min_y {
             samples.sort_by(|a, b| a.position.x.total_cmp(&b.position.x));
