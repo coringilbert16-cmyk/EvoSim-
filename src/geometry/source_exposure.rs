@@ -3037,6 +3037,58 @@ mod visibility_tests {
     }
 
     #[test]
+    fn pose_cell_inventory_reuses_swept_blocker_that_moves_from_behind_to_front() {
+        let reference_bodies = [
+            rectangle_body(0, 5.0, 0.0, 2.0, 2.0),
+            rectangle_body(1, 8.0, 0.0, 0.5, 0.5),
+        ];
+        let target_indices = [0];
+        let motion = [
+            VisibilityBodyMotionBound::default(),
+            VisibilityBodyMotionBound {
+                translation_bound: 6.0,
+                ..VisibilityBodyMotionBound::default()
+            },
+        ];
+        let inventory = build_visibility_pose_cell_candidate_inventory(
+            (-5.0, 0.0),
+            &reference_bodies,
+            &target_indices,
+            0.0,
+            &motion,
+        )
+        .expect("the swept blocker inventory should be certifiable");
+        assert!(inventory
+            .candidates_for_target(0)
+            .expect("target inventory")
+            .contains(&1));
+
+        let sampled_bodies = [
+            rectangle_body(0, 5.0, 0.0, 2.0, 2.0),
+            rectangle_body(1, 3.0, 0.0, 0.5, 0.5),
+        ];
+        let reused = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+            (-5.0, 0.0),
+            &sampled_bodies,
+            &target_indices,
+            0.0,
+            &motion,
+            &inventory,
+        )
+        .expect("the same swept inventory must cover the moved blocker");
+        let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
+            (-5.0, 0.0),
+            &sampled_bodies,
+            &target_indices,
+        )
+        .expect("exact sampled-pose visibility");
+        assert_eq!(
+            reused.iter().map(|entry| entry.interval).collect::<Vec<_>>(),
+            exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
     fn fully_shadowed_target_edge_has_no_exposed_interval() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 4.0);
