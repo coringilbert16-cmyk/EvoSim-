@@ -7175,4 +7175,98 @@ mod projected_extent_motion_tests {
         )
         .is_none());
     }
+
+    #[test]
+    fn pose_cell_broad_phase_never_drops_sampled_segment_intersecting_aabb_blockers() {
+        fn segment_intersects_bounds(
+            end: (f64, f64),
+            bounds: (f64, f64, f64, f64),
+        ) -> bool {
+            let (min_x, max_x, min_y, max_y) = bounds;
+            let delta = (end.0, end.1);
+            let mut lower: f64 = 0.0;
+            let mut upper: f64 = 1.0;
+            for (origin, direction, minimum, maximum) in [
+                (0.0, delta.0, min_x, max_x),
+                (0.0, delta.1, min_y, max_y),
+            ] {
+                if direction.abs() <= f64::EPSILON {
+                    if origin < minimum || origin > maximum {
+                        return false;
+                    }
+                    continue;
+                }
+                let first = (minimum - origin) / direction;
+                let second = (maximum - origin) / direction;
+                lower = lower.max(first.min(second));
+                upper = upper.min(first.max(second));
+                if lower > upper {
+                    return false;
+                }
+            }
+            upper >= 0.0 && lower <= 1.0
+        }
+
+        // Deterministic coverage of blocker boxes around the complete target
+        // angular cone. If any sampled source-to-target segment intersects a
+        // blocker AABB, the angular/distance broad phase must retain it.
+        let source = (0.0, 0.0);
+        let target = (5.0, 7.0, -2.0, 2.0);
+        let reference_angle = 0.0;
+        let mut state = 0x9e37_79b9_u64;
+        let mut next_unit = || {
+            state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            (state >> 11) as f64 / ((1_u64 << 53) as f64)
+        };
+
+        for _ in 0..512 {
+            let min_x = 0.25 + next_unit() * 9.0;
+            let min_y = -4.0 + next_unit() * 7.0;
+            let blocker = (
+                min_x,
+                min_x + 0.05 + next_unit() * 1.5,
+                min_y,
+                min_y + 0.05 + next_unit() * 1.5,
+            );
+            let interval = angle_interval_for_bounds(source, blocker, reference_angle).unwrap();
+            let dx = if source.0 < blocker.0 {
+                blocker.0 - source.0
+            } else if source.0 > blocker.1 {
+                source.0 - blocker.1
+            } else {
+                0.0
+            };
+            let dy = if source.1 < blocker.2 {
+                blocker.2 - source.1
+            } else if source.1 > blocker.3 {
+                source.1 - blocker.3
+            } else {
+                0.0
+            };
+            let minimum_distance = dx.hypot(dy);
+            let candidates = candidate_body_indices_for_bounds(
+                source,
+                target,
+                reference_angle,
+                &[interval],
+                &[minimum_distance],
+            )
+            .unwrap();
+
+            let mut intersects = false;
+            for x_step in 0..=10 {
+                for y_step in 0..=10 {
+                    let target_point = (
+                        target.0 + (target.1 - target.0) * x_step as f64 / 10.0,
+                        target.2 + (target.3 - target.2) * y_step as f64 / 10.0,
+                    );
+                    intersects |= segment_intersects_bounds(target_point, blocker);
+                }
+            }
+            if intersects {
+                assert_eq!(candidates, vec![0], "blocker AABB {blocker:?}");
+            }
+        }
+    }
+
 }
