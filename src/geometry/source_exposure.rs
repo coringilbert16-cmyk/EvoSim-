@@ -246,6 +246,7 @@ impl VisibilityCutEvent {
 pub(crate) struct VisibilityCutSignature {
     candidate_bodies: Vec<usize>,
     interval_visibility: Vec<bool>,
+    interval_blocker_bodies: Vec<Vec<usize>>,
     ordered_events: Vec<VisibilityEventIdentity>,
 }
 
@@ -278,6 +279,7 @@ impl VisibilityCutSignature {
         Some(Self {
             candidate_bodies: Vec::new(),
             interval_visibility: Vec::new(),
+            interval_blocker_bodies: Vec::new(),
             ordered_events,
         })
     }
@@ -288,16 +290,23 @@ impl VisibilityCutSignature {
     pub(crate) fn from_partition(
         cuts: &[VisibilityCutRecord],
         candidate_bodies: &[usize],
-        interval_visibility: &[bool],
+        interval_blocker_bodies: &[Vec<usize>],
     ) -> Option<Self> {
         if candidate_bodies.windows(2).any(|pair| pair[0] >= pair[1])
-            || interval_visibility.len() != cuts.len().checked_sub(1)?
+            || interval_blocker_bodies.len() != cuts.len().checked_sub(1)?
+            || interval_blocker_bodies
+                .iter()
+                .any(|blockers| blockers.windows(2).any(|pair| pair[0] >= pair[1]))
         {
             return None;
         }
         let mut signature = Self::from_cuts(cuts)?;
         signature.candidate_bodies = candidate_bodies.to_vec();
-        signature.interval_visibility = interval_visibility.to_vec();
+        signature.interval_visibility = interval_blocker_bodies
+            .iter()
+            .map(|blockers| !blockers.is_empty())
+            .collect();
+        signature.interval_blocker_bodies = interval_blocker_bodies.to_vec();
         Some(signature)
     }
 
@@ -2566,32 +2575,33 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
             }
 
             let cuts = merge_visibility_cuts(cuts);
-            let mut interval_visibility = Vec::with_capacity(cuts.len().saturating_sub(1));
+            let mut interval_blocker_bodies = Vec::with_capacity(cuts.len().saturating_sub(1));
             for pair in cuts.windows(2) {
                 let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 {
-                    interval_visibility.push(true);
+                    interval_blocker_bodies.push(candidate_body_indices.clone());
                     continue;
                 }
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
-                interval_visibility.push(
-                    crate::organism_geometry::source_path_blocked_for_candidates(
+                interval_blocker_bodies.push(
+                    crate::physical_body_geometry::source_path_blocker_body_indices_for_candidates(
                         source,
                         point,
                         bodies,
                         body_index,
                         unit_index,
                         &candidate_body_indices,
-                    ),
+                    )?,
                 );
             }
             let visibility_signature = VisibilityCutSignature::from_partition(
                 &cuts,
                 &candidate_body_indices,
-                &interval_visibility,
+                &interval_blocker_bodies,
             );
-            for (pair, blocked) in cuts.windows(2).zip(interval_visibility.iter().copied()) {
+            for (pair, blockers) in cuts.windows(2).zip(interval_blocker_bodies.iter()) {
+                let blocked = !blockers.is_empty();
                 let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 || blocked {
                     continue;
