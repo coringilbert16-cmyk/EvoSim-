@@ -1527,7 +1527,8 @@ impl VisibilityPoseCellCandidateInventory {
         let source_displacement =
             (source.0 - self.source_reference.0).hypot(source.1 - self.source_reference.1);
         if !source_displacement.is_finite()
-            || source_displacement > self.source_translation_bound + 1.0e-10 * self.source_translation_bound.max(1.0)
+            || source_displacement
+                > self.source_translation_bound + 1.0e-10 * self.source_translation_bound.max(1.0)
         {
             return None;
         }
