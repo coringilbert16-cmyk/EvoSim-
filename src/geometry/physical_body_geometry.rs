@@ -323,6 +323,50 @@ pub(crate) fn source_path_blocked(
 
 /// Exact blocker test restricted to bodies whose conservative angular bounds
 /// overlap the target boundary interval. Candidate indices refer to `bodies`.
+/// Return the stable body identities that occlude one source-to-target
+/// segment. Invalid geometry or candidate inventories return None so callers
+/// cannot mistake an unresolved visibility test for an unblocked interval.
+pub(crate) fn source_path_blocker_body_indices_for_candidates(
+    source: (f64, f64),
+    target: (f64, f64),
+    bodies: &[PhysicalBodyGeometry],
+    target_body_index: usize,
+    target_unit_index: usize,
+    candidate_body_indices: &[usize],
+) -> Option<Vec<usize>> {
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !target.0.is_finite()
+        || !target.1.is_finite()
+        || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
+        || candidate_body_indices.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        return None;
+    }
+    let segment_bounds = (
+        source.0.min(target.0),
+        source.0.max(target.0),
+        source.1.min(target.1),
+        source.1.max(target.1),
+    );
+    let mut blockers = Vec::new();
+    for &body_index in candidate_body_indices {
+        let body = bodies.get(body_index)?;
+        if body_blocks_segment(
+            body_index,
+            body,
+            source,
+            target,
+            target_body_index,
+            target_unit_index,
+            segment_bounds,
+        )? {
+            blockers.push(body_index);
+        }
+    }
+    Some(blockers)
+}
+
 pub(crate) fn source_path_blocked_for_candidates(
     source: (f64, f64),
     target: (f64, f64),
