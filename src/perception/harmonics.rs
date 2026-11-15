@@ -4481,9 +4481,13 @@ mod tests {
             match &sample.boundary {
                 MaterialAuraBoundary::Straight { .. } => {
                     assert!(sample.visibility_signature.is_some());
+                    assert!(sample.start_provenance.is_some());
+                    assert!(sample.end_provenance.is_some());
                 }
                 MaterialAuraBoundary::Arc(_) => {
                     assert!(sample.visibility_signature.is_none());
+                    assert!(sample.start_provenance.is_none());
+                    assert!(sample.end_provenance.is_none());
                 }
             }
         }
