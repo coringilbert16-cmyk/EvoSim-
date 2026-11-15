@@ -3375,12 +3375,16 @@ mod tests {
         assert!(!left_to_right.is_empty());
         assert!(!right_to_left.is_empty());
         assert!(!left_to_farther.is_empty());
-        assert!(left_to_right
-            .iter()
-            .all(|sample| sample.visibility_signature.is_some()));
-        assert!(right_to_left
-            .iter()
-            .all(|sample| sample.visibility_signature.is_some()));
+        for sample in left_to_right.iter().chain(&right_to_left) {
+            match sample.boundary {
+                MaterialAuraBoundary::Straight { .. } => {
+                    assert!(sample.visibility_signature.is_some());
+                }
+                MaterialAuraBoundary::Arc(_) => {
+                    assert!(sample.visibility_signature.is_none());
+                }
+            }
+        }
         assert!(left_to_right.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
