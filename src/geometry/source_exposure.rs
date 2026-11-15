@@ -1895,7 +1895,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
     }
     if let Some(inventory) = candidate_inventory {
         inventory.validate_pose(source, bodies, target_body_indices)?;
-        if motion_envelope.is_none() {
+        let envelope = motion_envelope?;
+        if envelope.source_translation_bound != inventory.source_translation_bound
+            || envelope.body_motion != inventory.body_motion.as_slice()
+        {
             return None;
         }
     }
@@ -3110,7 +3113,7 @@ mod visibility_tests {
             (-5.0, 0.0),
             &reference_bodies,
             &target_indices,
-            0.0,
+            0.5,
             &motion,
         )
         .expect("the swept blocker inventory should be certifiable");
@@ -3124,16 +3127,16 @@ mod visibility_tests {
             rectangle_body(1, 3.0, 0.0, 0.5, 0.5),
         ];
         let reused = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
-            (-5.0, 0.0),
+            (-4.5, 0.0),
             &sampled_bodies,
             &target_indices,
-            0.0,
+            0.5,
             &motion,
             &inventory,
         )
-        .expect("the same swept inventory must cover the moved blocker");
+        .expect("the same swept inventory must cover the moved source and blocker");
         let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
-            (-5.0, 0.0),
+            (-4.5, 0.0),
             &sampled_bodies,
             &target_indices,
         )
@@ -3142,6 +3145,20 @@ mod visibility_tests {
             reused.iter().map(|entry| entry.interval).collect::<Vec<_>>(),
             exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
         );
+
+        let outside_envelope = [
+            rectangle_body(0, 5.0, 0.0, 2.0, 2.0),
+            rectangle_body(1, 1.0, 0.0, 0.5, 0.5),
+        ];
+        assert!(visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+            (-4.5, 0.0),
+            &outside_envelope,
+            &target_indices,
+            0.5,
+            &motion,
+            &inventory,
+        )
+        .is_none());
     }
 
     #[test]
