@@ -339,7 +339,9 @@ pub(crate) fn source_path_blocker_body_indices_for_candidates(
         || !target.0.is_finite()
         || !target.1.is_finite()
         || (target.0 - source.0).hypot(target.1 - source.1) <= f64::EPSILON
-        || candidate_body_indices.windows(2).any(|pair| pair[0] >= pair[1])
+        || candidate_body_indices
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
     {
         return None;
     }
