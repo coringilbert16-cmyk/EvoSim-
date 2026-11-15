@@ -214,18 +214,22 @@ fn endpoint_provenance_from_cut(
                 edge_parameter: cut.parameter,
             }
         }
-        Some(event @ VisibilityCutEvent::StraightBoundaryIntersection {
-            target_body_index: body_index,
-            target_unit_index: unit_index,
-            target_parameter,
-            ..
-        })
-        | Some(event @ VisibilityCutEvent::CircleStraightIntersection {
-            target_body_index: body_index,
-            target_unit_index: unit_index,
-            target_parameter,
-            ..
-        }) if *body_index == target_body_index
+        Some(
+            event @ VisibilityCutEvent::StraightBoundaryIntersection {
+                target_body_index: body_index,
+                target_unit_index: unit_index,
+                target_parameter,
+                ..
+            },
+        )
+        | Some(
+            event @ VisibilityCutEvent::CircleStraightIntersection {
+                target_body_index: body_index,
+                target_unit_index: unit_index,
+                target_parameter,
+                ..
+            },
+        ) if *body_index == target_body_index
             && *unit_index == target_unit_index
             && (*target_parameter - cut.parameter).abs() <= 1.0e-10 =>
         {
