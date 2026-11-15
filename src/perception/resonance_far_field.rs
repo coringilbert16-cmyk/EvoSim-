@@ -42,6 +42,9 @@ pub(crate) struct FarFieldErrorBounds {
     pub(crate) potential: f64,
     pub(crate) force: f64,
     pub(crate) torque_about_center: f64,
+    /// Bound on total source-plus-target angular-momentum imbalance about the
+    /// expansion center, including the target force's lever arm.
+    pub(crate) angular_momentum: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -221,6 +224,8 @@ impl ResonanceFarFieldExpansion {
             let offset_y = source.position.y - self.center.y;
             torque_error += offset_x.hypot(offset_y) * *source_error;
         }
+        let angular_momentum_error =
+            torque_error + distance * force_error;
         let values = [
             potential,
             target_gradient.x,
@@ -229,6 +234,7 @@ impl ResonanceFarFieldExpansion {
             potential_error,
             force_error,
             torque_error,
+            angular_momentum_error,
         ];
         if values.iter().any(|value| !value.is_finite()) {
             return None;
@@ -244,6 +250,7 @@ impl ResonanceFarFieldExpansion {
                 potential: potential_error,
                 force: force_error,
                 torque_about_center: torque_error,
+                angular_momentum: angular_momentum_error,
             },
         })
     }
@@ -310,7 +317,10 @@ impl ResonanceFarFieldExpansion {
             torque_tolerance,
             &mut result,
         )?;
-        Some(result)
+        let target_lever = (target.x - root_center.x).hypot(target.y - root_center.y);
+        result.error.angular_momentum = result.error.torque_about_center
+            + target_lever * result.error.force;
+        result.error.angular_momentum.is_finite().then_some(result)
     }
 
     fn accumulate_adaptive_cluster(
@@ -470,6 +480,7 @@ impl ResonanceFarFieldExpansion {
             && evaluation.error.potential <= potential_tolerance
             && evaluation.error.force <= force_tolerance
             && evaluation.error.torque_about_center <= torque_tolerance
+            && evaluation.error.angular_momentum <= torque_tolerance
     }
 }
 
