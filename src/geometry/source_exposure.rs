@@ -2592,6 +2592,14 @@ impl VisibilityPoseCellCandidateInventory {
         Some(())
     }
 
+    pub(crate) fn source_translation_bound(&self) -> f64 {
+        self.source_translation_bound
+    }
+
+    pub(crate) fn body_motion(&self) -> &[VisibilityBodyMotionBound] {
+        &self.body_motion
+    }
+
     fn candidates_for_target(&self, target_body_index: usize) -> Option<&[usize]> {
         self.target_candidates.get(target_body_index)?.as_deref()
     }
