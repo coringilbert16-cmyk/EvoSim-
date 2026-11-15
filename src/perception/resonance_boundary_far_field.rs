@@ -2944,7 +2944,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod provenance_resolver_tests {
     use super::*;
@@ -3032,8 +3031,7 @@ mod provenance_resolver_tests {
                     x: target_pose.pivot.x + direction * step * target_translation.x,
                     y: target_pose.pivot.y + direction * step * target_translation.y,
                 },
-                rotation_radians: target_pose.rotation_radians
-                    + direction * step * target_angular,
+                rotation_radians: target_pose.rotation_radians + direction * step * target_angular,
             };
             let blocker = RigidBoundaryPose {
                 pivot: BoundaryKernelVector {
@@ -3056,12 +3054,8 @@ mod provenance_resolver_tests {
             x: (plus.x - minus.x) / (2.0 * step),
             y: (plus.y - minus.y) / (2.0 * step),
         };
-        assert!(
-            (resolved.derivative.point_derivative.x - finite_difference.x).abs() < 1.0e-8
-        );
-        assert!(
-            (resolved.derivative.point_derivative.y - finite_difference.y).abs() < 1.0e-8
-        );
+        assert!((resolved.derivative.point_derivative.x - finite_difference.x).abs() < 1.0e-8);
+        assert!((resolved.derivative.point_derivative.y - finite_difference.y).abs() < 1.0e-8);
     }
 
     #[test]
