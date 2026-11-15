@@ -1467,7 +1467,7 @@ pub(crate) fn visible_polygonal_intervals(
 /// Compute visible intervals only for selected receiver bodies while retaining
 /// every body as a potential occluder. This avoids solving exposure for thousands
 /// of environmental particles when only organism energy holders receive input.
-fn visible_polygonal_intervals_for_targets_with_cut_provenance(
+pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
