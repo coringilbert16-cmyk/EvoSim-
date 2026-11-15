@@ -2067,7 +2067,71 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
         return Some(evaluation);
     }
     if samples.len() == 1 {
-        return None;
+        let sample = samples[0];
+        if !sample.position.x.is_finite()
+            || !sample.position.y.is_finite()
+            || !sample.weight.is_finite()
+        {
+            return None;
+        }
+        let source_delta = BoundaryKernelVector {
+            x: sample.position.x - source_center.x,
+            y: sample.position.y - source_center.y,
+        };
+        let receiver_delta = BoundaryKernelVector {
+            x: sample.position.x - receiver_center.x,
+            y: sample.position.y - receiver_center.y,
+        };
+        let source_distance = source_delta.norm();
+        let receiver_distance = receiver_delta.norm();
+        if !source_distance.is_finite()
+            || !receiver_distance.is_finite()
+            || source_distance <= f64::EPSILON
+            || receiver_distance <= f64::EPSILON
+        {
+            return None;
+        }
+        let source_value = 1.0 / (1.0 + source_distance);
+        let receiver_value = 1.0 / (1.0 + receiver_distance);
+        let source_scale = -1.0 / (source_distance * (1.0 + source_distance).powi(2));
+        let receiver_scale = -1.0 / (receiver_distance * (1.0 + receiver_distance).powi(2));
+        let source_gradient = BoundaryKernelVector {
+            x: -sample.weight * source_delta.x * source_scale * receiver_value,
+            y: -sample.weight * source_delta.y * source_scale * receiver_value,
+        };
+        let receiver_gradient = BoundaryKernelVector {
+            x: -sample.weight * receiver_delta.x * receiver_scale * source_value,
+            y: -sample.weight * receiver_delta.y * receiver_scale * source_value,
+        };
+        let potential = sample.weight * source_value * receiver_value;
+        let roundoff_guard = 128.0
+            * f64::EPSILON
+            * (potential.abs()
+                + source_gradient.norm()
+                + receiver_gradient.norm()
+                + sample.weight.abs()
+                + 1.0);
+        if !potential.is_finite()
+            || !source_gradient.x.is_finite()
+            || !source_gradient.y.is_finite()
+            || !receiver_gradient.x.is_finite()
+            || !receiver_gradient.y.is_finite()
+            || !roundoff_guard.is_finite()
+        {
+            return None;
+        }
+        return Some(BoundaryPotentialEvaluation {
+            potential,
+            source_gradient,
+            receiver_gradient,
+            error: super::resonance_boundary_far_field::BoundaryPotentialError {
+                potential: roundoff_guard,
+                source_force: roundoff_guard,
+                receiver_force: roundoff_guard,
+            },
+            center: sample.position,
+            radius: 0.0,
+        });
     }
 
     let min_x = samples
