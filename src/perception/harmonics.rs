@@ -2497,7 +2497,6 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
 ) -> Option<super::resonance_boundary_far_field::BoundaryPoseCellGeneralizedEvaluation> {
     use super::resonance_boundary_far_field::{
         BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialError,
-        BoundaryPoseCellEvaluation, BoundaryPoseCellError,
         BoundaryPoseCellGeneralizedEvaluation, BoundaryPoseCoordinateDerivative,
         BoundarySampleMotionBound, WeightedBoundaryKernelSample,
     };
