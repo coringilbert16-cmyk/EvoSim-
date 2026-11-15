@@ -155,7 +155,10 @@ fn localize_boundary_point(
     point: (f64, f64),
 ) -> Option<(f64, f64)> {
     let body = bodies.get(body_index)?;
-    let mut matching_parts = body.parts.iter().filter(|part| part.unit_index == unit_index);
+    let mut matching_parts = body
+        .parts
+        .iter()
+        .filter(|part| part.unit_index == unit_index);
     let part = matching_parts.next()?;
     if matching_parts.next().is_some()
         || !part.x.is_finite()
