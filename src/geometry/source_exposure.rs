@@ -1103,83 +1103,82 @@ mod tests {
             .certifies_target_signature(source, &reference, &[1], 1, reference_signature)
             .expect("boundary signature must be tied to the same certified blocker inventory");
 
-        let poses = [
-            (0.0, 1.0, 0.0, 5.0, 0.0, 0.0, source),
-            (
-                0.35,
-                1.35,
-                std::f64::consts::FRAC_PI_2,
-                5.1,
-                0.1,
-                0.2,
-                (-4.8, 0.1),
-            ),
-            (
-                -0.35,
-                0.65,
-                -std::f64::consts::FRAC_PI_2,
-                4.9,
-                -0.1,
-                -0.2,
-                (-5.2, -0.1),
-            ),
+        let blocker_translations = [
+            (0.0, 0.0),
+            (0.35, 0.0),
+            (-0.35, 0.0),
+            (0.0, 0.35),
+            (0.0, -0.35),
         ];
-        for (
-            blocker_x,
-            blocker_y,
-            blocker_rotation,
-            target_x,
-            target_y,
-            target_rotation,
-            pose_source,
-        ) in poses
-        {
-            let bodies = vec![
-                geometry(
-                    Form::Rectangle {
-                        width: 2.0,
-                        height: 0.2,
-                    },
-                    blocker_x,
-                    blocker_y,
-                    blocker_rotation,
-                ),
-                geometry(
-                    Form::Rectangle {
-                        width: 1.0,
-                        height: 1.0,
-                    },
-                    target_x,
-                    target_y,
-                    target_rotation,
-                ),
-            ];
-            let indexed = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
-                pose_source,
-                &bodies,
-                &[1],
-                0.25,
-                &motion,
-                &inventory,
-            )
-            .expect("pose inside the complete translation/rotation cell must use its inventory");
-            let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
-                pose_source,
-                &bodies,
-                &[1],
-            )
-            .expect("exact current-pose visibility must remain available");
-            assert_eq!(indexed.len(), exact.len());
-            for (indexed_interval, exact_interval) in indexed.iter().zip(&exact) {
-                assert_eq!(indexed_interval.interval, exact_interval.interval);
-                assert_eq!(
-                    indexed_interval.start_provenance,
-                    exact_interval.start_provenance
-                );
-                assert_eq!(
-                    indexed_interval.end_provenance,
-                    exact_interval.end_provenance
-                );
+        let blocker_rotations = [
+            -std::f64::consts::FRAC_PI_2,
+            0.0,
+            std::f64::consts::FRAC_PI_2,
+        ];
+        let target_translations = [(-0.1, 0.0), (0.0, 0.0), (0.1, 0.0)];
+        let target_rotations = [-0.2, 0.0, 0.2];
+        let source_offsets = [-0.25, 0.0, 0.25];
+
+        // Exercise the cross-product of translation and rotation limits rather
+        // than a few correlated poses. Every sample remains inside the declared
+        // rigid-body pose cells; the swept inventory must match exact visibility.
+        for (blocker_dx, blocker_dy) in blocker_translations {
+            for blocker_rotation in blocker_rotations {
+                for (target_dx, target_dy) in target_translations {
+                    for target_rotation in target_rotations {
+                        for source_dx in source_offsets {
+                            let pose_source = (source.0 + source_dx, source.1);
+                            let bodies = vec![
+                                geometry(
+                                    Form::Rectangle {
+                                        width: 2.0,
+                                        height: 0.2,
+                                    },
+                                    blocker_dx,
+                                    1.0 + blocker_dy,
+                                    blocker_rotation,
+                                ),
+                                geometry(
+                                    Form::Rectangle {
+                                        width: 1.0,
+                                        height: 1.0,
+                                    },
+                                    5.0 + target_dx,
+                                    target_dy,
+                                    target_rotation,
+                                ),
+                            ];
+                            let indexed =
+                                visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+                                    pose_source,
+                                    &bodies,
+                                    &[1],
+                                    0.25,
+                                    &motion,
+                                    &inventory,
+                                )
+                                .expect("every sampled pose inside the declared cell must be covered");
+                            let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
+                                pose_source,
+                                &bodies,
+                                &[1],
+                            )
+                            .expect("exact current-pose visibility must remain available");
+                            assert_eq!(indexed.len(), exact.len());
+                            for (indexed_interval, exact_interval) in indexed.iter().zip(&exact) {
+                                assert_eq!(indexed_interval.interval, exact_interval.interval);
+                                assert_eq!(
+                                    indexed_interval.start_provenance,
+                                    exact_interval.start_provenance
+                                );
+                                assert_eq!(
+                                    indexed_interval.end_provenance,
+                                    exact_interval.end_provenance
+                                );
+                            }
+                        }
+                    }
+                }
             }
         }
 
