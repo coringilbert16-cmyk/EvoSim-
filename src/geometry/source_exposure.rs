@@ -2611,8 +2611,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
             for pair in cuts.windows(2) {
                 let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 {
-                    interval_blocker_bodies.push(candidate_body_indices.clone());
-                    continue;
+                    return None;
                 }
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
@@ -3231,6 +3230,14 @@ mod visibility_tests {
                 .collect::<Vec<_>>(),
             exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
         );
+        assert!(reused.iter().any(|entry| {
+            entry.visibility_signature.as_ref().is_some_and(|signature| {
+                signature
+                    .interval_blocker_bodies
+                    .iter()
+                    .any(|blockers| blockers.contains(&1))
+            })
+        }));
 
         let undersized_radius = [
             VisibilityBodyMotionBound {
