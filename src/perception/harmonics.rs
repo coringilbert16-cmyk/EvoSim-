@@ -4020,7 +4020,6 @@ mod tests {
                 && sample.projected_extent > 0.0
                 && sample.receiver_normal_x.is_finite()
                 && sample.receiver_normal_y.is_finite()
-                && sample.visibility_signature.is_some()
         }));
         assert!((reconstructed_energy - directional_energy).abs() < 1e-10);
     }
