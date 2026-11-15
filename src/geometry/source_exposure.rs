@@ -338,8 +338,7 @@ mod tests {
             vec![(2, 0, (0.0, 0.0), (1.0, 0.0))],
             vec![(7, 3, (2.0, 0.0), (2.0, 1.0))],
         ];
-        let inventory =
-            build_target_edge_blocker_inventory(&[0, 1], &critical, &edges).unwrap();
+        let inventory = build_target_edge_blocker_inventory(&[0, 1], &critical, &edges).unwrap();
         assert_eq!(inventory.candidate_bodies.len(), 2);
         assert_eq!(inventory.candidate_bodies[1].body_index, 1);
         assert_eq!(
