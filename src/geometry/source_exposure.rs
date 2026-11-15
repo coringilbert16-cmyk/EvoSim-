@@ -1724,8 +1724,9 @@ mod visibility_tests {
                                     target_body_index: 0,
                                     target_unit_index: 0,
                                     target_edge_index,
+                                    blocker_feature_index,
                                     ..
-                                } if *target_edge_index < 4
+                                } if *target_edge_index < 4 && *blocker_feature_index < 4
                             ))
                     );
                     near_target_vertex && has_blocker_ray
