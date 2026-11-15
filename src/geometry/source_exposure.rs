@@ -155,7 +155,7 @@ pub(crate) enum VisibilityEventIdentity {
 }
 
 impl VisibilityCutEvent {
-    fn stable_identity(&self) -> Option<VisibilityEventIdentity> {
+    pub(crate) fn stable_identity(&self) -> Option<VisibilityEventIdentity> {
         match self {
             Self::TargetVertex {
                 body_index,
@@ -779,6 +779,25 @@ fn endpoint_provenance_from_cut(
             && *unit_index == target_unit_index
             && (*target_parameter - cut.parameter).abs() <= 1.0e-10 =>
         {
+            BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: cut.parameter,
+                event: event.clone(),
+            }
+        }
+        Some(
+            event @ VisibilityCutEvent::RayThroughRigidFeature {
+                target_body_index: body_index,
+                target_unit_index: unit_index,
+                ..
+            },
+        )
+        | Some(
+            event @ VisibilityCutEvent::RayThroughCircleTangent {
+                target_body_index: body_index,
+                target_unit_index: unit_index,
+                ..
+            },
+        ) if *body_index == target_body_index && *unit_index == target_unit_index => {
             BoundaryEndpointProvenance::RigidVisibilityIntersection {
                 parameter: cut.parameter,
                 event: event.clone(),
