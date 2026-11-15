@@ -1120,19 +1120,17 @@ pub(crate) fn circle_straight_intersection_motion_bound(
     {
         return None;
     }
-    let minimum_implicit_denominator =
-        minimum_edge_length * (radius * radius - maximum_signed_distance * maximum_signed_distance).sqrt();
-    if !minimum_implicit_denominator.is_finite()
-        || minimum_implicit_denominator <= f64::EPSILON
+    let minimum_implicit_denominator = minimum_edge_length
+        * (radius * radius - maximum_signed_distance * maximum_signed_distance).sqrt();
+    if !minimum_implicit_denominator.is_finite() || minimum_implicit_denominator <= f64::EPSILON
     {
         return None;
     }
     let target_parameter_change = radius
         * (target_start_displacement + circle_center_displacement + edge_displacement)
         / minimum_implicit_denominator;
-    let target_parameter_guard = 128.0
-        * f64::EPSILON
-        * (target_parameter_change + target_parameter.abs() + 1.0);
+    let target_parameter_guard =
+        128.0 * f64::EPSILON * (target_parameter_change + target_parameter.abs() + 1.0);
     let target_parameter_change = target_parameter_change + target_parameter_guard;
     const PARAMETER_MARGIN: f64 = 1.0e-10;
     if !target_parameter_change.is_finite()
@@ -1146,10 +1144,9 @@ pub(crate) fn circle_straight_intersection_motion_bound(
         + target_parameter_change * edge_length
         + target_parameter * edge_displacement
         + target_parameter_change * edge_displacement;
-    let local_arc_angle_change = (point_displacement + circle_center_displacement) / radius
-        + blocker_angular_displacement;
-    let arc_offset =
-        (arc_angle_local - arc_start_local).rem_euclid(std::f64::consts::TAU);
+    let local_arc_angle_change =
+        (point_displacement + circle_center_displacement) / radius + blocker_angular_displacement;
+    let arc_offset = (arc_angle_local - arc_start_local).rem_euclid(std::f64::consts::TAU);
     if !point_displacement.is_finite()
         || !local_arc_angle_change.is_finite()
         || (arc_sweep < std::f64::consts::TAU - 1.0e-10
@@ -3800,7 +3797,6 @@ mod intersection_parameter_bound_tests {
     }
 }
 
-
 #[cfg(test)]
 mod circle_straight_provenance_tests {
     use super::*;
@@ -3991,7 +3987,6 @@ mod circle_straight_provenance_tests {
     }
 }
 
-
 #[cfg(test)]
 mod circle_straight_motion_bound_tests {
     use super::*;
@@ -4039,7 +4034,9 @@ mod circle_straight_motion_bound_tests {
         let end = BoundaryKernelVector { x: 2.0, y: 0.0 };
         let center = BoundaryKernelVector { x: 0.0, y: 0.5 };
         let target_parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
-        let arc_angle = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        let arc_angle = (-0.5_f64)
+            .atan2(0.75_f64.sqrt())
+            .rem_euclid(std::f64::consts::TAU);
         let displacement = 0.001;
         let angular_displacement = 0.001;
         let bound = circle_straight_intersection_motion_bound(
@@ -4068,19 +4065,17 @@ mod circle_straight_motion_bound_tests {
             (-0.6, -0.8),
         ];
         let angle_delta = |left: f64, right: f64| {
-            (left - right + std::f64::consts::PI)
-                .rem_euclid(std::f64::consts::TAU)
+            (left - right + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
                 - std::f64::consts::PI
         };
         for (ia, da) in directions.iter().enumerate() {
             for (ib, db) in directions.iter().enumerate() {
                 let dc = directions[(ia + ib) % directions.len()];
-                let moved = |point: BoundaryKernelVector, direction: &(f64, f64)| {
-                    BoundaryKernelVector {
+                let moved =
+                    |point: BoundaryKernelVector, direction: &(f64, f64)| BoundaryKernelVector {
                         x: point.x + displacement * direction.0,
                         y: point.y + displacement * direction.1,
-                    }
-                };
+                    };
                 let moved_start = moved(start, da);
                 let moved_end = moved(end, db);
                 let moved_center = moved(center, &dc);
@@ -4096,8 +4091,8 @@ mod circle_straight_motion_bound_tests {
                 } else {
                     -angular_displacement
                 };
-                let local_angle = (world_angle - blocker_rotation)
-                    .rem_euclid(std::f64::consts::TAU);
+                let local_angle =
+                    (world_angle - blocker_rotation).rem_euclid(std::f64::consts::TAU);
                 assert!((parameter - target_parameter).abs() <= bound.target_parameter_change);
                 assert!(angle_delta(local_angle, arc_angle).abs() <= bound.local_arc_angle_change);
             }
@@ -4127,7 +4122,9 @@ mod circle_straight_motion_bound_tests {
         .is_none());
 
         let parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
-        let angle = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        let angle = (-0.5_f64)
+            .atan2(0.75_f64.sqrt())
+            .rem_euclid(std::f64::consts::TAU);
         assert!(circle_straight_intersection_motion_bound(
             point(-2.0, 0.0),
             point(2.0, 0.0),
