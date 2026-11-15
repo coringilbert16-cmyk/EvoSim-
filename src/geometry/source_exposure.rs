@@ -917,7 +917,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                             return None;
                         }
                         critical_points
-                            .extend(world.iter().copied().map(|(x, y)| (body_index, x, y)));
+                            .extend(world.iter().copied().map(|(x, y)| (body_index, part.unit_index, x, y)));
                         for index in 0..world.len() {
                             straight_edges.push((
                                 body_index,
@@ -975,13 +975,14 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                         arc.transformed(part.x, part.y, part.rotation_radians)?;
                                     critical_points.extend(
                                         [world.start_point(), world.end_point()]
-                                            .map(|(x, y)| (body_index, x, y)),
+                                            .map(|(x, y)| (body_index, part.unit_index, x, y)),
                                     );
                                     add_circle_tangent_points_tagged(
                                         (world.center_x, world.center_y),
                                         world.radius,
                                         source,
                                         body_index,
+                                            part.unit_index,
                                         &mut critical_points,
                                     );
                                 }
@@ -998,6 +999,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                             radius,
                             source,
                             body_index,
+                                            part.unit_index,
                             &mut critical_points,
                         );
                     }
