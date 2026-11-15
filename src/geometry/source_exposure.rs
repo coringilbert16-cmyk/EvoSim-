@@ -334,6 +334,7 @@ fn visibility_world_point(
 /// Endpoint motion is bounded by each owning body's rigid-point displacement;
 /// determinant and blocker-segment margins prove the intersection cannot
 /// become parallel, leave the blocker segment, or disappear inside the cell.
+#[allow(dead_code)]
 pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
     event: &VisibilityCutEvent,
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
