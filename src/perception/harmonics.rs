@@ -2506,8 +2506,12 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                             x: -evaluation.source_gradient.x,
                             y: -evaluation.source_gradient.y,
                         },
+                        // Rigid receiver translation carries every
+                        // boundary sample with its center, so translational
+                        // invariance makes its force the opposite source
+                        // force; the source-center remainder bounds both.
                         evaluation.error.source_force,
-                        evaluation.error.receiver_force,
+                        evaluation.error.source_force,
                         evaluation.error.potential,
                     )
                 },
@@ -2531,8 +2535,12 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                             x: -evaluation.source_gradient.x,
                             y: -evaluation.source_gradient.y,
                         },
+                        // Rigid receiver translation carries every
+                        // boundary sample with its center, so translational
+                        // invariance makes its force the opposite source
+                        // force; the source-center remainder bounds both.
                         evaluation.error.source_force,
-                        evaluation.error.receiver_force,
+                        evaluation.error.source_force,
                         evaluation.error.potential,
                     )
                 },
