@@ -4904,6 +4904,239 @@ mod endpoint_provenance_dispatch_tests {
         assert!(resolved.derivative.x.is_finite() && resolved.derivative.y.is_finite());
     }
 
+    fn one_part_body(
+        unit_index: usize,
+        form: crate::resources::Form,
+        x: f64,
+        y: f64,
+        rotation_radians: f64,
+    ) -> crate::organism_geometry::OrganismBodyGeometry {
+        let radius = form.bounding_radius();
+        crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::organism_geometry::PlacedForm {
+                unit_index,
+                form,
+                x,
+                y,
+                rotation_radians,
+            }],
+            min_x: x - radius,
+            max_x: x + radius,
+            min_y: y - radius,
+            max_y: y + radius,
+        }
+    }
+
+    fn moved_pose(
+        pose: RigidBoundaryPose,
+        translation: BoundaryKernelVector,
+        angular: f64,
+        coordinate: f64,
+    ) -> RigidBoundaryPose {
+        RigidBoundaryPose {
+            pivot: BoundaryKernelVector {
+                x: pose.pivot.x + coordinate * translation.x,
+                y: pose.pivot.y + coordinate * translation.y,
+            },
+            rotation_radians: pose.rotation_radians + coordinate * angular,
+        }
+    }
+
+    #[test]
+    fn ray_feature_endpoint_resolver_matches_finite_difference() {
+        let bodies = vec![
+            one_part_body(
+                5,
+                crate::resources::Form::Line { length: 4.0 },
+                2.0,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            one_part_body(
+                3,
+                crate::resources::Form::Line { length: 1.0 },
+                1.0,
+                0.5,
+                0.0,
+            ),
+        ];
+        let provenance =
+            crate::source_exposure::BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: 2.0 / 3.0,
+                event: crate::source_exposure::VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index: 1,
+                    blocker_unit_index: 3,
+                    blocker_feature_index: 0,
+                    target_body_index: 0,
+                    target_unit_index: 5,
+                    target_edge_index: 0,
+                    local_point: (0.5, 0.0),
+                },
+            };
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let source_derivative = BoundaryKernelVector { x: 0.03, y: -0.02 };
+        let target_translation = BoundaryKernelVector { x: 0.02, y: 0.01 };
+        let blocker_translation = BoundaryKernelVector { x: -0.01, y: 0.04 };
+        let target_angular = 0.03;
+        let blocker_angular = -0.02;
+        let resolved = resolve_boundary_endpoint_pose_derivative_with_source(
+            &provenance,
+            0,
+            5,
+            1,
+            3,
+            &bodies,
+            source,
+            source_derivative,
+            target_translation,
+            target_angular,
+            blocker_translation,
+            blocker_angular,
+        )
+        .expect("ray through a rigid blocker feature should resolve");
+
+        let target_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: 0.0 },
+            rotation_radians: std::f64::consts::FRAC_PI_2,
+        };
+        let blocker_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 1.0, y: 0.5 },
+            rotation_radians: 0.0,
+        };
+        let step = 1.0e-6;
+        let intersection = |direction: f64| {
+            let moved_source = BoundaryKernelVector {
+                x: source.x + direction * step * source_derivative.x,
+                y: source.y + direction * step * source_derivative.y,
+            };
+            let target = moved_pose(target_pose, target_translation, target_angular, direction * step);
+            let blocker = moved_pose(blocker_pose, blocker_translation, blocker_angular, direction * step);
+            let start = target
+                .transform_local_point(BoundaryKernelVector { x: -2.0, y: 0.0 })
+                .unwrap();
+            let end = target
+                .transform_local_point(BoundaryKernelVector { x: 2.0, y: 0.0 })
+                .unwrap();
+            let critical = blocker
+                .transform_local_point(BoundaryKernelVector { x: 0.5, y: 0.0 })
+                .unwrap();
+            ray_edge_intersection_point_and_parameter(moved_source, critical, start, end)
+                .unwrap()
+                .0
+        };
+        let plus = intersection(1.0);
+        let minus = intersection(-1.0);
+        let finite_difference = BoundaryKernelVector {
+            x: (plus.x - minus.x) / (2.0 * step),
+            y: (plus.y - minus.y) / (2.0 * step),
+        };
+        assert!((resolved.derivative.x - finite_difference.x).abs() < 1.0e-7);
+        assert!((resolved.derivative.y - finite_difference.y).abs() < 1.0e-7);
+    }
+
+    #[test]
+    fn circle_tangent_endpoint_resolver_matches_finite_difference() {
+        let bodies = vec![
+            one_part_body(
+                5,
+                crate::resources::Form::Line { length: 4.0 },
+                2.0,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            one_part_body(
+                3,
+                crate::resources::Form::Circle { radius: 0.5 },
+                1.0,
+                0.0,
+                0.0,
+            ),
+        ];
+        let provenance =
+            crate::source_exposure::BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: 0.5 - 3.0_f64.sqrt() / 6.0,
+                event: crate::source_exposure::VisibilityCutEvent::RayThroughCircleTangent {
+                    blocker_body_index: 1,
+                    blocker_unit_index: 3,
+                    target_body_index: 0,
+                    target_unit_index: 5,
+                    target_edge_index: 0,
+                    tangent_side: 1,
+                    local_center: (0.0, 0.0),
+                    radius: 0.5,
+                },
+            };
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let source_derivative = BoundaryKernelVector { x: 0.02, y: -0.01 };
+        let target_translation = BoundaryKernelVector { x: -0.01, y: 0.02 };
+        let blocker_translation = BoundaryKernelVector { x: 0.03, y: 0.01 };
+        let target_angular = -0.02;
+        let blocker_angular = 0.01;
+        let resolved = resolve_boundary_endpoint_pose_derivative_with_source(
+            &provenance,
+            0,
+            5,
+            1,
+            3,
+            &bodies,
+            source,
+            source_derivative,
+            target_translation,
+            target_angular,
+            blocker_translation,
+            blocker_angular,
+        )
+        .expect("source-dependent circle tangent should resolve");
+
+        let target_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: 0.0 },
+            rotation_radians: std::f64::consts::FRAC_PI_2,
+        };
+        let blocker_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 1.0, y: 0.0 },
+            rotation_radians: 0.0,
+        };
+        let step = 1.0e-6;
+        let intersection = |direction: f64| {
+            let moved_source = BoundaryKernelVector {
+                x: source.x + direction * step * source_derivative.x,
+                y: source.y + direction * step * source_derivative.y,
+            };
+            let target = moved_pose(target_pose, target_translation, target_angular, direction * step);
+            let blocker = moved_pose(blocker_pose, blocker_translation, blocker_angular, direction * step);
+            let start = target
+                .transform_local_point(BoundaryKernelVector { x: -2.0, y: 0.0 })
+                .unwrap();
+            let end = target
+                .transform_local_point(BoundaryKernelVector { x: 2.0, y: 0.0 })
+                .unwrap();
+            let center = blocker
+                .transform_local_point(BoundaryKernelVector::default())
+                .unwrap();
+            let tangent = circle_tangent_point_pose_derivative(
+                center,
+                0.5,
+                moved_source,
+                BoundaryKernelVector::default(),
+                BoundaryKernelVector::default(),
+                1.0,
+            )
+            .unwrap()
+            .point;
+            ray_edge_intersection_point_and_parameter(moved_source, tangent, start, end)
+                .unwrap()
+                .0
+        };
+        let plus = intersection(1.0);
+        let minus = intersection(-1.0);
+        let finite_difference = BoundaryKernelVector {
+            x: (plus.x - minus.x) / (2.0 * step),
+            y: (plus.y - minus.y) / (2.0 * step),
+        };
+        assert!((resolved.derivative.x - finite_difference.x).abs() < 1.0e-7);
+        assert!((resolved.derivative.y - finite_difference.y).abs() < 1.0e-7);
+    }
+
     #[test]
     fn unresolved_or_mismatched_endpoint_provenance_stays_unresolved() {
         let pose = RigidBoundaryPose::default();
