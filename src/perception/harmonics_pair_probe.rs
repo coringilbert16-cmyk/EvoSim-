@@ -858,6 +858,40 @@ fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
         exact_force_b_x,
         evaluation.force_b_error,
     );
+
+    let plus_a_y = super::translated_physical_material(&a, 0.0, step)
+        .expect("y-translated source should remain valid");
+    let minus_a_y = super::translated_physical_material(&a, 0.0, -step)
+        .expect("y-translated source should remain valid");
+    let exact_force_a_y = -(super::resonance_pair_potential(&plus_a_y, &b, &catalog, 211)
+        .expect("positive source-y potential")
+        - super::resonance_pair_potential(&minus_a_y, &b, &catalog, 211)
+            .expect("negative source-y potential"))
+        / (2.0 * step);
+    assert!(
+        (evaluation.force_a_y - exact_force_a_y).abs() <= evaluation.force_a_error + 1e-5,
+        "source y-force exceeded its expansion bound: approximate={}, exact={}, bound={}",
+        evaluation.force_a_y,
+        exact_force_a_y,
+        evaluation.force_a_error,
+    );
+
+    let plus_b_y = super::translated_physical_material(&b, 0.0, step)
+        .expect("y-translated receiver should remain valid");
+    let minus_b_y = super::translated_physical_material(&b, 0.0, -step)
+        .expect("y-translated receiver should remain valid");
+    let exact_force_b_y = -(super::resonance_pair_potential(&a, &plus_b_y, &catalog, 211)
+        .expect("positive receiver-y potential")
+        - super::resonance_pair_potential(&a, &minus_b_y, &catalog, 211)
+            .expect("negative receiver-y potential"))
+        / (2.0 * step);
+    assert!(
+        (evaluation.force_b_y - exact_force_b_y).abs() <= evaluation.force_b_error + 1e-5,
+        "receiver y-force exceeded its expansion bound: approximate={}, exact={}, bound={}",
+        evaluation.force_b_y,
+        exact_force_b_y,
+        evaluation.force_b_error,
+    );
     assert!(
         (evaluation.force_a_x + evaluation.force_b_x).abs() <= 1e-8
             && (evaluation.force_a_y + evaluation.force_b_y).abs() <= 1e-8,
