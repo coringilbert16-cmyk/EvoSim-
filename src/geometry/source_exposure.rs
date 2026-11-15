@@ -33,6 +33,12 @@ pub(crate) enum BoundaryEndpointProvenance {
         local_point: (f64, f64),
         edge_parameter: f64,
     },
+    /// A unique rigid straight/straight or circle/straight cut whose local
+    /// feature provenance is retained for a pose-aware resolver.
+    RigidVisibilityIntersection {
+        parameter: f64,
+        event: VisibilityCutEvent,
+    },
     UnresolvedVisibilityCut {
         parameter: f64,
         events: Vec<VisibilityCutEvent>,
@@ -208,6 +214,26 @@ fn endpoint_provenance_from_cut(
                 edge_parameter: cut.parameter,
             }
         }
+        Some(event @ VisibilityCutEvent::StraightBoundaryIntersection {
+            target_body_index: body_index,
+            target_unit_index: unit_index,
+            target_parameter,
+            ..
+        })
+        | Some(event @ VisibilityCutEvent::CircleStraightIntersection {
+            target_body_index: body_index,
+            target_unit_index: unit_index,
+            target_parameter,
+            ..
+        }) if *body_index == target_body_index
+            && *unit_index == target_unit_index
+            && (*target_parameter - cut.parameter).abs() <= 1.0e-10 =>
+        {
+            BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: cut.parameter,
+                event: event.clone(),
+            }
+        }
         _ => BoundaryEndpointProvenance::UnresolvedVisibilityCut {
             parameter: cut.parameter,
             events: cut.events.clone(),
@@ -309,7 +335,7 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_endpoint_retains_complete_intersection_feature_identity() {
+    fn rigid_intersection_endpoint_retains_resolvable_feature_identity() {
         let event = VisibilityCutEvent::StraightBoundaryIntersection {
             blocker_body_index: 3,
             blocker_unit_index: 9,
@@ -327,9 +353,9 @@ mod tests {
         let cut = VisibilityCutRecord::new(0.25, event.clone());
         assert_eq!(
             endpoint_provenance_from_cut(&cut, 0, 2),
-            BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            BoundaryEndpointProvenance::RigidVisibilityIntersection {
                 parameter: 0.25,
-                events: vec![event],
+                event,
             }
         );
     }
