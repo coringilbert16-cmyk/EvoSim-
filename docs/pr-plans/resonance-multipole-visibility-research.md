@@ -1435,3 +1435,11 @@ The certificate rejects cells that can approach tangency, move the intersection 
 Regression tests perturb target endpoints and the circle center within their displacement disks, include blocker angular movement, and check that observed parameter/angle changes remain within the envelope. Near-tangent and arc-endpoint-crossing cases fail closed.
 
 This is still a local event certificate. Complete visibility certification must enumerate every cut, preserve blocker/arc identity, and certify event order on each target and blocker feature. If any event is missing, coincident, ambiguous, or not bounded, the pair remains on exact evaluation/subdivision.
+
+## 36. Rigid curved-endpoint pose-cell envelope
+
+A curved receiver endpoint now has both an exact rigid-pose Jacobian and a conservative displacement/derivative envelope. The endpoint's lever arm is the intrinsic local arc center plus its radius vector, measured from the owning rigid pivot. The derivative magnitude is bounded by translation-rate magnitude plus angular-rate magnitude times lever-arm length. The displacement envelope is bounded by translation displacement plus angular displacement times the same lever arm, with a roundoff guard.
+
+This gives curved sample endpoints a pose-cell movement input without replacing their circular geometry with a straight chord. The bound composes with the existing sample-geometry and potential/force remainder machinery. Tests compare the bound against a finite rigid-pose perturbation and reject invalid motion envelopes.
+
+The complete pair certificate still needs to combine these endpoint envelopes with the circle/straight cut bounds, strict event ordering, complete event enumeration, and independent potential/force/torque remainder bounds. It does not authorize live multipole movement.
