@@ -1637,7 +1637,7 @@ fn material_aura_receptions_with_geometry_prepared(
             interval.outward_normal.0,
             interval.outward_normal.1,
             projected_extent,
-            Some(projected_extent_source_gradient),
+            projected_extent_source_gradient,
             MaterialAuraBoundary::Straight {
                 start: interval.start,
                 end: interval.end,
