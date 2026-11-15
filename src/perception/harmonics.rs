@@ -1629,7 +1629,7 @@ fn material_aura_receptions_with_geometry_prepared(
                 });
             }
             Some(())
-    };
+        };
 
     for exposed in straight_intervals {
         let interval = exposed.interval;
