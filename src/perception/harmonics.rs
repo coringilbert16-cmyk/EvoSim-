@@ -1575,18 +1575,17 @@ fn material_aura_receptions_with_geometry_prepared(
         .or(computed_emitted.as_ref())?;
 
     let mut receptions = Vec::with_capacity(straight_intervals.len() + curved_intervals.len());
-    let mut receive_at = |receiver_x: f64,
-                          receiver_y: f64,
-                          normal_x: f64,
-                          normal_y: f64,
-                          projected_extent: f64,
-                          projected_extent_source_gradient: Option<(f64, f64)>,
-                          start_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
-                          end_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
-                          boundary: MaterialAuraBoundary,
-                          visibility_signature: Option<
-        crate::source_exposure::VisibilityCutSignature,
-    >| {
+    let mut receive_at =
+        |receiver_x: f64,
+         receiver_y: f64,
+         normal_x: f64,
+         normal_y: f64,
+         projected_extent: f64,
+         projected_extent_source_gradient: Option<(f64, f64)>,
+         start_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
+         end_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
+         boundary: MaterialAuraBoundary,
+         visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
