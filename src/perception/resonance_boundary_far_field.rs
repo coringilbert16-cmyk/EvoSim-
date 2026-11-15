@@ -493,6 +493,59 @@ pub(crate) fn straight_boundary_intersection_pose_derivative(
     })
 }
 
+/// Compose rigid-body pose rates into the four endpoint rates of a
+/// straight/straight visibility cut. Endpoint positions are the world-space
+/// realization of the exact edge identities retained by the visibility event;
+/// each edge may belong to a different rigid body.
+#[allow(dead_code)]
+pub(crate) fn rigid_straight_boundary_intersection_pose_derivative(
+    target_start: BoundaryKernelVector,
+    target_end: BoundaryKernelVector,
+    blocker_start: BoundaryKernelVector,
+    blocker_end: BoundaryKernelVector,
+    target_pivot: BoundaryKernelVector,
+    blocker_pivot: BoundaryKernelVector,
+    target_translation_derivative: BoundaryKernelVector,
+    target_angular_derivative: f64,
+    blocker_translation_derivative: BoundaryKernelVector,
+    blocker_angular_derivative: f64,
+) -> Option<StraightBoundaryIntersectionPoseDerivative> {
+    let target_start_derivative = rigid_pose_point_derivative(
+        target_start,
+        target_pivot,
+        target_translation_derivative,
+        target_angular_derivative,
+    )?;
+    let target_end_derivative = rigid_pose_point_derivative(
+        target_end,
+        target_pivot,
+        target_translation_derivative,
+        target_angular_derivative,
+    )?;
+    let blocker_start_derivative = rigid_pose_point_derivative(
+        blocker_start,
+        blocker_pivot,
+        blocker_translation_derivative,
+        blocker_angular_derivative,
+    )?;
+    let blocker_end_derivative = rigid_pose_point_derivative(
+        blocker_end,
+        blocker_pivot,
+        blocker_translation_derivative,
+        blocker_angular_derivative,
+    )?;
+    straight_boundary_intersection_pose_derivative(
+        target_start,
+        target_end,
+        blocker_start,
+        blocker_end,
+        target_start_derivative,
+        target_end_derivative,
+        blocker_start_derivative,
+        blocker_end_derivative,
+    )
+}
+
 /// Midpoint and exact point-source projected-extent derivatives for one
 /// already-corresponding straight exposed interval. The interval normal is
 /// transported from its edge orientation; edge-on transitions fail closed.
@@ -1922,6 +1975,72 @@ mod tests {
         assert!((blocker_rate - derivative.blocker_parameter_derivative).abs() < 1.0e-8);
         assert!((point_rate.x - derivative.point_derivative.x).abs() < 1.0e-8);
         assert!((point_rate.y - derivative.point_derivative.y).abs() < 1.0e-8);
+    }
+
+    #[test]
+    fn rigid_straight_boundary_intersection_pose_derivative_matches_finite_difference() {
+        let target_start = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let target_end = BoundaryKernelVector { x: 2.0, y: 0.0 };
+        let blocker_start = BoundaryKernelVector { x: 1.0, y: -1.0 };
+        let blocker_end = BoundaryKernelVector { x: 1.0, y: 1.0 };
+        let target_pivot = BoundaryKernelVector { x: 0.5, y: -0.2 };
+        let blocker_pivot = BoundaryKernelVector { x: 1.4, y: 0.3 };
+        let target_translation = BoundaryKernelVector { x: 0.07, y: -0.03 };
+        let blocker_translation = BoundaryKernelVector { x: -0.02, y: 0.05 };
+        let target_angular: f64 = 0.11;
+        let blocker_angular: f64 = -0.08;
+        let derivative = rigid_straight_boundary_intersection_pose_derivative(
+            target_start,
+            target_end,
+            blocker_start,
+            blocker_end,
+            target_pivot,
+            blocker_pivot,
+            target_translation,
+            target_angular,
+            blocker_translation,
+            blocker_angular,
+        )
+        .expect("rigid edge intersection should remain differentiable");
+        let moved = |point: BoundaryKernelVector, pivot: BoundaryKernelVector,
+                     translation: BoundaryKernelVector, angular: f64, q: f64| {
+            let offset = BoundaryKernelVector {
+                x: point.x - pivot.x,
+                y: point.y - pivot.y,
+            };
+            let (sin, cos) = (q * angular).sin_cos();
+            BoundaryKernelVector {
+                x: pivot.x + q * translation.x + offset.x * cos - offset.y * sin,
+                y: pivot.y + q * translation.y + offset.x * sin + offset.y * cos,
+            }
+        };
+        let intersect = |q: f64| {
+            let a = moved(target_start, target_pivot, target_translation, target_angular, q);
+            let b = moved(target_end, target_pivot, target_translation, target_angular, q);
+            let c = moved(blocker_start, blocker_pivot, blocker_translation, blocker_angular, q);
+            let d = moved(blocker_end, blocker_pivot, blocker_translation, blocker_angular, q);
+            let edge = BoundaryKernelVector { x: b.x - a.x, y: b.y - a.y };
+            let blocker = BoundaryKernelVector { x: d.x - c.x, y: d.y - c.y };
+            let offset = BoundaryKernelVector { x: c.x - a.x, y: c.y - a.y };
+            let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+                left.x * right.y - left.y * right.x
+            };
+            let t = cross(offset, blocker) / cross(edge, blocker);
+            let u = cross(offset, edge) / cross(edge, blocker);
+            let point = BoundaryKernelVector { x: a.x + t * edge.x, y: a.y + t * edge.y };
+            (t, u, point)
+        };
+        let step = 1.0e-6;
+        let plus = intersect(step);
+        let minus = intersect(-step);
+        assert!(((plus.0 - minus.0) / (2.0 * step)
+            - derivative.target_parameter_derivative).abs() < 1.0e-8);
+        assert!(((plus.1 - minus.1) / (2.0 * step)
+            - derivative.blocker_parameter_derivative).abs() < 1.0e-8);
+        assert!(((plus.2.x - minus.2.x) / (2.0 * step)
+            - derivative.point_derivative.x).abs() < 1.0e-8);
+        assert!(((plus.2.y - minus.2.y) / (2.0 * step)
+            - derivative.point_derivative.y).abs() < 1.0e-8);
     }
 
     #[test]
