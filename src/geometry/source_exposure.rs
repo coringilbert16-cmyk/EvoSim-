@@ -388,16 +388,14 @@ mod tests {
         assert!(
             build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none()
         );
-        let mismatched_arc = WorldCircleArc { body_index: 0, ..arc };
+        let mismatched_arc = WorldCircleArc {
+            body_index: 0,
+            ..arc
+        };
         let mismatched_arcs = vec![vec![], vec![(7, 0, mismatched_arc)]];
         assert!(
-            build_target_edge_blocker_inventory(
-                &[1],
-                &critical,
-                &edges,
-                &mismatched_arcs
-            )
-            .is_none()
+            build_target_edge_blocker_inventory(&[1], &critical, &edges, &mismatched_arcs)
+                .is_none()
         );
     }
 
@@ -1677,17 +1675,24 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                 t,
                                 VisibilityCutEvent::CircleStraightIntersection {
                                     blocker_body_index: blocker_body.body_index,
-                                    blocker_unit_index, target_body_index: body_index,
-                                    target_unit_index: unit_index, target_edge_index: edge_index,
+                                    blocker_unit_index,
+                                    target_body_index: body_index,
+                                    target_unit_index: unit_index,
+                                    target_edge_index: edge_index,
                                     arc_index,
-                                    target_edge_start_local: localize_boundary_point(bodies, body_index, unit_index, a)?,
-                                    target_edge_end_local: localize_boundary_point(bodies, body_index, unit_index, b)?,
+                                    target_edge_start_local: localize_boundary_point(
+                                        bodies, body_index, unit_index, a,
+                                    )?,
+                                    target_edge_end_local: localize_boundary_point(
+                                        bodies, body_index, unit_index, b,
+                                    )?,
                                     blocker_arc_center_local: arc.center_local,
                                     blocker_arc_radius: arc.radius,
                                     blocker_arc_start_local: arc.start_local,
                                     blocker_arc_sweep: arc.sweep,
                                     target_parameter: t,
-                                    arc_angle_local: (angle - blocker_part.rotation_radians).rem_euclid(std::f64::consts::TAU),
+                                    arc_angle_local: (angle - blocker_part.rotation_radians)
+                                        .rem_euclid(std::f64::consts::TAU),
                                 },
                             ));
                         }
