@@ -2165,29 +2165,42 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
         return None;
     }
     let samples_ab = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
-        a, b, &[], catalog, tick, None, None,
+        a,
+        b,
+        &[],
+        catalog,
+        tick,
+        None,
+        None,
     )?;
     let samples_ba = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
-        b, a, &[], catalog, tick, None, None,
+        b,
+        a,
+        &[],
+        catalog,
+        tick,
+        None,
+        None,
     )?;
     let expanded_ab = expand_resonance_boundary_interaction_samples(&samples_ab)?;
     let expanded_ba = expand_resonance_boundary_interaction_samples(&samples_ba)?;
     let mut result = ResonanceMutualBoundaryEvaluation::default();
     let mut frequencies = Vec::new();
     for frequency in expanded_ab.iter().chain(&expanded_ba) {
-        if !frequencies.iter().any(|known: &f64| {
-            (*known - frequency.frequency_cycles_per_day).abs() <= 1e-9
-        }) {
+        if !frequencies
+            .iter()
+            .any(|known: &f64| (*known - frequency.frequency_cycles_per_day).abs() <= 1e-9)
+        {
             frequencies.push(frequency.frequency_cycles_per_day);
         }
     }
     for frequency in frequencies {
-        let ab = expanded_ab.iter().find(|entry| {
-            (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9
-        });
-        let ba = expanded_ba.iter().find(|entry| {
-            (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9
-        });
+        let ab = expanded_ab
+            .iter()
+            .find(|entry| (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9);
+        let ba = expanded_ba
+            .iter()
+            .find(|entry| (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9);
         let (potential_ab, force_a_ab, force_b_ab, error_ab_a, error_ab_b, potential_error_ab) =
             ab.map_or((0.0, super::resonance_boundary_far_field::BoundaryKernelVector::default(), super::resonance_boundary_far_field::BoundaryKernelVector::default(), 0.0, 0.0, 0.0), |entry| {
                 let evaluation = entry.evaluation;
