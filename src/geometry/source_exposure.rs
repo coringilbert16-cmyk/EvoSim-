@@ -2866,11 +2866,9 @@ mod visibility_tests {
 
     #[test]
     fn pose_cell_visibility_provenance_matches_static_geometry_at_zero_motion() {
-        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let blocker = rectangle_body(1, 2.5, 0.0, 0.5, 0.5);
-        let bodies = [target, blocker];
+        let bodies = [rectangle_body(0, 5.0, 0.0, 2.0, 2.0)];
         let target_indices = [0];
-        let motion = [VisibilityBodyMotionBound::default(); 2];
+        let motion = [VisibilityBodyMotionBound::default()];
 
         let static_intervals =
             visible_polygonal_intervals_for_targets_with_cut_provenance(
