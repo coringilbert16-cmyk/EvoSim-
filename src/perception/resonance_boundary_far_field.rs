@@ -3178,7 +3178,8 @@ mod tests {
             vec![sample(position.x, position.y, 1.7)],
         )
         .expect("valid one-sample expansion");
-        let coordinate = |source_dx, source_dy, sample_dx, sample_dy| BoundaryPoseCoordinateDerivative {
+        let coordinate =
+            |source_dx, source_dy, sample_dx, sample_dy| BoundaryPoseCoordinateDerivative {
                 source_center_derivative: BoundaryKernelVector {
                     x: source_dx,
                     y: source_dy,
