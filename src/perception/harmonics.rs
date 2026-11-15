@@ -2493,8 +2493,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
 /// derivatives through the same adaptive subdivision used for potential and
 /// center-force evaluation. Samples must belong to one target-edge visibility
 /// signature; distinct target-edge signatures are certified in separate calls.
-/// Every body in the supplied blocker inventory must have all three coordinates
-/// represented.
+/// Coordinates are source-first, followed by every body in the blocker
+/// inventory, with x/y/angle supplied for each.
 #[allow(dead_code, clippy::too_many_arguments)]
 pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker_inventory(
     source_center: super::resonance_boundary_far_field::BoundaryKernelVector,
@@ -2521,7 +2521,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
 
     if samples.is_empty()
         || sample_motion.len() != samples.len()
-        || coordinates.len() != bodies.len().checked_mul(3)?
+        || coordinates.len() != bodies.len().checked_add(1)?.checked_mul(3)?
         || coordinates
             .iter()
             .any(|coordinate| coordinate.samples.len() != samples.len())
