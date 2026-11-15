@@ -3376,7 +3376,7 @@ mod tests {
         assert!(!right_to_left.is_empty());
         assert!(!left_to_farther.is_empty());
         for sample in left_to_right.iter().chain(&right_to_left) {
-            match sample.boundary {
+            match &sample.boundary {
                 MaterialAuraBoundary::Straight { .. } => {
                     assert!(sample.visibility_signature.is_some());
                 }
