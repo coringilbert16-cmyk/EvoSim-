@@ -2032,12 +2032,14 @@ fn resonance_boundary_sample_potential_components(
 /// reception path; this only compresses their smooth two-distance spatial kernel.
 /// Pose-chain derivatives and blocker reactions remain the responsibility of
 /// the generalized evaluator and its caller.
+#[allow(dead_code)] // Consumed by the adaptive mutual evaluator in the next integration step.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ResonanceBoundaryFrequencyExpansion {
     pub(crate) frequency_cycles_per_day: f64,
     pub(crate) evaluation: super::resonance_boundary_far_field::BoundaryPotentialEvaluation,
 }
 
+#[allow(dead_code)] // Staged bridge from exact spectral samples into the certified kernel.
 pub(crate) fn expand_resonance_boundary_interaction_samples(
     samples: &[ResonanceBoundaryInteractionSample],
 ) -> Option<Vec<ResonanceBoundaryFrequencyExpansion>> {
