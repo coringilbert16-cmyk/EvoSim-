@@ -1472,6 +1472,9 @@ fn candidate_body_indices_for_bounds(
 pub(crate) struct VisibilityBodyMotionBound {
     pub(crate) translation_bound: f64,
     pub(crate) angular_bound_radians: f64,
+    /// Reference-pose rotation pivot in world coordinates.
+    pub(crate) rotation_pivot: (f64, f64),
+    /// Conservative radius about rotation_pivot, checked against realized forms.
     pub(crate) radius_bound: f64,
 }
 
@@ -1487,6 +1490,8 @@ impl VisibilityBodyMotionBound {
             || self.translation_bound < 0.0
             || !self.angular_bound_radians.is_finite()
             || self.angular_bound_radians < 0.0
+            || !self.rotation_pivot.0.is_finite()
+            || !self.rotation_pivot.1.is_finite()
             || !self.radius_bound.is_finite()
             || self.radius_bound < 0.0
         {
@@ -1575,6 +1580,31 @@ impl VisibilityPoseCellCandidateInventory {
     }
 }
 
+fn maximum_geometry_radius_about_pivot(
+    body: &crate::organism_geometry::OrganismBodyGeometry,
+    pivot: (f64, f64),
+) -> Option<f64> {
+    if !pivot.0.is_finite() || !pivot.1.is_finite() {
+        return None;
+    }
+    let mut maximum = 0.0_f64;
+    for part in &body.parts {
+        if !part.x.is_finite() || !part.y.is_finite() {
+            return None;
+        }
+        let shape_radius = part.form.bounding_radius();
+        if !shape_radius.is_finite() || shape_radius < 0.0 {
+            return None;
+        }
+        let radius = (part.x - pivot.0).hypot(part.y - pivot.1) + shape_radius;
+        if !radius.is_finite() {
+            return None;
+        }
+        maximum = maximum.max(radius);
+    }
+    Some(maximum)
+}
+
 /// Build one conservative candidate superset per target body. The target's
 /// complete body bounds are used rather than individual edges, so every edge
 /// and curved boundary on that target shares the same inventory.
@@ -1592,6 +1622,16 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
         || body_motion.len() != bodies.len()
     {
         return None;
+    }
+    for (body, motion) in bodies.iter().zip(body_motion) {
+        let required_radius = maximum_geometry_radius_about_pivot(body, motion.rotation_pivot)?;
+        if motion.maximum_point_displacement()?.is_finite()
+            && motion.radius_bound
+                + 1.0e-10 * motion.radius_bound.max(1.0)
+                < required_radius
+        {
+            return None;
+        }
     }
     let reference_angle = reference_angle_for_bodies(source, bodies)?;
     let body_bounds = bodies
@@ -3056,7 +3096,11 @@ mod visibility_tests {
     fn pose_cell_visibility_provenance_matches_static_geometry_at_zero_motion() {
         let bodies = [rectangle_body(0, 5.0, 0.0, 2.0, 2.0)];
         let target_indices = [0];
-        let motion = [VisibilityBodyMotionBound::default()];
+        let motion = [VisibilityBodyMotionBound {
+            rotation_pivot: (5.0, 0.0),
+            radius_bound: 2.0,
+            ..VisibilityBodyMotionBound::default()
+        }];
 
         let static_intervals = visible_polygonal_intervals_for_targets_with_cut_provenance(
             (-5.0, 0.0),
@@ -3096,9 +3140,15 @@ mod visibility_tests {
         ];
         let target_indices = [0];
         let motion = [
-            VisibilityBodyMotionBound::default(),
+            VisibilityBodyMotionBound {
+                rotation_pivot: (5.0, 0.0),
+                radius_bound: 2.0,
+                ..VisibilityBodyMotionBound::default()
+            },
             VisibilityBodyMotionBound {
                 translation_bound: 6.0,
+                rotation_pivot: (8.0, 0.0),
+                radius_bound: 1.0,
                 ..VisibilityBodyMotionBound::default()
             },
         ];
