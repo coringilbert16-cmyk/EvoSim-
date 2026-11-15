@@ -246,7 +246,7 @@ impl VisibilityCutEvent {
 pub(crate) struct VisibilityCutSignature {
     candidate_bodies: Vec<usize>,
     interval_visibility: Vec<bool>,
-    interval_blocker_bodies: Vec<Vec<usize>>,
+    interval_blocker_bodies: Vec<Vec<(usize, usize)>>,
     ordered_events: Vec<VisibilityEventIdentity>,
 }
 
@@ -290,15 +290,15 @@ impl VisibilityCutSignature {
     pub(crate) fn from_partition(
         cuts: &[VisibilityCutRecord],
         candidate_bodies: &[usize],
-        interval_blocker_bodies: &[Vec<usize>],
+        interval_blocker_bodies: &[Vec<(usize, usize)>],
     ) -> Option<Self> {
         if candidate_bodies.windows(2).any(|pair| pair[0] >= pair[1])
             || interval_blocker_bodies.len() != cuts.len().checked_sub(1)?
             || interval_blocker_bodies.iter().any(|blockers| {
                 blockers.windows(2).any(|pair| pair[0] >= pair[1])
-                    || blockers
-                        .iter()
-                        .any(|blocker| candidate_bodies.binary_search(blocker).is_err())
+                    || blockers.iter().any(|(body, _)| {
+                        candidate_bodies.binary_search(body).is_err()
+                    })
             })
         {
             return None;
@@ -784,7 +784,7 @@ mod tests {
     #[test]
     fn visibility_signature_requires_stable_identity_and_partition_across_pose_samples() {
         let make_signature =
-            |blocker_feature_index, candidates: &[usize], blockers: &[Vec<usize>]| {
+            |blocker_feature_index, candidates: &[usize], blockers: &[Vec<(usize, usize)>]| {
                 let cuts = vec![
                     VisibilityCutRecord::new(
                         0.0,
@@ -819,21 +819,21 @@ mod tests {
                 ];
                 VisibilityCutSignature::from_partition(&cuts, candidates, blockers).unwrap()
             };
-        let baseline = make_signature(3, &[0, 2], &[vec![], vec![2]]);
+        let baseline = make_signature(3, &[0, 2], &[vec![], vec![(2, 7)]]);
         assert!(baseline
             .certify_unchanged_across(&[
-                make_signature(3, &[0, 2], &[vec![], vec![2]]),
-                make_signature(3, &[0, 2], &[vec![], vec![2]]),
+                make_signature(3, &[0, 2], &[vec![], vec![(2, 7)]]),
+                make_signature(3, &[0, 2], &[vec![], vec![(2, 7)]]),
             ])
             .is_some());
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(4, &[0, 2], &[vec![], vec![2]])])
+            .certify_unchanged_across(&[make_signature(4, &[0, 2], &[vec![], vec![(2, 7)]])])
             .is_none());
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(3, &[0, 3], &[vec![], vec![2]])])
+            .certify_unchanged_across(&[make_signature(3, &[0, 3], &[vec![], vec![(2, 7)]])])
             .is_none());
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(3, &[0, 2], &[vec![], vec![0]])])
+            .certify_unchanged_across(&[make_signature(3, &[0, 2], &[vec![], vec![(0, 1)]])])
             .is_none());
         assert!(baseline
             .certify_unchanged_across(&[make_signature(3, &[0, 2], &[vec![], vec![]])])
@@ -860,7 +860,7 @@ mod tests {
                 ),
             ],
             &[0, 2],
-            &[vec![3]],
+            &[vec![(3, 8)]],
         )
         .is_none());
         assert!(baseline.certify_unchanged_across(&[]).is_none());
@@ -2616,7 +2616,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
                 interval_blocker_bodies.push(
-                    crate::physical_body_geometry::source_path_blocker_body_indices_for_candidates(
+                    crate::physical_body_geometry::source_path_blocker_unit_identities_for_candidates(
                         source,
                         point,
                         bodies,
@@ -3238,7 +3238,7 @@ mod visibility_tests {
                     signature
                         .interval_blocker_bodies
                         .iter()
-                        .any(|blockers| blockers.contains(&1))
+                        .any(|blockers| blockers.contains(&(1, 1)))
                 })
         }));
 
