@@ -1486,6 +1486,56 @@ mod visibility_tests {
             }),
             "occluder-generated cuts must not be mislabeled as rigid target vertices"
         );
+        assert!(
+            intervals.iter().any(|interval| {
+                matches!(
+                    &interval.start_provenance,
+                    BoundaryEndpointProvenance::RigidTargetVertex { .. }
+                ) || matches!(
+                    &interval.end_provenance,
+                    BoundaryEndpointProvenance::RigidTargetVertex { .. }
+                )
+            }),
+            "partial occlusion must preserve the unaffected target-vertex endpoint"
+        );
+    }
+
+    #[test]
+    fn near_silhouette_ray_cut_stays_unresolved_beside_target_vertex() {
+        let source = (-5.0, 0.0);
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(1, 2.0, 0.5277776, 1.0, 0.5);
+        let intervals = visible_polygonal_intervals_for_targets_with_provenance(
+            source,
+            &[target, blocker],
+            &[0],
+        )
+        .expect("near-silhouette geometry should retain exact visibility intervals");
+        let near_silhouette_cut = intervals.iter().any(|interval| {
+            [&interval.start_provenance, &interval.end_provenance]
+                .into_iter()
+                .zip([interval.interval.start, interval.interval.end])
+                .any(|(provenance, point)| {
+                    let near_target_vertex = (point.0 - 4.0).hypot(point.1 - 1.0) < 1.0e-5;
+                    let has_blocker_ray = matches!(
+                        provenance,
+                        BoundaryEndpointProvenance::UnresolvedVisibilityCut { events }
+                            if events.iter().any(|event| matches!(
+                                event,
+                                VisibilityCutEvent::RayThroughRigidFeature {
+                                    blocker_body_index: 1,
+                                    blocker_unit_index: 1,
+                                    ..
+                                }
+                            ))
+                    );
+                    near_target_vertex && has_blocker_ray
+                })
+        });
+        assert!(
+            near_silhouette_cut,
+            "a ray cut close to a target silhouette must retain blocker provenance and remain unresolved"
+        );
     }
 
     #[test]
