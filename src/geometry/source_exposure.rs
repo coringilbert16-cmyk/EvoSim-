@@ -1444,7 +1444,7 @@ mod visibility_tests {
         assert!(!intervals.is_empty());
         for interval in intervals {
             assert!(matches!(
-                interval.start_provenance,
+                &interval.start_provenance,
                 BoundaryEndpointProvenance::RigidTargetVertex {
                     body_index: 0,
                     unit_index: 0,
@@ -1452,7 +1452,7 @@ mod visibility_tests {
                 }
             ));
             assert!(matches!(
-                interval.end_provenance,
+                &interval.end_provenance,
                 BoundaryEndpointProvenance::RigidTargetVertex {
                     body_index: 0,
                     unit_index: 0,
@@ -1477,10 +1477,10 @@ mod visibility_tests {
         assert!(
             intervals.iter().any(|interval| {
                 matches!(
-                    interval.start_provenance,
+                    &interval.start_provenance,
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 ) || matches!(
-                    interval.end_provenance,
+                    &interval.end_provenance,
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 )
             }),
@@ -1504,10 +1504,10 @@ mod visibility_tests {
         assert!(
             intervals.iter().any(|interval| {
                 matches!(
-                    interval.start_provenance,
+                    &interval.start_provenance,
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 ) || matches!(
-                    interval.end_provenance,
+                    &interval.end_provenance,
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 )
             }),
