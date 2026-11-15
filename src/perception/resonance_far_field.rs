@@ -224,8 +224,7 @@ impl ResonanceFarFieldExpansion {
             let offset_y = source.position.y - self.center.y;
             torque_error += offset_x.hypot(offset_y) * *source_error;
         }
-        let angular_momentum_error =
-            torque_error + distance * force_error;
+        let angular_momentum_error = torque_error + distance * force_error;
         let values = [
             potential,
             target_gradient.x,
@@ -318,8 +317,8 @@ impl ResonanceFarFieldExpansion {
             &mut result,
         )?;
         let target_lever = (target.x - root_center.x).hypot(target.y - root_center.y);
-        result.error.angular_momentum = result.error.torque_about_center
-            + target_lever * result.error.force;
+        result.error.angular_momentum =
+            result.error.torque_about_center + target_lever * result.error.force;
         result.error.angular_momentum.is_finite().then_some(result)
     }
 
