@@ -273,6 +273,8 @@ pub(crate) struct MaterialAuraReception {
     /// their arc integral has a certified analytic derivative.
     pub(crate) projected_extent_source_gradient: Option<(f64, f64)>,
     pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
+    pub(crate) start_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
+    pub(crate) end_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
     boundary: MaterialAuraBoundary,
     /// Incident field before the receiver's oscillator response. Pair
     /// interference compares this with the receiver's own emitted field;
@@ -467,6 +469,12 @@ pub(crate) struct ResonanceBoundaryInteractionSample {
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
     pub(crate) projected_extent_source_gradient: Option<(f64, f64)>,
+    /// Exact boundary geometry and endpoint provenance are retained so the
+    /// generalized pose evaluator can reuse the existing rigid/intersection
+    /// Jacobians instead of reconstructing endpoints from coordinates.
+    boundary: MaterialAuraBoundary,
+    start_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
+    end_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
     pub(crate) source_mass_scale: f64,
     pub(crate) receiver_mass_scale: f64,
     /// Unattenuated, per-body spectra. These are the frequency/phase
@@ -1573,6 +1581,8 @@ fn material_aura_receptions_with_geometry_prepared(
                           normal_y: f64,
                           projected_extent: f64,
                           projected_extent_source_gradient: Option<(f64, f64)>,
+                          start_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
+                          end_provenance: Option<crate::source_exposure::BoundaryEndpointProvenance>,
                           boundary: MaterialAuraBoundary,
                           visibility_signature: Option<
         crate::source_exposure::VisibilityCutSignature,
@@ -1610,6 +1620,8 @@ fn material_aura_receptions_with_geometry_prepared(
                 projected_extent,
                 projected_extent_source_gradient,
                 visibility_signature,
+                start_provenance,
+                end_provenance,
                 boundary,
                 incident_spectrum: incident,
                 spectrum: received,
@@ -1638,6 +1650,8 @@ fn material_aura_receptions_with_geometry_prepared(
             interval.outward_normal.1,
             projected_extent,
             projected_extent_source_gradient,
+            Some(exposed.start_provenance),
+            Some(exposed.end_provenance),
             MaterialAuraBoundary::Straight {
                 start: interval.start,
                 end: interval.end,
@@ -1662,6 +1676,8 @@ fn material_aura_receptions_with_geometry_prepared(
             normal_x,
             normal_y,
             projected_extent,
+            None,
+            None,
             None,
             MaterialAuraBoundary::Arc(interval.arc),
             None,
@@ -3028,6 +3044,9 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
             receiver_normal_y: reception.receiver_normal_y,
             projected_extent: reception.projected_extent,
             projected_extent_source_gradient: reception.projected_extent_source_gradient,
+            boundary: reception.boundary,
+            start_provenance: reception.start_provenance,
+            end_provenance: reception.end_provenance,
             source_mass_scale,
             receiver_mass_scale,
             source_emitted_spectrum: source_emission.clone(),
