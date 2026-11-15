@@ -80,8 +80,16 @@ impl MutualFarFieldMoments {
         }
         let count = sources.len() as f64;
         let center = FarFieldVector {
-            x: sources.iter().map(|entry| entry.source.position.x).sum::<f64>() / count,
-            y: sources.iter().map(|entry| entry.source.position.y).sum::<f64>() / count,
+            x: sources
+                .iter()
+                .map(|entry| entry.source.position.x)
+                .sum::<f64>()
+                / count,
+            y: sources
+                .iter()
+                .map(|entry| entry.source.position.y)
+                .sum::<f64>()
+                / count,
         };
         if !center.x.is_finite() || !center.y.is_finite() {
             return None;
@@ -173,8 +181,8 @@ fn evaluate_mutual_far_field_cluster_pair(
         y: first_derivative * unit.y,
     };
     let hessian_moment = hessian_apply(weighted_moment);
-    let potential = a.total_weight * b.total_weight / (1.0 + distance)
-        + gradient.dot(weighted_moment);
+    let potential =
+        a.total_weight * b.total_weight / (1.0 + distance) + gradient.dot(weighted_moment);
 
     let minimum = minimum_distance;
     let f_prime = -1.0 / (1.0 + minimum).powi(2);
@@ -200,17 +208,13 @@ fn evaluate_mutual_far_field_cluster_pair(
             y: source.position.y - a.center.y,
         };
         let force = FarFieldVector {
-            x: b.total_weight * source.weight * gradient.x
-                + hessian_moment.x / count_a,
-            y: b.total_weight * source.weight * gradient.y
-                + hessian_moment.y / count_a,
+            x: b.total_weight * source.weight * gradient.x + hessian_moment.x / count_a,
+            y: b.total_weight * source.weight * gradient.y + hessian_moment.y / count_a,
         };
         let error = hessian_bound
-            * ((source.weight - a.total_weight / count_a).abs()
-                * b.absolute_first_moment
+            * ((source.weight - a.total_weight / count_a).abs() * b.absolute_first_moment
                 + b.absolute_weight
-                    * (source.weight.abs() * offset.norm()
-                        + a.absolute_first_moment / count_a))
+                    * (source.weight.abs() * offset.norm() + a.absolute_first_moment / count_a))
             + 0.5
                 * source.weight.abs()
                 * b.absolute_weight
@@ -232,17 +236,13 @@ fn evaluate_mutual_far_field_cluster_pair(
             y: source.position.y - b.center.y,
         };
         let force = FarFieldVector {
-            x: -a.total_weight * source.weight * gradient.x
-                - hessian_moment.x / count_b,
-            y: -a.total_weight * source.weight * gradient.y
-                - hessian_moment.y / count_b,
+            x: -a.total_weight * source.weight * gradient.x - hessian_moment.x / count_b,
+            y: -a.total_weight * source.weight * gradient.y - hessian_moment.y / count_b,
         };
         let error = hessian_bound
-            * ((source.weight - b.total_weight / count_b).abs()
-                * a.absolute_first_moment
+            * ((source.weight - b.total_weight / count_b).abs() * a.absolute_first_moment
                 + a.absolute_weight
-                    * (source.weight.abs() * offset.norm()
-                        + b.absolute_first_moment / count_b))
+                    * (source.weight.abs() * offset.norm() + b.absolute_first_moment / count_b))
             + 0.5
                 * source.weight.abs()
                 * a.absolute_weight
@@ -264,8 +264,7 @@ fn evaluate_mutual_far_field_cluster_pair(
         .zip(&force_error_bounds_a)
         .chain(sources_b.iter().zip(&force_error_bounds_b))
         .map(|(entry, bound)| {
-            (entry.source.position.x - root_center.x)
-                .hypot(entry.source.position.y - root_center.y)
+            (entry.source.position.x - root_center.x).hypot(entry.source.position.y - root_center.y)
                 * bound
         })
         .sum::<f64>();
@@ -353,22 +352,29 @@ pub(crate) fn evaluate_mutual_far_field_adaptive(
 ) -> Option<MutualFarFieldEvaluation> {
     if sources_a.is_empty()
         || sources_b.is_empty()
-        || [potential_tolerance, force_tolerance, angular_momentum_tolerance]
-            .iter()
-            .any(|value| !value.is_finite() || *value < 0.0)
-        || sources_a
-            .iter()
-            .chain(sources_b)
-            .any(|source| {
-                !source.position.x.is_finite()
-                    || !source.position.y.is_finite()
-                    || !source.weight.is_finite()
-            })
+        || [
+            potential_tolerance,
+            force_tolerance,
+            angular_momentum_tolerance,
+        ]
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
+        || sources_a.iter().chain(sources_b).any(|source| {
+            !source.position.x.is_finite()
+                || !source.position.y.is_finite()
+                || !source.weight.is_finite()
+        })
     {
         return None;
     }
-    let absolute_a = sources_a.iter().map(|source| source.weight.abs()).sum::<f64>();
-    let absolute_b = sources_b.iter().map(|source| source.weight.abs()).sum::<f64>();
+    let absolute_a = sources_a
+        .iter()
+        .map(|source| source.weight.abs())
+        .sum::<f64>();
+    let absolute_b = sources_b
+        .iter()
+        .map(|source| source.weight.abs())
+        .sum::<f64>();
     let total_absolute_pair_weight = absolute_a * absolute_b;
     if !total_absolute_pair_weight.is_finite() {
         return None;
@@ -436,8 +442,7 @@ pub(crate) fn evaluate_mutual_far_field_adaptive(
         .zip(&result.forces_a)
         .chain(sources_b.iter().zip(&result.forces_b))
         .map(|(source, force)| {
-            source.position.x.abs() * force.y.abs()
-                + source.position.y.abs() * force.x.abs()
+            source.position.x.abs() * force.y.abs() + source.position.y.abs() * force.x.abs()
         })
         .sum::<f64>();
     let roundoff = 64.0 * f64::EPSILON * force_scale.max(1.0);
@@ -482,26 +487,26 @@ fn accumulate_mutual_far_field_clusters(
         evaluate_mutual_far_field_cluster_pair(&sources_a, &sources_b, root_center)
     {
         let share = a.absolute_weight * b.absolute_weight / total_absolute_pair_weight;
-        let potential_budget_met =
-            evaluation.error.potential <= potential_tolerance * share;
+        let potential_budget_met = evaluation.error.potential <= potential_tolerance * share;
         let angular_budget_met =
             evaluation.error.angular_momentum <= angular_momentum_tolerance * share;
-        let force_budgets_met = sources_a
-            .iter()
-            .zip(&evaluation.force_error_bounds_a)
-            .all(|(entry, error)| {
-                *error
-                    <= force_tolerance * entry.source.weight.abs() * b.absolute_weight
-                        / total_absolute_pair_weight
-            })
-            && sources_b
+        let force_budgets_met =
+            sources_a
                 .iter()
-                .zip(&evaluation.force_error_bounds_b)
+                .zip(&evaluation.force_error_bounds_a)
                 .all(|(entry, error)| {
                     *error
-                        <= force_tolerance * entry.source.weight.abs() * a.absolute_weight
+                        <= force_tolerance * entry.source.weight.abs() * b.absolute_weight
                             / total_absolute_pair_weight
-                });
+                })
+                && sources_b
+                    .iter()
+                    .zip(&evaluation.force_error_bounds_b)
+                    .all(|(entry, error)| {
+                        *error
+                            <= force_tolerance * entry.source.weight.abs() * a.absolute_weight
+                                / total_absolute_pair_weight
+                    });
         if potential_budget_met && angular_budget_met && force_budgets_met {
             result.potential += evaluation.potential;
             result.error.potential += evaluation.error.potential;
@@ -534,8 +539,7 @@ fn accumulate_mutual_far_field_clusters(
         // the exact near-field regularization path owned by the caller.
         return None;
     }
-    let split_a = sources_a.len() > 1
-        && (sources_b.len() == 1 || a.radius >= b.radius);
+    let split_a = sources_a.len() > 1 && (sources_b.len() == 1 || a.radius >= b.radius);
     if split_a {
         let (left, right) = split_mutual_far_field_cluster(sources_a)?;
         accumulate_mutual_far_field_clusters(
@@ -1077,8 +1081,8 @@ mod tests {
                 let dy = source_b.position.y - source_a.position.y;
                 let distance = dx.hypot(dy);
                 potential += source_a.weight * source_b.weight / (1.0 + distance);
-                let scale = -source_a.weight * source_b.weight
-                    / (distance * (1.0 + distance).powi(2));
+                let scale =
+                    -source_a.weight * source_b.weight / (distance * (1.0 + distance).powi(2));
                 let force = FarFieldVector {
                     x: scale * dx,
                     y: scale * dy,
@@ -1284,9 +1288,8 @@ mod tests {
                 weight: -0.4,
             },
         ];
-        let evaluation =
-            evaluate_mutual_far_field_adaptive(&sources_a, &sources_b, 1.0, 1.0, 10.0)
-                .expect("well-separated mutual clusters should be accepted");
+        let evaluation = evaluate_mutual_far_field_adaptive(&sources_a, &sources_b, 1.0, 1.0, 10.0)
+            .expect("well-separated mutual clusters should be accepted");
         let (exact_potential, exact_forces_a, exact_forces_b) =
             exact_mutual_pair(&sources_a, &sources_b);
         assert!((exact_potential - evaluation.potential).abs() <= evaluation.error.potential);
@@ -1305,15 +1308,14 @@ mod tests {
             assert!((exact.x - approximate.x).hypot(exact.y - approximate.y) <= *bound + 1e-12);
         }
         assert!(evaluation.error.potential > 0.0);
-        let net_force = evaluation
-            .forces_a
-            .iter()
-            .chain(&evaluation.forces_b)
-            .fold(FarFieldVector::default(), |mut sum, force| {
+        let net_force = evaluation.forces_a.iter().chain(&evaluation.forces_b).fold(
+            FarFieldVector::default(),
+            |mut sum, force| {
                 sum.x += force.x;
                 sum.y += force.y;
                 sum
-            });
+            },
+        );
         assert!(net_force.norm() < 1e-12);
         assert!(evaluation.angular_momentum_residual.abs() <= evaluation.error.angular_momentum);
         let exact_torque = sources_a
@@ -1359,20 +1361,17 @@ mod tests {
                 weight: 0.6,
             },
         ];
-        let evaluation = evaluate_mutual_far_field_adaptive(
-            &sources_a,
-            &sources_b,
-            1.0e-8,
-            1.0e-8,
-            1.0e-7,
-        )
-        .expect("adaptive mutual evaluation should refine until all budgets are met");
+        let evaluation =
+            evaluate_mutual_far_field_adaptive(&sources_a, &sources_b, 1.0e-8, 1.0e-8, 1.0e-7)
+                .expect("adaptive mutual evaluation should refine until all budgets are met");
         let (exact_potential, exact_forces_a, exact_forces_b) =
             exact_mutual_pair(&sources_a, &sources_b);
         assert!(evaluation.error.potential <= 1.0e-8);
         assert!(evaluation.error.force <= 1.0e-8);
         assert!(evaluation.error.angular_momentum <= 1.0e-7);
-        assert!((exact_potential - evaluation.potential).abs() <= evaluation.error.potential + 1e-12);
+        assert!(
+            (exact_potential - evaluation.potential).abs() <= evaluation.error.potential + 1e-12
+        );
         for ((exact, approximate), bound) in exact_forces_a
             .iter()
             .zip(&evaluation.forces_a)
