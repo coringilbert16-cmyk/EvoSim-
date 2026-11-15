@@ -1057,8 +1057,7 @@ pub(crate) fn rigid_circle_arc_endpoint_motion_bound(
     let lever_length = lever.norm();
     let derivative = translation_derivative.norm() + angular_derivative.abs() * lever_length;
     let displacement = translation_displacement + angular_displacement * lever_length;
-    let roundoff_guard =
-        128.0 * f64::EPSILON * (derivative + displacement + lever_length + 1.0);
+    let roundoff_guard = 128.0 * f64::EPSILON * (derivative + displacement + lever_length + 1.0);
     (lever_length.is_finite()
         && derivative.is_finite()
         && displacement.is_finite()
@@ -4200,7 +4199,6 @@ mod circle_straight_motion_bound_tests {
     }
 }
 
-
 #[cfg(test)]
 mod curved_endpoint_motion_bound_tests {
     use super::*;
@@ -4259,13 +4257,13 @@ mod curved_endpoint_motion_bound_tests {
     #[test]
     fn rigid_curved_endpoint_motion_bound_rejects_invalid_envelopes() {
         let zero = BoundaryKernelVector::default();
-        assert!(rigid_circle_arc_endpoint_motion_bound(
-            zero, 1.0, 0.0, zero, 0.0, -0.1, 0.0
-        )
-        .is_none());
-        assert!(rigid_circle_arc_endpoint_motion_bound(
-            zero, 1.0, 0.0, zero, 0.0, 0.0, f64::NAN
-        )
-        .is_none());
+        assert!(
+            rigid_circle_arc_endpoint_motion_bound(zero, 1.0, 0.0, zero, 0.0, -0.1, 0.0)
+                .is_none()
+        );
+        assert!(
+            rigid_circle_arc_endpoint_motion_bound(zero, 1.0, 0.0, zero, 0.0, 0.0, f64::NAN)
+                .is_none()
+        );
     }
 }
