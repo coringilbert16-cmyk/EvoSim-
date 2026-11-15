@@ -2289,9 +2289,12 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                     (
                         evaluation.potential,
                         evaluation.source_gradient,
-                        evaluation.receiver_gradient,
+                        super::resonance_boundary_far_field::BoundaryKernelVector {
+                            x: -evaluation.source_gradient.x,
+                            y: -evaluation.source_gradient.y,
+                        },
                         evaluation.error.source_force,
-                        evaluation.error.receiver_force,
+                        evaluation.error.source_force,
                         evaluation.error.potential,
                     )
                 },
@@ -2311,9 +2314,12 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                     (
                         evaluation.potential,
                         evaluation.source_gradient,
-                        evaluation.receiver_gradient,
+                        super::resonance_boundary_far_field::BoundaryKernelVector {
+                            x: -evaluation.source_gradient.x,
+                            y: -evaluation.source_gradient.y,
+                        },
                         evaluation.error.source_force,
-                        evaluation.error.receiver_force,
+                        evaluation.error.source_force,
                         evaluation.error.potential,
                     )
                 },
