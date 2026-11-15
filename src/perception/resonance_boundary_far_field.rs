@@ -1305,7 +1305,7 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
                 } => *target_parameter,
                 _ => return None,
             };
-            if !parameter.is_finite() || (event_parameter - parameter).abs() > 1.0e-10 {
+            if !parameter.is_finite() || (event_parameter - *parameter).abs() > 1.0e-10 {
                 return None;
             }
             match event {
