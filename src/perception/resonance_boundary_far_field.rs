@@ -741,6 +741,141 @@ pub(crate) fn resolve_straight_boundary_intersection_event(
     })
 }
 
+/// Conservative absolute movement bounds for the two parameters of one
+/// straight/straight intersection over a pose cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct StraightIntersectionParameterMotionBound {
+    pub(crate) target_parameter_change: f64,
+    pub(crate) blocker_parameter_change: f64,
+}
+
+/// Bound how far the target-edge and blocker-edge intersection parameters can
+/// move when each endpoint remains inside its supplied displacement disk.
+/// The denominator envelope must stay strictly nonzero, and both parameter
+/// envelopes must remain strictly inside (0, 1); otherwise subdivide or use
+/// exact visibility evaluation.
+#[allow(dead_code)]
+pub(crate) fn straight_intersection_parameter_motion_bound(
+    target_start: BoundaryKernelVector,
+    target_end: BoundaryKernelVector,
+    blocker_start: BoundaryKernelVector,
+    blocker_end: BoundaryKernelVector,
+    target_start_displacement: f64,
+    target_end_displacement: f64,
+    blocker_start_displacement: f64,
+    blocker_end_displacement: f64,
+) -> Option<StraightIntersectionParameterMotionBound> {
+    let motions = [
+        target_start_displacement,
+        target_end_displacement,
+        blocker_start_displacement,
+        blocker_end_displacement,
+    ];
+    if motions.iter().any(|value| !value.is_finite() || *value < 0.0)
+        || [
+            target_start.x,
+            target_start.y,
+            target_end.x,
+            target_end.y,
+            blocker_start.x,
+            blocker_start.y,
+            blocker_end.x,
+            blocker_end.y,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+    {
+        return None;
+    }
+    let target_edge = BoundaryKernelVector {
+        x: target_end.x - target_start.x,
+        y: target_end.y - target_start.y,
+    };
+    let blocker_edge = BoundaryKernelVector {
+        x: blocker_end.x - blocker_start.x,
+        y: blocker_end.y - blocker_start.y,
+    };
+    let offset = BoundaryKernelVector {
+        x: blocker_start.x - target_start.x,
+        y: blocker_start.y - target_start.y,
+    };
+    let target_length = target_edge.norm();
+    let blocker_length = blocker_edge.norm();
+    let offset_length = offset.norm();
+    if !target_length.is_finite()
+        || !blocker_length.is_finite()
+        || !offset_length.is_finite()
+        || target_length <= f64::EPSILON
+        || blocker_length <= f64::EPSILON
+    {
+        return None;
+    }
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let denominator = cross(target_edge, blocker_edge);
+    let denominator_change = target_length
+        * (blocker_start_displacement + blocker_end_displacement)
+        + blocker_length * (target_start_displacement + target_end_displacement)
+        + (target_start_displacement + target_end_displacement)
+            * (blocker_start_displacement + blocker_end_displacement);
+    let denominator_minimum = denominator.abs() - denominator_change;
+    let denominator_scale = target_length * blocker_length + denominator_change + 1.0;
+    if !denominator_minimum.is_finite()
+        || denominator_minimum <= 128.0 * f64::EPSILON * denominator_scale
+    {
+        return None;
+    }
+
+    let target_numerator = cross(offset, blocker_edge);
+    let blocker_numerator = cross(offset, target_edge);
+    let target_parameter = target_numerator / denominator;
+    let blocker_parameter = blocker_numerator / denominator;
+    const PARAMETER_MARGIN: f64 = 1.0e-10;
+    if !target_parameter.is_finite()
+        || !blocker_parameter.is_finite()
+        || !(PARAMETER_MARGIN..1.0 - PARAMETER_MARGIN).contains(&target_parameter)
+        || !(PARAMETER_MARGIN..1.0 - PARAMETER_MARGIN).contains(&blocker_parameter)
+    {
+        return None;
+    }
+
+    let offset_change = target_start_displacement + blocker_start_displacement;
+    let blocker_edge_change = blocker_start_displacement + blocker_end_displacement;
+    let target_edge_change = target_start_displacement + target_end_displacement;
+    let target_numerator_change = offset_length * blocker_edge_change
+        + blocker_length * offset_change
+        + offset_change * blocker_edge_change;
+    let blocker_numerator_change = offset_length * target_edge_change
+        + target_length * offset_change
+        + offset_change * target_edge_change;
+    let target_parameter_change = (target_numerator_change
+        + target_parameter.abs() * denominator_change)
+        / denominator_minimum;
+    let blocker_parameter_change = (blocker_numerator_change
+        + blocker_parameter.abs() * denominator_change)
+        / denominator_minimum;
+    let target_guard = 128.0
+        * f64::EPSILON
+        * (target_parameter_change + target_parameter.abs() + 1.0);
+    let blocker_guard = 128.0
+        * f64::EPSILON
+        * (blocker_parameter_change + blocker_parameter.abs() + 1.0);
+    let target_parameter_change = target_parameter_change + target_guard;
+    let blocker_parameter_change = blocker_parameter_change + blocker_guard;
+    if !target_parameter_change.is_finite()
+        || !blocker_parameter_change.is_finite()
+        || target_parameter_change >= target_parameter.min(1.0 - target_parameter)
+        || blocker_parameter_change >= blocker_parameter.min(1.0 - blocker_parameter)
+    {
+        return None;
+    }
+    Some(StraightIntersectionParameterMotionBound {
+        target_parameter_change,
+        blocker_parameter_change,
+    })
+}
+
 /// Midpoint and exact point-source projected-extent derivatives for one
 /// already-corresponding straight exposed interval. The interval normal is
 /// transported from its edge orientation; edge-on transitions fail closed.
@@ -3095,6 +3230,120 @@ mod provenance_resolver_tests {
             0.0,
             zero,
             0.0,
+        )
+        .is_none());
+    }
+}
+
+
+#[cfg(test)]
+mod intersection_parameter_bound_tests {
+    use super::*;
+
+    fn cross(left: BoundaryKernelVector, right: BoundaryKernelVector) -> f64 {
+        left.x * right.y - left.y * right.x
+    }
+
+    fn parameters(
+        a: BoundaryKernelVector,
+        b: BoundaryKernelVector,
+        c: BoundaryKernelVector,
+        d: BoundaryKernelVector,
+    ) -> (f64, f64) {
+        let edge = BoundaryKernelVector {
+            x: b.x - a.x,
+            y: b.y - a.y,
+        };
+        let blocker = BoundaryKernelVector {
+            x: d.x - c.x,
+            y: d.y - c.y,
+        };
+        let offset = BoundaryKernelVector {
+            x: c.x - a.x,
+            y: c.y - a.y,
+        };
+        let denominator = cross(edge, blocker);
+        (cross(offset, blocker) / denominator, cross(offset, edge) / denominator)
+    }
+
+    #[test]
+    fn intersection_parameter_motion_bounds_contain_endpoint_perturbations() {
+        let a = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let b = BoundaryKernelVector { x: 2.0, y: 0.0 };
+        let c = BoundaryKernelVector { x: 1.0, y: -1.0 };
+        let d = BoundaryKernelVector { x: 1.0, y: 1.0 };
+        let radius = 0.01;
+        let bound = straight_intersection_parameter_motion_bound(
+            a, b, c, d, radius, radius, radius, radius,
+        )
+        .expect("well-separated intersection has a finite parameter envelope");
+        let directions = [
+            (1.0, 0.0),
+            (-1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, -1.0),
+            (0.6, 0.8),
+            (-0.8, 0.6),
+            (0.8, -0.6),
+            (-0.6, -0.8),
+        ];
+        for (ia, da) in directions.iter().enumerate() {
+            for (ib, db) in directions.iter().enumerate() {
+                for (ic, dc) in directions.iter().enumerate() {
+                    let dd = directions[(ia + ib + ic) % directions.len()];
+                    let moved = |point: BoundaryKernelVector, direction: &(f64, f64)| {
+                        BoundaryKernelVector {
+                            x: point.x + radius * direction.0,
+                            y: point.y + radius * direction.1,
+                        }
+                    };
+                    let (target, blocker) = parameters(
+                        moved(a, da),
+                        moved(b, db),
+                        moved(c, dc),
+                        moved(d, &dd),
+                    );
+                    assert!((target - 0.5).abs() <= bound.target_parameter_change);
+                    assert!((blocker - 0.5).abs() <= bound.blocker_parameter_change);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn intersection_parameter_motion_bound_fails_closed_near_parallel_or_endpoint() {
+        let point = |x, y| BoundaryKernelVector { x, y };
+        assert!(straight_intersection_parameter_motion_bound(
+            point(0.0, 0.0),
+            point(2.0, 0.0),
+            point(0.0, 1.0),
+            point(2.0, 1.0),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .is_none());
+        assert!(straight_intersection_parameter_motion_bound(
+            point(0.0, 0.0),
+            point(2.0, 0.0),
+            point(2.0, -1.0),
+            point(2.0, 1.0),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        )
+        .is_none());
+        assert!(straight_intersection_parameter_motion_bound(
+            point(0.0, 0.0),
+            point(2.0, 0.0),
+            point(1.0, -1.0),
+            point(1.0, 1.0),
+            0.6,
+            0.6,
+            0.6,
+            0.6,
         )
         .is_none());
     }
