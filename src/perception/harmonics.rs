@@ -2468,6 +2468,326 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
     evaluate(source_center, receiver_center, samples, budget)
 }
 
+/// Adaptive composition of the existing generalized pose evaluator with the
+/// mutual boundary kernel and certified blocker inventory.
+///
+/// The caller supplies the already-derived per-coordinate sample Jacobians
+/// from the visibility/pose machinery, in body-major x/y/angle order. This
+/// function does not derive a second force law: it carries those existing
+/// derivatives through the same adaptive subdivision used for potential and
+/// center-force evaluation. Every body in the supplied blocker inventory must
+/// have all three coordinates represented.
+#[allow(dead_code)]
+pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker_inventory(
+    source_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    samples: Vec<super::resonance_boundary_far_field::WeightedBoundaryKernelSample>,
+    budget: super::resonance_boundary_far_field::BoundaryPotentialError,
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: Vec<super::resonance_boundary_far_field::BoundarySampleMotionBound>,
+    coordinates: Vec<super::resonance_boundary_far_field::BoundaryPoseCoordinateDerivative>,
+    baseline_signature: &crate::source_exposure::VisibilityCutSignature,
+    sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
+    event_bounds: &[crate::source_exposure::VisibilityEventPoseCellBound],
+    inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    target_body_index: usize,
+) -> Option<super::resonance_boundary_far_field::BoundaryPoseCellGeneralizedEvaluation> {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialError,
+        BoundaryPoseCellEvaluation, BoundaryPoseCellError,
+        BoundaryPoseCellGeneralizedEvaluation, BoundaryPoseCoordinateDerivative,
+        BoundarySampleMotionBound, WeightedBoundaryKernelSample,
+    };
+
+    if samples.is_empty()
+        || sample_motion.len() != samples.len()
+        || coordinates.len() != bodies.len().checked_mul(3)?
+        || coordinates
+            .iter()
+            .any(|coordinate| coordinate.samples.len() != samples.len())
+        || ![
+            budget.potential,
+            budget.source_force,
+            budget.receiver_force,
+        ]
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0)
+    {
+        return None;
+    }
+
+    // Validate the complete candidate set and continuous visibility event
+    // proof once, before subdivision. Every child then inherits that proof;
+    // no child is allowed to silently drop a blocker or event.
+    inventory.certifies_target_signature(
+        source,
+        bodies,
+        target_body_indices,
+        target_body_index,
+        baseline_signature,
+    )?;
+    baseline_signature.certify_pose_cell(event_bounds)?;
+    baseline_signature.certify_unchanged_across(sampled_signatures)?;
+
+    fn combine(
+        mut left: BoundaryPoseCellGeneralizedEvaluation,
+        right: BoundaryPoseCellGeneralizedEvaluation,
+        center: BoundaryKernelVector,
+        radius: f64,
+    ) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
+        if left.coordinates.len() != right.coordinates.len() {
+            return None;
+        }
+        let left_eval = &mut left.boundary.evaluation;
+        let right_eval = right.boundary.evaluation;
+        left_eval.potential += right_eval.potential;
+        left_eval.source_gradient.x += right_eval.source_gradient.x;
+        left_eval.source_gradient.y += right_eval.source_gradient.y;
+        left_eval.receiver_gradient.x += right_eval.receiver_gradient.x;
+        left_eval.receiver_gradient.y += right_eval.receiver_gradient.y;
+        left_eval.error.potential += right_eval.error.potential;
+        left_eval.error.source_force += right_eval.error.source_force;
+        left_eval.error.receiver_force += right_eval.error.receiver_force;
+        left_eval.center = center;
+        left_eval.radius = radius;
+
+        left.boundary.error.potential += right.boundary.error.potential;
+        left.boundary.error.source_force += right.boundary.error.source_force;
+        left.boundary.error.receiver_force += right.boundary.error.receiver_force;
+
+        for (left_coordinate, right_coordinate) in
+            left.coordinates.iter_mut().zip(right.coordinates)
+        {
+            left_coordinate.derivative += right_coordinate.derivative;
+            left_coordinate.absolute_bound += right_coordinate.absolute_bound;
+            left_coordinate.sample_position_derivative +=
+                right_coordinate.sample_position_derivative;
+            left_coordinate.sample_weight_derivative +=
+                right_coordinate.sample_weight_derivative;
+        }
+
+        let roundoff = 128.0
+            * f64::EPSILON
+            * (left_eval.potential.abs()
+                + left_eval.source_gradient.x.abs()
+                + left_eval.source_gradient.y.abs()
+                + left_eval.receiver_gradient.x.abs()
+                + left_eval.receiver_gradient.y.abs()
+                + left.boundary.error.potential
+                + left.boundary.error.source_force
+                + left.boundary.error.receiver_force
+                + 1.0);
+        left.boundary.error.potential += roundoff;
+        left.boundary.error.source_force += roundoff;
+        left.boundary.error.receiver_force += roundoff;
+        for coordinate in &mut left.coordinates {
+            coordinate.absolute_bound +=
+                128.0 * f64::EPSILON * (coordinate.absolute_bound + 1.0);
+        }
+
+        let finite = [
+            left_eval.potential,
+            left_eval.source_gradient.x,
+            left_eval.source_gradient.y,
+            left_eval.receiver_gradient.x,
+            left_eval.receiver_gradient.y,
+            left.boundary.error.potential,
+            left.boundary.error.source_force,
+            left.boundary.error.receiver_force,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+            && left.coordinates.iter().all(|coordinate| {
+                coordinate.derivative.is_finite()
+                    && coordinate.absolute_bound.is_finite()
+                    && coordinate.sample_position_derivative.is_finite()
+                    && coordinate.sample_weight_derivative.is_finite()
+            });
+        finite.then_some(left)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn evaluate(
+        source_center: BoundaryKernelVector,
+        receiver_center: BoundaryKernelVector,
+        samples: Vec<WeightedBoundaryKernelSample>,
+        budget: BoundaryPotentialError,
+        ordered_visibility_cuts: &[(f64, f64)],
+        sample_motion: Vec<BoundarySampleMotionBound>,
+        coordinates: Vec<BoundaryPoseCoordinateDerivative>,
+    ) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
+        if samples.is_empty()
+            || sample_motion.len() != samples.len()
+            || coordinates
+                .iter()
+                .any(|coordinate| coordinate.samples.len() != samples.len())
+        {
+            return None;
+        }
+
+        let center = BoundaryKernelVector {
+            x: samples.iter().map(|sample| sample.position.x).sum::<f64>()
+                / samples.len() as f64,
+            y: samples.iter().map(|sample| sample.position.y).sum::<f64>()
+                / samples.len() as f64,
+        };
+        let radius = samples
+            .iter()
+            .map(|sample| {
+                (sample.position.x - center.x).hypot(sample.position.y - center.y)
+            })
+            .fold(0.0_f64, f64::max);
+        if !center.x.is_finite() || !center.y.is_finite() || !radius.is_finite() {
+            return None;
+        }
+
+        let candidate = BoundaryKernelExpansion::new(
+            source_center,
+            receiver_center,
+            center,
+            samples.clone(),
+        )
+        .and_then(|expansion| {
+            super::resonance_boundary_far_field::certify_boundary_pose_cell_generalized(
+                &expansion,
+                ordered_visibility_cuts,
+                &sample_motion,
+                &coordinates,
+            )
+        });
+        if let Some(candidate) = candidate {
+            let error = candidate.boundary.error;
+            if error.potential <= budget.potential
+                && error.source_force <= budget.source_force
+                && error.receiver_force <= budget.receiver_force
+            {
+                return Some(candidate);
+            }
+        }
+
+        if samples.len() == 1 {
+            return None;
+        }
+
+        // Sort one shared index inventory so samples, geometry envelopes, and
+        // every generalized coordinate remain aligned through the tree split.
+        let min_x = samples
+            .iter()
+            .map(|sample| sample.position.x)
+            .fold(f64::INFINITY, f64::min);
+        let max_x = samples
+            .iter()
+            .map(|sample| sample.position.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let min_y = samples
+            .iter()
+            .map(|sample| sample.position.y)
+            .fold(f64::INFINITY, f64::min);
+        let max_y = samples
+            .iter()
+            .map(|sample| sample.position.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let split_x = max_x - min_x >= max_y - min_y;
+        let mut order = (0..samples.len()).collect::<Vec<_>>();
+        order.sort_by(|left, right| {
+            let a = if split_x {
+                samples[*left].position.x
+            } else {
+                samples[*left].position.y
+            };
+            let b = if split_x {
+                samples[*right].position.x
+            } else {
+                samples[*right].position.y
+            };
+            a.total_cmp(&b).then_with(|| left.cmp(right))
+        });
+
+        let sorted_samples = order.iter().map(|index| samples[*index]).collect::<Vec<_>>();
+        let sorted_motion = order
+            .iter()
+            .map(|index| sample_motion[*index])
+            .collect::<Vec<_>>();
+        let sorted_coordinates = coordinates
+            .iter()
+            .map(|coordinate| BoundaryPoseCoordinateDerivative {
+                source_center_derivative: coordinate.source_center_derivative,
+                receiver_center_derivative: coordinate.receiver_center_derivative,
+                source_center_derivative_bound: coordinate.source_center_derivative_bound,
+                receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                samples: order
+                    .iter()
+                    .map(|index| coordinate.samples[*index])
+                    .collect(),
+            })
+            .collect::<Vec<_>>();
+
+        let mut left_samples = sorted_samples;
+        let right_samples = left_samples.split_off(left_samples.len() / 2);
+        let mut left_motion = sorted_motion;
+        let right_motion = left_motion.split_off(left_motion.len() / 2);
+        let half_budget = BoundaryPotentialError {
+            potential: budget.potential * 0.5,
+            source_force: budget.source_force * 0.5,
+            receiver_force: budget.receiver_force * 0.5,
+        };
+
+        let mut left_coordinates = Vec::with_capacity(sorted_coordinates.len());
+        let mut right_coordinates = Vec::with_capacity(sorted_coordinates.len());
+        for coordinate in sorted_coordinates {
+            let mut left_derivatives = coordinate.samples;
+            let right_derivatives = left_derivatives.split_off(left_derivatives.len() / 2);
+            left_coordinates.push(BoundaryPoseCoordinateDerivative {
+                source_center_derivative: coordinate.source_center_derivative,
+                receiver_center_derivative: coordinate.receiver_center_derivative,
+                source_center_derivative_bound: coordinate.source_center_derivative_bound,
+                receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                samples: left_derivatives,
+            });
+            right_coordinates.push(BoundaryPoseCoordinateDerivative {
+                source_center_derivative: coordinate.source_center_derivative,
+                receiver_center_derivative: coordinate.receiver_center_derivative,
+                source_center_derivative_bound: coordinate.source_center_derivative_bound,
+                receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                samples: right_derivatives,
+            });
+        }
+
+        let left = evaluate(
+            source_center,
+            receiver_center,
+            left_samples,
+            half_budget,
+            ordered_visibility_cuts,
+            left_motion,
+            left_coordinates,
+        )?;
+        let right = evaluate(
+            source_center,
+            receiver_center,
+            right_samples,
+            half_budget,
+            ordered_visibility_cuts,
+            right_motion,
+            right_coordinates,
+        )?;
+        combine(left, right, center, radius)
+    }
+
+    evaluate(
+        source_center,
+        receiver_center,
+        samples,
+        budget,
+        ordered_visibility_cuts,
+        sample_motion,
+        coordinates,
+    )
+}
+
 /// Symmetric frequency-resolved pair evaluation using the existing two-distance
 /// boundary expansion. The gradients are with respect to the two body centers;
 /// callers must use the exact multi-body pose evaluator whenever occluders or
