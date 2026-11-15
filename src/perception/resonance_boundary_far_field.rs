@@ -3743,8 +3743,7 @@ mod circle_straight_provenance_tests {
                     x: target_pose.pivot.x + direction * step * target_translation.x,
                     y: target_pose.pivot.y + direction * step * target_translation.y,
                 },
-                rotation_radians: target_pose.rotation_radians
-                    + direction * step * target_angular,
+                rotation_radians: target_pose.rotation_radians + direction * step * target_angular,
             };
             let blocker = RigidBoundaryPose {
                 pivot: BoundaryKernelVector {
@@ -3781,8 +3780,7 @@ mod circle_straight_provenance_tests {
         };
         let parameter_rate = (plus.0 - minus.0) / (2.0 * step);
         let angle_delta = |left: f64, right: f64| {
-            (left - right + std::f64::consts::PI)
-                .rem_euclid(std::f64::consts::TAU)
+            (left - right + std::f64::consts::PI).rem_euclid(std::f64::consts::TAU)
                 - std::f64::consts::PI
         };
         let angle_rate = angle_delta(plus.2, minus.2) / (2.0 * step);
