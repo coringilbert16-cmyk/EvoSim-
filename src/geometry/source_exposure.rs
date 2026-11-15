@@ -852,7 +852,12 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 {
                     return None;
                 }
-                critical_points.extend(vertices.iter().copied().map(|(x, y)| (body_index, part.unit_index, x, y)));
+                critical_points.extend(
+                    vertices
+                        .iter()
+                        .copied()
+                        .map(|(x, y)| (body_index, part.unit_index, x, y)),
+                );
                 for index in 0..vertices.len() {
                     straight_edges.push((
                         body_index,
@@ -876,8 +881,10 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let half = *length * 0.5;
                     let start = (part.x - half * cos, part.y - half * sin);
                     let end = (part.x + half * cos, part.y + half * sin);
-                    critical_points
-                        .extend([(body_index, part.unit_index, start.0, start.1), (body_index, part.unit_index, end.0, end.1)]);
+                    critical_points.extend([
+                        (body_index, part.unit_index, start.0, start.1),
+                        (body_index, part.unit_index, end.0, end.1),
+                    ]);
                     straight_edges.push((body_index, part.unit_index, start, end));
                 }
                 Form::Circle { radius } => {
