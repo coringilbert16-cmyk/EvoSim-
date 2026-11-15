@@ -892,6 +892,34 @@ mod tests {
                 VisibilityCutSignature::from_partition(&cuts, candidates, blockers).unwrap()
             };
         let baseline = make_signature(3, &[0, 2], &[vec![], vec![(2, 7)]]);
+        let make_event_bounds = |parameter_change_bound, existence_margin, margin_change_bound| {
+            baseline
+                .ordered_events
+                .iter()
+                .map(|identity| VisibilityEventPoseCellBound {
+                    identity: *identity,
+                    parameter_change_bound: if matches!(
+                        identity,
+                        VisibilityEventIdentity::TargetVertex { .. }
+                    ) {
+                        0.0
+                    } else {
+                        parameter_change_bound
+                    },
+                    existence_margin,
+                    existence_margin_change_bound: margin_change_bound,
+                })
+                .collect::<Vec<_>>()
+        };
+        assert!(baseline
+            .certify_pose_cell(&make_event_bounds(0.05, 0.2, 0.1))
+            .is_some());
+        assert!(baseline
+            .certify_pose_cell(&make_event_bounds(0.05, 0.05, 0.1))
+            .is_none());
+        assert!(baseline
+            .certify_pose_cell(&make_event_bounds(0.6, 0.2, 0.1))
+            .is_none());
         assert!(baseline
             .certify_unchanged_across(&[
                 make_signature(3, &[0, 2], &[vec![], vec![(2, 7)]]),
