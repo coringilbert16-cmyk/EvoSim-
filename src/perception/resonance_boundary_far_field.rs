@@ -2450,6 +2450,126 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
     })
 }
 
+/// Dispatch each stable visibility event to the existing geometry-specific
+/// pose-cell bound. This is the single event-bound entry point used when
+/// assembling a complete ordered signature certificate.
+#[allow(dead_code)]
+pub(crate) fn bound_visibility_event_over_pose_cell(
+    event: &crate::source_exposure::VisibilityCutEvent,
+    source: BoundaryKernelVector,
+    source_displacement: f64,
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
+) -> Option<crate::source_exposure::VisibilityEventPoseCellBound> {
+    use crate::source_exposure::{
+        VisibilityCutEvent, VisibilityEventPoseCellBound,
+    };
+
+    match event {
+        VisibilityCutEvent::TargetVertex { .. } => Some(VisibilityEventPoseCellBound {
+            identity: event.stable_identity()?,
+            parameter_change_bound: 0.0,
+            existence_margin: 1.0,
+            existence_margin_change_bound: 0.0,
+        }),
+        VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
+            crate::source_exposure::bound_straight_boundary_intersection_event_over_pose_cell(
+                event,
+                bodies,
+                body_motion,
+            )
+        }
+        VisibilityCutEvent::CircleStraightIntersection {
+            blocker_body_index,
+            blocker_unit_index,
+            target_body_index,
+            target_unit_index,
+            target_edge_index,
+            blocker_arc_center_local,
+            blocker_arc_radius,
+            blocker_arc_start_local,
+            blocker_arc_sweep,
+            target_parameter,
+            arc_angle_local,
+            ..
+        } => {
+            if body_motion.len() != bodies.len() {
+                return None;
+            }
+            let target_part =
+                crate::source_exposure::visibility_part(bodies, *target_body_index, *target_unit_index)?;
+            let blocker_part =
+                crate::source_exposure::visibility_part(bodies, *blocker_body_index, *blocker_unit_index)?;
+            let target_pose = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: target_part.x,
+                    y: target_part.y,
+                },
+                rotation_radians: target_part.rotation_radians,
+            };
+            let blocker_pose = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: blocker_part.x,
+                    y: blocker_part.y,
+                },
+                rotation_radians: blocker_part.rotation_radians,
+            };
+            let (target_start_local, target_end_local) =
+                crate::source_exposure::local_straight_feature_endpoints(
+                    target_part,
+                    *target_edge_index,
+                )?;
+            let target_start = target_pose.transform_local_point(BoundaryKernelVector {
+                x: target_start_local.0,
+                y: target_start_local.1,
+            })?;
+            let target_end = target_pose.transform_local_point(BoundaryKernelVector {
+                x: target_end_local.0,
+                y: target_end_local.1,
+            })?;
+            let circle_center = blocker_pose.transform_local_point(BoundaryKernelVector {
+                x: blocker_arc_center_local.0,
+                y: blocker_arc_center_local.1,
+            })?;
+            let target_motion = *body_motion.get(*target_body_index)?;
+            let blocker_motion = *body_motion.get(*blocker_body_index)?;
+            let target_displacement = target_motion.maximum_point_displacement()?;
+            let blocker_displacement = blocker_motion.maximum_point_displacement()?;
+            let bound = circle_straight_intersection_motion_bound(
+                target_start,
+                target_end,
+                circle_center,
+                *blocker_arc_radius,
+                *target_parameter,
+                *blocker_arc_start_local,
+                *blocker_arc_sweep,
+                *arc_angle_local,
+                target_displacement,
+                target_displacement,
+                blocker_displacement,
+                blocker_motion.angular_bound_radians,
+            )?;
+            Some(VisibilityEventPoseCellBound {
+                identity: event.stable_identity()?,
+                parameter_change_bound: bound.target_parameter_change,
+                existence_margin: bound.existence_margin,
+                existence_margin_change_bound: bound.existence_margin_change_bound,
+            })
+        }
+        VisibilityCutEvent::RayThroughRigidFeature { .. }
+        | VisibilityCutEvent::RayThroughCircleTangent { .. } => {
+            bound_ray_visibility_event_over_pose_cell(
+                event,
+                source,
+                source_displacement,
+                bodies,
+                body_motion,
+            )
+        }
+        VisibilityCutEvent::Unresolved { .. } => None,
+    }
+}
+
 fn circle_tangent_point_displacement_bound(
     source: BoundaryKernelVector,
     center: BoundaryKernelVector,
