@@ -1691,51 +1691,55 @@ mod visibility_tests {
             &[0],
         )
         .expect("touching straight boundaries should retain exact intervals");
-        let has_identified_intersection = intervals.iter().any(|interval| {
+        let has_identified_intersection = |event: &VisibilityCutEvent| {
+            matches!(
+                event,
+                VisibilityCutEvent::StraightBoundaryIntersection {
+                    blocker_body_index: 1,
+                    blocker_unit_index: 1,
+                    target_body_index: 0,
+                    target_unit_index: 0,
+                    target_edge_index,
+                    blocker_edge_index,
+                    target_edge_start_local,
+                    target_edge_end_local,
+                    blocker_edge_start_local,
+                    blocker_edge_end_local,
+                    target_parameter,
+                    blocker_parameter,
+                } if *target_edge_index < 4
+                    && *blocker_edge_index < 4
+                    && [
+                        target_edge_start_local.0,
+                        target_edge_start_local.1,
+                        target_edge_end_local.0,
+                        target_edge_end_local.1,
+                        blocker_edge_start_local.0,
+                        blocker_edge_start_local.1,
+                        blocker_edge_end_local.0,
+                        blocker_edge_end_local.1,
+                    ]
+                    .iter()
+                    .all(|value| value.is_finite())
+                    && target_parameter.is_finite()
+                    && blocker_parameter.is_finite()
+            )
+        };
+        let found = intervals.iter().any(|interval| {
             [&interval.start_provenance, &interval.end_provenance]
                 .into_iter()
                 .any(|provenance| match provenance {
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { events, .. } => {
-                        events.iter().any(|event| {
-                            matches!(
-                                event,
-                                VisibilityCutEvent::StraightBoundaryIntersection {
-                                    blocker_body_index: 1,
-                                    blocker_unit_index: 1,
-                                    target_body_index: 0,
-                                    target_unit_index: 0,
-                                    target_edge_index,
-                                    blocker_edge_index,
-                                    target_edge_start_local,
-                                    target_edge_end_local,
-                                    blocker_edge_start_local,
-                                    blocker_edge_end_local,
-                                    target_parameter,
-                                    blocker_parameter,
-                                } if *target_edge_index < 4
-                                    && *blocker_edge_index < 4
-                                    && [
-                                        target_edge_start_local.0,
-                                        target_edge_start_local.1,
-                                        target_edge_end_local.0,
-                                        target_edge_end_local.1,
-                                        blocker_edge_start_local.0,
-                                        blocker_edge_start_local.1,
-                                        blocker_edge_end_local.0,
-                                        blocker_edge_end_local.1,
-                                    ]
-                                    .iter()
-                                    .all(|value| value.is_finite())
-                                    && target_parameter.is_finite()
-                                    && blocker_parameter.is_finite()
-                            )
-                        })
+                        events.iter().any(&has_identified_intersection)
+                    }
+                    BoundaryEndpointProvenance::RigidVisibilityIntersection { event, .. } => {
+                        has_identified_intersection(event)
                     }
                     BoundaryEndpointProvenance::RigidTargetVertex { .. } => false,
                 })
         });
         assert!(
-            has_identified_intersection,
+            found,
             "the cut must retain target and blocker edge identities and both local parameters"
         );
     }
