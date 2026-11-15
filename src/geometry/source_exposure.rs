@@ -287,11 +287,11 @@ fn local_straight_feature_endpoints(
             *vertices.get((edge_index + 1) % vertices.len())?,
         ));
     }
-    if let crate::resources::Form::Line { length } = part.form {
-        if edge_index != 0 || !length.is_finite() || length <= 0.0 {
+    if let crate::resources::Form::Line { length } = &part.form {
+        if edge_index != 0 || !length.is_finite() || *length <= 0.0 {
             return None;
         }
-        let half = length * 0.5;
+        let half = *length * 0.5;
         return Some(((-half, 0.0), (half, 0.0)));
     }
     None
@@ -429,7 +429,9 @@ pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
     let blocker_numerator = cross(offset, target_vector);
     let target_parameter = target_numerator / denominator;
     let blocker_parameter = blocker_numerator / denominator;
-    if !target_parameter.is_finite()
+    if !expected_target_parameter.is_finite()
+        || !expected_blocker_parameter.is_finite()
+        || !target_parameter.is_finite()
         || !blocker_parameter.is_finite()
         || !(0.0..1.0).contains(&target_parameter)
         || !(0.0..1.0).contains(&blocker_parameter)
