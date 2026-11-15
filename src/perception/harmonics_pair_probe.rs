@@ -847,3 +847,74 @@ fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
         "unoccluded mutual center forces must be equal and opposite"
     );
 }
+
+#[test]
+fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelVector, BoundaryPotentialError, WeightedBoundaryKernelSample,
+    };
+
+    let source = BoundaryKernelVector { x:: 0.0, y: 0.0 };
+    let receiver = BoundaryKernelVector { x: 8.0, y: -1.0 };
+    let samples = vec![
+        WeightedBoundaryKernelSample {
+            position: BoundaryKernelVector { x: 2.0, y: 0.5 },
+            weight: 0.7,
+        },
+        WeightedBoundaryKernelSample {
+            position: BoundaryKernelVector { x: 2.5, y: 0.7 },
+            weight: -0.2,
+        },
+        WeightedBoundaryKernelSample {
+            position: BoundaryKernelVector { x: 3.0, y: 1.1 },
+            weight: 0.4,
+        },
+        WeightedBoundaryKernelSample {
+            position: BoundaryKernelVector { x: 3.5, y: 0.8 },
+            weight: 0.3,
+        },
+    ];
+    let exact_potential: f64 = samples
+        .iter()
+        .map(|sample| {
+            let source_distance = (sample.position.x - source.x)
+                .hypot(sample.position.y - source.y);
+            let receiver_distance = (sample.position.x - receiver.x)
+                .hypot(sample.position.y - receiver.y);
+            sample.weight / ((1.0 + source_distance) * (1.0 + receiver_distance))
+        })
+        .sum();
+
+    let budget = BoundaryPotentialError {
+        potential: 1.0e-6,
+        source_force: 1.0e-6,
+        receiver_force: 1.0e-6,
+    };
+    let evaluation = super::evaluate_boundary_kernel_samples_adaptive_with_budget(
+        source,
+        receiver,
+        samples.clone(),
+        budget,
+    )
+    .expect("adaptive subdivision should satisfy the requested absolute budgets");
+
+    assert!(evaluation.error.potential <= budget.potential);
+    assert!(evaluation.error.source_force <= budget.source_force);
+    assert!(evaluation.error.receiver_force <= budget.receiver_force);
+    assert!(
+        (evaluation.potential - exact_potential).abs() <= evaluation.error.potential + 1.0e-12,
+        "reported potential remainder must contain the exact discrete sum"
+    );
+
+    let singleton = vec![samples[0]];
+    assert!(
+        super::evaluate_boundary_kernel_samples_adaptive_with_budget(
+            source,
+            receiver,
+            singleton,
+            BoundaryPotentialError::default(),
+        )
+        .is_none(),
+        "a nonzero roundoff remainder cannot satisfy a zero error budget"
+    );
+}
