@@ -264,11 +264,11 @@ pub(crate) struct VisibilityEventPoseCellBound {
     pub(crate) existence_margin_change_bound: f64,
 }
 
-fn visibility_part<'a>(
-    bodies: &'a [crate::organism_geometry::OrganismBodyGeometry],
+fn visibility_part(
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     body_index: usize,
     unit_index: usize,
-) -> Option<&'a crate::organism_geometry::PlacedForm> {
+) -> Option<&crate::organism_geometry::PlacedForm> {
     let mut parts = bodies
         .get(body_index)?
         .parts
@@ -2042,6 +2042,10 @@ impl VisibilityBodyMotionBound {
     }
 }
 
+/// One constituent's reference pose within a visibility pose cell.
+type VisibilityReferencePartPose = (usize, crate::resources::Form, f64, f64, f64);
+type VisibilityReferenceBodyPoses = Vec<VisibilityReferencePartPose>;
+
 /// Candidate blocker superset for every target body throughout one rigid-pose cell.
 /// Build once at the reference pose, then reuse for all pose samples in that cell.
 #[derive(Clone, Debug, PartialEq)]
@@ -2049,7 +2053,7 @@ pub(crate) struct VisibilityPoseCellCandidateInventory {
     source_reference: (f64, f64),
     source_translation_bound: f64,
     body_motion: Vec<VisibilityBodyMotionBound>,
-    reference_part_poses: Vec<Vec<(usize, crate::resources::Form, f64, f64, f64)>>,
+    reference_part_poses: Vec<VisibilityReferenceBodyPoses>,
     target_candidates: Vec<Option<Vec<usize>>>,
 }
 
