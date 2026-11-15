@@ -2268,7 +2268,14 @@ impl VisibilityPoseCellCandidateInventory {
             if body.parts.len() != reference_parts.len() {
                 return None;
             }
+            if body.parts.is_empty() {
+                return None;
+            }
             let maximum_displacement = motion.maximum_point_displacement()?;
+            let translation_tolerance = 1.0e-10 * motion.translation_bound.max(1.0);
+            let angular_tolerance = 1.0e-10 * motion.angular_bound_radians.max(1.0);
+            let mut inferred_translation = None;
+            let mut inferred_rotation = None;
             for (part, (unit_index, form, x, y, rotation)) in body.parts.iter().zip(reference_parts)
             {
                 if part.unit_index != *unit_index
@@ -2284,16 +2291,58 @@ impl VisibilityPoseCellCandidateInventory {
                     + std::f64::consts::PI)
                     .rem_euclid(std::f64::consts::TAU)
                     - std::f64::consts::PI;
-                let translation_tolerance = 1.0e-10 * motion.translation_bound.max(1.0);
-                let angular_tolerance = 1.0e-10 * motion.angular_bound_radians.max(1.0);
                 if !displacement.is_finite()
-                    || displacement > motion.translation_bound + translation_tolerance
                     || !angular_displacement.is_finite()
-                    || angular_displacement.abs() > motion.angular_bound_radians + angular_tolerance
+                    || angular_displacement.abs()
+                        > motion.angular_bound_radians + angular_tolerance
                     || displacement > maximum_displacement + translation_tolerance
                 {
                     return None;
                 }
+
+                let (sin, cos) = angular_displacement.sin_cos();
+                let reference_offset = (
+                    *x - motion.rotation_pivot.0,
+                    *y - motion.rotation_pivot.1,
+                );
+                let rotated_reference = (
+                    motion.rotation_pivot.0
+                        + reference_offset.0 * cos
+                        - reference_offset.1 * sin,
+                    motion.rotation_pivot.1
+                        + reference_offset.0 * sin
+                        + reference_offset.1 * cos,
+                );
+                let translation = (part.x - rotated_reference.0, part.y - rotated_reference.1);
+                if !translation.0.is_finite() || !translation.1.is_finite() {
+                    return None;
+                }
+                if let Some((expected_x, expected_y)) = inferred_translation {
+                    if (translation.0 - expected_x).hypot(translation.1 - expected_y)
+                        > translation_tolerance
+                    {
+                        return None;
+                    }
+                } else {
+                    inferred_translation = Some(translation);
+                }
+                if let Some(expected_rotation) = inferred_rotation {
+                    let rotation_difference = (angular_displacement - expected_rotation
+                        + std::f64::consts::PI)
+                        .rem_euclid(std::f64::consts::TAU)
+                        - std::f64::consts::PI;
+                    if rotation_difference.abs() > angular_tolerance {
+                        return None;
+                    }
+                } else {
+                    inferred_rotation = Some(angular_displacement);
+                }
+            }
+            let translation = inferred_translation?;
+            if translation.0.hypot(translation.1)
+                > motion.translation_bound + translation_tolerance
+            {
+                return None;
             }
         }
         for &target in target_body_indices {
