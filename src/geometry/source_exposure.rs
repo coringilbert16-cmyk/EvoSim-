@@ -1157,13 +1157,16 @@ mod tests {
                                     &motion,
                                     &inventory,
                                 )
-                                .expect("every sampled pose inside the declared cell must be covered");
-                            let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
-                                pose_source,
-                                &bodies,
-                                &[1],
-                            )
-                            .expect("exact current-pose visibility must remain available");
+                                .expect(
+                                    "every sampled pose inside the declared cell must be covered",
+                                );
+                            let exact =
+                                visible_polygonal_intervals_for_targets_with_cut_provenance(
+                                    pose_source,
+                                    &bodies,
+                                    &[1],
+                                )
+                                .expect("exact current-pose visibility must remain available");
                             for signature in indexed
                                 .iter()
                                 .filter_map(|interval| interval.visibility_signature.as_ref())
