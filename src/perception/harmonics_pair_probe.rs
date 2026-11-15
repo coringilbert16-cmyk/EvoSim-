@@ -954,8 +954,7 @@ fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
     assert!(evaluation.error.receiver_force <= budget.receiver_force);
     assert!(
         samples.iter().all(|sample| {
-            (sample.position.x - evaluation.center.x)
-                .hypot(sample.position.y - evaluation.center.y)
+            (sample.position.x - evaluation.center.x).hypot(sample.position.y - evaluation.center.y)
                 <= evaluation.radius + 1.0e-12
         }),
         "combined adaptive result must retain a radius enclosing every original sample"
