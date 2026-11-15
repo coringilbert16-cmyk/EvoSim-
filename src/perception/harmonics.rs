@@ -2201,8 +2201,8 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
         let ba = expanded_ba
             .iter()
             .find(|entry| (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9);
-        let (potential_ab, force_a_ab, force_b_ab, error_ab_a, error_ab_b, potential_error_ab) =
-            ab.map_or(
+        let (potential_ab, force_a_ab, force_b_ab, error_ab_a, error_ab_b, potential_error_ab) = ab
+            .map_or(
                 (
                     0.0,
                     super::resonance_boundary_far_field::BoundaryKernelVector::default(),
@@ -2223,8 +2223,8 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                     )
                 },
             );
-        let (potential_ba, force_b_ba, force_a_ba, error_b_b, error_b_a, potential_error_ba) =
-            ba.map_or(
+        let (potential_ba, force_b_ba, force_a_ba, error_b_b, error_b_a, potential_error_ba) = ba
+            .map_or(
                 (
                     0.0,
                     super::resonance_boundary_far_field::BoundaryKernelVector::default(),
