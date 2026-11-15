@@ -2115,7 +2115,7 @@ fn expand_resonance_boundary_interaction_samples(
     samples: &[ResonanceBoundaryInteractionSample],
 ) -> Option<Vec<ResonanceBoundaryFrequencyExpansion>> {
     use super::resonance_boundary_far_field::{
-        BoundaryKernelExpansion, BoundaryKernelVector, WeightedBoundaryKernelSample,
+        BoundaryKernelVector, WeightedBoundaryKernelSample,
     };
 
     let first = samples.first()?;
@@ -2191,13 +2191,11 @@ fn expand_resonance_boundary_interaction_samples(
                     })
                 })
                 .collect::<Option<Vec<_>>>()?;
-            let expansion = BoundaryKernelExpansion::new(
+            let evaluation = evaluate_boundary_kernel_samples_adaptive(
                 source_center,
                 receiver_center,
-                sample_center,
                 weighted_samples,
             )?;
-            let evaluation = expansion.evaluate()?;
             Some(ResonanceBoundaryFrequencyExpansion {
                 frequency_cycles_per_day: frequency,
                 evaluation,
