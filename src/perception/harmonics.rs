@@ -2137,6 +2137,15 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
         });
     }
 
+    let cluster_radius = samples
+        .iter()
+        .map(|sample| {
+            (sample.position.x - sample_center.x).hypot(sample.position.y - sample_center.y)
+        })
+        .fold(0.0_f64, f64::max);
+    if !cluster_radius.is_finite() {
+        return None;
+    }
     let min_x = samples
         .iter()
         .map(|sample| sample.position.x)
@@ -2180,7 +2189,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
                 + right_evaluation.error.receiver_force,
         },
         center: sample_center,
-        radius: left_evaluation.radius.max(right_evaluation.radius),
+        radius: cluster_radius,
     })
 }
 
@@ -2327,6 +2336,19 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
             return None;
         }
 
+        let center = BoundaryKernelVector {
+            x: samples.iter().map(|sample| sample.position.x).sum::<f64>()
+                / samples.len() as f64,
+            y: samples.iter().map(|sample| sample.position.y).sum::<f64>()
+                / samples.len() as f64,
+        };
+        let radius = samples
+            .iter()
+            .map(|sample| (sample.position.x - center.x).hypot(sample.position.y - center.y))
+            .fold(0.0_f64, f64::max);
+        if !center.x.is_finite() || !center.y.is_finite() || !radius.is_finite() {
+            return None;
+        }
         let min_x = samples
             .iter()
             .map(|sample| sample.position.x)
@@ -2372,11 +2394,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
                 source_force: left.error.source_force + right.error.source_force,
                 receiver_force: left.error.receiver_force + right.error.receiver_force,
             },
-            center: BoundaryKernelVector {
-                x: 0.5 * (left.center.x + right.center.x),
-                y: 0.5 * (left.center.y + right.center.y),
-            },
-            radius: left.radius.max(right.radius),
+            center,
+            radius,
         };
         [
             combined.potential,
