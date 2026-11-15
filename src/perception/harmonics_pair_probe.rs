@@ -805,4 +805,45 @@ fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() 
             expansion.evaluation.error.potential,
         );
     }
+#[test]
+fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
+    let catalog = crate::resources::default_catalog();
+    let a = single_body("Carbon", 0.0, 0.0, 0.13, &catalog);
+    let b = asymmetric_receiver((0.0, 0.0), -0.09, &catalog);
+    let evaluation = super::resonance_mutual_boundary_pair_evaluation(&a, &b, &catalog, 211)
+        .expect("separated unoccluded bodies should have a valid mutual expansion");
+    let exact = super::resonance_pair_potential(&a, &b, &catalog, 211)
+        .expect("exact symmetric pair potential should be available");
+    assert!(
+        (evaluation.potential - exact).abs() <= evaluation.potential_error + 1e-9,
+        "mutual expansion potential error exceeded its bound: approximate={}, exact={}, bound={}",
+        evaluation.potential,
+        exact,
+        evaluation.potential_error,
+    );
+
+    let step = 1.0e-4;
+    let plus_a = super::translated_physical_material(&a, step, 0.0)
+        .expect("translated source should remain valid");
+    let minus_a = super::translated_physical_material(&a, -step, 0.0)
+        .expect("translated source should remain valid");
+    let exact_force_a_x = -(super::resonance_pair_potential(&plus_a, &b, &catalog, 211)
+        .expect("plus source potential")
+        - super::resonance_pair_potential(&minus_a, &b, &catalog, 211)
+            .expect("minus source potential"))
+        / (2.0 * step);
+    assert!(
+        (evaluation.force_a_x - exact_force_a_x).abs() <= evaluation.force_a_error + 1e-5,
+        "source force exceeded its expansion bound: approximate={}, exact={}, bound={}",
+        evaluation.force_a_x,
+        exact_force_a_x,
+        evaluation.force_a_error,
+    );
+    assert!(
+        (evaluation.force_a_x + evaluation.force_b_x).abs() <= 1e-8
+            && (evaluation.force_a_y + evaluation.force_b_y).abs() <= 1e-8,
+        "unoccluded mutual center forces must be equal and opposite"
+    );
+}
+
 }
