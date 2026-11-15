@@ -3192,6 +3192,23 @@ mod visibility_tests {
             exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
         );
 
+        let undersized_radius = [
+            VisibilityBodyMotionBound {
+                rotation_pivot: (5.0, 0.0),
+                radius_bound: 0.25,
+                ..VisibilityBodyMotionBound::default()
+            },
+            motion[1],
+        ];
+        assert!(build_visibility_pose_cell_candidate_inventory(
+            (-5.0, 0.0),
+            &reference_bodies,
+            &target_indices,
+            0.5,
+            &undersized_radius,
+        )
+        .is_none());
+
         let outside_envelope = [
             rectangle_body(0, 5.0, 0.0, 2.0, 2.0),
             rectangle_body(1, 1.0, 0.0, 0.5, 0.5),
