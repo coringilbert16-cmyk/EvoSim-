@@ -1397,3 +1397,13 @@ compose the local endpoints into world positions, and prove that intersection
 parameters stay strict-interior and event ordering remains stable over the
 pose cell. Coincident cuts, collinear overlap endpoints, and near-parallel
 events remain unresolved and require exact evaluation or subdivision.
+
+## 32. Provenance-driven straight-intersection pose resolver
+
+The straight/straight visibility event can now be consumed directly by a rigid-pose resolver. It uses the four local edge endpoints retained in the event, transforms each endpoint through the current owning-body pose, and composes the independent target/blocker translation and angular rates into the analytic intersection derivative.
+
+The resolver validates the event's target and blocker body/unit identities against the caller's expected identities. It also checks that the event's stored target and blocker parameters still identify a mutually consistent strict-interior intersection after the current poses are applied. It does not reconstruct feature identity from coordinates or select a nearest edge. Unsupported event variants, stale identities, inconsistent parameters, non-finite poses, parallel/near-parallel geometry, and endpoint intersections return unresolved so the caller can use exact evaluation or subdivision.
+
+A finite-difference regression exercises simultaneous translation and rotation of both rigid bodies and checks the resulting world intersection derivative. This closes the local-endpoint-to-world-pose composition gap for straight/straight cuts only.
+
+This is **not yet a pose-cell certificate**. The resolver evaluates one reference pose and one generalized-coordinate derivative. A scalable caller must still bound target/blocker parameter movement and prove that the intersection remains strict-interior and that all visibility event ordering remains unchanged throughout the proposed pose cell. Coincident cuts, event-order swaps, tangencies, and unsupported intersection classes continue to require exact/subdivision fallback.
