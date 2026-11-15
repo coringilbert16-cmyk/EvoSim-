@@ -1738,6 +1738,17 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
     if !source.0.is_finite() || !source.1.is_finite() {
         return None;
     }
+    if let Some(envelope) = motion_envelope {
+        if !envelope.source_translation_bound.is_finite()
+            || envelope.source_translation_bound < 0.0
+            || envelope.body_motion.len() != bodies.len()
+        {
+            return None;
+        }
+        for motion in envelope.body_motion {
+            motion.maximum_point_displacement()?;
+        }
+    }
     let mut target_body_mask = vec![false; bodies.len()];
     for &index in target_body_indices {
         *target_body_mask.get_mut(index)? = true;
