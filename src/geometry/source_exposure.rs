@@ -581,6 +581,106 @@ mod tests {
     }
 
     #[test]
+    fn pose_cell_visibility_broad_phase_includes_swept_blockers() {
+        let target_bounds = (5.0, 6.0, -0.5, 0.5);
+        let body_bounds = [target_bounds, (7.0, 8.0, -0.5, 0.5)];
+        let still = VisibilityBodyMotionBound::default();
+        let still_motion = [still, still];
+
+        let current = candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            0.0,
+            target_bounds,
+            still,
+            0.0,
+            &body_bounds,
+            &still_motion,
+        )
+        .expect("finite stationary bounds should produce candidates");
+        assert_eq!(current, vec![0]);
+
+        let blocker_moves = [
+            still,
+            VisibilityBodyMotionBound {
+                translation_bound: 1.0,
+                ..still
+            },
+        ];
+        let swept = candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            0.0,
+            target_bounds,
+            still,
+            0.0,
+            &body_bounds,
+            &blocker_moves,
+        )
+        .expect("swept blocker bounds should produce candidates");
+        assert_eq!(swept, vec![0, 1]);
+
+        let source_moves = candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            1.0,
+            target_bounds,
+            still,
+            0.0,
+            &body_bounds,
+            &still_motion,
+        )
+        .expect("source motion must expand relative blocker bounds");
+        assert_eq!(source_moves, vec![0, 1]);
+
+        let blocker_rotates = [
+            still,
+            VisibilityBodyMotionBound {
+                angular_bound_radians: std::f64::consts::FRAC_PI_2,
+                radius_bound: 2.0,
+                ..still
+            },
+        ];
+        let rotated = candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            0.0,
+            target_bounds,
+            still,
+            0.0,
+            &body_bounds,
+            &blocker_rotates,
+        )
+        .expect("rotational sweep bounds should produce candidates");
+        assert_eq!(rotated, vec![0, 1]);
+    }
+
+    #[test]
+    fn pose_cell_visibility_broad_phase_rejects_incomplete_or_invalid_motion_inventory() {
+        let bounds = [(5.0, 6.0, -0.5, 0.5)];
+        let still = VisibilityBodyMotionBound::default();
+        assert!(candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            0.0,
+            bounds[0],
+            still,
+            0.0,
+            &bounds,
+            &[],
+        )
+        .is_none());
+        assert!(candidate_body_indices_for_pose_cell(
+            (0.0, 0.0),
+            0.0,
+            bounds[0],
+            still,
+            0.0,
+            &bounds,
+            &[VisibilityBodyMotionBound {
+                translation_bound: f64::NAN,
+                ..still
+            }],
+        )
+        .is_none());
+    }
+
+    #[test]
     fn visibility_cut_signature_tracks_stable_feature_order_not_coordinates() {
         let event = |x| VisibilityCutEvent::RayThroughRigidFeature {
             blocker_body_index: 2,
