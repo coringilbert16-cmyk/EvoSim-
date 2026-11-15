@@ -1245,6 +1245,98 @@ pub(crate) fn rigid_circle_arc_endpoint_pose_derivative(
     Some((world_point, derivative))
 }
 
+/// A visibility endpoint resolved to one world point and its exact
+/// generalized-coordinate derivative.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResolvedBoundaryEndpointPoseDerivative {
+    pub(crate) point: BoundaryKernelVector,
+    pub(crate) derivative: BoundaryKernelVector,
+}
+
+/// Consume the typed endpoint provenance emitted by the exact visibility
+/// solver. Target vertices and unique straight/circle intersection events are
+/// differentiated through their owning rigid poses; unresolved or unsupported
+/// cuts remain on exact evaluation/subdivision.
+#[allow(dead_code)]
+pub(crate) fn resolve_boundary_endpoint_pose_derivative(
+    provenance: &crate::source_exposure::BoundaryEndpointProvenance,
+    expected_target_body: usize,
+    expected_target_unit: usize,
+    expected_blocker_body: usize,
+    expected_blocker_unit: usize,
+    target_pose: RigidBoundaryPose,
+    blocker_pose: RigidBoundaryPose,
+    target_translation_derivative: BoundaryKernelVector,
+    target_angular_derivative: f64,
+    blocker_translation_derivative: BoundaryKernelVector,
+    blocker_angular_derivative: f64,
+) -> Option<ResolvedBoundaryEndpointPoseDerivative> {
+    match provenance {
+        crate::source_exposure::BoundaryEndpointProvenance::RigidTargetVertex {
+            body_index,
+            unit_index,
+            local_point,
+            ..
+        } if *body_index == expected_target_body && *unit_index == expected_target_unit => {
+            let point = target_pose.transform_local_point(BoundaryKernelVector {
+                x: local_point.0,
+                y: local_point.1,
+            })?;
+            let derivative = rigid_pose_point_derivative(
+                point,
+                target_pose.pivot,
+                target_translation_derivative,
+                target_angular_derivative,
+            )?;
+            Some(ResolvedBoundaryEndpointPoseDerivative { point, derivative })
+        }
+        crate::source_exposure::BoundaryEndpointProvenance::RigidVisibilityIntersection {
+            event, ..
+        } => match event {
+            crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
+                let resolved = resolve_straight_boundary_intersection_event(
+                    event,
+                    expected_target_body,
+                    expected_target_unit,
+                    expected_blocker_body,
+                    expected_blocker_unit,
+                    target_pose,
+                    blocker_pose,
+                    target_translation_derivative,
+                    target_angular_derivative,
+                    blocker_translation_derivative,
+                    blocker_angular_derivative,
+                )?;
+                Some(ResolvedBoundaryEndpointPoseDerivative {
+                    point: resolved.intersection,
+                    derivative: resolved.derivative.point_derivative,
+                })
+            }
+            crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection { .. } => {
+                let (point, derivative) = resolve_circle_straight_intersection_event(
+                    event,
+                    expected_target_body,
+                    expected_target_unit,
+                    expected_blocker_body,
+                    expected_blocker_unit,
+                    target_pose,
+                    blocker_pose,
+                    target_translation_derivative,
+                    target_angular_derivative,
+                    blocker_translation_derivative,
+                    blocker_angular_derivative,
+                )?;
+                Some(ResolvedBoundaryEndpointPoseDerivative {
+                    point,
+                    derivative: derivative.point_derivative,
+                })
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 /// Conservative absolute movement bounds for the two parameters of one
 /// straight/straight intersection over a pose cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
