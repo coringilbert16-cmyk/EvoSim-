@@ -2108,12 +2108,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
                 continue;
             }
 
-            let target_edge_bounds = (
-                a.0.min(b.0),
-                a.0.max(b.0),
-                a.1.min(b.1),
-                a.1.max(b.1),
-            );
+            let target_edge_bounds = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
             let candidate_body_indices = if let Some(envelope) = motion_envelope {
                 candidate_body_indices_for_pose_cell(
                     source,
@@ -2870,13 +2865,12 @@ mod visibility_tests {
         let target_indices = [0];
         let motion = [VisibilityBodyMotionBound::default()];
 
-        let static_intervals =
-            visible_polygonal_intervals_for_targets_with_cut_provenance(
-                (-5.0, 0.0),
-                &bodies,
-                &target_indices,
-            )
-            .expect("static rectangle visibility should be exact");
+        let static_intervals = visible_polygonal_intervals_for_targets_with_cut_provenance(
+            (-5.0, 0.0),
+            &bodies,
+            &target_indices,
+        )
+        .expect("static rectangle visibility should be exact");
         let pose_cell_intervals =
             visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
                 (-5.0, 0.0),
