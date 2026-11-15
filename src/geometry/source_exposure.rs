@@ -1357,6 +1357,18 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                 target_unit_index: unit_index,
                                 target_edge_index: edge_index,
                                 blocker_edge_index: block_edge_index,
+                                target_edge_start_local: localize_boundary_point(
+                                    bodies, body_index, unit_index, a,
+                                )?,
+                                target_edge_end_local: localize_boundary_point(
+                                    bodies, body_index, unit_index, b,
+                                )?,
+                                blocker_edge_start_local: localize_boundary_point(
+                                    bodies, block_body, block_unit, c,
+                                )?,
+                                blocker_edge_end_local: localize_boundary_point(
+                                    bodies, block_body, block_unit, d,
+                                )?,
                                 target_parameter: t,
                                 blocker_parameter: u,
                             },
