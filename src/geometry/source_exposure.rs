@@ -1527,9 +1527,7 @@ impl VisibilityPoseCellCandidateInventory {
         let source_displacement =
             (source.0 - self.source_reference.0).hypot(source.1 - self.source_reference.1);
         if !source_displacement.is_finite()
-            || source_displacement
-                > self.source_translation_bound
-                    + 1.0e-10 * self.source_translation_bound.max(1.0)
+            || source_displacement > self.source_translation_bound + 1.0e-10 * self.source_translation_bound.max(1.0)
         {
             return None;
         }
@@ -1559,8 +1557,7 @@ impl VisibilityPoseCellCandidateInventory {
                 if !displacement.is_finite()
                     || displacement > maximum_displacement + tolerance
                     || !angular_displacement.is_finite()
-                    || angular_displacement.abs()
-                        > motion.angular_bound_radians + 1.0e-10
+                    || angular_displacement.abs() > motion.angular_bound_radians + 1.0e-10
                 {
                     return None;
                 }
@@ -1613,12 +1610,7 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
                 return None;
             }
             units.push(part.unit_index);
-            reference_parts.push((
-                part.unit_index,
-                part.x,
-                part.y,
-                part.rotation_radians,
-            ));
+            reference_parts.push((part.unit_index, part.x, part.y, part.rotation_radians));
         }
         reference_part_poses.push(reference_parts);
     }
@@ -3142,7 +3134,10 @@ mod visibility_tests {
         )
         .expect("exact sampled-pose visibility");
         assert_eq!(
-            reused.iter().map(|entry| entry.interval).collect::<Vec<_>>(),
+            reused
+                .iter()
+                .map(|entry| entry.interval)
+                .collect::<Vec<_>>(),
             exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
         );
 
@@ -3150,15 +3145,17 @@ mod visibility_tests {
             rectangle_body(0, 5.0, 0.0, 2.0, 2.0),
             rectangle_body(1, 1.0, 0.0, 0.5, 0.5),
         ];
-        assert!(visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
-            (-4.5, 0.0),
-            &outside_envelope,
-            &target_indices,
-            0.5,
-            &motion,
-            &inventory,
-        )
-        .is_none());
+        assert!(
+            visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+                (-4.5, 0.0),
+                &outside_envelope,
+                &target_indices,
+                0.5,
+                &motion,
+                &inventory,
+            )
+            .is_none()
+        );
     }
 
     #[test]
