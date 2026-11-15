@@ -1180,74 +1180,7 @@ mod tests {
                                         signature,
                                     )
                                     .expect("every moving/rotating pose signature must bind to the same swept inventory");
-                                let event_bounds = signature
-                                    .ordered_events
-                                    .iter()
-                                    .cloned()
-                                    .map(|identity| {
-                                        crate::source_exposure::VisibilityEventPoseCellBound {
-                                            identity,
-                                            parameter_change_bound: 0.0,
-                                            existence_margin: 1.0,
-                                            existence_margin_change_bound: 0.0,
-                                        }
-                                    })
-                                    .collect::<Vec<_>>();
-                                let ordered_cuts = signature
-                                    .ordered_parameters
-                                    .iter()
-                                    .map(|parameter| (*parameter, 0.0))
-                                    .collect::<Vec<_>>();
-                                let expansion =
-                                    crate::resonance_boundary_far_field::BoundaryKernelExpansion::new(
-                                        crate::resonance_boundary_far_field::BoundaryKernelVector {
-                                            x: 0.0,
-                                            y: 0.0,
-                                        },
-                                        crate::resonance_boundary_far_field::BoundaryKernelVector {
-                                            x: 5.0,
-                                            y: 0.0,
-                                        },
-                                        crate::resonance_boundary_far_field::BoundaryKernelVector {
-                                            x: 5.0,
-                                            y: 0.5,
-                                        },
-                                        vec![
-                                            crate::resonance_boundary_far_field::WeightedBoundaryKernelSample {
-                                                position: crate::resonance_boundary_far_field::BoundaryKernelVector {
-                                                    x: 5.0,
-                                                    y: 0.5,
-                                                },
-                                                weight: 1.0,
-                                            },
-                                        ],
-                                    )
-                                    .expect("one finite boundary sample should form an expansion");
-                                let coordinate =
-                                    crate::resonance_boundary_far_field::BoundaryPoseCoordinateDerivative {
-                                        source_center_derivative: crate::resonance_boundary_far_field::BoundaryKernelVector::default(),
-                                        receiver_center_derivative: crate::resonance_boundary_far_field::BoundaryKernelVector::default(),
-                                        source_center_derivative_bound: 0.0,
-                                        receiver_center_derivative_bound: 0.0,
-                                        samples: vec![
-                                            crate::resonance_boundary_far_field::BoundarySamplePoseDerivative::default(),
-                                        ],
-                                    };
-                                crate::resonance_boundary_far_field::certify_boundary_pose_cell_generalized_with_blocker_inventory(
-                                    &expansion,
-                                    signature,
-                                    std::slice::from_ref(signature),
-                                    &ordered_cuts,
-                                    &[crate::resonance_boundary_far_field::BoundarySampleMotionBound::default()],
-                                    &event_bounds,
-                                    &[coordinate],
-                                    &inventory,
-                                    pose_source,
-                                    &bodies,
-                                    &[1],
-                                    1,
-                                )
-                                .expect("certified moving/rotating blocker inventory must reach generalized force/torque evaluation");
+
                             }
                             assert_eq!(indexed.len(), exact.len());
                             for (indexed_interval, exact_interval) in indexed.iter().zip(&exact) {
@@ -1291,6 +1224,118 @@ mod tests {
             .is_none(),
             "rotation allowance must not mask translation beyond the declared pose cell"
         );
+    }
+
+    #[test]
+    fn certified_inventory_reaches_generalized_boundary_pose_evaluator() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let form = Form::Rectangle {
+            width: 1.0,
+            height: 1.0,
+        };
+        let radius = form.bounding_radius();
+        let bodies = vec![OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 0,
+                form,
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 5.0 - radius,
+            max_x: 5.0 + radius,
+            min_y: -radius,
+            max_y: radius,
+        }];
+        let source = (-5.0, 0.0);
+        let motion = [VisibilityBodyMotionBound {
+            translation_bound: 0.0,
+            angular_bound_radians: 0.0,
+            rotation_pivot: (5.0, 0.0),
+            radius_bound: radius,
+        }];
+        let inventory = build_visibility_pose_cell_candidate_inventory(
+            source,
+            &bodies,
+            &[0],
+            0.0,
+            &motion,
+        )
+        .expect("stationary target inventory should be valid");
+        let intervals = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+            source,
+            &bodies,
+            &[0],
+            0.0,
+            &motion,
+            &inventory,
+        )
+        .expect("target visibility should use the certified inventory");
+        let signature = intervals
+            .iter()
+            .find_map(|interval| interval.visibility_signature.as_ref())
+            .expect("visible target boundary should have a stable signature");
+        let event_bounds = signature
+            .ordered_events
+            .iter()
+            .cloned()
+            .map(|identity| VisibilityEventPoseCellBound {
+                identity,
+                parameter_change_bound: 0.0,
+                existence_margin: 1.0,
+                existence_margin_change_bound: 0.0,
+            })
+            .collect::<Vec<_>>();
+        let ordered_cuts = signature
+            .ordered_parameters
+            .iter()
+            .map(|parameter| (*parameter, 0.0))
+            .collect::<Vec<_>>();
+        let point = crate::resonance_boundary_far_field::BoundaryKernelVector {
+            x: 5.0,
+            y: 0.5,
+        };
+        let expansion = crate::resonance_boundary_far_field::BoundaryKernelExpansion::new(
+            crate::resonance_boundary_far_field::BoundaryKernelVector { x: 0.0, y: 0.0 },
+            crate::resonance_boundary_far_field::BoundaryKernelVector { x: 5.0, y: 0.0 },
+            point,
+            vec![
+                crate::resonance_boundary_far_field::WeightedBoundaryKernelSample {
+                    position: point,
+                    weight: 1.0,
+                },
+            ],
+        )
+        .expect("finite boundary sample should form an expansion");
+        let coordinate =
+            crate::resonance_boundary_far_field::BoundaryPoseCoordinateDerivative {
+                source_center_derivative:
+                    crate::resonance_boundary_far_field::BoundaryKernelVector::default(),
+                receiver_center_derivative:
+                    crate::resonance_boundary_far_field::BoundaryKernelVector::default(),
+                source_center_derivative_bound: 0.0,
+                receiver_center_derivative_bound: 0.0,
+                samples: vec![
+                    crate::resonance_boundary_far_field::BoundarySamplePoseDerivative::default(),
+                ],
+            };
+        crate::resonance_boundary_far_field::certify_boundary_pose_cell_generalized_with_blocker_inventory(
+            &expansion,
+            signature,
+            std::slice::from_ref(signature),
+            &ordered_cuts,
+            &[crate::resonance_boundary_far_field::BoundarySampleMotionBound::default()],
+            &event_bounds,
+            &[coordinate],
+            &inventory,
+            source,
+            &bodies,
+            &[0],
+            0,
+        )
+        .expect("complete stationary visibility proof should reach generalized pose evaluation");
     }
 
     #[test]
