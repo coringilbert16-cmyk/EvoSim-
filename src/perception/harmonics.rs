@@ -268,6 +268,7 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
     boundary: MaterialAuraBoundary,
     /// Incident field before the receiver's oscillator response. Pair
     /// interference compares this with the receiver's own emitted field;
@@ -1487,7 +1488,7 @@ fn material_aura_receptions_with_geometry_prepared(
     let target_body_indices = [0];
     let receiver_geometry = receiver_bodies.first()?;
     let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
-        crate::source_exposure::visible_polygonal_intervals_for_targets(
+        crate::source_exposure::visible_polygonal_intervals_for_targets_with_cut_provenance(
             (source_x, source_y),
             receiver_bodies,
             &target_body_indices,
@@ -1533,7 +1534,8 @@ fn material_aura_receptions_with_geometry_prepared(
                           normal_x: f64,
                           normal_y: f64,
                           projected_extent: f64,
-                          boundary: MaterialAuraBoundary| {
+                          boundary: MaterialAuraBoundary,
+                          visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
@@ -1565,6 +1567,7 @@ fn material_aura_receptions_with_geometry_prepared(
                 receiver_normal_x: normal_x,
                 receiver_normal_y: normal_y,
                 projected_extent,
+                visibility_signature,
                 boundary,
                 incident_spectrum: incident,
                 spectrum: received,
@@ -1574,7 +1577,8 @@ fn material_aura_receptions_with_geometry_prepared(
         Some(())
     };
 
-    for interval in straight_intervals {
+    for exposed in straight_intervals {
+        let interval = exposed.interval;
         let projected_extent =
             crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
@@ -1590,6 +1594,7 @@ fn material_aura_receptions_with_geometry_prepared(
                 end: interval.end,
                 normal: interval.outward_normal,
             },
+            exposed.visibility_signature,
         )?;
     }
 
@@ -1609,6 +1614,7 @@ fn material_aura_receptions_with_geometry_prepared(
             normal_y,
             projected_extent,
             MaterialAuraBoundary::Arc(interval.arc),
+            None,
         )?;
     }
 
