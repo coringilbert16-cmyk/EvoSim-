@@ -441,6 +441,26 @@ pub(crate) struct ResonancePairPotentialComponent {
     pub(crate) energy: f64,
 }
 
+/// Exact, geometry-resolved input to the mutual environmental interaction
+/// evaluator. Each record is one currently exposed receiver-boundary sample;
+/// its spectra already include the existing source/receiver mass scaling and
+/// distance attenuation. Keeping the two spectra separate preserves their
+/// frequency and phase information for controlled spatial aggregation.
+#[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)] // Consumed by the staged mutual boundary evaluator.
+pub(crate) struct ResonanceBoundaryInteractionSample {
+    pub(crate) source_x: f64,
+    pub(crate) source_y: f64,
+    pub(crate) receiver_x: f64,
+    pub(crate) receiver_y: f64,
+    pub(crate) receiver_normal_x: f64,
+    pub(crate) receiver_normal_y: f64,
+    pub(crate) projected_extent: f64,
+    pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
+    pub(crate) incident_spectrum: ToneSpectrum,
+    pub(crate) receiver_spectrum: ToneSpectrum,
+}
+
 /// Translation force on one participant in a resonance interaction.
 ///
 /// The order returned by the multi-body gradient is source, receiver, then
@@ -1883,13 +1903,51 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
+    let samples = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+        source, receiver, occluders, catalog, tick, prepared_source, prepared_receiver,
+    )?;
+    let mut potential = Vec::<ResonancePairPotentialComponent>::new();
+    for sample in samples {
+        for contribution in
+            spectrum_cross_energy_components(&sample.incident_spectrum, &sample.receiver_spectrum)?
+        {
+            if let Some(existing) = potential.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                existing.energy += contribution.energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                potential.push(contribution);
+            }
+        }
+    }
+    potential.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(potential)
+}
+
+/// Preserve the exact discrete boundary samples used by the mechanical pair
+/// potential. This is the shared input representation for the future mutual
+/// evaluator; it deliberately retains exact visibility classification and
+/// does not replace ambiguous samples with a smooth far-field approximation.
+#[allow(dead_code)]
+pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_source: Option<&MaterialResonanceEmitter>,
+    prepared_receiver: Option<&MaterialResonanceEmitter>,
+) -> Option<Vec<ResonanceBoundaryInteractionSample>> {
     let receptions = material_aura_receptions_with_occluders_prepared(
-        source,
-        receiver,
-        occluders,
-        catalog,
-        tick,
-        prepared_source,
+        source, receiver, occluders, catalog, tick, prepared_source,
     )?;
     if receptions.is_empty() {
         return Some(Vec::new());
@@ -1916,9 +1974,10 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
         .map(|emitter| &emitter.emitted)
         .or(computed_receiver_emission.as_ref())?;
 
-    let mut potential = Vec::<ResonancePairPotentialComponent>::new();
-    for sample in receptions {
-        let local_distance = (sample.receiver_x - receiver_x).hypot(sample.receiver_y - receiver_y);
+    let mut samples = Vec::with_capacity(receptions.len());
+    for reception in receptions {
+        let local_distance =
+            (reception.receiver_x - receiver_x).hypot(reception.receiver_y - receiver_y);
         if !local_distance.is_finite() {
             return None;
         }
@@ -1926,35 +1985,27 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
         // extent is applied to the receiver's own boundary field. The
         // incident spectrum already contains its matching extent factor.
         let local_scale =
-            receiver_mass_scale * sample.projected_extent.sqrt() / (1.0 + local_distance);
+            receiver_mass_scale * reception.projected_extent.sqrt() / (1.0 + local_distance);
         if !local_scale.is_finite() {
             return None;
         }
         let mut local_field = ToneSpectrum::empty();
         add_spectrum(&mut local_field, receiver_emission, local_scale);
         local_field.retain_strongest();
-        for contribution in
-            spectrum_cross_energy_components(&sample.incident_spectrum, &local_field)?
-        {
-            if let Some(existing) = potential.iter_mut().find(|component| {
-                (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
-                    <= 1e-9
-            }) {
-                existing.energy += contribution.energy;
-                if !existing.energy.is_finite() {
-                    return None;
-                }
-            } else {
-                potential.push(contribution);
-            }
-        }
+        samples.push(ResonanceBoundaryInteractionSample {
+            source_x: reception.source_x,
+            source_y: reception.source_y,
+            receiver_x: reception.receiver_x,
+            receiver_y: reception.receiver_y,
+            receiver_normal_x: reception.receiver_normal_x,
+            receiver_normal_y: reception.receiver_normal_y,
+            projected_extent: reception.projected_extent,
+            visibility_signature: reception.visibility_signature,
+            incident_spectrum: reception.incident_spectrum,
+            receiver_spectrum: local_field,
+        });
     }
-    potential.sort_by(|a, b| {
-        a.frequency_cycles_per_day
-            .partial_cmp(&b.frequency_cycles_per_day)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    Some(potential)
+    Some(samples)
 }
 
 /// One symmetric resonance-derived pair potential for an isolated pair,
