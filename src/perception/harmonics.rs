@@ -2095,8 +2095,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
         let receiver_value = 1.0 / (1.0 + receiver_distance);
         let source_denominator = 1.0 + source_distance;
         let receiver_denominator = 1.0 + receiver_distance;
-        let source_scale =
-            -1.0 / (source_distance * source_denominator * source_denominator);
+        let source_scale = -1.0 / (source_distance * source_denominator * source_denominator);
         let receiver_scale =
             -1.0 / (receiver_distance * receiver_denominator * receiver_denominator);
         let source_gradient = BoundaryKernelVector {
