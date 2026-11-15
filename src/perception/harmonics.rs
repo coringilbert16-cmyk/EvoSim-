@@ -2337,10 +2337,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
         }
 
         let center = BoundaryKernelVector {
-            x: samples.iter().map(|sample| sample.position.x).sum::<f64>()
-                / samples.len() as f64,
-            y: samples.iter().map(|sample| sample.position.y).sum::<f64>()
-                / samples.len() as f64,
+            x: samples.iter().map(|sample| sample.position.x).sum::<f64>() / samples.len() as f64,
+            y: samples.iter().map(|sample| sample.position.y).sum::<f64>() / samples.len() as f64,
         };
         let radius = samples
             .iter()
