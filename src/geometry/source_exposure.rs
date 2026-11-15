@@ -49,11 +49,17 @@ pub(crate) enum VisibilityCutEvent {
     RayThroughRigidFeature {
         blocker_body_index: usize,
         blocker_unit_index: usize,
+        target_body_index: usize,
+        target_unit_index: usize,
+        target_edge_index: usize,
         local_point: (f64, f64),
     },
     RayThroughCircleTangent {
         blocker_body_index: usize,
         blocker_unit_index: usize,
+        target_body_index: usize,
+        target_unit_index: usize,
+        target_edge_index: usize,
         tangent_side: i8,
         local_center: (f64, f64),
         radius: f64,
@@ -225,6 +231,9 @@ mod tests {
             VisibilityCutEvent::RayThroughRigidFeature {
                 blocker_body_index: 2,
                 blocker_unit_index: 7,
+                target_body_index: 0,
+                target_unit_index: 3,
+                target_edge_index: 1,
                 local_point: (0.5, -0.25),
             },
         );
@@ -1217,6 +1226,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                 VisibilityCutEvent::RayThroughCircleTangent {
                                     blocker_body_index: candidate_body,
                                     blocker_unit_index,
+                                    target_body_index: body_index,
+                                    target_unit_index: unit_index,
+                                    target_edge_index: edge_index,
                                     tangent_side: if cross < 0.0 { -1 } else { 1 },
                                     local_center: (0.0, 0.0),
                                     radius: *radius,
@@ -1225,6 +1237,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                             _ => VisibilityCutEvent::RayThroughRigidFeature {
                                 blocker_body_index: candidate_body,
                                 blocker_unit_index,
+                                target_body_index: body_index,
+                                target_unit_index: unit_index,
+                                target_edge_index: edge_index,
                                 local_point,
                             },
                         };
