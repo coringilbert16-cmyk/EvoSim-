@@ -908,6 +908,64 @@ fn add_circle_tangent_points_tagged(
 }
 
 type IndexedCriticalPointsByBody = Vec<Vec<(usize, usize, f64, f64)>>;
+type IndexedStraightEdgesByBody = Vec<Vec<(usize, usize, (f64, f64), (f64, f64))>>;
+
+#[derive(Clone, Debug, PartialEq)]
+struct VisibilityBlockerBodyInventory {
+    body_index: usize,
+    critical_features: Vec<(usize, usize, f64, f64)>,
+    straight_edges: Vec<(usize, usize, (f64, f64), (f64, f64))>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct TargetEdgeBlockerInventory {
+    candidate_bodies: Vec<VisibilityBlockerBodyInventory>,
+}
+
+fn build_target_edge_blocker_inventory(
+    candidate_body_indices: &[usize],
+    critical_points_by_body: &IndexedCriticalPointsByBody,
+    straight_edges_by_body: &IndexedStraightEdgesByBody,
+) -> Option<TargetEdgeBlockerInventory> {
+    let mut candidate_bodies = Vec::with_capacity(candidate_body_indices.len());
+    let mut previous_body = None;
+    for &body_index in candidate_body_indices {
+        if previous_body.is_some_and(|previous| previous >= body_index) {
+            return None;
+        }
+        previous_body = Some(body_index);
+        let critical_features = critical_points_by_body.get(body_index)?.clone();
+        let straight_edges = straight_edges_by_body.get(body_index)?.clone();
+        let mut feature_ids = Vec::with_capacity(critical_features.len());
+        for &(unit_index, feature_index, x, y) in &critical_features {
+            if !x.is_finite()
+                || !y.is_finite()
+                || feature_ids.contains(&(unit_index, feature_index))
+            {
+                return None;
+            }
+            feature_ids.push((unit_index, feature_index));
+        }
+        let mut edge_ids = Vec::with_capacity(straight_edges.len());
+        for &(unit_index, edge_index, start, end) in &straight_edges {
+            if !start.0.is_finite()
+                || !start.1.is_finite()
+                || !end.0.is_finite()
+                || !end.1.is_finite()
+                || edge_ids.contains(&(unit_index, edge_index))
+            {
+                return None;
+            }
+            edge_ids.push((unit_index, edge_index));
+        }
+        candidate_bodies.push(VisibilityBlockerBodyInventory {
+            body_index,
+            critical_features,
+            straight_edges,
+        });
+    }
+    Some(TargetEdgeBlockerInventory { candidate_bodies })
+}
 
 fn index_critical_points_by_body(
     body_count: usize,
@@ -1295,6 +1353,11 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 &body_intervals,
                 &body_min_distances,
             )?;
+            let blocker_inventory = build_target_edge_blocker_inventory(
+                &candidate_body_indices,
+                &critical_points_by_body,
+                &straight_edges_by_body,
+            )?;
             let target_part = bodies[body_index]
                 .parts
                 .iter()
@@ -1328,9 +1391,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                     },
                 ),
             ];
-            for &candidate_body in &candidate_body_indices {
+            for blocker_body in &blocker_inventory.candidate_bodies {
+                let candidate_body = blocker_body.body_index;
                 for &(blocker_unit_index, blocker_feature_index, vx, vy) in
-                    &critical_points_by_body[candidate_body]
+                    &blocker_body.critical_features
                 {
                     let dx = vx - source.0;
                     let dy = vy - source.1;
@@ -1391,8 +1455,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
 
             // Directly split at straight-boundary intersections, including
             // contact chords. Collinear overlaps are split at both endpoints.
-            for &block_body in &candidate_body_indices {
-                for &(block_unit, block_edge_index, c, d) in &straight_edges_by_body[block_body] {
+            for blocker_body in &blocker_inventory.candidate_bodies {
+                let block_body = blocker_body.body_index;
+                for &(block_unit, block_edge_index, c, d) in &blocker_body.straight_edges {
                     if block_body == body_index && block_unit == unit_index {
                         continue;
                     }
