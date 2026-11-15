@@ -1475,6 +1475,12 @@ pub(crate) struct VisibilityBodyMotionBound {
     pub(crate) radius_bound: f64,
 }
 
+/// Source and per-body movement envelopes for one proposed visibility pose cell.
+pub(crate) struct VisibilityPoseCellMotionEnvelope<'a> {
+    pub(crate) source_translation_bound: f64,
+    pub(crate) body_motion: &'a [VisibilityBodyMotionBound],
+}
+
 impl VisibilityBodyMotionBound {
     fn maximum_point_displacement(self) -> Option<f64> {
         if !self.translation_bound.is_finite()
@@ -1720,10 +1726,11 @@ pub(crate) fn visible_polygonal_intervals(
 /// Compute visible intervals only for selected receiver bodies while retaining
 /// every body as a potential occluder. This avoids solving exposure for thousands
 /// of environmental particles when only organism energy holders receive input.
-pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
+fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
+    motion_envelope: Option<&VisibilityPoseCellMotionEnvelope<'_>>,
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
@@ -1736,8 +1743,23 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         *target_body_mask.get_mut(index)? = true;
     }
     let reference_angle = reference_angle_for_bodies(source, bodies)?;
-    let body_intervals = body_angular_intervals(source, bodies, reference_angle)?;
-    let body_min_distances = body_minimum_distances(source, bodies)?;
+    let body_bounds = motion_envelope.map(|_| {
+        bodies
+            .iter()
+            .map(|body| (body.min_x, body.max_x, body.min_y, body.max_y))
+            .collect::<Vec<_>>()
+    });
+    if motion_envelope.is_some_and(|envelope| envelope.body_motion.len() != bodies.len()) {
+        return None;
+    }
+    let (body_intervals, body_min_distances) = if motion_envelope.is_none() {
+        (
+            body_angular_intervals(source, bodies, reference_angle)?,
+            body_minimum_distances(source, bodies)?,
+        )
+    } else {
+        (Vec::new(), Vec::new())
+    };
 
     let mut straight_targets = Vec::new();
     let mut straight_edges = Vec::new();
@@ -2075,13 +2097,31 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 continue;
             }
 
-            let candidate_body_indices = candidate_body_indices_for_bounds(
-                source,
-                (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1)),
-                reference_angle,
-                &body_intervals,
-                &body_min_distances,
-            )?;
+            let target_edge_bounds = (
+                a.0.min(b.0),
+                a.0.max(b.0),
+                a.1.min(b.1),
+                a.1.max(b.1),
+            );
+            let candidate_body_indices = if let Some(envelope) = motion_envelope {
+                candidate_body_indices_for_pose_cell(
+                    source,
+                    envelope.source_translation_bound,
+                    target_edge_bounds,
+                    *envelope.body_motion.get(body_index)?,
+                    reference_angle,
+                    body_bounds.as_deref()?,
+                    envelope.body_motion,
+                )?
+            } else {
+                candidate_body_indices_for_bounds(
+                    source,
+                    target_edge_bounds,
+                    reference_angle,
+                    &body_intervals,
+                    &body_min_distances,
+                )?
+            };
             let blocker_inventory = build_target_edge_blocker_inventory(
                 &candidate_body_indices,
                 &critical_points_by_body,
@@ -2372,6 +2412,43 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         }
     }
     Some(result)
+}
+
+/// Exact current-pose visibility with stable event provenance.
+pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
+    visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
+        source,
+        bodies,
+        target_body_indices,
+        None,
+    )
+}
+
+/// Visibility evaluated with a conservative swept candidate inventory for a
+/// complete proposed pose cell. Call this at each certified pose sample using
+/// envelopes that cover the entire same cell; compare returned signatures and
+/// fall back/subdivide on any change.
+pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    source_translation_bound: f64,
+    body_motion: &[VisibilityBodyMotionBound],
+) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
+    let envelope = VisibilityPoseCellMotionEnvelope {
+        source_translation_bound,
+        body_motion,
+    };
+    visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
+        source,
+        bodies,
+        target_body_indices,
+        Some(&envelope),
+    )
 }
 
 /// Preserve the established interval-only API for existing geometry consumers.
