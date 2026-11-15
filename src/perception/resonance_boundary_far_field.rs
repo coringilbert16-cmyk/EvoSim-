@@ -3404,6 +3404,64 @@ mod tests {
     }
 
     #[test]
+    fn circle_tangent_point_displacement_bound_contains_pose_cell_changes() {
+        let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let center = BoundaryKernelVector { x: 1.0, y: 0.0 };
+        let radius = 0.5;
+        let source_displacement = 0.001;
+        let center_displacement = 0.002;
+        let (bound, existence_margin, margin_change) =
+            circle_tangent_point_displacement_bound(
+                source,
+                center,
+                radius,
+                source_displacement,
+                center_displacement,
+            )
+            .expect("external tangent remains certified over the pose cell");
+        assert!(existence_margin > margin_change);
+
+        for side in [-1.0, 1.0] {
+            let original = circle_tangent_point_pose_derivative(
+                center,
+                radius,
+                source,
+                BoundaryKernelVector::default(),
+                BoundaryKernelVector::default(),
+                side,
+            )
+            .unwrap()
+            .point;
+            for index in 0..128 {
+                let source_angle = index as f64 * 0.173;
+                let center_angle = index as f64 * 0.317 + 0.4;
+                let moved_source = BoundaryKernelVector {
+                    x: source.x + 0.8 * source_displacement * source_angle.cos(),
+                    y: source.y + 0.8 * source_displacement * source_angle.sin(),
+                };
+                let moved_center = BoundaryKernelVector {
+                    x: center.x + 0.8 * center_displacement * center_angle.cos(),
+                    y: center.y + 0.8 * center_displacement * center_angle.sin(),
+                };
+                let moved = circle_tangent_point_pose_derivative(
+                    moved_center,
+                    radius,
+                    moved_source,
+                    BoundaryKernelVector::default(),
+                    BoundaryKernelVector::default(),
+                    side,
+                )
+                .expect("small pose perturbation preserves external tangency")
+                .point;
+                assert!(
+                    (moved.x - original.x).hypot(moved.y - original.y) <= bound,
+                    "tangent point exceeded its certified displacement"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn rigid_pose_displacement_bound_contains_transformed_boundary_points() {
         let translation_bound = 0.35;
         let rotation_bound = 0.8;
