@@ -323,17 +323,17 @@ pub(crate) fn source_path_blocked(
 
 /// Exact blocker test restricted to bodies whose conservative angular bounds
 /// overlap the target boundary interval. Candidate indices refer to `bodies`.
-/// Return the stable body identities that occlude one source-to-target
+/// Return the stable body/unit identities that occlude one source-to-target
 /// segment. Invalid geometry or candidate inventories return None so callers
 /// cannot mistake an unresolved visibility test for an unblocked interval.
-pub(crate) fn source_path_blocker_body_indices_for_candidates(
+pub(crate) fn source_path_blocker_unit_identities_for_candidates(
     source: (f64, f64),
     target: (f64, f64),
     bodies: &[PhysicalBodyGeometry],
     target_body_index: usize,
     target_unit_index: usize,
     candidate_body_indices: &[usize],
-) -> Option<Vec<usize>> {
+) -> Option<Vec<(usize, usize)>> {
     if !source.0.is_finite()
         || !source.1.is_finite()
         || !target.0.is_finite()
@@ -354,18 +354,36 @@ pub(crate) fn source_path_blocker_body_indices_for_candidates(
     let mut blockers = Vec::new();
     for &body_index in candidate_body_indices {
         let body = bodies.get(body_index)?;
-        if body_blocks_segment(
-            body_index,
-            body,
-            source,
-            target,
-            target_body_index,
-            target_unit_index,
-            segment_bounds,
-        )? {
-            blockers.push(body_index);
+        if ![body.min_x, body.max_x, body.min_y, body.max_y]
+            .iter()
+            .all(|value| value.is_finite())
+            || body.min_x > body.max_x
+            || body.min_y > body.max_y
+        {
+            return None;
+        }
+        if body.max_x < segment_bounds.0
+            || body.min_x > segment_bounds.1
+            || body.max_y < segment_bounds.2
+            || body.min_y > segment_bounds.3
+        {
+            continue;
+        }
+        let mut seen_units = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if seen_units.contains(&part.unit_index) {
+                return None;
+            }
+            seen_units.push(part.unit_index);
+            if body_index == target_body_index && part.unit_index == target_unit_index {
+                continue;
+            }
+            if segment_crosses_part(source, target, part) {
+                blockers.push((body_index, part.unit_index));
+            }
         }
     }
+    blockers.sort_unstable();
     Some(blockers)
 }
 
