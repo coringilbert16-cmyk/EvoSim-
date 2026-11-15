@@ -3169,6 +3169,65 @@ mod tests {
     }
 
     #[test]
+    fn generalized_pose_cell_certificate_covers_each_supplied_force_and_torque_coordinate() {
+        let position = BoundaryKernelVector { x: 4.0, y: 1.5 };
+        let expansion = BoundaryKernelExpansion::new(
+            BoundaryKernelVector { x: 0.0, y: 0.0 },
+            BoundaryKernelVector { x: 9.0, y: 0.5 },
+            position,
+            vec![sample(position.x, position.y, 1.7)],
+        )
+        .expect("valid one-sample expansion");
+        let coordinate = |source_dx, source_dy, sample_dx, sample_dy| {
+            BoundaryPoseCoordinateDerivative {
+                source_center_derivative: BoundaryKernelVector {
+                    x: source_dx,
+                    y: source_dy,
+                },
+                receiver_center_derivative: BoundaryKernelVector::default(),
+                source_center_derivative_bound: source_dx.hypot(source_dy),
+                receiver_center_derivative_bound: 0.0,
+                samples: vec![BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector {
+                        x: sample_dx,
+                        y: sample_dy,
+                    },
+                    weight_derivative: 0.0,
+                    position_derivative_bound: sample_dx.hypot(sample_dy),
+                    absolute_weight_derivative_bound: 0.0,
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                }],
+            }
+        };
+        let coordinates = vec![coordinate(1.0, 0.0, 0.0, 0.0), coordinate(0.0, 0.0, -1.5, 4.0)];
+        let result = certify_boundary_pose_cell_generalized(
+            &expansion,
+            &[],
+            &[BoundarySampleMotionBound {
+                position_displacement: 0.001,
+                absolute_weight_change: 0.001,
+            }],
+            &coordinates,
+        )
+        .expect("complete supplied coordinate set should certify");
+        assert_eq!(result.coordinates.len(), coordinates.len());
+        assert!(result.coordinates.iter().all(|entry| {
+            entry.absolute_bound.is_finite() && entry.absolute_bound >= entry.derivative.abs()
+        }));
+        assert!(certify_boundary_pose_cell_generalized(
+            &expansion,
+            &[],
+            &[BoundarySampleMotionBound {
+                position_displacement: 0.001,
+                absolute_weight_change: 0.001,
+            }],
+            &[],
+        )
+        .is_none());
+    }
+
+    #[test]
     fn pose_coordinate_derivative_includes_sample_motion_weight_motion_and_torque_terms() {
         let source_center = BoundaryKernelVector { x: 0.0, y: 0.0 };
         let receiver_center = BoundaryKernelVector { x: 9.0, y: 0.5 };
