@@ -1436,6 +1436,33 @@ mod visibility_tests {
     }
 
     #[test]
+    fn coincident_duplicate_blockers_keep_the_cut_provenance_unresolved() {
+        let source = (-5.0, 0.0);
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let first_blocker = rectangle_body(1, 2.0, 0.0, 1.0, 0.5);
+        let second_blocker = rectangle_body(2, 2.0, 0.0, 1.0, 0.5);
+        let intervals = visible_polygonal_intervals_for_targets_with_provenance(
+            source,
+            &[target, first_blocker, second_blocker],
+            &[0],
+        )
+        .expect("coincident blockers should retain valid exact visibility intervals");
+        assert!(!intervals.is_empty());
+        assert!(
+            intervals.iter().any(|interval| {
+                matches!(
+                    interval.start_provenance,
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                ) || matches!(
+                    interval.end_provenance,
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                )
+            }),
+            "coincident cuts from distinct blockers must not be assigned a unique derivative"
+        );
+    }
+
+    #[test]
     fn candidate_filter_excludes_angularly_overlapping_bodies_behind_target() {
         let source = (-10.0, 0.0);
         let bodies = [
