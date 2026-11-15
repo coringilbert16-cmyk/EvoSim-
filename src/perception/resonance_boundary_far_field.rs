@@ -865,8 +865,10 @@ pub(crate) fn straight_intersection_parameter_motion_bound(
     let blocker_parameter_change = blocker_parameter_change + blocker_guard;
     if !target_parameter_change.is_finite()
         || !blocker_parameter_change.is_finite()
-        || target_parameter_change >= target_parameter.min(1.0 - target_parameter)
-        || blocker_parameter_change >= blocker_parameter.min(1.0 - blocker_parameter)
+        || target_parameter_change >= target_parameter - PARAMETER_MARGIN
+        || target_parameter_change >= 1.0 - PARAMETER_MARGIN - target_parameter
+        || blocker_parameter_change >= blocker_parameter - PARAMETER_MARGIN
+        || blocker_parameter_change >= 1.0 - PARAMETER_MARGIN - blocker_parameter
     {
         return None;
     }
