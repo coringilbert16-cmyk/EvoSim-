@@ -1164,6 +1164,20 @@ mod tests {
                                 &[1],
                             )
                             .expect("exact current-pose visibility must remain available");
+                            for signature in indexed
+                                .iter()
+                                .filter_map(|interval| interval.visibility_signature.as_ref())
+                            {
+                                inventory
+                                    .certifies_target_signature(
+                                        pose_source,
+                                        &bodies,
+                                        &[1],
+                                        1,
+                                        signature,
+                                    )
+                                    .expect("every moving/rotating pose signature must bind to the same swept inventory");
+                            }
                             assert_eq!(indexed.len(), exact.len());
                             for (indexed_interval, exact_interval) in indexed.iter().zip(&exact) {
                                 assert_eq!(indexed_interval.interval, exact_interval.interval);
