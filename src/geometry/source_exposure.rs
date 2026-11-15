@@ -2395,7 +2395,7 @@ pub(crate) struct VisibilityPoseCellMotionEnvelope<'a> {
 }
 
 impl VisibilityBodyMotionBound {
-    fn maximum_point_displacement(self) -> Option<f64> {
+    pub(crate) fn maximum_point_displacement(self) -> Option<f64> {
         if !self.translation_bound.is_finite()
             || self.translation_bound < 0.0
             || !self.angular_bound_radians.is_finite()
