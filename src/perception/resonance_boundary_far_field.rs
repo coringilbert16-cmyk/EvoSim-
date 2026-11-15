@@ -877,7 +877,10 @@ pub(crate) fn resolve_circle_straight_intersection_event(
     target_angular_derivative: f64,
     blocker_translation_derivative: BoundaryKernelVector,
     blocker_angular_derivative: f64,
-) -> Option<(BoundaryKernelVector, CircleStraightIntersectionPoseDerivative)> {
+) -> Option<(
+    BoundaryKernelVector,
+    CircleStraightIntersectionPoseDerivative,
+)> {
     let (
         blocker_body,
         blocker_unit,
