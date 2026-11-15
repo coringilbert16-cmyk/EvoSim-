@@ -1457,3 +1457,12 @@ The variant is a resolvable reference event, not a proof that it remains stable 
 The perception layer now consumes `BoundaryEndpointProvenance` directly. Rigid target vertices are transformed through their owning target pose; unique rigid visibility intersections dispatch by event type to the straight/straight or circle/straight resolver. Each branch returns the same world-point plus generalized-coordinate derivative shape. Unresolved cuts, unsupported event classes, and mismatched target identities return no derivative.
 
 This removes the remaining manual handoff between interval provenance and the local event resolvers. It still does not create a production multipole caller: the dispatcher is a certified local geometry primitive, while complete event-set and pair-level potential/force/torque certificates remain outstanding.
+
+
+## 39. Generalized force/torque pose-cell derivative composition
+
+The ordered-pair boundary certificate now has a generalized-coordinate composition entry point. It first validates the supplied visibility-cut ordering and sample-geometry envelope, then evaluates the exact discrete pose derivative and its independent absolute bound for every supplied generalized coordinate. Translational coordinates carry force derivatives; angular coordinates carry torque derivatives, including boundary-sample motion and signed projected-weight changes.
+
+The API rejects an empty coordinate set and any coordinate whose sample correspondence or derivative envelope is incomplete. The caller must enumerate x, y, and angular coordinates for every source, receiver, and occluding body. This is deliberately an explicit caller obligation: the local kernel cannot infer which bodies or degrees of freedom belong to the complete world.
+
+A regression checks multi-coordinate composition, per-coordinate finite bounds, and rejection of an empty set. This closes the local scalar-to-generalized-coordinate composition gap, but it does not yet prove complete visibility event enumeration, construct the world DOF inventory, or certify a mutual multi-body evaluator. Exact visibility/subdivision remains authoritative until those world-level proofs are connected.
