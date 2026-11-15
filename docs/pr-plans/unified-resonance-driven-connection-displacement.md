@@ -403,6 +403,18 @@ The tick-local `MaterialResonanceEmitter` cache is now used by the environmental
 
 The chemistry snapshot regression evaluates the same three-body pair both through prepared emitters and through the uncached reference path, then compares every body's force and torque to (10^{-10}). This is an exactness-preserving preparation step for the future multipole evaluator, not a multipole approximation. It does not change the force law or make the all-pairs oracle suitable for live ticks.
 
+## 7.7 Visibility topology signatures and pose-cell candidate bounds — 2026-11-15
+
+The visibility foundation now retains stable event identity rather than relying on world-coordinate matching:
+
+- Straight target vertices, rays through rigid blocker features, circle tangencies, straight/straight intersections, and circle/straight intersections have stable body/unit/feature identities.
+- A target-edge signature records the strict ordered event identities, conservative candidate-body indices, and blocked/unblocked classification for each open interval. Coincident, unresolved, duplicate, or reordered events fail closed.
+- The signature is attached to provenance-bearing exposed intervals and carried into material-aura reception samples.
+- A pose-cell broad-phase helper expands target and blocker bounds by source translation and each body's translation/rotation envelope. Rotation expansion uses the supplied maximum pivot-to-shape radius; invalid or missing envelopes fail closed.
+- The far-field pose-cell helper can compare signatures across a supplied cell cover. Signature equality is necessary but not sufficient: it does not itself prove candidate completeness or rule out event births/deaths between samples.
+
+**Remaining visibility work:** build one conservative candidate inventory from the full pose-cell envelope and reuse it for every sampled pose; prove that every possible blocker feature is included; add interval-level blocker identity where needed; certify event existence/order and tangency transitions over the entire cell; otherwise subdivide or use exact visibility. The new pose-cell candidate helper is groundwork and is not yet wired into the production interval-generation call path. The live force evaluator also does not yet consume the reception signatures.
+
 ## 11. Live objective audit and minimal closeout plan — 2026-11-13
 
 This audit compares the live branch against the original objective: free environmental atoms and molecules must move under the existing resonance interaction physics; physical approach, exact chemical face alignment, activation, and bond competition must advance together; displacement must be the same continuous physical event; and the complete movement/chemistry/energy/field update must commit atomically. Organism mechanics remain isolated and off limits.
