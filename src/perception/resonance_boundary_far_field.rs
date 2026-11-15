@@ -3200,7 +3200,10 @@ mod tests {
                 }],
             }
         };
-        let coordinates = vec![coordinate(1.0, 0.0, 0.0, 0.0), coordinate(0.0, 0.0, -1.5, 4.0)];
+        let coordinates = vec![
+            coordinate(1.0, 0.0, 0.0, 0.0),
+            coordinate(0.0, 0.0, -1.5, 4.0),
+        ];
         let result = certify_boundary_pose_cell_generalized(
             &expansion,
             &[],
