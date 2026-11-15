@@ -1475,3 +1475,26 @@ Ray-through-feature visibility cuts now retain a deterministic feature ordinal i
 The ordinal is stable for a fixed body/unit topology and feature enumeration order, which is the identity contract needed when comparing neighboring pose cells. Invalid body references fail closed during inventory construction. A regression verifies repeatability, per-constituent uniqueness, body separation, and rejection of out-of-range body identities; the near-silhouette regression now also requires the blocker feature identity to survive into the unresolved cut.
 
 This closes the missing feature-level identity in the ray-through-vertex path. It does not yet prove that the candidate-body broad phase is complete, that every feature capable of entering the target edge's visibility arrangement has been enumerated, or that the event set remains complete over a pose cell. The next certificate must retain the complete blocker/feature inventory for each target edge and prove candidate-set completeness and event ordering over the cell. Until then, these events remain reference-pose provenance only and approximation must fail closed to exact evaluation/subdivision.
+
+## 41. Explicit per-target-edge blocker inventories
+
+The straight-boundary visibility builder now materializes a blocker inventory
+for each target edge after the conservative body-level candidate query. Each
+inventory preserves candidate bodies in deterministic body-index order and
+copies the complete critical-feature and straight-edge identities contributed
+by each candidate body. Feature identity remains the constituent-local ordinal
+paired with the constituent identity; straight-edge identity remains the
+constituent-local edge ordinal paired with the constituent identity.
+
+The exact cut-construction loops consume this inventory rather than indexing
+parallel global arrays independently. Inventory construction rejects
+out-of-order or repeated candidate bodies, missing body slots, non-finite
+feature/edge coordinates, and duplicate feature or edge identities. These
+cases therefore fail closed before an approximate pose-cell result can use an
+ambiguous candidate set.
+
+This makes the candidate set explicit and testable; it does not yet prove that
+the broad-phase query contains every geometrically possible blocker, nor that
+the same candidate/event inventory persists throughout a pose cell. Those
+remain the next certification obligations. The exact visibility partition
+continues to be the reference result.
