@@ -1942,6 +1942,17 @@ pub(crate) struct BoundaryPoseCellEvaluation {
     pub(crate) error: BoundaryPoseCellError,
 }
 
+/// Complete generalized-coordinate result for one smooth ordered-pair pose cell.
+/// Each entry corresponds, in caller-supplied order, to one body translation or
+/// rotation coordinate. Angular entries are torque derivatives; translational
+/// entries are force derivatives. The caller must supply every participating
+/// body's x, y, and angular coordinate, including occluders.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct BoundaryPoseCellGeneralizedEvaluation {
+    pub(crate) boundary: BoundaryPoseCellEvaluation,
+    pub(crate) coordinates: Vec<BoundaryPoseDerivativeEvaluation>,
+}
+
 /// Validate supplied visibility-cut ordering and compose all currently
 /// available scalar-potential and center-gradient error terms for one
 /// source-specific ordered pair.
@@ -1972,6 +1983,36 @@ pub(crate) fn certify_boundary_pose_cell(
         .iter()
         .all(|bound| bound.is_finite())
         .then_some(BoundaryPoseCellEvaluation { evaluation, error })
+}
+
+/// Certify the exact discrete ordered-pair derivative for every supplied
+/// generalized body coordinate. This composes sample-position and signed-weight
+/// chain rules with source/receiver center motion, and returns an independent
+/// absolute derivative bound for each coordinate. Rotational coordinates retain
+/// the full boundary-motion/projected-weight torque term.
+///
+/// The caller must enumerate x, y, and angle for every body participating as
+/// source, receiver, or occluder. Missing coordinates cannot be inferred by
+/// this local kernel and must be prevented by the caller's body/DOF inventory.
+#[allow(dead_code)]
+pub(crate) fn certify_boundary_pose_cell_generalized(
+    expansion: &BoundaryKernelExpansion,
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: &[BoundarySampleMotionBound],
+    coordinates: &[BoundaryPoseCoordinateDerivative],
+) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
+    if coordinates.is_empty() {
+        return None;
+    }
+    let boundary = certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)?;
+    let coordinates = coordinates
+        .iter()
+        .map(|coordinate| expansion.evaluate_pose_coordinate_derivative(coordinate))
+        .collect::<Option<Vec<_>>>()?;
+    Some(BoundaryPoseCellGeneralizedEvaluation {
+        boundary,
+        coordinates,
+    })
 }
 
 impl BoundaryKernelExpansion {
