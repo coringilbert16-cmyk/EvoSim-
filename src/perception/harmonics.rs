@@ -2254,10 +2254,26 @@ fn expand_resonance_boundary_interaction_samples(
                     })
                 })
                 .collect::<Option<Vec<_>>>()?;
-            let evaluation = evaluate_boundary_kernel_samples_adaptive(
+            let absolute_weight = weighted_samples
+                .iter()
+                .map(|sample| sample.weight.abs())
+                .sum::<f64>();
+            if !absolute_weight.is_finite() {
+                return None;
+            }
+            // Allocate an absolute remainder budget per frequency. Adaptive
+            // subdivision preserves the same discrete kernel and fails closed
+            // if even exact singleton evaluation cannot meet the budget.
+            let tolerance = 1.0e-7 * absolute_weight.max(1.0);
+            let evaluation = evaluate_boundary_kernel_samples_adaptive_with_budget(
                 source_center,
                 receiver_center,
                 weighted_samples,
+                super::resonance_boundary_far_field::BoundaryPotentialError {
+                    potential: tolerance,
+                    source_force: tolerance,
+                    receiver_force: tolerance,
+                },
             )?;
             Some(ResonanceBoundaryFrequencyExpansion {
                 frequency_cycles_per_day: frequency,
@@ -2474,7 +2490,7 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                             y: -evaluation.source_gradient.y,
                         },
                         evaluation.error.source_force,
-                        evaluation.error.source_force,
+                        evaluation.error.receiver_force,
                         evaluation.error.potential,
                     )
                 },
@@ -2499,7 +2515,7 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
                             y: -evaluation.source_gradient.y,
                         },
                         evaluation.error.source_force,
-                        evaluation.error.source_force,
+                        evaluation.error.receiver_force,
                         evaluation.error.potential,
                     )
                 },
