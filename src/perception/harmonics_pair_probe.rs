@@ -877,10 +877,10 @@ fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
     let exact_potential: f64 = samples
         .iter()
         .map(|sample| {
-            let source_distance = (sample.position.x - source.x)
-                .hypot(sample.position.y - source.y);
-            let receiver_distance = (sample.position.x - receiver.x)
-                .hypot(sample.position.y - receiver.y);
+            let source_distance =
+                (sample.position.x - source.x).hypot(sample.position.y - source.y);
+            let receiver_distance =
+                (sample.position.x - receiver.x).hypot(sample.position.y - receiver.y);
             sample.weight / ((1.0 + source_distance) * (1.0 + receiver_distance))
         })
         .sum();
