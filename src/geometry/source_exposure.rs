@@ -431,6 +431,7 @@ pub(crate) struct ExposedBoundaryIntervalWithProvenance {
     /// Stable ordered feature identity for the complete target-edge partition.
     /// `None` means a coincident, unresolved, or otherwise unsupported event
     /// prevents differentiating this visibility topology.
+    #[allow(dead_code)]
     pub(crate) visibility_signature: Option<VisibilityCutSignature>,
 }
 
