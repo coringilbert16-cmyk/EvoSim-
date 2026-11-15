@@ -321,8 +321,6 @@ pub(crate) fn source_path_blocked(
     )
 }
 
-/// Exact blocker test restricted to bodies whose conservative angular bounds
-/// overlap the target boundary interval. Candidate indices refer to `bodies`.
 /// Return the stable body/unit identities that occlude one source-to-target
 /// segment. Invalid geometry or candidate inventories return None so callers
 /// cannot mistake an unresolved visibility test for an unblocked interval.
@@ -387,6 +385,8 @@ pub(crate) fn source_path_blocker_unit_identities_for_candidates(
     Some(blockers)
 }
 
+/// Exact blocker test restricted to bodies whose conservative angular bounds
+/// overlap the target boundary interval. Candidate indices refer to `bodies`.
 pub(crate) fn source_path_blocked_for_candidates(
     source: (f64, f64),
     target: (f64, f64),
