@@ -433,10 +433,8 @@ pub(crate) fn straight_boundary_intersection_pose_derivative(
     let target_edge = subtract(target_end, target_start);
     let blocker_edge = subtract(blocker_end, blocker_start);
     let offset = subtract(blocker_start, target_start);
-    let target_edge_derivative =
-        subtract(target_end_derivative, target_start_derivative);
-    let blocker_edge_derivative =
-        subtract(blocker_end_derivative, blocker_start_derivative);
+    let target_edge_derivative = subtract(target_end_derivative, target_start_derivative);
+    let blocker_edge_derivative = subtract(blocker_end_derivative, blocker_start_derivative);
     let offset_derivative = subtract(blocker_start_derivative, target_start_derivative);
     let denominator = cross(target_edge, blocker_edge);
     let denominator_scale = target_edge.norm() * blocker_edge.norm();
@@ -459,8 +457,8 @@ pub(crate) fn straight_boundary_intersection_pose_derivative(
     {
         return None;
     }
-    let denominator_derivative = cross(target_edge_derivative, blocker_edge)
-        + cross(target_edge, blocker_edge_derivative);
+    let denominator_derivative =
+        cross(target_edge_derivative, blocker_edge) + cross(target_edge, blocker_edge_derivative);
     let target_numerator_derivative =
         cross(offset_derivative, blocker_edge) + cross(offset, blocker_edge_derivative);
     let blocker_numerator_derivative =
@@ -1879,19 +1877,27 @@ mod tests {
         )
         .expect("strict interior straight-boundary intersection should differentiate");
         let intersection = |coordinate: f64| {
-            let moved = |point: BoundaryKernelVector, rate: BoundaryKernelVector| {
-                BoundaryKernelVector {
+            let moved =
+                |point: BoundaryKernelVector, rate: BoundaryKernelVector| BoundaryKernelVector {
                     x: point.x + coordinate * rate.x,
                     y: point.y + coordinate * rate.y,
-                }
-            };
+                };
             let a = moved(target_start, target_start_rate);
             let b = moved(target_end, target_end_rate);
             let c = moved(blocker_start, blocker_start_rate);
             let d = moved(blocker_end, blocker_end_rate);
-            let edge = BoundaryKernelVector { x: b.x - a.x, y: b.y - a.y };
-            let blocker = BoundaryKernelVector { x: d.x - c.x, y: d.y - c.y };
-            let offset = BoundaryKernelVector { x: c.x - a.x, y: c.y - a.y };
+            let edge = BoundaryKernelVector {
+                x: b.x - a.x,
+                y: b.y - a.y,
+            };
+            let blocker = BoundaryKernelVector {
+                x: d.x - c.x,
+                y: d.y - c.y,
+            };
+            let offset = BoundaryKernelVector {
+                x: c.x - a.x,
+                y: c.y - a.y,
+            };
             let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
                 left.x * right.y - left.y * right.x
             };
@@ -1923,13 +1929,27 @@ mod tests {
         let point = |x, y| BoundaryKernelVector { x, y };
         let zero = BoundaryKernelVector::default();
         assert!(straight_boundary_intersection_pose_derivative(
-            point(0.0, 0.0), point(2.0, 0.0), point(0.0, 1.0), point(2.0, 1.0),
-            zero, zero, zero, zero,
-        ).is_none());
+            point(0.0, 0.0),
+            point(2.0, 0.0),
+            point(0.0, 1.0),
+            point(2.0, 1.0),
+            zero,
+            zero,
+            zero,
+            zero,
+        )
+        .is_none());
         assert!(straight_boundary_intersection_pose_derivative(
-            point(0.0, 0.0), point(2.0, 0.0), point(0.0, -1.0), point(0.0, 1.0),
-            zero, zero, zero, zero,
-        ).is_none());
+            point(0.0, 0.0),
+            point(2.0, 0.0),
+            point(0.0, -1.0),
+            point(0.0, 1.0),
+            zero,
+            zero,
+            zero,
+            zero,
+        )
+        .is_none());
     }
 
     #[test]
