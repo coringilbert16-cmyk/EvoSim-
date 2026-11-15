@@ -581,32 +581,58 @@ mod tests {
 
     #[test]
     fn visibility_cut_signature_tracks_stable_feature_order_not_coordinates() {
-        let event = |x| VisibilityCutEvent::RayThroughRigidFeature {
-            blocker_body_index: 2,
-            blocker_unit_index: 7,
-            blocker_feature_index: 3,
-            target_body_index: 0,
-            target_unit_index: 1,
-            target_edge_index: 4,
-            local_point: (x, 0.25),
+        let event = |x| {
+            VisibilityCutEvent::RayThroughRigidFeature {
+                blocker_body_index: 2,
+                blocker_unit_index: 7,
+                blocker_feature_index: 3,
+                target_body_index: 0,
+                target_unit_index: 1,
+                target_edge_index: 4,
+                local_point: (x, 0.25),
+            }
         };
         let first = vec![
-            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                0.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 0,
+                    local_point: (0.0, 0.0),
+                },
+            ),
             VisibilityCutRecord::new(0.4, event(0.5)),
-            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                1.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 1,
+                    local_point: (1.0, 0.0),
+                },
+            ),
         ];
         let moved = vec![
-            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                0.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 0,
+                    local_point: (0.0, 0.0),
+                },
+            ),
             VisibilityCutRecord::new(0.45, event(0.7)),
-            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                1.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 1,
+                    local_point: (1.0, 0.0),
+                },
+            ),
         ];
         assert_eq!(
             VisibilityCutSignature::from_cuts(&first),
@@ -621,17 +647,36 @@ mod tests {
     fn visibility_signature_requires_stable_identity_across_every_pose_sample() {
         let make_signature = |blocker_feature_index| {
             let cuts = vec![
-                VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
-                    body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
-                }),
-                VisibilityCutRecord::new(0.5, VisibilityCutEvent::RayThroughRigidFeature {
-                    blocker_body_index: 2, blocker_unit_index: 7,
-                    blocker_feature_index, target_body_index: 0,
-                    target_unit_index: 1, target_edge_index: 4, local_point: (0.5, 0.25),
-                }),
-                VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
-                    body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
-                }),
+                VisibilityCutRecord::new(
+                    0.0,
+                    VisibilityCutEvent::TargetVertex {
+                        body_index: 0,
+                        unit_index: 1,
+                        vertex_index: 0,
+                        local_point: (0.0, 0.0),
+                    },
+                ),
+                VisibilityCutRecord::new(
+                    0.5,
+                    VisibilityCutEvent::RayThroughRigidFeature {
+                        blocker_body_index: 2,
+                        blocker_unit_index: 7,
+                        blocker_feature_index,
+                        target_body_index: 0,
+                        target_unit_index: 1,
+                        target_edge_index: 4,
+                        local_point: (0.5, 0.25),
+                    },
+                ),
+                VisibilityCutRecord::new(
+                    1.0,
+                    VisibilityCutEvent::TargetVertex {
+                        body_index: 0,
+                        unit_index: 1,
+                        vertex_index: 1,
+                        local_point: (1.0, 0.0),
+                    },
+                ),
             ];
             VisibilityCutSignature::from_cuts(&cuts).unwrap()
         };
