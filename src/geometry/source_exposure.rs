@@ -29,9 +29,12 @@ pub(crate) enum BoundaryEndpointProvenance {
     RigidTargetVertex {
         body_index: usize,
         unit_index: usize,
+        vertex_index: usize,
         local_point: (f64, f64),
+        edge_parameter: f64,
     },
     UnresolvedVisibilityCut {
+        parameter: f64,
         events: Vec<VisibilityCutEvent>,
     },
 }
@@ -145,6 +148,7 @@ fn endpoint_provenance_from_cut(
 ) -> BoundaryEndpointProvenance {
     if cut.unresolved || cut.events.len() != 1 {
         return BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            parameter: cut.parameter,
             events: cut.events.clone(),
         };
     }
@@ -152,16 +156,19 @@ fn endpoint_provenance_from_cut(
         Some(VisibilityCutEvent::TargetVertex {
             body_index,
             unit_index,
+            vertex_index,
             local_point,
-            ..
         }) if *body_index == target_body_index && *unit_index == target_unit_index => {
             BoundaryEndpointProvenance::RigidTargetVertex {
                 body_index: *body_index,
                 unit_index: *unit_index,
+                vertex_index: *vertex_index,
                 local_point: *local_point,
+                edge_parameter: cut.parameter,
             }
         }
         _ => BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            parameter: cut.parameter,
             events: cut.events.clone(),
         },
     }
@@ -272,6 +279,7 @@ mod tests {
         assert_eq!(
             endpoint_provenance_from_cut(&cut, 0, 2),
             BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+                parameter: 0.25,
                 events: vec![event],
             }
         );
@@ -1534,7 +1542,7 @@ mod visibility_tests {
                     let near_target_vertex = (point.0 - 4.0).hypot(point.1 - 1.0) < 1.0e-5;
                     let has_blocker_ray = matches!(
                         provenance,
-                        BoundaryEndpointProvenance::UnresolvedVisibilityCut { events }
+                        BoundaryEndpointProvenance::UnresolvedVisibilityCut { events, .. }
                             if events.iter().any(|event| matches!(
                                 event,
                                 VisibilityCutEvent::RayThroughRigidFeature {
@@ -1571,7 +1579,7 @@ mod visibility_tests {
             [&interval.start_provenance, &interval.end_provenance]
                 .into_iter()
                 .any(|provenance| match provenance {
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { events } => {
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { events, .. } => {
                         events.iter().any(|event| {
                             matches!(
                                 event,
