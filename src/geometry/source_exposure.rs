@@ -237,8 +237,8 @@ impl VisibilityCutEvent {
 }
 
 /// Discrete visibility topology for one target edge. It records the ordered
-/// stable event identities, conservative candidate-body set, and each open
-/// interval's occlusion classification. It is valid only when every cut has
+/// stable event identities, conservative candidate-body set, each open
+/// interval's occluding body identities, and its visibility classification. It is valid only when every cut has
 /// one supported, uniquely identified event and the event order is strict.
 /// Coincident, unresolved, or reordered events require exact visibility or
 /// subdivision rather than a pose derivative.
@@ -785,7 +785,7 @@ mod tests {
     fn visibility_signature_requires_stable_identity_and_partition_across_pose_samples() {
         let make_signature =
             |blocker_feature_index, candidates: &[usize], blockers: &[Vec<usize>]| {
-            let cuts = vec![
+                let cuts = vec![
                 VisibilityCutRecord::new(
                     0.0,
                     VisibilityCutEvent::TargetVertex {
@@ -816,9 +816,9 @@ mod tests {
                         local_point: (1.0, 0.0),
                     },
                 ),
-            ];
-            VisibilityCutSignature::from_partition(&cuts, candidates, blockers).unwrap()
-        };
+                ];
+                VisibilityCutSignature::from_partition(&cuts, candidates, blockers).unwrap()
+            };
         let baseline = make_signature(3, &[0, 2], &[vec![], vec![2]]);
         assert!(baseline
             .certify_unchanged_across(&[
