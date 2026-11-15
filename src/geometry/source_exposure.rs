@@ -797,7 +797,11 @@ fn endpoint_provenance_from_cut(
                 target_unit_index: unit_index,
                 ..
             },
-        ) if *body_index == target_body_index && *unit_index == target_unit_index => {
+        ) if *body_index == target_body_index
+            && *unit_index == target_unit_index
+            && cut.parameter > 1.0e-5
+            && cut.parameter < 1.0 - 1.0e-5 =>
+        {
             BoundaryEndpointProvenance::RigidVisibilityIntersection {
                 parameter: cut.parameter,
                 event: event.clone(),
@@ -3764,7 +3768,7 @@ mod visibility_tests {
     }
 
     #[test]
-    fn visibility_provenance_fails_closed_for_occlusion_generated_cuts() {
+    fn visibility_provenance_retains_rigid_identity_for_occlusion_generated_cuts() {
         let source = (-5.0, 0.0);
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(1, 2.0, 0.0, 1.0, 1.0);
@@ -3777,15 +3781,19 @@ mod visibility_tests {
         assert!(!intervals.is_empty());
         assert!(
             intervals.iter().any(|interval| {
-                matches!(
-                    &interval.start_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
-                ) || matches!(
-                    &interval.end_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
-                )
+                [&interval.start_provenance, &interval.end_provenance]
+                    .into_iter()
+                    .any(|provenance| {
+                        matches!(
+                            provenance,
+                            BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                                event: VisibilityCutEvent::RayThroughRigidFeature { .. },
+                                ..
+                            }
+                        )
+                    })
             }),
-            "occluder-generated cuts must not be mislabeled as rigid target vertices"
+            "supported occluder ray cuts should retain their rigid feature identity"
         );
         assert!(
             intervals.iter().any(|interval| {
