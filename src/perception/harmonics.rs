@@ -4018,9 +4018,9 @@ mod tests {
         let directional_energy =
             directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
                 .expect("directional pair potential should be available")
-        .iter()
-        .map(|component| component.energy)
-        .sum::<f64>();
+                .iter()
+                .map(|component| component.energy)
+                .sum::<f64>();
 
         assert!(samples.iter().all(|sample| {
             sample.projected_extent.is_finite()
