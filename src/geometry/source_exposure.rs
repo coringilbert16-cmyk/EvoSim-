@@ -713,7 +713,11 @@ fn add_circle_tangent_points_tagged(
 ) {
     let mut points = Vec::with_capacity(2);
     add_circle_tangent_points(center, radius, source, &mut points);
-    critical_points.extend(points.into_iter().map(|(x, y)| (body_index, unit_index, x, y)));
+    critical_points.extend(
+        points
+            .into_iter()
+            .map(|(x, y)| (body_index, unit_index, x, y)),
+    );
 }
 
 pub(crate) fn visible_polygonal_intervals(
@@ -1123,12 +1127,14 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         );
                         let event = match &blocker_part.form {
                             crate::resources::Form::Circle { radius } => {
-                                let source_offset = (source.0 - blocker_part.x, source.1 - blocker_part.y);
+                                let source_offset =
+                                    (source.0 - blocker_part.x, source.1 - blocker_part.y);
                                 let local_source = (
                                     source_offset.0 * cos + source_offset.1 * sin,
                                     -source_offset.0 * sin + source_offset.1 * cos,
                                 );
-                                let cross = local_source.0 * local_point.1 - local_source.1 * local_point.0;
+                                let cross =
+                                    local_source.0 * local_point.1 - local_source.1 * local_point.0;
                                 VisibilityCutEvent::RayThroughCircleTangent {
                                     blocker_body_index: candidate_body,
                                     blocker_unit_index,
