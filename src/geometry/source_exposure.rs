@@ -110,6 +110,133 @@ pub(crate) enum VisibilityCutEvent {
     },
 }
 
+/// Stable identity of a visibility event. Geometric coordinates and cut
+/// parameters are intentionally excluded so the same physical feature remains
+/// identifiable as bodies move within a certified pose cell.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub(crate) enum VisibilityEventIdentity {
+    TargetVertex {
+        body: usize,
+        unit: usize,
+        vertex: usize,
+    },
+    RayThroughRigidFeature {
+        blocker_body: usize,
+        blocker_unit: usize,
+        blocker_feature: usize,
+        target_body: usize,
+        target_unit: usize,
+        target_edge: usize,
+    },
+    RayThroughCircleTangent {
+        blocker_body: usize,
+        blocker_unit: usize,
+        target_body: usize,
+        target_unit: usize,
+        target_edge: usize,
+        tangent_side: i8,
+    },
+    StraightBoundaryIntersection {
+        blocker_body: usize,
+        blocker_unit: usize,
+        blocker_edge: usize,
+        target_body: usize,
+        target_unit: usize,
+        target_edge: usize,
+    },
+    CircleStraightIntersection {
+        blocker_body: usize,
+        blocker_unit: usize,
+        blocker_arc: usize,
+        target_body: usize,
+        target_unit: usize,
+        target_edge: usize,
+    },
+}
+
+impl VisibilityCutEvent {
+    fn stable_identity(&self) -> Option<VisibilityEventIdentity> {
+        match self {
+            Self::TargetVertex { body_index, unit_index, vertex_index, .. } =>
+                Some(VisibilityEventIdentity::TargetVertex {
+                    body: *body_index, unit: *unit_index, vertex: *vertex_index,
+                }),
+            Self::RayThroughRigidFeature {
+                blocker_body_index, blocker_unit_index, blocker_feature_index,
+                target_body_index, target_unit_index, target_edge_index, ..
+            } => Some(VisibilityEventIdentity::RayThroughRigidFeature {
+                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
+                blocker_feature: *blocker_feature_index, target_body: *target_body_index,
+                target_unit: *target_unit_index, target_edge: *target_edge_index,
+            }),
+            Self::RayThroughCircleTangent {
+                blocker_body_index, blocker_unit_index, target_body_index,
+                target_unit_index, target_edge_index, tangent_side, ..
+            } => Some(VisibilityEventIdentity::RayThroughCircleTangent {
+                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
+                target_body: *target_body_index, target_unit: *target_unit_index,
+                target_edge: *target_edge_index, tangent_side: *tangent_side,
+            }),
+            Self::StraightBoundaryIntersection {
+                blocker_body_index, blocker_unit_index, target_body_index,
+                target_unit_index, target_edge_index, blocker_edge_index, ..
+            } => Some(VisibilityEventIdentity::StraightBoundaryIntersection {
+                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
+                blocker_edge: *blocker_edge_index, target_body: *target_body_index,
+                target_unit: *target_unit_index, target_edge: *target_edge_index,
+            }),
+            Self::CircleStraightIntersection {
+                blocker_body_index, blocker_unit_index, target_body_index,
+                target_unit_index, target_edge_index, arc_index, ..
+            } => Some(VisibilityEventIdentity::CircleStraightIntersection {
+                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
+                blocker_arc: *arc_index, target_body: *target_body_index,
+                target_unit: *target_unit_index, target_edge: *target_edge_index,
+            }),
+            Self::Unresolved { .. } => None,
+        }
+    }
+}
+
+/// Discrete visibility topology for one target edge. It is valid only when
+/// every cut has one supported, uniquely identified event and the event order
+/// is strict. Coincident, unresolved, or reordered events require exact
+/// visibility/subdivision rather than a pose derivative.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct VisibilityCutSignature {
+    ordered_events: Vec<VisibilityEventIdentity>,
+}
+
+impl VisibilityCutSignature {
+    #[allow(dead_code)]
+    pub(crate) fn from_cuts(cuts: &[VisibilityCutRecord]) -> Option<Self> {
+        use std::collections::BTreeSet;
+
+        if cuts.len() < 2 {
+            return None;
+        }
+        let mut previous_parameter = f64::NEG_INFINITY;
+        let mut identities = BTreeSet::new();
+        let mut ordered_events = Vec::with_capacity(cuts.len());
+        for cut in cuts {
+            if cut.unresolved
+                || cut.events.len() != 1
+                || !cut.parameter.is_finite()
+                || cut.parameter <= previous_parameter
+            {
+                return None;
+            }
+            previous_parameter = cut.parameter;
+            let identity = cut.events[0].stable_identity()?;
+            if !identities.insert(identity) {
+                return None;
+            }
+            ordered_events.push(identity);
+        }
+        Some(Self { ordered_events })
+    }
+}
+
 /// A partition location retaining every event that generated the cut.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VisibilityCutRecord {
@@ -397,6 +524,80 @@ mod tests {
             build_target_edge_blocker_inventory(&[1], &critical, &edges, &mismatched_arcs)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn visibility_cut_signature_tracks_stable_feature_order_not_coordinates() {
+        let event = |x| VisibilityCutEvent::RayThroughRigidFeature {
+            blocker_body_index: 2,
+            blocker_unit_index: 7,
+            blocker_feature_index: 3,
+            target_body_index: 0,
+            target_unit_index: 1,
+            target_edge_index: 4,
+            local_point: (x, 0.25),
+        };
+        let first = vec![
+            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
+            }),
+            VisibilityCutRecord::new(0.4, event(0.5)),
+            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
+            }),
+        ];
+        let moved = vec![
+            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
+            }),
+            VisibilityCutRecord::new(0.45, event(0.7)),
+            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
+            }),
+        ];
+        assert_eq!(
+            VisibilityCutSignature::from_cuts(&first),
+            VisibilityCutSignature::from_cuts(&moved)
+        );
+
+        let reordered = vec![first[0].clone(), first[2].clone(), first[1].clone()];
+        assert!(VisibilityCutSignature::from_cuts(&reordered).is_none());
+    }
+
+    #[test]
+    fn visibility_cut_signature_rejects_unresolved_and_duplicate_feature_events() {
+        let unresolved = vec![
+            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
+            }),
+            VisibilityCutRecord::new(0.5, VisibilityCutEvent::Unresolved {
+                blocker_body_index: Some(2), blocker_unit_index: Some(7),
+            }),
+            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
+            }),
+        ];
+        assert!(VisibilityCutSignature::from_cuts(&unresolved).is_none());
+
+        let duplicate = vec![
+            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
+            }),
+            VisibilityCutRecord::new(0.4, VisibilityCutEvent::RayThroughRigidFeature {
+                blocker_body_index: 2, blocker_unit_index: 7, blocker_feature_index: 3,
+                target_body_index: 0, target_unit_index: 1, target_edge_index: 4,
+                local_point: (0.5, 0.25),
+            }),
+            VisibilityCutRecord::new(0.7, VisibilityCutEvent::RayThroughRigidFeature {
+                blocker_body_index: 2, blocker_unit_index: 7, blocker_feature_index: 3,
+                target_body_index: 0, target_unit_index: 1, target_edge_index: 4,
+                local_point: (0.6, 0.25),
+            }),
+            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
+            }),
+        ];
+        assert!(VisibilityCutSignature::from_cuts(&duplicate).is_none());
     }
 
     #[test]
