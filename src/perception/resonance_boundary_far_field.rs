@@ -1234,13 +1234,14 @@ pub(crate) fn circle_straight_intersection_motion_bound(
         arc_offset.min(arc_sweep - arc_offset)
     };
     let existence_margin = tangency_margin.min(parameter_margin).min(arc_margin);
-    let existence_margin_change_bound = tangency_margin_change
-        .max(target_parameter_change)
-        .max(if arc_margin.is_finite() {
-            local_arc_angle_change
-        } else {
-            0.0
-        });
+    let existence_margin_change_bound =
+        tangency_margin_change
+            .max(target_parameter_change)
+            .max(if arc_margin.is_finite() {
+                local_arc_angle_change
+            } else {
+                0.0
+            });
     if !existence_margin.is_finite()
         || !existence_margin_change_bound.is_finite()
         || existence_margin <= existence_margin_change_bound
@@ -2163,14 +2164,8 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
     edge_end: BoundaryKernelVector,
     motion: RayEdgeIntersectionMotion,
 ) -> Option<f64> {
-    ray_edge_intersection_motion_certificate(
-        source,
-        critical_point,
-        edge_start,
-        edge_end,
-        motion,
-    )
-    .map(|certificate| certificate.point_displacement)
+    ray_edge_intersection_motion_certificate(source, critical_point, edge_start, edge_end, motion)
+        .map(|certificate| certificate.point_displacement)
 }
 
 /// Expose the parameter and strict-existence margins already calculated by
@@ -2277,8 +2272,7 @@ pub(crate) fn ray_edge_intersection_motion_certificate(
     }
     let determinant_margin = denominator.abs() / determinant_scale;
     let minimum_determinant_margin = denominator_min / minimum_determinant_scale;
-    let determinant_margin_change =
-        (determinant_margin - minimum_determinant_margin).max(0.0);
+    let determinant_margin_change = (determinant_margin - minimum_determinant_margin).max(0.0);
     let existence_margin = t.min(1.0 - t).min(u - 1.0).min(determinant_margin);
     let existence_margin_change_bound = t_change
         .max(u_change)
@@ -2353,8 +2347,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
     };
 
     let target_part = crate::source_exposure::visibility_part(bodies, target_body, target_unit)?;
-    let blocker_part =
-        crate::source_exposure::visibility_part(bodies, blocker_body, blocker_unit)?;
+    let blocker_part = crate::source_exposure::visibility_part(bodies, blocker_body, blocker_unit)?;
     let target_pose = RigidBoundaryPose {
         pivot: BoundaryKernelVector {
             x: target_part.x,
@@ -2417,12 +2410,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
                     BoundaryKernelVector::default(),
                     f64::from(*tangent_side),
                 )?;
-                (
-                    tangent.point,
-                    point_displacement,
-                    margin,
-                    margin_change,
-                )
+                (tangent.point, point_displacement, margin, margin_change)
             }
             _ => return None,
         };
@@ -2461,9 +2449,7 @@ pub(crate) fn bound_visibility_event_over_pose_cell(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
 ) -> Option<crate::source_exposure::VisibilityEventPoseCellBound> {
-    use crate::source_exposure::{
-        VisibilityCutEvent, VisibilityEventPoseCellBound,
-    };
+    use crate::source_exposure::{VisibilityCutEvent, VisibilityEventPoseCellBound};
 
     match event {
         VisibilityCutEvent::TargetVertex { .. } => Some(VisibilityEventPoseCellBound {
@@ -2496,10 +2482,16 @@ pub(crate) fn bound_visibility_event_over_pose_cell(
             if body_motion.len() != bodies.len() {
                 return None;
             }
-            let target_part =
-                crate::source_exposure::visibility_part(bodies, *target_body_index, *target_unit_index)?;
-            let blocker_part =
-                crate::source_exposure::visibility_part(bodies, *blocker_body_index, *blocker_unit_index)?;
+            let target_part = crate::source_exposure::visibility_part(
+                bodies,
+                *target_body_index,
+                *target_unit_index,
+            )?;
+            let blocker_part = crate::source_exposure::visibility_part(
+                bodies,
+                *blocker_body_index,
+                *blocker_unit_index,
+            )?;
             let target_pose = RigidBoundaryPose {
                 pivot: BoundaryKernelVector {
                     x: target_part.x,
@@ -2581,8 +2573,7 @@ pub(crate) fn certify_visibility_pose_cell_from_endpoint_provenance(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
 ) -> Option<Vec<crate::source_exposure::VisibilityEventPoseCellBound>> {
-    let events =
-        crate::source_exposure::ordered_visibility_events_from_endpoints(endpoints)?;
+    let events = crate::source_exposure::ordered_visibility_events_from_endpoints(endpoints)?;
     let event_bounds = events
         .iter()
         .map(|event| {
@@ -2642,8 +2633,7 @@ fn circle_tangent_point_displacement_bound(
     {
         return None;
     }
-    let transverse_change =
-        ratio_change * (maximum_ratio + ratio) / minimum_transverse;
+    let transverse_change = ratio_change * (maximum_ratio + ratio) / minimum_transverse;
     let unit_change = 2.0 * relative_displacement / minimum_distance;
     let tangent_direction_change =
         ratio_change + transverse_change + (maximum_ratio + 1.0) * unit_change;
