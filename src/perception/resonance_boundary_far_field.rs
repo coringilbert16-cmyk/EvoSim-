@@ -4423,21 +4423,9 @@ mod endpoint_provenance_dispatch_tests {
                 parameter: 0.5,
                 events: Vec::new(),
             };
-        assert!(
-            resolve_boundary_endpoint_pose_derivative(
-                &unresolved,
-                0,
-                0,
-                1,
-                1,
-                pose,
-                pose,
-                zero,
-                0.0,
-                zero,
-                0.0
-            )
-            .is_none()
-        );
+        assert!(resolve_boundary_endpoint_pose_derivative(
+            &unresolved, 0, 0, 1, 1, pose, pose, zero, 0.0, zero, 0.0
+        )
+        .is_none());
     }
 }
