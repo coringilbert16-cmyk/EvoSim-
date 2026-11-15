@@ -1985,6 +1985,22 @@ pub(crate) fn certify_boundary_pose_cell(
         .then_some(BoundaryPoseCellEvaluation { evaluation, error })
 }
 
+/// Extend the scalar pose-cell certificate with a discrete visibility-topology
+/// check. The caller supplies signatures sampled across the complete proposed
+/// pose cell; any event birth/death, identity change, or ordering change forces
+/// subdivision or exact visibility fallback.
+#[allow(dead_code)]
+pub(crate) fn certify_boundary_pose_cell_with_visibility_signature(
+    expansion: &BoundaryKernelExpansion,
+    baseline_signature: &crate::source_exposure::VisibilityCutSignature,
+    sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: &[BoundarySampleMotionBound],
+) -> Option<BoundaryPoseCellEvaluation> {
+    baseline_signature.certify_unchanged_across(sampled_signatures)?;
+    certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
+}
+
 /// Certify the exact discrete ordered-pair derivative for every supplied
 /// generalized body coordinate. This composes sample-position and signed-weight
 /// chain rules with source/receiver center motion, and returns an independent
