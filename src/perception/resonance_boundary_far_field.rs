@@ -2354,7 +2354,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
         y: target_end_local.1,
     })?;
     let (target_displacement, _) = bound_for_body(target_body)?;
-    let (blocker_displacement, blocker_motion) = bound_for_body(blocker_body)?;
+    let (blocker_displacement, _) = bound_for_body(blocker_body)?;
 
     let (critical_point, critical_point_displacement, extra_margin, extra_margin_change) =
         match event {
@@ -2368,6 +2368,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
             VisibilityCutEvent::RayThroughCircleTangent {
                 local_center,
                 radius,
+                tangent_side,
                 ..
             } => {
                 let center = blocker_pose.transform_local_point(BoundaryKernelVector {
@@ -2388,7 +2389,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
                     source,
                     BoundaryKernelVector::default(),
                     BoundaryKernelVector::default(),
-                    1.0,
+                    f64::from(*tangent_side),
                 )?;
                 (
                     tangent.point,
