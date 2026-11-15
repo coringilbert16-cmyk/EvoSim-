@@ -338,7 +338,8 @@ mod tests {
             vec![(2, 0, (0.0, 0.0), (1.0, 0.0))],
             vec![(7, 3, (2.0, 0.0), (2.0, 1.0))],
         ];
-        let inventory = build_target_edge_blocker_inventory(&[0, 1], &critical, &edges).unwrap();
+        let arcs = vec![vec![], vec![]];
+        let inventory = build_target_edge_blocker_inventory(&[0, 1], &critical, &edges, &arcs).unwrap();
         assert_eq!(inventory.candidate_bodies.len(), 2);
         assert_eq!(inventory.candidate_bodies[1].body_index, 1);
         assert_eq!(
@@ -357,11 +358,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(7, 3)]
         );
-        assert!(build_target_edge_blocker_inventory(&[1, 0], &critical, &edges).is_none());
-        assert!(build_target_edge_blocker_inventory(&[2], &critical, &edges).is_none());
+        assert!(build_target_edge_blocker_inventory(&[1, 0], &critical, &edges, &arcs).is_none());
+        assert!(build_target_edge_blocker_inventory(&[2], &critical, &edges, &arcs).is_none());
 
         let duplicate_feature = vec![vec![(2, 0, 1.0, 2.0), (2, 0, 3.0, 4.0)]];
-        assert!(build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges).is_none());
+        assert!(build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges, &arcs).is_none());
     }
 
     #[test]
@@ -945,12 +946,14 @@ fn add_circle_tangent_points_tagged(
 
 type IndexedCriticalPointsByBody = Vec<Vec<(usize, usize, f64, f64)>>;
 type IndexedStraightEdgesByBody = Vec<Vec<(usize, usize, (f64, f64), (f64, f64))>>;
+type IndexedCircleArcsByBody = Vec<Vec<(usize, usize, WorldCircleArc)>>;
 
 #[derive(Clone, Debug, PartialEq)]
 struct VisibilityBlockerBodyInventory {
     body_index: usize,
     critical_features: Vec<(usize, usize, f64, f64)>,
     straight_edges: Vec<(usize, usize, (f64, f64), (f64, f64))>,
+    circular_arcs: Vec<(usize, usize, WorldCircleArc)>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -962,6 +965,7 @@ fn build_target_edge_blocker_inventory(
     candidate_body_indices: &[usize],
     critical_points_by_body: &IndexedCriticalPointsByBody,
     straight_edges_by_body: &IndexedStraightEdgesByBody,
+    circle_arcs_by_body: &IndexedCircleArcsByBody,
 ) -> Option<TargetEdgeBlockerInventory> {
     let mut candidate_bodies = Vec::with_capacity(candidate_body_indices.len());
     let mut previous_body = None;
@@ -972,6 +976,7 @@ fn build_target_edge_blocker_inventory(
         previous_body = Some(body_index);
         let critical_features = critical_points_by_body.get(body_index)?.clone();
         let straight_edges = straight_edges_by_body.get(body_index)?.clone();
+        let circular_arcs = circle_arcs_by_body.get(body_index)?.clone();
         let mut feature_ids = Vec::with_capacity(critical_features.len());
         for &(unit_index, feature_index, x, y) in &critical_features {
             if !x.is_finite()
@@ -994,10 +999,16 @@ fn build_target_edge_blocker_inventory(
             }
             edge_ids.push((unit_index, edge_index));
         }
+        let mut arc_ids = Vec::with_capacity(circular_arcs.len());
+        for &(unit_index, arc_index, arc) in &circular_arcs {
+            if !arc.center.0.is_finite() || !arc.center.1.is_finite()
+                || !arc.radius.is_finite() || arc.radius <= 0.0
+                || !arc.start.is_finite() || !arc.sweep.is_finite() || arc.sweep <= 0.0
+                || arc_ids.contains(&(unit_index, arc_index)) { return None; }
+            arc_ids.push((unit_index, arc_index));
+        }
         candidate_bodies.push(VisibilityBlockerBodyInventory {
-            body_index,
-            critical_features,
-            straight_edges,
+            body_index, critical_features, straight_edges, circular_arcs,
         });
     }
     Some(TargetEdgeBlockerInventory { candidate_bodies })
@@ -1349,6 +1360,16 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         straight_edges_by_body[body_index].push((unit_index, edge_index, start, end));
     }
 
+    let mut circle_arcs_by_body: IndexedCircleArcsByBody =
+        (0..bodies.len()).map(|_| Vec::new()).collect();
+    for (body_index, body) in bodies.iter().enumerate() {
+        for part in &body.parts {
+            for (arc_index, arc) in realized_circle_arcs(body_index, part)?.into_iter().enumerate() {
+                circle_arcs_by_body[body_index].push((part.unit_index, arc_index, arc));
+            }
+        }
+    }
+
     let mut result = Vec::new();
     for (body_index, unit_index, vertices) in straight_targets {
         if !polygon_is_convex(&vertices) {
@@ -1393,6 +1414,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 &candidate_body_indices,
                 &critical_points_by_body,
                 &straight_edges_by_body,
+                &circle_arcs_by_body,
             )?;
             let target_part = bodies[body_index]
                 .parts
@@ -1574,57 +1596,38 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
             // Curved-boundary intersections retain the blocker constituent and
             // arc parameter. The analytic arc Jacobian is still a separate
             // certificate obligation, so these events remain unresolved later.
-            for &block_body_index in &candidate_body_indices {
-                let block_body = bodies.get(block_body_index)?;
-                for blocker in &block_body.parts {
-                    if block_body_index == body_index && blocker.unit_index == unit_index {
+            for blocker_body in &blocker_inventory.candidate_bodies {
+                for &(blocker_unit_index, arc_index, arc) in &blocker_body.circular_arcs {
+                    if blocker_body.body_index == body_index && blocker_unit_index == unit_index {
                         continue;
                     }
-                    for (arc_index, arc) in realized_circle_arcs(block_body_index, blocker)?
-                        .into_iter()
-                        .enumerate()
-                    {
-                        let mut intersections = Vec::with_capacity(2);
-                        add_circle_segment_intersections(
-                            arc.center,
-                            arc.radius,
-                            a,
-                            b,
-                            &mut intersections,
-                        )?;
-                        for point in intersections {
-                            let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
-                            if !arc_has_angle(arc, angle) {
-                                continue;
-                            }
-                            let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
-                                / (edge_length * edge_length);
-                            if t > 1e-10 && t < 1.0 - 1e-10 {
-                                cuts.push(VisibilityCutRecord::new(
-                                    t,
-                                    VisibilityCutEvent::CircleStraightIntersection {
-                                        blocker_body_index: block_body_index,
-                                        blocker_unit_index: blocker.unit_index,
-                                        target_body_index: body_index,
-                                        target_unit_index: unit_index,
-                                        target_edge_index: edge_index,
-                                        arc_index,
-                                        target_edge_start_local: localize_boundary_point(
-                                            bodies, body_index, unit_index, a,
-                                        )?,
-                                        target_edge_end_local: localize_boundary_point(
-                                            bodies, body_index, unit_index, b,
-                                        )?,
-                                        blocker_arc_center_local: arc.center_local,
-                                        blocker_arc_radius: arc.radius,
-                                        blocker_arc_start_local: arc.start_local,
-                                        blocker_arc_sweep: arc.sweep,
-                                        target_parameter: t,
-                                        arc_angle_local: (angle - blocker.rotation_radians)
-                                            .rem_euclid(std::f64::consts::TAU),
-                                    },
-                                ));
-                            }
+                    let mut intersections = Vec::with_capacity(2);
+                    add_circle_segment_intersections(arc.center, arc.radius, a, b, &mut intersections)?;
+                    for point in intersections {
+                        let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
+                        if !arc_has_angle(arc, angle) { continue; }
+                        let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
+                            / (edge_length * edge_length);
+                        if t > 1e-10 && t < 1.0 - 1e-10 {
+                            let blocker_part = bodies[blocker_body.body_index]
+                                .parts.iter().find(|part| part.unit_index == blocker_unit_index)?;
+                            cuts.push(VisibilityCutRecord::new(
+                                t,
+                                VisibilityCutEvent::CircleStraightIntersection {
+                                    blocker_body_index: blocker_body.body_index,
+                                    blocker_unit_index, target_body_index: body_index,
+                                    target_unit_index: unit_index, target_edge_index: edge_index,
+                                    arc_index,
+                                    target_edge_start_local: localize_boundary_point(bodies, body_index, unit_index, a)?,
+                                    target_edge_end_local: localize_boundary_point(bodies, body_index, unit_index, b)?,
+                                    blocker_arc_center_local: arc.center_local,
+                                    blocker_arc_radius: arc.radius,
+                                    blocker_arc_start_local: arc.start_local,
+                                    blocker_arc_sweep: arc.sweep,
+                                    target_parameter: t,
+                                    arc_angle_local: (angle - blocker_part.rotation_radians).rem_euclid(std::f64::consts::TAU),
+                                },
+                            ));
                         }
                     }
                 }
