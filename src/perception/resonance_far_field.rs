@@ -1045,6 +1045,34 @@ mod tests {
         result
     }
 
+    fn exact_mutual_pair(
+        sources_a: &[WeightedFarFieldSource],
+        sources_b: &[WeightedFarFieldSource],
+    ) -> (f64, Vec<FarFieldVector>, Vec<FarFieldVector>) {
+        let mut potential = 0.0;
+        let mut forces_a = vec![FarFieldVector::default(); sources_a.len()];
+        let mut forces_b = vec![FarFieldVector::default(); sources_b.len()];
+        for (index_a, source_a) in sources_a.iter().enumerate() {
+            for (index_b, source_b) in sources_b.iter().enumerate() {
+                let dx = source_b.position.x - source_a.position.x;
+                let dy = source_b.position.y - source_a.position.y;
+                let distance = dx.hypot(dy);
+                potential += source_a.weight * source_b.weight / (1.0 + distance);
+                let scale = -source_a.weight * source_b.weight
+                    / (distance * (1.0 + distance).powi(2));
+                let force = FarFieldVector {
+                    x: scale * dx,
+                    y: scale * dy,
+                };
+                forces_a[index_a].x += force.x;
+                forces_a[index_a].y += force.y;
+                forces_b[index_b].x -= force.x;
+                forces_b[index_b].y -= force.y;
+            }
+        }
+        (potential, forces_a, forces_b)
+    }
+
     #[test]
     fn first_order_expansion_matches_exact_sum_within_its_bound() {
         let sources = vec![
@@ -1205,6 +1233,151 @@ mod tests {
         assert!(expansion
             .evaluate(FarFieldVector { x: 1.5, y: 0.0 })
             .is_none());
+    }
+
+    #[test]
+    fn mutual_cluster_expansion_bounds_potential_forces_and_conserves_momentum() {
+        let sources_a = vec![
+            WeightedFarFieldSource {
+                position: FarFieldVector { x:: -0.2, y: 0.1 },
+                weight: 0.8,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 0.1, y: -0.15 },
+                weight: -0.25,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 0.25, y: 0.05 },
+                weight: 0.6,
+            },
+        ];
+        let sources_b = vec![
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 10.0, y: 0.0 },
+                weight: 1.1,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 10.2, y: 0.15 },
+                weight: 0.35,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 9.85, y: -0.1 },
+                weight: -0.4,
+            },
+        ];
+        let evaluation =
+            evaluate_mutual_far_field_adaptive(&sources_a, &sources_b, 1.0, 1.0, 10.0)
+                .expect("well-separated mutual clusters should be accepted");
+        let (exact_potential, exact_forces_a, exact_forces_b) =
+            exact_mutual_pair(&sources_a, &sources_b);
+        assert!((exact_potential - evaluation.potential).abs() <= evaluation.error.potential);
+        for ((exact, approximate), bound) in exact_forces_a
+            .iter()
+            .zip(&evaluation.forces_a)
+            .zip(&evaluation.force_error_bounds_a)
+        {
+            assert!((exact.x - approximate.x).hypot(exact.y - approximate.y) <= *bound + 1e-12);
+        }
+        for ((exact, approximate), bound) in exact_forces_b
+            .iter()
+            .zip(&evaluation.forces_b)
+            .zip(&evaluation.force_error_bounds_b)
+        {
+            assert!((exact.x - approximate.x).hypot(exact.y - approximate.y) <= *bound + 1e-12);
+        }
+        assert!(evaluation.error.potential > 0.0);
+        let net_force = evaluation
+            .forces_a
+            .iter()
+            .chain(&evaluation.forces_b)
+            .fold(FarFieldVector::default(), |mut sum, force| {
+                sum.x += force.x;
+                sum.y += force.y;
+                sum
+            });
+        assert!(net_force.norm() < 1e-12);
+        assert!(evaluation.angular_momentum_residual.abs() <= evaluation.error.angular_momentum);
+        let exact_torque = sources_a
+            .iter()
+            .zip(&exact_forces_a)
+            .chain(sources_b.iter().zip(&exact_forces_b))
+            .map(|(source, force)| source.position.cross(*force))
+            .sum::<f64>();
+        assert!(exact_torque.abs() < 1e-12);
+    }
+
+    #[test]
+    fn mutual_cluster_adaptation_subdivides_to_meet_strict_per_body_budgets() {
+        let sources_a = vec![
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: -1.0, y: 0.1 },
+                weight: 0.8,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: -0.6, y: -0.2 },
+                weight: -0.2,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 0.7, y: 0.15 },
+                weight: 1.1,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 1.0, y: -0.1 },
+                weight: 0.4,
+            },
+        ];
+        let sources_b = vec![
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 12.0, y: 0.0 },
+                weight: 0.9,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 12.3, y: 0.2 },
+                weight: -0.3,
+            },
+            WeightedFarFieldSource {
+                position: FarFieldVector { x: 11.7, y: -0.15 },
+                weight: 0.6,
+            },
+        ];
+        let evaluation = evaluate_mutual_far_field_adaptive(
+            &sources_a,
+            &sources_b,
+            1.0e-8,
+            1.0e-8,
+            1.0e-7,
+        )
+        .expect("adaptive mutual evaluation should refine until all budgets are met");
+        let (exact_potential, exact_forces_a, exact_forces_b) =
+            exact_mutual_pair(&sources_a, &sources_b);
+        assert!(evaluation.error.potential <= 1.0e-8);
+        assert!(evaluation.error.force <= 1.0e-8);
+        assert!(evaluation.error.angular_momentum <= 1.0e-7);
+        assert!((exact_potential - evaluation.potential).abs() <= evaluation.error.potential + 1e-12);
+        for ((exact, approximate), bound) in exact_forces_a
+            .iter()
+            .zip(&evaluation.forces_a)
+            .zip(&evaluation.force_error_bounds_a)
+        {
+            assert!((exact.x - approximate.x).hypot(exact.y - approximate.y) <= *bound + 1e-12);
+        }
+        for ((exact, approximate), bound) in exact_forces_b
+            .iter()
+            .zip(&evaluation.forces_b)
+            .zip(&evaluation.force_error_bounds_b)
+        {
+            assert!((exact.x - approximate.x).hypot(exact.y - approximate.y) <= *bound + 1e-12);
+        }
+        assert!(evaluation.angular_momentum_residual.abs() < 1e-10);
+    }
+
+    #[test]
+    fn mutual_cluster_evaluator_fails_closed_for_coincident_leaf_pair() {
+        let source = WeightedFarFieldSource {
+            position: FarFieldVector { x: 1.0, y: 2.0 },
+            weight: 1.0,
+        };
+        assert!(evaluate_mutual_far_field_adaptive(&[source], &[source], 1.0, 1.0, 1.0).is_none());
     }
 
     #[test]
