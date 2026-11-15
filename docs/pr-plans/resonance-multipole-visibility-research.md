@@ -1415,3 +1415,13 @@ A straight/straight cut now has a conservative reference-pose envelope for both 
 The target-edge parameter envelope can be passed to the existing ordered-cut certificate alongside the other cuts on that same target edge. The blocker-edge parameter is independently bounded and must be grouped with cuts on its owning blocker edge when certifying that edge's partition. The certificate remains conditional on complete event enumeration and stable blocker identity; these scalar envelopes do not prove that an unseen event cannot enter the pose cell.
 
 Tests exercise bounded endpoint perturbations and fail-closed behavior for parallel, endpoint, and oversized-motion cases. This establishes the local parameter-motion bound needed for a later whole-pose-cell visibility certificate, but does not yet certify the complete event set or interval classification.
+
+## 34. Circle/straight intersection and curved-endpoint provenance
+
+Circle/straight visibility cuts now retain the target edge's two local endpoints and the blocker arc's local center, radius, local start angle, sweep, and local intersection angle, in addition to body/unit/edge/arc identities and the target-edge parameter. The local arc metadata is captured when the exact visibility event is constructed; it is not reconstructed later from nearest world coordinates.
+
+The pose resolver transforms the target edge and blocker circle through their independent rigid poses, verifies that the stored target parameter still lies on the circle and that the local intersection angle remains on the identified arc, then differentiates the circle/line constraint implicitly. The derivative includes target translation/rotation, blocker translation/rotation, target-edge parameter motion, world intersection motion, and local arc-angle motion. Tangencies, stale identities, inconsistent geometry, and unsupported events fail closed.
+
+A separate rigid circular-arc endpoint primitive transports an intrinsic local center/radius/angle through its owning pose and differentiates the resulting world point. Finite-difference regressions cover simultaneous target/blocker motion at a circle/straight crossing and rigidly moving curved endpoints.
+
+These are reference-pose Jacobians, not yet conservative pose-cell certificates. A future bound must keep the circle/line implicit denominator away from zero (excluding tangencies), keep the intersection parameter strictly inside the target edge, preserve arc-angle membership without crossing either arc endpoint, and certify event ordering against all other cuts. Until those conditions are bounded over a complete cell, exact visibility or subdivision remains authoritative.
