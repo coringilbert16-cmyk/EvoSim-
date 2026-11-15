@@ -1309,7 +1309,9 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
                 return None;
             }
             match event {
-                crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
+                crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection {
+                    ..
+                } => {
                     let resolved = resolve_straight_boundary_intersection_event(
                         event,
                         expected_target_body,
@@ -1328,7 +1330,9 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
                         derivative: resolved.derivative.point_derivative,
                     })
                 }
-                crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection { .. } => {
+                crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection {
+                    ..
+                } => {
                     let (point, derivative) = resolve_circle_straight_intersection_event(
                         event,
                         expected_target_body,
