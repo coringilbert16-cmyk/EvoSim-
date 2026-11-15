@@ -2038,6 +2038,47 @@ pub(crate) fn certify_boundary_pose_cell_with_blocker_inventory(
     certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
 }
 
+/// Join the swept blocker inventory and continuous visibility-event proof
+/// directly to the generalized force/torque evaluator. No pose derivative is
+/// returned unless the same inventory validates the target, the baseline
+/// signature matches its candidate set, every event has a whole-cell bound,
+/// sampled signatures preserve topology, and all caller-supplied body
+/// coordinates pass their independent derivative envelopes.
+///
+/// This still relies on the caller to provide a complete event cover and every
+/// participating body's x/y/angle coordinates. Missing proofs fail closed.
+#[allow(dead_code)]
+pub(crate) fn certify_boundary_pose_cell_generalized_with_blocker_inventory(
+    expansion: &BoundaryKernelExpansion,
+    baseline_signature: &crate::source_exposure::VisibilityCutSignature,
+    sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: &[BoundarySampleMotionBound],
+    event_bounds: &[crate::source_exposure::VisibilityEventPoseCellBound],
+    coordinates: &[BoundaryPoseCoordinateDerivative],
+    inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    target_body_index: usize,
+) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
+    inventory.certifies_target_signature(
+        source,
+        bodies,
+        target_body_indices,
+        target_body_index,
+        baseline_signature,
+    )?;
+    baseline_signature.certify_pose_cell(event_bounds)?;
+    baseline_signature.certify_unchanged_across(sampled_signatures)?;
+    certify_boundary_pose_cell_generalized(
+        expansion,
+        ordered_visibility_cuts,
+        sample_motion,
+        coordinates,
+    )
+}
+
 /// Certify the exact discrete ordered-pair derivative for every supplied
 /// generalized body coordinate. This composes sample-position and signed-weight
 /// chain rules with source/receiver center motion, and returns an independent
