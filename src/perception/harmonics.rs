@@ -2318,10 +2318,8 @@ fn expand_resonance_boundary_interaction_samples(
             // is differentiated against the exact discrete two-distance
             // kernel, while the adaptive expansion certifies the smooth
             // fixed-weight kernel derivative.
-            for ((sample, (extent_dx, extent_dy)), extent) in weighted_samples
-                .iter()
-                .zip(extent_gradients)
-                .zip(extents)
+            for ((sample, (extent_dx, extent_dy)), extent) in
+                weighted_samples.iter().zip(extent_gradients).zip(extents)
             {
                 if !extent.is_finite() || extent <= f64::EPSILON {
                     return None;
