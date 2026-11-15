@@ -24,14 +24,16 @@ pub(crate) struct ExposedBoundaryInterval {
 /// Provenance for one endpoint of an exposed straight interval. Only endpoints
 /// that match a rigid target-feature vertex are currently certified; all cuts
 /// created by occluders or intersections remain explicitly unresolved.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) enum BoundaryEndpointProvenance {
     RigidTargetVertex {
         body_index: usize,
         unit_index: usize,
         local_point: (f64, f64),
     },
-    UnresolvedVisibilityCut,
+    UnresolvedVisibilityCut {
+        events: Vec<VisibilityCutEvent>,
+    },
 }
 
 /// Construction event that introduced a visibility partition endpoint.
@@ -128,7 +130,9 @@ fn endpoint_provenance_from_cut(
     target_unit_index: usize,
 ) -> BoundaryEndpointProvenance {
     if cut.unresolved || cut.events.len() != 1 {
-        return BoundaryEndpointProvenance::UnresolvedVisibilityCut;
+        return BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            events: cut.events.clone(),
+        };
     }
     match cut.events.first() {
         Some(VisibilityCutEvent::TargetVertex {
@@ -143,12 +147,14 @@ fn endpoint_provenance_from_cut(
                 local_point: *local_point,
             }
         }
-        _ => BoundaryEndpointProvenance::UnresolvedVisibilityCut,
+        _ => BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            events: cut.events.clone(),
+        },
     }
 }
 
 /// Exact exposed interval paired with conservative endpoint provenance.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryIntervalWithProvenance {
     pub(crate) interval: ExposedBoundaryInterval,
     pub(crate) start_provenance: BoundaryEndpointProvenance,
@@ -1415,10 +1421,10 @@ mod visibility_tests {
             intervals.iter().any(|interval| {
                 matches!(
                     interval.start_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 ) || matches!(
                     interval.end_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 )
             }),
             "occluder-generated cuts must not be mislabeled as rigid target vertices"
@@ -1442,10 +1448,10 @@ mod visibility_tests {
             intervals.iter().any(|interval| {
                 matches!(
                     interval.start_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 ) || matches!(
                     interval.end_provenance,
-                    BoundaryEndpointProvenance::UnresolvedVisibilityCut
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 )
             }),
             "coincident cuts from distinct blockers must not be assigned a unique derivative"
