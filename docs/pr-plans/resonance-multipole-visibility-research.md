@@ -1451,3 +1451,9 @@ Unique straight/straight and circle/straight cuts are no longer represented only
 Coincident/multiple events, mismatched target identities, and parameter inconsistencies remain unresolved. The pose-aware resolvers consume the retained event directly and revalidate the owning identities and reference-pose geometry before returning derivatives. This connects the retained local edge/arc provenance to the interval endpoint data path without weakening the exact visibility partition.
 
 The variant is a resolvable reference event, not a proof that it remains stable over a pose cell. Parameter/angle motion bounds, complete cut enumeration, and strict event-order certification are still required before a caller can use the derivative in an approximation.
+
+## 38. Typed endpoint-to-pose derivative dispatch
+
+The perception layer now consumes `BoundaryEndpointProvenance` directly. Rigid target vertices are transformed through their owning target pose; unique rigid visibility intersections dispatch by event type to the straight/straight or circle/straight resolver. Each branch returns the same world-point plus generalized-coordinate derivative shape. Unresolved cuts, unsupported event classes, and mismatched target identities return no derivative.
+
+This removes the remaining manual handoff between interval provenance and the local event resolvers. It still does not create a production multipole caller: the dispatcher is a certified local geometry primitive, while complete event-set and pair-level potential/force/torque certificates remain outstanding.
