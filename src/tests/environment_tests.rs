@@ -97,9 +97,14 @@ fn environmental_motion_batch_rejects_stale_source_without_partial_changes() {
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let material = PhysicalMaterial::realized(
         Material::free_base("Carbon", 1.0),
-        vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        }],
         &catalog,
-    ).expect("carbon should realize");
+    )
+    .expect("carbon should realize");
     assert!(field.deposit_physical(10.0, 10.0, material, &catalog));
     field.assign_missing_material_identities();
     let source = field.index_for_position(10.0, 10.0).unwrap();
