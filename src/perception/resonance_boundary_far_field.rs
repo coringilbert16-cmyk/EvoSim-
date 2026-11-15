@@ -2274,9 +2274,7 @@ pub(crate) fn ray_edge_intersection_motion_certificate(
     let minimum_determinant_margin = denominator_min / minimum_determinant_scale;
     let determinant_margin_change = (determinant_margin - minimum_determinant_margin).max(0.0);
     let existence_margin = t.min(1.0 - t).min(u - 1.0).min(determinant_margin);
-    let existence_margin_change_bound = t_change
-        .max(u_change)
-        .max(determinant_margin_change)
+    let existence_margin_change_bound = t_change.max(u_change).max(determinant_margin_change)
         + 128.0 * f64::EPSILON * (determinant_margin + 1.0);
 
     [
