@@ -3003,7 +3003,7 @@ mod provenance_resolver_tests {
             rotation_radians: 0.3,
         };
         let blocker_pose = RigidBoundaryPose {
-            pivot: BoundaryKernelVector { x: -1.0, y: 4.0 },
+            pivot: BoundaryKernelVector { x: 2.0, y: 3.0 },
             rotation_radians: -0.2,
         };
         let target_translation = BoundaryKernelVector { x: 0.2, y: -0.1 };
