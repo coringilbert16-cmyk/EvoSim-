@@ -242,6 +242,8 @@ impl VisibilityCutEvent {
 /// visibility/subdivision rather than a pose derivative.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct VisibilityCutSignature {
+    candidate_bodies: Vec<usize>,
+    interval_visibility: Vec<bool>,
     ordered_events: Vec<VisibilityEventIdentity>,
 }
 
@@ -271,7 +273,30 @@ impl VisibilityCutSignature {
             }
             ordered_events.push(identity);
         }
-        Some(Self { ordered_events })
+        Some(Self {
+            candidate_bodies: Vec::new(),
+            interval_visibility: Vec::new(),
+            ordered_events,
+        })
+    }
+
+    /// Build a complete partition signature from the conservative candidate
+    /// body set and the visibility classification of every open cut interval.
+    #[allow(dead_code)]
+    pub(crate) fn from_partition(
+        cuts: &[VisibilityCutRecord],
+        candidate_bodies: &[usize],
+        interval_visibility: &[bool],
+    ) -> Option<Self> {
+        if candidate_bodies.windows(2).any(|pair| pair[0] >= pair[1])
+            || interval_visibility.len() != cuts.len().checked_sub(1)?
+        {
+            return None;
+        }
+        let mut signature = Self::from_cuts(cuts)?;
+        signature.candidate_bodies = candidate_bodies.to_vec();
+        signature.interval_visibility = interval_visibility.to_vec();
+        Some(signature)
     }
 
     /// Require every sampled pose in a proposed cell to retain this exact
@@ -2287,22 +2312,34 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
             }
 
             let cuts = merge_visibility_cuts(cuts);
-            let visibility_signature = VisibilityCutSignature::from_cuts(&cuts);
+            let mut interval_visibility = Vec::with_capacity(cuts.len().saturating_sub(1));
             for pair in cuts.windows(2) {
                 let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 {
+                    interval_visibility.push(true);
                     continue;
                 }
                 let t = (t0 + t1) * 0.5;
                 let point = (a.0 + ex * t, a.1 + ey * t);
-                if crate::organism_geometry::source_path_blocked_for_candidates(
-                    source,
-                    point,
-                    bodies,
-                    body_index,
-                    unit_index,
-                    &candidate_body_indices,
-                ) {
+                interval_visibility.push(
+                    crate::organism_geometry::source_path_blocked_for_candidates(
+                        source,
+                        point,
+                        bodies,
+                        body_index,
+                        unit_index,
+                        &candidate_body_indices,
+                    ),
+                );
+            }
+            let visibility_signature = VisibilityCutSignature::from_partition(
+                &cuts,
+                &candidate_body_indices,
+                &interval_visibility,
+            );
+            for (pair, blocked) in cuts.windows(2).zip(interval_visibility.iter().copied()) {
+                let (t0, t1) = (pair[0].parameter, pair[1].parameter);
+                if t1 - t0 <= 1e-10 || blocked {
                     continue;
                 }
                 let interval = ExposedBoundaryInterval {
