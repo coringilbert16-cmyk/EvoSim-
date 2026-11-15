@@ -343,6 +343,7 @@ fn split_mutual_far_field_cluster(
 /// Clusters are subdivided until potential, per-body force, and angular-momentum
 /// error budgets are all satisfied. This primitive does not certify visibility
 /// or replace the extended-boundary two-distance evaluator.
+#[allow(dead_code)] // Integrated with the complete boundary kernel in the next evaluator stage.
 pub(crate) fn evaluate_mutual_far_field_adaptive(
     sources_a: &[WeightedFarFieldSource],
     sources_b: &[WeightedFarFieldSource],
@@ -441,8 +442,26 @@ pub(crate) fn evaluate_mutual_far_field_adaptive(
         .sum::<f64>();
     let roundoff = 64.0 * f64::EPSILON * force_scale.max(1.0);
     result.error.angular_momentum += roundoff;
-    (result.angular_momentum_residual.is_finite()
-        && result.angular_momentum_residual.abs() <= result.error.angular_momentum)
+    let finite = [
+        result.potential,
+        result.error.potential,
+        result.error.force,
+        result.error.angular_momentum,
+        result.angular_momentum_residual,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        && result
+            .forces_a
+            .iter()
+            .chain(&result.forces_b)
+            .all(|force| force.x.is_finite() && force.y.is_finite())
+        && result
+            .force_error_bounds_a
+            .iter()
+            .chain(&result.force_error_bounds_b)
+            .all(|bound| bound.is_finite());
+    (finite && result.angular_momentum_residual.abs() <= result.error.angular_momentum)
         .then_some(result)
 }
 
