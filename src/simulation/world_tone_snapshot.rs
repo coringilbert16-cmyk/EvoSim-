@@ -3262,12 +3262,10 @@ mod tests {
                 &catalog,
             )
             .expect("environmental material should realize");
-            assert!(simulation.environment.field.deposit_physical(
-                x,
-                y,
-                physical,
-                &catalog,
-            ));
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical(x, y, physical, &catalog,));
         }
         simulation
             .environment
