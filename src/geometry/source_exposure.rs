@@ -88,8 +88,14 @@ pub(crate) enum VisibilityCutEvent {
         target_unit_index: usize,
         target_edge_index: usize,
         arc_index: usize,
+        target_edge_start_local: (f64, f64),
+        target_edge_end_local: (f64, f64),
+        blocker_arc_center_local: (f64, f64),
+        blocker_arc_radius: f64,
+        blocker_arc_start_local: f64,
+        blocker_arc_sweep: f64,
         target_parameter: f64,
-        arc_angle: f64,
+        arc_angle_local: f64,
     },
     Unresolved {
         blocker_body_index: Option<usize>,
@@ -1418,8 +1424,19 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                         target_unit_index: unit_index,
                                         target_edge_index: edge_index,
                                         arc_index,
+                                        target_edge_start_local: localize_boundary_point(
+                                            bodies, body_index, unit_index, a,
+                                        )?,
+                                        target_edge_end_local: localize_boundary_point(
+                                            bodies, body_index, unit_index, b,
+                                        )?,
+                                        blocker_arc_center_local: arc.center_local,
+                                        blocker_arc_radius: arc.radius,
+                                        blocker_arc_start_local: arc.start_local,
+                                        blocker_arc_sweep: arc.sweep,
                                         target_parameter: t,
-                                        arc_angle: angle,
+                                        arc_angle_local: (angle - blocker.rotation_radians)
+                                            .rem_euclid(std::f64::consts::TAU),
                                     },
                                 ));
                             }
@@ -2071,6 +2088,8 @@ struct WorldCircleArc {
     radius: f64,
     start: f64,
     sweep: f64,
+    center_local: (f64, f64),
+    start_local: f64,
 }
 
 /// Return the realized circular boundary pieces for a constituent. Compound
@@ -2094,6 +2113,8 @@ fn push_world_circle_arc(
     .rem_euclid(std::f64::consts::TAU);
     if !center.0.is_finite()
         || !center.1.is_finite()
+        || !center_local.0.is_finite()
+        || !center_local.1.is_finite()
         || !radius.is_finite()
         || radius <= 0.0
         || !start.is_finite()
@@ -2111,6 +2132,8 @@ fn push_world_circle_arc(
         radius,
         start: normalized_start,
         sweep,
+        center_local,
+        start_local: start.rem_euclid(std::f64::consts::TAU),
     });
     Some(())
 }
