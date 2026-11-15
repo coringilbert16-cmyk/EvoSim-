@@ -3410,15 +3410,14 @@ mod tests {
         let radius = 0.5;
         let source_displacement = 0.001;
         let center_displacement = 0.002;
-        let (bound, existence_margin, margin_change) =
-            circle_tangent_point_displacement_bound(
-                source,
-                center,
-                radius,
-                source_displacement,
-                center_displacement,
-            )
-            .expect("external tangent remains certified over the pose cell");
+        let (bound, existence_margin, margin_change) = circle_tangent_point_displacement_bound(
+            source,
+            center,
+            radius,
+            source_displacement,
+            center_displacement,
+        )
+        .expect("external tangent remains certified over the pose cell");
         assert!(existence_margin > margin_change);
 
         for side in [-1.0, 1.0] {
@@ -3582,8 +3581,7 @@ mod tests {
                 "perturbed cut exceeded certified displacement"
             );
             assert!(
-                (moved_parameter - original_parameter).abs()
-                    <= certificate.target_parameter_change,
+                (moved_parameter - original_parameter).abs() <= certificate.target_parameter_change,
                 "perturbed edge parameter exceeded its certificate"
             );
         }
