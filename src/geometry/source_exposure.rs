@@ -296,9 +296,9 @@ impl VisibilityCutSignature {
             || interval_blocker_bodies.len() != cuts.len().checked_sub(1)?
             || interval_blocker_bodies.iter().any(|blockers| {
                 blockers.windows(2).any(|pair| pair[0] >= pair[1])
-                    || blockers.iter().any(|(body, _)| {
-                        candidate_bodies.binary_search(body).is_err()
-                    })
+                    || blockers
+                        .iter()
+                        .any(|(body, _)| candidate_bodies.binary_search(body).is_err())
             })
         {
             return None;
