@@ -268,6 +268,10 @@ pub(crate) struct MaterialAuraReception {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    /// Derivative of projected extent with respect to source-center translation.
+    /// Curved boundaries currently fail closed in the mutual expansion until
+    /// their arc integral has a certified analytic derivative.
+    pub(crate) projected_extent_source_gradient: Option<(f64, f64)>,
     pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
     boundary: MaterialAuraBoundary,
     /// Incident field before the receiver's oscillator response. Pair
@@ -462,6 +466,7 @@ pub(crate) struct ResonanceBoundaryInteractionSample {
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
+    pub(crate) projected_extent_source_gradient: Option<(f64, f64)>,
     pub(crate) source_mass_scale: f64,
     pub(crate) receiver_mass_scale: f64,
     /// Unattenuated, per-body spectra. These are the frequency/phase
@@ -1567,6 +1572,7 @@ fn material_aura_receptions_with_geometry_prepared(
                           normal_x: f64,
                           normal_y: f64,
                           projected_extent: f64,
+                          projected_extent_source_gradient: Option<(f64, f64)>,
                           boundary: MaterialAuraBoundary,
                           visibility_signature: Option<
         crate::source_exposure::VisibilityCutSignature,
@@ -1602,6 +1608,7 @@ fn material_aura_receptions_with_geometry_prepared(
                 receiver_normal_x: normal_x,
                 receiver_normal_y: normal_y,
                 projected_extent,
+                projected_extent_source_gradient,
                 visibility_signature,
                 boundary,
                 incident_spectrum: incident,
@@ -1614,8 +1621,11 @@ fn material_aura_receptions_with_geometry_prepared(
 
     for exposed in straight_intervals {
         let interval = exposed.interval;
-        let projected_extent =
-            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
+        let (projected_extent, projected_extent_source_gradient) =
+            crate::source_exposure::point_source_projected_extent_with_gradient(
+                interval,
+                (source_x, source_y),
+            )?;
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
         receive_at(
@@ -1624,6 +1634,7 @@ fn material_aura_receptions_with_geometry_prepared(
             interval.outward_normal.0,
             interval.outward_normal.1,
             projected_extent,
+            Some(projected_extent_source_gradient),
             MaterialAuraBoundary::Straight {
                 start: interval.start,
                 end: interval.end,
@@ -1648,6 +1659,7 @@ fn material_aura_receptions_with_geometry_prepared(
             normal_x,
             normal_y,
             projected_extent,
+            None,
             MaterialAuraBoundary::Arc(interval.arc),
             None,
         )?;
@@ -2251,7 +2263,7 @@ fn expand_resonance_boundary_interaction_samples(
                     if !spatial_scale.is_finite() || !weight.is_finite() {
                         return None;
                     }
-                    Some(WeightedBoundaryKernelSample {
+                    Some((WeightedBoundaryKernelSample {
                         position: BoundaryKernelVector {
                             x: sample.receiver_x,
                             y: sample.receiver_y,
@@ -2260,9 +2272,11 @@ fn expand_resonance_boundary_interaction_samples(
                         // distance attenuations. Remove them here because the
                         // expansion applies the two-distance kernel itself.
                         weight,
-                    })
+                    }, sample.projected_extent_source_gradient?))
                 })
                 .collect::<Option<Vec<_>>>()?;
+            let (weighted_samples, extent_gradients): (Vec<_>, Vec<_>) =
+                weighted_samples.into_iter().unzip();
             let absolute_weight = weighted_samples
                 .iter()
                 .map(|sample| sample.weight.abs())
@@ -2274,16 +2288,43 @@ fn expand_resonance_boundary_interaction_samples(
             // subdivision preserves the same discrete kernel and fails closed
             // if even exact singleton evaluation cannot meet the budget.
             let tolerance = 1.0e-7 * absolute_weight.max(1.0);
-            let evaluation = evaluate_boundary_kernel_samples_adaptive_with_budget(
+            let mut evaluation = evaluate_boundary_kernel_samples_adaptive_with_budget(
                 source_center,
                 receiver_center,
-                weighted_samples,
+                weighted_samples.clone(),
                 super::resonance_boundary_far_field::BoundaryPotentialError {
                     potential: tolerance,
                     source_force: tolerance,
                     receiver_force: tolerance,
                 },
             )?;
+            // Projected extent is source-position dependent. Its contribution
+            // is differentiated against the exact discrete two-distance
+            // kernel, while the adaptive expansion certifies the smooth
+            // fixed-weight kernel derivative.
+            for (sample, (extent_dx, extent_dy)) in
+                weighted_samples.iter().zip(extent_gradients)
+            {
+                let original = samples
+                    .iter()
+                    .find(|candidate| {
+                        candidate.receiver_x == sample.position.x
+                            && candidate.receiver_y == sample.position.y
+                    })?;
+                let extent = original.projected_extent;
+                if !extent.is_finite() || extent <= f64::EPSILON {
+                    return None;
+                }
+                let source_distance = (source_center.x - sample.position.x)
+                    .hypot(source_center.y - sample.position.y);
+                let receiver_distance = (receiver_center.x - sample.position.x)
+                    .hypot(receiver_center.y - sample.position.y);
+                let kernel = 1.0 / ((1.0 + source_distance) * (1.0 + receiver_distance));
+                let weight_derivative_scale = sample.weight / extent;
+                let factor = kernel * weight_derivative_scale;
+                evaluation.source_gradient.x += factor * extent_dx;
+                evaluation.source_gradient.y += factor * extent_dy;
+            }
             Some(ResonanceBoundaryFrequencyExpansion {
                 frequency_cycles_per_day: frequency,
                 evaluation,
@@ -2662,6 +2703,7 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
             receiver_normal_x: reception.receiver_normal_x,
             receiver_normal_y: reception.receiver_normal_y,
             projected_extent: reception.projected_extent,
+            projected_extent_source_gradient: reception.projected_extent_source_gradient,
             source_mass_scale,
             receiver_mass_scale,
             source_emitted_spectrum: source_emission.clone(),
