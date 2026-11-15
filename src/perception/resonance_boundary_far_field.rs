@@ -383,6 +383,118 @@ pub(crate) fn ray_edge_intersection_pose_derivative(
         })
 }
 
+/// Exact first derivative of one strict straight/straight boundary cut.
+/// Both segment parameters must remain strictly interior; parallel, endpoint,
+/// and topology-transition cases fail closed to exact evaluation/subdivision.
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct StraightBoundaryIntersectionPoseDerivative {
+    pub(crate) target_parameter_derivative: f64,
+    pub(crate) blocker_parameter_derivative: f64,
+    pub(crate) point_derivative: BoundaryKernelVector,
+}
+
+/// Differentiate A + t(B-A) = C + u(D-C) for one generalized pose
+/// coordinate. The caller supplies derivatives of all four rigid endpoints.
+#[allow(dead_code)]
+pub(crate) fn straight_boundary_intersection_pose_derivative(
+    target_start: BoundaryKernelVector,
+    target_end: BoundaryKernelVector,
+    blocker_start: BoundaryKernelVector,
+    blocker_end: BoundaryKernelVector,
+    target_start_derivative: BoundaryKernelVector,
+    target_end_derivative: BoundaryKernelVector,
+    blocker_start_derivative: BoundaryKernelVector,
+    blocker_end_derivative: BoundaryKernelVector,
+) -> Option<StraightBoundaryIntersectionPoseDerivative> {
+    let points = [
+        target_start,
+        target_end,
+        blocker_start,
+        blocker_end,
+        target_start_derivative,
+        target_end_derivative,
+        blocker_start_derivative,
+        blocker_end_derivative,
+    ];
+    if points
+        .iter()
+        .any(|point| !point.x.is_finite() || !point.y.is_finite())
+    {
+        return None;
+    }
+    let subtract = |left: BoundaryKernelVector, right: BoundaryKernelVector| BoundaryKernelVector {
+        x: left.x - right.x,
+        y: left.y - right.y,
+    };
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let target_edge = subtract(target_end, target_start);
+    let blocker_edge = subtract(blocker_end, blocker_start);
+    let offset = subtract(blocker_start, target_start);
+    let target_edge_derivative =
+        subtract(target_end_derivative, target_start_derivative);
+    let blocker_edge_derivative =
+        subtract(blocker_end_derivative, blocker_start_derivative);
+    let offset_derivative = subtract(blocker_start_derivative, target_start_derivative);
+    let denominator = cross(target_edge, blocker_edge);
+    let denominator_scale = target_edge.norm() * blocker_edge.norm();
+    if !denominator.is_finite()
+        || !denominator_scale.is_finite()
+        || denominator_scale <= f64::MIN_POSITIVE
+        || denominator.abs() <= 64.0 * f64::EPSILON * denominator_scale
+    {
+        return None;
+    }
+    let target_numerator = cross(offset, blocker_edge);
+    let blocker_numerator = cross(offset, target_edge);
+    let target_parameter = target_numerator / denominator;
+    let blocker_parameter = blocker_numerator / denominator;
+    const PARAMETER_MARGIN: f64 = 1.0e-10;
+    if !target_parameter.is_finite()
+        || !blocker_parameter.is_finite()
+        || !(PARAMETER_MARGIN..1.0 - PARAMETER_MARGIN).contains(&target_parameter)
+        || !(PARAMETER_MARGIN..1.0 - PARAMETER_MARGIN).contains(&blocker_parameter)
+    {
+        return None;
+    }
+    let denominator_derivative = cross(target_edge_derivative, blocker_edge)
+        + cross(target_edge, blocker_edge_derivative);
+    let target_numerator_derivative =
+        cross(offset_derivative, blocker_edge) + cross(offset, blocker_edge_derivative);
+    let blocker_numerator_derivative =
+        cross(offset_derivative, target_edge) + cross(offset, target_edge_derivative);
+    let denominator_squared = denominator * denominator;
+    let target_parameter_derivative = (target_numerator_derivative * denominator
+        - target_numerator * denominator_derivative)
+        / denominator_squared;
+    let blocker_parameter_derivative = (blocker_numerator_derivative * denominator
+        - blocker_numerator * denominator_derivative)
+        / denominator_squared;
+    let point_derivative = BoundaryKernelVector {
+        x: target_start_derivative.x
+            + target_parameter_derivative * target_edge.x
+            + target_parameter * target_edge_derivative.x,
+        y: target_start_derivative.y
+            + target_parameter_derivative * target_edge.y
+            + target_parameter * target_edge_derivative.y,
+    };
+    [
+        target_parameter_derivative,
+        blocker_parameter_derivative,
+        point_derivative.x,
+        point_derivative.y,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+    .then_some(StraightBoundaryIntersectionPoseDerivative {
+        target_parameter_derivative,
+        blocker_parameter_derivative,
+        point_derivative,
+    })
+}
+
 /// Midpoint and exact point-source projected-extent derivatives for one
 /// already-corresponding straight exposed interval. The interval normal is
 /// transported from its edge orientation; edge-on transitions fail closed.
@@ -1743,6 +1855,81 @@ mod tests {
         };
         assert!((finite_difference.x - derivative.point_derivative.x).abs() < 1.0e-8);
         assert!((finite_difference.y - derivative.point_derivative.y).abs() < 1.0e-8);
+    }
+
+    #[test]
+    fn straight_boundary_intersection_pose_derivative_matches_finite_difference() {
+        let target_start = BoundaryKernelVector { x: 0.0, y: 0.0 };
+        let target_end = BoundaryKernelVector { x: 2.0, y: 0.0 };
+        let blocker_start = BoundaryKernelVector { x: 1.0, y: -1.0 };
+        let blocker_end = BoundaryKernelVector { x: 1.0, y: 1.0 };
+        let target_start_rate = BoundaryKernelVector { x: 0.03, y: -0.02 };
+        let target_end_rate = BoundaryKernelVector { x: -0.01, y: 0.04 };
+        let blocker_start_rate = BoundaryKernelVector { x: 0.02, y: 0.01 };
+        let blocker_end_rate = BoundaryKernelVector { x: -0.04, y: -0.03 };
+        let derivative = straight_boundary_intersection_pose_derivative(
+            target_start,
+            target_end,
+            blocker_start,
+            blocker_end,
+            target_start_rate,
+            target_end_rate,
+            blocker_start_rate,
+            blocker_end_rate,
+        )
+        .expect("strict interior straight-boundary intersection should differentiate");
+        let intersection = |coordinate: f64| {
+            let moved = |point: BoundaryKernelVector, rate: BoundaryKernelVector| {
+                BoundaryKernelVector {
+                    x: point.x + coordinate * rate.x,
+                    y: point.y + coordinate * rate.y,
+                }
+            };
+            let a = moved(target_start, target_start_rate);
+            let b = moved(target_end, target_end_rate);
+            let c = moved(blocker_start, blocker_start_rate);
+            let d = moved(blocker_end, blocker_end_rate);
+            let edge = BoundaryKernelVector { x: b.x - a.x, y: b.y - a.y };
+            let blocker = BoundaryKernelVector { x: d.x - c.x, y: d.y - c.y };
+            let offset = BoundaryKernelVector { x: c.x - a.x, y: c.y - a.y };
+            let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+                left.x * right.y - left.y * right.x
+            };
+            let target_parameter = cross(offset, blocker) / cross(edge, blocker);
+            let blocker_parameter = cross(offset, edge) / cross(edge, blocker);
+            let point = BoundaryKernelVector {
+                x: a.x + target_parameter * edge.x,
+                y: a.y + target_parameter * edge.y,
+            };
+            (target_parameter, blocker_parameter, point)
+        };
+        let step = 1.0e-6;
+        let plus = intersection(step);
+        let minus = intersection(-step);
+        let target_rate = (plus.0 - minus.0) / (2.0 * step);
+        let blocker_rate = (plus.1 - minus.1) / (2.0 * step);
+        let point_rate = BoundaryKernelVector {
+            x: (plus.2.x - minus.2.x) / (2.0 * step),
+            y: (plus.2.y - minus.2.y) / (2.0 * step),
+        };
+        assert!((target_rate - derivative.target_parameter_derivative).abs() < 1.0e-8);
+        assert!((blocker_rate - derivative.blocker_parameter_derivative).abs() < 1.0e-8);
+        assert!((point_rate.x - derivative.point_derivative.x).abs() < 1.0e-8);
+        assert!((point_rate.y - derivative.point_derivative.y).abs() < 1.0e-8);
+    }
+
+    #[test]
+    fn straight_boundary_intersection_derivative_rejects_parallel_and_endpoint_events() {
+        let point = |x, y| BoundaryKernelVector { x, y };
+        let zero = BoundaryKernelVector::default();
+        assert!(straight_boundary_intersection_pose_derivative(
+            point(0.0, 0.0), point(2.0, 0.0), point(0.0, 1.0), point(2.0, 1.0),
+            zero, zero, zero, zero,
+        ).is_none());
+        assert!(straight_boundary_intersection_pose_derivative(
+            point(0.0, 0.0), point(2.0, 0.0), point(0.0, -1.0), point(0.0, 1.0),
+            zero, zero, zero, zero,
+        ).is_none());
     }
 
     #[test]
