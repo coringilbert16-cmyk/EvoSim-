@@ -74,6 +74,10 @@ pub(crate) enum VisibilityCutEvent {
         target_unit_index: usize,
         target_edge_index: usize,
         blocker_edge_index: usize,
+        target_edge_start_local: (f64, f64),
+        target_edge_end_local: (f64, f64),
+        blocker_edge_start_local: (f64, f64),
+        blocker_edge_end_local: (f64, f64),
         target_parameter: f64,
         blocker_parameter: f64,
     },
@@ -139,6 +143,34 @@ fn merge_visibility_cuts(mut cuts: Vec<VisibilityCutRecord>) -> Vec<VisibilityCu
         merged.push(cut);
     }
     merged
+}
+
+/// Convert an exact world-space boundary point back into the local frame
+/// of the uniquely identified placed constituent. Ambiguous unit identities
+/// fail closed instead of selecting an arbitrary matching part.
+fn localize_boundary_point(
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    body_index: usize,
+    unit_index: usize,
+    point: (f64, f64),
+) -> Option<(f64, f64)> {
+    let body = bodies.get(body_index)?;
+    let mut matching_parts = body.parts.iter().filter(|part| part.unit_index == unit_index);
+    let part = matching_parts.next()?;
+    if matching_parts.next().is_some()
+        || !part.x.is_finite()
+        || !part.y.is_finite()
+        || !part.rotation_radians.is_finite()
+        || !point.0.is_finite()
+        || !point.1.is_finite()
+    {
+        return None;
+    }
+    let (sin, cos) = part.rotation_radians.sin_cos();
+    let dx = point.0 - part.x;
+    let dy = point.1 - part.y;
+    let local = (dx * cos + dy * sin, -dx * sin + dy * cos);
+    (local.0.is_finite() && local.1.is_finite()).then_some(local)
 }
 
 fn endpoint_provenance_from_cut(
@@ -253,6 +285,10 @@ mod tests {
                 target_unit_index: 2,
                 target_edge_index: 4,
                 blocker_edge_index: 6,
+                target_edge_start_local: (-1.0, 0.0),
+                target_edge_end_local: (1.0, 0.0),
+                blocker_edge_start_local: (0.0, -1.0),
+                blocker_edge_end_local: (0.0, 1.0),
                 target_parameter: 0.25,
                 blocker_parameter: 0.75,
             },
@@ -272,6 +308,10 @@ mod tests {
             target_unit_index: 2,
             target_edge_index: 4,
             blocker_edge_index: 6,
+            target_edge_start_local: (-1.0, 0.0),
+            target_edge_end_local: (1.0, 0.0),
+            blocker_edge_start_local: (0.0, -1.0),
+            blocker_edge_end_local: (0.0, 1.0),
             target_parameter: 0.25,
             blocker_parameter: 0.75,
         };
@@ -1284,6 +1324,18 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                             target_unit_index: unit_index,
                                             target_edge_index: edge_index,
                                             blocker_edge_index: block_edge_index,
+                                            target_edge_start_local: localize_boundary_point(
+                                                bodies, body_index, unit_index, a,
+                                            )?,
+                                            target_edge_end_local: localize_boundary_point(
+                                                bodies, body_index, unit_index, b,
+                                            )?,
+                                            blocker_edge_start_local: localize_boundary_point(
+                                                bodies, block_body, block_unit, c,
+                                            )?,
+                                            blocker_edge_end_local: localize_boundary_point(
+                                                bodies, block_body, block_unit, d,
+                                            )?,
                                             target_parameter: t,
                                             blocker_parameter,
                                         },
