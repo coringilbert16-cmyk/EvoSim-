@@ -2277,6 +2277,218 @@ pub(crate) fn ray_edge_intersection_motion_certificate(
     })
 }
 
+/// Build the continuous pose-cell certificate for ray-generated visibility
+/// cuts using the same ray/edge parameter evaluator used by the point-motion
+/// bound. Near-silhouette and near-parallel cases fail closed.
+#[allow(dead_code)]
+pub(crate) fn bound_ray_visibility_event_over_pose_cell(
+    event: &crate::source_exposure::VisibilityCutEvent,
+    source: BoundaryKernelVector,
+    source_displacement: f64,
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
+) -> Option<crate::source_exposure::VisibilityEventPoseCellBound> {
+    use crate::source_exposure::{
+        VisibilityBodyMotionBound, VisibilityCutEvent, VisibilityEventPoseCellBound,
+    };
+
+    if !source_displacement.is_finite() || source_displacement < 0.0 {
+        return None;
+    }
+    let bound_for_body = |index: usize| -> Option<(f64, VisibilityBodyMotionBound)> {
+        let motion = *body_motion.get(index)?;
+        Some((motion.maximum_point_displacement()?, motion))
+    };
+
+    let (target_body, target_unit, target_edge, blocker_body, blocker_unit) = match event {
+        VisibilityCutEvent::RayThroughRigidFeature {
+            target_body_index,
+            target_unit_index,
+            target_edge_index,
+            blocker_body_index,
+            blocker_unit_index,
+            ..
+        }
+        | VisibilityCutEvent::RayThroughCircleTangent {
+            target_body_index,
+            target_unit_index,
+            target_edge_index,
+            blocker_body_index,
+            blocker_unit_index,
+            ..
+        } => (
+            *target_body_index,
+            *target_unit_index,
+            *target_edge_index,
+            *blocker_body_index,
+            *blocker_unit_index,
+        ),
+        _ => return None,
+    };
+
+    let target_part = crate::source_exposure::visibility_part(bodies, target_body, target_unit)?;
+    let blocker_part =
+        crate::source_exposure::visibility_part(bodies, blocker_body, blocker_unit)?;
+    let target_pose = RigidBoundaryPose {
+        pivot: BoundaryKernelVector {
+            x: target_part.x,
+            y: target_part.y,
+        },
+        rotation_radians: target_part.rotation_radians,
+    };
+    let blocker_pose = RigidBoundaryPose {
+        pivot: BoundaryKernelVector {
+            x: blocker_part.x,
+            y: blocker_part.y,
+        },
+        rotation_radians: blocker_part.rotation_radians,
+    };
+    let (target_start_local, target_end_local) =
+        crate::source_exposure::local_straight_feature_endpoints(target_part, target_edge)?;
+    let target_start = target_pose.transform_local_point(BoundaryKernelVector {
+        x: target_start_local.0,
+        y: target_start_local.1,
+    })?;
+    let target_end = target_pose.transform_local_point(BoundaryKernelVector {
+        x: target_end_local.0,
+        y: target_end_local.1,
+    })?;
+    let (target_displacement, _) = bound_for_body(target_body)?;
+    let (blocker_displacement, blocker_motion) = bound_for_body(blocker_body)?;
+
+    let (critical_point, critical_point_displacement, extra_margin, extra_margin_change) =
+        match event {
+            VisibilityCutEvent::RayThroughRigidFeature { local_point, .. } => {
+                let point = blocker_pose.transform_local_point(BoundaryKernelVector {
+                    x: local_point.0,
+                    y: local_point.1,
+                })?;
+                (point, blocker_displacement, f64::INFINITY, 0.0)
+            }
+            VisibilityCutEvent::RayThroughCircleTangent {
+                local_center,
+                radius,
+                ..
+            } => {
+                let center = blocker_pose.transform_local_point(BoundaryKernelVector {
+                    x: local_center.0,
+                    y: local_center.1,
+                })?;
+                let (point_displacement, margin, margin_change) =
+                    circle_tangent_point_displacement_bound(
+                        source,
+                        center,
+                        *radius,
+                        source_displacement,
+                        blocker_displacement,
+                    )?;
+                let tangent = circle_tangent_point_pose_derivative(
+                    center,
+                    *radius,
+                    source,
+                    BoundaryKernelVector::default(),
+                    BoundaryKernelVector::default(),
+                    1.0,
+                )?;
+                (
+                    tangent.point,
+                    point_displacement,
+                    margin,
+                    margin_change,
+                )
+            }
+            _ => return None,
+        };
+
+    let certificate = ray_edge_intersection_motion_certificate(
+        source,
+        critical_point,
+        target_start,
+        target_end,
+        RayEdgeIntersectionMotion {
+            source_displacement,
+            critical_point_displacement,
+            edge_start_displacement: target_displacement,
+            edge_end_displacement: target_displacement,
+        },
+    )?;
+    let identity = event.stable_identity()?;
+    Some(VisibilityEventPoseCellBound {
+        identity,
+        parameter_change_bound: certificate.target_parameter_change,
+        existence_margin: certificate.existence_margin.min(extra_margin),
+        existence_margin_change_bound: certificate
+            .existence_margin_change_bound
+            .max(extra_margin_change),
+    })
+}
+
+fn circle_tangent_point_displacement_bound(
+    source: BoundaryKernelVector,
+    center: BoundaryKernelVector,
+    radius: f64,
+    source_displacement: f64,
+    center_displacement: f64,
+) -> Option<(f64, f64, f64)> {
+    let values = [
+        source.x,
+        source.y,
+        center.x,
+        center.y,
+        radius,
+        source_displacement,
+        center_displacement,
+    ];
+    if values.iter().any(|value| !value.is_finite())
+        || radius <= 0.0
+        || source_displacement < 0.0
+        || center_displacement < 0.0
+    {
+        return None;
+    }
+    let distance = (source.x - center.x).hypot(source.y - center.y);
+    let relative_displacement = source_displacement + center_displacement;
+    let minimum_distance = distance - relative_displacement;
+    if !distance.is_finite()
+        || !minimum_distance.is_finite()
+        || minimum_distance <= radius + f64::EPSILON
+    {
+        return None;
+    }
+
+    let ratio = radius / distance;
+    let maximum_ratio = radius / minimum_distance;
+    let ratio_change = radius * relative_displacement / (minimum_distance * distance);
+    let minimum_transverse = (1.0 - maximum_ratio * maximum_ratio).sqrt();
+    if !ratio_change.is_finite()
+        || !minimum_transverse.is_finite()
+        || minimum_transverse <= f64::EPSILON
+    {
+        return None;
+    }
+    let transverse_change =
+        ratio_change * (maximum_ratio + ratio) / minimum_transverse;
+    let unit_change = 2.0 * relative_displacement / minimum_distance;
+    let tangent_direction_change =
+        ratio_change + transverse_change + (maximum_ratio + 1.0) * unit_change;
+    let roundoff_guard = 128.0
+        * f64::EPSILON
+        * (distance + radius + relative_displacement + tangent_direction_change + 1.0);
+    let point_displacement =
+        center_displacement + radius * tangent_direction_change + roundoff_guard;
+    let existence_margin = 1.0 - ratio;
+    let existence_margin_change_bound = ratio_change + 128.0 * f64::EPSILON * (ratio + 1.0);
+    (point_displacement.is_finite()
+        && existence_margin.is_finite()
+        && existence_margin_change_bound.is_finite()
+        && existence_margin > existence_margin_change_bound)
+        .then_some((
+            point_displacement,
+            existence_margin,
+            existence_margin_change_bound,
+        ))
+}
+
 /// Certify that a supplied ordered list of visibility-cut parameters cannot
 /// cross or reach an edge endpoint anywhere inside their individual motion
 /// envelopes. This does not prove that the list contains every geometric cut.
