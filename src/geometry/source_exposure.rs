@@ -1598,8 +1598,8 @@ impl VisibilityPoseCellCandidateInventory {
                 {
                     return None;
                 }
-                let displacement = (part.x - x).hypot(part.y - y);
-                let angular_displacement = (part.rotation_radians - rotation
+                let displacement = (part.x - *x).hypot(part.y - *y);
+                let angular_displacement = (part.rotation_radians - *rotation
                     + std::f64::consts::PI)
                     .rem_euclid(std::f64::consts::TAU)
                     - std::f64::consts::PI;
@@ -3276,6 +3276,20 @@ mod visibility_tests {
             visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
                 (-4.5, 0.0),
                 &outside_envelope,
+                &target_indices,
+                0.5,
+                &motion,
+                &inventory,
+            )
+            .is_none()
+        );
+
+        let mut changed_form = sampled_bodies.clone();
+        changed_form[1].parts[0].form = Form::Circle { radius: 0.25 };
+        assert!(
+            visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+                (-4.5, 0.0),
+                &changed_form,
                 &target_indices,
                 0.5,
                 &motion,
