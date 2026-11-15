@@ -1527,7 +1527,13 @@ mod visibility_tests {
     fn near_silhouette_ray_cut_stays_unresolved_beside_target_vertex() {
         let source = (-5.0, 0.0);
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let blocker = rectangle_body(1, 2.0, 0.5833282, 1.0, 0.5);
+        // Keep the blocker angularly narrower than the target-vertex ray.
+        // Its upper corners then create a near-silhouette cut while the tiny
+        // interval between that cut and the target vertex remains exposed.
+        let blocker_right_x = 2.0 + 5.0e-6;
+        let near_vertex_target_y = 1.0 - 6.16e-6;
+        let blocker_top_y = near_vertex_target_y * (blocker_right_x + 5.0) / 9.0;
+        let blocker = rectangle_body(1, 2.0, blocker_top_y - 0.25, 1.0e-5, 0.5);
         let intervals = visible_polygonal_intervals_for_targets_with_provenance(
             source,
             &[target, blocker],
@@ -1560,7 +1566,7 @@ mod visibility_tests {
         });
         assert!(
             near_silhouette_cut,
-            "a ray cut close to a target silhouette must retain blocker provenance and remain unresolved; intervals={intervals:#?}"
+            "a ray cut close to a target silhouette must retain blocker provenance and remain unresolved"
         );
     }
 
