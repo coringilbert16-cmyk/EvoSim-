@@ -2865,6 +2865,45 @@ mod visibility_tests {
     }
 
     #[test]
+    fn pose_cell_visibility_provenance_matches_static_geometry_at_zero_motion() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let blocker = rectangle_body(1, 2.5, 0.0, 0.5, 0.5);
+        let bodies = [target, blocker];
+        let target_indices = [0];
+        let motion = [VisibilityBodyMotionBound::default(); 2];
+
+        let static_intervals =
+            visible_polygonal_intervals_for_targets_with_cut_provenance(
+                (-5.0, 0.0),
+                &bodies,
+                &target_indices,
+            )
+            .expect("static rectangle visibility should be exact");
+        let pose_cell_intervals =
+            visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
+                (-5.0, 0.0),
+                &bodies,
+                &target_indices,
+                0.0,
+                &motion,
+            )
+            .expect("zero-motion pose-cell visibility should be exact");
+
+        let static_geometry = static_intervals
+            .iter()
+            .map(|entry| entry.interval)
+            .collect::<Vec<_>>();
+        let pose_cell_geometry = pose_cell_intervals
+            .iter()
+            .map(|entry| entry.interval)
+            .collect::<Vec<_>>();
+        assert_eq!(pose_cell_geometry, static_geometry);
+        assert!(pose_cell_intervals
+            .iter()
+            .any(|entry| entry.visibility_signature.is_some()));
+    }
+
+    #[test]
     fn fully_shadowed_target_edge_has_no_exposed_interval() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
         let blocker = rectangle_body(0, 2.5, 0.0, 0.5, 4.0);
