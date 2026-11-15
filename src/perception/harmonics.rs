@@ -1926,10 +1926,8 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
         prepared_receiver,
     )?;
     let mut potential = Vec::<ResonancePairPotentialComponent>::new();
-    for sample in samples {
-        for contribution in
-            spectrum_cross_energy_components(&sample.incident_spectrum, &sample.receiver_spectrum)?
-        {
+    for sample in &samples {
+        for contribution in resonance_boundary_sample_potential_components(sample)? {
             if let Some(existing) = potential.iter_mut().find(|component| {
                 (component.frequency_cycles_per_day - contribution.frequency_cycles_per_day).abs()
                     <= 1e-9
@@ -1949,6 +1947,84 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     Some(potential)
+}
+
+/// Evaluate the exact two-distance, frequency-resolved contribution of one
+/// exposed boundary sample. Geometry remains explicit so a later mutual
+/// evaluator can expand the spatial kernel without changing spectral physics.
+fn resonance_boundary_sample_potential_components(
+    sample: &ResonanceBoundaryInteractionSample,
+) -> Option<Vec<ResonancePairPotentialComponent>> {
+    if !sample.source_x.is_finite()
+        || !sample.source_y.is_finite()
+        || !sample.receiver_x.is_finite()
+        || !sample.receiver_y.is_finite()
+        || !sample.receiver_center_x.is_finite()
+        || !sample.receiver_center_y.is_finite()
+        || !sample.projected_extent.is_finite()
+        || sample.projected_extent <= 0.0
+        || !sample.source_mass_scale.is_finite()
+        || sample.source_mass_scale < 0.0
+        || !sample.receiver_mass_scale.is_finite()
+        || sample.receiver_mass_scale < 0.0
+    {
+        return None;
+    }
+    spectrum_energy(&sample.source_emitted_spectrum)?;
+    spectrum_energy(&sample.receiver_emitted_spectrum)?;
+    let source_distance =
+        (sample.source_x - sample.receiver_x).hypot(sample.source_y - sample.receiver_y);
+    let receiver_distance = (sample.receiver_center_x - sample.receiver_x)
+        .hypot(sample.receiver_center_y - sample.receiver_y);
+    if !source_distance.is_finite() || !receiver_distance.is_finite() {
+        return None;
+    }
+    let extent_scale = sample.projected_extent.sqrt();
+    let source_scale =
+        sample.source_mass_scale * extent_scale / (1.0 + source_distance);
+    let receiver_scale =
+        sample.receiver_mass_scale * extent_scale / (1.0 + receiver_distance);
+    if !source_scale.is_finite() || !receiver_scale.is_finite() {
+        return None;
+    }
+
+    let mut components = Vec::<ResonancePairPotentialComponent>::new();
+    for source in &sample.source_emitted_spectrum.components {
+        for receiver in &sample.receiver_emitted_spectrum.components {
+            if (source.frequency_cycles_per_day - receiver.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            let energy = 2.0
+                * source.amplitude
+                * source_scale
+                * receiver.amplitude
+                * receiver_scale
+                * (source.phase_radians - receiver.phase_radians).cos();
+            if !energy.is_finite() {
+                return None;
+            }
+            if let Some(existing) = components.iter_mut().find(|component| {
+                (component.frequency_cycles_per_day - source.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            }) {
+                existing.energy += energy;
+                if !existing.energy.is_finite() {
+                    return None;
+                }
+            } else {
+                components.push(ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: source.frequency_cycles_per_day,
+                    energy,
+                });
+            }
+        }
+    }
+    components.sort_by(|a, b| {
+        a.frequency_cycles_per_day
+            .partial_cmp(&b.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(components)
 }
 
 /// Preserve the exact discrete boundary samples used by the mechanical pair
