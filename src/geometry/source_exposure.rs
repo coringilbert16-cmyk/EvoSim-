@@ -426,8 +426,10 @@ pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
         || !expected_blocker_parameter.is_finite()
         || !target_parameter.is_finite()
         || !blocker_parameter.is_finite()
-        || !(0.0..1.0).contains(&target_parameter)
-        || !(0.0..1.0).contains(&blocker_parameter)
+        || target_parameter <= 0.0
+        || target_parameter >= 1.0
+        || blocker_parameter <= 0.0
+        || blocker_parameter >= 1.0
         || (target_parameter - expected_target_parameter).abs() > 1.0e-8
         || (blocker_parameter - expected_blocker_parameter).abs() > 1.0e-8
     {
@@ -471,6 +473,9 @@ pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
         return None;
     }
     let denominator_product = denominator_abs * denominator_lower_bound;
+    if !denominator_product.is_finite() || denominator_product <= 0.0 {
+        return None;
+    }
     let target_parameter_change = (target_numerator_change * denominator_abs
         + target_numerator.abs() * denominator_change)
         / denominator_product;
