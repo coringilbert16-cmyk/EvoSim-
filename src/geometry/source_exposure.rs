@@ -2293,25 +2293,17 @@ impl VisibilityPoseCellCandidateInventory {
                     - std::f64::consts::PI;
                 if !displacement.is_finite()
                     || !angular_displacement.is_finite()
-                    || angular_displacement.abs()
-                        > motion.angular_bound_radians + angular_tolerance
+                    || angular_displacement.abs() > motion.angular_bound_radians + angular_tolerance
                     || displacement > maximum_displacement + translation_tolerance
                 {
                     return None;
                 }
 
                 let (sin, cos) = angular_displacement.sin_cos();
-                let reference_offset = (
-                    *x - motion.rotation_pivot.0,
-                    *y - motion.rotation_pivot.1,
-                );
+                let reference_offset = (*x - motion.rotation_pivot.0, *y - motion.rotation_pivot.1);
                 let rotated_reference = (
-                    motion.rotation_pivot.0
-                        + reference_offset.0 * cos
-                        - reference_offset.1 * sin,
-                    motion.rotation_pivot.1
-                        + reference_offset.0 * sin
-                        + reference_offset.1 * cos,
+                    motion.rotation_pivot.0 + reference_offset.0 * cos - reference_offset.1 * sin,
+                    motion.rotation_pivot.1 + reference_offset.0 * sin + reference_offset.1 * cos,
                 );
                 let translation = (part.x - rotated_reference.0, part.y - rotated_reference.1);
                 if !translation.0.is_finite() || !translation.1.is_finite() {
@@ -2339,8 +2331,7 @@ impl VisibilityPoseCellCandidateInventory {
                 }
             }
             let translation = inferred_translation?;
-            if translation.0.hypot(translation.1)
-                > motion.translation_bound + translation_tolerance
+            if translation.0.hypot(translation.1) > motion.translation_bound + translation_tolerance
             {
                 return None;
             }
