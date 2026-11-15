@@ -2040,7 +2040,78 @@ pub(crate) struct ResonanceBoundaryFrequencyExpansion {
 }
 
 #[allow(dead_code)] // Staged bridge from exact spectral samples into the certified kernel.
-pub(crate) fn expand_resonance_boundary_interaction_samples(
+pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
+    source_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    mut samples: Vec<super::resonance_boundary_far_field::WeightedBoundaryKernelSample>,
+) -> Option<super::resonance_boundary_far_field::BoundaryPotentialEvaluation> {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialEvaluation,
+    };
+
+    if samples.is_empty() {
+        return None;
+    }
+    let sample_center = BoundaryKernelVector {
+        x: samples.iter().map(|sample| sample.position.x).sum::<f64>() / samples.len() as f64,
+        y: samples.iter().map(|sample| sample.position.y).sum::<f64>() / samples.len() as f64,
+    };
+    if let Some(evaluation) = BoundaryKernelExpansion::new(
+        source_center,
+        receiver_center,
+        sample_center,
+        samples.clone(),
+    )
+    .and_then(|expansion| expansion.evaluate())
+    {
+        return Some(evaluation);
+    }
+    if samples.len() == 1 {
+        return None;
+    }
+
+    let min_x = samples.iter().map(|sample| sample.position.x).fold(f64::INFINITY, f64::min);
+    let max_x = samples.iter().map(|sample| sample.position.x).fold(f64::NEG_INFINITY, f64::max);
+    let min_y = samples.iter().map(|sample| sample.position.y).fold(f64::INFINITY, f64::min);
+    let max_y = samples.iter().map(|sample| sample.position.y).fold(f64::NEG_INFINITY, f64::max);
+    if max_x - min_x >= max_y - min_y {
+        samples.sort_by(|a, b| a.position.x.total_cmp(&b.position.x));
+    } else {
+        samples.sort_by(|a, b| a.position.y.total_cmp(&b.position.y));
+    }
+    let right = samples.split_off(samples.len() / 2);
+    let left_evaluation = evaluate_boundary_kernel_samples_adaptive(
+        source_center,
+        receiver_center,
+        samples,
+    )?;
+    let right_evaluation = evaluate_boundary_kernel_samples_adaptive(
+        source_center,
+        receiver_center,
+        right,
+    )?;
+    Some(BoundaryPotentialEvaluation {
+        potential: left_evaluation.potential + right_evaluation.potential,
+        source_gradient: BoundaryKernelVector {
+            x: left_evaluation.source_gradient.x + right_evaluation.source_gradient.x,
+            y: left_evaluation.source_gradient.y + right_evaluation.source_gradient.y,
+        },
+        receiver_gradient: BoundaryKernelVector {
+            x: left_evaluation.receiver_gradient.x + right_evaluation.receiver_gradient.x,
+            y: left_evaluation.receiver_gradient.y + right_evaluation.receiver_gradient.y,
+        },
+        error: super::resonance_boundary_far_field::BoundaryPotentialError {
+            potential: left_evaluation.error.potential + right_evaluation.error.potential,
+            source_force: left_evaluation.error.source_force + right_evaluation.error.source_force,
+            receiver_force: left_evaluation.error.receiver_force
+                + right_evaluation.error.receiver_force,
+        },
+        center: sample_center,
+        radius: left_evaluation.radius.max(right_evaluation.radius),
+    })
+}
+
+fn expand_resonance_boundary_interaction_samples(
     samples: &[ResonanceBoundaryInteractionSample],
 ) -> Option<Vec<ResonanceBoundaryFrequencyExpansion>> {
     use super::resonance_boundary_far_field::{
