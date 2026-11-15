@@ -1980,10 +1980,8 @@ fn resonance_boundary_sample_potential_components(
         return None;
     }
     let extent_scale = sample.projected_extent.sqrt();
-    let source_scale =
-        sample.source_mass_scale * extent_scale / (1.0 + source_distance);
-    let receiver_scale =
-        sample.receiver_mass_scale * extent_scale / (1.0 + receiver_distance);
+    let source_scale = sample.source_mass_scale * extent_scale / (1.0 + source_distance);
+    let receiver_scale = sample.receiver_mass_scale * extent_scale / (1.0 + receiver_distance);
     if !source_scale.is_finite() || !receiver_scale.is_finite() {
         return None;
     }
@@ -2004,8 +2002,7 @@ fn resonance_boundary_sample_potential_components(
                 return None;
             }
             if let Some(existing) = components.iter_mut().find(|component| {
-                (component.frequency_cycles_per_day - source.frequency_cycles_per_day).abs()
-                    <= 1e-9
+                (component.frequency_cycles_per_day - source.frequency_cycles_per_day).abs() <= 1e-9
             }) {
                 existing.energy += energy;
                 if !existing.energy.is_finite() {
@@ -2076,9 +2073,7 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
 
     let source_mass_scale = prepared_source
         .map(|emitter| emitter.mass_scale)
-        .unwrap_or_else(|| {
-            environmental_mass_scale(source.material.mass(catalog), baselines.mass)
-        });
+        .unwrap_or_else(|| environmental_mass_scale(source.material.mass(catalog), baselines.mass));
     if !source_mass_scale.is_finite() || source_mass_scale < 0.0 {
         return None;
     }
@@ -4137,12 +4132,12 @@ mod tests {
                 .sum::<f64>();
 
         assert!(samples.iter().all(|sample| {
-            let source_distance = (sample.source_x - sample.receiver_x)
-                .hypot(sample.source_y - sample.receiver_y);
+            let source_distance =
+                (sample.source_x - sample.receiver_x).hypot(sample.source_y - sample.receiver_y);
             let receiver_distance = (sample.receiver_center_x - sample.receiver_x)
                 .hypot(sample.receiver_center_y - sample.receiver_y);
-            let source_scale = sample.source_mass_scale * sample.projected_extent.sqrt()
-                / (1.0 + source_distance);
+            let source_scale =
+                sample.source_mass_scale * sample.projected_extent.sqrt() / (1.0 + source_distance);
             let receiver_scale = sample.receiver_mass_scale * sample.projected_extent.sqrt()
                 / (1.0 + receiver_distance);
             let mut reconstructed_incident = sample.source_emitted_spectrum.clone();
