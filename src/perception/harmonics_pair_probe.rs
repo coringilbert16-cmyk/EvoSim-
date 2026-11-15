@@ -771,11 +771,10 @@ fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() 
     let source = single_body("Carbon", 0.0, 0.0, 0.17, &catalog);
     let receiver = asymmetric_receiver((0.0, 0.0), -0.11, &catalog);
     let blockers = vec![single_body("Nitrogen", 5.1, 1.7, 0.23, &catalog)];
-    let samples =
-        super::directional_resonance_boundary_interaction_samples_with_prepared_emitters(
-            &source, &receiver, &blockers, &catalog, 173, None, None,
-        )
-        .expect("valid occluded pair should produce exact boundary samples");
+    let samples = super::directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+        &source, &receiver, &blockers, &catalog, 173, None, None,
+    )
+    .expect("valid occluded pair should produce exact boundary samples");
     assert!(
         !samples.is_empty(),
         "the receiver should retain visible boundary samples"
