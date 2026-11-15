@@ -2570,6 +2570,35 @@ pub(crate) fn bound_visibility_event_over_pose_cell(
     }
 }
 
+/// Assemble and validate the complete ordered event certificate directly
+/// from the endpoint provenance retained on the interaction samples.
+#[allow(dead_code)]
+pub(crate) fn certify_visibility_pose_cell_from_endpoint_provenance(
+    signature: &crate::source_exposure::VisibilityCutSignature,
+    endpoints: &[&crate::source_exposure::BoundaryEndpointProvenance],
+    source: BoundaryKernelVector,
+    source_displacement: f64,
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
+) -> Option<Vec<crate::source_exposure::VisibilityEventPoseCellBound>> {
+    let events =
+        crate::source_exposure::ordered_visibility_events_from_endpoints(endpoints)?;
+    let event_bounds = events
+        .iter()
+        .map(|event| {
+            bound_visibility_event_over_pose_cell(
+                event,
+                source,
+                source_displacement,
+                bodies,
+                body_motion,
+            )
+        })
+        .collect::<Option<Vec<_>>>()?;
+    signature.certify_pose_cell(&event_bounds)?;
+    Some(event_bounds)
+}
+
 fn circle_tangent_point_displacement_bound(
     source: BoundaryKernelVector,
     center: BoundaryKernelVector,
