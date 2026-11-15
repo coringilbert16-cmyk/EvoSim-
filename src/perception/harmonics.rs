@@ -2182,8 +2182,16 @@ pub(crate) fn resonance_mutual_boundary_pair_evaluation(
         None,
         None,
     )?;
-    let expanded_ab = expand_resonance_boundary_interaction_samples(&samples_ab)?;
-    let expanded_ba = expand_resonance_boundary_interaction_samples(&samples_ba)?;
+    let expanded_ab = if samples_ab.is_empty() {
+        Vec::new()
+    } else {
+        expand_resonance_boundary_interaction_samples(&samples_ab)?
+    };
+    let expanded_ba = if samples_ba.is_empty() {
+        Vec::new()
+    } else {
+        expand_resonance_boundary_interaction_samples(&samples_ba)?
+    };
     let mut result = ResonanceMutualBoundaryEvaluation::default();
     let mut frequencies = Vec::new();
     for frequency in expanded_ab.iter().chain(&expanded_ba) {
