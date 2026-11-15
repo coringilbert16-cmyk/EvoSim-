@@ -157,41 +157,79 @@ pub(crate) enum VisibilityEventIdentity {
 impl VisibilityCutEvent {
     fn stable_identity(&self) -> Option<VisibilityEventIdentity> {
         match self {
-            Self::TargetVertex { body_index, unit_index, vertex_index, .. } =>
-                Some(VisibilityEventIdentity::TargetVertex {
-                    body: *body_index, unit: *unit_index, vertex: *vertex_index,
-                }),
+            Self::TargetVertex {
+                body_index,
+                unit_index,
+                vertex_index,
+                ..
+            } => Some(VisibilityEventIdentity::TargetVertex {
+                body: *body_index,
+                unit: *unit_index,
+                vertex: *vertex_index,
+            }),
             Self::RayThroughRigidFeature {
-                blocker_body_index, blocker_unit_index, blocker_feature_index,
-                target_body_index, target_unit_index, target_edge_index, ..
+                blocker_body_index,
+                blocker_unit_index,
+                blocker_feature_index,
+                target_body_index,
+                target_unit_index,
+                target_edge_index,
+                ..
             } => Some(VisibilityEventIdentity::RayThroughRigidFeature {
-                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
-                blocker_feature: *blocker_feature_index, target_body: *target_body_index,
-                target_unit: *target_unit_index, target_edge: *target_edge_index,
+                blocker_body: *blocker_body_index,
+                blocker_unit: *blocker_unit_index,
+                blocker_feature: *blocker_feature_index,
+                target_body: *target_body_index,
+                target_unit: *target_unit_index,
+                target_edge: *target_edge_index,
             }),
             Self::RayThroughCircleTangent {
-                blocker_body_index, blocker_unit_index, target_body_index,
-                target_unit_index, target_edge_index, tangent_side, ..
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                target_edge_index,
+                tangent_side,
+                ..
             } => Some(VisibilityEventIdentity::RayThroughCircleTangent {
-                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
-                target_body: *target_body_index, target_unit: *target_unit_index,
-                target_edge: *target_edge_index, tangent_side: *tangent_side,
+                blocker_body: *blocker_body_index,
+                blocker_unit: *blocker_unit_index,
+                target_body: *target_body_index,
+                target_unit: *target_unit_index,
+                target_edge: *target_edge_index,
+                tangent_side: *tangent_side,
             }),
             Self::StraightBoundaryIntersection {
-                blocker_body_index, blocker_unit_index, target_body_index,
-                target_unit_index, target_edge_index, blocker_edge_index, ..
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                target_edge_index,
+                blocker_edge_index,
+                ..
             } => Some(VisibilityEventIdentity::StraightBoundaryIntersection {
-                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
-                blocker_edge: *blocker_edge_index, target_body: *target_body_index,
-                target_unit: *target_unit_index, target_edge: *target_edge_index,
+                blocker_body: *blocker_body_index,
+                blocker_unit: *blocker_unit_index,
+                blocker_edge: *blocker_edge_index,
+                target_body: *target_body_index,
+                target_unit: *target_unit_index,
+                target_edge: *target_edge_index,
             }),
             Self::CircleStraightIntersection {
-                blocker_body_index, blocker_unit_index, target_body_index,
-                target_unit_index, target_edge_index, arc_index, ..
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                target_edge_index,
+                arc_index,
+                ..
             } => Some(VisibilityEventIdentity::CircleStraightIntersection {
-                blocker_body: *blocker_body_index, blocker_unit: *blocker_unit_index,
-                blocker_arc: *arc_index, target_body: *target_body_index,
-                target_unit: *target_unit_index, target_edge: *target_edge_index,
+                blocker_body: *blocker_body_index,
+                blocker_unit: *blocker_unit_index,
+                blocker_arc: *arc_index,
+                target_body: *target_body_index,
+                target_unit: *target_unit_index,
+                target_edge: *target_edge_index,
             }),
             Self::Unresolved { .. } => None,
         }
@@ -598,8 +636,12 @@ mod tests {
             VisibilityCutSignature::from_cuts(&cuts).unwrap()
         };
         let baseline = make_signature(3);
-        assert!(baseline.certify_unchanged_across(&[make_signature(3), make_signature(3)]).is_some());
-        assert!(baseline.certify_unchanged_across(&[make_signature(3), make_signature(4)]).is_none());
+        assert!(baseline
+            .certify_unchanged_across(&[make_signature(3), make_signature(3)])
+            .is_some());
+        assert!(baseline
+            .certify_unchanged_across(&[make_signature(3), make_signature(4)])
+            .is_none());
         assert!(baseline.certify_unchanged_across(&[]).is_none());
     }
 
