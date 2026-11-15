@@ -122,6 +122,31 @@ fn merge_visibility_cuts(mut cuts: Vec<VisibilityCutRecord>) -> Vec<VisibilityCu
     merged
 }
 
+fn endpoint_provenance_from_cut(
+    cut: &VisibilityCutRecord,
+    target_body_index: usize,
+    target_unit_index: usize,
+) -> BoundaryEndpointProvenance {
+    if cut.unresolved || cut.events.len() != 1 {
+        return BoundaryEndpointProvenance::UnresolvedVisibilityCut;
+    }
+    match cut.events.first() {
+        Some(VisibilityCutEvent::TargetVertex {
+            body_index,
+            unit_index,
+            local_point,
+            ..
+        }) if *body_index == target_body_index && *unit_index == target_unit_index => {
+            BoundaryEndpointProvenance::RigidTargetVertex {
+                body_index: *body_index,
+                unit_index: *unit_index,
+                local_point: *local_point,
+            }
+        }
+        _ => BoundaryEndpointProvenance::UnresolvedVisibilityCut,
+    }
+}
+
 /// Exact exposed interval paired with conservative endpoint provenance.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ExposedBoundaryIntervalWithProvenance {
@@ -731,11 +756,11 @@ pub(crate) fn visible_polygonal_intervals(
 /// Compute visible intervals only for selected receiver bodies while retaining
 /// every body as a potential occluder. This avoids solving exposure for thousands
 /// of environmental particles when only organism energy holders receive input.
-pub(crate) fn visible_polygonal_intervals_for_targets(
+fn visible_polygonal_intervals_for_targets_with_cut_provenance(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
-) -> Option<Vec<ExposedBoundaryInterval>> {
+) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
@@ -1268,12 +1293,25 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                 ) {
                     continue;
                 }
-                result.push(ExposedBoundaryInterval {
+                let interval = ExposedBoundaryInterval {
                     body_index,
                     unit_index,
                     start: (a.0 + ex * t0, a.1 + ey * t0),
                     end: (a.0 + ex * t1, a.1 + ey * t1),
                     outward_normal: normal,
+                };
+                result.push(ExposedBoundaryIntervalWithProvenance {
+                    interval,
+                    start_provenance: endpoint_provenance_from_cut(
+                        &pair[0],
+                        body_index,
+                        unit_index,
+                    ),
+                    end_provenance: endpoint_provenance_from_cut(
+                        &pair[1],
+                        body_index,
+                        unit_index,
+                    ),
                 });
             }
         }
@@ -1281,68 +1319,38 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
     Some(result)
 }
 
-/// Return the existing exact straight visibility intervals with conservative
-/// endpoint identity. A returned endpoint is marked as a rigid target vertex
-/// only when its world coordinate uniquely matches a local target vertex.
-/// Ray cuts and all other intersections are marked unresolved and must use
-/// exact evaluation or subdivision until their own provenance is available.
+/// Preserve the established interval-only API for existing geometry consumers.
+pub(crate) fn visible_polygonal_intervals_for_targets(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+) -> Option<Vec<ExposedBoundaryInterval>> {
+    Some(
+        visible_polygonal_intervals_for_targets_with_cut_provenance(
+            source,
+            bodies,
+            target_body_indices,
+        )?
+        .into_iter()
+        .map(|entry| entry.interval)
+        .collect(),
+    )
+}
+
+/// Return exact intervals with endpoint provenance carried from the cut events
+/// that created each interval. No coordinate-based provenance reconstruction
+/// is performed; unsupported visibility cuts remain unresolved.
 #[allow(dead_code)]
 pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
-    use crate::resources::Form;
-
-    let intervals = visible_polygonal_intervals_for_targets(source, bodies, target_body_indices)?;
-    let mut result = Vec::with_capacity(intervals.len());
-    for interval in intervals {
-        let body = bodies.get(interval.body_index)?;
-        let part = body
-            .parts
-            .iter()
-            .find(|part| part.unit_index == interval.unit_index)?;
-        let local_vertices = match &part.form {
-            Form::Fluid {
-                boundary: Some(vertices),
-                arc_boundary: None,
-                multi_contact_boundary: None,
-                ..
-            } => Some(vertices.clone()),
-            _ => part.form.polygon_vertices(),
-        }?;
-        let (sin, cos) = part.rotation_radians.sin_cos();
-        let identify = |world_point: (f64, f64)| {
-            let tolerance = 1.0e-8 * world_point.0.abs().max(world_point.1.abs()).max(1.0);
-            let mut matched = None;
-            for &(local_x, local_y) in &local_vertices {
-                let candidate = (
-                    part.x + local_x * cos - local_y * sin,
-                    part.y + local_x * sin + local_y * cos,
-                );
-                if (candidate.0 - world_point.0).hypot(candidate.1 - world_point.1) <= tolerance {
-                    if matched.is_some() {
-                        return BoundaryEndpointProvenance::UnresolvedVisibilityCut;
-                    }
-                    matched = Some((local_x, local_y));
-                }
-            }
-            matched.map_or(
-                BoundaryEndpointProvenance::UnresolvedVisibilityCut,
-                |local_point| BoundaryEndpointProvenance::RigidTargetVertex {
-                    body_index: interval.body_index,
-                    unit_index: interval.unit_index,
-                    local_point,
-                },
-            )
-        };
-        result.push(ExposedBoundaryIntervalWithProvenance {
-            interval,
-            start_provenance: identify(interval.start),
-            end_provenance: identify(interval.end),
-        });
-    }
-    Some(result)
+    visible_polygonal_intervals_for_targets_with_cut_provenance(
+        source,
+        bodies,
+        target_body_indices,
+    )
 }
 
 #[cfg(test)]
