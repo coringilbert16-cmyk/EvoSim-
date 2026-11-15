@@ -1245,8 +1245,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         return None;
     }
 
-    let critical_points_by_body =
-        index_critical_points_by_body(bodies.len(), critical_points)?;
+    let critical_points_by_body = index_critical_points_by_body(bodies.len(), critical_points)?;
     type StraightEdge = (usize, usize, (f64, f64), (f64, f64));
     let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
