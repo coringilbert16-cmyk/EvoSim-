@@ -83,7 +83,10 @@ impl FieldCell {
             {
                 return false;
             }
-            let Some(anchor) = after.placements.as_ref().and_then(|placements| placements.first())
+            let Some(anchor) = after
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
             else {
                 return false;
             };
@@ -102,11 +105,15 @@ impl FieldCell {
         removals.sort_unstable_by(|a, b| b.cmp(a));
         let mut changed = vec![false; self.cells.len()];
         for (source_cell, source_index) in removals {
-            self.cells[source_cell].physical_materials.remove(source_index);
+            self.cells[source_cell]
+                .physical_materials
+                .remove(source_index);
             changed[source_cell] = true;
         }
         for (_, _, destination_cell, material) in staged {
-            self.cells[destination_cell].physical_materials.push(material);
+            self.cells[destination_cell]
+                .physical_materials
+                .push(material);
             changed[destination_cell] = true;
         }
         for (cell_index, did_change) in changed.into_iter().enumerate() {
