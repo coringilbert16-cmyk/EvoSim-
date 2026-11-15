@@ -1291,7 +1291,8 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
             Some(ResolvedBoundaryEndpointPoseDerivative { point, derivative })
         }
         crate::source_exposure::BoundaryEndpointProvenance::RigidVisibilityIntersection {
-            event, ..
+            event,
+            ..
         } => match event {
             crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
                 let resolved = resolve_straight_boundary_intersection_event(
@@ -4359,7 +4360,6 @@ mod curved_endpoint_motion_bound_tests {
     }
 }
 
-
 #[cfg(test)]
 mod endpoint_provenance_dispatch_tests {
     use super::*;
@@ -4418,13 +4418,26 @@ mod endpoint_provenance_dispatch_tests {
     fn unresolved_or_mismatched_endpoint_provenance_stays_unresolved() {
         let pose = RigidBoundaryPose::default();
         let zero = BoundaryKernelVector::default();
-        let unresolved = crate::source_exposure::BoundaryEndpointProvenance::UnresolvedVisibilityCut {
-            parameter: 0.5,
-            events: Vec::new(),
-        };
-        assert!(resolve_boundary_endpoint_pose_derivative(
-            &unresolved, 0, 0, 1, 1, pose, pose, zero, 0.0, zero, 0.0
-        )
-        .is_none());
+        let unresolved =
+            crate::source_exposure::BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+                parameter: 0.5,
+                events: Vec::new(),
+            };
+        assert!(
+            resolve_boundary_endpoint_pose_derivative(
+                &unresolved,
+                0,
+                0,
+                1,
+                1,
+                pose,
+                pose,
+                zero,
+                0.0,
+                zero,
+                0.0
+            )
+            .is_none()
+        );
     }
 }
