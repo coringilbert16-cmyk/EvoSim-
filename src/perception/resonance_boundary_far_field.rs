@@ -2002,8 +2002,11 @@ mod tests {
             blocker_angular,
         )
         .expect("rigid edge intersection should remain differentiable");
-        let moved = |point: BoundaryKernelVector, pivot: BoundaryKernelVector,
-                     translation: BoundaryKernelVector, angular: f64, q: f64| {
+        let moved = |point: BoundaryKernelVector,
+                     pivot: BoundaryKernelVector,
+                     translation: BoundaryKernelVector,
+                     angular: f64,
+                     q: f64| {
             let offset = BoundaryKernelVector {
                 x: point.x - pivot.x,
                 y: point.y - pivot.y,
@@ -2015,32 +2018,74 @@ mod tests {
             }
         };
         let intersect = |q: f64| {
-            let a = moved(target_start, target_pivot, target_translation, target_angular, q);
-            let b = moved(target_end, target_pivot, target_translation, target_angular, q);
-            let c = moved(blocker_start, blocker_pivot, blocker_translation, blocker_angular, q);
-            let d = moved(blocker_end, blocker_pivot, blocker_translation, blocker_angular, q);
-            let edge = BoundaryKernelVector { x: b.x - a.x, y: b.y - a.y };
-            let blocker = BoundaryKernelVector { x: d.x - c.x, y: d.y - c.y };
-            let offset = BoundaryKernelVector { x: c.x - a.x, y: c.y - a.y };
+            let a = moved(
+                target_start,
+                target_pivot,
+                target_translation,
+                target_angular,
+                q,
+            );
+            let b = moved(
+                target_end,
+                target_pivot,
+                target_translation,
+                target_angular,
+                q,
+            );
+            let c = moved(
+                blocker_start,
+                blocker_pivot,
+                blocker_translation,
+                blocker_angular,
+                q,
+            );
+            let d = moved(
+                blocker_end,
+                blocker_pivot,
+                blocker_translation,
+                blocker_angular,
+                q,
+            );
+            let edge = BoundaryKernelVector {
+                x: b.x - a.x,
+                y: b.y - a.y,
+            };
+            let blocker = BoundaryKernelVector {
+                x: d.x - c.x,
+                y: d.y - c.y,
+            };
+            let offset = BoundaryKernelVector {
+                x: c.x - a.x,
+                y: c.y - a.y,
+            };
             let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
                 left.x * right.y - left.y * right.x
             };
             let t = cross(offset, blocker) / cross(edge, blocker);
             let u = cross(offset, edge) / cross(edge, blocker);
-            let point = BoundaryKernelVector { x: a.x + t * edge.x, y: a.y + t * edge.y };
+            let point = BoundaryKernelVector {
+                x: a.x + t * edge.x,
+                y: a.y + t * edge.y,
+            };
             (t, u, point)
         };
         let step = 1.0e-6;
         let plus = intersect(step);
         let minus = intersect(-step);
-        assert!(((plus.0 - minus.0) / (2.0 * step)
-            - derivative.target_parameter_derivative).abs() < 1.0e-8);
-        assert!(((plus.1 - minus.1) / (2.0 * step)
-            - derivative.blocker_parameter_derivative).abs() < 1.0e-8);
-        assert!(((plus.2.x - minus.2.x) / (2.0 * step)
-            - derivative.point_derivative.x).abs() < 1.0e-8);
-        assert!(((plus.2.y - minus.2.y) / (2.0 * step)
-            - derivative.point_derivative.y).abs() < 1.0e-8);
+        assert!(
+            ((plus.0 - minus.0) / (2.0 * step) - derivative.target_parameter_derivative).abs()
+                < 1.0e-8
+        );
+        assert!(
+            ((plus.1 - minus.1) / (2.0 * step) - derivative.blocker_parameter_derivative).abs()
+                < 1.0e-8
+        );
+        assert!(
+            ((plus.2.x - minus.2.x) / (2.0 * step) - derivative.point_derivative.x).abs() < 1.0e-8
+        );
+        assert!(
+            ((plus.2.y - minus.2.y) / (2.0 * step) - derivative.point_derivative.y).abs() < 1.0e-8
+        );
     }
 
     #[test]
