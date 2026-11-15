@@ -1,5 +1,6 @@
 use super::*;
 use crate::resources::{InternalBond, Material};
+use crate::structure::Placement;
 
 fn make_raw(name: &str, amount: f64) -> Material {
     Material::free_base(name, amount)
