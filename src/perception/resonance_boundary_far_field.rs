@@ -5009,8 +5009,18 @@ mod endpoint_provenance_dispatch_tests {
                 x: source.x + direction * step * source_derivative.x,
                 y: source.y + direction * step * source_derivative.y,
             };
-            let target = moved_pose(target_pose, target_translation, target_angular, direction * step);
-            let blocker = moved_pose(blocker_pose, blocker_translation, blocker_angular, direction * step);
+            let target = moved_pose(
+                target_pose,
+                target_translation,
+                target_angular,
+                direction * step,
+            );
+            let blocker = moved_pose(
+                blocker_pose,
+                blocker_translation,
+                blocker_angular,
+                direction * step,
+            );
             let start = target
                 .transform_local_point(BoundaryKernelVector { x: -2.0, y: 0.0 })
                 .unwrap();
@@ -5102,8 +5112,18 @@ mod endpoint_provenance_dispatch_tests {
                 x: source.x + direction * step * source_derivative.x,
                 y: source.y + direction * step * source_derivative.y,
             };
-            let target = moved_pose(target_pose, target_translation, target_angular, direction * step);
-            let blocker = moved_pose(blocker_pose, blocker_translation, blocker_angular, direction * step);
+            let target = moved_pose(
+                target_pose,
+                target_translation,
+                target_angular,
+                direction * step,
+            );
+            let blocker = moved_pose(
+                blocker_pose,
+                blocker_translation,
+                blocker_angular,
+                direction * step,
+            );
             let start = target
                 .transform_local_point(BoundaryKernelVector { x: -2.0, y: 0.0 })
                 .unwrap();
