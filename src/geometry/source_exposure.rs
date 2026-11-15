@@ -1299,8 +1299,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                     if block_body_index == body_index && blocker.unit_index == unit_index {
                         continue;
                     }
-                    for (arc_index, arc) in
-                        realized_circle_arcs(block_body_index, blocker)?.into_iter().enumerate()
+                    for (arc_index, arc) in realized_circle_arcs(block_body_index, blocker)?
+                        .into_iter()
+                        .enumerate()
                     {
                         let mut intersections = Vec::with_capacity(2);
                         add_circle_segment_intersections(
