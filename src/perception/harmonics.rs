@@ -2496,9 +2496,9 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
     target_body_index: usize,
 ) -> Option<super::resonance_boundary_far_field::BoundaryPoseCellGeneralizedEvaluation> {
     use super::resonance_boundary_far_field::{
-        BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialError,
-        BoundaryPoseCellGeneralizedEvaluation, BoundaryPoseCoordinateDerivative,
-        BoundarySampleMotionBound, WeightedBoundaryKernelSample,
+        BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPoseCellGeneralizedEvaluation,
+        BoundaryPoseCoordinateDerivative, BoundaryPotentialError, BoundarySampleMotionBound,
+        WeightedBoundaryKernelSample,
     };
 
     if samples.is_empty()
@@ -2507,13 +2507,9 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         || coordinates
             .iter()
             .any(|coordinate| coordinate.samples.len() != samples.len())
-        || ![
-            budget.potential,
-            budget.source_force,
-            budget.receiver_force,
-        ]
-        .iter()
-        .all(|value| value.is_finite() && *value >= 0.0)
+        || ![budget.potential, budget.source_force, budget.receiver_force]
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
     {
         return None;
     }
@@ -2564,8 +2560,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             left_coordinate.absolute_bound += right_coordinate.absolute_bound;
             left_coordinate.sample_position_derivative +=
                 right_coordinate.sample_position_derivative;
-            left_coordinate.sample_weight_derivative +=
-                right_coordinate.sample_weight_derivative;
+            left_coordinate.sample_weight_derivative += right_coordinate.sample_weight_derivative;
         }
 
         let roundoff = 128.0
@@ -2583,8 +2578,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         left.boundary.error.source_force += roundoff;
         left.boundary.error.receiver_force += roundoff;
         for coordinate in &mut left.coordinates {
-            coordinate.absolute_bound +=
-                128.0 * f64::EPSILON * (coordinate.absolute_bound + 1.0);
+            coordinate.absolute_bound += 128.0 * f64::EPSILON * (coordinate.absolute_bound + 1.0);
         }
 
         let finite = [
@@ -2628,35 +2622,27 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         }
 
         let center = BoundaryKernelVector {
-            x: samples.iter().map(|sample| sample.position.x).sum::<f64>()
-                / samples.len() as f64,
-            y: samples.iter().map(|sample| sample.position.y).sum::<f64>()
-                / samples.len() as f64,
+            x: samples.iter().map(|sample| sample.position.x).sum::<f64>() / samples.len() as f64,
+            y: samples.iter().map(|sample| sample.position.y).sum::<f64>() / samples.len() as f64,
         };
         let radius = samples
             .iter()
-            .map(|sample| {
-                (sample.position.x - center.x).hypot(sample.position.y - center.y)
-            })
+            .map(|sample| (sample.position.x - center.x).hypot(sample.position.y - center.y))
             .fold(0.0_f64, f64::max);
         if !center.x.is_finite() || !center.y.is_finite() || !radius.is_finite() {
             return None;
         }
 
-        let candidate = BoundaryKernelExpansion::new(
-            source_center,
-            receiver_center,
-            center,
-            samples.clone(),
-        )
-        .and_then(|expansion| {
-            super::resonance_boundary_far_field::certify_boundary_pose_cell_generalized(
-                &expansion,
-                ordered_visibility_cuts,
-                &sample_motion,
-                &coordinates,
-            )
-        });
+        let candidate =
+            BoundaryKernelExpansion::new(source_center, receiver_center, center, samples.clone())
+                .and_then(|expansion| {
+                    super::resonance_boundary_far_field::certify_boundary_pose_cell_generalized(
+                        &expansion,
+                        ordered_visibility_cuts,
+                        &sample_motion,
+                        &coordinates,
+                    )
+                });
         if let Some(candidate) = candidate {
             let error = candidate.boundary.error;
             if error.potential <= budget.potential
