@@ -1552,7 +1552,7 @@ pub(crate) struct VisibilityPoseCellCandidateInventory {
     source_reference: (f64, f64),
     source_translation_bound: f64,
     body_motion: Vec<VisibilityBodyMotionBound>,
-    reference_part_poses: Vec<Vec<(usize, f64, f64, f64)>>,
+    reference_part_poses: Vec<Vec<(usize, crate::resources::Form, f64, f64, f64)>>,
     target_candidates: Vec<Option<Vec<usize>>>,
 }
 
@@ -1587,8 +1587,11 @@ impl VisibilityPoseCellCandidateInventory {
                 return None;
             }
             let maximum_displacement = motion.maximum_point_displacement()?;
-            for (part, &(unit_index, x, y, rotation)) in body.parts.iter().zip(reference_parts) {
-                if part.unit_index != unit_index
+            for (part, (unit_index, form, x, y, rotation)) in
+                body.parts.iter().zip(reference_parts)
+            {
+                if part.unit_index != *unit_index
+                    || &part.form != form
                     || !part.x.is_finite()
                     || !part.y.is_finite()
                     || !part.rotation_radians.is_finite()
@@ -1690,7 +1693,13 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
                 return None;
             }
             units.push(part.unit_index);
-            reference_parts.push((part.unit_index, part.x, part.y, part.rotation_radians));
+            reference_parts.push((
+                part.unit_index,
+                part.form.clone(),
+                part.x,
+                part.y,
+                part.rotation_radians,
+            ));
         }
         reference_part_poses.push(reference_parts);
     }
