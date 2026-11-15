@@ -805,6 +805,8 @@ fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() 
             expansion.evaluation.error.potential,
         );
     }
+}
+
 #[test]
 fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
     let catalog = crate::resources::default_catalog();
@@ -844,6 +846,4 @@ fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
             && (evaluation.force_a_y + evaluation.force_b_y).abs() <= 1e-8,
         "unoccluded mutual center forces must be equal and opposite"
     );
-}
-
 }
