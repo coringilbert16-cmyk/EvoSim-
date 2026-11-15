@@ -1986,9 +1986,12 @@ pub(crate) fn certify_boundary_pose_cell(
 }
 
 /// Extend the scalar pose-cell certificate with a discrete visibility-topology
-/// check. The caller supplies signatures sampled across the complete proposed
-/// pose cell; any event birth/death, identity change, or ordering change forces
-/// subdivision or exact visibility fallback.
+/// check. The caller supplies signatures from a certified cover of the
+/// proposed pose cell; candidate-body and open-interval visibility changes
+/// invalidate the comparison. Equality is necessary but not sufficient: this
+/// helper does not prove candidate completeness or exclude unobserved event
+/// births/deaths between samples. Those require independent conservative
+/// geometric bounds; otherwise subdivide or use exact visibility.
 #[allow(dead_code)]
 pub(crate) fn certify_boundary_pose_cell_with_visibility_signature(
     expansion: &BoundaryKernelExpansion,
