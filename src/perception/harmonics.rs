@@ -1535,7 +1535,9 @@ fn material_aura_receptions_with_geometry_prepared(
                           normal_y: f64,
                           projected_extent: f64,
                           boundary: MaterialAuraBoundary,
-                          visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>| {
+                          visibility_signature: Option<
+        crate::source_exposure::VisibilityCutSignature,
+    >| {
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
