@@ -841,6 +841,23 @@ fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
         exact_force_a_x,
         evaluation.force_a_error,
     );
+
+    let plus_b = super::translated_physical_material(&b, step, 0.0)
+        .expect("translated receiver should remain valid");
+    let minus_b = super::translated_physical_material(&b, -step, 0.0)
+        .expect("translated receiver should remain valid");
+    let exact_force_b_x = -(super::resonance_pair_potential(&a, &plus_b, &catalog, 211)
+        .expect("plus receiver potential")
+        - super::resonance_pair_potential(&a, &minus_b, &catalog, 211)
+            .expect("minus receiver potential"))
+        / (2.0 * step);
+    assert!(
+        (evaluation.force_b_x - exact_force_b_x).abs() <= evaluation.force_b_error + 1e-5,
+        "receiver force exceeded its expansion bound: approximate={}, exact={}, bound={}",
+        evaluation.force_b_x,
+        exact_force_b_x,
+        evaluation.force_b_error,
+    );
     assert!(
         (evaluation.force_a_x + evaluation.force_b_x).abs() <= 1e-8
             && (evaluation.force_a_y + evaluation.force_b_y).abs() <= 1e-8,
