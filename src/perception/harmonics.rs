@@ -2092,21 +2092,32 @@ pub(crate) fn expand_resonance_boundary_interaction_samples(
                 .iter()
                 .zip(&frequency_components)
                 .map(|(sample, components)| {
+                    let source_distance = (sample.source_x - sample.receiver_x)
+                        .hypot(sample.source_y - sample.receiver_y);
+                    let receiver_distance = (sample.receiver_center_x - sample.receiver_x)
+                        .hypot(sample.receiver_center_y - sample.receiver_y);
+                    let spatial_scale = (1.0 + source_distance) * (1.0 + receiver_distance);
                     let weight = components
                         .iter()
                         .find(|component| {
                             (component.frequency_cycles_per_day - frequency).abs() <= 1e-9
                         })
-                        .map_or(0.0, |component| component.energy);
-                    WeightedBoundaryKernelSample {
+                        .map_or(0.0, |component| component.energy * spatial_scale);
+                    if !spatial_scale.is_finite() || !weight.is_finite() {
+                        return None;
+                    }
+                    Some(WeightedBoundaryKernelSample {
                         position: BoundaryKernelVector {
                             x: sample.receiver_x,
                             y: sample.receiver_y,
                         },
+                        // The exact sample potential already contains both
+                        // distance attenuations. Remove them here because the
+                        // expansion applies the two-distance kernel itself.
                         weight,
-                    }
+                    })
                 })
-                .collect();
+                .collect::<Option<Vec<_>>>()?;
             let expansion = BoundaryKernelExpansion::new(
                 source_center,
                 receiver_center,
