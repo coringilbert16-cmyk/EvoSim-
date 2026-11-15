@@ -1373,3 +1373,27 @@ coincident, or topology-changing events continue to require exact evaluation
 or subdivision. The next milestone is a provenance-driven resolver that maps
 the retained body/unit/edge identities to exact realized endpoints and composes
 their body-pose Jacobians without coordinate-nearest matching.
+
+
+## 31. Straight-intersection provenance retains local edge endpoints — 2026-11-14
+
+A `StraightBoundaryIntersection` event now retains the local-frame start and
+end points of both the target edge and blocker edge, in addition to their
+body/unit/edge identities and intersection parameters. The endpoints are
+recovered by inverse-transforming the exact world-space edge endpoints through
+the uniquely matching placed constituent's current rigid pose. Duplicate or
+missing constituent identities and non-finite transforms fail closed; no
+nearest-coordinate reconstruction is used.
+
+The straight-intersection provenance regression now checks that all four local
+endpoints are present and finite. This makes the event record sufficient to
+reconstruct the exact two rigid segments from their current pose and local
+geometry, which is the missing data handoff needed by the rigid intersection
+Jacobian from Sections 29–30.
+
+This remains a geometry provenance primitive, not a complete pose-cell
+certificate. The caller must still resolve each event's owning rigid poses,
+compose the local endpoints into world positions, and prove that intersection
+parameters stay strict-interior and event ordering remains stable over the
+pose cell. Coincident cuts, collinear overlap endpoints, and near-parallel
+events remain unresolved and require exact evaluation or subdivision.
