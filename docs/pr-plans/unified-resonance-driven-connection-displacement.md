@@ -414,14 +414,15 @@ This audit compares the live branch against the original objective: free environ
 3. `LocalResonanceWorldSnapshot` is correctly built only from free environmental field materials. Its exact complete-pair force oracle evaluates every unordered pair and includes occluder reaction forces/torques, but is explicitly a small-world correctness oracle and is not called by the live tick.
 4. `EnvironmentalFlowField` is a read-only ambient-flow sampler. The legacy transport consumer still uses its sampled velocity to advect material. That is not Newtonian movement and must not remain a second writer after the new mover is enabled.
 5. Environmental COMBINE and displacement discovery still begin from near-contact endpoint candidates. There is no live chemistry-native approach controller that advances physical poses, exact face alignment, and activation together.
-6. `environmental_displacement.rs` currently reconstructs free field materials into `OrganismStructure` via `restore_displacement_source`, then uses organism-structure geometry and bond graph helpers for candidate discovery and trial topology. This is a chemistry-path dependency on an organism-specific graph representation. Replace it with chemistry-native molecular topology/geometry before completing approach or displacement. Do not modify organism mechanics to accomplish this.
+6. The production `environmental_displacement.rs` path now operates on free environmental `PhysicalMaterial` constituents and native material bond/contact state. The earlier `OrganismStructure` reconstruction and graph-based trial helpers are retained only behind `#[cfg(test)]` for legacy regression fixtures; they are not used by production candidate discovery or commit. `physical_body_geometry.rs` is the extracted generic rigid-body geometry layer and does not introduce organism lifecycle or ownership behavior. The remaining gap is not an organism-graph adapter: it is live physical approach, displacement trajectories, adjacent reconnection, and one atomic pose/topology/energy/field commit. Keep organism mechanics untouched.
 7. The current displacement resolver stages a topology/energy replacement, but it does not stage and commit the physical trajectories of the incoming, anchor, and displaced materials. It therefore does not yet implement physical displacement.
 
 ### Minimal closeout sequence
 
 **1 — Make the chemistry movement population and data model self-contained.**
 - Keep the active bodies strictly to free environmental atoms and molecules.
-- Replace the `OrganismStructure` adapter in environmental displacement with chemistry-owned molecular bond/face geometry and trial topology.
+- Preserve the production `PhysicalMaterial`-native displacement path and keep legacy graph adapters test-only.
+- Complete chemistry-owned connection-face geometry and trial topology without routing through organism structures.
 - Reuse generic shape, collision, and geometry primitives only where they do not call or mutate organism systems.
 - Keep the existing organism implementation untouched.
 
@@ -452,4 +453,3 @@ This audit compares the live branch against the original objective: free environ
 ### Completion definition
 
 This PR is not complete when the force helpers compile or when a staged topology transaction passes in isolation. It is complete only when the ordinary live environmental tick uses one chemistry-only Newtonian movement authority; free materials visibly move from the existing physical interaction law; compatible approach and activation progress through real motion; COMBINE/BREAK/displacement resolve through the same atomic movement/chemistry/energy boundary; organism code remains unchanged; and full CI is green.
-
