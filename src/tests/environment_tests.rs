@@ -25,14 +25,24 @@ fn environmental_motion_batch_moves_exact_objects_and_updates_cell_revisions() {
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let first = PhysicalMaterial::realized(
         Material::free_base("Carbon", 1.0),
-        vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        }],
         &catalog,
-    ).expect("carbon should realize");
+    )
+    .expect("carbon should realize");
     let second = PhysicalMaterial::realized(
         Material::free_base("Oxygen", 1.0),
-        vec![Placement { x: 12.0, y: 10.0, rotation_radians: 0.0 }],
+        vec![Placement {
+            x: 12.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        }],
         &catalog,
-    ).expect("oxygen should realize");
+    )
+    .expect("oxygen should realize");
     assert!(field.deposit_physical(10.0, 10.0, first, &catalog));
     assert!(field.deposit_physical(12.0, 10.0, second, &catalog));
     field.assign_missing_material_identities();
@@ -62,12 +72,20 @@ fn environmental_motion_batch_moves_exact_objects_and_updates_cell_revisions() {
     ));
 
     assert!(field.cells[source_a].physical_materials.is_empty());
-    assert!(field.cells[destination_a].physical_materials.iter().any(|material| {
-        material.environmental_identity == identity_a && material.inertial_motion.velocity_x == 2.0
-    }));
-    assert!(field.cells[destination_b].physical_materials.iter().any(|material| {
-        material.environmental_identity == identity_b && material.inertial_motion.velocity_x == 3.0
-    }));
+    assert!(field.cells[destination_a]
+        .physical_materials
+        .iter()
+        .any(|material| {
+            material.environmental_identity == identity_a
+                && material.inertial_motion.velocity_x == 2.0
+        }));
+    assert!(field.cells[destination_b]
+        .physical_materials
+        .iter()
+        .any(|material| {
+            material.environmental_identity == identity_b
+                && material.inertial_motion.velocity_x == 3.0
+        }));
     for index in [source_a, source_b, destination_a, destination_b] {
         assert!(field.cell_revisions[index] > revisions_before[index]);
     }
@@ -94,10 +112,7 @@ fn environmental_motion_batch_rejects_stale_source_without_partial_changes() {
     let revisions_before = field.cell_revisions.clone();
     let revision_before = field.revision;
 
-    assert!(!field.commit_environmental_motion_batch(
-        vec![(source, 0, stale, after)],
-        &catalog,
-    ));
+    assert!(!field.commit_environmental_motion_batch(vec![(source, 0, stale, after)], &catalog,));
     assert_eq!(field.cells, cells_before);
     assert_eq!(field.cell_revisions, revisions_before);
     assert_eq!(field.revision, revision_before);
