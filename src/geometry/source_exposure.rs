@@ -1104,16 +1104,39 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                     let t = -(ax * dy - ay * dx) / denominator;
                     let u = -(ax * ey - ay * ex) / denominator;
                     if t > 1e-10 && t < 1.0 - 1e-10 && u > 1.0 + 1e-10 {
-                        // Critical-point construction currently has not yet
-                        // retained its constituent/feature identity. Preserve
-                        // the blocker body and explicitly fail closed.
-                        cuts.push(VisibilityCutRecord::new(
-                            t,
-                            VisibilityCutEvent::Unresolved {
-                                blocker_body_index: Some(candidate_body),
-                                blocker_unit_index: Some(blocker_unit_index),
+                        let blocker_part = bodies[candidate_body]
+                            .parts
+                            .iter()
+                            .find(|part| part.unit_index == blocker_unit_index)?;
+                        let (sin, cos) = blocker_part.rotation_radians.sin_cos();
+                        let offset = (vx - blocker_part.x, vy - blocker_part.y);
+                        let local_point = (
+                            offset.0 * cos + offset.1 * sin,
+                            -offset.0 * sin + offset.1 * cos,
+                        );
+                        let event = match &blocker_part.form {
+                            crate::resources::Form::Circle { radius } => {
+                                let source_offset = (source.0 - blocker_part.x, source.1 - blocker_part.y);
+                                let local_source = (
+                                    source_offset.0 * cos + source_offset.1 * sin,
+                                    -source_offset.0 * sin + source_offset.1 * cos,
+                                );
+                                let cross = local_source.0 * local_point.1 - local_source.1 * local_point.0;
+                                VisibilityCutEvent::RayThroughCircleTangent {
+                                    blocker_body_index: candidate_body,
+                                    blocker_unit_index,
+                                    tangent_side: if cross < 0.0 { -1 } else { 1 },
+                                    local_center: (0.0, 0.0),
+                                    radius: *radius,
+                                }
+                            }
+                            _ => VisibilityCutEvent::RayThroughRigidFeature {
+                                blocker_body_index: candidate_body,
+                                blocker_unit_index,
+                                local_point,
                             },
-                        ));
+                        };
+                        cuts.push(VisibilityCutRecord::new(t, event));
                     }
                 }
             }
