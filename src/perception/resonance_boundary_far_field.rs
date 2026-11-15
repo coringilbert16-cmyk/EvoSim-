@@ -3783,7 +3783,8 @@ mod circle_straight_provenance_tests {
                 - std::f64::consts::PI
         };
         let angle_rate = angle_delta(plus.2, minus.2) / (2.0 * step);
-        assert!((point.x - (0.0 + target_parameter * 4.0)).is_finite());
+        assert!((point.x - (-2.0 + target_parameter * 4.0)).abs() < 1.0e-12);
+        assert!(point.y.abs() < 1.0e-12);
         assert!((derivative.point_derivative.x - point_rate.x).abs() < 1.0e-7);
         assert!((derivative.point_derivative.y - point_rate.y).abs() < 1.0e-7);
         assert!((derivative.target_parameter_derivative - parameter_rate).abs() < 1.0e-7);
@@ -3827,7 +3828,7 @@ mod circle_straight_provenance_tests {
         };
         let plus = moved(1.0);
         let minus = moved(-1.0);
-        assert!((point.x - (pose.pivot.x + 0.0)).is_finite());
+        assert!(point.x.is_finite() && point.y.is_finite());
         assert!(((plus.x - minus.x) / (2.0 * step) - derivative.x).abs() < 1.0e-8);
         assert!(((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8);
     }
