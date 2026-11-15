@@ -1329,6 +1329,124 @@ fn candidate_body_indices_for_bounds(
     Some(candidates)
 }
 
+/// Conservative rigid-pose motion envelope used to expand visibility
+/// broad-phase bounds over an entire proposed pose cell. The radius_bound is the
+/// maximum distance from the body's rotation pivot to any point on its shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct VisibilityBodyMotionBound {
+    pub(crate) translation_bound: f64,
+    pub(crate) angular_bound_radians: f64,
+    pub(crate) radius_bound: f64,
+}
+
+impl VisibilityBodyMotionBound {
+    fn maximum_point_displacement(self) -> Option<f64> {
+        if !self.translation_bound.is_finite()
+            || self.translation_bound < 0.0
+            || !self.angular_bound_radians.is_finite()
+            || self.angular_bound_radians < 0.0
+            || !self.radius_bound.is_finite()
+            || self.radius_bound < 0.0
+        {
+            return None;
+        }
+        let half_angle = self.angular_bound_radians.min(std::f64::consts::PI) * 0.5;
+        let rotational = 2.0 * self.radius_bound * half_angle.sin();
+        let displacement = self.translation_bound + rotational;
+        displacement.is_finite().then_some(displacement)
+    }
+}
+
+fn expand_visibility_bounds(
+    bounds: (f64, f64, f64, f64),
+    expansion: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let (min_x, max_x, min_y, max_y) = bounds;
+    if ![min_x, max_x, min_y, max_y, expansion]
+        .iter()
+        .all(|value| value.is_finite())
+        || min_x > max_x
+        || min_y > max_y
+        || expansion < 0.0
+    {
+        return None;
+    }
+    let expanded = (
+        min_x - expansion,
+        max_x + expansion,
+        min_y - expansion,
+        max_y + expansion,
+    );
+    [expanded.0, expanded.1, expanded.2, expanded.3]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(expanded)
+}
+
+/// Return every body whose conservative swept AABB may occlude a target edge
+/// anywhere in the supplied rigid-pose cell. Source translation is included
+/// in every relative bound; target and blocker translation/rotation are
+/// independently included. Missing or invalid motion envelopes fail closed.
+#[allow(dead_code)]
+pub(crate) fn candidate_body_indices_for_pose_cell(
+    source: (f64, f64),
+    source_translation_bound: f64,
+    target_bounds: (f64, f64, f64, f64),
+    target_motion: VisibilityBodyMotionBound,
+    reference_angle: f64,
+    body_bounds: &[(f64, f64, f64, f64)],
+    body_motion: &[VisibilityBodyMotionBound],
+) -> Option<Vec<usize>> {
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !source_translation_bound.is_finite()
+        || source_translation_bound < 0.0
+        || body_bounds.len() != body_motion.len()
+    {
+        return None;
+    }
+    let target_expansion =
+        source_translation_bound + target_motion.maximum_point_displacement()?;
+    let swept_target_bounds = expand_visibility_bounds(target_bounds, target_expansion)?;
+    let mut swept_body_intervals = Vec::with_capacity(body_bounds.len());
+    let mut swept_body_distances = Vec::with_capacity(body_bounds.len());
+    for (bounds, motion) in body_bounds.iter().copied().zip(body_motion.iter().copied()) {
+        let expansion = source_translation_bound + motion.maximum_point_displacement()?;
+        let swept_bounds = expand_visibility_bounds(bounds, expansion)?;
+        swept_body_intervals.push(angle_interval_for_bounds(
+            source,
+            swept_bounds,
+            reference_angle,
+        )?);
+        let dx = if source.0 < swept_bounds.0 {
+            swept_bounds.0 - source.0
+        } else if source.0 > swept_bounds.1 {
+            source.0 - swept_bounds.1
+        } else {
+            0.0
+        };
+        let dy = if source.1 < swept_bounds.2 {
+            swept_bounds.2 - source.1
+        } else if source.1 > swept_bounds.3 {
+            source.1 - swept_bounds.3
+        } else {
+            0.0
+        };
+        let distance = dx.hypot(dy);
+        if !distance.is_finite() {
+            return None;
+        }
+        swept_body_distances.push(distance);
+    }
+    candidate_body_indices_for_bounds(
+        source,
+        swept_target_bounds,
+        reference_angle,
+        &swept_body_intervals,
+        &swept_body_distances,
+    )
+}
+
 fn add_circle_tangent_points_tagged(
     center: (f64, f64),
     radius: f64,
