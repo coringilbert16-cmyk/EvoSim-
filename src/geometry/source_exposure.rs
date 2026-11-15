@@ -233,6 +233,10 @@ mod tests {
             VisibilityCutEvent::StraightBoundaryIntersection {
                 blocker_body_index: 3,
                 blocker_unit_index: 9,
+                target_body_index: 0,
+                target_unit_index: 2,
+                target_edge_index: 4,
+                blocker_edge_index: 6,
                 target_parameter: 0.25,
                 blocker_parameter: 0.75,
             },
@@ -241,6 +245,27 @@ mod tests {
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].events.len(), 2);
         assert!(merged[0].unresolved);
+    }
+
+    #[test]
+    fn unresolved_endpoint_retains_complete_intersection_feature_identity() {
+        let event = VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 3,
+            blocker_unit_index: 9,
+            target_body_index: 0,
+            target_unit_index: 2,
+            target_edge_index: 4,
+            blocker_edge_index: 6,
+            target_parameter: 0.25,
+            blocker_parameter: 0.75,
+        };
+        let cut = VisibilityCutRecord::new(0.25, event.clone());
+        assert_eq!(
+            endpoint_provenance_from_cut(&cut, 0, 2),
+            BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+                events: vec![event],
+            }
+        );
     }
 
     #[test]
