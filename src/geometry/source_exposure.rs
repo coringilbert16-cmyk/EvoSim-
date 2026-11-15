@@ -264,6 +264,254 @@ pub(crate) struct VisibilityEventPoseCellBound {
     pub(crate) existence_margin_change_bound: f64,
 }
 
+fn visibility_part<'a>(
+    bodies: &'a [crate::organism_geometry::OrganismBodyGeometry],
+    body_index: usize,
+    unit_index: usize,
+) -> Option<&'a crate::organism_geometry::PlacedForm> {
+    let mut parts = bodies.get(body_index)?.parts.iter().filter(|part| part.unit_index == unit_index);
+    let part = parts.next()?;
+    parts.next().is_none().then_some(part)
+}
+
+fn local_straight_feature_endpoints(
+    part: &crate::organism_geometry::PlacedForm,
+    edge_index: usize,
+) -> Option<((f64, f64), (f64, f64))> {
+    if let Some(vertices) = part.form.polygon_vertices() {
+        if vertices.len() < 2 {
+            return None;
+        }
+        return Some((
+            *vertices.get(edge_index)?,
+            *vertices.get((edge_index + 1) % vertices.len())?,
+        ));
+    }
+    if let crate::resources::Form::Line { length } = part.form {
+        if edge_index != 0 || !length.is_finite() || length <= 0.0 {
+            return None;
+        }
+        let half = length * 0.5;
+        return Some(((-half, 0.0), (half, 0.0)));
+    }
+    None
+}
+
+fn visibility_local_points_match(left: (f64, f64), right: (f64, f64)) -> bool {
+    let scale = left
+        .0
+        .abs()
+        .max(left.1.abs())
+        .max(right.0.abs())
+        .max(right.1.abs())
+        .max(1.0);
+    (left.0 - right.0).abs() <= 1.0e-10 * scale
+        && (left.1 - right.1).abs() <= 1.0e-10 * scale
+}
+
+fn visibility_world_point(
+    part: &crate::organism_geometry::PlacedForm,
+    local: (f64, f64),
+) -> Option<(f64, f64)> {
+    if ![
+        part.x,
+        part.y,
+        part.rotation_radians,
+        local.0,
+        local.1,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+    {
+        return None;
+    }
+    let (sin, cos) = part.rotation_radians.sin_cos();
+    let point = (
+        part.x + local.0 * cos - local.1 * sin,
+        part.y + local.0 * sin + local.1 * cos,
+    );
+    (point.0.is_finite() && point.1.is_finite()).then_some(point)
+}
+
+/// Derive a whole-pose-cell bound for a straight/straight visibility event.
+/// Endpoint motion is bounded by each owning body's rigid-point displacement;
+/// determinant and blocker-segment margins prove the intersection cannot
+/// become parallel, leave the blocker segment, or disappear inside the cell.
+pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
+    event: &VisibilityCutEvent,
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    body_motion: &[VisibilityBodyMotionBound],
+) -> Option<VisibilityEventPoseCellBound> {
+    let (
+        blocker_body_index,
+        blocker_unit_index,
+        target_body_index,
+        target_unit_index,
+        target_edge_index,
+        blocker_edge_index,
+        target_start_local,
+        target_end_local,
+        blocker_start_local,
+        blocker_end_local,
+        expected_target_parameter,
+        expected_blocker_parameter,
+    ) = match event {
+        VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index,
+            blocker_unit_index,
+            target_body_index,
+            target_unit_index,
+            target_edge_index,
+            blocker_edge_index,
+            target_edge_start_local,
+            target_edge_end_local,
+            blocker_edge_start_local,
+            blocker_edge_end_local,
+            target_parameter,
+            blocker_parameter,
+        } => (
+            *blocker_body_index,
+            *blocker_unit_index,
+            *target_body_index,
+            *target_unit_index,
+            *target_edge_index,
+            *blocker_edge_index,
+            *target_edge_start_local,
+            *target_edge_end_local,
+            *blocker_edge_start_local,
+            *blocker_edge_end_local,
+            *target_parameter,
+            *blocker_parameter,
+        ),
+        _ => return None,
+    };
+    if body_motion.len() != bodies.len() {
+        return None;
+    }
+    let target_part = visibility_part(bodies, target_body_index, target_unit_index)?;
+    let blocker_part = visibility_part(bodies, blocker_body_index, blocker_unit_index)?;
+    let target_edge = local_straight_feature_endpoints(target_part, target_edge_index)?;
+    let blocker_edge = local_straight_feature_endpoints(blocker_part, blocker_edge_index)?;
+    if !visibility_local_points_match(target_edge.0, target_start_local)
+        || !visibility_local_points_match(target_edge.1, target_end_local)
+        || !visibility_local_points_match(blocker_edge.0, blocker_start_local)
+        || !visibility_local_points_match(blocker_edge.1, blocker_end_local)
+    {
+        return None;
+    }
+    let a = visibility_world_point(target_part, target_start_local)?;
+    let b = visibility_world_point(target_part, target_end_local)?;
+    let c = visibility_world_point(blocker_part, blocker_start_local)?;
+    let d = visibility_world_point(blocker_part, blocker_end_local)?;
+    let subtract = |left: (f64, f64), right: (f64, f64)| {
+        (left.0 - right.0, left.1 - right.1)
+    };
+    let cross = |left: (f64, f64), right: (f64, f64)| {
+        left.0 * right.1 - left.1 * right.0
+    };
+    let norm = |vector: (f64, f64)| vector.0.hypot(vector.1);
+    let target_vector = subtract(b, a);
+    let blocker_vector = subtract(d, c);
+    let offset = subtract(c, a);
+    let denominator = cross(target_vector, blocker_vector);
+    let denominator_abs = denominator.abs();
+    let target_length = norm(target_vector);
+    let blocker_length = norm(blocker_vector);
+    let denominator_scale = target_length * blocker_length;
+    if !denominator_abs.is_finite()
+        || !denominator_scale.is_finite()
+        || denominator_scale <= f64::MIN_POSITIVE
+        || denominator_abs <= 64.0 * f64::EPSILON * denominator_scale
+    {
+        return None;
+    }
+    let target_numerator = cross(offset, blocker_vector);
+    let blocker_numerator = cross(offset, target_vector);
+    let target_parameter = target_numerator / denominator;
+    let blocker_parameter = blocker_numerator / denominator;
+    if !target_parameter.is_finite()
+        || !blocker_parameter.is_finite()
+        || !(0.0..1.0).contains(&target_parameter)
+        || !(0.0..1.0).contains(&blocker_parameter)
+        || (target_parameter - expected_target_parameter).abs() > 1.0e-8
+        || (blocker_parameter - expected_blocker_parameter).abs() > 1.0e-8
+    {
+        return None;
+    }
+    for body_index in [target_body_index, blocker_body_index] {
+        let motion = *body_motion.get(body_index)?;
+        let required_radius =
+            maximum_geometry_radius_about_pivot(bodies.get(body_index)?, motion.rotation_pivot)?;
+        if motion.maximum_point_displacement()?.is_finite()
+            && motion.radius_bound + 1.0e-10 * motion.radius_bound.max(1.0) < required_radius
+        {
+            return None;
+        }
+    }
+    let target_displacement = body_motion[target_body_index].maximum_point_displacement()?;
+    let blocker_displacement = body_motion[blocker_body_index].maximum_point_displacement()?;
+    let target_edge_change = 2.0 * target_displacement;
+    let blocker_edge_change = 2.0 * blocker_displacement;
+    let offset_change = target_displacement + blocker_displacement;
+    let denominator_change = target_edge_change * blocker_length
+        + target_length * blocker_edge_change
+        + target_edge_change * blocker_edge_change;
+    let target_numerator_change = offset_change * blocker_length
+        + norm(offset) * blocker_edge_change
+        + offset_change * blocker_edge_change;
+    let blocker_numerator_change = offset_change * target_length
+        + norm(offset) * target_edge_change
+        + offset_change * target_edge_change;
+    let denominator_lower_bound = denominator_abs - denominator_change;
+    if ![
+        denominator_change,
+        target_numerator_change,
+        blocker_numerator_change,
+        denominator_lower_bound,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || denominator_lower_bound <= 0.0
+    {
+        return None;
+    }
+    let denominator_product = denominator_abs * denominator_lower_bound;
+    let target_parameter_change = (target_numerator_change * denominator_abs
+        + target_numerator.abs() * denominator_change)
+        / denominator_product;
+    let blocker_parameter_change = (blocker_numerator_change * denominator_abs
+        + blocker_numerator.abs() * denominator_change)
+        / denominator_product;
+    let determinant_margin = denominator_abs / denominator_scale;
+    let determinant_change = denominator_change / denominator_scale;
+    let blocker_parameter_margin = blocker_parameter.min(1.0 - blocker_parameter);
+    let existence_margin = determinant_margin.min(blocker_parameter_margin);
+    let existence_change = determinant_change.max(blocker_parameter_change);
+    if ![
+        target_parameter_change,
+        blocker_parameter_change,
+        determinant_margin,
+        determinant_change,
+        blocker_parameter_margin,
+        existence_margin,
+        existence_change,
+    ]
+    .iter()
+    .all(|value| value.is_finite())
+        || target_parameter_change < 0.0
+        || blocker_parameter_change < 0.0
+        || existence_margin <= existence_change
+    {
+        return None;
+    }
+    Some(VisibilityEventPoseCellBound {
+        identity: event.stable_identity()?,
+        parameter_change_bound: target_parameter_change,
+        existence_margin,
+        existence_margin_change_bound: existence_change,
+    })
+}
+
 impl VisibilityCutSignature {
     /// Prove that each event remains valid and that its parameter interval
     /// stays strictly ordered throughout the pose cell. The caller must supply
