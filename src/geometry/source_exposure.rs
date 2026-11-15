@@ -816,7 +816,38 @@ mod tests {
                         local_point: (1.0, 0.0),
                     },
                 ),
-                ];
+                let cuts = vec![
+                    VisibilityCutRecord::new(
+                        0.0,
+                        VisibilityCutEvent::TargetVertex {
+                            body_index: 0,
+                            unit_index: 1,
+                            vertex_index: 0,
+                            local_point: (0.0, 0.0),
+                        },
+                    ),
+                    VisibilityCutRecord::new(
+                        0.5,
+                        VisibilityCutEvent::RayThroughRigidFeature {
+                            blocker_body_index: 2,
+                            blocker_unit_index: 7,
+                            blocker_feature_index,
+                            target_body_index: 0,
+                            target_unit_index: 1,
+                            target_edge_index: 4,
+                            local_point: (0.5, 0.25),
+                        },
+                    ),
+                    VisibilityCutRecord::new(
+                        1.0,
+                        VisibilityCutEvent::TargetVertex {
+                            body_index: 0,
+                            unit_index: 1,
+                            vertex_index: 1,
+                            local_point: (1.0, 0.0),
+                        },
+                    ),
+                    ];
                 VisibilityCutSignature::from_partition(&cuts, candidates, blockers).unwrap()
             };
         let baseline = make_signature(3, &[0, 2], &[vec![], vec![2]]);
@@ -3231,12 +3262,15 @@ mod visibility_tests {
             exact.iter().map(|entry| entry.interval).collect::<Vec<_>>()
         );
         assert!(reused.iter().any(|entry| {
-            entry.visibility_signature.as_ref().is_some_and(|signature| {
-                signature
-                    .interval_blocker_bodies
-                    .iter()
-                    .any(|blockers| blockers.contains(&1))
-            })
+            entry
+                .visibility_signature
+                .as_ref()
+                .is_some_and(|signature| {
+                    signature
+                        .interval_blocker_bodies
+                        .iter()
+                        .any(|blockers| blockers.contains(&1))
+                })
         }));
 
         let undersized_radius = [
