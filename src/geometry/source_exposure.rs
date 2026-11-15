@@ -1499,6 +1499,104 @@ impl VisibilityBodyMotionBound {
     }
 }
 
+/// Candidate blocker superset for every target body throughout one rigid-pose cell.
+/// Build once at the reference pose, then reuse for all pose samples in that cell.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct VisibilityPoseCellCandidateInventory {
+    body_count: usize,
+    body_units: Vec<Vec<usize>>,
+    target_candidates: Vec<Option<Vec<usize>>>,
+}
+
+impl VisibilityPoseCellCandidateInventory {
+    fn validate_pose(
+        &self,
+        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        target_body_indices: &[usize],
+    ) -> Option<()> {
+        if bodies.len() != self.body_count || self.body_units.len() != bodies.len() {
+            return None;
+        }
+        for (body, expected_units) in bodies.iter().zip(&self.body_units) {
+            let actual_units = body.parts.iter().map(|part| part.unit_index).collect::<Vec<_>>();
+            if &actual_units != expected_units {
+                return None;
+            }
+        }
+        for &target in target_body_indices {
+            self.target_candidates.get(target)?.as_ref()?;
+        }
+        Some(())
+    }
+
+    fn candidates_for_target(&self, target_body_index: usize) -> Option<&[usize]> {
+        self.target_candidates.get(target_body_index)?.as_deref()
+    }
+}
+
+/// Build one conservative candidate superset per target body. The target's
+/// complete body bounds are used rather than individual edges, so every edge
+/// and curved boundary on that target shares the same inventory.
+pub(crate) fn build_visibility_pose_cell_candidate_inventory(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    source_translation_bound: f64,
+    body_motion: &[VisibilityBodyMotionBound],
+) -> Option<VisibilityPoseCellCandidateInventory> {
+    if !source.0.is_finite()
+        || !source.1.is_finite()
+        || !source_translation_bound.is_finite()
+        || source_translation_bound < 0.0
+        || body_motion.len() != bodies.len()
+    {
+        return None;
+    }
+    let reference_angle = reference_angle_for_bodies(source, bodies)?;
+    let body_bounds = bodies
+        .iter()
+        .map(|body| (body.min_x, body.max_x, body.min_y, body.max_y))
+        .collect::<Vec<_>>();
+    let mut body_units = Vec::with_capacity(bodies.len());
+    for body in bodies {
+        let units = body.parts.iter().map(|part| part.unit_index).collect::<Vec<_>>();
+        let mut unique = units.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        if unique.len() != units.len() {
+            return None;
+        }
+        body_units.push(units);
+    }
+    let mut target_candidates = vec![None; bodies.len()];
+    for &target_body_index in target_body_indices {
+        if target_candidates.get(target_body_index)?.is_some() {
+            continue;
+        }
+        let mut candidates = candidate_body_indices_for_pose_cell(
+            source,
+            source_translation_bound,
+            *body_bounds.get(target_body_index)?,
+            *body_motion.get(target_body_index)?,
+            reference_angle,
+            &body_bounds,
+            body_motion,
+        )?;
+        // Include the target itself so the inventory identity is independent
+        // of broad-phase tie handling; exact occlusion skips its own features.
+        if !candidates.contains(&target_body_index) {
+            candidates.push(target_body_index);
+            candidates.sort_unstable();
+        }
+        target_candidates[target_body_index] = Some(candidates);
+    }
+    Some(VisibilityPoseCellCandidateInventory {
+        body_count: bodies.len(),
+        body_units,
+        target_candidates,
+    })
+}
+
 fn expand_visibility_bounds(
     bounds: (f64, f64, f64, f64),
     expansion: f64,
@@ -1731,12 +1829,19 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
     motion_envelope: Option<&VisibilityPoseCellMotionEnvelope<'_>>,
+    candidate_inventory: Option<&VisibilityPoseCellCandidateInventory>,
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
     use crate::resources::Form;
 
     if !source.0.is_finite() || !source.1.is_finite() {
         return None;
+    }
+    if let Some(inventory) = candidate_inventory {
+        inventory.validate_pose(bodies, target_body_indices)?;
+        if motion_envelope.is_none() {
+            return None;
+        }
     }
     if let Some(envelope) = motion_envelope {
         if !envelope.source_translation_bound.is_finite()
@@ -2109,7 +2214,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
             }
 
             let target_edge_bounds = (a.0.min(b.0), a.0.max(b.0), a.1.min(b.1), a.1.max(b.1));
-            let candidate_body_indices = if let Some(envelope) = motion_envelope {
+            let candidate_body_indices = if let Some(inventory) = candidate_inventory {
+                inventory.candidates_for_target(body_index)?.to_vec()
+            } else if let Some(envelope) = motion_envelope {
                 candidate_body_indices_for_pose_cell(
                     source,
                     envelope.source_translation_bound,
@@ -2431,6 +2538,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         bodies,
         target_body_indices,
         None,
+        None,
     )
 }
 
@@ -2449,11 +2557,44 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
         source_translation_bound,
         body_motion,
     };
+    let inventory = build_visibility_pose_cell_candidate_inventory(
+        source,
+        bodies,
+        target_body_indices,
+        source_translation_bound,
+        body_motion,
+    )?;
     visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
         source,
         bodies,
         target_body_indices,
         Some(&envelope),
+        Some(&inventory),
+    )
+}
+
+/// Re-evaluate exact visibility at another pose sample using the same
+/// conservative candidate superset built at the reference pose. The caller
+/// must ensure every sampled pose remains inside that inventory's certified
+/// motion envelope and preserves body/unit identity.
+pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    source_translation_bound: f64,
+    body_motion: &[VisibilityBodyMotionBound],
+    inventory: &VisibilityPoseCellCandidateInventory,
+) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
+    let envelope = VisibilityPoseCellMotionEnvelope {
+        source_translation_bound,
+        body_motion,
+    };
+    visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
+        source,
+        bodies,
+        target_body_indices,
+        Some(&envelope),
+        Some(inventory),
     )
 }
 
