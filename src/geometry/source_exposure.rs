@@ -1560,7 +1560,7 @@ mod visibility_tests {
         });
         assert!(
             near_silhouette_cut,
-            "a ray cut close to a target silhouette must retain blocker provenance and remain unresolved"
+            "a ray cut close to a target silhouette must retain blocker provenance and remain unresolved; intervals={intervals:#?}"
         );
     }
 
