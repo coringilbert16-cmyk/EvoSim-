@@ -4258,8 +4258,7 @@ mod curved_endpoint_motion_bound_tests {
     fn rigid_curved_endpoint_motion_bound_rejects_invalid_envelopes() {
         let zero = BoundaryKernelVector::default();
         assert!(
-            rigid_circle_arc_endpoint_motion_bound(zero, 1.0, 0.0, zero, 0.0, -0.1, 0.0)
-                .is_none()
+            rigid_circle_arc_endpoint_motion_bound(zero, 1.0, 0.0, zero, 0.0, -0.1, 0.0).is_none()
         );
         assert!(
             rigid_circle_arc_endpoint_motion_bound(zero, 1.0, 0.0, zero, 0.0, 0.0, f64::NAN)
