@@ -1425,3 +1425,13 @@ The pose resolver transforms the target edge and blocker circle through their in
 A separate rigid circular-arc endpoint primitive transports an intrinsic local center/radius/angle through its owning pose and differentiates the resulting world point. Finite-difference regressions cover simultaneous target/blocker motion at a circle/straight crossing and rigidly moving curved endpoints.
 
 These are reference-pose Jacobians, not yet conservative pose-cell certificates. A future bound must keep the circle/line implicit denominator away from zero (excluding tangencies), keep the intersection parameter strictly inside the target edge, preserve arc-angle membership without crossing either arc endpoint, and certify event ordering against all other cuts. Until those conditions are bounded over a complete cell, exact visibility or subdivision remains authoritative.
+
+## 35. Circle/straight pose-cell motion envelope
+
+A conservative circle/straight pose-cell envelope now bounds both target-edge parameter movement and local arc-angle movement. It bounds the line direction and signed line-to-circle-center distance under endpoint/center displacement disks. From the resulting minimum distance-to-tangency, it obtains a positive lower bound on the implicit intersection denominator and then bounds target-parameter movement. It propagates that movement into a radial-point displacement bound and finally an angular movement bound, including the blocker body's angular displacement.
+
+The certificate rejects cells that can approach tangency, move the intersection to a target-edge endpoint, or cross either endpoint of a partial circular arc. Full-circle arcs do not impose artificial angular endpoints. The target-parameter envelope can be supplied to the ordered-cut certificate for the target edge; the arc-angle envelope must be checked against the blocker arc's own endpoint and event set.
+
+Regression tests perturb target endpoints and the circle center within their displacement disks, include blocker angular movement, and check that observed parameter/angle changes remain within the envelope. Near-tangent and arc-endpoint-crossing cases fail closed.
+
+This is still a local event certificate. Complete visibility certification must enumerate every cut, preserve blocker/arc identity, and certify event order on each target and blocker feature. If any event is missing, coincident, ambiguous, or not bounded, the pair remains on exact evaluation/subdivision.
