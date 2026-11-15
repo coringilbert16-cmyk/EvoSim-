@@ -2008,8 +2008,10 @@ pub(crate) fn certify_boundary_pose_cell_with_visibility_signature(
 /// used to produce its exact visibility signatures. This joins three separate
 /// obligations: the inventory must still cover the requested target pose, the
 /// signature must use that inventory's exact candidate set, and every cut must
-/// have an independently derived whole-cell event bound. Unsupported or
-/// incomplete event bounds fail closed to exact visibility/subdivision.
+/// have an independently derived whole-cell event bound. The candidate
+/// inventory alone does not prove that all event classes were enumerated or
+/// exclude unobserved event births/deaths; callers must establish that separately.
+/// Unsupported or incomplete topology/event proofs fail closed to exact visibility/subdivision.
 #[allow(dead_code)]
 pub(crate) fn certify_boundary_pose_cell_with_blocker_inventory(
     expansion: &BoundaryKernelExpansion,
