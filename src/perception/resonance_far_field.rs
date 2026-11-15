@@ -1239,7 +1239,7 @@ mod tests {
     fn mutual_cluster_expansion_bounds_potential_forces_and_conserves_momentum() {
         let sources_a = vec![
             WeightedFarFieldSource {
-                position: FarFieldVector { x:: -0.2, y: 0.1 },
+                position: FarFieldVector { x: -0.2, y: 0.1 },
                 weight: 0.8,
             },
             WeightedFarFieldSource {
