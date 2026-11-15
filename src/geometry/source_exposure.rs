@@ -1648,10 +1648,26 @@ mod visibility_tests {
                                     target_unit_index: 0,
                                     target_edge_index,
                                     blocker_edge_index,
+                                    target_edge_start_local,
+                                    target_edge_end_local,
+                                    blocker_edge_start_local,
+                                    blocker_edge_end_local,
                                     target_parameter,
                                     blocker_parameter,
                                 } if *target_edge_index < 4
                                     && *blocker_edge_index < 4
+                                    && [
+                                        target_edge_start_local.0,
+                                        target_edge_start_local.1,
+                                        target_edge_end_local.0,
+                                        target_edge_end_local.1,
+                                        blocker_edge_start_local.0,
+                                        blocker_edge_start_local.1,
+                                        blocker_edge_end_local.0,
+                                        blocker_edge_end_local.1,
+                                    ]
+                                    .iter()
+                                    .all(|value| value.is_finite())
                                     && target_parameter.is_finite()
                                     && blocker_parameter.is_finite()
                             )
