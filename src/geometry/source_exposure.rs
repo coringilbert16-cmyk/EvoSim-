@@ -1169,10 +1169,18 @@ mod tests {
                 &[1],
             )
             .expect("exact current-pose visibility must remain available");
-            assert_eq!(
-                indexed, exact,
-                "certified swept blockers must preserve exact visibility at every tested cell extreme"
-            );
+            assert_eq!(indexed.len(), exact.len());
+            for (indexed_interval, exact_interval) in indexed.iter().zip(&exact) {
+                assert_eq!(indexed_interval.interval, exact_interval.interval);
+                assert_eq!(
+                    indexed_interval.start_provenance,
+                    exact_interval.start_provenance
+                );
+                assert_eq!(
+                    indexed_interval.end_provenance,
+                    exact_interval.end_provenance
+                );
+            }
         }
 
         let outside_translation = vec![
