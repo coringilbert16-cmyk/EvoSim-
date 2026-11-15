@@ -2135,6 +2135,87 @@ pub(crate) fn expand_resonance_boundary_interaction_samples(
         .collect()
 }
 
+/// Symmetric frequency-resolved pair evaluation using the existing two-distance
+/// boundary expansion. The gradients are with respect to the two body centers;
+/// callers must use the exact multi-body pose evaluator whenever occluders or
+/// boundary-pose changes contribute forces/torques.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ResonanceMutualBoundaryEvaluation {
+    pub(crate) potential: f64,
+    pub(crate) force_a_x: f64,
+    pub(crate) force_a_y: f64,
+    pub(crate) force_b_x: f64,
+    pub(crate) force_b_y: f64,
+    pub(crate) potential_error: f64,
+    pub(crate) force_a_error: f64,
+    pub(crate) force_b_error: f64,
+}
+
+/// Evaluate both ordered directions and average them into one symmetric scalar
+/// potential. Every frequency is accumulated independently, and both center
+/// gradients are derived from that same scalar expansion.
+#[allow(dead_code)] // The exact multi-body evaluator remains authoritative until pose integration.
+pub(crate) fn resonance_mutual_boundary_pair_evaluation(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<ResonanceMutualBoundaryEvaluation> {
+    if std::ptr::eq(a, b) {
+        return None;
+    }
+    let samples_ab = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+        a, b, &[], catalog, tick, None, None,
+    )?;
+    let samples_ba = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+        b, a, &[], catalog, tick, None, None,
+    )?;
+    let expanded_ab = expand_resonance_boundary_interaction_samples(&samples_ab)?;
+    let expanded_ba = expand_resonance_boundary_interaction_samples(&samples_ba)?;
+    let mut result = ResonanceMutualBoundaryEvaluation::default();
+    let mut frequencies = Vec::new();
+    for frequency in expanded_ab.iter().chain(&expanded_ba) {
+        if !frequencies.iter().any(|known: &f64| {
+            (*known - frequency.frequency_cycles_per_day).abs() <= 1e-9
+        }) {
+            frequencies.push(frequency.frequency_cycles_per_day);
+        }
+    }
+    for frequency in frequencies {
+        let ab = expanded_ab.iter().find(|entry| {
+            (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9
+        });
+        let ba = expanded_ba.iter().find(|entry| {
+            (entry.frequency_cycles_per_day - frequency).abs() <= 1e-9
+        });
+        let (potential_ab, force_a_ab, force_b_ab, error_ab_a, error_ab_b, potential_error_ab) =
+            ab.map_or((0.0, BoundaryKernelVector::default(), BoundaryKernelVector::default(), 0.0, 0.0, 0.0), |entry| {
+                let evaluation = entry.evaluation;
+                (evaluation.potential, evaluation.source_gradient, evaluation.receiver_gradient,
+                 evaluation.error.source_force, evaluation.error.receiver_force, evaluation.error.potential)
+            });
+        let (potential_ba, force_b_ba, force_a_ba, error_b_b, error_b_a, potential_error_ba) =
+            ba.map_or((0.0, BoundaryKernelVector::default(), BoundaryKernelVector::default(), 0.0, 0.0, 0.0), |entry| {
+                let evaluation = entry.evaluation;
+                (evaluation.potential, evaluation.source_gradient, evaluation.receiver_gradient,
+                 evaluation.error.source_force, evaluation.error.receiver_force, evaluation.error.potential)
+            });
+        result.potential += 0.5 * (potential_ab + potential_ba);
+        result.force_a_x -= 0.5 * (force_a_ab.x + force_a_ba.x);
+        result.force_a_y -= 0.5 * (force_a_ab.y + force_a_ba.y);
+        result.force_b_x -= 0.5 * (force_b_ab.x + force_b_ba.x);
+        result.force_b_y -= 0.5 * (force_b_ab.y + force_b_ba.y);
+        result.potential_error += 0.5 * (potential_error_ab + potential_error_ba);
+        result.force_a_error += 0.5 * (error_ab_a + error_b_a);
+        result.force_b_error += 0.5 * (error_ab_b + error_b_b);
+    }
+    let values = [
+        result.potential, result.force_a_x, result.force_a_y, result.force_b_x,
+        result.force_b_y, result.potential_error, result.force_a_error, result.force_b_error,
+    ];
+    values.iter().all(|value| value.is_finite()).then_some(result)
+}
+
 /// Preserve the exact discrete boundary samples used by the mechanical pair
 /// potential. This is the shared input representation for the future mutual
 /// evaluator; it deliberately retains exact visibility classification and
