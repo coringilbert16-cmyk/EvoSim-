@@ -2267,6 +2267,111 @@ fn expand_resonance_boundary_interaction_samples(
         .collect()
 }
 
+/// Re-evaluate a boundary-sample cluster until its certified potential and
+/// both center-gradient remainders fit caller-supplied absolute budgets.
+/// Budgets are divided between children, so the sum of accepted leaf bounds
+/// cannot exceed the original request (apart from floating-point roundoff).
+/// Failure to meet a budget at a singleton fails closed.
+pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
+    source_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
+    samples: Vec<super::resonance_boundary_far_field::WeightedBoundaryKernelSample>,
+    budget: super::resonance_boundary_far_field::BoundaryPotentialError,
+) -> Option<super::resonance_boundary_far_field::BoundaryPotentialEvaluation> {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelVector, BoundaryPotentialEvaluation, WeightedBoundaryKernelSample,
+    };
+
+    fn evaluate(
+        source_center: BoundaryKernelVector,
+        receiver_center: BoundaryKernelVector,
+        samples: Vec<WeightedBoundaryKernelSample>,
+        budget: super::resonance_boundary_far_field::BoundaryPotentialError,
+    ) -> Option<BoundaryPotentialEvaluation> {
+        if samples.is_empty()
+            || ![
+                budget.potential,
+                budget.source_force,
+                budget.receiver_force,
+            ]
+            .iter()
+            .all(|value| value.is_finite() && *value >= 0.0)
+        {
+            return None;
+        }
+        if let Some(candidate) = super::harmonics::evaluate_boundary_kernel_samples_adaptive(
+            source_center,
+            receiver_center,
+            samples.clone(),
+        ) {
+            if candidate.error.potential <= budget.potential
+                && candidate.error.source_force <= budget.source_force
+                && candidate.error.receiver_force <= budget.receiver_force
+            {
+                return Some(candidate);
+            }
+        }
+        if samples.len() == 1 {
+            return None;
+        }
+
+        let min_x = samples.iter().map(|sample| sample.position.x).fold(f64::INFINITY, f64::min);
+        let max_x = samples.iter().map(|sample| sample.position.x).fold(f64::NEG_INFINITY, f64::max);
+        let min_y = samples.iter().map(|sample| sample.position.y).fold(f64::INFINITY, f64::min);
+        let max_y = samples.iter().map(|sample| sample.position.y).fold(f64::NEG_INFINITY, f64::max);
+        let mut samples = samples;
+        if max_x - min_x >= max_y - min_y {
+            samples.sort_by(|a, b| a.position.x.total_cmp(&b.position.x));
+        } else {
+            samples.sort_by(|a, b| a.position.y.total_cmp(&b.position.y));
+        }
+        let right = samples.split_off(samples.len() / 2);
+        let half_budget = super::resonance_boundary_far_field::BoundaryPotentialError {
+            potential: budget.potential * 0.5,
+            source_force: budget.source_force * 0.5,
+            receiver_force: budget.receiver_force * 0.5,
+        };
+        let left = evaluate(source_center, receiver_center, samples, half_budget)?;
+        let right = evaluate(source_center, receiver_center, right, half_budget)?;
+        let combined = BoundaryPotentialEvaluation {
+            potential: left.potential + right.potential,
+            source_gradient: BoundaryKernelVector {
+                x: left.source_gradient.x + right.source_gradient.x,
+                y: left.source_gradient.y + right.source_gradient.y,
+            },
+            receiver_gradient: BoundaryKernelVector {
+                x: left.receiver_gradient.x + right.receiver_gradient.x,
+                y: left.receiver_gradient.y + right.receiver_gradient.y,
+            },
+            error: super::resonance_boundary_far_field::BoundaryPotentialError {
+                potential: left.error.potential + right.error.potential,
+                source_force: left.error.source_force + right.error.source_force,
+                receiver_force: left.error.receiver_force + right.error.receiver_force,
+            },
+            center: BoundaryKernelVector {
+                x: 0.5 * (left.center.x + right.center.x),
+                y: 0.5 * (left.center.y + right.center.y),
+            },
+            radius: left.radius.max(right.radius),
+        };
+        [
+            combined.potential,
+            combined.source_gradient.x,
+            combined.source_gradient.y,
+            combined.receiver_gradient.x,
+            combined.receiver_gradient.y,
+            combined.error.potential,
+            combined.error.source_force,
+            combined.error.receiver_force,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(combined)
+    }
+
+    evaluate(source_center, receiver_center, samples, budget)
+}
+
 /// Symmetric frequency-resolved pair evaluation using the existing two-distance
 /// boundary expansion. The gradients are with respect to the two body centers;
 /// callers must use the exact multi-body pose evaluator whenever occluders or
