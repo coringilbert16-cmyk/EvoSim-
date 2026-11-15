@@ -1443,3 +1443,11 @@ A curved receiver endpoint now has both an exact rigid-pose Jacobian and a conse
 This gives curved sample endpoints a pose-cell movement input without replacing their circular geometry with a straight chord. The bound composes with the existing sample-geometry and potential/force remainder machinery. Tests compare the bound against a finite rigid-pose perturbation and reject invalid motion envelopes.
 
 The complete pair certificate still needs to combine these endpoint envelopes with the circle/straight cut bounds, strict event ordering, complete event enumeration, and independent potential/force/torque remainder bounds. It does not authorize live multipole movement.
+
+## 37. Intersection events are now surfaced as resolvable interval endpoints
+
+Unique straight/straight and circle/straight cuts are no longer represented only as unresolved interval endpoints. When the event is unique, its target body/unit identity matches the interval being partitioned, and its stored target parameter matches the cut parameter, endpoint provenance now carries the complete typed intersection event as a rigid visibility-intersection variant.
+
+Coincident/multiple events, mismatched target identities, and parameter inconsistencies remain unresolved. The pose-aware resolvers consume the retained event directly and revalidate the owning identities and reference-pose geometry before returning derivatives. This connects the retained local edge/arc provenance to the interval endpoint data path without weakening the exact visibility partition.
+
+The variant is a resolvable reference event, not a proof that it remains stable over a pose cell. Parameter/angle motion bounds, complete cut enumeration, and strict event-order certification are still required before a caller can use the derivative in an approximation.
