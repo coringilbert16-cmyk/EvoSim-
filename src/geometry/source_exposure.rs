@@ -1489,6 +1489,50 @@ mod visibility_tests {
     }
 
     #[test]
+    fn straight_intersection_provenance_retains_both_edge_identities() {
+        let source = (-5.0, 0.0);
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let touching_blocker = rectangle_body(1, 4.0, 0.0, 1.0, 0.5);
+        let intervals = visible_polygonal_intervals_for_targets_with_provenance(
+            source,
+            &[target, touching_blocker],
+            &[0],
+        )
+        .expect("touching straight boundaries should retain exact intervals");
+        let has_identified_intersection = intervals.iter().any(|interval| {
+            [&interval.start_provenance, &interval.end_provenance]
+                .into_iter()
+                .any(|provenance| match provenance {
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { events } => {
+                        events.iter().any(|event| {
+                            matches!(
+                                event,
+                                VisibilityCutEvent::StraightBoundaryIntersection {
+                                    blocker_body_index: 1,
+                                    blocker_unit_index: 1,
+                                    target_body_index: 0,
+                                    target_unit_index: 0,
+                                    target_edge_index,
+                                    blocker_edge_index,
+                                    target_parameter,
+                                    blocker_parameter,
+                                } if *target_edge_index < 4
+                                    && *blocker_edge_index < 4
+                                    && target_parameter.is_finite()
+                                    && blocker_parameter.is_finite()
+                            )
+                        })
+                    }
+                    BoundaryEndpointProvenance::RigidTargetVertex { .. } => false,
+                })
+        });
+        assert!(
+            has_identified_intersection,
+            "the cut must retain target and blocker edge identities and both local parameters"
+        );
+    }
+
+    #[test]
     fn coincident_duplicate_blockers_keep_the_cut_provenance_unresolved() {
         let source = (-5.0, 0.0);
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
