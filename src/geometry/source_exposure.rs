@@ -269,7 +269,11 @@ fn visibility_part<'a>(
     body_index: usize,
     unit_index: usize,
 ) -> Option<&'a crate::organism_geometry::PlacedForm> {
-    let mut parts = bodies.get(body_index)?.parts.iter().filter(|part| part.unit_index == unit_index);
+    let mut parts = bodies
+        .get(body_index)?
+        .parts
+        .iter()
+        .filter(|part| part.unit_index == unit_index);
     let part = parts.next()?;
     parts.next().is_none().then_some(part)
 }
@@ -305,23 +309,16 @@ fn visibility_local_points_match(left: (f64, f64), right: (f64, f64)) -> bool {
         .max(right.0.abs())
         .max(right.1.abs())
         .max(1.0);
-    (left.0 - right.0).abs() <= 1.0e-10 * scale
-        && (left.1 - right.1).abs() <= 1.0e-10 * scale
+    (left.0 - right.0).abs() <= 1.0e-10 * scale && (left.1 - right.1).abs() <= 1.0e-10 * scale
 }
 
 fn visibility_world_point(
     part: &crate::organism_geometry::PlacedForm,
     local: (f64, f64),
 ) -> Option<(f64, f64)> {
-    if ![
-        part.x,
-        part.y,
-        part.rotation_radians,
-        local.0,
-        local.1,
-    ]
-    .iter()
-    .all(|value| value.is_finite())
+    if ![part.x, part.y, part.rotation_radians, local.0, local.1]
+        .iter()
+        .all(|value| value.is_finite())
     {
         return None;
     }
@@ -403,12 +400,8 @@ pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
     let b = visibility_world_point(target_part, target_end_local)?;
     let c = visibility_world_point(blocker_part, blocker_start_local)?;
     let d = visibility_world_point(blocker_part, blocker_end_local)?;
-    let subtract = |left: (f64, f64), right: (f64, f64)| {
-        (left.0 - right.0, left.1 - right.1)
-    };
-    let cross = |left: (f64, f64), right: (f64, f64)| {
-        left.0 * right.1 - left.1 * right.0
-    };
+    let subtract = |left: (f64, f64), right: (f64, f64)| (left.0 - right.0, left.1 - right.1);
+    let cross = |left: (f64, f64), right: (f64, f64)| left.0 * right.1 - left.1 * right.0;
     let norm = |vector: (f64, f64)| vector.0.hypot(vector.1);
     let target_vector = subtract(b, a);
     let blocker_vector = subtract(d, c);
@@ -1332,14 +1325,12 @@ mod tests {
                 ..motion[1]
             },
         ];
-        assert!(
-            bound_straight_boundary_intersection_event_over_pose_cell(
-                &event,
-                &bodies,
-                &large_motion,
-            )
-            .is_none()
-        );
+        assert!(bound_straight_boundary_intersection_event_over_pose_cell(
+            &event,
+            &bodies,
+            &large_motion,
+        )
+        .is_none());
     }
 
     #[test]
