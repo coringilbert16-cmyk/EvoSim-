@@ -349,7 +349,8 @@ mod tests {
             start_local: 0.25,
         };
         let arcs = vec![vec![], vec![(7, 0, arc)]];
-        let inventory = build_target_edge_blocker_inventory(&[0, 1], &critical, &edges, &arcs).unwrap();
+        let inventory =
+            build_target_edge_blocker_inventory(&[0, 1], &critical, &edges, &arcs).unwrap();
         assert_eq!(inventory.candidate_bodies.len(), 2);
         assert_eq!(inventory.candidate_bodies[1].body_index, 1);
         assert_eq!(
@@ -380,9 +381,13 @@ mod tests {
         assert!(build_target_edge_blocker_inventory(&[2], &critical, &edges, &arcs).is_none());
 
         let duplicate_feature = vec![vec![(2, 0, 1.0, 2.0), (2, 0, 3.0, 4.0)]];
-        assert!(build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges, &arcs).is_none());
+        assert!(
+            build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges, &arcs).is_none()
+        );
         let duplicate_arc = vec![vec![], vec![(7, 0, arc), (7, 0, arc)]];
-        assert!(build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none());
+        assert!(
+            build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none()
+        );
     }
 
     #[test]
@@ -1021,14 +1026,24 @@ fn build_target_edge_blocker_inventory(
         }
         let mut arc_ids = Vec::with_capacity(circular_arcs.len());
         for &(unit_index, arc_index, arc) in &circular_arcs {
-            if !arc.center.0.is_finite() || !arc.center.1.is_finite()
-                || !arc.radius.is_finite() || arc.radius <= 0.0
-                || !arc.start.is_finite() || !arc.sweep.is_finite() || arc.sweep <= 0.0
-                || arc_ids.contains(&(unit_index, arc_index)) { return None; }
+            if !arc.center.0.is_finite()
+                || !arc.center.1.is_finite()
+                || !arc.radius.is_finite()
+                || arc.radius <= 0.0
+                || !arc.start.is_finite()
+                || !arc.sweep.is_finite()
+                || arc.sweep <= 0.0
+                || arc_ids.contains(&(unit_index, arc_index))
+            {
+                return None;
+            }
             arc_ids.push((unit_index, arc_index));
         }
         candidate_bodies.push(VisibilityBlockerBodyInventory {
-            body_index, critical_features, straight_edges, circular_arcs,
+            body_index,
+            critical_features,
+            straight_edges,
+            circular_arcs,
         });
     }
     Some(TargetEdgeBlockerInventory { candidate_bodies })
@@ -1384,7 +1399,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         (0..bodies.len()).map(|_| Vec::new()).collect();
     for (body_index, body) in bodies.iter().enumerate() {
         for part in &body.parts {
-            for (arc_index, arc) in realized_circle_arcs(body_index, part)?.into_iter().enumerate() {
+            for (arc_index, arc) in realized_circle_arcs(body_index, part)?
+                .into_iter()
+                .enumerate()
+            {
                 circle_arcs_by_body[body_index].push((part.unit_index, arc_index, arc));
             }
         }
@@ -1622,15 +1640,25 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                         continue;
                     }
                     let mut intersections = Vec::with_capacity(2);
-                    add_circle_segment_intersections(arc.center, arc.radius, a, b, &mut intersections)?;
+                    add_circle_segment_intersections(
+                        arc.center,
+                        arc.radius,
+                        a,
+                        b,
+                        &mut intersections,
+                    )?;
                     for point in intersections {
                         let angle = (point.1 - arc.center.1).atan2(point.0 - arc.center.0);
-                        if !arc_has_angle(arc, angle) { continue; }
+                        if !arc_has_angle(arc, angle) {
+                            continue;
+                        }
                         let t = ((point.0 - a.0) * ex + (point.1 - a.1) * ey)
                             / (edge_length * edge_length);
                         if t > 1e-10 && t < 1.0 - 1e-10 {
                             let blocker_part = bodies[blocker_body.body_index]
-                                .parts.iter().find(|part| part.unit_index == blocker_unit_index)?;
+                                .parts
+                                .iter()
+                                .find(|part| part.unit_index == blocker_unit_index)?;
                             cuts.push(VisibilityCutRecord::new(
                                 t,
                                 VisibilityCutEvent::CircleStraightIntersection {
