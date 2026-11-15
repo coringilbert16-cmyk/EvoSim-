@@ -2082,8 +2082,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
             x: sample.position.x - receiver_center.x,
             y: sample.position.y - receiver_center.y,
         };
-        let source_distance = source_delta.norm();
-        let receiver_distance = receiver_delta.norm();
+        let source_distance: f64 = source_delta.x.hypot(source_delta.y);
+        let receiver_distance: f64 = receiver_delta.x.hypot(receiver_delta.y);
         if !source_distance.is_finite()
             || !receiver_distance.is_finite()
             || source_distance <= f64::EPSILON
@@ -2093,8 +2093,12 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
         }
         let source_value = 1.0 / (1.0 + source_distance);
         let receiver_value = 1.0 / (1.0 + receiver_distance);
-        let source_scale = -1.0 / (source_distance * (1.0 + source_distance).powi(2));
-        let receiver_scale = -1.0 / (receiver_distance * (1.0 + receiver_distance).powi(2));
+        let source_denominator = 1.0 + source_distance;
+        let receiver_denominator = 1.0 + receiver_distance;
+        let source_scale =
+            -1.0 / (source_distance * source_denominator * source_denominator);
+        let receiver_scale =
+            -1.0 / (receiver_distance * receiver_denominator * receiver_denominator);
         let source_gradient = BoundaryKernelVector {
             x: -sample.weight * source_delta.x * source_scale * receiver_value,
             y: -sample.weight * source_delta.y * source_scale * receiver_value,
@@ -2107,8 +2111,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
         let roundoff_guard = 128.0
             * f64::EPSILON
             * (potential.abs()
-                + source_gradient.norm()
-                + receiver_gradient.norm()
+                + source_gradient.x.hypot(source_gradient.y)
+                + receiver_gradient.x.hypot(receiver_gradient.y)
                 + sample.weight.abs()
                 + 1.0);
         if !potential.is_finite()
