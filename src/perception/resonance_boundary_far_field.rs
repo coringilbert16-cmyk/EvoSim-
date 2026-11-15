@@ -1358,6 +1358,312 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
     }
 }
 
+/// Resolve every supported rigid visibility endpoint through its existing
+/// geometric derivative evaluator. Ray-through-feature cuts depend on the
+/// emitter position as well as the target and blocker poses, so this entry
+/// point carries the source coordinate explicitly.
+#[allow(dead_code, clippy::too_many_arguments)]
+pub(crate) fn resolve_boundary_endpoint_pose_derivative_with_source(
+    provenance: &crate::source_exposure::BoundaryEndpointProvenance,
+    expected_target_body: usize,
+    expected_target_unit: usize,
+    expected_blocker_body: usize,
+    expected_blocker_unit: usize,
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    source: BoundaryKernelVector,
+    source_derivative: BoundaryKernelVector,
+    target_translation_derivative: BoundaryKernelVector,
+    target_angular_derivative: f64,
+    blocker_translation_derivative: BoundaryKernelVector,
+    blocker_angular_derivative: f64,
+) -> Option<ResolvedBoundaryEndpointPoseDerivative> {
+    use crate::source_exposure::{BoundaryEndpointProvenance, VisibilityCutEvent};
+
+    let target_part =
+        crate::source_exposure::visibility_part(bodies, expected_target_body, expected_target_unit)?;
+    let target_pose = RigidBoundaryPose {
+        pivot: BoundaryKernelVector {
+            x: target_part.x,
+            y: target_part.y,
+        },
+        rotation_radians: target_part.rotation_radians,
+    };
+
+    match provenance {
+        BoundaryEndpointProvenance::RigidTargetVertex {
+            body_index,
+            unit_index,
+            local_point,
+            ..
+        } if *body_index == expected_target_body && *unit_index == expected_target_unit => {
+            let point = target_pose.transform_local_point(BoundaryKernelVector {
+                x: local_point.0,
+                y: local_point.1,
+            })?;
+            let derivative = rigid_pose_point_derivative(
+                point,
+                target_pose.pivot,
+                target_translation_derivative,
+                target_angular_derivative,
+            )?;
+            Some(ResolvedBoundaryEndpointPoseDerivative { point, derivative })
+        }
+        BoundaryEndpointProvenance::RigidVisibilityIntersection { parameter, event } => {
+            match event {
+                VisibilityCutEvent::StraightBoundaryIntersection { .. }
+                | VisibilityCutEvent::CircleStraightIntersection { .. } => {
+                    let blocker_part = crate::source_exposure::visibility_part(
+                        bodies,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                    )?;
+                    let blocker_pose = RigidBoundaryPose {
+                        pivot: BoundaryKernelVector {
+                            x: blocker_part.x,
+                            y: blocker_part.y,
+                        },
+                        rotation_radians: blocker_part.rotation_radians,
+                    };
+                    resolve_boundary_endpoint_pose_derivative(
+                        provenance,
+                        expected_target_body,
+                        expected_target_unit,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                        target_pose,
+                        blocker_pose,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                        blocker_translation_derivative,
+                        blocker_angular_derivative,
+                    )
+                }
+                VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    target_edge_index,
+                    local_point,
+                    ..
+                } if *blocker_body_index == expected_blocker_body
+                    && *blocker_unit_index == expected_blocker_unit
+                    && *target_body_index == expected_target_body
+                    && *target_unit_index == expected_target_unit =>
+                {
+                    let blocker_part = crate::source_exposure::visibility_part(
+                        bodies,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                    )?;
+                    let blocker_pose = RigidBoundaryPose {
+                        pivot: BoundaryKernelVector {
+                            x: blocker_part.x,
+                            y: blocker_part.y,
+                        },
+                        rotation_radians: blocker_part.rotation_radians,
+                    };
+                    let (target_start_local, target_end_local) =
+                        crate::source_exposure::local_straight_feature_endpoints(
+                            target_part,
+                            *target_edge_index,
+                        )?;
+                    let target_start = target_pose.transform_local_point(BoundaryKernelVector {
+                        x: target_start_local.0,
+                        y: target_start_local.1,
+                    })?;
+                    let target_end = target_pose.transform_local_point(BoundaryKernelVector {
+                        x: target_end_local.0,
+                        y: target_end_local.1,
+                    })?;
+                    let target_start_derivative = rigid_pose_point_derivative(
+                        target_start,
+                        target_pose.pivot,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                    )?;
+                    let target_end_derivative = rigid_pose_point_derivative(
+                        target_end,
+                        target_pose.pivot,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                    )?;
+                    let critical_point = blocker_pose.transform_local_point(BoundaryKernelVector {
+                        x: local_point.0,
+                        y: local_point.1,
+                    })?;
+                    let critical_point_derivative = rigid_pose_point_derivative(
+                        critical_point,
+                        blocker_pose.pivot,
+                        blocker_translation_derivative,
+                        blocker_angular_derivative,
+                    )?;
+                    let derivative = ray_edge_intersection_pose_derivative(
+                        source,
+                        critical_point,
+                        target_start,
+                        target_end,
+                        source_derivative,
+                        critical_point_derivative,
+                        target_start_derivative,
+                        target_end_derivative,
+                    )?;
+                    let point = ray_edge_intersection_point_and_parameter(
+                        source,
+                        critical_point,
+                        target_start,
+                        target_end,
+                    )?;
+                    if (point.1 - *parameter).abs() > 1.0e-8 {
+                        return None;
+                    }
+                    Some(ResolvedBoundaryEndpointPoseDerivative {
+                        point: point.0,
+                        derivative: derivative.point_derivative,
+                    })
+                }
+                VisibilityCutEvent::RayThroughCircleTangent {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    target_edge_index,
+                    tangent_side,
+                    local_center,
+                    radius,
+                    ..
+                } if *blocker_body_index == expected_blocker_body
+                    && *blocker_unit_index == expected_blocker_unit
+                    && *target_body_index == expected_target_body
+                    && *target_unit_index == expected_target_unit =>
+                {
+                    let blocker_part = crate::source_exposure::visibility_part(
+                        bodies,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                    )?;
+                    let blocker_pose = RigidBoundaryPose {
+                        pivot: BoundaryKernelVector {
+                            x: blocker_part.x,
+                            y: blocker_part.y,
+                        },
+                        rotation_radians: blocker_part.rotation_radians,
+                    };
+                    let (target_start_local, target_end_local) =
+                        crate::source_exposure::local_straight_feature_endpoints(
+                            target_part,
+                            *target_edge_index,
+                        )?;
+                    let target_start = target_pose.transform_local_point(BoundaryKernelVector {
+                        x: target_start_local.0,
+                        y: target_start_local.1,
+                    })?;
+                    let target_end = target_pose.transform_local_point(BoundaryKernelVector {
+                        x: target_end_local.0,
+                        y: target_end_local.1,
+                    })?;
+                    let target_start_derivative = rigid_pose_point_derivative(
+                        target_start,
+                        target_pose.pivot,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                    )?;
+                    let target_end_derivative = rigid_pose_point_derivative(
+                        target_end,
+                        target_pose.pivot,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                    )?;
+                    let circle_center = blocker_pose.transform_local_point(BoundaryKernelVector {
+                        x: local_center.0,
+                        y: local_center.1,
+                    })?;
+                    let circle_center_derivative = rigid_pose_point_derivative(
+                        circle_center,
+                        blocker_pose.pivot,
+                        blocker_translation_derivative,
+                        blocker_angular_derivative,
+                    )?;
+                    let tangent = circle_tangent_point_pose_derivative(
+                        circle_center,
+                        *radius,
+                        source,
+                        circle_center_derivative,
+                        source_derivative,
+                        f64::from(*tangent_side),
+                    )?;
+                    let derivative = ray_edge_intersection_pose_derivative(
+                        source,
+                        tangent.point,
+                        target_start,
+                        target_end,
+                        source_derivative,
+                        tangent.derivative,
+                        target_start_derivative,
+                        target_end_derivative,
+                    )?;
+                    let point = ray_edge_intersection_point_and_parameter(
+                        source,
+                        tangent.point,
+                        target_start,
+                        target_end,
+                    )?;
+                    if (point.1 - *parameter).abs() > 1.0e-8 {
+                        return None;
+                    }
+                    Some(ResolvedBoundaryEndpointPoseDerivative {
+                        point: point.0,
+                        derivative: derivative.point_derivative,
+                    })
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn ray_edge_intersection_point_and_parameter(
+    source: BoundaryKernelVector,
+    critical_point: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+) -> Option<(BoundaryKernelVector, f64)> {
+    let q = BoundaryKernelVector {
+        x: edge_start.x - source.x,
+        y: edge_start.y - source.y,
+    };
+    let r = BoundaryKernelVector {
+        x: critical_point.x - source.x,
+        y: critical_point.y - source.y,
+    };
+    let edge = BoundaryKernelVector {
+        x: edge_end.x - edge_start.x,
+        y: edge_end.y - edge_start.y,
+    };
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let denominator = cross(edge, r);
+    if !denominator.is_finite() || denominator.abs() <= f64::EPSILON {
+        return None;
+    }
+    let parameter = -cross(q, r) / denominator;
+    let ray_parameter = -cross(q, edge) / denominator;
+    if !parameter.is_finite()
+        || !ray_parameter.is_finite()
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&parameter)
+        || ray_parameter <= 1.0 + 1.0e-10
+    {
+        return None;
+    }
+    let point = BoundaryKernelVector {
+        x: edge_start.x + parameter * edge.x,
+        y: edge_start.y + parameter * edge.y,
+    };
+    (point.x.is_finite() && point.y.is_finite()).then_some((point, parameter))
+}
+
 /// Conservative absolute movement bounds for the two parameters of one
 /// straight/straight intersection over a pose cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
