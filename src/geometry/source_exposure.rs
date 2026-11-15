@@ -235,6 +235,17 @@ impl VisibilityCutSignature {
         }
         Some(Self { ordered_events })
     }
+
+    /// Require every sampled pose in a proposed cell to retain this exact
+    /// discrete event order. A birth, death, identity change, or reordering
+    /// invalidates the smooth-pose certificate.
+    #[allow(dead_code)]
+    pub(crate) fn certify_unchanged_across(&self, samples: &[Self]) -> Option<()> {
+        if samples.is_empty() || samples.iter().any(|sample| sample != self) {
+            return None;
+        }
+        Some(())
+    }
 }
 
 /// A partition location retaining every event that generated the cut.
@@ -566,6 +577,30 @@ mod tests {
 
         let reordered = vec![first[0].clone(), first[2].clone(), first[1].clone()];
         assert!(VisibilityCutSignature::from_cuts(&reordered).is_none());
+    }
+
+    #[test]
+    fn visibility_signature_requires_stable_identity_across_every_pose_sample() {
+        let make_signature = |blocker_feature_index| {
+            let cuts = vec![
+                VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
+                    body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
+                }),
+                VisibilityCutRecord::new(0.5, VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index: 2, blocker_unit_index: 7,
+                    blocker_feature_index, target_body_index: 0,
+                    target_unit_index: 1, target_edge_index: 4, local_point: (0.5, 0.25),
+                }),
+                VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
+                    body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
+                }),
+            ];
+            VisibilityCutSignature::from_cuts(&cuts).unwrap()
+        };
+        let baseline = make_signature(3);
+        assert!(baseline.certify_unchanged_across(&[make_signature(3), make_signature(3)]).is_some());
+        assert!(baseline.certify_unchanged_across(&[make_signature(3), make_signature(4)]).is_none());
+        assert!(baseline.certify_unchanged_across(&[]).is_none());
     }
 
     #[test]
