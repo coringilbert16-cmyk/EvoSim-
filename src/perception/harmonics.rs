@@ -1600,7 +1600,8 @@ fn material_aura_receptions_with_geometry_prepared(
             let mut incident = ToneSpectrum::empty();
             add_spectrum(&mut incident, emitted, attenuation);
             incident.retain_strongest();
-            let mut received = material_response_spectrum(receiver_properties, baselines, &incident)?;
+            let mut received =
+                material_response_spectrum(receiver_properties, baselines, &incident)?;
             received.retain_strongest();
             let magnitude = spectrum_magnitude(&received);
             // Geometric reception is independent of whether this material can
