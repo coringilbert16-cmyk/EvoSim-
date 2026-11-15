@@ -1010,6 +1010,160 @@ pub(crate) fn resolve_circle_straight_intersection_event(
     Some((point, derivative))
 }
 
+/// Conservative pose-cell movement envelope for a circle/straight cut.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct CircleStraightIntersectionMotionBound {
+    pub(crate) target_parameter_change: f64,
+    pub(crate) local_arc_angle_change: f64,
+}
+
+/// Bound target-edge parameter and local arc-angle movement while a rigid
+/// line and circle move inside endpoint/center displacement disks. The signed
+/// line-to-center distance must remain separated from the circle radius, which
+/// proves the intersection stays away from tangency. Arc endpoints must also
+/// remain separated from the moving intersection angle.
+#[allow(dead_code)]
+pub(crate) fn circle_straight_intersection_motion_bound(
+    target_start: BoundaryKernelVector,
+    target_end: BoundaryKernelVector,
+    circle_center: BoundaryKernelVector,
+    radius: f64,
+    target_parameter: f64,
+    arc_start_local: f64,
+    arc_sweep: f64,
+    arc_angle_local: f64,
+    target_start_displacement: f64,
+    target_end_displacement: f64,
+    circle_center_displacement: f64,
+    blocker_angular_displacement: f64,
+) -> Option<CircleStraightIntersectionMotionBound> {
+    let displacements = [
+        target_start_displacement,
+        target_end_displacement,
+        circle_center_displacement,
+        blocker_angular_displacement,
+    ];
+    if displacements
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
+        || !radius.is_finite()
+        || radius <= 0.0
+        || !target_parameter.is_finite()
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&target_parameter)
+        || !arc_start_local.is_finite()
+        || !arc_sweep.is_finite()
+        || arc_sweep <= 0.0
+        || arc_sweep > std::f64::consts::TAU
+        || !arc_angle_local.is_finite()
+        || [
+            target_start.x,
+            target_start.y,
+            target_end.x,
+            target_end.y,
+            circle_center.x,
+            circle_center.y,
+        ]
+        .iter()
+        .any(|value| !value.is_finite())
+    {
+        return None;
+    }
+    let edge = BoundaryKernelVector {
+        x: target_end.x - target_start.x,
+        y: target_end.y - target_start.y,
+    };
+    let offset = BoundaryKernelVector {
+        x: circle_center.x - target_start.x,
+        y: circle_center.y - target_start.y,
+    };
+    let edge_length = edge.norm();
+    let offset_length = offset.norm();
+    let intersection = BoundaryKernelVector {
+        x: target_start.x + target_parameter * edge.x,
+        y: target_start.y + target_parameter * edge.y,
+    };
+    let radial = BoundaryKernelVector {
+        x: intersection.x - circle_center.x,
+        y: intersection.y - circle_center.y,
+    };
+    let radial_length = radial.norm();
+    if !edge_length.is_finite()
+        || !offset_length.is_finite()
+        || !radial_length.is_finite()
+        || edge_length <= f64::EPSILON
+        || (radial_length - radius).abs() > 1.0e-8 * (radial_length + radius + 1.0)
+    {
+        return None;
+    }
+    let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+        left.x * right.y - left.y * right.x
+    };
+    let edge_displacement = target_start_displacement + target_end_displacement;
+    let offset_displacement = target_start_displacement + circle_center_displacement;
+    let minimum_edge_length = edge_length - edge_displacement;
+    if !minimum_edge_length.is_finite() || minimum_edge_length <= f64::EPSILON {
+        return None;
+    }
+    let signed_distance_numerator = cross(edge, offset);
+    let signed_distance = signed_distance_numerator / edge_length;
+    let numerator_change = edge_length * offset_displacement
+        + offset_length * edge_displacement
+        + edge_displacement * offset_displacement;
+    let signed_distance_change = numerator_change / minimum_edge_length
+        + signed_distance_numerator.abs() * edge_displacement
+            / (edge_length * minimum_edge_length);
+    let maximum_signed_distance = signed_distance.abs() + signed_distance_change;
+    if !signed_distance.is_finite()
+        || !signed_distance_change.is_finite()
+        || !maximum_signed_distance.is_finite()
+        || maximum_signed_distance >= radius
+    {
+        return None;
+    }
+    let minimum_implicit_denominator =
+        minimum_edge_length * (radius * radius - maximum_signed_distance * maximum_signed_distance).sqrt();
+    if !minimum_implicit_denominator.is_finite()
+        || minimum_implicit_denominator <= f64::EPSILON
+    {
+        return None;
+    }
+    let target_parameter_change = radius
+        * (target_start_displacement + circle_center_displacement + edge_displacement)
+        / minimum_implicit_denominator;
+    let target_parameter_guard = 128.0
+        * f64::EPSILON
+        * (target_parameter_change + target_parameter.abs() + 1.0);
+    let target_parameter_change = target_parameter_change + target_parameter_guard;
+    const PARAMETER_MARGIN: f64 = 1.0e-10;
+    if !target_parameter_change.is_finite()
+        || target_parameter_change >= target_parameter - PARAMETER_MARGIN
+        || target_parameter_change >= 1.0 - PARAMETER_MARGIN - target_parameter
+    {
+        return None;
+    }
+
+    let point_displacement = target_start_displacement
+        + target_parameter_change * edge_length
+        + target_parameter * edge_displacement
+        + target_parameter_change * edge_displacement;
+    let local_arc_angle_change = (point_displacement + circle_center_displacement) / radius
+        + blocker_angular_displacement;
+    let arc_offset =
+        (arc_angle_local - arc_start_local).rem_euclid(std::f64::consts::TAU);
+    if !point_displacement.is_finite()
+        || !local_arc_angle_change.is_finite()
+        || (arc_sweep < std::f64::consts::TAU - 1.0e-10
+            && (local_arc_angle_change >= arc_offset
+                || local_arc_angle_change >= arc_sweep - arc_offset))
+    {
+        return None;
+    }
+    Some(CircleStraightIntersectionMotionBound {
+        target_parameter_change,
+        local_arc_angle_change,
+    })
+}
+
 /// Exact pose derivative of a rigidly attached circular-arc endpoint. The
 /// local angle and center are intrinsic to the owning constituent.
 #[allow(dead_code)]
