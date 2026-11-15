@@ -854,7 +854,7 @@ fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
         BoundaryKernelVector, BoundaryPotentialError, WeightedBoundaryKernelSample,
     };
 
-    let source = BoundaryKernelVector { x:: 0.0, y: 0.0 };
+    let source = BoundaryKernelVector { x: 0.0, y: 0.0 };
     let receiver = BoundaryKernelVector { x: 8.0, y: -1.0 };
     let samples = vec![
         WeightedBoundaryKernelSample {
