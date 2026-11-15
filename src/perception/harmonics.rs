@@ -449,16 +449,29 @@ pub(crate) struct ResonancePairPotentialComponent {
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)] // Consumed by the staged mutual boundary evaluator.
 pub(crate) struct ResonanceBoundaryInteractionSample {
+    /// Source center and receiver boundary sample in world coordinates.
     pub(crate) source_x: f64,
     pub(crate) source_y: f64,
     pub(crate) receiver_x: f64,
     pub(crate) receiver_y: f64,
+    /// Receiver center is retained separately from its boundary sample so
+    /// both exact attenuation factors can be reconstructed without folding
+    /// geometry into spectral coefficients.
+    pub(crate) receiver_center_x: f64,
+    pub(crate) receiver_center_y: f64,
     pub(crate) receiver_normal_x: f64,
     pub(crate) receiver_normal_y: f64,
     pub(crate) projected_extent: f64,
-    pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
+    pub(crate) source_mass_scale: f64,
+    pub(crate) receiver_mass_scale: f64,
+    /// Unattenuated, per-body spectra. These are the frequency/phase
+    /// coefficients for the mutual spatial evaluator.
+    pub(crate) source_emitted_spectrum: ToneSpectrum,
+    pub(crate) receiver_emitted_spectrum: ToneSpectrum,
+    /// Exact legacy samples retained as a direct reconstruction oracle.
     pub(crate) incident_spectrum: ToneSpectrum,
     pub(crate) receiver_spectrum: ToneSpectrum,
+    pub(crate) visibility_signature: Option<crate::source_exposure::VisibilityCutSignature>,
 }
 
 /// Translation force on one participant in a resonance interaction.
@@ -1985,6 +1998,25 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
         .map(|emitter| &emitter.emitted)
         .or(computed_receiver_emission.as_ref())?;
 
+    let source_mass_scale = prepared_source
+        .map(|emitter| emitter.mass_scale)
+        .unwrap_or_else(|| {
+            environmental_mass_scale(source.material.mass(catalog), baselines.mass)
+        });
+    if !source_mass_scale.is_finite() || source_mass_scale < 0.0 {
+        return None;
+    }
+    let computed_source_emission = prepared_source.is_none().then(|| {
+        material_response(
+            source.material.weighted_properties(catalog),
+            baselines,
+            phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick),
+        )
+    });
+    let source_emission = prepared_source
+        .map(|emitter| &emitter.emitted)
+        .or(computed_source_emission.as_ref())?;
+
     let mut samples = Vec::with_capacity(receptions.len());
     for reception in receptions {
         let local_distance =
@@ -2008,9 +2040,15 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
             source_y: reception.source_y,
             receiver_x: reception.receiver_x,
             receiver_y: reception.receiver_y,
+            receiver_center_x: receiver_x,
+            receiver_center_y: receiver_y,
             receiver_normal_x: reception.receiver_normal_x,
             receiver_normal_y: reception.receiver_normal_y,
             projected_extent: reception.projected_extent,
+            source_mass_scale,
+            receiver_mass_scale,
+            source_emitted_spectrum: source_emission.clone(),
+            receiver_emitted_spectrum: receiver_emission.clone(),
             visibility_signature: reception.visibility_signature,
             incident_spectrum: reception.incident_spectrum,
             receiver_spectrum: local_field,
@@ -4023,10 +4061,30 @@ mod tests {
                 .sum::<f64>();
 
         assert!(samples.iter().all(|sample| {
+            let source_distance = (sample.source_x - sample.receiver_x)
+                .hypot(sample.source_y - sample.receiver_y);
+            let receiver_distance = (sample.receiver_center_x - sample.receiver_x)
+                .hypot(sample.receiver_center_y - sample.receiver_y);
+            let source_scale = sample.source_mass_scale * sample.projected_extent.sqrt()
+                / (1.0 + source_distance);
+            let receiver_scale = sample.receiver_mass_scale * sample.projected_extent.sqrt()
+                / (1.0 + receiver_distance);
+            let mut reconstructed_incident = sample.source_emitted_spectrum.clone();
+            for component in &mut reconstructed_incident.components {
+                component.amplitude *= source_scale;
+            }
+            let mut reconstructed_receiver = sample.receiver_emitted_spectrum.clone();
+            for component in &mut reconstructed_receiver.components {
+                component.amplitude *= receiver_scale;
+            }
             sample.projected_extent.is_finite()
                 && sample.projected_extent > 0.0
                 && sample.receiver_normal_x.is_finite()
                 && sample.receiver_normal_y.is_finite()
+                && sample.source_mass_scale.is_finite()
+                && sample.receiver_mass_scale.is_finite()
+                && reconstructed_incident == sample.incident_spectrum
+                && reconstructed_receiver == sample.receiver_spectrum
         }));
         assert!((reconstructed_energy - directional_energy).abs() < 1e-10);
     }
