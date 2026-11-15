@@ -61,12 +61,20 @@ pub(crate) enum VisibilityCutEvent {
     StraightBoundaryIntersection {
         blocker_body_index: usize,
         blocker_unit_index: usize,
+        target_body_index: usize,
+        target_unit_index: usize,
+        target_edge_index: usize,
+        blocker_edge_index: usize,
         target_parameter: f64,
         blocker_parameter: f64,
     },
     CircleStraightIntersection {
         blocker_body_index: usize,
         blocker_unit_index: usize,
+        target_body_index: usize,
+        target_unit_index: usize,
+        target_edge_index: usize,
+        arc_index: usize,
         target_parameter: f64,
         arc_angle: f64,
     },
@@ -897,6 +905,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                     straight_edges.push((
                         body_index,
                         part.unit_index,
+                        index,
                         vertices[index],
                         vertices[(index + 1) % vertices.len()],
                     ));
@@ -920,7 +929,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                         (body_index, part.unit_index, start.0, start.1),
                         (body_index, part.unit_index, end.0, end.1),
                     ]);
-                    straight_edges.push((body_index, part.unit_index, start, end));
+                    straight_edges.push((body_index, part.unit_index, 0, start, end));
                 }
                 Form::Circle { radius } => {
                     add_circle_tangent_points_tagged(
@@ -957,6 +966,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                             straight_edges.push((
                                 body_index,
                                 part.unit_index,
+                                index,
                                 world[index],
                                 world[(index + 1) % world.len()],
                             ));
@@ -979,12 +989,13 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                         straight_edges.push((
                             body_index,
                             part.unit_index,
+                            0,
                             world.start_point(),
                             world.end_point(),
                         ));
                     }
                     if let Some(multi) = multi_contact_boundary {
-                        for piece in &multi.pieces {
+                        for (piece_index, piece) in multi.pieces.iter().enumerate() {
                             match piece {
                                 FluidBoundaryPiece::SolidContact {
                                     start_x,
@@ -1003,7 +1014,13 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                         (body_index, part.unit_index, start.0, start.1),
                                         (body_index, part.unit_index, end.0, end.1),
                                     ]);
-                                    straight_edges.push((body_index, part.unit_index, start, end));
+                                    straight_edges.push((
+                                        body_index,
+                                        part.unit_index,
+                                        piece_index,
+                                        start,
+                                        end,
+                                    ));
                                 }
                                 FluidBoundaryPiece::FreeArc(arc) => {
                                     let world =
@@ -1047,7 +1064,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
     if critical_points
         .iter()
         .any(|(_, _, x, y)| !x.is_finite() || !y.is_finite())
-        || straight_edges.iter().any(|(_, _, a, b)| {
+        || straight_edges.iter().any(|(_, _, _, a, b)| {
             !a.0.is_finite() || !a.1.is_finite() || !b.0.is_finite() || !b.1.is_finite()
         })
     {
@@ -1059,11 +1076,11 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
     for (body_index, unit_index, x, y) in critical_points {
         critical_points_by_body[body_index].push((unit_index, x, y));
     }
-    type StraightEdge = (usize, (f64, f64), (f64, f64));
+    type StraightEdge = (usize, usize, (f64, f64), (f64, f64));
     let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
-    for (body_index, unit_index, start, end) in straight_edges {
-        straight_edges_by_body[body_index].push((unit_index, start, end));
+    for (body_index, unit_index, edge_index, start, end) in straight_edges {
+        straight_edges_by_body[body_index].push((unit_index, edge_index, start, end));
     }
 
     let mut result = Vec::new();
@@ -1194,7 +1211,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
             // Directly split at straight-boundary intersections, including
             // contact chords. Collinear overlaps are split at both endpoints.
             for &block_body in &candidate_body_indices {
-                for &(block_unit, c, d) in &straight_edges_by_body[block_body] {
+                for &(block_unit, block_edge_index, c, d) in &straight_edges_by_body[block_body] {
                     if block_body == body_index && block_unit == unit_index {
                         continue;
                     }
@@ -1215,6 +1232,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                         VisibilityCutEvent::StraightBoundaryIntersection {
                                             blocker_body_index: block_body,
                                             blocker_unit_index: block_unit,
+                                            target_body_index: body_index,
+                                            target_unit_index: unit_index,
+                                            target_edge_index: edge_index,
+                                            blocker_edge_index: block_edge_index,
                                             target_parameter: t,
                                             blocker_parameter,
                                         },
@@ -1232,6 +1253,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                             VisibilityCutEvent::StraightBoundaryIntersection {
                                 blocker_body_index: block_body,
                                 blocker_unit_index: block_unit,
+                                target_body_index: body_index,
+                                target_unit_index: unit_index,
+                                target_edge_index: edge_index,
+                                blocker_edge_index: block_edge_index,
                                 target_parameter: t,
                                 blocker_parameter: u,
                             },
@@ -1249,7 +1274,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                     if block_body_index == body_index && blocker.unit_index == unit_index {
                         continue;
                     }
-                    for arc in realized_circle_arcs(block_body_index, blocker)? {
+                    for (arc_index, arc) in
+                        realized_circle_arcs(block_body_index, blocker)?.into_iter().enumerate()
+                    {
                         let mut intersections = Vec::with_capacity(2);
                         add_circle_segment_intersections(
                             arc.center,
@@ -1271,6 +1298,10 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                     VisibilityCutEvent::CircleStraightIntersection {
                                         blocker_body_index: block_body_index,
                                         blocker_unit_index: blocker.unit_index,
+                                        target_body_index: body_index,
+                                        target_unit_index: unit_index,
+                                        target_edge_index: edge_index,
+                                        arc_index,
                                         target_parameter: t,
                                         arc_angle: angle,
                                     },
