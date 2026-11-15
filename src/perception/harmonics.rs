@@ -2506,7 +2506,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
     coordinates: Vec<super::resonance_boundary_far_field::BoundaryPoseCoordinateDerivative>,
     baseline_signature: &crate::source_exposure::VisibilityCutSignature,
     sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
-    event_bounds: &[crate::source_exposure::VisibilityEventPoseCellBound],
+    endpoints: &[&crate::source_exposure::BoundaryEndpointProvenance],
     inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
@@ -2542,7 +2542,17 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         target_body_index,
         baseline_signature,
     )?;
-    baseline_signature.certify_pose_cell(event_bounds)?;
+    super::resonance_boundary_far_field::certify_visibility_pose_cell_from_endpoint_provenance(
+        baseline_signature,
+        endpoints,
+        super::resonance_boundary_far_field::BoundaryKernelVector {
+            x: source.0,
+            y: source.1,
+        },
+        inventory.source_translation_bound(),
+        bodies,
+        inventory.body_motion(),
+    )?;
     baseline_signature.certify_unchanged_across(sampled_signatures)?;
 
     fn combine(
