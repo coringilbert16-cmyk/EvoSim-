@@ -1086,6 +1086,22 @@ mod tests {
                 .contains(&0),
             "the blocker must be retained because its swept rigid pose crosses the source-target corridor"
         );
+        let reference_intervals = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+            source,
+            &reference,
+            &[1],
+            0.25,
+            &motion,
+            &inventory,
+        )
+        .expect("reference pose should use the built blocker inventory");
+        let reference_signature = reference_intervals
+            .iter()
+            .find_map(|interval| interval.visibility_signature.as_ref())
+            .expect("reference boundary should retain its ordered visibility signature");
+        inventory
+            .certifies_target_signature(source, &reference, &[1], 1, reference_signature)
+            .expect("boundary signature must be tied to the same certified blocker inventory");
 
         let poses = [
             (0.0, 1.0, 0.0, 5.0, 0.0, 0.0, source),
