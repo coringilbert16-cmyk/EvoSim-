@@ -45,85 +45,6 @@ impl FieldCell {
                 .sum::<f64>()
     }
 
-    /// Commit a complete batch of already-staged Newtonian pose updates.
-    ///
-    /// The caller must validate swept paths/collisions and settle the matching
-    /// kinetic and pair-potential energy changes before calling this method.
-    /// This method revalidates every source identity and destination before
-    /// removing anything, then moves the exact physical objects and updates all
-    /// affected field-cell revisions together.
-    pub(crate) fn commit_environmental_motion_batch(
-        &mut self,
-        motions: Vec<(usize, usize, PhysicalMaterial, PhysicalMaterial)>,
-        catalog: &[crate::resources::BaseResource],
-    ) -> bool {
-        if motions.is_empty() {
-            return true;
-        }
-
-        let mut source_locators = std::collections::HashSet::new();
-        let mut staged = Vec::with_capacity(motions.len());
-        for (source_cell, source_index, expected_before, after) in motions {
-            let Some(cell) = self.cells.get(source_cell) else {
-                return false;
-            };
-            if !source_locators.insert((source_cell, source_index))
-                || cell.physical_materials.get(source_index) != Some(&expected_before)
-                || expected_before.environmental_identity == 0
-                || after.environmental_identity != expected_before.environmental_identity
-                || expected_before.owner_relative_origin.is_some()
-                || after.owner_relative_origin.is_some()
-                || expected_before.material != after.material
-                || expected_before.internal_connections != after.internal_connections
-                || expected_before.realized_shapes != after.realized_shapes
-                || !expected_before.inertial_motion.is_finite()
-                || !after.inertial_motion.is_finite()
-                || !after.is_realized()
-                || !after.material.is_valid_for_catalog(catalog)
-            {
-                return false;
-            }
-            let Some(anchor) = after
-                .placements
-                .as_ref()
-                .and_then(|placements| placements.first())
-            else {
-                return false;
-            };
-            let Some(destination_cell) = self.index_for_position(anchor.x, anchor.y) else {
-                return false;
-            };
-            staged.push((source_cell, source_index, destination_cell, after));
-        }
-
-        // Remove in descending slot order so multiple moves from one source cell
-        // cannot invalidate the remaining locators. All fallible checks are done.
-        let mut removals = staged
-            .iter()
-            .map(|(source_cell, source_index, _, _)| (*source_cell, *source_index))
-            .collect::<Vec<_>>();
-        removals.sort_unstable_by(|a, b| b.cmp(a));
-        let mut changed = vec![false; self.cells.len()];
-        for (source_cell, source_index) in removals {
-            self.cells[source_cell]
-                .physical_materials
-                .remove(source_index);
-            changed[source_cell] = true;
-        }
-        for (_, _, destination_cell, material) in staged {
-            self.cells[destination_cell]
-                .physical_materials
-                .push(material);
-            changed[destination_cell] = true;
-        }
-        for (cell_index, did_change) in changed.into_iter().enumerate() {
-            if did_change {
-                self.mark_changed_at_index(cell_index);
-            }
-        }
-        true
-    }
-
     pub fn total_material(&self) -> Vec<(String, f64)> {
         let mut totals = Vec::new();
         for material in &self.materials {
@@ -999,6 +920,85 @@ impl ActiveMaterialField {
         for (index, material) in staged {
             self.cells[index].physical_materials.push(material);
             self.mark_changed_at_index(index);
+        }
+        true
+    }
+
+    /// Commit a complete batch of already-staged Newtonian pose updates.
+    ///
+    /// The caller must validate swept paths/collisions and settle the matching
+    /// kinetic and pair-potential energy changes before calling this method.
+    /// This method revalidates every source identity and destination before
+    /// removing anything, then moves the exact physical objects and updates all
+    /// affected field-cell revisions together.
+    pub(crate) fn commit_environmental_motion_batch(
+        &mut self,
+        motions: Vec<(usize, usize, PhysicalMaterial, PhysicalMaterial)>,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
+        if motions.is_empty() {
+            return true;
+        }
+
+        let mut source_locators = std::collections::HashSet::new();
+        let mut staged = Vec::with_capacity(motions.len());
+        for (source_cell, source_index, expected_before, after) in motions {
+            let Some(cell) = self.cells.get(source_cell) else {
+                return false;
+            };
+            if !source_locators.insert((source_cell, source_index))
+                || cell.physical_materials.get(source_index) != Some(&expected_before)
+                || expected_before.environmental_identity == 0
+                || after.environmental_identity != expected_before.environmental_identity
+                || expected_before.owner_relative_origin.is_some()
+                || after.owner_relative_origin.is_some()
+                || expected_before.material != after.material
+                || expected_before.internal_connections != after.internal_connections
+                || expected_before.realized_shapes != after.realized_shapes
+                || !expected_before.inertial_motion.is_finite()
+                || !after.inertial_motion.is_finite()
+                || !after.is_realized()
+                || !after.material.is_valid_for_catalog(catalog)
+            {
+                return false;
+            }
+            let Some(anchor) = after
+                .placements
+                .as_ref()
+                .and_then(|placements| placements.first())
+            else {
+                return false;
+            };
+            let Some(destination_cell) = self.index_for_position(anchor.x, anchor.y) else {
+                return false;
+            };
+            staged.push((source_cell, source_index, destination_cell, after));
+        }
+
+        // Remove in descending slot order so multiple moves from one source cell
+        // cannot invalidate the remaining locators. All fallible checks are done.
+        let mut removals = staged
+            .iter()
+            .map(|(source_cell, source_index, _, _)| (*source_cell, *source_index))
+            .collect::<Vec<_>>();
+        removals.sort_unstable_by(|a, b| b.cmp(a));
+        let mut changed = vec![false; self.cells.len()];
+        for (source_cell, source_index) in removals {
+            self.cells[source_cell]
+                .physical_materials
+                .remove(source_index);
+            changed[source_cell] = true;
+        }
+        for (_, _, destination_cell, material) in staged {
+            self.cells[destination_cell]
+                .physical_materials
+                .push(material);
+            changed[destination_cell] = true;
+        }
+        for (cell_index, did_change) in changed.into_iter().enumerate() {
+            if did_change {
+                self.mark_changed_at_index(cell_index);
+            }
         }
         true
     }
