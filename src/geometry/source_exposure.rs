@@ -388,6 +388,10 @@ mod tests {
         assert!(
             build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none()
         );
+        let mismatched_arc = WorldCircleArc { body_index: 0, ..arc };
+        assert!(
+            build_target_edge_blocker_inventory(&[1], &critical, &edges, &vec![vec![], vec![(7, 0, mismatched_arc)]]).is_none()
+        );
     }
 
     #[test]
@@ -1026,13 +1030,16 @@ fn build_target_edge_blocker_inventory(
         }
         let mut arc_ids = Vec::with_capacity(circular_arcs.len());
         for &(unit_index, arc_index, arc) in &circular_arcs {
-            if !arc.center.0.is_finite()
+            if arc.body_index != body_index
+                || arc.unit_index != unit_index
+                || !arc.center.0.is_finite()
                 || !arc.center.1.is_finite()
                 || !arc.radius.is_finite()
                 || arc.radius <= 0.0
                 || !arc.start.is_finite()
                 || !arc.sweep.is_finite()
                 || arc.sweep <= 0.0
+                || arc.sweep > std::f64::consts::TAU
                 || arc_ids.contains(&(unit_index, arc_index))
             {
                 return None;
