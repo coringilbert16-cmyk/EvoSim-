@@ -1626,9 +1626,7 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
     for (body, motion) in bodies.iter().zip(body_motion) {
         let required_radius = maximum_geometry_radius_about_pivot(body, motion.rotation_pivot)?;
         if motion.maximum_point_displacement()?.is_finite()
-            && motion.radius_bound
-                + 1.0e-10 * motion.radius_bound.max(1.0)
-                < required_radius
+            && motion.radius_bound + 1.0e-10 * motion.radius_bound.max(1.0) < required_radius
         {
             return None;
         }
