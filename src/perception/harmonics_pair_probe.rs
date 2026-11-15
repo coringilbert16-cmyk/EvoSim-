@@ -850,7 +850,7 @@ fn mutual_boundary_pair_evaluation_is_symmetric_and_bounds_center_forces() {
 
 #[test]
 fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
-    use super::resonance_boundary_far_field::{
+    use crate::resonance_boundary_far_field::{
         BoundaryKernelVector, BoundaryPotentialError, WeightedBoundaryKernelSample,
     };
 
