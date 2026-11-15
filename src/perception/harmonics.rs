@@ -1904,7 +1904,13 @@ fn directional_resonance_pair_potential_components_with_prepared_emitters(
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<ResonancePairPotentialComponent>> {
     let samples = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
-        source, receiver, occluders, catalog, tick, prepared_source, prepared_receiver,
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_source,
+        prepared_receiver,
     )?;
     let mut potential = Vec::<ResonancePairPotentialComponent>::new();
     for sample in samples {
@@ -1947,7 +1953,12 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<ResonanceBoundaryInteractionSample>> {
     let receptions = material_aura_receptions_with_occluders_prepared(
-        source, receiver, occluders, catalog, tick, prepared_source,
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_source,
     )?;
     if receptions.is_empty() {
         return Some(Vec::new());
@@ -4004,13 +4015,9 @@ mod tests {
             })
             .map(|component| component.energy)
             .sum::<f64>();
-        let directional_energy = directional_resonance_pair_potential_components(
-            &source,
-            &receiver,
-            &catalog,
-            0,
-        )
-        .expect("directional pair potential should be available")
+        let directional_energy =
+            directional_resonance_pair_potential_components(&source, &receiver, &catalog, 0)
+                .expect("directional pair potential should be available")
         .iter()
         .map(|component| component.energy)
         .sum::<f64>();
