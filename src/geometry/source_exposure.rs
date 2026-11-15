@@ -2274,8 +2274,8 @@ impl VisibilityPoseCellCandidateInventory {
             let maximum_displacement = motion.maximum_point_displacement()?;
             let translation_tolerance = 1.0e-10 * motion.translation_bound.max(1.0);
             let angular_tolerance = 1.0e-10 * motion.angular_bound_radians.max(1.0);
-            let mut inferred_translation = None;
-            let mut inferred_rotation = None;
+            let mut inferred_translation: Option<(f64, f64)> = None;
+            let mut inferred_rotation: Option<f64> = None;
             for (part, (unit_index, form, x, y, rotation)) in body.parts.iter().zip(reference_parts)
             {
                 if part.unit_index != *unit_index
