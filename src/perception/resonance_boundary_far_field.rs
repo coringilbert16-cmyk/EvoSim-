@@ -300,6 +300,18 @@ pub(crate) struct RayEdgeIntersectionMotion {
     pub(crate) edge_end_displacement: f64,
 }
 
+/// Full certificate produced by the ray/edge motion evaluator. The detailed
+/// parameter and existence margins let visibility topology reuse the same
+/// proof rather than reconstructing or approximating it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RayEdgeIntersectionMotionCertificate {
+    pub(crate) target_parameter_change: f64,
+    pub(crate) ray_parameter_change: f64,
+    pub(crate) point_displacement: f64,
+    pub(crate) existence_margin: f64,
+    pub(crate) existence_margin_change_bound: f64,
+}
+
 /// Exact first derivative of one strict ray/edge cut for one generalized
 /// pose coordinate. The critical-point derivative is supplied by the caller;
 /// for a polygon vertex it is the vertex's rigid-pose derivative.
@@ -2125,6 +2137,27 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
     edge_end: BoundaryKernelVector,
     motion: RayEdgeIntersectionMotion,
 ) -> Option<f64> {
+    ray_edge_intersection_motion_certificate(
+        source,
+        critical_point,
+        edge_start,
+        edge_end,
+        motion,
+    )
+    .map(|certificate| certificate.point_displacement)
+}
+
+/// Expose the parameter and strict-existence margins already calculated by
+/// the ray/edge displacement proof. This is the certificate consumed by the
+/// visibility-event inventory for ray-through-feature cuts.
+#[allow(dead_code)]
+pub(crate) fn ray_edge_intersection_motion_certificate(
+    source: BoundaryKernelVector,
+    critical_point: BoundaryKernelVector,
+    edge_start: BoundaryKernelVector,
+    edge_end: BoundaryKernelVector,
+    motion: RayEdgeIntersectionMotion,
+) -> Option<RayEdgeIntersectionMotionCertificate> {
     let points = [source, critical_point, edge_start, edge_end];
     if points
         .iter()
@@ -2205,8 +2238,43 @@ pub(crate) fn ray_edge_intersection_displacement_bound(
     let point_change =
         motion.edge_start_displacement + t.abs() * delta_e + e_norm * t_change + delta_e * t_change;
     let roundoff_guard = 64.0 * f64::EPSILON * (point_change + q_norm + r_norm + e_norm + 1.0);
-    let result = point_change + roundoff_guard;
-    result.is_finite().then_some(result)
+    let point_displacement = point_change + roundoff_guard;
+
+    let determinant_scale = e_norm * r_norm;
+    let minimum_determinant_scale = (e_norm + delta_e) * (r_norm + delta_r);
+    if !determinant_scale.is_finite()
+        || determinant_scale <= f64::EPSILON
+        || !minimum_determinant_scale.is_finite()
+        || minimum_determinant_scale <= f64::EPSILON
+    {
+        return None;
+    }
+    let determinant_margin = denominator.abs() / determinant_scale;
+    let minimum_determinant_margin = denominator_min / minimum_determinant_scale;
+    let determinant_margin_change =
+        (determinant_margin - minimum_determinant_margin).max(0.0);
+    let existence_margin = t.min(1.0 - t).min(u - 1.0).min(determinant_margin);
+    let existence_margin_change_bound = t_change
+        .max(u_change)
+        .max(determinant_margin_change)
+        + 128.0 * f64::EPSILON * (determinant_margin + 1.0);
+
+    [
+        point_displacement,
+        determinant_margin,
+        minimum_determinant_margin,
+        existence_margin,
+        existence_margin_change_bound,
+    ]
+    .iter()
+    .all(|value| value.is_finite() && *value >= 0.0)
+    .then_some(RayEdgeIntersectionMotionCertificate {
+        target_parameter_change: t_change,
+        ray_parameter_change: u_change,
+        point_displacement,
+        existence_margin,
+        existence_margin_change_bound,
+    })
 }
 
 /// Certify that a supplied ordered list of visibility-cut parameters cannot
