@@ -398,6 +398,7 @@ mod tests {
                 .is_none()
         );
     }
+
     #[test]
     fn coincident_visibility_cuts_preserve_distinct_events_and_fail_closed() {
         let first = VisibilityCutRecord::new(
@@ -796,7 +797,8 @@ fn polygon_is_convex(vertices: &[(f64, f64)]) -> bool {
 /// fluid targets. Curved and line constituents remain in the occluder snapshot:
 /// tangencies, endpoints, and boundary intersections split straight targets
 /// before exact realized-geometry occlusion classifies each open interval.
-/// Curved receiver intervals are returned separately by the arc query.fn angle_interval_for_bounds(
+/// Curved receiver intervals are returned separately by the arc query.
+fn angle_interval_for_bounds(
     source: (f64, f64),
     bounds: (f64, f64, f64, f64),
     reference_angle: f64,
@@ -1196,7 +1198,8 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 }
                 Form::Line { length } => {
                     if !length.is_finite() || *length <= 0.0 {
-                        return None;                    }
+                        return None;
+                    }
                     None
                 }
                 _ => part.form.polygon_vertices(),
@@ -1595,7 +1598,8 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                                                 bodies, body_index, unit_index, b,
                                             )?,
                                             blocker_edge_start_local: localize_boundary_point(
-                                                bodies, block_body, block_unit, c,                                            )?,
+                                                bodies, block_body, block_unit, c,
+                                            )?,
                                             blocker_edge_end_local: localize_boundary_point(
                                                 bodies, block_body, block_unit, d,
                                             )?,
@@ -1994,7 +1998,8 @@ mod visibility_tests {
                     BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
                 )
             }),
-            "coincident cuts from distinct blockers must not be assigned a unique derivative"        );
+            "coincident cuts from distinct blockers must not be assigned a unique derivative"
+        );
     }
 
     #[test]
@@ -2393,6 +2398,7 @@ fn push_world_circle_arc(
     });
     Some(())
 }
+
 fn realized_circle_arcs(
     body_index: usize,
     part: &crate::organism_geometry::PlacedForm,
@@ -2792,7 +2798,8 @@ pub(crate) fn visible_circular_arc_intervals_for_targets(
                                 start_y,
                                 end_x,
                                 end_y,
-                                ..                            } = piece
+                                ..
+                            } = piece
                             {
                                 local_edges.push(((*start_x, *start_y), (*end_x, *end_y)));
                             }
@@ -3191,7 +3198,8 @@ pub(crate) fn point_source_projected_arc_extent(
     (extent.is_finite() && extent >= -1e-10).then_some(extent.max(0.0))
 }
 
-#[cfg(test)]mod point_source_curve_visibility_tests {
+#[cfg(test)]
+mod point_source_curve_visibility_tests {
     use super::{point_source_projected_arc_extent, visible_circular_arc_intervals};
     use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
     use crate::resources::Form;
@@ -3590,7 +3598,8 @@ mod exact_arc_projection_tests {
         let quarter = CircularArcBoundary {
             start_angle_radians: 0.0,
             sweep_radians: std::f64::consts::FRAC_PI_2,
-            ..semicircle        };
+            ..semicircle
+        };
         // Integral of cos(theta) from 0 to pi/2 is 1.
         assert!((projected_arc_extent(quarter, (1.0, 0.0)).unwrap() - 2.0).abs() < 1e-12);
     }
@@ -3989,7 +3998,8 @@ mod parallel_ray_frame_tests {
         assert_eq!(
             frame.segment_intersection_lane((0.0, 0.0), (1.0, 0.0), (0.0, 2.0), (1.0, 2.0)),
             Some(None)
-        );    }
+        );
+    }
 
     #[test]
     fn collinear_overlap_fails_closed() {
@@ -4388,7 +4398,8 @@ pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
         if t0 < -1e-9 || t0 > 1.0 + 1e-9 || t1 < -1e-9 || t1 > 1.0 + 1e-9 {
             return None;
         }
-        let point_at = |t: f64| {            (
+        let point_at = |t: f64| {
+            (
                 edge.start.0 + (edge.end.0 - edge.start.0) * t,
                 edge.start.1 + (edge.end.1 - edge.start.1) * t,
             )
@@ -4787,7 +4798,8 @@ fn parallel_exposure_with_exact_intersections(
                 add_circle_circle_intersections(
                     first.center,
                     first.radius,
-                    second.center,                    second.radius,
+                    second.center,
+                    second.radius,
                     &mut intersections,
                 )?;
                 for point in intersections {
@@ -5186,7 +5198,8 @@ mod parallel_mixed_boundary_visibility_tests {
             })
             .collect();
         let targets: Vec<_> = (0..bodies.len()).collect();
-        let (widths, paths) =            parallel_exposure_with_paths_for_targets((1.0, 0.0), &bodies, &targets)
+        let (widths, paths) =
+            parallel_exposure_with_paths_for_targets((1.0, 0.0), &bodies, &targets)
                 .expect("dense-world approximation should retain a valid path");
         assert!(
             paths.iter().any(|path| path.hits.len() == bodies.len()),
