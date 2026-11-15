@@ -1505,8 +1505,7 @@ pub(crate) fn candidate_body_indices_for_pose_cell(
     {
         return None;
     }
-    let target_expansion =
-        source_translation_bound + target_motion.maximum_point_displacement()?;
+    let target_expansion = source_translation_bound + target_motion.maximum_point_displacement()?;
     let swept_target_bounds = expand_visibility_bounds(target_bounds, target_expansion)?;
     let mut swept_body_intervals = Vec::with_capacity(body_bounds.len());
     let mut swept_body_distances = Vec::with_capacity(body_bounds.len());
