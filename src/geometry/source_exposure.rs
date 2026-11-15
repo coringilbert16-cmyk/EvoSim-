@@ -242,7 +242,7 @@ impl VisibilityCutEvent {
 /// one supported, uniquely identified event and the event order is strict.
 /// Coincident, unresolved, or reordered events require exact visibility or
 /// subdivision rather than a pose derivative.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VisibilityCutSignature {
     candidate_bodies: Vec<usize>,
     interval_visibility: Vec<bool>,
