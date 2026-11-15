@@ -1346,3 +1346,30 @@ their own derivative rules or exact/subdivision fallback. The next step is to
 compose the event's retained target/blocker edge identities and local
 parameters with rigid endpoint Jacobians, then validate the composed endpoint
 derivative against the exact visibility output.
+
+
+## 30. Rigid-body composition for straight-boundary intersections — 2026-11-14
+
+The straight/straight intersection Jacobian now has a rigid-pose composition
+helper. Given the world-space endpoints belonging to the target and blocker
+edge identities retained by a `StraightBoundaryIntersection` event, plus each
+body's pivot, translation rate, and angular rate, it derives all four endpoint
+rates with the existing rigid-point Jacobian and feeds them into the
+intersection derivative. Target and blocker may be different bodies and may
+have independent rigid motions.
+
+A finite-difference regression applies simultaneous translation and rotation
+to both bodies and checks both segment-parameter derivatives and the world
+intersection-point derivative. This validates the local chain-rule composition
+for the supplied edge endpoints.
+
+The helper deliberately does not look up geometry by body/unit/edge identity:
+the visibility construction currently stores the edge indices and parameters,
+but the exact realized world endpoints and their owning-body pivots must be
+provided by the caller. It also does not certify that the same intersection
+remains strict-interior or that event ordering is unchanged throughout a pose
+cell. Those remain explicit caller obligations; near-parallel, endpoint,
+coincident, or topology-changing events continue to require exact evaluation
+or subdivision. The next milestone is a provenance-driven resolver that maps
+the retained body/unit/edge identities to exact realized endpoints and composes
+their body-pose Jacobians without coordinate-nearest matching.
