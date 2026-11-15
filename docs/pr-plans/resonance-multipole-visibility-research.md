@@ -1466,3 +1466,12 @@ The ordered-pair boundary certificate now has a generalized-coordinate compositi
 The API rejects an empty coordinate set and any coordinate whose sample correspondence or derivative envelope is incomplete. The caller must enumerate x, y, and angular coordinates for every source, receiver, and occluding body. This is deliberately an explicit caller obligation: the local kernel cannot infer which bodies or degrees of freedom belong to the complete world.
 
 A regression checks multi-coordinate composition, per-coordinate finite bounds, and rejection of an empty set. This closes the local scalar-to-generalized-coordinate composition gap, but it does not yet prove complete visibility event enumeration, construct the world DOF inventory, or certify a mutual multi-body evaluator. Exact visibility/subdivision remains authoritative until those world-level proofs are connected.
+
+
+## 40. Stable blocker-feature identity for visibility cuts
+
+Ray-through-feature visibility cuts now retain a deterministic feature ordinal in addition to blocker body and constituent identity. The ordinal is assigned within each realized constituent from the ordered geometric feature inventory, so distinct vertices/endpoints/tangent features on one constituent cannot collapse to the same blocker identity. Circle tangencies retain their signed tangent-side identity; straight/straight and circle/straight crossings retain their existing edge/arc indices.
+
+The ordinal is stable for a fixed body/unit topology and feature enumeration order, which is the identity contract needed when comparing neighboring pose cells. Invalid body references fail closed during inventory construction. A regression verifies repeatability, per-constituent uniqueness, body separation, and rejection of out-of-range body identities; the near-silhouette regression now also requires the blocker feature identity to survive into the unresolved cut.
+
+This closes the missing feature-level identity in the ray-through-vertex path. It does not yet prove that the candidate-body broad phase is complete, that every feature capable of entering the target edge's visibility arrangement has been enumerated, or that the event set remains complete over a pose cell. The next certificate must retain the complete blocker/feature inventory for each target edge and prove candidate-set completeness and event ordering over the cell. Until then, these events remain reference-pose provenance only and approximation must fail closed to exact evaluation/subdivision.
