@@ -3240,6 +3240,8 @@ mod tests {
                 expected
             );
         }
+    }
+
     #[test]
     fn complete_environmental_pair_accumulation_matches_shared_potential_gradient() {
         let mut simulation = Simulation::new(307, 1.0);
@@ -3321,7 +3323,5 @@ mod tests {
             total_angular_momentum_rate.abs() < 1.0e-4,
             "shared-potential forces and torques must conserve total angular momentum"
         );
-    }
-
     }
 }
