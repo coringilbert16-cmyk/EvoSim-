@@ -58,6 +58,7 @@ pub(crate) enum VisibilityCutEvent {
     RayThroughRigidFeature {
         blocker_body_index: usize,
         blocker_unit_index: usize,
+        blocker_feature_index: usize,
         target_body_index: usize,
         target_unit_index: usize,
         target_edge_index: usize,
@@ -303,12 +304,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn blocker_feature_ordinals_are_distinct_and_repeatable_per_constituent() {
+        let points = vec![
+            (1, 7, 0.0, 0.0),
+            (1, 7, 1.0, 0.0),
+            (0, 3, 2.0, 0.0),
+            (1, 9, 3.0, 0.0),
+            (1, 7, 4.0, 0.0),
+        ];
+        let first = index_critical_points_by_body(2, points.clone()).unwrap();
+        let second = index_critical_points_by_body(2, points).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(
+            first[1]
+                .iter()
+                .filter(|(unit, _, _, _)| *unit == 7)
+                .map(|(_, feature, _, _)| *feature)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+        assert_eq!(first[1][2].0, 9);
+        assert_eq!(first[0][0].1, 0);
+        assert!(index_critical_points_by_body(1, vec![(1, 0, 0.0, 0.0)]).is_none());
+    }
+
+    #[test]
     fn coincident_visibility_cuts_preserve_distinct_events_and_fail_closed() {
         let first = VisibilityCutRecord::new(
             0.25,
             VisibilityCutEvent::RayThroughRigidFeature {
                 blocker_body_index: 2,
                 blocker_unit_index: 7,
+                blocker_feature_index: 2,
                 target_body_index: 0,
                 target_unit_index: 3,
                 target_edge_index: 1,
@@ -880,6 +907,32 @@ fn add_circle_tangent_points_tagged(
     );
 }
 
+fn index_critical_points_by_body(
+    body_count: usize,
+    critical_points: Vec<(usize, usize, f64, f64)>,
+) -> Option<Vec<Vec<(usize, usize, f64, f64)>>> {
+    let mut feature_counts: Vec<Vec<(usize, usize)>> =
+        (0..body_count).map(|_| Vec::new()).collect();
+    let mut indexed: Vec<Vec<(usize, usize, f64, f64)>> =
+        (0..body_count).map(|_| Vec::new()).collect();
+    for (body_index, unit_index, x, y) in critical_points {
+        let unit_counts = feature_counts.get_mut(body_index)?;
+        let feature_count = if let Some((_, count)) = unit_counts
+            .iter_mut()
+            .find(|(existing_unit, _)| *existing_unit == unit_index)
+        {
+            count
+        } else {
+            unit_counts.push((unit_index, 0));
+            &mut unit_counts.last_mut()?.1
+        };
+        let feature_index = *feature_count;
+        *feature_count = feature_count.checked_add(1)?;
+        indexed[body_index].push((unit_index, feature_index, x, y));
+    }
+    Some(indexed)
+}
+
 pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
@@ -1192,11 +1245,8 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
         return None;
     }
 
-    let mut critical_points_by_body: Vec<Vec<(usize, f64, f64)>> =
-        (0..bodies.len()).map(|_| Vec::new()).collect();
-    for (body_index, unit_index, x, y) in critical_points {
-        critical_points_by_body[body_index].push((unit_index, x, y));
-    }
+    let critical_points_by_body =
+        index_critical_points_by_body(bodies.len(), critical_points)?;
     type StraightEdge = (usize, usize, (f64, f64), (f64, f64));
     let mut straight_edges_by_body: Vec<Vec<StraightEdge>> =
         (0..bodies.len()).map(|_| Vec::new()).collect();
@@ -1278,7 +1328,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 ),
             ];
             for &candidate_body in &candidate_body_indices {
-                for &(blocker_unit_index, vx, vy) in &critical_points_by_body[candidate_body] {
+                for &(blocker_unit_index, blocker_feature_index, vx, vy) in
+                    &critical_points_by_body[candidate_body]
+                {
                     let dx = vx - source.0;
                     let dy = vy - source.1;
                     let denominator = ex * dy - ey * dx;
@@ -1324,6 +1376,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                             _ => VisibilityCutEvent::RayThroughRigidFeature {
                                 blocker_body_index: candidate_body,
                                 blocker_unit_index,
+                                blocker_feature_index,
                                 target_body_index: body_index,
                                 target_unit_index: unit_index,
                                 target_edge_index: edge_index,
