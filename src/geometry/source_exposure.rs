@@ -236,10 +236,12 @@ impl VisibilityCutEvent {
     }
 }
 
-/// Discrete visibility topology for one target edge. It is valid only when
-/// every cut has one supported, uniquely identified event and the event order
-/// is strict. Coincident, unresolved, or reordered events require exact
-/// visibility/subdivision rather than a pose derivative.
+/// Discrete visibility topology for one target edge. It records the ordered
+/// stable event identities, conservative candidate-body set, and each open
+/// interval's occlusion classification. It is valid only when every cut has
+/// one supported, uniquely identified event and the event order is strict.
+/// Coincident, unresolved, or reordered events require exact visibility or
+/// subdivision rather than a pose derivative.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct VisibilityCutSignature {
     candidate_bodies: Vec<usize>,
