@@ -1407,3 +1407,11 @@ The resolver validates the event's target and blocker body/unit identities again
 A finite-difference regression exercises simultaneous translation and rotation of both rigid bodies and checks the resulting world intersection derivative. This closes the local-endpoint-to-world-pose composition gap for straight/straight cuts only.
 
 This is **not yet a pose-cell certificate**. The resolver evaluates one reference pose and one generalized-coordinate derivative. A scalable caller must still bound target/blocker parameter movement and prove that the intersection remains strict-interior and that all visibility event ordering remains unchanged throughout the proposed pose cell. Coincident cuts, event-order swaps, tangencies, and unsupported intersection classes continue to require exact/subdivision fallback.
+
+## 33. Strict-interior intersection-parameter motion bounds
+
+A straight/straight cut now has a conservative reference-pose envelope for both edge parameters. The bound propagates independent endpoint displacement disks through the two edge vectors, the offset vector, the cross-product denominator, and both parameter numerators. It first proves a positive lower bound on the absolute denominator; it then bounds each quotient change using that denominator floor and rejects any envelope that can reach an edge endpoint.
+
+The target-edge parameter envelope can be passed to the existing ordered-cut certificate alongside the other cuts on that same target edge. The blocker-edge parameter is independently bounded and must be grouped with cuts on its owning blocker edge when certifying that edge's partition. The certificate remains conditional on complete event enumeration and stable blocker identity; these scalar envelopes do not prove that an unseen event cannot enter the pose cell.
+
+Tests exercise bounded endpoint perturbations and fail-closed behavior for parallel, endpoint, and oversized-motion cases. This establishes the local parameter-motion bound needed for a later whole-pose-cell visibility certificate, but does not yet certify the complete event set or interval classification.
