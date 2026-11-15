@@ -2004,40 +2004,6 @@ pub(crate) fn certify_boundary_pose_cell_with_visibility_signature(
     certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
 }
 
-/// Certify a boundary-pose expansion against the same swept blocker inventory
-/// used to produce its exact visibility signatures. This joins three separate
-/// obligations: the inventory must still cover the requested target pose, the
-/// signature must use that inventory's exact candidate set, and every cut must
-/// have an independently derived whole-cell event bound. The candidate
-/// inventory alone does not prove that all event classes were enumerated or
-/// exclude unobserved event births/deaths; callers must establish that separately.
-/// Unsupported or incomplete topology/event proofs fail closed to exact visibility/subdivision.
-#[allow(dead_code)]
-pub(crate) fn certify_boundary_pose_cell_with_blocker_inventory(
-    expansion: &BoundaryKernelExpansion,
-    baseline_signature: &crate::source_exposure::VisibilityCutSignature,
-    sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
-    ordered_visibility_cuts: &[(f64, f64)],
-    sample_motion: &[BoundarySampleMotionBound],
-    event_bounds: &[crate::source_exposure::VisibilityEventPoseCellBound],
-    inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
-    source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
-    target_body_indices: &[usize],
-    target_body_index: usize,
-) -> Option<BoundaryPoseCellEvaluation> {
-    inventory.certifies_target_signature(
-        source,
-        bodies,
-        target_body_indices,
-        target_body_index,
-        baseline_signature,
-    )?;
-    baseline_signature.certify_pose_cell(event_bounds)?;
-    baseline_signature.certify_unchanged_across(sampled_signatures)?;
-    certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
-}
-
 /// Join the swept blocker inventory and continuous visibility-event proof
 /// directly to the generalized force/torque evaluator. No pose derivative is
 /// returned unless the same inventory validates the target, the baseline
