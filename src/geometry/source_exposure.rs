@@ -1527,7 +1527,7 @@ mod visibility_tests {
     fn near_silhouette_ray_cut_stays_unresolved_beside_target_vertex() {
         let source = (-5.0, 0.0);
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let blocker = rectangle_body(1, 2.0, 0.5277776, 1.0, 0.5);
+        let blocker = rectangle_body(1, 2.0, 0.5833332, 1.0, 0.5);
         let intervals = visible_polygonal_intervals_for_targets_with_provenance(
             source,
             &[target, blocker],
@@ -1568,7 +1568,7 @@ mod visibility_tests {
     fn straight_intersection_provenance_retains_both_edge_identities() {
         let source = (-5.0, 0.0);
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let touching_blocker = rectangle_body(1, 4.0, 0.0, 1.0, 0.5);
+        let touching_blocker = rectangle_body(1, 4.5, 0.0, 1.0, 0.5);
         let intervals = visible_polygonal_intervals_for_targets_with_provenance(
             source,
             &[target, touching_blocker],
