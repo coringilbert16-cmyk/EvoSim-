@@ -2004,6 +2004,38 @@ pub(crate) fn certify_boundary_pose_cell_with_visibility_signature(
     certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
 }
 
+/// Certify a boundary-pose expansion against the same swept blocker inventory
+/// used to produce its exact visibility signatures. This joins three separate
+/// obligations: the inventory must still cover the requested target pose, the
+/// signature must use that inventory's exact candidate set, and every cut must
+/// have an independently derived whole-cell event bound. Unsupported or
+/// incomplete event bounds fail closed to exact visibility/subdivision.
+#[allow(dead_code)]
+pub(crate) fn certify_boundary_pose_cell_with_blocker_inventory(
+    expansion: &BoundaryKernelExpansion,
+    baseline_signature: &crate::source_exposure::VisibilityCutSignature,
+    sampled_signatures: &[crate::source_exposure::VisibilityCutSignature],
+    ordered_visibility_cuts: &[(f64, f64)],
+    sample_motion: &[BoundarySampleMotionBound],
+    event_bounds: &[crate::source_exposure::VisibilityEventPoseCellBound],
+    inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
+    source: (f64, f64),
+    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    target_body_indices: &[usize],
+    target_body_index: usize,
+) -> Option<BoundaryPoseCellEvaluation> {
+    inventory.certifies_target_signature(
+        source,
+        bodies,
+        target_body_indices,
+        target_body_index,
+        baseline_signature,
+    )?;
+    baseline_signature.certify_pose_cell(event_bounds)?;
+    baseline_signature.certify_unchanged_across(sampled_signatures)?;
+    certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)
+}
+
 /// Certify the exact discrete ordered-pair derivative for every supplied
 /// generalized body coordinate. This composes sample-position and signed-weight
 /// chain rules with source/receiver center motion, and returns an independent
