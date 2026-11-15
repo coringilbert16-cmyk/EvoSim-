@@ -3235,7 +3235,6 @@ mod provenance_resolver_tests {
     }
 }
 
-
 #[cfg(test)]
 mod intersection_parameter_bound_tests {
     use super::*;
@@ -3263,7 +3262,10 @@ mod intersection_parameter_bound_tests {
             y: c.y - a.y,
         };
         let denominator = cross(edge, blocker);
-        (cross(offset, blocker) / denominator, cross(offset, edge) / denominator)
+        (
+            cross(offset, blocker) / denominator,
+            cross(offset, edge) / denominator,
+        )
     }
 
     #[test]
@@ -3297,12 +3299,8 @@ mod intersection_parameter_bound_tests {
                             y: point.y + radius * direction.1,
                         }
                     };
-                    let (target, blocker) = parameters(
-                        moved(a, da),
-                        moved(b, db),
-                        moved(c, dc),
-                        moved(d, &dd),
-                    );
+                    let (target, blocker) =
+                        parameters(moved(a, da), moved(b, db), moved(c, dc), moved(d, &dd));
                     assert!((target - 0.5).abs() <= bound.target_parameter_change);
                     assert!((blocker - 0.5).abs() <= bound.blocker_parameter_change);
                 }
