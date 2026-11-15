@@ -771,7 +771,9 @@ pub(crate) fn straight_intersection_parameter_motion_bound(
         blocker_start_displacement,
         blocker_end_displacement,
     ];
-    if motions.iter().any(|value| !value.is_finite() || *value < 0.0)
+    if motions
+        .iter()
+        .any(|value| !value.is_finite() || *value < 0.0)
         || [
             target_start.x,
             target_start.y,
@@ -855,12 +857,10 @@ pub(crate) fn straight_intersection_parameter_motion_bound(
     let blocker_parameter_change = (blocker_numerator_change
         + blocker_parameter.abs() * denominator_change)
         / denominator_minimum;
-    let target_guard = 128.0
-        * f64::EPSILON
-        * (target_parameter_change + target_parameter.abs() + 1.0);
-    let blocker_guard = 128.0
-        * f64::EPSILON
-        * (blocker_parameter_change + blocker_parameter.abs() + 1.0);
+    let target_guard =
+        128.0 * f64::EPSILON * (target_parameter_change + target_parameter.abs() + 1.0);
+    let blocker_guard =
+        128.0 * f64::EPSILON * (blocker_parameter_change + blocker_parameter.abs() + 1.0);
     let target_parameter_change = target_parameter_change + target_guard;
     let blocker_parameter_change = blocker_parameter_change + blocker_guard;
     if !target_parameter_change.is_finite()
