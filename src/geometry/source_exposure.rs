@@ -916,8 +916,12 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                         if world.iter().any(|(x, y)| !x.is_finite() || !y.is_finite()) {
                             return None;
                         }
-                        critical_points
-                            .extend(world.iter().copied().map(|(x, y)| (body_index, part.unit_index, x, y)));
+                        critical_points.extend(
+                            world
+                                .iter()
+                                .copied()
+                                .map(|(x, y)| (body_index, part.unit_index, x, y)),
+                        );
                         for index in 0..world.len() {
                             straight_edges.push((
                                 body_index,
@@ -982,7 +986,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                                         world.radius,
                                         source,
                                         body_index,
-                                            part.unit_index,
+                                        part.unit_index,
                                         &mut critical_points,
                                     );
                                 }
@@ -999,7 +1003,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
                             radius,
                             source,
                             body_index,
-                                            part.unit_index,
+                            part.unit_index,
                             &mut critical_points,
                         );
                     }
