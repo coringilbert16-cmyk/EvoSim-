@@ -1217,6 +1217,132 @@ mod tests {
     }
 
     #[test]
+    fn straight_intersection_event_derives_conservative_pose_cell_bounds() {
+        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
+        let target_vertices = Form::Rectangle {
+            width: 2.0,
+            height: 2.0,
+        }
+        .polygon_vertices()
+        .unwrap();
+        let target_edge_index = (0..target_vertices.len())
+            .find(|&index| {
+                let start = target_vertices[index];
+                let end = target_vertices[(index + 1) % target_vertices.len()];
+                (start.0 + 1.0).abs() < 1.0e-12
+                    && (end.0 + 1.0).abs() < 1.0e-12
+                    && (start.1 - end.1).abs() > 1.0e-12
+            })
+            .expect("rectangle has a left edge");
+        let target_start_local = target_vertices[target_edge_index];
+        let target_end_local = target_vertices[(target_edge_index + 1) % target_vertices.len()];
+        let blocker = OrganismBodyGeometry {
+            parts: vec![PlacedForm {
+                unit_index: 7,
+                form: Form::Line { length: 2.0 },
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 3.0,
+            max_x: 5.0,
+            min_y: 0.0,
+            max_y: 0.0,
+        };
+        let bodies = [target, blocker];
+        let event = VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 1,
+            blocker_unit_index: 7,
+            target_body_index: 0,
+            target_unit_index: 0,
+            target_edge_index,
+            blocker_edge_index: 0,
+            target_edge_start_local: target_start_local,
+            target_edge_end_local: target_end_local,
+            blocker_edge_start_local: (-1.0, 0.0),
+            blocker_edge_end_local: (1.0, 0.0),
+            target_parameter: 0.5,
+            blocker_parameter: 0.5,
+        };
+        let cuts = vec![
+            VisibilityCutRecord::new(
+                0.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 0,
+                    vertex_index: target_edge_index,
+                    local_point: target_start_local,
+                },
+            ),
+            VisibilityCutRecord::new(0.5, event.clone()),
+            VisibilityCutRecord::new(
+                1.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 0,
+                    vertex_index: (target_edge_index + 1) % target_vertices.len(),
+                    local_point: target_end_local,
+                },
+            ),
+        ];
+        let signature =
+            VisibilityCutSignature::from_partition(&cuts, &[0, 1], &[vec![], vec![]]).unwrap();
+        let motion = [
+            VisibilityBodyMotionBound {
+                translation_bound: 0.01,
+                angular_bound_radians: 0.01,
+                rotation_pivot: (5.0, 0.0),
+                radius_bound: 2.0,
+            },
+            VisibilityBodyMotionBound {
+                translation_bound: 0.01,
+                angular_bound_radians: 0.01,
+                rotation_pivot: (4.0, 0.0),
+                radius_bound: 2.0,
+            },
+        ];
+        let event_bound =
+            bound_straight_boundary_intersection_event_over_pose_cell(&event, &bodies, &motion)
+                .expect("small rigid-pose cell preserves the straight intersection");
+        let bounds = signature
+            .ordered_events
+            .iter()
+            .map(|identity| {
+                if *identity == event_bound.identity {
+                    event_bound
+                } else {
+                    VisibilityEventPoseCellBound {
+                        identity: *identity,
+                        parameter_change_bound: 0.0,
+                        existence_margin: 1.0,
+                        existence_margin_change_bound: 0.0,
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        assert!(signature.certify_pose_cell(&bounds).is_some());
+
+        let large_motion = [
+            VisibilityBodyMotionBound {
+                translation_bound: 1.0,
+                ..motion[0]
+            },
+            VisibilityBodyMotionBound {
+                translation_bound: 1.0,
+                ..motion[1]
+            },
+        ];
+        assert!(
+            bound_straight_boundary_intersection_event_over_pose_cell(
+                &event,
+                &bodies,
+                &large_motion,
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
     fn visibility_cut_signature_rejects_unresolved_and_duplicate_feature_events() {
         let unresolved = vec![
             VisibilityCutRecord::new(
