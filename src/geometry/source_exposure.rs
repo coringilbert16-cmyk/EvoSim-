@@ -1303,15 +1303,9 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                 result.push(ExposedBoundaryIntervalWithProvenance {
                     interval,
                     start_provenance: endpoint_provenance_from_cut(
-                        &pair[0],
-                        body_index,
-                        unit_index,
+                        &pair[0], body_index, unit_index,
                     ),
-                    end_provenance: endpoint_provenance_from_cut(
-                        &pair[1],
-                        body_index,
-                        unit_index,
-                    ),
+                    end_provenance: endpoint_provenance_from_cut(&pair[1], body_index, unit_index),
                 });
             }
         }
@@ -1346,11 +1340,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
-    visible_polygonal_intervals_for_targets_with_cut_provenance(
-        source,
-        bodies,
-        target_body_indices,
-    )
+    visible_polygonal_intervals_for_targets_with_cut_provenance(source, bodies, target_body_indices)
 }
 
 #[cfg(test)]
