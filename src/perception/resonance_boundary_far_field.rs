@@ -3452,8 +3452,10 @@ mod tests {
             edge_start_displacement: 0.005,
             edge_end_displacement: 0.005,
         };
-        let bound = ray_edge_intersection_displacement_bound(source, critical, start, end, motion)
-            .expect("strict ray-edge intersection should have a finite motion bound");
+        let certificate =
+            ray_edge_intersection_motion_certificate(source, critical, start, end, motion)
+                .expect("strict ray-edge intersection should have a finite motion certificate");
+        let bound = certificate.point_displacement;
 
         let intersection = |s: BoundaryKernelVector,
                             v: BoundaryKernelVector,
@@ -3478,12 +3480,15 @@ mod tests {
             let t = -cross(q, r) / denominator;
             let u = -cross(q, e) / denominator;
             assert!(t > 0.0 && t < 1.0 && u > 1.0);
-            BoundaryKernelVector {
-                x: a.x + t * e.x,
-                y: a.y + t * e.y,
-            }
+            (
+                BoundaryKernelVector {
+                    x: a.x + t * e.x,
+                    y: a.y + t * e.y,
+                },
+                t,
+            )
         };
-        let original = intersection(source, critical, start, end);
+        let (original, original_parameter) = intersection(source, critical, start, end);
         let mut state = 0x4d59_5df4_d0f3_3173_u64;
         let mut next_direction = || {
             state = state.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -3512,10 +3517,16 @@ mod tests {
                 x: end.x + bx * motion.edge_end_displacement * 0.8,
                 y: end.y + by * motion.edge_end_displacement * 0.8,
             };
-            let moved = intersection(moved_source, moved_critical, moved_start, moved_end);
+            let (moved, moved_parameter) =
+                intersection(moved_source, moved_critical, moved_start, moved_end);
             assert!(
                 (moved.x - original.x).hypot(moved.y - original.y) <= bound,
                 "perturbed cut exceeded certified displacement"
+            );
+            assert!(
+                (moved_parameter - original_parameter).abs()
+                    <= certificate.target_parameter_change,
+                "perturbed edge parameter exceeded its certificate"
             );
         }
     }
