@@ -242,7 +242,7 @@ impl VisibilityCutEvent {
 /// one supported, uniquely identified event and the event order is strict.
 /// Coincident, unresolved, or reordered events require exact visibility or
 /// subdivision rather than a pose derivative.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub(crate) struct VisibilityCutSignature {
     candidate_bodies: Vec<usize>,
     interval_visibility: Vec<bool>,
@@ -510,6 +510,15 @@ pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
         existence_margin,
         existence_margin_change_bound: existence_change,
     })
+}
+
+impl PartialEq for VisibilityCutSignature {
+    fn eq(&self, other: &Self) -> bool {
+        self.candidate_bodies == other.candidate_bodies
+            && self.interval_visibility == other.interval_visibility
+            && self.interval_blocker_bodies == other.interval_blocker_bodies
+            && self.ordered_events == other.ordered_events
+    }
 }
 
 impl VisibilityCutSignature {
@@ -1178,7 +1187,7 @@ mod tests {
             .certify_unchanged_across(&[make_signature(4, &[0, 2], &[vec![], vec![(2, 7)]])])
             .is_none());
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(3, &[0, 3], &[vec![], vec![(2, 7)]])])
+            .certify_unchanged_across(&[make_signature(3, &[0, 2, 3], &[vec![], vec![(2, 7)]])])
             .is_none());
         assert!(baseline
             .certify_unchanged_across(&[make_signature(3, &[0, 2], &[vec![], vec![(0, 1)]])])
