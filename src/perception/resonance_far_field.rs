@@ -367,9 +367,14 @@ impl ResonanceFarFieldExpansion {
                     distance * source_error
                 })
                 .sum::<f64>();
+            let target_lever =
+                (target.x - root_center.x).hypot(target.y - root_center.y);
+            let angular_momentum_error =
+                cluster_torque_error + target_lever * evaluation.error.force;
             let budget_met = evaluation.error.potential <= potential_tolerance * share
                 && evaluation.error.force <= force_tolerance * share
-                && cluster_torque_error <= torque_tolerance * share;
+                && cluster_torque_error <= torque_tolerance * share
+                && angular_momentum_error <= torque_tolerance * share;
             if budget_met {
                 result.potential += evaluation.potential;
                 result.target_gradient.x += evaluation.target_gradient.x;
