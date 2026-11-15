@@ -264,7 +264,7 @@ pub(crate) struct VisibilityEventPoseCellBound {
     pub(crate) existence_margin_change_bound: f64,
 }
 
-fn visibility_part(
+pub(crate) fn visibility_part(
     bodies: &[crate::organism_geometry::OrganismBodyGeometry],
     body_index: usize,
     unit_index: usize,
@@ -278,7 +278,7 @@ fn visibility_part(
     parts.next().is_none().then_some(part)
 }
 
-fn local_straight_feature_endpoints(
+pub(crate) fn local_straight_feature_endpoints(
     part: &crate::organism_geometry::PlacedForm,
     edge_index: usize,
 ) -> Option<((f64, f64), (f64, f64))> {
@@ -312,7 +312,7 @@ fn visibility_local_points_match(left: (f64, f64), right: (f64, f64)) -> bool {
     (left.0 - right.0).abs() <= 1.0e-10 * scale && (left.1 - right.1).abs() <= 1.0e-10 * scale
 }
 
-fn visibility_world_point(
+pub(crate) fn visibility_world_point(
     part: &crate::organism_geometry::PlacedForm,
     local: (f64, f64),
 ) -> Option<(f64, f64)> {
