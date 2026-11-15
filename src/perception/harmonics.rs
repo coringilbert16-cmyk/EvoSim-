@@ -2024,6 +2024,104 @@ fn resonance_boundary_sample_potential_components(
     Some(components)
 }
 
+/// Frequency-resolved expansion of the exact, visibility-classified boundary samples.
+///
+/// Each frequency is expanded independently so signed phase cancellation at one
+/// frequency cannot contaminate another frequency's error budget. The samples,
+/// visibility decisions, and projected extents are still produced by the exact
+/// reception path; this only compresses their smooth two-distance spatial kernel.
+/// Pose-chain derivatives and blocker reactions remain the responsibility of
+/// the generalized evaluator and its caller.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResonanceBoundaryFrequencyExpansion {
+    pub(crate) frequency_cycles_per_day: f64,
+    pub(crate) evaluation: super::resonance_boundary_far_field::BoundaryPotentialEvaluation,
+}
+
+pub(crate) fn expand_resonance_boundary_interaction_samples(
+    samples: &[ResonanceBoundaryInteractionSample],
+) -> Option<Vec<ResonanceBoundaryFrequencyExpansion>> {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelExpansion, BoundaryKernelVector, WeightedBoundaryKernelSample,
+    };
+
+    let first = samples.first()?;
+    let source_center = BoundaryKernelVector {
+        x: first.source_x,
+        y: first.source_y,
+    };
+    let receiver_center = BoundaryKernelVector {
+        x: first.receiver_center_x,
+        y: first.receiver_center_y,
+    };
+    let mut frequency_components = Vec::with_capacity(samples.len());
+    let mut frequencies = Vec::new();
+    let mut sample_center = BoundaryKernelVector::default();
+
+    for sample in samples {
+        if (sample.source_x - source_center.x).abs() > 1e-9
+            || (sample.source_y - source_center.y).abs() > 1e-9
+            || (sample.receiver_center_x - receiver_center.x).abs() > 1e-9
+            || (sample.receiver_center_y - receiver_center.y).abs() > 1e-9
+        {
+            return None;
+        }
+        sample_center.x += sample.receiver_x;
+        sample_center.y += sample.receiver_y;
+        let components = resonance_boundary_sample_potential_components(sample)?;
+        for component in &components {
+            if !frequencies.iter().any(|frequency: &f64| {
+                (*frequency - component.frequency_cycles_per_day).abs() <= 1e-9
+            }) {
+                frequencies.push(component.frequency_cycles_per_day);
+            }
+        }
+        frequency_components.push(components);
+    }
+    sample_center.x /= samples.len() as f64;
+    sample_center.y /= samples.len() as f64;
+    if !sample_center.x.is_finite() || !sample_center.y.is_finite() {
+        return None;
+    }
+    frequencies.sort_by(f64::total_cmp);
+
+    frequencies
+        .into_iter()
+        .map(|frequency| {
+            let weighted_samples = samples
+                .iter()
+                .zip(&frequency_components)
+                .map(|(sample, components)| {
+                    let weight = components
+                        .iter()
+                        .find(|component| {
+                            (component.frequency_cycles_per_day - frequency).abs() <= 1e-9
+                        })
+                        .map_or(0.0, |component| component.energy);
+                    WeightedBoundaryKernelSample {
+                        position: BoundaryKernelVector {
+                            x: sample.receiver_x,
+                            y: sample.receiver_y,
+                        },
+                        weight,
+                    }
+                })
+                .collect();
+            let expansion = BoundaryKernelExpansion::new(
+                source_center,
+                receiver_center,
+                sample_center,
+                weighted_samples,
+            )?;
+            let evaluation = expansion.evaluate()?;
+            Some(ResonanceBoundaryFrequencyExpansion {
+                frequency_cycles_per_day: frequency,
+                evaluation,
+            })
+        })
+        .collect()
+}
+
 /// Preserve the exact discrete boundary samples used by the mechanical pair
 /// potential. This is the shared input representation for the future mutual
 /// evaluator; it deliberately retains exact visibility classification and
