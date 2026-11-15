@@ -1076,14 +1076,9 @@ mod tests {
                 radius_bound: 0.75,
             },
         ];
-        let inventory = build_visibility_pose_cell_candidate_inventory(
-            source,
-            &reference,
-            &[1],
-            0.25,
-            &motion,
-        )
-        .expect("complete translation/rotation envelopes should build");
+        let inventory =
+            build_visibility_pose_cell_candidate_inventory(source, &reference, &[1], 0.25, &motion)
+                .expect("complete translation/rotation envelopes should build");
         assert!(
             inventory
                 .candidates_for_target(1)
@@ -1113,7 +1108,16 @@ mod tests {
                 (-5.2, -0.1),
             ),
         ];
-        for (blocker_x, blocker_y, blocker_rotation, target_x, target_y, target_rotation, pose_source) in poses {
+        for (
+            blocker_x,
+            blocker_y,
+            blocker_rotation,
+            target_x,
+            target_y,
+            target_rotation,
+            pose_source,
+        ) in poses
+        {
             let bodies = vec![
                 geometry(
                     Form::Rectangle {
@@ -2269,8 +2273,7 @@ impl VisibilityPoseCellCandidateInventory {
                 if !displacement.is_finite()
                     || displacement > motion.translation_bound + translation_tolerance
                     || !angular_displacement.is_finite()
-                    || angular_displacement.abs()
-                        > motion.angular_bound_radians + angular_tolerance
+                    || angular_displacement.abs() > motion.angular_bound_radians + angular_tolerance
                     || displacement > maximum_displacement + translation_tolerance
                 {
                     return None;
