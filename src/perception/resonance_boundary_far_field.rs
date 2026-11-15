@@ -3846,7 +3846,9 @@ mod circle_straight_provenance_tests {
     fn circle_straight_provenance_derivative_matches_two_body_finite_difference() {
         let radius = 1.0;
         let target_parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
-        let arc_angle_local = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        let arc_angle_local = (-0.5_f64)
+            .atan2(0.75_f64.sqrt())
+            .rem_euclid(std::f64::consts::TAU);
         let event = crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection {
             blocker_body_index: 8,
             blocker_unit_index: 4,
