@@ -2475,9 +2475,11 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_with_budget(
 /// from the visibility/pose machinery, in body-major x/y/angle order. This
 /// function does not derive a second force law: it carries those existing
 /// derivatives through the same adaptive subdivision used for potential and
-/// center-force evaluation. Every body in the supplied blocker inventory must
-/// have all three coordinates represented.
-#[allow(dead_code)]
+/// center-force evaluation. Samples must belong to one target-edge visibility
+/// signature; distinct target-edge signatures are certified in separate calls.
+/// Every body in the supplied blocker inventory must have all three coordinates
+/// represented.
+#[allow(dead_code, clippy::too_many_arguments)]
 pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker_inventory(
     source_center: super::resonance_boundary_far_field::BoundaryKernelVector,
     receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
