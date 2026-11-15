@@ -1021,6 +1021,167 @@ mod tests {
     }
 
     #[test]
+    fn moving_and_rotating_blockers_remain_in_inventory_across_pose_cell_extremes() {
+        use crate::organism_geometry::{OrganismBodyGeometry, PlacedForm};
+        use crate::resources::Form;
+
+        let geometry = |form: Form, x: f64, y: f64, rotation_radians: f64| {
+            let radius = form.bounding_radius();
+            OrganismBodyGeometry {
+                parts: vec![PlacedForm {
+                    unit_index: 0,
+                    form,
+                    x,
+                    y,
+                    rotation_radians,
+                }],
+                min_x: x - radius,
+                max_x: x + radius,
+                min_y: y - radius,
+                max_y: y + radius,
+            }
+        };
+        let source = (-5.0, 0.0);
+        let reference = vec![
+            geometry(
+                Form::Rectangle {
+                    width: 2.0,
+                    height: 0.2,
+                },
+                0.0,
+                1.0,
+                0.0,
+            ),
+            geometry(
+                Form::Rectangle {
+                    width: 1.0,
+                    height: 1.0,
+                },
+                5.0,
+                0.0,
+                0.0,
+            ),
+        ];
+        let motion = [
+            VisibilityBodyMotionBound {
+                translation_bound: 0.5,
+                angular_bound_radians: std::f64::consts::FRAC_PI_2,
+                rotation_pivot: (0.0, 1.0),
+                radius_bound: 1.1,
+            },
+            VisibilityBodyMotionBound {
+                translation_bound: 0.2,
+                angular_bound_radians: 0.2,
+                rotation_pivot: (5.0, 0.0),
+                radius_bound: 0.75,
+            },
+        ];
+        let inventory = build_visibility_pose_cell_candidate_inventory(
+            source,
+            &reference,
+            &[1],
+            0.25,
+            &motion,
+        )
+        .expect("complete translation/rotation envelopes should build");
+        assert!(
+            inventory
+                .candidates_for_target(1)
+                .expect("target inventory")
+                .contains(&0),
+            "the blocker must be retained because its swept rigid pose crosses the source-target corridor"
+        );
+
+        let poses = [
+            (0.0, 1.0, 0.0, 5.0, 0.0, 0.0, source),
+            (
+                0.35,
+                1.35,
+                std::f64::consts::FRAC_PI_2,
+                5.1,
+                0.1,
+                0.2,
+                (-4.8, 0.1),
+            ),
+            (
+                -0.35,
+                0.65,
+                -std::f64::consts::FRAC_PI_2,
+                4.9,
+                -0.1,
+                -0.2,
+                (-5.2, -0.1),
+            ),
+        ];
+        for (blocker_x, blocker_y, blocker_rotation, target_x, target_y, target_rotation, pose_source) in poses {
+            let bodies = vec![
+                geometry(
+                    Form::Rectangle {
+                        width: 2.0,
+                        height: 0.2,
+                    },
+                    blocker_x,
+                    blocker_y,
+                    blocker_rotation,
+                ),
+                geometry(
+                    Form::Rectangle {
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                    target_x,
+                    target_y,
+                    target_rotation,
+                ),
+            ];
+            let indexed = visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+                pose_source,
+                &bodies,
+                &[1],
+                0.25,
+                &motion,
+                &inventory,
+            )
+            .expect("pose inside the complete translation/rotation cell must use its inventory");
+            let exact = visible_polygonal_intervals_for_targets_with_cut_provenance(
+                pose_source,
+                &bodies,
+                &[1],
+            )
+            .expect("exact current-pose visibility must remain available");
+            assert_eq!(
+                indexed, exact,
+                "certified swept blockers must preserve exact visibility at every tested cell extreme"
+            );
+        }
+
+        let outside_translation = vec![
+            geometry(
+                Form::Rectangle {
+                    width: 2.0,
+                    height: 0.2,
+                },
+                0.51,
+                1.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            reference[1].clone(),
+        ];
+        assert!(
+            visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
+                source,
+                &outside_translation,
+                &[1],
+                0.25,
+                &motion,
+                &inventory,
+            )
+            .is_none(),
+            "rotation allowance must not mask translation beyond the declared pose cell"
+        );
+    }
+
+    #[test]
     fn pose_cell_visibility_broad_phase_rejects_incomplete_or_invalid_motion_inventory() {
         let bounds = [(5.0, 6.0, -0.5, 0.5)];
         let still = VisibilityBodyMotionBound::default();
@@ -2103,11 +2264,14 @@ impl VisibilityPoseCellCandidateInventory {
                     + std::f64::consts::PI)
                     .rem_euclid(std::f64::consts::TAU)
                     - std::f64::consts::PI;
-                let tolerance = 1.0e-10 * maximum_displacement.max(1.0);
+                let translation_tolerance = 1.0e-10 * motion.translation_bound.max(1.0);
+                let angular_tolerance = 1.0e-10 * motion.angular_bound_radians.max(1.0);
                 if !displacement.is_finite()
-                    || displacement > maximum_displacement + tolerance
+                    || displacement > motion.translation_bound + translation_tolerance
                     || !angular_displacement.is_finite()
-                    || angular_displacement.abs() > motion.angular_bound_radians + 1.0e-10
+                    || angular_displacement.abs()
+                        > motion.angular_bound_radians + angular_tolerance
+                    || displacement > maximum_displacement + translation_tolerance
                 {
                     return None;
                 }
@@ -2121,6 +2285,32 @@ impl VisibilityPoseCellCandidateInventory {
 
     fn candidates_for_target(&self, target_body_index: usize) -> Option<&[usize]> {
         self.target_candidates.get(target_body_index)?.as_deref()
+    }
+
+    /// Verify that a boundary signature was evaluated with this exact
+    /// conservative blocker superset and that every reported blocker belongs
+    /// to that inventory. The boundary evaluator still requires independent
+    /// whole-cell event bounds before accepting a smooth pose derivative.
+    pub(crate) fn certifies_target_signature(
+        &self,
+        source: (f64, f64),
+        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        target_body_indices: &[usize],
+        target_body_index: usize,
+        signature: &VisibilityCutSignature,
+    ) -> Option<()> {
+        self.validate_pose(source, bodies, target_body_indices)?;
+        let candidates = self.candidates_for_target(target_body_index)?;
+        if signature.candidate_bodies.as_slice() != candidates
+            || signature.interval_blocker_bodies.iter().any(|blockers| {
+                blockers
+                    .iter()
+                    .any(|(body_index, _)| candidates.binary_search(body_index).is_err())
+            })
+        {
+            return None;
+        }
+        Some(())
     }
 }
 
