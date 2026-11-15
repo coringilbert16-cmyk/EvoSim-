@@ -1621,11 +1621,14 @@ fn material_aura_receptions_with_geometry_prepared(
 
     for exposed in straight_intervals {
         let interval = exposed.interval;
-        let (projected_extent, projected_extent_source_gradient) =
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
+        let projected_extent_source_gradient =
             crate::source_exposure::point_source_projected_extent_with_gradient(
                 interval,
                 (source_x, source_y),
-            )?;
+            )
+            .map(|(_, gradient)| gradient);
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
         receive_at(
@@ -2310,6 +2313,7 @@ fn expand_resonance_boundary_interaction_samples(
                     receiver_force: tolerance,
                 },
             )?;
+            let mut extent_gradient_roundoff = 0.0;
             // Projected extent is source-position dependent. Its contribution
             // is differentiated against the exact discrete two-distance
             // kernel, while the adaptive expansion certifies the smooth
@@ -2329,9 +2333,14 @@ fn expand_resonance_boundary_interaction_samples(
                 let kernel = 1.0 / ((1.0 + source_distance) * (1.0 + receiver_distance));
                 let weight_derivative_scale = sample.weight / extent;
                 let factor = kernel * weight_derivative_scale;
-                evaluation.source_gradient.x += factor * extent_dx;
-                evaluation.source_gradient.y += factor * extent_dy;
+                let correction_x = factor * extent_dx;
+                let correction_y = factor * extent_dy;
+                evaluation.source_gradient.x += correction_x;
+                evaluation.source_gradient.y += correction_y;
+                extent_gradient_roundoff += correction_x.abs() + correction_y.abs();
             }
+            evaluation.error.source_force +=
+                128.0 * f64::EPSILON * (extent_gradient_roundoff + 1.0);
             Some(ResonanceBoundaryFrequencyExpansion {
                 frequency_cycles_per_day: frequency,
                 evaluation,
