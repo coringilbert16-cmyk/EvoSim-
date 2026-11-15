@@ -764,6 +764,8 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
         "complete-world pair gradients must balance angular momentum: net={net_angular_momentum}, scale={angular_scale}"
     );
 
+}
+
 #[test]
 fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() {
     let catalog = crate::resources::default_catalog();
@@ -811,5 +813,4 @@ fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() 
             expansion.evaluation.error.potential,
         );
     }
-}
 }
