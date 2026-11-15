@@ -572,8 +572,7 @@ mod tests {
             .sum::<f64>();
         let target_torque = target.cross(approximation.target_gradient);
         assert!(
-            (source_torque + target_torque).abs()
-                <= approximation.error.angular_momentum + 1e-12,
+            (source_torque + target_torque).abs() <= approximation.error.angular_momentum + 1e-12,
             "mutual angular-momentum residual must fit its independent error bound"
         );
     }
