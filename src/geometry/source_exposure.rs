@@ -389,8 +389,9 @@ mod tests {
             build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none()
         );
         let mismatched_arc = WorldCircleArc { body_index: 0, ..arc };
+        let mismatched_arcs = vec![vec![], vec![(7, 0, mismatched_arc)]];
         assert!(
-            build_target_edge_blocker_inventory(&[1], &critical, &edges, &vec![vec![], vec![(7, 0, mismatched_arc)]]).is_none()
+            build_target_edge_blocker_inventory(&[1], &critical, &edges, &mismatched_arcs).is_none()
         );
     }
 
