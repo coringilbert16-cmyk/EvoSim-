@@ -768,8 +768,8 @@ mod tests {
     }
 
     #[test]
-    fn visibility_signature_requires_stable_identity_across_every_pose_sample() {
-        let make_signature = |blocker_feature_index| {
+    fn visibility_signature_requires_stable_identity_and_partition_across_pose_samples() {
+        let make_signature = |blocker_feature_index, candidates: &[usize], visibility: &[bool]| {
             let cuts = vec![
                 VisibilityCutRecord::new(
                     0.0,
@@ -802,14 +802,23 @@ mod tests {
                     },
                 ),
             ];
-            VisibilityCutSignature::from_cuts(&cuts).unwrap()
+            VisibilityCutSignature::from_partition(&cuts, candidates, visibility).unwrap()
         };
-        let baseline = make_signature(3);
+        let baseline = make_signature(3, &[0, 2], &[false, true]);
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(3), make_signature(3)])
+            .certify_unchanged_across(&[
+                make_signature(3, &[0, 2], &[false, true]),
+                make_signature(3, &[0, 2], &[false, true]),
+            ])
             .is_some());
         assert!(baseline
-            .certify_unchanged_across(&[make_signature(3), make_signature(4)])
+            .certify_unchanged_across(&[make_signature(4, &[0, 2], &[false, true])])
+            .is_none());
+        assert!(baseline
+            .certify_unchanged_across(&[make_signature(3, &[0, 3], &[false, true])])
+            .is_none());
+        assert!(baseline
+            .certify_unchanged_across(&[make_signature(3, &[0, 2], &[true, true])])
             .is_none());
         assert!(baseline.certify_unchanged_across(&[]).is_none());
     }
