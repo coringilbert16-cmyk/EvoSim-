@@ -1503,24 +1503,67 @@ impl VisibilityBodyMotionBound {
 /// Build once at the reference pose, then reuse for all pose samples in that cell.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct VisibilityPoseCellCandidateInventory {
-    body_count: usize,
-    body_units: Vec<Vec<usize>>,
+    source_reference: (f64, f64),
+    source_translation_bound: f64,
+    body_motion: Vec<VisibilityBodyMotionBound>,
+    reference_part_poses: Vec<Vec<(usize, f64, f64, f64)>>,
     target_candidates: Vec<Option<Vec<usize>>>,
 }
 
 impl VisibilityPoseCellCandidateInventory {
     fn validate_pose(
         &self,
+        source: (f64, f64),
         bodies: &[crate::organism_geometry::OrganismBodyGeometry],
         target_body_indices: &[usize],
     ) -> Option<()> {
-        if bodies.len() != self.body_count || self.body_units.len() != bodies.len() {
+        if bodies.len() != self.body_motion.len()
+            || self.reference_part_poses.len() != bodies.len()
+            || !source.0.is_finite()
+            || !source.1.is_finite()
+        {
             return None;
         }
-        for (body, expected_units) in bodies.iter().zip(&self.body_units) {
-            let actual_units = body.parts.iter().map(|part| part.unit_index).collect::<Vec<_>>();
-            if &actual_units != expected_units {
+        let source_displacement =
+            (source.0 - self.source_reference.0).hypot(source.1 - self.source_reference.1);
+        if !source_displacement.is_finite()
+            || source_displacement
+                > self.source_translation_bound
+                    + 1.0e-10 * self.source_translation_bound.max(1.0)
+        {
+            return None;
+        }
+        for ((body, reference_parts), motion) in bodies
+            .iter()
+            .zip(&self.reference_part_poses)
+            .zip(&self.body_motion)
+        {
+            if body.parts.len() != reference_parts.len() {
                 return None;
+            }
+            let maximum_displacement = motion.maximum_point_displacement()?;
+            for (part, &(unit_index, x, y, rotation)) in body.parts.iter().zip(reference_parts) {
+                if part.unit_index != unit_index
+                    || !part.x.is_finite()
+                    || !part.y.is_finite()
+                    || !part.rotation_radians.is_finite()
+                {
+                    return None;
+                }
+                let displacement = (part.x - x).hypot(part.y - y);
+                let angular_displacement = (part.rotation_radians - rotation
+                    + std::f64::consts::PI)
+                    .rem_euclid(std::f64::consts::TAU)
+                    - std::f64::consts::PI;
+                let tolerance = 1.0e-10 * maximum_displacement.max(1.0);
+                if !displacement.is_finite()
+                    || displacement > maximum_displacement + tolerance
+                    || !angular_displacement.is_finite()
+                    || angular_displacement.abs()
+                        > motion.angular_bound_radians + 1.0e-10
+                {
+                    return None;
+                }
             }
         }
         for &target in target_body_indices {
@@ -1557,16 +1600,27 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
         .iter()
         .map(|body| (body.min_x, body.max_x, body.min_y, body.max_y))
         .collect::<Vec<_>>();
-    let mut body_units = Vec::with_capacity(bodies.len());
+    let mut reference_part_poses = Vec::with_capacity(bodies.len());
     for body in bodies {
-        let units = body.parts.iter().map(|part| part.unit_index).collect::<Vec<_>>();
-        let mut unique = units.clone();
-        unique.sort_unstable();
-        unique.dedup();
-        if unique.len() != units.len() {
-            return None;
+        let mut units = Vec::with_capacity(body.parts.len());
+        let mut reference_parts = Vec::with_capacity(body.parts.len());
+        for part in &body.parts {
+            if !part.x.is_finite()
+                || !part.y.is_finite()
+                || !part.rotation_radians.is_finite()
+                || units.contains(&part.unit_index)
+            {
+                return None;
+            }
+            units.push(part.unit_index);
+            reference_parts.push((
+                part.unit_index,
+                part.x,
+                part.y,
+                part.rotation_radians,
+            ));
         }
-        body_units.push(units);
+        reference_part_poses.push(reference_parts);
     }
     let mut target_candidates = vec![None; bodies.len()];
     for &target_body_index in target_body_indices {
@@ -1591,8 +1645,10 @@ pub(crate) fn build_visibility_pose_cell_candidate_inventory(
         target_candidates[target_body_index] = Some(candidates);
     }
     Some(VisibilityPoseCellCandidateInventory {
-        body_count: bodies.len(),
-        body_units,
+        source_reference: source,
+        source_translation_bound,
+        body_motion: body_motion.to_vec(),
+        reference_part_poses,
         target_candidates,
     })
 }
@@ -1838,7 +1894,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
         return None;
     }
     if let Some(inventory) = candidate_inventory {
-        inventory.validate_pose(bodies, target_body_indices)?;
+        inventory.validate_pose(source, bodies, target_body_indices)?;
         if motion_envelope.is_none() {
             return None;
         }
