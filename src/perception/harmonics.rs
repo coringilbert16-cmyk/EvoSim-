@@ -2263,20 +2263,32 @@ fn expand_resonance_boundary_interaction_samples(
                     if !spatial_scale.is_finite() || !weight.is_finite() {
                         return None;
                     }
-                    Some((WeightedBoundaryKernelSample {
-                        position: BoundaryKernelVector {
-                            x: sample.receiver_x,
-                            y: sample.receiver_y,
+                    Some((
+                        WeightedBoundaryKernelSample {
+                            position: BoundaryKernelVector {
+                                x: sample.receiver_x,
+                                y: sample.receiver_y,
+                            },
+                            // The exact sample potential already contains both
+                            // distance attenuations. Remove them here because the
+                            // expansion applies the two-distance kernel itself.
+                            weight,
                         },
-                        // The exact sample potential already contains both
-                        // distance attenuations. Remove them here because the
-                        // expansion applies the two-distance kernel itself.
-                        weight,
-                    }, sample.projected_extent_source_gradient?))
+                        sample.projected_extent_source_gradient?,
+                        sample.projected_extent,
+                    ))
                 })
                 .collect::<Option<Vec<_>>>()?;
-            let (weighted_samples, extent_gradients): (Vec<_>, Vec<_>) =
-                weighted_samples.into_iter().unzip();
+            let mut extent_gradients = Vec::with_capacity(weighted_samples.len());
+            let mut extents = Vec::with_capacity(weighted_samples.len());
+            let weighted_samples = weighted_samples
+                .into_iter()
+                .map(|(sample, gradient, extent)| {
+                    extent_gradients.push(gradient);
+                    extents.push(extent);
+                    sample
+                })
+                .collect::<Vec<_>>();
             let absolute_weight = weighted_samples
                 .iter()
                 .map(|sample| sample.weight.abs())
@@ -2302,16 +2314,11 @@ fn expand_resonance_boundary_interaction_samples(
             // is differentiated against the exact discrete two-distance
             // kernel, while the adaptive expansion certifies the smooth
             // fixed-weight kernel derivative.
-            for (sample, (extent_dx, extent_dy)) in
-                weighted_samples.iter().zip(extent_gradients)
+            for ((sample, (extent_dx, extent_dy)), extent) in weighted_samples
+                .iter()
+                .zip(extent_gradients)
+                .zip(extents)
             {
-                let original = samples
-                    .iter()
-                    .find(|candidate| {
-                        candidate.receiver_x == sample.position.x
-                            && candidate.receiver_y == sample.position.y
-                    })?;
-                let extent = original.projected_extent;
                 if !extent.is_finite() || extent <= f64::EPSILON {
                     return None;
                 }
