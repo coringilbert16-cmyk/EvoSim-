@@ -1540,8 +1540,11 @@ mod visibility_tests {
                                 VisibilityCutEvent::RayThroughRigidFeature {
                                     blocker_body_index: 1,
                                     blocker_unit_index: 1,
+                                    target_body_index: 0,
+                                    target_unit_index: 0,
+                                    target_edge_index,
                                     ..
-                                }
+                                } if *target_edge_index < 4
                             ))
                     );
                     near_target_vertex && has_blocker_ray
