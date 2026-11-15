@@ -2691,7 +2691,10 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             a.total_cmp(&b).then_with(|| left.cmp(right))
         });
 
-        let sorted_samples = order.iter().map(|index| samples[*index]).collect::<Vec<_>>();
+        let sorted_samples = order
+            .iter()
+            .map(|index| samples[*index])
+            .collect::<Vec<_>>();
         let sorted_motion = order
             .iter()
             .map(|index| sample_motion[*index])
