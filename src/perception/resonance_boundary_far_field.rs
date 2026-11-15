@@ -1085,6 +1085,8 @@ pub(crate) fn rigid_circle_arc_endpoint_motion_bound(
 pub(crate) struct CircleStraightIntersectionMotionBound {
     pub(crate) target_parameter_change: f64,
     pub(crate) local_arc_angle_change: f64,
+    pub(crate) existence_margin: f64,
+    pub(crate) existence_margin_change_bound: f64,
 }
 
 /// Bound target-edge parameter and local arc-angle movement while a rigid
@@ -1223,9 +1225,33 @@ pub(crate) fn circle_straight_intersection_motion_bound(
     {
         return None;
     }
+    let tangency_margin = (radius - signed_distance.abs()) / radius;
+    let tangency_margin_change = signed_distance_change / radius;
+    let parameter_margin = target_parameter.min(1.0 - target_parameter);
+    let arc_margin = if arc_sweep >= std::f64::consts::TAU - 1.0e-10 {
+        f64::INFINITY
+    } else {
+        arc_offset.min(arc_sweep - arc_offset)
+    };
+    let existence_margin = tangency_margin.min(parameter_margin).min(arc_margin);
+    let existence_margin_change_bound = tangency_margin_change
+        .max(target_parameter_change)
+        .max(if arc_margin.is_finite() {
+            local_arc_angle_change
+        } else {
+            0.0
+        });
+    if !existence_margin.is_finite()
+        || !existence_margin_change_bound.is_finite()
+        || existence_margin <= existence_margin_change_bound
+    {
+        return None;
+    }
     Some(CircleStraightIntersectionMotionBound {
         target_parameter_change,
         local_arc_angle_change,
+        existence_margin,
+        existence_margin_change_bound,
     })
 }
 
