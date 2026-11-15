@@ -379,6 +379,10 @@ pub(crate) struct ExposedBoundaryIntervalWithProvenance {
     pub(crate) interval: ExposedBoundaryInterval,
     pub(crate) start_provenance: BoundaryEndpointProvenance,
     pub(crate) end_provenance: BoundaryEndpointProvenance,
+    /// Stable ordered feature identity for the complete target-edge partition.
+    /// `None` means a coincident, unresolved, or otherwise unsupported event
+    /// prevents differentiating this visibility topology.
+    pub(crate) visibility_signature: Option<VisibilityCutSignature>,
 }
 
 /// Return the interval's contribution to projected extent for a directional
@@ -1903,6 +1907,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
             }
 
             let cuts = merge_visibility_cuts(cuts);
+            let visibility_signature = VisibilityCutSignature::from_cuts(&cuts);
             for pair in cuts.windows(2) {
                 let (t0, t1) = (pair[0].parameter, pair[1].parameter);
                 if t1 - t0 <= 1e-10 {
@@ -1933,6 +1938,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance(
                         &pair[0], body_index, unit_index,
                     ),
                     end_provenance: endpoint_provenance_from_cut(&pair[1], body_index, unit_index),
+                    visibility_signature: visibility_signature.clone(),
                 });
             }
         }
