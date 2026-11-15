@@ -1285,6 +1285,7 @@ mod tests {
         let ordered_cuts = signature
             .ordered_parameters
             .iter()
+            .filter(|parameter| **parameter > 1.0e-10 && **parameter < 1.0 - 1.0e-10)
             .map(|parameter| (*parameter, 0.0))
             .collect::<Vec<_>>();
         let point = crate::resonance_boundary_far_field::BoundaryKernelVector { x: 5.0, y: 0.5 };
