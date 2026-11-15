@@ -1833,6 +1833,46 @@ mod tests {
     }
 
     #[test]
+    fn ray_visibility_endpoints_retain_rigid_feature_provenance() {
+        let feature = VisibilityCutEvent::RayThroughRigidFeature {
+            blocker_body_index: 3,
+            blocker_unit_index: 9,
+            blocker_feature_index: 2,
+            target_body_index: 0,
+            target_unit_index: 2,
+            target_edge_index: 4,
+            local_point: (0.5, -0.25),
+        };
+        let feature_cut = VisibilityCutRecord::new(0.4, feature.clone());
+        assert_eq!(
+            endpoint_provenance_from_cut(&feature_cut, 0, 2),
+            BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: 0.4,
+                event: feature,
+            }
+        );
+
+        let tangent = VisibilityCutEvent::RayThroughCircleTangent {
+            blocker_body_index: 3,
+            blocker_unit_index: 9,
+            target_body_index: 0,
+            target_unit_index: 2,
+            target_edge_index: 4,
+            tangent_side: 1,
+            local_center: (0.0, 0.0),
+            radius: 0.75,
+        };
+        let tangent_cut = VisibilityCutRecord::new(0.6, tangent.clone());
+        assert_eq!(
+            endpoint_provenance_from_cut(&tangent_cut, 0, 2),
+            BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: 0.6,
+                event: tangent,
+            }
+        );
+    }
+
+    #[test]
     fn duplicate_visibility_events_are_deduplicated() {
         let event = VisibilityCutEvent::Unresolved {
             blocker_body_index: Some(4),
