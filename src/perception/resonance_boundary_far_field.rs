@@ -1110,8 +1110,7 @@ pub(crate) fn circle_straight_intersection_motion_bound(
         + offset_length * edge_displacement
         + edge_displacement * offset_displacement;
     let signed_distance_change = numerator_change / minimum_edge_length
-        + signed_distance_numerator.abs() * edge_displacement
-            / (edge_length * minimum_edge_length);
+        + signed_distance_numerator.abs() * edge_displacement / (edge_length * minimum_edge_length);
     let maximum_signed_distance = signed_distance.abs() + signed_distance_change;
     if !signed_distance.is_finite()
         || !signed_distance_change.is_finite()
@@ -1122,8 +1121,7 @@ pub(crate) fn circle_straight_intersection_motion_bound(
     }
     let minimum_implicit_denominator = minimum_edge_length
         * (radius * radius - maximum_signed_distance * maximum_signed_distance).sqrt();
-    if !minimum_implicit_denominator.is_finite() || minimum_implicit_denominator <= f64::EPSILON
-    {
+    if !minimum_implicit_denominator.is_finite() || minimum_implicit_denominator <= f64::EPSILON {
         return None;
     }
     let target_parameter_change = radius
