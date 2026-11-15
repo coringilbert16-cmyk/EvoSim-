@@ -329,6 +329,43 @@ mod tests {
     }
 
     #[test]
+    fn target_edge_blocker_inventory_retains_ordered_body_and_feature_identities() {
+        let critical = vec![
+            vec![(2, 0, 1.0, 2.0)],
+            vec![(7, 0, 3.0, 4.0), (7, 1, 5.0, 6.0)],
+        ];
+        let edges = vec![
+            vec![(2, 0, (0.0, 0.0), (1.0, 0.0))],
+            vec![(7, 3, (2.0, 0.0), (2.0, 1.0))],
+        ];
+        let inventory =
+            build_target_edge_blocker_inventory(&[0, 1], &critical, &edges).unwrap();
+        assert_eq!(inventory.candidate_bodies.len(), 2);
+        assert_eq!(inventory.candidate_bodies[1].body_index, 1);
+        assert_eq!(
+            inventory.candidate_bodies[1]
+                .critical_features
+                .iter()
+                .map(|(unit, feature, _, _)| (*unit, *feature))
+                .collect::<Vec<_>>(),
+            vec![(7, 0), (7, 1)]
+        );
+        assert_eq!(
+            inventory.candidate_bodies[1]
+                .straight_edges
+                .iter()
+                .map(|(unit, edge, _, _)| (*unit, *edge))
+                .collect::<Vec<_>>(),
+            vec![(7, 3)]
+        );
+        assert!(build_target_edge_blocker_inventory(&[1, 0], &critical, &edges).is_none());
+        assert!(build_target_edge_blocker_inventory(&[2], &critical, &edges).is_none());
+
+        let duplicate_feature = vec![vec![(2, 0, 1.0, 2.0), (2, 0, 3.0, 4.0)]];
+        assert!(build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges).is_none());
+    }
+
+    #[test]
     fn coincident_visibility_cuts_preserve_distinct_events_and_fail_closed() {
         let first = VisibilityCutRecord::new(
             0.25,
