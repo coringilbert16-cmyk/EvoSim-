@@ -1010,6 +1010,65 @@ pub(crate) fn resolve_circle_straight_intersection_event(
     Some((point, derivative))
 }
 
+/// Displacement and generalized-coordinate derivative bounds for one
+/// rigidly attached circular-arc endpoint.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RigidArcEndpointMotionBound {
+    pub(crate) displacement: f64,
+    pub(crate) derivative: f64,
+}
+
+/// Bound a curved endpoint's world displacement and derivative from the
+/// owning rigid body's translation/rotation envelopes. The endpoint's lever
+/// arm is measured from the body's rigid pivot, so angular motion is included
+/// without approximating the arc as a straight chord.
+#[allow(dead_code)]
+pub(crate) fn rigid_circle_arc_endpoint_motion_bound(
+    local_center: BoundaryKernelVector,
+    radius: f64,
+    local_angle: f64,
+    translation_derivative: BoundaryKernelVector,
+    angular_derivative: f64,
+    translation_displacement: f64,
+    angular_displacement: f64,
+) -> Option<RigidArcEndpointMotionBound> {
+    let values = [
+        local_center.x,
+        local_center.y,
+        radius,
+        local_angle,
+        translation_derivative.x,
+        translation_derivative.y,
+        angular_derivative,
+        translation_displacement,
+        angular_displacement,
+    ];
+    if values.iter().any(|value| !value.is_finite())
+        || radius <= 0.0
+        || translation_displacement < 0.0
+        || angular_displacement < 0.0
+    {
+        return None;
+    }
+    let lever = BoundaryKernelVector {
+        x: local_center.x + radius * local_angle.cos(),
+        y: local_center.y + radius * local_angle.sin(),
+    };
+    let lever_length = lever.norm();
+    let derivative = translation_derivative.norm() + angular_derivative.abs() * lever_length;
+    let displacement = translation_displacement + angular_displacement * lever_length;
+    let roundoff_guard =
+        128.0 * f64::EPSILON * (derivative + displacement + lever_length + 1.0);
+    (lever_length.is_finite()
+        && derivative.is_finite()
+        && displacement.is_finite()
+        && roundoff_guard.is_finite())
+    .then_some(RigidArcEndpointMotionBound {
+        displacement: displacement + roundoff_guard,
+        derivative: derivative + roundoff_guard,
+    })
+}
+
 /// Conservative pose-cell movement envelope for a circle/straight cut.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct CircleStraightIntersectionMotionBound {
@@ -4136,6 +4195,76 @@ mod circle_straight_motion_bound_tests {
             0.001,
             0.001,
             0.001,
+        )
+        .is_none());
+    }
+}
+
+
+#[cfg(test)]
+mod curved_endpoint_motion_bound_tests {
+    use super::*;
+
+    #[test]
+    fn rigid_curved_endpoint_motion_bound_contains_pose_motion_and_derivative() {
+        let local_center = BoundaryKernelVector { x: 0.2, y: -0.1 };
+        let radius = 1.4;
+        let angle = 1.1;
+        let translation = BoundaryKernelVector { x: -0.1, y: 0.3 };
+        let angular = 0.2;
+        let translation_displacement = 0.02;
+        let angular_displacement = 0.03;
+        let bound = rigid_circle_arc_endpoint_motion_bound(
+            local_center,
+            radius,
+            angle,
+            translation,
+            angular,
+            translation_displacement,
+            angular_displacement,
+        )
+        .expect("finite rigid endpoint envelope");
+        let pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: -3.0 },
+            rotation_radians: 0.4,
+        };
+        let (point, derivative) = rigid_circle_arc_endpoint_pose_derivative(
+            local_center,
+            radius,
+            angle,
+            pose,
+            translation,
+            angular,
+        )
+        .unwrap();
+        assert!(derivative.norm() <= bound.derivative);
+
+        let scale = 0.05;
+        let moved_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector {
+                x: pose.pivot.x + scale * translation.x,
+                y: pose.pivot.y + scale * translation.y,
+            },
+            rotation_radians: pose.rotation_radians + scale * angular,
+        };
+        let moved_point = moved_pose
+            .transform_local_point(BoundaryKernelVector {
+                x: local_center.x + radius * angle.cos(),
+                y: local_center.y + radius * angle.sin(),
+            })
+            .unwrap();
+        assert!((moved_point.x - point.x).hypot(moved_point.y - point.y) <= bound.displacement);
+    }
+
+    #[test]
+    fn rigid_curved_endpoint_motion_bound_rejects_invalid_envelopes() {
+        let zero = BoundaryKernelVector::default();
+        assert!(rigid_circle_arc_endpoint_motion_bound(
+            zero, 1.0, 0.0, zero, 0.0, -0.1, 0.0
+        )
+        .is_none());
+        assert!(rigid_circle_arc_endpoint_motion_bound(
+            zero, 1.0, 0.0, zero, 0.0, 0.0, f64::NAN
         )
         .is_none());
     }
