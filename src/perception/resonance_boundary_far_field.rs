@@ -4135,7 +4135,7 @@ mod circle_straight_motion_bound_tests {
             radius,
             parameter,
             0.0,
-            angle + 0.01,
+            angle + 0.005,
             angle,
             0.001,
             0.001,
