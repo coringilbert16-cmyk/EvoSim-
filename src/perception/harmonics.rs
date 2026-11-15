@@ -3965,6 +3965,67 @@ mod tests {
     }
 
     #[test]
+    fn boundary_interaction_samples_reconstruct_directional_pair_potential() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let source = make_material(0.0);
+        let receiver = make_material(4.0);
+        let samples = directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+            &source,
+            &receiver,
+            &[],
+            &catalog,
+            0,
+            None,
+            None,
+        )
+        .expect("exact exposed boundary samples should be available");
+        assert!(!samples.is_empty());
+
+        let reconstructed_energy = samples
+            .iter()
+            .flat_map(|sample| {
+                spectrum_cross_energy_components(
+                    &sample.incident_spectrum,
+                    &sample.receiver_spectrum,
+                )
+                .expect("sample spectra should be valid")
+            })
+            .map(|component| component.energy)
+            .sum::<f64>();
+        let directional_energy = directional_resonance_pair_potential_components(
+            &source,
+            &receiver,
+            &catalog,
+            0,
+        )
+        .expect("directional pair potential should be available")
+        .iter()
+        .map(|component| component.energy)
+        .sum::<f64>();
+
+        assert!(samples.iter().all(|sample| {
+            sample.projected_extent.is_finite()
+                && sample.projected_extent > 0.0
+                && sample.receiver_normal_x.is_finite()
+                && sample.receiver_normal_y.is_finite()
+                && sample.visibility_signature.is_some()
+        }));
+        assert!((reconstructed_energy - directional_energy).abs() < 1e-10);
+    }
+
+    #[test]
     fn stationary_pair_potential_is_invariant_as_shared_phase_clock_advances() {
         let catalog = crate::resources::default_catalog();
         let make_material = |x| {
