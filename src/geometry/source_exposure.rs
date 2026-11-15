@@ -907,10 +907,12 @@ fn add_circle_tangent_points_tagged(
     );
 }
 
+type IndexedCriticalPointsByBody = Vec<Vec<(usize, usize, f64, f64)>>;
+
 fn index_critical_points_by_body(
     body_count: usize,
     critical_points: Vec<(usize, usize, f64, f64)>,
-) -> Option<Vec<Vec<(usize, usize, f64, f64)>>> {
+) -> Option<IndexedCriticalPointsByBody> {
     let mut feature_counts: Vec<Vec<(usize, usize)>> =
         (0..body_count).map(|_| Vec::new()).collect();
     let mut indexed: Vec<Vec<(usize, usize, f64, f64)>> =
