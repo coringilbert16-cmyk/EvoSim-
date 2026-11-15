@@ -2358,6 +2358,9 @@ impl VisibilityPoseCellCandidateInventory {
         target_body_index: usize,
         signature: &VisibilityCutSignature,
     ) -> Option<()> {
+        if !target_body_indices.contains(&target_body_index) {
+            return None;
+        }
         self.validate_pose(source, bodies, target_body_indices)?;
         let candidates = self.candidates_for_target(target_body_index)?;
         if signature.candidate_bodies.as_slice() != candidates
