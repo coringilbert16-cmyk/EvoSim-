@@ -19,6 +19,90 @@ fn make_structured(amount: f64) -> Material {
 }
 
 #[test]
+fn environmental_motion_batch_moves_exact_objects_and_updates_cell_revisions() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let first = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+        &catalog,
+    ).expect("carbon should realize");
+    let second = PhysicalMaterial::realized(
+        Material::free_base("Oxygen", 1.0),
+        vec![Placement { x: 12.0, y: 10.0, rotation_radians: 0.0 }],
+        &catalog,
+    ).expect("oxygen should realize");
+    assert!(field.deposit_physical(10.0, 10.0, first, &catalog));
+    assert!(field.deposit_physical(12.0, 10.0, second, &catalog));
+    field.assign_missing_material_identities();
+
+    let source_a = field.index_for_position(10.0, 10.0).unwrap();
+    let source_b = field.index_for_position(12.0, 10.0).unwrap();
+    let before_a = field.cells[source_a].physical_materials[0].clone();
+    let before_b = field.cells[source_b].physical_materials[1].clone();
+    let identity_a = before_a.environmental_identity;
+    let identity_b = before_b.environmental_identity;
+    let destination_a = field.index_for_position(60.0, 10.0).unwrap();
+    let destination_b = field.index_for_position(62.0, 10.0).unwrap();
+    let revisions_before = field.cell_revisions.clone();
+    let mut after_a = before_a.clone();
+    after_a.placements.as_mut().unwrap()[0].x = 60.0;
+    after_a.inertial_motion.velocity_x = 2.0;
+    let mut after_b = before_b.clone();
+    after_b.placements.as_mut().unwrap()[0].x = 62.0;
+    after_b.inertial_motion.velocity_x = 3.0;
+
+    assert!(field.commit_environmental_motion_batch(
+        vec![
+            (source_a, 0, before_a, after_a),
+            (source_b, 1, before_b, after_b),
+        ],
+        &catalog,
+    ));
+
+    assert!(field.cells[source_a].physical_materials.is_empty());
+    assert!(field.cells[destination_a].physical_materials.iter().any(|material| {
+        material.environmental_identity == identity_a && material.inertial_motion.velocity_x == 2.0
+    }));
+    assert!(field.cells[destination_b].physical_materials.iter().any(|material| {
+        material.environmental_identity == identity_b && material.inertial_motion.velocity_x == 3.0
+    }));
+    for index in [source_a, source_b, destination_a, destination_b] {
+        assert!(field.cell_revisions[index] > revisions_before[index]);
+    }
+}
+
+#[test]
+fn environmental_motion_batch_rejects_stale_source_without_partial_changes() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let material = PhysicalMaterial::realized(
+        Material::free_base("Carbon", 1.0),
+        vec![Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 }],
+        &catalog,
+    ).expect("carbon should realize");
+    assert!(field.deposit_physical(10.0, 10.0, material, &catalog));
+    field.assign_missing_material_identities();
+    let source = field.index_for_position(10.0, 10.0).unwrap();
+    let expected = field.cells[source].physical_materials[0].clone();
+    let mut stale = expected.clone();
+    stale.inertial_motion.velocity_x = 1.0;
+    let mut after = expected.clone();
+    after.placements.as_mut().unwrap()[0].x = 60.0;
+    let cells_before = field.cells.clone();
+    let revisions_before = field.cell_revisions.clone();
+    let revision_before = field.revision;
+
+    assert!(!field.commit_environmental_motion_batch(
+        vec![(source, 0, stale, after)],
+        &catalog,
+    ));
+    assert_eq!(field.cells, cells_before);
+    assert_eq!(field.cell_revisions, revisions_before);
+    assert_eq!(field.revision, revision_before);
+}
+
+#[test]
 fn field_has_expected_dimensions() {
     let field = ActiveMaterialField::new(1000.0, 1000.0, 25.0);
     assert_eq!(field.width_cells, 40);
