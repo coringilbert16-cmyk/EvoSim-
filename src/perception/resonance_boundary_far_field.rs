@@ -546,6 +546,201 @@ pub(crate) fn rigid_straight_boundary_intersection_pose_derivative(
     )
 }
 
+/// Current rigid pose for one body that owns a straight visibility feature.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct RigidBoundaryPose {
+    pub(crate) pivot: BoundaryKernelVector,
+    pub(crate) rotation_radians: f64,
+}
+
+impl RigidBoundaryPose {
+    fn transform_local_point(self, local: BoundaryKernelVector) -> Option<BoundaryKernelVector> {
+        if ![
+            self.pivot.x,
+            self.pivot.y,
+            self.rotation_radians,
+            local.x,
+            local.y,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        {
+            return None;
+        }
+        let (sin, cos) = self.rotation_radians.sin_cos();
+        let world = BoundaryKernelVector {
+            x: self.pivot.x + local.x * cos - local.y * sin,
+            y: self.pivot.y + local.x * sin + local.y * cos,
+        };
+        (world.x.is_finite() && world.y.is_finite()).then_some(world)
+    }
+}
+
+/// A straight/straight visibility event resolved against its two owning poses.
+/// The intersection parameters are retained from the exact visibility event;
+/// this resolver verifies that they still describe the same strict-interior
+/// intersection before differentiating it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ResolvedStraightBoundaryIntersection {
+    pub(crate) target_start: BoundaryKernelVector,
+    pub(crate) target_end: BoundaryKernelVector,
+    pub(crate) blocker_start: BoundaryKernelVector,
+    pub(crate) blocker_end: BoundaryKernelVector,
+    pub(crate) intersection: BoundaryKernelVector,
+    pub(crate) target_parameter: f64,
+    pub(crate) blocker_parameter: f64,
+    pub(crate) derivative: StraightBoundaryIntersectionPoseDerivative,
+}
+
+/// Resolve the local edge endpoints retained by a straight-boundary visibility
+/// event using the current rigid poses, then compose both bodies' translation
+/// and angular rates into the exact intersection derivative. No coordinate
+/// nearest-neighbour lookup is performed. Ambiguous, stale, endpoint, parallel,
+/// or unsupported events return None and must use exact/subdivision fallback.
+#[allow(dead_code)]
+pub(crate) fn resolve_straight_boundary_intersection_event(
+    event: &crate::source_exposure::VisibilityCutEvent,
+    expected_target_body: usize,
+    expected_target_unit: usize,
+    expected_blocker_body: usize,
+    expected_blocker_unit: usize,
+    target_pose: RigidBoundaryPose,
+    blocker_pose: RigidBoundaryPose,
+    target_translation_derivative: BoundaryKernelVector,
+    target_angular_derivative: f64,
+    blocker_translation_derivative: BoundaryKernelVector,
+    blocker_angular_derivative: f64,
+) -> Option<ResolvedStraightBoundaryIntersection> {
+    let (
+        blocker_body,
+        blocker_unit,
+        target_body,
+        target_unit,
+        target_start_local,
+        target_end_local,
+        blocker_start_local,
+        blocker_end_local,
+        target_parameter,
+        blocker_parameter,
+    ) = match event {
+        crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index,
+            blocker_unit_index,
+            target_body_index,
+            target_unit_index,
+            target_edge_start_local,
+            target_edge_end_local,
+            blocker_edge_start_local,
+            blocker_edge_end_local,
+            target_parameter,
+            blocker_parameter,
+            ..
+        } => (
+            *blocker_body_index,
+            *blocker_unit_index,
+            *target_body_index,
+            *target_unit_index,
+            *target_edge_start_local,
+            *target_edge_end_local,
+            *blocker_edge_start_local,
+            *blocker_edge_end_local,
+            *target_parameter,
+            *blocker_parameter,
+        ),
+        _ => return None,
+    };
+    if target_body != expected_target_body
+        || target_unit != expected_target_unit
+        || blocker_body != expected_blocker_body
+        || blocker_unit != expected_blocker_unit
+        || !target_parameter.is_finite()
+        || !blocker_parameter.is_finite()
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&target_parameter)
+        || !(1.0e-10..1.0 - 1.0e-10).contains(&blocker_parameter)
+    {
+        return None;
+    }
+
+    let target_start = target_pose.transform_local_point(BoundaryKernelVector {
+        x: target_start_local.0,
+        y: target_start_local.1,
+    })?;
+    let target_end = target_pose.transform_local_point(BoundaryKernelVector {
+        x: target_end_local.0,
+        y: target_end_local.1,
+    })?;
+    let blocker_start = blocker_pose.transform_local_point(BoundaryKernelVector {
+        x: blocker_start_local.0,
+        y: blocker_start_local.1,
+    })?;
+    let blocker_end = blocker_pose.transform_local_point(BoundaryKernelVector {
+        x: blocker_end_local.0,
+        y: blocker_end_local.1,
+    })?;
+
+    let target_edge = BoundaryKernelVector {
+        x: target_end.x - target_start.x,
+        y: target_end.y - target_start.y,
+    };
+    let blocker_edge = BoundaryKernelVector {
+        x: blocker_end.x - blocker_start.x,
+        y: blocker_end.y - blocker_start.y,
+    };
+    let target_point = BoundaryKernelVector {
+        x: target_start.x + target_parameter * target_edge.x,
+        y: target_start.y + target_parameter * target_edge.y,
+    };
+    let blocker_point = BoundaryKernelVector {
+        x: blocker_start.x + blocker_parameter * blocker_edge.x,
+        y: blocker_start.y + blocker_parameter * blocker_edge.y,
+    };
+    let scale = [
+        target_start.x.abs(),
+        target_start.y.abs(),
+        target_end.x.abs(),
+        target_end.y.abs(),
+        blocker_start.x.abs(),
+        blocker_start.y.abs(),
+        blocker_end.x.abs(),
+        blocker_end.y.abs(),
+        1.0,
+    ]
+    .into_iter()
+    .fold(0.0_f64, f64::max);
+    let consistency_tolerance = 1.0e-8 * scale;
+    if (target_point.x - blocker_point.x).hypot(target_point.y - blocker_point.y)
+        > consistency_tolerance
+    {
+        return None;
+    }
+
+    let derivative = rigid_straight_boundary_intersection_pose_derivative(
+        target_start,
+        target_end,
+        blocker_start,
+        blocker_end,
+        target_pose.pivot,
+        blocker_pose.pivot,
+        target_translation_derivative,
+        target_angular_derivative,
+        blocker_translation_derivative,
+        blocker_angular_derivative,
+    )?;
+    Some(ResolvedStraightBoundaryIntersection {
+        target_start,
+        target_end,
+        blocker_start,
+        blocker_end,
+        intersection: BoundaryKernelVector {
+            x: 0.5 * (target_point.x + blocker_point.x),
+            y: 0.5 * (target_point.y + blocker_point.y),
+        },
+        target_parameter,
+        blocker_parameter,
+        derivative,
+    })
+}
+
 /// Midpoint and exact point-source projected-extent derivatives for one
 /// already-corresponding straight exposed interval. The interval normal is
 /// transported from its edge orientation; edge-on transitions fail closed.
@@ -2746,5 +2941,167 @@ mod tests {
                 <= approximate.error.potential
         );
         assert_eq!(approximate.radius, 0.0);
+    }
+}
+
+
+#[cfg(test)]
+mod provenance_resolver_tests {
+    use super::*;
+
+    fn exact_intersection(
+        target_start: BoundaryKernelVector,
+        target_end: BoundaryKernelVector,
+        blocker_start: BoundaryKernelVector,
+        blocker_end: BoundaryKernelVector,
+    ) -> BoundaryKernelVector {
+        let a = BoundaryKernelVector {
+            x: target_end.x - target_start.x,
+            y: target_end.y - target_start.y,
+        };
+        let b = BoundaryKernelVector {
+            x: blocker_end.x - blocker_start.x,
+            y: blocker_end.y - blocker_start.y,
+        };
+        let offset = BoundaryKernelVector {
+            x: blocker_start.x - target_start.x,
+            y: blocker_start.y - target_start.y,
+        };
+        let cross = |left: BoundaryKernelVector, right: BoundaryKernelVector| {
+            left.x * right.y - left.y * right.x
+        };
+        let denominator = cross(a, b);
+        let parameter = cross(offset, b) / denominator;
+        BoundaryKernelVector {
+            x: target_start.x + parameter * a.x,
+            y: target_start.y + parameter * a.y,
+        }
+    }
+
+    fn pose_point(pose: RigidBoundaryPose, local: BoundaryKernelVector) -> BoundaryKernelVector {
+        pose.transform_local_point(local).unwrap()
+    }
+
+    #[test]
+    fn provenance_resolver_composes_two_local_edges_and_matches_finite_difference() {
+        let event = crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 7,
+            blocker_unit_index: 3,
+            target_body_index: 2,
+            target_unit_index: 5,
+            target_edge_index: 1,
+            blocker_edge_index: 4,
+            target_edge_start_local: (-1.0, 0.0),
+            target_edge_end_local: (1.0, 0.0),
+            blocker_edge_start_local: (0.0, -1.0),
+            blocker_edge_end_local: (0.0, 1.0),
+            target_parameter: 0.5,
+            blocker_parameter: 0.5,
+        };
+        let target_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: 3.0 },
+            rotation_radians: 0.3,
+        };
+        let blocker_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: -1.0, y: 4.0 },
+            rotation_radians: -0.2,
+        };
+        let target_translation = BoundaryKernelVector { x: 0.2, y: -0.1 };
+        let blocker_translation = BoundaryKernelVector { x: -0.05, y: 0.15 };
+        let target_angular = 0.3;
+        let blocker_angular = -0.2;
+        let resolved = resolve_straight_boundary_intersection_event(
+            &event,
+            2,
+            5,
+            7,
+            3,
+            target_pose,
+            blocker_pose,
+            target_translation,
+            target_angular,
+            blocker_translation,
+            blocker_angular,
+        )
+        .expect("stored feature identities and local endpoints resolve");
+
+        let step = 1.0e-6;
+        let perturbed_intersection = |direction: f64| {
+            let target = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: target_pose.pivot.x + direction * step * target_translation.x,
+                    y: target_pose.pivot.y + direction * step * target_translation.y,
+                },
+                rotation_radians: target_pose.rotation_radians
+                    + direction * step * target_angular,
+            };
+            let blocker = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: blocker_pose.pivot.x + direction * step * blocker_translation.x,
+                    y: blocker_pose.pivot.y + direction * step * blocker_translation.y,
+                },
+                rotation_radians: blocker_pose.rotation_radians
+                    + direction * step * blocker_angular,
+            };
+            exact_intersection(
+                pose_point(target, BoundaryKernelVector { x: -1.0, y: 0.0 }),
+                pose_point(target, BoundaryKernelVector { x: 1.0, y: 0.0 }),
+                pose_point(blocker, BoundaryKernelVector { x: 0.0, y: -1.0 }),
+                pose_point(blocker, BoundaryKernelVector { x: 0.0, y: 1.0 }),
+            )
+        };
+        let plus = perturbed_intersection(1.0);
+        let minus = perturbed_intersection(-1.0);
+        let finite_difference = BoundaryKernelVector {
+            x: (plus.x - minus.x) / (2.0 * step),
+            y: (plus.y - minus.y) / (2.0 * step),
+        };
+        assert!(
+            (resolved.derivative.point_derivative.x - finite_difference.x).abs() < 1.0e-8
+        );
+        assert!(
+            (resolved.derivative.point_derivative.y - finite_difference.y).abs() < 1.0e-8
+        );
+    }
+
+    #[test]
+    fn provenance_resolver_rejects_stale_identity_and_unsupported_event() {
+        let event = crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 1,
+            blocker_unit_index: 2,
+            target_body_index: 3,
+            target_unit_index: 4,
+            target_edge_index: 0,
+            blocker_edge_index: 0,
+            target_edge_start_local: (-1.0, 0.0),
+            target_edge_end_local: (1.0, 0.0),
+            blocker_edge_start_local: (0.0, -1.0),
+            blocker_edge_end_local: (0.0, 1.0),
+            target_parameter: 0.5,
+            blocker_parameter: 0.5,
+        };
+        let pose = RigidBoundaryPose::default();
+        let zero = BoundaryKernelVector::default();
+        assert!(resolve_straight_boundary_intersection_event(
+            &event, 99, 4, 1, 2, pose, pose, zero, 0.0, zero, 0.0
+        )
+        .is_none());
+        assert!(resolve_straight_boundary_intersection_event(
+            &crate::source_exposure::VisibilityCutEvent::Unresolved {
+                blocker_body_index: Some(1),
+                blocker_unit_index: Some(2),
+            },
+            3,
+            4,
+            1,
+            2,
+            pose,
+            pose,
+            zero,
+            0.0,
+            zero,
+            0.0,
+        )
+        .is_none());
     }
 }
