@@ -1309,45 +1309,45 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative(
                 return None;
             }
             match event {
-            crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
-                let resolved = resolve_straight_boundary_intersection_event(
-                    event,
-                    expected_target_body,
-                    expected_target_unit,
-                    expected_blocker_body,
-                    expected_blocker_unit,
-                    target_pose,
-                    blocker_pose,
-                    target_translation_derivative,
-                    target_angular_derivative,
-                    blocker_translation_derivative,
-                    blocker_angular_derivative,
-                )?;
-                Some(ResolvedBoundaryEndpointPoseDerivative {
-                    point: resolved.intersection,
-                    derivative: resolved.derivative.point_derivative,
-                })
-            }
-            crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection { .. } => {
-                let (point, derivative) = resolve_circle_straight_intersection_event(
-                    event,
-                    expected_target_body,
-                    expected_target_unit,
-                    expected_blocker_body,
-                    expected_blocker_unit,
-                    target_pose,
-                    blocker_pose,
-                    target_translation_derivative,
-                    target_angular_derivative,
-                    blocker_translation_derivative,
-                    blocker_angular_derivative,
-                )?;
-                Some(ResolvedBoundaryEndpointPoseDerivative {
-                    point,
-                    derivative: derivative.point_derivative,
-                })
-            }
-            _ => None,
+                crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection { .. } => {
+                    let resolved = resolve_straight_boundary_intersection_event(
+                        event,
+                        expected_target_body,
+                        expected_target_unit,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                        target_pose,
+                        blocker_pose,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                        blocker_translation_derivative,
+                        blocker_angular_derivative,
+                    )?;
+                    Some(ResolvedBoundaryEndpointPoseDerivative {
+                        point: resolved.intersection,
+                        derivative: resolved.derivative.point_derivative,
+                    })
+                }
+                crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection { .. } => {
+                    let (point, derivative) = resolve_circle_straight_intersection_event(
+                        event,
+                        expected_target_body,
+                        expected_target_unit,
+                        expected_blocker_body,
+                        expected_blocker_unit,
+                        target_pose,
+                        blocker_pose,
+                        target_translation_derivative,
+                        target_angular_derivative,
+                        blocker_translation_derivative,
+                        blocker_angular_derivative,
+                    )?;
+                    Some(ResolvedBoundaryEndpointPoseDerivative {
+                        point,
+                        derivative: derivative.point_derivative,
+                    })
+                }
+                _ => None,
             }
         }
         _ => None,
