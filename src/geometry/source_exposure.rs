@@ -338,7 +338,17 @@ mod tests {
             vec![(2, 0, (0.0, 0.0), (1.0, 0.0))],
             vec![(7, 3, (2.0, 0.0), (2.0, 1.0))],
         ];
-        let arcs = vec![vec![], vec![]];
+        let arc = WorldCircleArc {
+            body_index: 1,
+            unit_index: 7,
+            center: (3.0, 4.0),
+            radius: 1.5,
+            start: 0.25,
+            sweep: 1.0,
+            center_local: (0.0, 0.0),
+            start_local: 0.25,
+        };
+        let arcs = vec![vec![], vec![(7, 0, arc)]];
         let inventory = build_target_edge_blocker_inventory(&[0, 1], &critical, &edges, &arcs).unwrap();
         assert_eq!(inventory.candidate_bodies.len(), 2);
         assert_eq!(inventory.candidate_bodies[1].body_index, 1);
@@ -358,11 +368,21 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![(7, 3)]
         );
+        assert_eq!(
+            inventory.candidate_bodies[1]
+                .circular_arcs
+                .iter()
+                .map(|(unit, arc, _)| (*unit, *arc))
+                .collect::<Vec<_>>(),
+            vec![(7, 0)]
+        );
         assert!(build_target_edge_blocker_inventory(&[1, 0], &critical, &edges, &arcs).is_none());
         assert!(build_target_edge_blocker_inventory(&[2], &critical, &edges, &arcs).is_none());
 
         let duplicate_feature = vec![vec![(2, 0, 1.0, 2.0), (2, 0, 3.0, 4.0)]];
         assert!(build_target_edge_blocker_inventory(&[0], &duplicate_feature, &edges, &arcs).is_none());
+        let duplicate_arc = vec![vec![], vec![(7, 0, arc), (7, 0, arc)]];
+        assert!(build_target_edge_blocker_inventory(&[1], &critical, &edges, &duplicate_arc).is_none());
     }
 
     #[test]
@@ -2273,7 +2293,7 @@ pub(crate) struct ExposedCircularArcInterval {
     pub arc: crate::capillary_geometry::CircularArcBoundary,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct WorldCircleArc {
     body_index: usize,
     unit_index: usize,
