@@ -294,9 +294,12 @@ impl VisibilityCutSignature {
     ) -> Option<Self> {
         if candidate_bodies.windows(2).any(|pair| pair[0] >= pair[1])
             || interval_blocker_bodies.len() != cuts.len().checked_sub(1)?
-            || interval_blocker_bodies
-                .iter()
-                .any(|blockers| blockers.windows(2).any(|pair| pair[0] >= pair[1]))
+            || interval_blocker_bodies.iter().any(|blockers| {
+                blockers.windows(2).any(|pair| pair[0] >= pair[1])
+                    || blockers
+                        .iter()
+                        .any(|blocker| candidate_bodies.binary_search(blocker).is_err())
+            })
         {
             return None;
         }
