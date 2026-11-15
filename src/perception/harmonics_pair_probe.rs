@@ -763,4 +763,53 @@ fn complete_world_pair_force_and_torque_match_independent_potential_differences(
         net_angular_momentum.abs() <= 5.0e-2 * angular_scale + 1.0e-7,
         "complete-world pair gradients must balance angular momentum: net={net_angular_momentum}, scale={angular_scale}"
     );
+
+#[test]
+fn frequency_resolved_boundary_expansion_is_bounded_by_exact_sample_potential() {
+    let catalog = crate::resources::default_catalog();
+    let source = single_body("Carbon", 0.0, 0.0, 0.17, &catalog);
+    let receiver = asymmetric_receiver((0.0, 0.0), -0.11, &catalog);
+    let blockers = vec![single_body("Nitrogen", 5.1, 1.7, 0.23, &catalog)];
+    let samples = super::directional_resonance_boundary_interaction_samples_with_prepared_emitters(
+        &source,
+        &receiver,
+        &blockers,
+        &catalog,
+        173,
+        None,
+        None,
+    )
+    .expect("valid occluded pair should produce exact boundary samples");
+    assert!(!samples.is_empty(), "the receiver should retain visible boundary samples");
+
+    let expansions = super::expand_resonance_boundary_interaction_samples(&samples)
+        .expect("exact spectral samples should feed the two-distance expansion");
+    let exact = super::directional_resonance_pair_potential_components_with_occluders(
+        &source,
+        &receiver,
+        &blockers,
+        &catalog,
+        173,
+    )
+    .expect("the same pair should produce its exact frequency-resolved potential");
+
+    assert_eq!(expansions.len(), exact.len());
+    for expansion in expansions {
+        let exact_component = exact
+            .iter()
+            .find(|component| {
+                (component.frequency_cycles_per_day - expansion.frequency_cycles_per_day).abs()
+                    <= 1e-9
+            })
+            .expect("every expanded frequency should exist in the exact potential");
+        let error = (expansion.evaluation.potential - exact_component.energy).abs();
+        assert!(
+            error <= expansion.evaluation.error.potential + 1e-10,
+            "frequency {} exceeded its certified potential remainder: error={}, bound={}",
+            expansion.frequency_cycles_per_day,
+            error,
+            expansion.evaluation.error.potential,
+        );
+    }
+}
 }
