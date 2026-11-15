@@ -561,6 +561,17 @@ mod tests {
                     <= *error_bound + 1e-12
             );
         }
+        let source_torque = sources
+            .iter()
+            .zip(&approximation.source_forces)
+            .map(|(source, force)| source.position.cross(*force))
+            .sum::<f64>();
+        let target_torque = target.cross(approximation.target_gradient);
+        assert!(
+            (source_torque + target_torque).abs()
+                <= approximation.error.angular_momentum + 1e-12,
+            "mutual angular-momentum residual must fit its independent error bound"
+        );
     }
 
     #[test]
@@ -628,6 +639,16 @@ mod tests {
         assert!(evaluation.error.potential <= 1e-4);
         assert!(evaluation.error.force <= 1e-4);
         assert!(evaluation.error.torque_about_center <= 1e-4);
+        assert!(evaluation.error.angular_momentum <= 1e-4);
+        let source_torque = sources
+            .iter()
+            .zip(&evaluation.source_forces)
+            .map(|(source, force)| source.position.cross(*force))
+            .sum::<f64>();
+        assert!(
+            (source_torque + target.cross(evaluation.target_gradient)).abs()
+                <= evaluation.error.angular_momentum + 1e-12
+        );
         for (index, (source, force)) in sources.iter().zip(&evaluation.source_forces).enumerate() {
             let dx = target.x - source.position.x;
             let dy = target.y - source.position.y;
