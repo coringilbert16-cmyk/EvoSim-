@@ -582,16 +582,14 @@ mod tests {
 
     #[test]
     fn visibility_cut_signature_tracks_stable_feature_order_not_coordinates() {
-        let event = |x| {
-            VisibilityCutEvent::RayThroughRigidFeature {
-                blocker_body_index: 2,
-                blocker_unit_index: 7,
-                blocker_feature_index: 3,
-                target_body_index: 0,
-                target_unit_index: 1,
-                target_edge_index: 4,
-                local_point: (x, 0.25),
-            }
+        let event = |x| VisibilityCutEvent::RayThroughRigidFeature {
+            blocker_body_index: 2,
+            blocker_unit_index: 7,
+            blocker_feature_index: 3,
+            target_body_index: 0,
+            target_unit_index: 1,
+            target_edge_index: 4,
+            local_point: (x, 0.25),
         };
         let first = vec![
             VisibilityCutRecord::new(
@@ -694,35 +692,77 @@ mod tests {
     #[test]
     fn visibility_cut_signature_rejects_unresolved_and_duplicate_feature_events() {
         let unresolved = vec![
-            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
-            }),
-            VisibilityCutRecord::new(0.5, VisibilityCutEvent::Unresolved {
-                blocker_body_index: Some(2), blocker_unit_index: Some(7),
-            }),
-            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                0.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 0,
+                    local_point: (0.0, 0.0),
+                },
+            ),
+            VisibilityCutRecord::new(
+                0.5,
+                VisibilityCutEvent::Unresolved {
+                    blocker_body_index: Some(2),
+                    blocker_unit_index: Some(7),
+                },
+            ),
+            VisibilityCutRecord::new(
+                1.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 1,
+                    local_point: (1.0, 0.0),
+                },
+            ),
         ];
         assert!(VisibilityCutSignature::from_cuts(&unresolved).is_none());
 
         let duplicate = vec![
-            VisibilityCutRecord::new(0.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 0, local_point: (0.0, 0.0),
-            }),
-            VisibilityCutRecord::new(0.4, VisibilityCutEvent::RayThroughRigidFeature {
-                blocker_body_index: 2, blocker_unit_index: 7, blocker_feature_index: 3,
-                target_body_index: 0, target_unit_index: 1, target_edge_index: 4,
-                local_point: (0.5, 0.25),
-            }),
-            VisibilityCutRecord::new(0.7, VisibilityCutEvent::RayThroughRigidFeature {
-                blocker_body_index: 2, blocker_unit_index: 7, blocker_feature_index: 3,
-                target_body_index: 0, target_unit_index: 1, target_edge_index: 4,
-                local_point: (0.6, 0.25),
-            }),
-            VisibilityCutRecord::new(1.0, VisibilityCutEvent::TargetVertex {
-                body_index: 0, unit_index: 1, vertex_index: 1, local_point: (1.0, 0.0),
-            }),
+            VisibilityCutRecord::new(
+                0.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 0,
+                    local_point: (0.0, 0.0),
+                },
+            ),
+            VisibilityCutRecord::new(
+                0.4,
+                VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index: 2,
+                    blocker_unit_index: 7,
+                    blocker_feature_index: 3,
+                    target_body_index: 0,
+                    target_unit_index: 1,
+                    target_edge_index: 4,
+                    local_point: (0.5, 0.25),
+                },
+            ),
+            VisibilityCutRecord::new(
+                0.7,
+                VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index: 2,
+                    blocker_unit_index: 7,
+                    blocker_feature_index: 3,
+                    target_body_index: 0,
+                    target_unit_index: 1,
+                    target_edge_index: 4,
+                    local_point: (0.6, 0.25),
+                },
+            ),
+            VisibilityCutRecord::new(
+                1.0,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: 0,
+                    unit_index: 1,
+                    vertex_index: 1,
+                    local_point: (1.0, 0.0),
+                },
+            ),
         ];
         assert!(VisibilityCutSignature::from_cuts(&duplicate).is_none());
     }
