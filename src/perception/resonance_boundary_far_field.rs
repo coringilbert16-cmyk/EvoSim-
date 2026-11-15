@@ -3642,3 +3642,193 @@ mod intersection_parameter_bound_tests {
         .is_none());
     }
 }
+
+
+#[cfg(test)]
+mod circle_straight_provenance_tests {
+    use super::*;
+
+    fn circle_line_intersection(
+        start: BoundaryKernelVector,
+        end: BoundaryKernelVector,
+        center: BoundaryKernelVector,
+        radius: f64,
+        reference_parameter: f64,
+    ) -> (f64, BoundaryKernelVector) {
+        let edge = BoundaryKernelVector {
+            x: end.x - start.x,
+            y: end.y - start.y,
+        };
+        let offset = BoundaryKernelVector {
+            x: start.x - center.x,
+            y: start.y - center.y,
+        };
+        let a = edge.dot(edge);
+        let b = 2.0 * offset.dot(edge);
+        let c = offset.dot(offset) - radius * radius;
+        let root = (b * b - 4.0 * a * c).sqrt();
+        let candidates = [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)];
+        let parameter = candidates
+            .into_iter()
+            .min_by(|left, right| {
+                (left - reference_parameter)
+                    .abs()
+                    .total_cmp(&(right - reference_parameter).abs())
+            })
+            .unwrap();
+        (
+            parameter,
+            BoundaryKernelVector {
+                x: start.x + parameter * edge.x,
+                y: start.y + parameter * edge.y,
+            },
+        )
+    }
+
+    #[test]
+    fn circle_straight_provenance_derivative_matches_two_body_finite_difference() {
+        let radius = 1.0;
+        let target_parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
+        let arc_angle_local = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        let event = crate::source_exposure::VisibilityCutEvent::CircleStraightIntersection {
+            blocker_body_index: 8,
+            blocker_unit_index: 4,
+            target_body_index: 1,
+            target_unit_index: 6,
+            target_edge_index: 2,
+            arc_index: 0,
+            target_edge_start_local: (-2.0, 0.0),
+            target_edge_end_local: (2.0, 0.0),
+            blocker_arc_center_local: (0.0, 0.0),
+            blocker_arc_radius: radius,
+            blocker_arc_start_local: 0.0,
+            blocker_arc_sweep: std::f64::consts::TAU,
+            target_parameter,
+            arc_angle_local,
+        };
+        let target_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 0.0, y: 0.0 },
+            rotation_radians: 0.0,
+        };
+        let blocker_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 0.0, y: 0.5 },
+            rotation_radians: 0.0,
+        };
+        let target_translation = BoundaryKernelVector { x: 0.1, y: 0.05 };
+        let blocker_translation = BoundaryKernelVector { x: -0.02, y: 0.04 };
+        let target_angular = 0.03;
+        let blocker_angular = -0.04;
+        let (point, derivative) = resolve_circle_straight_intersection_event(
+            &event,
+            1,
+            6,
+            8,
+            4,
+            target_pose,
+            blocker_pose,
+            target_translation,
+            target_angular,
+            blocker_translation,
+            blocker_angular,
+        )
+        .expect("local edge and arc provenance resolve a strict crossing");
+
+        let step = 1.0e-6;
+        let perturbed = |direction: f64| {
+            let target = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: target_pose.pivot.x + direction * step * target_translation.x,
+                    y: target_pose.pivot.y + direction * step * target_translation.y,
+                },
+                rotation_radians: target_pose.rotation_radians
+                    + direction * step * target_angular,
+            };
+            let blocker = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: blocker_pose.pivot.x + direction * step * blocker_translation.x,
+                    y: blocker_pose.pivot.y + direction * step * blocker_translation.y,
+                },
+                rotation_radians: blocker_pose.rotation_radians
+                    + direction * step * blocker_angular,
+            };
+            let start = target
+                .transform_local_point(BoundaryKernelVector { x: -2.0, y: 0.0 })
+                .unwrap();
+            let end = target
+                .transform_local_point(BoundaryKernelVector { x: 2.0, y: 0.0 })
+                .unwrap();
+            let center = blocker
+                .transform_local_point(BoundaryKernelVector::default())
+                .unwrap();
+            let (parameter, intersection) =
+                circle_line_intersection(start, end, center, radius, target_parameter);
+            let radial = BoundaryKernelVector {
+                x: intersection.x - center.x,
+                y: intersection.y - center.y,
+            };
+            let local_angle = (radial.y.atan2(radial.x) - blocker.rotation_radians)
+                .rem_euclid(std::f64::consts::TAU);
+            (parameter, intersection, local_angle)
+        };
+        let plus = perturbed(1.0);
+        let minus = perturbed(-1.0);
+        let point_rate = BoundaryKernelVector {
+            x: (plus.1.x - minus.1.x) / (2.0 * step),
+            y: (plus.1.y - minus.1.y) / (2.0 * step),
+        };
+        let parameter_rate = (plus.0 - minus.0) / (2.0 * step);
+        let angle_delta = |left: f64, right: f64| {
+            (left - right + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI
+        };
+        let angle_rate = angle_delta(plus.2, minus.2) / (2.0 * step);
+        assert!((point.x - (0.0 + target_parameter * 4.0)).is_finite());
+        assert!((derivative.point_derivative.x - point_rate.x).abs() < 1.0e-7);
+        assert!((derivative.point_derivative.y - point_rate.y).abs() < 1.0e-7);
+        assert!((derivative.target_parameter_derivative - parameter_rate).abs() < 1.0e-7);
+        assert!((derivative.local_arc_angle_derivative - angle_rate).abs() < 1.0e-7);
+    }
+
+    #[test]
+    fn rigid_curved_endpoint_derivative_matches_finite_difference() {
+        let local_center = BoundaryKernelVector { x: 0.2, y: -0.1 };
+        let radius = 1.4;
+        let angle = 1.1;
+        let pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: -3.0 },
+            rotation_radians: 0.4,
+        };
+        let translation = BoundaryKernelVector { x: -0.1, y: 0.3 };
+        let angular = 0.2;
+        let (point, derivative) = rigid_circle_arc_endpoint_pose_derivative(
+            local_center,
+            radius,
+            angle,
+            pose,
+            translation,
+            angular,
+        )
+        .unwrap();
+        let step = 1.0e-6;
+        let moved = |direction: f64| {
+            let next = RigidBoundaryPose {
+                pivot: BoundaryKernelVector {
+                    x: pose.pivot.x + direction * step * translation.x,
+                    y: pose.pivot.y + direction * step * translation.y,
+                },
+                rotation_radians: pose.rotation_radians + direction * step * angular,
+            };
+            next.transform_local_point(BoundaryKernelVector {
+                x: local_center.x + radius * angle.cos(),
+                y: local_center.y + radius * angle.sin(),
+            })
+            .unwrap()
+        };
+        let plus = moved(1.0);
+        let minus = moved(-1.0);
+        assert!((point.x - (pose.pivot.x + 0.0)).is_finite());
+        assert!(((plus.x - minus.x) / (2.0 * step) - derivative.x).abs() < 1.0e-8);
+        assert!(((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8);
+    }
+}
