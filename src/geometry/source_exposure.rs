@@ -1225,8 +1225,23 @@ mod tests {
 
     #[test]
     fn straight_intersection_event_derives_conservative_pose_cell_bounds() {
-        let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let target_vertices = Form::Rectangle {
+        let target = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
+                unit_index: 0,
+                form: crate::resources::Form::Rectangle {
+                    width: 2.0,
+                    height: 2.0,
+                },
+                x: 5.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            min_x: 4.0,
+            max_x: 6.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let target_vertices = crate::resources::Form::Rectangle {
             width: 2.0,
             height: 2.0,
         }
@@ -1243,10 +1258,10 @@ mod tests {
             .expect("rectangle has a left edge");
         let target_start_local = target_vertices[target_edge_index];
         let target_end_local = target_vertices[(target_edge_index + 1) % target_vertices.len()];
-        let blocker = OrganismBodyGeometry {
-            parts: vec![PlacedForm {
+        let blocker = crate::organism_geometry::OrganismBodyGeometry {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 7,
-                form: Form::Line { length: 2.0 },
+                form: crate::resources::Form::Line { length: 2.0 },
                 x: 4.0,
                 y: 0.0,
                 rotation_radians: 0.0,
