@@ -248,9 +248,80 @@ pub(crate) struct VisibilityCutSignature {
     interval_visibility: Vec<bool>,
     interval_blocker_bodies: Vec<Vec<(usize, usize)>>,
     ordered_events: Vec<VisibilityEventIdentity>,
+    ordered_parameters: Vec<f64>,
+}
+
+/// Caller-derived conservative bounds for one event over a complete
+/// proposed pose cell. existence_margin is the smallest positive geometric
+/// margin that keeps this event valid (for example, a nonzero intersection
+/// determinant, an interior parameter margin, or a positive tangency
+/// discriminant); its change bound must cover the whole cell.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct VisibilityEventPoseCellBound {
+    pub(crate) identity: VisibilityEventIdentity,
+    pub(crate) parameter_change_bound: f64,
+    pub(crate) existence_margin: f64,
+    pub(crate) existence_margin_change_bound: f64,
 }
 
 impl VisibilityCutSignature {
+    /// Prove that each event remains valid and that its parameter interval
+    /// stays strictly ordered throughout the pose cell. The caller must supply
+    /// independently conservative bounds for every event; sampled equality
+    /// alone is not a continuous-cell proof.
+    #[allow(dead_code)]
+    pub(crate) fn certify_pose_cell(
+        &self,
+        event_bounds: &[VisibilityEventPoseCellBound],
+    ) -> Option<()> {
+        if event_bounds.len() != self.ordered_events.len()
+            || self.ordered_parameters.len() != self.ordered_events.len()
+        {
+            return None;
+        }
+        let mut parameter_intervals = Vec::with_capacity(event_bounds.len());
+        for ((identity, parameter), bound) in self
+            .ordered_events
+            .iter()
+            .zip(&self.ordered_parameters)
+            .zip(event_bounds)
+        {
+            if *identity != bound.identity
+                || !parameter.is_finite()
+                || !bound.parameter_change_bound.is_finite()
+                || bound.parameter_change_bound < 0.0
+                || !bound.existence_margin.is_finite()
+                || bound.existence_margin <= 0.0
+                || !bound.existence_margin_change_bound.is_finite()
+                || bound.existence_margin_change_bound < 0.0
+                || bound.existence_margin <= bound.existence_margin_change_bound
+            {
+                return None;
+            }
+            let is_target_vertex = matches!(identity, VisibilityEventIdentity::TargetVertex { .. });
+            if is_target_vertex {
+                if bound.parameter_change_bound != 0.0 || (*parameter != 0.0 && *parameter != 1.0) {
+                    return None;
+                }
+                parameter_intervals.push((*parameter, *parameter));
+            } else {
+                let lower = *parameter - bound.parameter_change_bound;
+                let upper = *parameter + bound.parameter_change_bound;
+                if !lower.is_finite() || !upper.is_finite() || lower <= 0.0 || upper >= 1.0 {
+                    return None;
+                }
+                parameter_intervals.push((lower, upper));
+            }
+        }
+        if parameter_intervals
+            .windows(2)
+            .any(|pair| pair[0].1 >= pair[1].0)
+        {
+            return None;
+        }
+        Some(())
+    }
+
     #[allow(dead_code)]
     pub(crate) fn from_cuts(cuts: &[VisibilityCutRecord]) -> Option<Self> {
         use std::collections::BTreeSet;
@@ -280,6 +351,7 @@ impl VisibilityCutSignature {
             candidate_bodies: Vec::new(),
             interval_visibility: Vec::new(),
             interval_blocker_bodies: Vec::new(),
+            ordered_parameters: cuts.iter().map(|cut| cut.parameter).collect(),
             ordered_events,
         })
     }
