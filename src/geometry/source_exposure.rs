@@ -45,6 +45,65 @@ pub(crate) enum BoundaryEndpointProvenance {
     },
 }
 
+impl BoundaryEndpointProvenance {
+    pub(crate) fn visibility_event(&self) -> Option<(f64, VisibilityCutEvent)> {
+        match self {
+            Self::RigidTargetVertex {
+                body_index,
+                unit_index,
+                vertex_index,
+                local_point,
+                edge_parameter,
+            } => Some((
+                *edge_parameter,
+                VisibilityCutEvent::TargetVertex {
+                    body_index: *body_index,
+                    unit_index: *unit_index,
+                    vertex_index: *vertex_index,
+                    local_point: *local_point,
+                },
+            )),
+            Self::RigidVisibilityIntersection { parameter, event } => {
+                Some((*parameter, event.clone()))
+            }
+            Self::UnresolvedVisibilityCut { .. } => None,
+        }
+    }
+}
+
+/// Recover the complete ordered event set from exposed interval endpoints.
+/// If any endpoint lacks stable provenance, the pose-cell proof fails closed.
+pub(crate) fn ordered_visibility_events_from_endpoints(
+    endpoints: &[&BoundaryEndpointProvenance],
+) -> Option<Vec<VisibilityCutEvent>> {
+    let mut events = endpoints
+        .iter()
+        .map(|endpoint| endpoint.visibility_event())
+        .collect::<Option<Vec<_>>>()?;
+    events.sort_by(|left, right| {
+        left.0
+            .total_cmp(&right.0)
+            .then_with(|| left.1.stable_identity().cmp(&right.1.stable_identity()))
+    });
+
+    let mut ordered = Vec::with_capacity(events.len());
+    let mut previous: Option<(f64, VisibilityEventIdentity)> = None;
+    for (parameter, event) in events {
+        let identity = event.stable_identity()?;
+        if let Some((previous_parameter, previous_identity)) = previous {
+            if identity == previous_identity {
+                if (parameter - previous_parameter).abs() > 1.0e-10 {
+                    return None;
+                }
+                continue;
+            }
+        }
+        previous = Some((parameter, identity));
+        ordered.push(event);
+    }
+    Some(ordered)
+}
+
 /// Construction event that introduced a visibility partition endpoint.
 /// Unsupported event classes remain explicit so pose certificates can fail closed.
 #[derive(Clone, Debug, PartialEq)]
