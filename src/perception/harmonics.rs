@@ -2129,7 +2129,6 @@ fn expand_resonance_boundary_interaction_samples(
     };
     let mut frequency_components = Vec::with_capacity(samples.len());
     let mut frequencies = Vec::new();
-    let mut sample_center = BoundaryKernelVector::default();
 
     for sample in samples {
         if (sample.source_x - source_center.x).abs() > 1e-9
@@ -2139,8 +2138,6 @@ fn expand_resonance_boundary_interaction_samples(
         {
             return None;
         }
-        sample_center.x += sample.receiver_x;
-        sample_center.y += sample.receiver_y;
         let components = resonance_boundary_sample_potential_components(sample)?;
         for component in &components {
             if !frequencies.iter().any(|frequency: &f64| {
@@ -2150,11 +2147,6 @@ fn expand_resonance_boundary_interaction_samples(
             }
         }
         frequency_components.push(components);
-    }
-    sample_center.x /= samples.len() as f64;
-    sample_center.y /= samples.len() as f64;
-    if !sample_center.x.is_finite() || !sample_center.y.is_finite() {
-        return None;
     }
     frequencies.sort_by(f64::total_cmp);
 
