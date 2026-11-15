@@ -3988,3 +3988,158 @@ mod circle_straight_provenance_tests {
         assert!(((plus.y - minus.y) / (2.0 * step) - derivative.y).abs() < 1.0e-8);
     }
 }
+
+
+#[cfg(test)]
+mod circle_straight_motion_bound_tests {
+    use super::*;
+
+    fn root_near(
+        start: BoundaryKernelVector,
+        end: BoundaryKernelVector,
+        center: BoundaryKernelVector,
+        radius: f64,
+        reference: f64,
+    ) -> (f64, f64) {
+        let edge = BoundaryKernelVector {
+            x: end.x - start.x,
+            y: end.y - start.y,
+        };
+        let offset = BoundaryKernelVector {
+            x: start.x - center.x,
+            y: start.y - center.y,
+        };
+        let a = edge.dot(edge);
+        let b = 2.0 * offset.dot(edge);
+        let c = offset.dot(offset) - radius * radius;
+        let root = (b * b - 4.0 * a * c).sqrt();
+        let candidates = [(-b - root) / (2.0 * a), (-b + root) / (2.0 * a)];
+        let t = candidates
+            .into_iter()
+            .min_by(|left, right| {
+                (left - reference)
+                    .abs()
+                    .total_cmp(&(right - reference).abs())
+            })
+            .unwrap();
+        let point = BoundaryKernelVector {
+            x: start.x + t * edge.x,
+            y: start.y + t * edge.y,
+        };
+        let angle = (point.y - center.y).atan2(point.x - center.x);
+        (t, angle)
+    }
+
+    #[test]
+    fn circle_straight_pose_cell_bound_contains_small_endpoint_and_pose_changes() {
+        let radius = 1.0;
+        let start = BoundaryKernelVector { x: -2.0, y: 0.0 };
+        let end = BoundaryKernelVector { x: 2.0, y: 0.0 };
+        let center = BoundaryKernelVector { x: 0.0, y: 0.5 };
+        let target_parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
+        let arc_angle = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        let displacement = 0.001;
+        let angular_displacement = 0.001;
+        let bound = circle_straight_intersection_motion_bound(
+            start,
+            end,
+            center,
+            radius,
+            target_parameter,
+            0.0,
+            std::f64::consts::TAU,
+            arc_angle,
+            displacement,
+            displacement,
+            displacement,
+            angular_displacement,
+        )
+        .expect("small pose cell stays away from tangency and arc endpoints");
+        let directions = [
+            (1.0, 0.0),
+            (-1.0, 0.0),
+            (0.0, 1.0),
+            (0.0, -1.0),
+            (0.6, 0.8),
+            (-0.8, 0.6),
+            (0.8, -0.6),
+            (-0.6, -0.8),
+        ];
+        let angle_delta = |left: f64, right: f64| {
+            (left - right + std::f64::consts::PI)
+                .rem_euclid(std::f64::consts::TAU)
+                - std::f64::consts::PI
+        };
+        for (ia, da) in directions.iter().enumerate() {
+            for (ib, db) in directions.iter().enumerate() {
+                let dc = directions[(ia + ib) % directions.len()];
+                let moved = |point: BoundaryKernelVector, direction: &(f64, f64)| {
+                    BoundaryKernelVector {
+                        x: point.x + displacement * direction.0,
+                        y: point.y + displacement * direction.1,
+                    }
+                };
+                let moved_start = moved(start, da);
+                let moved_end = moved(end, db);
+                let moved_center = moved(center, &dc);
+                let (parameter, world_angle) = root_near(
+                    moved_start,
+                    moved_end,
+                    moved_center,
+                    radius,
+                    target_parameter,
+                );
+                let blocker_rotation = if (ia + ib) % 2 == 0 {
+                    angular_displacement
+                } else {
+                    -angular_displacement
+                };
+                let local_angle = (world_angle - blocker_rotation)
+                    .rem_euclid(std::f64::consts::TAU);
+                assert!((parameter - target_parameter).abs() <= bound.target_parameter_change);
+                assert!(angle_delta(local_angle, arc_angle).abs() <= bound.local_arc_angle_change);
+            }
+        }
+    }
+
+    #[test]
+    fn circle_straight_motion_bound_rejects_tangency_and_arc_endpoint_crossing() {
+        let point = |x, y| BoundaryKernelVector { x, y };
+        let radius = 1.0;
+        let tangent_center = point(0.0, 0.999);
+        let tangent_parameter = (2.0 + (radius * radius - 0.999_f64.powi(2)).sqrt()) / 4.0;
+        assert!(circle_straight_intersection_motion_bound(
+            point(-2.0, 0.0),
+            point(2.0, 0.0),
+            tangent_center,
+            radius,
+            tangent_parameter,
+            0.0,
+            std::f64::consts::TAU,
+            0.0,
+            0.01,
+            0.01,
+            0.01,
+            0.0,
+        )
+        .is_none());
+
+        let parameter = (2.0 + 0.75_f64.sqrt()) / 4.0;
+        let angle = (-0.5_f64).atan2(0.75_f64.sqrt()).rem_euclid(std::f64::consts::TAU);
+        assert!(circle_straight_intersection_motion_bound(
+            point(-2.0, 0.0),
+            point(2.0, 0.0),
+            point(0.0, 0.5),
+            radius,
+            parameter,
+            0.0,
+            angle + 0.01,
+            angle,
+            0.001,
+            0.001,
+            0.001,
+            0.001,
+        )
+        .is_none());
+    }
+}
