@@ -4358,3 +4358,73 @@ mod curved_endpoint_motion_bound_tests {
         );
     }
 }
+
+
+#[cfg(test)]
+mod endpoint_provenance_dispatch_tests {
+    use super::*;
+
+    #[test]
+    fn typed_intersection_endpoint_dispatches_to_its_rigid_pose_resolver() {
+        let event = crate::source_exposure::VisibilityCutEvent::StraightBoundaryIntersection {
+            blocker_body_index: 7,
+            blocker_unit_index: 3,
+            target_body_index: 2,
+            target_unit_index: 5,
+            target_edge_index: 1,
+            blocker_edge_index: 4,
+            target_edge_start_local: (-1.0, 0.0),
+            target_edge_end_local: (1.0, 0.0),
+            blocker_edge_start_local: (0.0, -1.0),
+            blocker_edge_end_local: (0.0, 1.0),
+            target_parameter: 0.5,
+            blocker_parameter: 0.5,
+        };
+        let provenance =
+            crate::source_exposure::BoundaryEndpointProvenance::RigidVisibilityIntersection {
+                parameter: 0.5,
+                event,
+            };
+        let target_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: 3.0 },
+            rotation_radians: 0.3,
+        };
+        let blocker_pose = RigidBoundaryPose {
+            pivot: BoundaryKernelVector { x: 2.0, y: 3.0 },
+            rotation_radians: -0.2,
+        };
+        let target_translation = BoundaryKernelVector { x: 0.2, y: -0.1 };
+        let blocker_translation = BoundaryKernelVector { x: -0.05, y: 0.15 };
+        let resolved = resolve_boundary_endpoint_pose_derivative(
+            &provenance,
+            2,
+            5,
+            7,
+            3,
+            target_pose,
+            blocker_pose,
+            target_translation,
+            0.3,
+            blocker_translation,
+            -0.2,
+        )
+        .expect("typed endpoint provenance should dispatch to the straight resolver");
+        assert!((resolved.point.x - 2.0).abs() < 1.0e-12);
+        assert!((resolved.point.y - 3.0).abs() < 1.0e-12);
+        assert!(resolved.derivative.x.is_finite() && resolved.derivative.y.is_finite());
+    }
+
+    #[test]
+    fn unresolved_or_mismatched_endpoint_provenance_stays_unresolved() {
+        let pose = RigidBoundaryPose::default();
+        let zero = BoundaryKernelVector::default();
+        let unresolved = crate::source_exposure::BoundaryEndpointProvenance::UnresolvedVisibilityCut {
+            parameter: 0.5,
+            events: Vec::new(),
+        };
+        assert!(resolve_boundary_endpoint_pose_derivative(
+            &unresolved, 0, 0, 1, 1, pose, pose, zero, 0.0, zero, 0.0
+        )
+        .is_none());
+    }
+}
