@@ -770,6 +770,9 @@ type PairPotentialWorldMaterials = (Vec<PhysicalMaterial>, Vec<usize>, Vec<Optio
 pub(crate) struct LocalResonanceWorldSnapshot {
     tick: u64,
     bodies: Vec<PhysicalMaterial>,
+    /// Original field-cell/material slots aligned with the body snapshot.
+    /// These locators let movement commits avoid ambiguous position lookups.
+    field_locators: Vec<Option<(usize, usize)>>,
     resonant_indices: Vec<usize>,
     resonant_index_set: HashSet<usize>,
     receiver_indices: HashMap<u64, Option<usize>>,
@@ -956,13 +959,14 @@ impl LocalResonanceWorldSnapshot {
     /// decomposing structures are deliberately outside this snapshot: they are
     /// isolated and must not act as emitters, receivers, or occluders here.
     pub(crate) fn from_simulation(simulation: &Simulation) -> Option<Self> {
-        let bodies = simulation
-            .environment
-            .field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.physical_materials.iter().cloned())
-            .collect::<Vec<_>>();
+        let mut bodies = Vec::new();
+        let mut field_locators = Vec::new();
+        for (cell_index, cell) in simulation.environment.field.cells.iter().enumerate() {
+            for (material_index, physical) in cell.physical_materials.iter().enumerate() {
+                bodies.push(physical.clone());
+                field_locators.push(Some((cell_index, material_index)));
+            }
+        }
         if bodies.is_empty() {
             return None;
         }
@@ -1020,6 +1024,7 @@ impl LocalResonanceWorldSnapshot {
         Some(Self {
             tick: simulation.tick,
             bodies,
+            field_locators,
             resonant_indices,
             resonant_index_set,
             receiver_indices,
@@ -1028,6 +1033,11 @@ impl LocalResonanceWorldSnapshot {
             visibility_hierarchy,
             maximum_rotation_margin,
         })
+    }
+
+    /// Resolve a snapshot body to its original environmental field slot.
+    pub(crate) fn field_locator(&self, body_index: usize) -> Option<(usize, usize)> {
+        self.field_locators.get(body_index).copied().flatten()
     }
 
     /// Derive the complete force contribution for one environmental material
