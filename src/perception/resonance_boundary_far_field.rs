@@ -5671,6 +5671,117 @@ mod endpoint_provenance_dispatch_tests {
     }
 
     #[test]
+    fn ray_feature_visibility_event_has_a_continuous_pose_cell_bound() {
+        let bodies = vec![
+            one_part_body(
+                5,
+                crate::resources::Form::Line { length: 4.0 },
+                2.0,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            one_part_body(
+                3,
+                crate::resources::Form::Line { length: 1.0 },
+                1.0,
+                0.5,
+                0.0,
+            ),
+        ];
+        let body_motion = [
+            crate::source_exposure::VisibilityBodyMotionBound {
+                body_index: 0,
+                pivot: (2.0, 0.0),
+                translation_bound: 0.001,
+                angular_bound_radians: 0.001,
+                radius_bound: 2.0,
+            },
+            crate::source_exposure::VisibilityBodyMotionBound {
+                body_index: 1,
+                pivot: (1.0, 0.5),
+                translation_bound: 0.001,
+                angular_bound_radians: 0.001,
+                radius_bound: 0.5,
+            },
+        ];
+        let event = crate::source_exposure::VisibilityCutEvent::RayThroughRigidFeature {
+            blocker_body_index: 1,
+            blocker_unit_index: 3,
+            blocker_feature_index: 0,
+            target_body_index: 0,
+            target_unit_index: 5,
+            target_edge_index: 0,
+            local_point: (0.5, 0.0),
+        };
+        let bound = bound_ray_visibility_event_over_pose_cell(
+            &event,
+            BoundaryKernelVector::default(),
+            0.001,
+            &bodies,
+            &body_motion,
+        )
+        .expect("stable ray-feature cut should have a pose-cell certificate");
+        assert!(bound.parameter_change_bound > 0.0);
+        assert!(bound.existence_margin > bound.existence_margin_change_bound);
+    }
+
+    #[test]
+    fn circle_tangent_visibility_event_has_a_continuous_pose_cell_bound() {
+        let bodies = vec![
+            one_part_body(
+                5,
+                crate::resources::Form::Line { length: 4.0 },
+                2.0,
+                0.0,
+                std::f64::consts::FRAC_PI_2,
+            ),
+            one_part_body(
+                3,
+                crate::resources::Form::Circle { radius: 0.5 },
+                1.0,
+                0.0,
+                0.0,
+            ),
+        ];
+        let body_motion = [
+            crate::source_exposure::VisibilityBodyMotionBound {
+                body_index: 0,
+                pivot: (2.0, 0.0),
+                translation_bound: 0.001,
+                angular_bound_radians: 0.001,
+                radius_bound: 2.0,
+            },
+            crate::source_exposure::VisibilityBodyMotionBound {
+                body_index: 1,
+                pivot: (1.0, 0.0),
+                translation_bound: 0.001,
+                angular_bound_radians: 0.001,
+                radius_bound: 0.5,
+            },
+        ];
+        let event = crate::source_exposure::VisibilityCutEvent::RayThroughCircleTangent {
+            blocker_body_index: 1,
+            blocker_unit_index: 3,
+            target_body_index: 0,
+            target_unit_index: 5,
+            target_edge_index: 0,
+            tangent_side: 1,
+            local_center: (0.0, 0.0),
+            radius: 0.5,
+        };
+        let bound = bound_ray_visibility_event_over_pose_cell(
+            &event,
+            BoundaryKernelVector::default(),
+            0.001,
+            &bodies,
+            &body_motion,
+        )
+        .expect("stable circle tangent cut should have a pose-cell certificate");
+        assert!(bound.parameter_change_bound > 0.0);
+        assert!(bound.existence_margin > bound.existence_margin_change_bound);
+    }
+
+    #[test]
     fn unresolved_or_mismatched_endpoint_provenance_stays_unresolved() {
         let pose = RigidBoundaryPose::default();
         let zero = BoundaryKernelVector::default();
