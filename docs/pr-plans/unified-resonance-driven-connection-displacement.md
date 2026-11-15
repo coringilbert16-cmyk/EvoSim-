@@ -403,17 +403,19 @@ The tick-local `MaterialResonanceEmitter` cache is now used by the environmental
 
 The chemistry snapshot regression evaluates the same three-body pair both through prepared emitters and through the uncached reference path, then compares every body's force and torque to (10^{-10}). This is an exactness-preserving preparation step for the future multipole evaluator, not a multipole approximation. It does not change the force law or make the all-pairs oracle suitable for live ticks.
 
-## 7.7 Visibility topology signatures and pose-cell candidate bounds — 2026-11-15
+## 7.7 Visibility topology signatures and reusable pose-cell candidates — 2026-11-15
 
-The visibility foundation now retains stable event identity rather than relying on world-coordinate matching:
+The visibility foundation retains stable event identity rather than relying on world-coordinate matching:
 
 - Straight target vertices, rays through rigid blocker features, circle tangencies, straight/straight intersections, and circle/straight intersections have stable body/unit/feature identities.
-- A target-edge signature records the strict ordered event identities, conservative candidate-body indices, and blocked/unblocked classification for each open interval. Coincident, unresolved, duplicate, or reordered events fail closed.
+- A target-edge signature records strict ordered event identities, candidate-body membership, and blocked/unblocked classification for each open interval. Coincident, unresolved, duplicate, or reordered events fail closed.
 - The signature is attached to provenance-bearing exposed intervals and carried into material-aura reception samples.
-- A pose-cell broad-phase helper expands target and blocker bounds by source translation and each body's translation/rotation envelope. Rotation expansion uses the supplied maximum pivot-to-shape radius; invalid or missing envelopes fail closed.
-- The far-field pose-cell helper can compare signatures across a supplied cell cover. Signature equality is necessary but not sufficient: it does not itself prove candidate completeness or rule out event births/deaths between samples.
+- A reusable pose-cell candidate inventory is now built once per target body from the full target-body AABB and conservative swept AABBs for all possible blocker bodies. The same candidate superset is reused for every target edge and every sampled pose in that cell.
+- The inventory records the reference source and per-constituent poses. Each reuse validates source displacement, constituent translation/rotation bounds, and stable body/unit ordering; samples outside the declared cell fail closed.
+- The candidate superset is compared against exact visibility in a regression where a blocker begins behind the target and moves in front during the pose cell. A separate assertion verifies rejection outside the declared envelope.
+- The far-field pose-cell helper can compare signatures across a supplied cell cover. Signature equality remains necessary but is not sufficient to prove topology cannot change between samples.
 
-**Remaining visibility work:** build one conservative candidate inventory from the full pose-cell envelope and reuse it for every sampled pose; prove that every possible blocker feature is included; add interval-level blocker identity where needed; certify event existence/order and tangency transitions over the entire cell; otherwise subdivide or use exact visibility. The swept candidate helper is wired into a dedicated pose-cell interval-generation API; the default material-aura path still uses the current-pose API, and no production force evaluator yet consumes the pose-cell signatures or reception metadata.
+**Remaining visibility proof:** the motion envelope's pivot-to-shape radius is still supplied by the caller and must be derived or independently certified from realized geometry; body/unit identity does not yet fingerprint every boundary feature/form. The candidate inventory is not yet wired into the default material-aura path or production force evaluator. Next, certify each possible event's existence, parameter ordering, and tangency/discriminant bounds over the complete pose cell. If an event can be born, die, coincide, or reorder anywhere in the cell, subdivide or use exact visibility. No sampled-signature equality alone may authorize a far-field approximation.
 
 ## 11. Live objective audit and minimal closeout plan — 2026-11-13
 
