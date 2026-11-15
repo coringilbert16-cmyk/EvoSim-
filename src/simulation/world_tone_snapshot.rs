@@ -1144,6 +1144,54 @@ impl LocalResonanceWorldSnapshot {
         Some((pair_count, accumulator))
     }
 
+    /// Independent complete-world gradient of the same unordered-pair
+    /// potential, restricted to free environmental materials. This computes
+    /// every body's translational force and center-of-mass torque from one
+    /// shared scalar potential, including reactions on occluding bodies.
+    /// It remains a small-world finite-difference oracle, not a live evaluator.
+    #[allow(dead_code)]
+    pub(crate) fn complete_pair_force_gradient_oracle(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Option<Vec<ResonanceWorldBodyForce>> {
+        let force_owners = vec![None; self.bodies.len()];
+        let gradient = world_pair_potential_gradient_for_bodies(
+            &self.bodies,
+            &self.resonant_indices,
+            &force_owners,
+            catalog,
+            self.tick,
+        )?;
+        if gradient.body_forces.len() != self.bodies.len()
+            || gradient.body_torques.len() != self.bodies.len()
+        {
+            return None;
+        }
+        let contributions = self
+            .bodies
+            .iter()
+            .enumerate()
+            .map(|(body_index, body)| ResonanceWorldBodyForce {
+                body_index,
+                environmental_identity: body.environmental_identity,
+                force: crate::harmonics::ResonanceBodyForce {
+                    x: gradient.body_forces[body_index].0,
+                    y: gradient.body_forces[body_index].1,
+                    torque: gradient.body_torques[body_index],
+                },
+            })
+            .collect::<Vec<_>>();
+        contributions
+            .iter()
+            .all(|entry| {
+                entry.force.x.is_finite()
+                    && entry.force.y.is_finite()
+                    && entry.force.torque.is_finite()
+                    && entry.environmental_identity != 0
+            })
+            .then_some(contributions)
+    }
+
     /// Return the mean endpoint spectral match to a reaction's natural
     /// frequency. This is a dimensionless activation influence, not energy.
     pub(crate) fn reaction_similarity(
@@ -3192,5 +3240,88 @@ mod tests {
                 expected
             );
         }
+    #[test]
+    fn complete_environmental_pair_accumulation_matches_shared_potential_gradient() {
+        let mut simulation = Simulation::new(307, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x, y) in [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 16.0, 10.0),
+            ("Nitrogen", 13.0, 14.0),
+        ] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should realize");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("environmental snapshot should contain all three free bodies");
+        let (pair_count, pair_accumulator) = snapshot
+            .accumulate_complete_pair_forces(&catalog)
+            .expect("each unordered pair should contribute all body reactions");
+        assert_eq!(pair_count, 3);
+        let pair_forces = pair_accumulator.into_body_forces();
+        let global_forces = snapshot
+            .complete_pair_force_gradient_oracle(&catalog)
+            .expect("shared scalar potential should provide every body force and torque");
+        assert_eq!(pair_forces.len(), global_forces.len());
+        for (pair, global) in pair_forces.iter().zip(&global_forces) {
+            assert_eq!(pair.body_index, global.body_index);
+            assert_eq!(pair.environmental_identity, global.environmental_identity);
+            let scale = pair
+                .force
+                .x
+                .abs()
+                .max(pair.force.y.abs())
+                .max(pair.force.torque.abs())
+                .max(global.force.x.abs())
+                .max(global.force.y.abs())
+                .max(global.force.torque.abs())
+                .max(1.0);
+            assert!(
+                (pair.force.x - global.force.x).abs() <= 1.0e-5 * scale
+                    && (pair.force.y - global.force.y).abs() <= 1.0e-5 * scale
+                    && (pair.force.torque - global.force.torque).abs() <= 1.0e-5 * scale,
+                "pairwise mutual accumulation must match the gradient of the shared world potential: pair={:?}, global={:?}",
+                pair.force,
+                global.force
+            );
+        }
+        let total_force = global_forces.iter().fold((0.0, 0.0), |sum, entry| {
+            (sum.0 + entry.force.x, sum.1 + entry.force.y)
+        });
+        let total_angular_momentum_rate = global_forces
+            .iter()
+            .zip(&snapshot.bodies)
+            .map(|(entry, body)| {
+                let properties = body.mass_properties(&catalog, None).unwrap();
+                properties.center_x * entry.force.y - properties.center_y * entry.force.x
+                    + entry.force.torque
+            })
+            .sum::<f64>();
+        assert!(total_force.0.abs() < 1.0e-4 && total_force.1.abs() < 1.0e-4);
+        assert!(
+            total_angular_momentum_rate.abs() < 1.0e-4,
+            "shared-potential forces and torques must conserve total angular momentum"
+        );
+    }
+
     }
 }
