@@ -1317,3 +1317,32 @@ finite-difference comparisons for every body's x/y force and torque, plus
 whole-world linear- and angular-momentum balance including occluder reactions.
 This validates the direct reference path; it does not validate a scalable
 approximation or relax any of the event-provenance requirements above.
+
+
+## 29. Straight/straight visibility-cut pose derivative — 2026-11-14
+
+The strict interior intersection of a target segment and a blocker segment now
+has an analytic generalized-pose derivative. For
+
+`A + t(B-A) = C + u(D-C)`,
+
+the helper differentiates both segment parameters and the world intersection
+point from the derivatives of all four rigid endpoints. It rejects
+near-parallel segments, endpoint intersections, non-finite inputs, and
+non-finite derivative results. Those cases remain exact/subdivision cases;
+the helper does not alter the exact visibility partition or classify an
+unsupported event as differentiable.
+
+The finite-difference regression checks both local parameters and both
+coordinates of the intersection point under independent endpoint motion.
+Separate regressions verify that parallel and endpoint events fail closed.
+
+This supplies the local Jacobian primitive corresponding to the
+`StraightBoundaryIntersection` provenance record from Section 28. It does
+not yet wire event records to body-pose endpoint derivatives or certify
+intersection ordering across a pose cell. Coincident events remain unresolved,
+and circle/straight intersections plus curved receiver endpoints still require
+their own derivative rules or exact/subdivision fallback. The next step is to
+compose the event's retained target/blocker edge identities and local
+parameters with rigid endpoint Jacobians, then validate the composed endpoint
+derivative against the exact visibility output.
