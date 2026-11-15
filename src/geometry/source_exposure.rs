@@ -1587,8 +1587,7 @@ impl VisibilityPoseCellCandidateInventory {
                 return None;
             }
             let maximum_displacement = motion.maximum_point_displacement()?;
-            for (part, (unit_index, form, x, y, rotation)) in
-                body.parts.iter().zip(reference_parts)
+            for (part, (unit_index, form, x, y, rotation)) in body.parts.iter().zip(reference_parts)
             {
                 if part.unit_index != *unit_index
                     || &part.form != form
