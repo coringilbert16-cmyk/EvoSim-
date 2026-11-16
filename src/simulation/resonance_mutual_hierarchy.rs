@@ -487,6 +487,163 @@ mod tests {
             .is_empty());
     }
 
+
+    fn zero_error_certificate(
+        bodies_a: &[usize],
+        bodies_b: &[usize],
+        visibility_certified: bool,
+    ) -> MutualClusterCertificate {
+        let bodies = bodies_a
+            .iter()
+            .chain(bodies_b.iter())
+            .copied()
+            .map(|body_index| BodyInteractionErrorBound {
+                body_index,
+                force_x: 0.0,
+                force_y: 0.0,
+                torque: 0.0,
+            })
+            .collect();
+        MutualClusterCertificate {
+            visibility_certified,
+            errors: MutualClusterErrorBounds {
+                potential: 0.0,
+                bodies,
+            },
+        }
+    }
+
+    fn strict_tolerance() -> MutualErrorTolerance {
+        MutualErrorTolerance {
+            potential: 0.1,
+            force_x: 0.1,
+            force_y: 0.1,
+            torque: 0.1,
+        }
+    }
+
+    #[test]
+    fn adaptive_traversal_accepts_only_complete_visible_cluster_certificates() {
+        let layout = [
+            bounds(0.0, 0.0, 0.1, 0.1),
+            bounds(1.0, 0.0, 0.1, 0.1),
+            bounds(2.0, 0.0, 0.1, 0.1),
+            bounds(3.0, 0.0, 0.1, 0.1),
+        ];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        let result = tree
+            .evaluate_adaptive(
+                strict_tolerance(),
+                |a, b| Some(zero_error_certificate(a, b, true)),
+                |_, _| Some(()),
+            )
+            .unwrap();
+
+        assert!(result.exact_pairs.is_empty());
+        assert_eq!(result.accepted_cluster_pairs.len(), 1);
+        let accepted = &result.accepted_cluster_pairs[0];
+        assert_eq!(accepted.bodies_a.len(), 2);
+        assert_eq!(accepted.bodies_b.len(), 2);
+        assert!(accepted.errors.is_within(
+            &accepted.bodies_a,
+            &accepted.bodies_b,
+            &strict_tolerance()
+        ));
+    }
+
+    #[test]
+    fn adaptive_traversal_subdivides_when_any_independent_error_or_visibility_fails() {
+        let layout = [
+            bounds(0.0, 0.0, 0.1, 0.1),
+            bounds(1.0, 0.0, 0.1, 0.1),
+            bounds(2.0, 0.0, 0.1, 0.1),
+            bounds(3.0, 0.0, 0.1, 0.1),
+        ];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        for failing_metric in 0..5 {
+            let result = tree
+                .evaluate_adaptive(
+                    strict_tolerance(),
+                    |a, b| {
+                        let mut certificate = zero_error_certificate(a, b, failing_metric != 4);
+                        match failing_metric {
+                            0 => certificate.errors.potential = 0.2,
+                            1 => certificate.errors.bodies[0].force_x = 0.2,
+                            2 => certificate.errors.bodies[0].force_y = 0.2,
+                            3 => certificate.errors.bodies[0].torque = 0.2,
+                            _ => {}
+                        }
+                        Some(certificate)
+                    },
+                    |_, _| Some(()),
+                )
+                .unwrap();
+            assert!(result.accepted_cluster_pairs.is_empty());
+            assert_eq!(result.exact_pairs, exact_pairs(layout.len()));
+        }
+    }
+
+    #[test]
+    fn adaptive_traversal_rejects_missing_or_duplicate_body_error_bounds() {
+        let tolerance = strict_tolerance();
+        let expected_a = [0, 1];
+        let expected_b = [2, 3];
+        let missing = MutualClusterErrorBounds {
+            potential: 0.0,
+            bodies: vec![BodyInteractionErrorBound {
+                body_index: 0,
+                force_x: 0.0,
+                force_y: 0.0,
+                torque: 0.0,
+            }],
+        };
+        assert!(!missing.is_within(&expected_a, &expected_b, &tolerance));
+
+        let duplicate = MutualClusterErrorBounds {
+            potential: 0.0,
+            bodies: vec![
+                BodyInteractionErrorBound {
+                    body_index: 0,
+                    force_x: 0.0,
+                    force_y: 0.0,
+                    torque: 0.0,
+                },
+                BodyInteractionErrorBound {
+                    body_index: 0,
+                    force_x: 0.0,
+                    force_y: 0.0,
+                    torque: 0.0,
+                },
+                BodyInteractionErrorBound {
+                    body_index: 2,
+                    force_x: 0.0,
+                    force_y: 0.0,
+                    torque: 0.0,
+                },
+                BodyInteractionErrorBound {
+                    body_index: 3,
+                    force_x: 0.0,
+                    force_y: 0.0,
+                    torque: 0.0,
+                },
+            ],
+        };
+        assert!(!duplicate.is_within(&expected_a, &expected_b, &tolerance));
+    }
+
+    #[test]
+    fn adaptive_traversal_fails_closed_when_exact_leaf_evaluation_fails() {
+        let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        assert!(tree
+            .evaluate_adaptive(
+                strict_tolerance(),
+                |_, _| None,
+                |_, _| None,
+            )
+            .is_none());
+    }
+
     #[test]
     fn mutual_tree_rejects_invalid_bounds_and_preserves_world_extent() {
         let invalid = [VisibilityBounds {
