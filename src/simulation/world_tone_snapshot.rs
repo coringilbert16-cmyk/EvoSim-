@@ -812,7 +812,7 @@ pub(crate) struct ResonanceWorldPairForceEvaluation {
 /// A validated, immutable proposal for advancing one world body. The caller
 /// still owns collision checks, energy settlement, and the eventual atomic commit.
 #[derive(Clone, Debug)]
-#[allow(dead_code)] // Consumed by the live movement/energy transaction being integrated.
+#[allow(dead_code)] // Consumed by the live movement/energy transaction.
 pub(crate) struct ResonanceWorldBodyMotion {
     pub(crate) body_index: usize,
     pub(crate) environmental_identity: u64,
@@ -826,7 +826,7 @@ pub(crate) struct ResonanceWorldBodyMotion {
 /// are accumulated before any body is advanced, so a body participating in
 /// several interactions receives their vector sum exactly once.
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)] // Consumed by the forthcoming runtime force-integration stage.
+#[allow(dead_code)] // Live Newtonian ticks accumulate force and potential state here.
 pub(crate) struct ResonanceForceAccumulator {
     bodies: std::collections::BTreeMap<
         usize,
@@ -845,7 +845,7 @@ pub(crate) struct ResonanceForceAccumulator {
     complete_world_body_count: Option<usize>,
 }
 
-#[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
+#[allow(dead_code)] // Audit and focused test helpers share the live accumulator API.
 impl ResonanceForceAccumulator {
     /// Add one environmental body's contribution. Reject identity changes,
     /// non-finite gradients, and overflow without partially modifying the sum.
@@ -1030,6 +1030,9 @@ impl ResonanceForceAccumulator {
                 || kinetic_energy_after < 0.0
             {
                 return None;
+            }
+            if after == *before {
+                continue;
             }
             staged.push(ResonanceWorldBodyMotion {
                 body_index: *body_index,

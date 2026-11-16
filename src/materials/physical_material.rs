@@ -82,10 +82,6 @@ impl InertialMotion {
     /// Apply a constant net force and torque over an explicitly supplied
     /// physics-time interval. No drag or damping is applied. The caller owns
     /// the timestep and the authoritative mass/inertia calculation.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "Newtonian runtime integration follows in this PR")
-    )]
     pub(crate) fn advanced(
         self,
         force_x: f64,

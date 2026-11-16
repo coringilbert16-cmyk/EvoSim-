@@ -1,9 +1,9 @@
-//! Deterministic ambient transport for realized environmental material.
+//! Deterministic read-only ambient flow for realized environmental material.
 //!
 //! The flow is deliberately a bounded approximation, not a fluid solver. It
-//! supplies a smooth S-shaped current, local recirculation, mass-dependent
-//! mobility, and coarse obstacle wakes while leaving chemistry to the normal
-//! simulation tick.
+//! supplies a smooth S-shaped current, local recirculation, and coarse obstacle
+//! wakes. The ordinary simulation tick samples no flow-driven material motion;
+//! legacy advection remains available only to diagnostics and regressions.
 
 use crate::environment::ActiveMaterialField;
 use crate::physical_material::{intrinsic_moment_of_inertia, PhysicalMaterial};
