@@ -5424,7 +5424,7 @@ mod endpoint_provenance_dispatch_tests {
     ) -> crate::physical_body_geometry::PhysicalBodyGeometry {
         let radius = form.bounding_radius();
         crate::physical_body_geometry::PhysicalBodyGeometry {
-            parts: vec![crate::organism_geometry::PlacedForm {
+            parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index,
                 form,
                 x,
