@@ -3906,7 +3906,7 @@ pub(crate) fn resonance_pair_potential_components_with_occluders(
     )
 }
 
-fn resonance_pair_potential_components_with_prepared_emitters(
+pub(crate) fn resonance_pair_potential_components_with_prepared_emitters(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
     occluders: &[crate::physical_material::PhysicalMaterial],
