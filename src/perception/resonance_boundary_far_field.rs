@@ -5688,15 +5688,13 @@ mod endpoint_provenance_dispatch_tests {
         ];
         let body_motion = [
             crate::source_exposure::VisibilityBodyMotionBound {
-                body_index: 0,
-                pivot: (2.0, 0.0),
+                rotation_pivot: (2.0, 0.0),
                 translation_bound: 0.001,
                 angular_bound_radians: 0.001,
                 radius_bound: 2.0,
             },
             crate::source_exposure::VisibilityBodyMotionBound {
-                body_index: 1,
-                pivot: (1.0, 0.5),
+                rotation_pivot: (1.0, 0.5),
                 translation_bound: 0.001,
                 angular_bound_radians: 0.001,
                 radius_bound: 0.5,
@@ -5743,15 +5741,13 @@ mod endpoint_provenance_dispatch_tests {
         ];
         let body_motion = [
             crate::source_exposure::VisibilityBodyMotionBound {
-                body_index: 0,
-                pivot: (2.0, 0.0),
+                rotation_pivot: (2.0, 0.0),
                 translation_bound: 0.001,
                 angular_bound_radians: 0.001,
                 radius_bound: 2.0,
             },
             crate::source_exposure::VisibilityBodyMotionBound {
-                body_index: 1,
-                pivot: (1.0, 0.0),
+                rotation_pivot: (1.0, 0.0),
                 translation_bound: 0.001,
                 angular_bound_radians: 0.001,
                 radius_bound: 0.5,
