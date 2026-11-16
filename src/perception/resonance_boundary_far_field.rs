@@ -4618,6 +4618,85 @@ mod tests {
     }
 
     #[test]
+    fn approximate_torque_derivative_matches_the_taylor_potential() {
+        let source = BoundaryKernelVector { x: -6.0, y: 0.5 };
+        let receiver = BoundaryKernelVector::default();
+        let samples = vec![
+            sample(2.0, 1.0, 0.7),
+            sample(2.5, 1.3, -0.2),
+            sample(1.8, 1.8, 0.35),
+        ];
+        let center = BoundaryKernelVector {
+            x: samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                / samples.len() as f64,
+            y: samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                / samples.len() as f64,
+        };
+        let expansion = BoundaryKernelExpansion::new(source, receiver, center, samples.clone())
+            .expect("finite angular sample cluster");
+        let coordinate = BoundaryPoseCoordinateDerivative {
+            source_center_derivative: BoundaryKernelVector::default(),
+            receiver_center_derivative: BoundaryKernelVector::default(),
+            source_center_derivative_bound: 0.0,
+            receiver_center_derivative_bound: 0.0,
+            source_center_displacement_bound: 0.0,
+            receiver_center_displacement_bound: 0.0,
+            samples: samples
+                .iter()
+                .enumerate()
+                .map(|(index, sample)| BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector {
+                        x: -sample.position.y,
+                        y: sample.position.x,
+                    },
+                    weight_derivative: [0.08, -0.03, 0.02][index],
+                    position_derivative_bound: sample.position.x.hypot(sample.position.y) + 0.1,
+                    absolute_weight_derivative_bound: [0.1, 0.05, 0.04][index],
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                })
+                .collect(),
+        };
+        let evaluation = expansion
+            .evaluate_approximate_pose_coordinate_derivative(&coordinate)
+            .expect("angular Taylor derivative should be bounded");
+        let potential_at_angle = |angle: f64| {
+            let (sin, cos) = angle.sin_cos();
+            let moved_samples = samples
+                .iter()
+                .zip(&coordinate.samples)
+                .map(|(sample, pose)| WeightedBoundaryKernelSample {
+                    position: BoundaryKernelVector {
+                        x: sample.position.x * cos - sample.position.y * sin,
+                        y: sample.position.x * sin + sample.position.y * cos,
+                    },
+                    weight: sample.weight + angle * pose.weight_derivative,
+                })
+                .collect::<Vec<_>>();
+            let moved_center = BoundaryKernelVector {
+                x: moved_samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                    / moved_samples.len() as f64,
+                y: moved_samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                    / moved_samples.len() as f64,
+            };
+            BoundaryKernelExpansion::new(source, receiver, moved_center, moved_samples)
+                .expect("rotated Taylor cluster remains valid")
+                .evaluate()
+                .expect("rotated Taylor expansion remains separated")
+                .potential
+        };
+        let step = 1.0e-6;
+        let finite_difference =
+            (potential_at_angle(step) - potential_at_angle(-step)) / (2.0 * step);
+        assert!(
+            (evaluation.derivative - finite_difference).abs() < 1.0e-8,
+            "Taylor torque={} finite difference={finite_difference}",
+            evaluation.derivative
+        );
+        assert!(evaluation.absolute_bound >= evaluation.derivative.abs());
+    }
+
+    #[test]
     fn pose_coordinate_derivative_rejects_incomplete_or_understated_envelopes() {
         let expansion = BoundaryKernelExpansion::new(
             BoundaryKernelVector { x: 0.0, y: 0.0 },
