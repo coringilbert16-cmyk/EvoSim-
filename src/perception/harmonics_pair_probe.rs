@@ -980,7 +980,6 @@ fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
 #[test]
 fn mutual_boundary_pair_error_bounds_hold_across_adversarial_pose_sweep() {
     let catalog = crate::resources::default_catalog();
-    let step = 5.0e-5;
     // Sweep separation, lateral offset, and asymmetric receiver orientation.
     // These remain unoccluded so the mutual pair oracle can be compared
     // directly with the exact symmetric production potential.
