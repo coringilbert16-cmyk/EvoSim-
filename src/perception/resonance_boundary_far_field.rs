@@ -3896,8 +3896,8 @@ impl MutualBoundaryKernelExpansion {
             + receiver_third_cell * source_value_cell
             + 3.0 * source_hessian_cell * receiver_gradient_cell
             + 3.0 * source_gradient_cell * receiver_hessian_cell;
-        let maximum_relative_displacement = maximum_source_displacement
-            .hypot(maximum_receiver_displacement);
+        let maximum_relative_displacement =
+            maximum_source_displacement.hypot(maximum_receiver_displacement);
         let average_relative_displacement =
             average_source_displacement.hypot(average_receiver_displacement);
         let radius_cell =
@@ -3911,11 +3911,7 @@ impl MutualBoundaryKernelExpansion {
         let potential_roundoff = 128.0
             * f64::EPSILON
             * (potential.abs() + absolute_weight_cell + self.first_moment.norm() + 1.0);
-        let potential_error = 0.5
-            * absolute_weight_cell
-            * hessian_cell
-            * radius_cell
-            * radius_cell
+        let potential_error = 0.5 * absolute_weight_cell * hessian_cell * radius_cell * radius_cell
             + potential_roundoff;
         if !potential.is_finite()
             || !potential_error.is_finite()
@@ -4028,8 +4024,7 @@ impl MutualBoundaryKernelExpansion {
                 let sample_relative_derivative_bound = source_relative_derivative_bound
                     .max(receiver_relative_derivative_bound)
                     * 2.0_f64.sqrt();
-                let maximum_weight =
-                    sample.weight.abs() + weight_change_bounds[sample_index];
+                let maximum_weight = sample.weight.abs() + weight_change_bounds[sample_index];
                 exact_derivative_magnitude_bound += maximum_weight
                     * (source_gradient_cell
                         * receiver_value_cell
