@@ -1434,6 +1434,8 @@ mod tests {
                 crate::resonance_boundary_far_field::BoundaryKernelVector::default(),
             source_center_derivative_bound: 0.0,
             receiver_center_derivative_bound: 0.0,
+            source_center_displacement_bound: 0.0,
+            receiver_center_displacement_bound: 0.0,
             samples: vec![
                 crate::resonance_boundary_far_field::BoundarySamplePoseDerivative::default(),
             ],
