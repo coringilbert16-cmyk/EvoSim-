@@ -2552,6 +2552,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
     receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
     samples: Vec<super::resonance_boundary_far_field::WeightedBoundaryKernelSample>,
     budget: super::resonance_boundary_far_field::BoundaryPotentialError,
+    coordinate_error_budget: f64,
     ordered_visibility_cuts: &[(f64, f64)],
     sample_motion: Vec<super::resonance_boundary_far_field::BoundarySampleMotionBound>,
     coordinates: Vec<super::resonance_boundary_far_field::BoundaryPoseCoordinateDerivative>,
@@ -2576,7 +2577,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         || coordinates
             .iter()
             .any(|coordinate| coordinate.samples.len() != samples.len())
-        || ![budget.potential, budget.source_force, budget.receiver_force]
+        || ![budget.potential, budget.source_force, budget.receiver_force, coordinate_error_budget]
             .iter()
             .all(|value| value.is_finite() && *value >= 0.0)
     {
@@ -2731,6 +2732,10 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             if error.potential <= budget.potential
                 && error.source_force <= budget.source_force
                 && error.receiver_force <= budget.receiver_force
+                && candidate
+                    .coordinates
+                    .iter()
+                    .all(|coordinate| coordinate.absolute_error <= coordinate_error_budget)
             {
                 return Some(candidate);
             }
@@ -3671,6 +3676,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                         source_force: tolerance,
                         receiver_force: tolerance,
                     },
+                    tolerance,
                     &ordered_cuts,
                     sample_motion,
                     coordinates,
