@@ -713,6 +713,10 @@ impl VisibilityCutSignature {
             interval_blocker_bodies: Vec::new(),
             ordered_parameters: cuts.iter().map(|cut| cut.parameter).collect(),
             ordered_events,
+            ordered_event_provenance: cuts
+                .iter()
+                .map(|cut| cut.events[0].clone())
+                .collect(),
         })
     }
 
