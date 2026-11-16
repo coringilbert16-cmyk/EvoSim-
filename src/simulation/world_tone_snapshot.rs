@@ -978,20 +978,13 @@ impl ResonanceForceAccumulator {
         accumulator: &ResonanceForceAccumulator,
         delta_time: f64,
     ) -> bool {
-        if self.tick != simulation.tick
-            || !delta_time.is_finite()
-            || delta_time <= 0.0
-        {
+        if self.tick != simulation.tick || !delta_time.is_finite() || delta_time <= 0.0 {
             return false;
         }
         let catalog = &simulation.environment.catalog;
         let vertical_period = Some(simulation.environment.height);
-        let Some(motions) = accumulator.stage_motion(
-            self,
-            delta_time,
-            catalog,
-            vertical_period,
-        ) else {
+        let Some(motions) = accumulator.stage_motion(self, delta_time, catalog, vertical_period)
+        else {
             return false;
         };
         if motions.is_empty() {
@@ -1014,8 +1007,7 @@ impl ResonanceForceAccumulator {
             }
             *body = motion.after.clone();
             moved_indices.push(motion.body_index);
-            kinetic_energy_delta +=
-                motion.kinetic_energy_after - motion.kinetic_energy_before;
+            kinetic_energy_delta += motion.kinetic_energy_after - motion.kinetic_energy_before;
         }
         if !kinetic_energy_delta.is_finite()
             || !environmental_motion_batch_is_collision_free(
@@ -1065,12 +1057,7 @@ impl ResonanceForceAccumulator {
             let Some((cell_index, material_index)) = self.field_locator(motion.body_index) else {
                 return false;
             };
-            field_motions.push((
-                cell_index,
-                material_index,
-                motion.before,
-                motion.after,
-            ));
+            field_motions.push((cell_index, material_index, motion.before, motion.after));
         }
         if !simulation
             .environment
@@ -1643,8 +1630,7 @@ fn environmental_body_motion_envelope(
         properties.center_x,
         properties.center_y.rem_euclid(vertical_period),
     );
-    (center.0.is_finite() && center.1.is_finite() && radius.is_finite())
-        .then_some((center, radius))
+    (center.0.is_finite() && center.1.is_finite() && radius.is_finite()).then_some((center, radius))
 }
 
 fn environmental_periodic_delta(delta: f64, period: f64) -> f64 {
@@ -1668,9 +1654,7 @@ fn environmental_motion_batch_is_collision_free(
         return false;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len()
-        || moved.iter().any(|index| *index >= before_bodies.len())
-    {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
         return false;
     }
     let mut starts = Vec::with_capacity(before_bodies.len());
@@ -1805,10 +1789,14 @@ fn environmental_motion_pair_potential_delta(
                 catalog,
                 tick,
             )?;
-            for component in before.into_iter().map(|mut value| {
-                value.energy = -value.energy;
-                value
-            }).chain(after) {
+            for component in before
+                .into_iter()
+                .map(|mut value| {
+                    value.energy = -value.energy;
+                    value
+                })
+                .chain(after)
+            {
                 if !component.energy.is_finite()
                     || !component.frequency_cycles_per_day.is_finite()
                     || component.frequency_cycles_per_day <= 0.0
@@ -1816,8 +1804,7 @@ fn environmental_motion_pair_potential_delta(
                     return None;
                 }
                 if let Some(existing) = totals.iter_mut().find(|existing| {
-                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day)
-                        .abs()
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
                         <= 1.0e-9
                 }) {
                     existing.energy += component.energy;
