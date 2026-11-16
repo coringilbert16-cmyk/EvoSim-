@@ -2509,7 +2509,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
     endpoints: &[&crate::source_exposure::BoundaryEndpointProvenance],
     inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     target_body_index: usize,
 ) -> Option<super::resonance_boundary_far_field::BoundaryPoseCellGeneralizedEvaluation> {
