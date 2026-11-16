@@ -37,8 +37,8 @@ mod world_tone;
 #[allow(dead_code)] // Live settlement uses this snapshot; audit helpers remain test-only.
 mod world_tone_snapshot;
 
-#[cfg(test)]
 #[path = "simulation/resonance_mutual_hierarchy.rs"]
+#[allow(dead_code)] // Production movement integration is staged behind the exact fallback.
 mod resonance_mutual_hierarchy;
 
 // Active physical geometry authority stack.
