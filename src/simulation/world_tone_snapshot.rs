@@ -1348,10 +1348,10 @@ impl LocalResonanceWorldSnapshot {
                         self.tick,
                         self.emitters
                             .iter()
-                            .find(|emitter| emitter.source_index == index_a),
+                            .find(|emitter| emitter.source_index() == index_a),
                         self.emitters
                             .iter()
-                            .find(|emitter| emitter.source_index == index_b),
+                            .find(|emitter| emitter.source_index() == index_b),
                     )?;
                 (
                     forces,
