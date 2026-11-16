@@ -791,15 +791,22 @@ fn environmental_material_translation_preserves_complete_object_and_identity() {
     let catalog = crate::resources::default_catalog();
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let physical = PhysicalMaterial::realized(
-        make_raw("Carbon", 1.0),
-        vec![crate::structure::Placement {
-            x: 10.0,
-            y: 10.0,
-            rotation_radians: 0.25,
-        }],
+        make_structured(2.0),
+        vec![
+            crate::structure::Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.25,
+            },
+            crate::structure::Placement {
+                x: 11.0,
+                y: 10.0,
+                rotation_radians: 0.25,
+            },
+        ],
         &catalog,
     )
-    .expect("carbon should be physically realizable");
+    .expect("bonded material should be physically realizable");
     let source_cell = field.index_for_position(10.0, 10.0).unwrap();
     assert!(field.deposit_physical_at_index(source_cell, physical, &catalog));
     field.assign_missing_material_identities();
@@ -815,6 +822,7 @@ fn environmental_material_translation_preserves_complete_object_and_identity() {
     assert_eq!(moved.environmental_identity, identity);
     assert_eq!(moved.material, original.material);
     assert_eq!(moved.internal_connections, original.internal_connections);
+    assert_eq!(moved.internal_connections.as_ref().map(Vec::len), Some(1));
     assert_eq!(moved.realized_shapes, original.realized_shapes);
     assert_eq!(moved.owner_relative_origin, original.owner_relative_origin);
     let old_placement = original.placements.as_ref().unwrap()[0];
