@@ -985,7 +985,9 @@ impl ResonanceForceAccumulator {
     ) -> Option<Vec<ResonanceWorldBodyMotion>> {
         if !delta_time.is_finite()
             || delta_time < 0.0
-            || self.complete_world_body_count.is_some_and(|count| count != snapshot.bodies.len())
+            || self
+                .complete_world_body_count
+                .is_some_and(|count| count != snapshot.bodies.len())
         {
             return None;
         }
@@ -2236,8 +2238,7 @@ fn environmental_motion_pair_potential_delta(
             return None;
         }
         if let Some(existing) = totals.iter_mut().find(|existing| {
-            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
-                <= 1.0e-9
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs() <= 1.0e-9
         }) {
             existing.energy += energy;
             if !existing.energy.is_finite() {
@@ -4380,18 +4381,19 @@ mod tests {
             )
             .expect("single environmental body should be realized");
             body.inertial_motion.velocity_x = velocity_x;
-            assert!(simulation.environment.field.deposit_physical(
-                210.0,
-                210.0,
-                body,
-                &catalog,
-            ));
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical(210.0, 210.0, body, &catalog,));
             simulation
                 .environment
                 .field
                 .assign_missing_material_identities();
         };
-        make_body(&mut moving, crate::harmonics::TICKS_PER_SIMULATED_DAY as f64);
+        make_body(
+            &mut moving,
+            crate::harmonics::TICKS_PER_SIMULATED_DAY as f64,
+        );
         make_body(&mut reference, 0.0);
 
         moving.step();
@@ -4404,9 +4406,12 @@ mod tests {
                 .cells
                 .iter()
                 .flat_map(|cell| cell.physical_materials.iter())
-                .find(|body| body.material.parts.iter().any(|(name, amount)| {
-                    name == "Hydrogen" && (*amount - 1.0).abs() <= 1.0e-9
-                }))
+                .find(|body| {
+                    body.material
+                        .parts
+                        .iter()
+                        .any(|(name, amount)| name == "Hydrogen" && (*amount - 1.0).abs() <= 1.0e-9)
+                })
                 .and_then(|body| body.placements.as_ref())
                 .and_then(|placements| placements.first())
                 .map(|placement| placement.x)

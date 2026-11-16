@@ -29,8 +29,7 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
-const PHYSICS_TIME_STEP_DAYS: f64 =
-    1.0 / crate::harmonics::TICKS_PER_SIMULATED_DAY as f64;
+const PHYSICS_TIME_STEP_DAYS: f64 = 1.0 / crate::harmonics::TICKS_PER_SIMULATED_DAY as f64;
 
 fn environmental_material_identity_set(environment: &Environment) -> HashSet<u64> {
     environment
