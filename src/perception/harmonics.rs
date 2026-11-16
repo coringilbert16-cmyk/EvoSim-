@@ -1405,7 +1405,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
- ) -> Option<(
+) -> Option<(
     Vec<MaterialAuraReception>,
     Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
     Vec<Option<usize>>,
@@ -3032,7 +3032,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     tick: u64,
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
- ) -> Option<(
+) -> Option<(
     Vec<ResonanceBoundaryInteractionSample>,
     Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
     Vec<Option<usize>>,
@@ -3143,42 +3143,40 @@ fn resonance_endpoint_indices(
             ..
         } => Some((*body_index, *unit_index, 0, 0)),
         BoundaryEndpointProvenance::RigidVisibilityIntersection { event, .. } => match event {
-                VisibilityCutEvent::StraightBoundaryIntersection {
-                    blocker_body_index,
-                    blocker_unit_index,
-                    target_body_index,
-                    target_unit_index,
-                    ..
-                }
-                | VisibilityCutEvent::CircleStraightIntersection {
-                    blocker_body_index,
-                    blocker_unit_index,
-                    target_body_index,
-                    target_unit_index,
-                    ..
-                }
-                | VisibilityCutEvent::RayThroughRigidFeature {
-                    blocker_body_index,
-                    blocker_unit_index,
-                    target_body_index,
-                    target_unit_index,
-                    ..
-                }
-                | VisibilityCutEvent::RayThroughCircleTangent {
-                    blocker_body_index,
-                    blocker_unit_index,
-                    target_body_index,
-                    target_unit_index,
-                    ..
-                } => Some((
-                    *target_body_index,
-                    *target_unit_index,
-                    *blocker_body_index,
-                    *blocker_unit_index,
-                )),
-                VisibilityCutEvent::TargetVertex { .. } | VisibilityCutEvent::Unresolved { .. } => {
-                    None
+            VisibilityCutEvent::StraightBoundaryIntersection {
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                ..
             }
+            | VisibilityCutEvent::CircleStraightIntersection {
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                ..
+            }
+            | VisibilityCutEvent::RayThroughRigidFeature {
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                ..
+            }
+            | VisibilityCutEvent::RayThroughCircleTangent {
+                blocker_body_index,
+                blocker_unit_index,
+                target_body_index,
+                target_unit_index,
+                ..
+            } => Some((
+                *target_body_index,
+                *target_unit_index,
+                *blocker_body_index,
+                *blocker_unit_index,
+            )),
+            VisibilityCutEvent::TargetVertex { .. } | VisibilityCutEvent::Unresolved { .. } => None,
         },
         BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. } => None,
     }
