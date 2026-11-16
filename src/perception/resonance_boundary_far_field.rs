@@ -88,6 +88,8 @@ pub(crate) struct BoundaryPoseCoordinateDerivative {
     pub(crate) receiver_center_derivative: BoundaryKernelVector,
     pub(crate) source_center_derivative_bound: f64,
     pub(crate) receiver_center_derivative_bound: f64,
+    pub(crate) source_center_displacement_bound: f64,
+    pub(crate) receiver_center_displacement_bound: f64,
     pub(crate) samples: Vec<BoundarySamplePoseDerivative>,
 }
 
@@ -3119,6 +3121,10 @@ impl BoundaryKernelExpansion {
             || coordinate.source_center_derivative_bound < 0.0
             || !coordinate.receiver_center_derivative_bound.is_finite()
             || coordinate.receiver_center_derivative_bound < 0.0
+            || !coordinate.source_center_displacement_bound.is_finite()
+            || coordinate.source_center_displacement_bound < 0.0
+            || !coordinate.receiver_center_displacement_bound.is_finite()
+            || coordinate.receiver_center_displacement_bound < 0.0
             || coordinate.source_center_derivative.norm()
                 > coordinate.source_center_derivative_bound + 64.0 * f64::EPSILON
             || coordinate.receiver_center_derivative.norm()
@@ -3277,10 +3283,10 @@ impl BoundaryKernelExpansion {
             .fold(0.0_f64, f64::max);
         let source_min = source_distance
             - center_displacement
-            - coordinate.source_center_derivative_bound;
+            - coordinate.source_center_displacement_bound;
         let receiver_min = receiver_distance
             - center_displacement
-            - coordinate.receiver_center_derivative_bound;
+            - coordinate.receiver_center_displacement_bound;
         if !source_min.is_finite()
             || !receiver_min.is_finite()
             || source_min <= f64::EPSILON
