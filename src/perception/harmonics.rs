@@ -1380,6 +1380,20 @@ fn material_aura_receptions_with_occluders_prepared(
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<MaterialAuraReception>> {
+    material_aura_receptions_with_occluders_and_geometry_prepared(
+        source, receiver, occluders, catalog, tick, prepared_emitter,
+    )
+    .map(|(receptions, _)| receptions)
+}
+
+fn material_aura_receptions_with_occluders_and_geometry_prepared(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_emitter: Option<&MaterialResonanceEmitter>,
+) -> Option<(Vec<MaterialAuraReception>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>)> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -1437,7 +1451,7 @@ fn material_aura_receptions_with_occluders_prepared(
         }
     }
 
-    material_aura_receptions_with_geometry_prepared(
+    let receptions = material_aura_receptions_with_geometry_prepared(
         source,
         receiver,
         &source_geometry,
@@ -1445,7 +1459,8 @@ fn material_aura_receptions_with_occluders_prepared(
         catalog,
         tick,
         prepared_emitter,
-    )
+    )?;
+    Some((receptions, receiver_bodies))
 }
 
 /// Conservative AABB broad phase for possible occluders between a point
