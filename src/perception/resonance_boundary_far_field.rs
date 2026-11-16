@@ -7,10 +7,11 @@
 //! generation remain exact and outside this module.
 //!
 //! The fixed-sample result includes scalar potential and source/receiver
-//! center-gradient estimates with independent remainder bounds. A separate
-//! generalized-coordinate path differentiates the exact discrete sum through
-//! caller-supplied sample-position and signed-weight Jacobians, with a
-//! conservative magnitude envelope. Geometry Jacobians and complete visibility
+//! center-gradient estimates with independent remainder bounds. The generalized
+//! path differentiates that same Taylor scalar through caller-supplied sample
+//! position, signed-weight, and body-center Jacobians, and carries independent
+//! per-coordinate derivative remainder bounds. Exact discrete derivatives remain
+//! available as differential oracles. Geometry Jacobians and complete visibility
 //! certification remain caller obligations; this module must not feed live movement.
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -93,16 +94,16 @@ pub(crate) struct BoundaryPoseCoordinateDerivative {
     pub(crate) samples: Vec<BoundarySamplePoseDerivative>,
 }
 
-/// Exact discrete derivative at the reference pose and an absolute bound
-/// valid throughout the caller-certified smooth pose cell.
+/// Derivative of the accepted Taylor scalar at the reference pose and a
+/// conservative magnitude/error bound valid throughout the certified pose cell.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[allow(dead_code)]
 pub(crate) struct BoundaryPoseDerivativeEvaluation {
     pub(crate) derivative: f64,
     /// Conservative magnitude envelope across the certified pose cell.
     pub(crate) absolute_bound: f64,
-    /// Floating-point evaluation error at the reference pose; distinct from
-    /// the derivative's magnitude envelope.
+    /// Absolute difference bound between the Taylor derivative and the exact
+    /// discrete derivative, including floating-point roundoff.
     pub(crate) absolute_error: f64,
     pub(crate) sample_position_derivative: f64,
     pub(crate) sample_weight_derivative: f64,
@@ -3170,8 +3171,12 @@ impl BoundaryKernelExpansion {
             };
             let source_distance = source_delta.norm();
             let receiver_distance = receiver_delta.norm();
-            let source_min = source_distance - pose.position_displacement_bound;
-            let receiver_min = receiver_distance - pose.position_displacement_bound;
+            let source_min = source_distance
+                - pose.position_displacement_bound
+                - coordinate.source_center_displacement_bound;
+            let receiver_min = receiver_distance
+                - pose.position_displacement_bound
+                - coordinate.receiver_center_displacement_bound;
             if !source_min.is_finite()
                 || !receiver_min.is_finite()
                 || source_min <= f64::EPSILON
