@@ -347,6 +347,9 @@ impl MutualInteractionHierarchy {
             )?;
         }
         result.exact_pairs.sort_unstable();
+        result
+            .exact_pair_evaluations
+            .sort_by_key(|evaluation| evaluation.pair);
         Some(result)
     }
 
