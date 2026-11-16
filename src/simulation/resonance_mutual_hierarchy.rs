@@ -20,7 +20,6 @@ enum NodeKind {
     Branch { left: Box<Node>, right: Box<Node> },
 }
 
-
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct MutualErrorTolerance {
     pub(crate) potential: f64,
@@ -301,7 +300,6 @@ impl MutualInteractionHierarchy {
         Some(())
     }
 
-
     /// Traverse mutual cluster pairs, accepting only independently certified
     /// potential, x/y force, torque, and visibility bounds. Rejected clusters
     /// subdivide; body/body leaves always use the exact callback.
@@ -398,18 +396,38 @@ impl MutualInteractionHierarchy {
         match (&a.kind, &b.kind) {
             (NodeKind::Branch { left, right }, NodeKind::Leaf(_)) => {
                 Self::visit_distinct_adaptive(
-                    left, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                    left,
+                    b,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
                 Self::visit_distinct_adaptive(
-                    right, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                    right,
+                    b,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
             }
             (NodeKind::Leaf(_), NodeKind::Branch { left, right }) => {
                 Self::visit_distinct_adaptive(
-                    a, left, tolerance, evaluate_cluster, evaluate_exact, result,
+                    a,
+                    left,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
                 Self::visit_distinct_adaptive(
-                    a, right, tolerance, evaluate_cluster, evaluate_exact, result,
+                    a,
+                    right,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
             }
             (NodeKind::Branch { left, right }, NodeKind::Branch { .. })
@@ -430,10 +448,20 @@ impl MutualInteractionHierarchy {
                 },
             ) => {
                 Self::visit_distinct_adaptive(
-                    a, other_left, tolerance, evaluate_cluster, evaluate_exact, result,
+                    a,
+                    other_left,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
                 Self::visit_distinct_adaptive(
-                    a, other_right, tolerance, evaluate_cluster, evaluate_exact, result,
+                    a,
+                    other_right,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
             }
             (NodeKind::Leaf(_), NodeKind::Leaf(_)) => unreachable!(),
@@ -718,11 +746,7 @@ mod tests {
         let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
         let tree = MutualInteractionHierarchy::new(&layout).unwrap();
         assert!(tree
-            .evaluate_adaptive(
-                strict_tolerance(),
-                |_, _| None,
-                |_, _| None,
-            )
+            .evaluate_adaptive(strict_tolerance(), |_, _| None, |_, _| None)
             .is_none());
     }
 
