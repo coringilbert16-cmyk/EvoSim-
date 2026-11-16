@@ -851,31 +851,29 @@ impl ActiveMaterialField {
         // Preserve the existing transaction's conservative rule: a candidate
         // may not penetrate any other object's current placement, even if that
         // other object also proposes a move.
-        for index in 0..candidates.len() {
-            let collides = {
-                let Some(candidate) = candidates[index].as_ref() else {
-                    continue;
+        for (index, candidate_slot) in candidates.iter_mut().enumerate() {
+            let Some(candidate) = candidate_slot.as_ref() else {
+                continue;
+            };
+            let collides = snapshots.iter().enumerate().any(|(other_index, other)| {
+                if other_index == index {
+                    return false;
+                }
+                let Some(other_parts) = other.original_parts.as_ref() else {
+                    return true;
                 };
-                snapshots.iter().enumerate().any(|(other_index, other)| {
-                    if other_index == index {
-                        return false;
-                    }
-                    let Some(other_parts) = other.original_parts.as_ref() else {
-                        return true;
-                    };
-                    candidate.parts.iter().any(|part| {
-                        other_parts.iter().any(|other_part| {
-                            crate::material_geometry::placed_forms_penetrate(
-                                part,
-                                other_part,
-                                crate::material_geometry::GEOMETRY_EPSILON,
-                            )
-                        })
+                candidate.parts.iter().any(|part| {
+                    other_parts.iter().any(|other_part| {
+                        crate::material_geometry::placed_forms_penetrate(
+                            part,
+                            other_part,
+                            crate::material_geometry::GEOMETRY_EPSILON,
+                        )
                     })
                 })
-            };
+            });
             if collides {
-                candidates[index]
+                candidate_slot
                     .as_mut()
                     .expect("candidate exists")
                     .accepted = false;

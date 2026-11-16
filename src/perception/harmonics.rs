@@ -1981,6 +1981,7 @@ fn resonance_pair_push_pull_from_emitters(
 /// Calculate one symmetric, radial push/pull contribution for an isolated
 /// material pair. Positive same-phase cross-energy repels; negative opposing-
 /// phase cross-energy attracts. Different frequencies have no cross-term.
+#[allow(dead_code)] // Retained as the isolated-pair reference implementation.
 pub(crate) fn resonance_pair_push_pull(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
