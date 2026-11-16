@@ -977,7 +977,6 @@ fn error_budgeted_boundary_expansion_refines_until_all_remainders_fit() {
     );
 }
 
-
 #[test]
 fn mutual_boundary_pair_error_bounds_hold_across_adversarial_pose_sweep() {
     let catalog = crate::resources::default_catalog();
@@ -995,15 +994,9 @@ fn mutual_boundary_pair_error_bounds_hold_across_adversarial_pose_sweep() {
 
     for (case_index, (separation, lateral, angle)) in cases.into_iter().enumerate() {
         let a = single_body("Carbon", 0.0, 0.0, 0.19, &catalog);
-        let b = asymmetric_receiver(
-            (separation - 10.75, lateral - 3.35),
-            angle,
-            &catalog,
-        );
-        let evaluation = super::resonance_mutual_boundary_pair_evaluation(
-            &a, &b, &catalog, 389,
-        )
-        .unwrap_or_else(|| panic!("mutual evaluator rejected adversarial pose {case_index}"));
+        let b = asymmetric_receiver((separation - 10.75, lateral - 3.35), angle, &catalog);
+        let evaluation = super::resonance_mutual_boundary_pair_evaluation(&a, &b, &catalog, 389)
+            .unwrap_or_else(|| panic!("mutual evaluator rejected adversarial pose {case_index}"));
         let exact = super::resonance_pair_potential(&a, &b, &catalog, 389)
             .expect("exact potential should remain available");
 
