@@ -1057,6 +1057,99 @@ mod tests {
     }
 
     #[test]
+    fn mutual_product_moments_flow_through_visibility_gated_hierarchy_acceptance() {
+        use crate::resonance_boundary_far_field::{
+            MutualBoundaryKernelExpansion, MutualBoundaryKernelSample,
+            MutualBoundaryPoseCoordinateDerivative, MutualBoundaryPoseSampleDerivative,
+        };
+
+        let layout = [
+            bounds(0.0, 0.0, 0.2, 0.2),
+            bounds(1.0, 0.0, 0.2, 0.2),
+            bounds(8.0, 0.0, 0.2, 0.2),
+            bounds(9.0, 0.0, 0.2, 0.2),
+        ];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        let visibility =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&layout).unwrap();
+        let samples = vec![
+            MutualBoundaryKernelSample {
+                source_center: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                receiver_center: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 8.0,
+                    y: 0.0,
+                },
+                position: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 4.0,
+                    y: 0.0,
+                },
+                weight: 1.0,
+            },
+            MutualBoundaryKernelSample {
+                source_center: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 0.0,
+                    y: 0.0,
+                },
+                receiver_center: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 8.0,
+                    y: 0.0,
+                },
+                position: crate::resonance_boundary_far_field::BoundaryKernelVector {
+                    x: 4.1,
+                    y: 0.0,
+                },
+                weight: -0.2,
+            },
+        ];
+        let coordinates = (0..12)
+            .map(|_| MutualBoundaryPoseCoordinateDerivative {
+                samples: vec![MutualBoundaryPoseSampleDerivative::default(); samples.len()],
+            })
+            .collect::<Vec<_>>();
+        let participants = [0usize, 1, 2, 3];
+        let tolerance = MutualErrorTolerance {
+            potential: 0.1,
+            force_x: 0.1,
+            force_y: 0.1,
+            torque: 0.1,
+        };
+        let result = tree
+            .evaluate_adaptive_with_visibility(
+                &visibility,
+                0.0,
+                tolerance,
+                |_, _| {
+                    let evaluation =
+                        MutualBoundaryKernelExpansion::new(samples.clone(), coordinates.clone())?
+                            .evaluate()?;
+                    let certificate =
+                        mutual_boundary_cluster_certificate(true, &participants, evaluation)?;
+                    Some((certificate.evaluation, certificate.errors))
+                },
+                |_, _| {
+                    Some(crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation {
+                        potential: 0.0,
+                        coordinates: Vec::new(),
+                        error: crate::resonance_boundary_far_field::MutualBoundaryKernelError {
+                            potential: 0.0,
+                            coordinates: Vec::new(),
+                        },
+                    })
+                },
+            )
+            .unwrap();
+        assert_eq!(result.accepted_cluster_pairs.len(), 1);
+        assert_eq!(result.exact_pairs, vec![(0, 1), (2, 3)]);
+        assert_eq!(
+            result.accepted_cluster_pairs[0].evaluation.coordinates.len(),
+            participants.len() * 3
+        );
+    }
+
+    #[test]
     fn adaptive_traversal_retains_exact_leaf_evaluations() {
         let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
         let tree = MutualInteractionHierarchy::new(&layout).unwrap();
