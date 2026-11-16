@@ -216,7 +216,10 @@ mod tests {
                 .unordered_pairs()
                 .expect("mutual traversal should complete");
             assert_eq!(pairs, exact_pairs(layout.len()));
-            assert_eq!(pairs.windows(2).filter(|pair| pair[0] == pair[1]).count(), 0);
+            assert_eq!(
+                pairs.windows(2).filter(|pair| pair[0] == pair[1]).count(),
+                0
+            );
         }
     }
 
