@@ -1418,7 +1418,17 @@ impl LocalResonanceWorldSnapshot {
         let hierarchy = crate::resonance_mutual_hierarchy::MutualInteractionHierarchy::new(
             &self.visibility_bounds,
         )?;
-        let pairs = hierarchy.unordered_pairs()?;
+        let traversal = hierarchy.evaluate_adaptive(
+            crate::resonance_mutual_hierarchy::MutualErrorTolerance {
+                potential: 0.0,
+                force_x: 0.0,
+                force_y: 0.0,
+                torque: 0.0,
+            },
+            |_, _| None,
+            |_, _| Some(()),
+        )?;
+        let pairs = traversal.exact_pairs;
         let mut accumulator = ResonanceForceAccumulator::default();
         for (index_a, index_b) in pairs.iter().copied() {
             let identity_a = self.bodies.get(index_a)?.environmental_identity;
