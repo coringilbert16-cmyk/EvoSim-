@@ -1770,18 +1770,17 @@ impl LocalResonanceWorldSnapshot {
         // A body with existing momentum must keep moving even when it has no
         // resonant pair this tick. Static zero-force bodies need no staged write.
         for (body_index, body) in self.bodies.iter().enumerate() {
-            if body.inertial_motion.velocity_x != 0.0
+            if (body.inertial_motion.velocity_x != 0.0
                 || body.inertial_motion.velocity_y != 0.0
-                || body.inertial_motion.angular_velocity != 0.0
-            {
-                if !accumulator.add(ResonanceWorldBodyForce {
+                || body.inertial_motion.angular_velocity != 0.0)
+                && !accumulator.add(ResonanceWorldBodyForce {
                     body_index,
                     environmental_identity: body.environmental_identity,
                     force: crate::harmonics::ResonanceBodyForce::default(),
                     absolute_error: Some(crate::harmonics::ResonanceBodyForce::default()),
-                }) {
-                    return None;
-                }
+                })
+            {
+                return None;
             }
         }
         accumulator.complete_world_body_count = Some(self.bodies.len());
