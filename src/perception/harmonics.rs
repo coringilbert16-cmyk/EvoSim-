@@ -521,7 +521,7 @@ pub(crate) enum ResonanceMutualBoundaryBodySlot {
 /// coordinates back to source/receiver material indices and the caller's
 /// occluder slice.
 #[allow(dead_code)] // Consumed by the world mutual hierarchy integration.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ResonanceMutualBoundaryFrequencyInventory {
     pub(crate) frequency_cycles_per_day: f64,
     pub(crate) body_slots: Vec<ResonanceMutualBoundaryBodySlot>,
