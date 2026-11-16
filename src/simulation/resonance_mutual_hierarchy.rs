@@ -123,9 +123,16 @@ pub(crate) struct AcceptedClusterPair<T> {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct ExactPairEvaluation<T> {
+    pub(crate) pair: (usize, usize),
+    pub(crate) evaluation: T,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct AdaptiveTraversalResult<T> {
     pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair<T>>,
     pub(crate) exact_pairs: Vec<(usize, usize)>,
+    pub(crate) exact_pair_evaluations: Vec<ExactPairEvaluation<T>>,
     pub(crate) accumulated_errors: MutualClusterErrorBounds,
 }
 
@@ -134,6 +141,7 @@ impl<T> Default for AdaptiveTraversalResult<T> {
         Self {
             accepted_cluster_pairs: Vec::new(),
             exact_pairs: Vec::new(),
+            exact_pair_evaluations: Vec::new(),
             accumulated_errors: MutualClusterErrorBounds::default(),
         }
     }
@@ -323,7 +331,7 @@ impl MutualInteractionHierarchy {
     ) -> Option<AdaptiveTraversalResult<T>>
     where
         C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
-        E: FnMut(usize, usize) -> Option<()>,
+        E: FnMut(usize, usize) -> Option<T>,
     {
         if !tolerance.is_valid() {
             return None;
@@ -418,8 +426,11 @@ impl MutualInteractionHierarchy {
     {
         if let (NodeKind::Leaf(index_a), NodeKind::Leaf(index_b)) = (&a.kind, &b.kind) {
             let pair = ((*index_a).min(*index_b), (*index_a).max(*index_b));
-            evaluate_exact(pair.0, pair.1)?;
+            let evaluation = evaluate_exact(pair.0, pair.1)?;
             result.exact_pairs.push(pair);
+            result
+                .exact_pair_evaluations
+                .push(ExactPairEvaluation { pair, evaluation });
             return Some(());
         }
 
