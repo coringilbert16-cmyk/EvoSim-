@@ -834,7 +834,20 @@ mod tests {
                     && bound.force_y <= strict_tolerance().force_y
                     && bound.torque <= strict_tolerance().torque
             }));
-            assert_eq!(result.exact_pairs.len(), 20);
+            assert_eq!(
+                result.exact_pairs.len(),
+                if charged_metric == 0 { 24 } else { 20 }
+            );
+            let mut covered_pairs = result.exact_pairs.clone();
+            for accepted in &result.accepted_cluster_pairs {
+                for index_a in &accepted.bodies_a {
+                    for index_b in &accepted.bodies_b {
+                        covered_pairs.push(((*index_a).min(*index_b), (*index_a).max(*index_b)));
+                    }
+                }
+            }
+            covered_pairs.sort_unstable();
+            assert_eq!(covered_pairs, exact_pairs(layout.len()));
         }
     }
 
