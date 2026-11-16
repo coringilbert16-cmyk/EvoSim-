@@ -2695,12 +2695,15 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         ordered_visibility_cuts: &[(f64, f64)],
         sample_motion: Vec<BoundarySampleMotionBound>,
         coordinates: Vec<BoundaryPoseCoordinateDerivative>,
+        coordinate_error_budget: f64,
     ) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
         if samples.is_empty()
             || sample_motion.len() != samples.len()
             || coordinates
                 .iter()
                 .any(|coordinate| coordinate.samples.len() != samples.len())
+            || !coordinate_error_budget.is_finite()
+            || coordinate_error_budget < 0.0
         {
             return None;
         }
@@ -2812,6 +2815,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             source_force: budget.source_force * 0.5,
             receiver_force: budget.receiver_force * 0.5,
         };
+        let half_coordinate_error_budget = coordinate_error_budget * 0.5;
 
         let mut left_coordinates = Vec::with_capacity(sorted_coordinates.len());
         let mut right_coordinates = Vec::with_capacity(sorted_coordinates.len());
@@ -2846,6 +2850,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             ordered_visibility_cuts,
             left_motion,
             left_coordinates,
+            half_coordinate_error_budget,
         )?;
         let right = evaluate(
             source_center,
@@ -2855,6 +2860,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             ordered_visibility_cuts,
             right_motion,
             right_coordinates,
+            half_coordinate_error_budget,
         )?;
         combine(left, right, center, radius)
     }
@@ -2867,6 +2873,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         ordered_visibility_cuts,
         sample_motion,
         coordinates,
+        coordinate_error_budget,
     )
 }
 
