@@ -874,7 +874,11 @@ mod tests {
         let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
         let tree = MutualInteractionHierarchy::new(&layout).unwrap();
         assert!(tree
-            .evaluate_adaptive(strict_tolerance(), |_, _| None, |_, _| None)
+            .evaluate_adaptive(
+                strict_tolerance(),
+                |_, _| -> Option<MutualClusterCertificate<()>> { None },
+                |_, _| None,
+            )
             .is_none());
     }
 
