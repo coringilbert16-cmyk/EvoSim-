@@ -3953,16 +3953,6 @@ impl MutualBoundaryKernelExpansion {
                     pose.position_derivative_bound + pose.source_center_derivative_bound;
                 let receiver_relative_derivative_bound =
                     pose.position_derivative_bound + pose.receiver_center_derivative_bound;
-                let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
-                exact_derivative_magnitude_bound += maximum_weight
-                    * (source_gradient_bound
-                        * receiver_value_bound
-                        * source_relative_derivative_bound
-                        + receiver_gradient_bound
-                            * source_value_bound
-                            * receiver_relative_derivative_bound)
-                    + source_value_bound * receiver_value_bound * pose.weight_derivative_bound;
-
                 center_displacement_bound.source.x +=
                     pose.position_displacement_bound + pose.source_center_displacement_bound;
                 center_displacement_bound.receiver.x +=
@@ -4031,6 +4021,16 @@ impl MutualBoundaryKernelExpansion {
                     .max(receiver_relative_derivative_bound)
                     * 2.0_f64.sqrt();
                 let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
+                exact_derivative_magnitude_bound += maximum_weight
+                    * (source_gradient_cell
+                        * receiver_value_cell
+                        * source_relative_derivative_bound
+                        + receiver_gradient_cell
+                            * source_value_cell
+                            * receiver_relative_derivative_bound)
+                    + source_value_cell
+                        * receiver_value_cell
+                        * pose.weight_derivative_bound;
                 derivative_error += maximum_weight
                     * (0.5 * third_cell * radius_cell * radius_cell * center_derivative_norm
                         + hessian_cell
