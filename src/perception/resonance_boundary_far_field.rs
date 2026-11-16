@@ -1408,7 +1408,7 @@ pub(crate) fn resolve_boundary_endpoint_pose_derivative_with_source(
     expected_target_unit: usize,
     expected_blocker_body: usize,
     expected_blocker_unit: usize,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     source: BoundaryKernelVector,
     source_derivative: BoundaryKernelVector,
     target_translation_derivative: BoundaryKernelVector,
@@ -2303,7 +2303,7 @@ pub(crate) fn bound_ray_visibility_event_over_pose_cell(
     event: &crate::source_exposure::VisibilityCutEvent,
     source: BoundaryKernelVector,
     source_displacement: f64,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
 ) -> Option<crate::source_exposure::VisibilityEventPoseCellBound> {
     use crate::source_exposure::{
@@ -2444,7 +2444,7 @@ pub(crate) fn bound_visibility_event_over_pose_cell(
     event: &crate::source_exposure::VisibilityCutEvent,
     source: BoundaryKernelVector,
     source_displacement: f64,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
 ) -> Option<crate::source_exposure::VisibilityEventPoseCellBound> {
     use crate::source_exposure::{VisibilityCutEvent, VisibilityEventPoseCellBound};
@@ -2568,7 +2568,7 @@ pub(crate) fn certify_visibility_pose_cell_from_endpoint_provenance(
     endpoints: &[&crate::source_exposure::BoundaryEndpointProvenance],
     source: BoundaryKernelVector,
     source_displacement: f64,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_motion: &[crate::source_exposure::VisibilityBodyMotionBound],
 ) -> Option<Vec<crate::source_exposure::VisibilityEventPoseCellBound>> {
     let events = crate::source_exposure::ordered_visibility_events_from_endpoints(endpoints)?;
@@ -2776,7 +2776,7 @@ pub(crate) fn certify_boundary_pose_cell_generalized_with_blocker_inventory(
     coordinates: &[BoundaryPoseCoordinateDerivative],
     inventory: &crate::source_exposure::VisibilityPoseCellCandidateInventory,
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     target_body_index: usize,
 ) -> Option<BoundaryPoseCellGeneralizedEvaluation> {
@@ -5421,9 +5421,9 @@ mod endpoint_provenance_dispatch_tests {
         x: f64,
         y: f64,
         rotation_radians: f64,
-    ) -> crate::organism_geometry::OrganismBodyGeometry {
+    ) -> crate::physical_body_geometry::PhysicalBodyGeometry {
         let radius = form.bounding_radius();
-        crate::organism_geometry::OrganismBodyGeometry {
+        crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::organism_geometry::PlacedForm {
                 unit_index,
                 form,
