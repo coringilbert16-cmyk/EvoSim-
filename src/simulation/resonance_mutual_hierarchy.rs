@@ -118,11 +118,15 @@ pub(crate) fn mutual_boundary_cluster_certificate(
     visibility_certified: bool,
     participating_body_indices: &[usize],
     evaluation: crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation,
-) -> Option<MutualClusterCertificate<crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation>> {
+) -> Option<
+    MutualClusterCertificate<crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation>,
+> {
     let mut sorted_body_indices = participating_body_indices.to_vec();
     sorted_body_indices.sort_unstable();
     if !visibility_certified
-        || sorted_body_indices.windows(2).any(|pair| pair[0] == pair[1])
+        || sorted_body_indices
+            .windows(2)
+            .any(|pair| pair[0] == pair[1])
         || evaluation.coordinates.len() != participating_body_indices.len().checked_mul(3)?
         || evaluation.error.coordinates.len() != evaluation.coordinates.len()
         || !evaluation.error.potential.is_finite()
@@ -1003,12 +1007,9 @@ mod tests {
                 coordinates: vec![error; participants.len() * 3],
             },
         };
-        let certificate = mutual_boundary_cluster_certificate(
-            true,
-            &participants,
-            make_evaluation(0.001),
-        )
-        .unwrap();
+        let certificate =
+            mutual_boundary_cluster_certificate(true, &participants, make_evaluation(0.001))
+                .unwrap();
         assert_eq!(certificate.errors.bodies.len(), participants.len());
         assert_eq!(
             certificate
@@ -1039,11 +1040,7 @@ mod tests {
                     torque: 0.01,
                 },
                 |_, _| {
-                    mutual_boundary_cluster_certificate(
-                        true,
-                        &participants,
-                        make_evaluation(0.001),
-                    )
+                    mutual_boundary_cluster_certificate(true, &participants, make_evaluation(0.001))
                 },
                 |_, _| Some(make_evaluation(0.0)),
             )
