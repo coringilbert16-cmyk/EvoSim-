@@ -846,7 +846,6 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 /// Different frequencies have no cycle-averaged cross term. This returns
 /// only the interference term (combined energy minus the two separate
 /// energies); it is not by itself a mechanical potential or force.
-#[allow(dead_code)] // Consumed by the staged pair-interaction implementation.
 pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
     let components = spectrum_cross_energy_components(a, b)?;
     let energy = components
@@ -1912,16 +1911,64 @@ pub(crate) fn resonance_pair_potential_with_occluders(
     potential.is_finite().then_some(potential)
 }
 
-/// Calculate one symmetric, radial push/pull contribution for an isolated material pair.
-///
-/// Positive constructive cross-energy pushes the materials apart; negative
-/// destructive cross-energy pulls them together. The existing symmetric pair
-/// potential supplies the signed strength, and center-to-center direction
-/// supplies the movement vector. This is not a force or time integrator.
-///
-/// The returned vectors are equal and opposite. The caller evaluates each
-/// unordered pair once and accumulates the contributions for both materials.
-#[allow(dead_code)] // Consumed by PR 2 movement application.
+/// Cached source data for the inexpensive environmental movement pass.
+struct EnvironmentalMovementEmitter {
+    x: f64,
+    y: f64,
+    mass_scale: f64,
+    spectrum: ToneSpectrum,
+}
+
+fn environmental_movement_emitter(
+    physical: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<EnvironmentalMovementEmitter> {
+    let (x, y, _, spectrum) = environmental_material_resonance(physical, catalog, tick)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baselines.mass);
+    (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
+        x,
+        y,
+        mass_scale,
+        spectrum,
+    })
+}
+
+/// Evaluate one symmetric radial pair contribution from cached material
+/// spectra. Cross-energy exists only for matching frequencies and naturally
+/// carries the relative phase through the existing phasor calculation.
+fn resonance_pair_push_pull_from_emitters(
+    a: &EnvironmentalMovementEmitter,
+    b: &EnvironmentalMovementEmitter,
+) -> Option<((f64, f64), (f64, f64))> {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() {
+        return None;
+    }
+    if distance <= f64::EPSILON {
+        return Some(((0.0, 0.0), (0.0, 0.0)));
+    }
+
+    // Each material's emitted aura uses the existing continuous 1/(1+d)
+    // attenuation. Cross-energy multiplies the two received amplitudes.
+    let attenuation = (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
+    let strength = spectrum_cross_energy(&a.spectrum, &b.spectrum)? * attenuation;
+    if !strength.is_finite() {
+        return None;
+    }
+    let on_b = (strength * dx / distance, strength * dy / distance);
+    if !on_b.0.is_finite() || !on_b.1.is_finite() {
+        return None;
+    }
+    Some(((-on_b.0, -on_b.1), on_b))
+}
+
+/// Calculate one symmetric, radial push/pull contribution for an isolated
+/// material pair. Positive same-phase cross-energy repels; negative opposing-
+/// phase cross-energy attracts. Different frequencies have no cross-term.
 pub(crate) fn resonance_pair_push_pull(
     a: &crate::physical_material::PhysicalMaterial,
     b: &crate::physical_material::PhysicalMaterial,
@@ -1931,26 +1978,48 @@ pub(crate) fn resonance_pair_push_pull(
     if std::ptr::eq(a, b) {
         return Some(((0.0, 0.0), (0.0, 0.0)));
     }
-    let (a_x, a_y, _, _) = environmental_material_resonance(a, catalog, tick)?;
-    let (b_x, b_y, _, _) = environmental_material_resonance(b, catalog, tick)?;
-    let dx = b_x - a_x;
-    let dy = b_y - a_y;
-    let distance = dx.hypot(dy);
-    if !distance.is_finite() {
-        return None;
-    }
-    if distance <= f64::EPSILON {
-        return Some(((0.0, 0.0), (0.0, 0.0)));
+    let a = environmental_movement_emitter(a, catalog, tick)?;
+    let b = environmental_movement_emitter(b, catalog, tick)?;
+    resonance_pair_push_pull_from_emitters(&a, &b)
+}
+
+/// Precompute each environmental material's resonance once, then evaluate
+/// every unordered pair exactly once. This is the live-tick path: it avoids
+/// rebuilding spectra and geometric boundary visibility for every pair.
+pub(crate) fn environmental_resonance_displacements(
+    materials: &[&crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<(f64, f64)>> {
+    let emitters = materials
+        .iter()
+        .map(|material| environmental_movement_emitter(material, catalog, tick))
+        .collect::<Option<Vec<_>>>()?;
+    let mut accumulated = vec![(0.0, 0.0); emitters.len()];
+
+    for a in 0..emitters.len() {
+        for b in (a + 1)..emitters.len() {
+            let (_, on_b) = resonance_pair_push_pull_from_emitters(&emitters[a], &emitters[b])?;
+            accumulated[a].0 -= on_b.0;
+            accumulated[a].1 -= on_b.1;
+            accumulated[b].0 += on_b.0;
+            accumulated[b].1 += on_b.1;
+        }
     }
 
-    // The potential already includes reciprocal aura reception and the
-    // existing continuous distance attenuation; do not attenuate it twice.
-    let strength = resonance_pair_potential(a, b, catalog, tick)?;
-    let on_b = (strength * dx / distance, strength * dy / distance);
-    if !on_b.0.is_finite() || !on_b.1.is_finite() {
-        return None;
-    }
-    Some(((-on_b.0, -on_b.1), on_b))
+    accumulated
+        .into_iter()
+        .map(|(x, y)| {
+            let magnitude = x.hypot(y);
+            if !magnitude.is_finite() {
+                return None;
+            }
+            let factor = RESONANCE_MOVEMENT_RESPONSE_SCALE
+                / (1.0 + RESONANCE_MOVEMENT_RESPONSE_SCALE * magnitude);
+            let displacement = (x * factor, y * factor);
+            (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
+        })
+        .collect()
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
