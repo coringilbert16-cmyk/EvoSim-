@@ -508,6 +508,15 @@ pub(crate) struct ResonanceBodyForceWithError {
     pub(crate) absolute_error: ResonanceBodyForce,
 }
 
+/// One ordered source/receiver evaluation from the same frequency-resolved
+/// scalar boundary potential used to derive its generalized force and torque.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct ResonanceDirectionalGeneralizedEvaluation {
+    pub(crate) potential_components: Vec<ResonancePairPotentialComponent>,
+    pub(crate) potential_error: f64,
+    pub(crate) forces: Vec<ResonanceBodyForceWithError>,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -3244,7 +3253,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     receiver_index: usize,
     catalog: &[crate::resources::BaseResource],
     tick: u64,
-) -> Option<Vec<ResonanceBodyForceWithError>> {
+) -> Option<ResonanceDirectionalGeneralizedEvaluation> {
     use super::resonance_boundary_far_field::{
         BoundaryKernelVector, BoundaryPoseCoordinateDerivative, BoundaryPotentialError,
         BoundarySampleMotionBound, WeightedBoundaryKernelSample,
@@ -3267,8 +3276,14 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             Some(prepared_receiver),
         )?;
     let mut result = vec![ResonanceBodyForceWithError::default(); occluders.len() + 2];
+    let mut potential_components = Vec::new();
+    let mut potential_error = 0.0;
     if samples.is_empty() {
-        return Some(result);
+        return Some(ResonanceDirectionalGeneralizedEvaluation {
+            potential_components,
+            potential_error,
+            forces: result,
+        });
     }
     if geometries.is_empty()
         || geometries.len() != occluder_mapping.len()
@@ -3649,6 +3664,30 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     &target_body_indices,
                     0,
                 )?;
+            let directional_potential = evaluation.boundary.evaluation.potential;
+            let directional_potential_error = evaluation.boundary.error.potential;
+            if !directional_potential.is_finite()
+                || !directional_potential_error.is_finite()
+                || directional_potential_error < 0.0
+            {
+                return None;
+            }
+            if let Some(existing) = potential_components.iter_mut().find(
+                |component: &&mut ResonancePairPotentialComponent| {
+                    (component.frequency_cycles_per_day - frequency).abs() <= 1.0e-9
+                },
+            ) {
+                existing.energy += directional_potential;
+            } else {
+                potential_components.push(ResonancePairPotentialComponent {
+                    frequency_cycles_per_day: frequency,
+                    energy: directional_potential,
+                });
+            }
+            potential_error += directional_potential_error;
+            if !potential_error.is_finite() {
+                return None;
+            }
 
             let mut add_coordinate =
                 |local_body: usize, axis: usize, derivative: f64, absolute_error: f64| {
@@ -3711,7 +3750,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
         target.absolute_error.y += local.absolute_error.y;
         target.absolute_error.torque += local.absolute_error.torque;
     }
-    mapped
+    let forces_valid = mapped
         .iter()
         .all(|entry| {
             [
@@ -3727,8 +3766,17 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                 && entry.absolute_error.x >= 0.0
                 && entry.absolute_error.y >= 0.0
                 && entry.absolute_error.torque >= 0.0
+        });
+    potential_components.sort_by(|left, right| {
+        left.frequency_cycles_per_day
+            .total_cmp(&right.frequency_cycles_per_day)
+    });
+    (forces_valid && potential_error.is_finite())
+        .then_some(ResonanceDirectionalGeneralizedEvaluation {
+            potential_components,
+            potential_error,
+            forces: mapped,
         })
-        .then_some(mapped)
 }
 
 /// Combine the two directional frequency-resolved gradients into the existing
@@ -3744,17 +3792,17 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
     index_b: usize,
     catalog: &[crate::resources::BaseResource],
     tick: u64,
-) -> Option<Vec<ResonanceBodyForceWithError>> {
+) -> Option<ResonanceDirectionalGeneralizedEvaluation> {
     let ab = directional_resonance_generalized_forces_with_prepared_emitters(
         a, b, occluders, emitters, index_a, index_b, catalog, tick,
     )?;
     let ba = directional_resonance_generalized_forces_with_prepared_emitters(
         b, a, occluders, emitters, index_b, index_a, catalog, tick,
     )?;
-    if ab.len() != occluders.len() + 2 || ba.len() != ab.len() {
+    if ab.forces.len() != occluders.len() + 2 || ba.forces.len() != ab.forces.len() {
         return None;
     }
-    let mut combined = vec![ResonanceBodyForceWithError::default(); ab.len()];
+    let mut combined = vec![ResonanceBodyForceWithError::default(); ab.forces.len()];
     for (index, target) in combined.iter_mut().enumerate() {
         let (ab_index, ba_index) = if index == 0 {
             (0, 1)
@@ -3763,8 +3811,8 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         } else {
             (index, index)
         };
-        let left = ab[ab_index];
-        let right = ba[ba_index];
+        let left = ab.forces[ab_index];
+        let right = ba.forces[ba_index];
         target.force.x = 0.5 * (left.force.x + right.force.x);
         target.force.y = 0.5 * (left.force.y + right.force.y);
         target.force.torque = 0.5 * (left.force.torque + right.force.torque);
@@ -3773,7 +3821,32 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         target.absolute_error.torque =
             0.5 * (left.absolute_error.torque + right.absolute_error.torque);
     }
-    combined
+    let mut potential_components = Vec::new();
+    for component in ab
+        .potential_components
+        .iter()
+        .chain(&ba.potential_components)
+    {
+        if let Some(existing) = potential_components.iter_mut().find(
+            |existing: &&mut ResonancePairPotentialComponent| {
+                (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                    <= 1.0e-9
+            },
+        ) {
+            existing.energy += 0.5 * component.energy;
+        } else {
+            potential_components.push(ResonancePairPotentialComponent {
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
+                energy: 0.5 * component.energy,
+            });
+        }
+    }
+    potential_components.sort_by(|left, right| {
+        left.frequency_cycles_per_day
+            .total_cmp(&right.frequency_cycles_per_day)
+    });
+    let potential_error = 0.5 * (ab.potential_error + ba.potential_error);
+    let valid = combined
         .iter()
         .all(|entry| {
             [
@@ -3790,7 +3863,18 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
                 && entry.absolute_error.y >= 0.0
                 && entry.absolute_error.torque >= 0.0
         })
-        .then_some(combined)
+        && potential_error.is_finite()
+        && potential_error >= 0.0
+        && potential_components.iter().all(|component| {
+            component.frequency_cycles_per_day.is_finite()
+                && component.frequency_cycles_per_day > 0.0
+                && component.energy.is_finite()
+        });
+    valid.then_some(ResonanceDirectionalGeneralizedEvaluation {
+        potential_components,
+        potential_error,
+        forces: combined,
+    })
 }
 
 /// One symmetric resonance-derived pair potential for an isolated pair,
