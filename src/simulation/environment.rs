@@ -873,10 +873,7 @@ impl ActiveMaterialField {
                 })
             });
             if collides {
-                candidate_slot
-                    .as_mut()
-                    .expect("candidate exists")
-                    .accepted = false;
+                candidate_slot.as_mut().expect("candidate exists").accepted = false;
             }
         }
 
