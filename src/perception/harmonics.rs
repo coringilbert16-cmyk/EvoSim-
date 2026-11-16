@@ -3488,17 +3488,25 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                             )?;
                             target_angular = if coordinate_axis == 2 { 1.0 } else { 0.0 };
                         }
-                        let mut blocker_translation = BoundaryKernelVector::default();
-                        let mut blocker_angular = 0.0;
-                        if coordinate_body > 0 && coordinate_body - 1 == blocker_body {
-                            blocker_translation = material_part_translation_derivative(
-                                geometries.get(blocker_body)?,
-                                *body_centers_of_mass.get(blocker_body)?,
-                                blocker_unit,
-                                coordinate_axis,
-                            )?;
-                            blocker_angular = if coordinate_axis == 2 { 1.0 } else { 0.0 };
-                        }
+                        let endpoint_translation = |body_index: usize,
+                                                    unit_index: usize|
+                         -> Option<(BoundaryKernelVector, f64)> {
+                            if coordinate_body > 0 && coordinate_body - 1 == body_index {
+                                Some((
+                                    material_part_translation_derivative(
+                                        geometries.get(body_index)?,
+                                        *body_centers_of_mass.get(body_index)?,
+                                        unit_index,
+                                        coordinate_axis,
+                                    )?,
+                                    if coordinate_axis == 2 { 1.0 } else { 0.0 },
+                                ))
+                            } else {
+                                Some((BoundaryKernelVector::default(), 0.0))
+                            }
+                        };
+                        let (start_blocker_translation, start_blocker_angular) =
+                            endpoint_translation(blocker_body, blocker_unit)?;
                         let start_resolved =
                             super::resonance_boundary_far_field::resolve_boundary_endpoint_pose_derivative_with_source(
                                 start_provenance,
@@ -3514,10 +3522,12 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                                 source_center_derivative,
                                 target_translation,
                                 target_angular,
-                                blocker_translation,
-                                blocker_angular,
+                                start_blocker_translation,
+                                start_blocker_angular,
                             )?;
                         let end_indices = resonance_endpoint_indices(end_provenance)?;
+                        let (end_blocker_translation, end_blocker_angular) =
+                            endpoint_translation(end_indices.2, end_indices.3)?;
                         let end_resolved =
                             super::resonance_boundary_far_field::resolve_boundary_endpoint_pose_derivative_with_source(
                                 end_provenance,
@@ -3533,8 +3543,8 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                                 source_center_derivative,
                                 target_translation,
                                 target_angular,
-                                blocker_translation,
-                                blocker_angular,
+                                end_blocker_translation,
+                                end_blocker_angular,
                             )?;
                         let close_point = |left: BoundaryKernelVector, right: (f64, f64)| {
                             (left.x - right.0).hypot(left.y - right.1)
