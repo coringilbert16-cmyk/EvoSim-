@@ -1166,7 +1166,10 @@ impl LocalResonanceWorldSnapshot {
 
         let mut force_by_index =
             vec![crate::harmonics::ResonanceBodyForce::default(); self.bodies.len()];
-        let mut error_by_index = vec![None; self.bodies.len()];
+        let mut error_by_index = vec![
+            Some(crate::harmonics::ResonanceBodyForce::default());
+            self.bodies.len()
+        ];
         force_by_index[index_a] = forces[0];
         force_by_index[index_b] = forces[1];
         error_by_index[index_a] = errors[0];
