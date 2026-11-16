@@ -143,12 +143,6 @@ impl MutualInteractionHierarchy {
                 Self::visit_distinct(a, left, pairs)?;
                 Self::visit_distinct(a, right, pairs)?;
             }
-            (
-                NodeKind::Branch { left, right },
-                NodeKind::Branch {
-                    left: other_left,
-                    right: other_right,
-                },
             (NodeKind::Branch { left, right }, NodeKind::Branch { .. })
                 if Self::maximum_extent(a.bounds) >= Self::maximum_extent(b.bounds) =>
             {
