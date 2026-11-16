@@ -38,7 +38,7 @@ mod world_tone;
 mod world_tone_snapshot;
 
 #[path = "simulation/resonance_mutual_hierarchy.rs"]
-#[allow(dead_code)] // Production movement integration is staged behind the exact fallback.
+#[allow(dead_code)] // The adaptive evaluator is exposed before live tick activation.
 mod resonance_mutual_hierarchy;
 
 // Active physical geometry authority stack.
