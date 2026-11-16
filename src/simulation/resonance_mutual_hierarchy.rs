@@ -1,10 +1,10 @@
 //! Test-only mutual dual-tree traversal for complete environmental interactions.
 //!
-//! This stage deliberately performs no multipole acceptance. Every unordered
-//! body pair is emitted exactly once as an exact leaf interaction. The spatial
-//! hierarchy establishes deterministic mutual traversal and a safe integration
-//! point for later kernel/visibility certificates without dropping long-range
-//! interactions or changing runtime behavior.
+//! The adaptive traversal accepts a cluster pair only when the caller supplies
+//! a complete visibility certificate and independent potential, per-body x/y
+//! force, and per-body torque error bounds. Missing or rejected certificates
+//! subdivide to exact body-pair callbacks. The current world oracle deliberately
+//! supplies no cluster evaluator, so it continues to exercise exact leaves.
 
 use crate::resonance_visibility::VisibilityBounds;
 
