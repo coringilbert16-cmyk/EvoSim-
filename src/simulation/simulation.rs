@@ -1035,6 +1035,14 @@ impl Simulation {
             self.environment.height,
         );
 
+        // Resonance movement runs after ambient transport and before reaction
+        // discovery, so chemistry sees the updated environmental contacts.
+        crate::environmental_movement::apply_environmental_resonance_movement(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            self.tick,
+        );
+
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
         // once per simulation tick instead of rebuilding the calibration
