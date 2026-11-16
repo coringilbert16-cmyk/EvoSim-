@@ -3882,7 +3882,12 @@ mod tests {
                 staged_kinetic_delta,
                 &staged_pair_delta,
             ),
-            "kinetic and pair-potential changes should settle against the funded environment"
+            "kinetic and pair-potential changes should settle against the funded environment: kinetic_delta={staged_kinetic_delta:?}, pair_components={staged_pair_delta:?}, usable={staged_usable:?}, ledger_usable_held={:?}, ledger_usable_gained={:?}, ledger_pair_held={:?}, ledger_resonant_held={:?}, ledger_heat={:?}",
+            staged_ledger.total_usable_energy_held,
+            staged_ledger.total_usable_energy_gained,
+            staged_ledger.total_pair_interaction_potential_held,
+            staged_ledger.total_resonant_energy_held,
+            staged_ledger.total_heat_dissipated
         );
 
         assert!(snapshot.commit_environmental_motion_transaction(
