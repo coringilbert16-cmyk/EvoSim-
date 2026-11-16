@@ -1030,10 +1030,11 @@ impl ResonanceForceAccumulator {
             return false;
         }
 
-        // Only pairs involving at least one moved body can change. Re-evaluate
-        // those pairs against the complete before/after occluder inventory.
-        // This is exact for the proposed batch and avoids an unconditional
-        // all-pairs world inventory scan when only a subset moves.
+        // A moved body can also change the visibility of pairs for which it
+        // is a third-party occluder. Re-evaluate the complete pair inventory
+        // against both world states so no occlusion-mediated energy change is
+        // omitted. The scalable potential hierarchy must replace this oracle
+        // before the transaction is enabled in the standard large-world tick.
         let Some(pair_components) = environmental_motion_pair_potential_delta(
             &self.bodies,
             &after_bodies,
@@ -1770,12 +1771,14 @@ fn environmental_motion_pair_potential_delta(
         return None;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
+    if moved.len() != moved_indices.len()
+        || moved.iter().any(|index| *index >= before_bodies.len())
+    {
+        return None;
+    }
     let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
     for first in 0..before_bodies.len() {
         for second in first + 1..before_bodies.len() {
-            if !moved.contains(&first) && !moved.contains(&second) {
-                continue;
-            }
             let before_occluders = before_bodies
                 .iter()
                 .enumerate()
