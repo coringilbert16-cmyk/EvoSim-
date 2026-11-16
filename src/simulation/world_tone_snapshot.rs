@@ -1654,9 +1654,7 @@ fn environmental_motion_batch_is_collision_free(
         return false;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len()
-        || moved.iter().any(|index| *index >= before_bodies.len())
-    {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
         return false;
     }
     let mut starts = Vec::with_capacity(before_bodies.len());
@@ -1757,9 +1755,7 @@ fn environmental_motion_pair_potential_delta(
         return None;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len()
-        || moved.iter().any(|index| *index >= before_bodies.len())
-    {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
         return None;
     }
     let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
@@ -3736,7 +3732,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn environmental_swept_collision_validation_rejects_tunnelling() {
         let mut simulation = Simulation::new(401, 1.0);
@@ -3753,12 +3748,10 @@ mod tests {
                 &catalog,
             )
             .expect("carbon should be physically realized");
-            assert!(simulation.environment.field.deposit_physical(
-                x,
-                y,
-                physical,
-                &catalog,
-            ));
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical(x, y, physical, &catalog,));
         }
         let before = simulation
             .environment
@@ -3829,11 +3822,7 @@ mod tests {
             .expect("environmental world snapshot should be valid");
         let body_index = 0;
         let identity = snapshot.bodies[body_index].environmental_identity;
-        let before_position = snapshot.bodies[body_index]
-            .placements
-            .as_ref()
-            .unwrap()[0]
-            .x;
+        let before_position = snapshot.bodies[body_index].placements.as_ref().unwrap()[0].x;
         let mut accumulator = ResonanceForceAccumulator::default();
         assert!(accumulator.add(ResonanceWorldBodyForce {
             body_index,
@@ -3868,9 +3857,16 @@ mod tests {
             "the force proposal should advance the material along +x"
         );
         assert!(
-            simulation.energy_ledger.total_pair_interaction_potential_held.is_finite()
+            simulation
+                .energy_ledger
+                .total_pair_interaction_potential_held
+                .is_finite()
                 && simulation.environment.chemistry_usable_energy.is_finite()
-                && simulation.environment.resonant_energy.total_energy().is_some(),
+                && simulation
+                    .environment
+                    .resonant_energy
+                    .total_energy()
+                    .is_some(),
             "field movement and its matching energy settlement must both commit"
         );
     }
