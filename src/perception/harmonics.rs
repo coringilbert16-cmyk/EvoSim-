@@ -3750,33 +3750,32 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
         target.absolute_error.y += local.absolute_error.y;
         target.absolute_error.torque += local.absolute_error.torque;
     }
-    let forces_valid = mapped
+    let forces_valid = mapped.iter().all(|entry| {
+        [
+            entry.force.x,
+            entry.force.y,
+            entry.force.torque,
+            entry.absolute_error.x,
+            entry.absolute_error.y,
+            entry.absolute_error.torque,
+        ]
         .iter()
-        .all(|entry| {
-            [
-                entry.force.x,
-                entry.force.y,
-                entry.force.torque,
-                entry.absolute_error.x,
-                entry.absolute_error.y,
-                entry.absolute_error.torque,
-            ]
-            .iter()
-            .all(|value| value.is_finite())
-                && entry.absolute_error.x >= 0.0
-                && entry.absolute_error.y >= 0.0
-                && entry.absolute_error.torque >= 0.0
-        });
+        .all(|value| value.is_finite())
+            && entry.absolute_error.x >= 0.0
+            && entry.absolute_error.y >= 0.0
+            && entry.absolute_error.torque >= 0.0
+    });
     potential_components.sort_by(|left, right| {
         left.frequency_cycles_per_day
             .total_cmp(&right.frequency_cycles_per_day)
     });
-    (forces_valid && potential_error.is_finite())
-        .then_some(ResonanceDirectionalGeneralizedEvaluation {
+    (forces_valid && potential_error.is_finite()).then_some(
+        ResonanceDirectionalGeneralizedEvaluation {
             potential_components,
             potential_error,
             forces: mapped,
-        })
+        },
+    )
 }
 
 /// Combine the two directional frequency-resolved gradients into the existing
@@ -3846,24 +3845,21 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
             .total_cmp(&right.frequency_cycles_per_day)
     });
     let potential_error = 0.5 * (ab.potential_error + ba.potential_error);
-    let valid = combined
+    let valid = combined.iter().all(|entry| {
+        [
+            entry.force.x,
+            entry.force.y,
+            entry.force.torque,
+            entry.absolute_error.x,
+            entry.absolute_error.y,
+            entry.absolute_error.torque,
+        ]
         .iter()
-        .all(|entry| {
-            [
-                entry.force.x,
-                entry.force.y,
-                entry.force.torque,
-                entry.absolute_error.x,
-                entry.absolute_error.y,
-                entry.absolute_error.torque,
-            ]
-            .iter()
-            .all(|value| value.is_finite())
-                && entry.absolute_error.x >= 0.0
-                && entry.absolute_error.y >= 0.0
-                && entry.absolute_error.torque >= 0.0
-        })
-        && potential_error.is_finite()
+        .all(|value| value.is_finite())
+            && entry.absolute_error.x >= 0.0
+            && entry.absolute_error.y >= 0.0
+            && entry.absolute_error.torque >= 0.0
+    }) && potential_error.is_finite()
         && potential_error >= 0.0
         && potential_components.iter().all(|component| {
             component.frequency_cycles_per_day.is_finite()
