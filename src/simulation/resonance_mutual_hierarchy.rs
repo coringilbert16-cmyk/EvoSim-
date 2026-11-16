@@ -1133,21 +1133,26 @@ mod tests {
                     Some((certificate.evaluation, certificate.errors))
                 },
                 |_, _| {
-                    Some(crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation {
-                        potential: 0.0,
-                        coordinates: Vec::new(),
-                        error: crate::resonance_boundary_far_field::MutualBoundaryKernelError {
+                    Some(
+                        crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation {
                             potential: 0.0,
                             coordinates: Vec::new(),
+                            error: crate::resonance_boundary_far_field::MutualBoundaryKernelError {
+                                potential: 0.0,
+                                coordinates: Vec::new(),
+                            },
                         },
-                    })
+                    )
                 },
             )
             .unwrap();
         assert_eq!(result.accepted_cluster_pairs.len(), 1);
         assert_eq!(result.exact_pairs, vec![(0, 1), (2, 3)]);
         assert_eq!(
-            result.accepted_cluster_pairs[0].evaluation.coordinates.len(),
+            result.accepted_cluster_pairs[0]
+                .evaluation
+                .coordinates
+                .len(),
             participants.len() * 3
         );
     }
