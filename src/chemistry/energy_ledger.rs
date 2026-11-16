@@ -586,18 +586,34 @@ pub(crate) fn settle_pair_potential_and_kinetic_change(
     }
 
     if net_delta > 0.0 {
-        let next_usable = *active_mover_usable_energy - net_delta;
+        let mut next_usable = *active_mover_usable_energy - net_delta;
         if !next_usable.is_finite() || next_usable < 0.0 {
             return false;
         }
-        let next_usable_gained = ledger.total_usable_energy_gained - net_delta;
-        if !next_usable_gained.is_finite() {
+        let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
+        let residual_for = |candidate_usable: f64| {
+            let actual_usable_delta = candidate_usable - *active_mover_usable_energy;
+            actual_usable_delta + actual_pair_delta + kinetic_energy_delta
+        };
+        // Match the conservative holder correction used by reaction settlement:
+        // subtraction at a large environmental balance can round the debit
+        // downward by an ULP, leaving a positive (energy-creating) residual.
+        let mut residual = residual_for(next_usable);
+        let mut rounding_steps = 0;
+        while residual > 0.0 {
+            if next_usable <= 0.0 || rounding_steps >= 64 {
+                return false;
+            }
+            next_usable = f64::from_bits(next_usable.to_bits() - 1);
+            residual = residual_for(next_usable);
+            rounding_steps += 1;
+        }
+        if !residual.is_finite() || residual.abs() > EPSILON {
             return false;
         }
         let actual_usable_delta = next_usable - *active_mover_usable_energy;
-        let actual_pair_delta = next_pair_potential - ledger.total_pair_interaction_potential_held;
-        let residual = actual_usable_delta + actual_pair_delta + kinetic_energy_delta;
-        if !residual.is_finite() || residual > 0.0 || residual.abs() > EPSILON {
+        let next_usable_gained = ledger.total_usable_energy_gained + actual_usable_delta;
+        if !next_usable_gained.is_finite() {
             return false;
         }
 
