@@ -1399,6 +1399,12 @@ fn material_aura_receptions_with_occluders_prepared(
     .map(|(receptions, _, _)| receptions)
 }
 
+type MaterialAuraReceptionGeometry = (
+    Vec<MaterialAuraReception>,
+    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
+    Vec<Option<usize>>,
+);
+
 fn material_aura_receptions_with_occluders_and_geometry_prepared(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
@@ -1406,11 +1412,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
-) -> Option<(
-    Vec<MaterialAuraReception>,
-    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
-    Vec<Option<usize>>,
-)> {
+) -> Option<MaterialAuraReceptionGeometry> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -3025,6 +3027,12 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
     .map(|(samples, _, _)| samples)
 }
 
+type ResonanceBoundaryInteractionFrame = (
+    Vec<ResonanceBoundaryInteractionSample>,
+    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
+    Vec<Option<usize>>,
+);
+
 fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     source: &crate::physical_material::PhysicalMaterial,
     receiver: &crate::physical_material::PhysicalMaterial,
@@ -3033,11 +3041,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     tick: u64,
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
-) -> Option<(
-    Vec<ResonanceBoundaryInteractionSample>,
-    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
-    Vec<Option<usize>>,
-)> {
+) -> Option<ResonanceBoundaryInteractionFrame> {
     let (receptions, receiver_bodies, receiver_body_occluder_indices) =
         material_aura_receptions_with_occluders_and_geometry_prepared(
             source,
@@ -3751,7 +3755,7 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         return None;
     }
     let mut combined = vec![ResonanceBodyForceWithError::default(); ab.len()];
-    for index in 0..combined.len() {
+    for (index, target) in combined.iter_mut().enumerate() {
         let (ab_index, ba_index) = if index == 0 {
             (0, 1)
         } else if index == 1 {
@@ -3761,7 +3765,6 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         };
         let left = ab[ab_index];
         let right = ba[ba_index];
-        let target = &mut combined[index];
         target.force.x = 0.5 * (left.force.x + right.force.x);
         target.force.y = 0.5 * (left.force.y + right.force.y);
         target.force.torque = 0.5 * (left.force.torque + right.force.torque);
