@@ -1104,12 +1104,12 @@ mod tests {
 
     #[test]
     fn moving_and_rotating_blockers_remain_in_inventory_across_pose_cell_extremes() {
-        use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+        use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
         let geometry = |form: Form, x: f64, y: f64, rotation_radians: f64| {
             let radius = form.bounding_radius();
-            OrganismBodyGeometry {
+            PhysicalBodyGeometry {
                 parts: vec![PlacedForm {
                     unit_index: 0,
                     form,
@@ -1309,7 +1309,7 @@ mod tests {
 
     #[test]
     fn certified_inventory_reaches_generalized_boundary_pose_evaluator() {
-        use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+        use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
         use crate::resources::Form;
 
         let form = Form::Rectangle {
@@ -1317,7 +1317,7 @@ mod tests {
             height: 1.0,
         };
         let radius = form.bounding_radius();
-        let bodies = vec![OrganismBodyGeometry {
+        let bodies = vec![PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form,
@@ -3781,7 +3781,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
 #[cfg(test)]
 mod visibility_tests {
     use super::*;
-    use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+    use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
     fn rectangle_body(
@@ -3790,8 +3790,8 @@ mod visibility_tests {
         y: f64,
         width: f64,
         height: f64,
-    ) -> OrganismBodyGeometry {
-        OrganismBodyGeometry {
+    ) -> PhysicalBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index,
                 form: Form::Rectangle { width, height },
@@ -4049,7 +4049,7 @@ mod visibility_tests {
 
     #[test]
     fn polygonal_exposure_rejects_duplicate_constituent_identity() {
-        let body = OrganismBodyGeometry {
+        let body = PhysicalBodyGeometry {
             parts: vec![
                 PlacedForm {
                     unit_index: 4,
@@ -4085,7 +4085,7 @@ mod visibility_tests {
 
     #[test]
     fn polygonal_exposure_fails_closed_for_concave_target_that_can_self_occlude() {
-        let concave = OrganismBodyGeometry {
+        let concave = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Polygon {
@@ -4335,7 +4335,7 @@ mod visibility_tests {
     #[test]
     fn line_boundary_intersection_splits_a_straight_receiver_interval() {
         let target = rectangle_body(0, 5.0, 0.0, 2.0, 2.0);
-        let line = OrganismBodyGeometry {
+        let line = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 1,
                 form: Form::Line { length: 4.0 },
@@ -4397,7 +4397,7 @@ mod visibility_tests {
 
     #[test]
     fn straight_boundary_query_skips_curved_targets_without_polygonization() {
-        let circle = OrganismBodyGeometry {
+        let circle = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Circle { radius: 1.0 },
@@ -4424,7 +4424,7 @@ mod visibility_tests {
         .expect("valid capillary family");
         let arc = crate::capillary_geometry::CircularArcBoundary::from_flat_contact(family)
             .expect("valid exact circular arc");
-        let fluid = OrganismBodyGeometry {
+        let fluid = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Fluid {
@@ -5373,16 +5373,16 @@ pub(crate) fn point_source_projected_arc_extent(
 #[cfg(test)]
 mod point_source_curve_visibility_tests {
     use super::{point_source_projected_arc_extent, visible_circular_arc_intervals};
-    use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+    use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
-    fn body(form: Form, x: f64, y: f64) -> OrganismBodyGeometry {
+    fn body(form: Form, x: f64, y: f64) -> PhysicalBodyGeometry {
         let radius = match &form {
             Form::Circle { radius } => *radius,
             Form::Rectangle { width, height } => width.hypot(*height) * 0.5,
             _ => 10.0,
         };
-        OrganismBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form,
@@ -5507,7 +5507,7 @@ mod point_source_curve_visibility_tests {
 
     #[test]
     fn point_source_circle_shadow_from_finite_line_splits_at_line_endpoints() {
-        let blocker = OrganismBodyGeometry {
+        let blocker = PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Line { length: 1.0 },
@@ -7238,11 +7238,11 @@ mod parallel_mixed_boundary_visibility_tests {
         parallel_exposure_with_exact_intersections, parallel_exposure_with_paths_for_targets,
         parallel_projected_widths_by_body_for_targets, ParallelRayInteractionPath,
     };
-    use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+    use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
-    fn circle(x: f64, y: f64, radius: f64) -> OrganismBodyGeometry {
-        OrganismBodyGeometry {
+    fn circle(x: f64, y: f64, radius: f64) -> PhysicalBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Circle { radius },
@@ -7257,8 +7257,8 @@ mod parallel_mixed_boundary_visibility_tests {
         }
     }
 
-    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
-        OrganismBodyGeometry {
+    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> PhysicalBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Rectangle { width, height },
@@ -7351,7 +7351,7 @@ mod parallel_mixed_boundary_visibility_tests {
         let bodies: Vec<_> = (0..=256)
             .map(|index| {
                 let x = 4.0 + index as f64 * 2.0;
-                OrganismBodyGeometry {
+                PhysicalBodyGeometry {
                     parts: vec![PlacedForm {
                         unit_index: 0,
                         form: Form::Rectangle {
@@ -7453,12 +7453,12 @@ mod parallel_lane_intersection_regression_tests {
 #[cfg(test)]
 mod parallel_polygonal_visibility_tests {
     use super::visible_parallel_polygonal_intervals_for_targets;
-    use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
+    use crate::physical_body_geometry::{PhysicalBodyGeometry, PlacedForm};
     use crate::resources::Form;
 
-    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> OrganismBodyGeometry {
+    fn rectangle(x: f64, y: f64, width: f64, height: f64) -> PhysicalBodyGeometry {
         let radius = (width * width + height * height).sqrt() * 0.5;
-        OrganismBodyGeometry {
+        PhysicalBodyGeometry {
             parts: vec![PlacedForm {
                 unit_index: 0,
                 form: Form::Rectangle { width, height },
