@@ -873,9 +873,7 @@ impl ResonanceForceAccumulator {
             }
         });
         if next_error.is_some_and(|error| {
-            !error.x.is_finite()
-                || !error.y.is_finite()
-                || !error.torque.is_finite()
+            !error.x.is_finite() || !error.y.is_finite() || !error.torque.is_finite()
         }) {
             return false;
         }
@@ -1137,7 +1135,10 @@ impl LocalResonanceWorldSnapshot {
                 return None;
             }
             (
-                evaluations.iter().map(|entry| entry.force).collect::<Vec<_>>(),
+                evaluations
+                    .iter()
+                    .map(|entry| entry.force)
+                    .collect::<Vec<_>>(),
                 evaluations
                     .iter()
                     .map(|entry| Some(entry.absolute_error))
@@ -1158,18 +1159,14 @@ impl LocalResonanceWorldSnapshot {
             )?;
             (forces, vec![None; occluder_indices.len() + 2])
         };
-        if forces.len() != occluder_indices.len() + 2
-            || errors.len() != forces.len()
-        {
+        if forces.len() != occluder_indices.len() + 2 || errors.len() != forces.len() {
             return None;
         }
 
         let mut force_by_index =
             vec![crate::harmonics::ResonanceBodyForce::default(); self.bodies.len()];
-        let mut error_by_index = vec![
-            Some(crate::harmonics::ResonanceBodyForce::default());
-            self.bodies.len()
-        ];
+        let mut error_by_index =
+            vec![Some(crate::harmonics::ResonanceBodyForce::default()); self.bodies.len()];
         force_by_index[index_a] = forces[0];
         force_by_index[index_b] = forces[1];
         error_by_index[index_a] = errors[0];
@@ -1183,12 +1180,14 @@ impl LocalResonanceWorldSnapshot {
                 .into_iter()
                 .zip(error_by_index)
                 .enumerate()
-                .map(|(body_index, (force, absolute_error))| ResonanceWorldBodyForce {
-                    body_index,
-                    environmental_identity: self.bodies[body_index].environmental_identity,
-                    force,
-                    absolute_error,
-                })
+                .map(
+                    |(body_index, (force, absolute_error))| ResonanceWorldBodyForce {
+                        body_index,
+                        environmental_identity: self.bodies[body_index].environmental_identity,
+                        force,
+                        absolute_error,
+                    },
+                )
                 .collect(),
         )
     }
