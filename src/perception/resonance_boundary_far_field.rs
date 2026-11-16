@@ -3842,28 +3842,88 @@ impl MutualBoundaryKernelExpansion {
             }
         };
         let potential = self.total_weight * kernel + gradient.dot(self.first_moment);
-        let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
-        let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
-        let source_value_bound = 1.0 / (1.0 + source_min);
-        let receiver_value_bound = 1.0 / (1.0 + receiver_min);
-        let source_hessian_bound = radial_hessian_bound(source_min);
-        let receiver_hessian_bound = radial_hessian_bound(receiver_min);
-        let source_third_bound = radial_third_bound(source_min);
-        let receiver_third_bound = radial_third_bound(receiver_min);
-        let hessian_bound = source_hessian_bound * receiver_value_bound
-            + receiver_hessian_bound * source_value_bound
-            + 2.0 * source_gradient_bound * receiver_gradient_bound;
-        let third_bound = source_third_bound * receiver_value_bound
-            + receiver_third_bound * source_value_bound
-            + 3.0 * source_hessian_bound * receiver_gradient_bound
-            + 3.0 * source_gradient_bound * receiver_hessian_bound;
+        let mut source_displacement_bounds = vec![0.0; self.samples.len()];
+        let mut receiver_displacement_bounds = vec![0.0; self.samples.len()];
+        let mut weight_change_bounds = vec![0.0; self.samples.len()];
+        for coordinate in &self.coordinates {
+            for (index, pose) in coordinate.samples.iter().enumerate() {
+                source_displacement_bounds[index] +=
+                    pose.position_displacement_bound + pose.source_center_displacement_bound;
+                receiver_displacement_bounds[index] +=
+                    pose.position_displacement_bound + pose.receiver_center_displacement_bound;
+                weight_change_bounds[index] += pose.weight_change_bound;
+            }
+        }
+        let maximum_source_displacement = source_displacement_bounds
+            .iter()
+            .copied()
+            .fold(0.0_f64, f64::max);
+        let maximum_receiver_displacement = receiver_displacement_bounds
+            .iter()
+            .copied()
+            .fold(0.0_f64, f64::max);
+        let average_source_displacement =
+            source_displacement_bounds.iter().sum::<f64>() / self.samples.len() as f64;
+        let average_receiver_displacement =
+            receiver_displacement_bounds.iter().sum::<f64>() / self.samples.len() as f64;
+        let source_min_cell = source_distance
+            - self.radius
+            - maximum_source_displacement
+            - average_source_displacement;
+        let receiver_min_cell = receiver_distance
+            - self.radius
+            - maximum_receiver_displacement
+            - average_receiver_displacement;
+        if !source_min_cell.is_finite()
+            || !receiver_min_cell.is_finite()
+            || source_min_cell <= f64::EPSILON
+            || receiver_min_cell <= f64::EPSILON
+        {
+            return None;
+        }
+        let source_gradient_cell = 1.0 / (1.0 + source_min_cell).powi(2);
+        let receiver_gradient_cell = 1.0 / (1.0 + receiver_min_cell).powi(2);
+        let source_value_cell = 1.0 / (1.0 + source_min_cell);
+        let receiver_value_cell = 1.0 / (1.0 + receiver_min_cell);
+        let source_hessian_cell = radial_hessian_bound(source_min_cell);
+        let receiver_hessian_cell = radial_hessian_bound(receiver_min_cell);
+        let source_third_cell = radial_third_bound(source_min_cell);
+        let receiver_third_cell = radial_third_bound(receiver_min_cell);
+        let hessian_cell = source_hessian_cell * receiver_value_cell
+            + receiver_hessian_cell * source_value_cell
+            + 2.0 * source_gradient_cell * receiver_gradient_cell;
+        let third_cell = source_third_cell * receiver_value_cell
+            + receiver_third_cell * source_value_cell
+            + 3.0 * source_hessian_cell * receiver_gradient_cell
+            + 3.0 * source_gradient_cell * receiver_hessian_cell;
+        let maximum_relative_displacement = maximum_source_displacement
+            .hypot(maximum_receiver_displacement);
+        let average_relative_displacement =
+            average_source_displacement.hypot(average_receiver_displacement);
+        let radius_cell =
+            self.radius + maximum_relative_displacement + average_relative_displacement;
+        let absolute_weight_cell = self
+            .samples
+            .iter()
+            .zip(&weight_change_bounds)
+            .map(|(sample, change)| sample.weight.abs() + change)
+            .sum::<f64>();
         let potential_roundoff = 128.0
             * f64::EPSILON
-            * (potential.abs() + self.absolute_weight + self.first_moment.norm() + 1.0);
-        let potential_error =
-            0.5 * self.absolute_weight * hessian_bound * self.radius * self.radius
-                + potential_roundoff;
-        if !potential.is_finite() || !potential_error.is_finite() {
+            * (potential.abs() + absolute_weight_cell + self.first_moment.norm() + 1.0);
+        let potential_error = 0.5
+            * absolute_weight_cell
+            * hessian_cell
+            * radius_cell
+            * radius_cell
+            + potential_roundoff;
+        if !potential.is_finite()
+            || !potential_error.is_finite()
+            || !absolute_weight_cell.is_finite()
+            || !hessian_cell.is_finite()
+            || !third_cell.is_finite()
+            || !radius_cell.is_finite()
+        {
             return None;
         }
 
@@ -3889,8 +3949,6 @@ impl MutualBoundaryKernelExpansion {
             let mut exact_derivative_magnitude_bound = 0.0;
             let mut sample_position_derivative = 0.0;
             let mut sample_weight_derivative = 0.0;
-            let mut center_displacement_bound = MutualBoundaryProductVector::default();
-            let mut maximum_displacement = MutualBoundaryProductVector::default();
             let mut center_derivative_bound = MutualBoundaryProductVector::default();
 
             for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
@@ -3953,66 +4011,16 @@ impl MutualBoundaryKernelExpansion {
                     pose.position_derivative_bound + pose.source_center_derivative_bound;
                 let receiver_relative_derivative_bound =
                     pose.position_derivative_bound + pose.receiver_center_derivative_bound;
-                center_displacement_bound.source.x +=
-                    pose.position_displacement_bound + pose.source_center_displacement_bound;
-                center_displacement_bound.receiver.x +=
-                    pose.position_displacement_bound + pose.receiver_center_displacement_bound;
-                maximum_displacement.source.x = maximum_displacement
-                    .source
-                    .x
-                    .max(pose.position_displacement_bound + pose.source_center_displacement_bound);
-                maximum_displacement.receiver.x = maximum_displacement.receiver.x.max(
-                    pose.position_displacement_bound + pose.receiver_center_displacement_bound,
-                );
                 center_derivative_bound.source.x += source_relative_derivative_bound;
                 center_derivative_bound.receiver.x += receiver_relative_derivative_bound;
             }
             let inverse_count = 1.0 / self.samples.len() as f64;
-            center_displacement_bound = center_displacement_bound.scale(inverse_count);
             center_derivative_bound = center_derivative_bound.scale(inverse_count);
-            let source_min_cell = source_distance
-                - self.radius
-                - maximum_displacement.source.x
-                - center_displacement_bound.source.x;
-            let receiver_min_cell = receiver_distance
-                - self.radius
-                - maximum_displacement.receiver.x
-                - center_displacement_bound.receiver.x;
-            if !source_min_cell.is_finite()
-                || !receiver_min_cell.is_finite()
-                || source_min_cell <= f64::EPSILON
-                || receiver_min_cell <= f64::EPSILON
-            {
-                return None;
-            }
-            let source_gradient_cell = 1.0 / (1.0 + source_min_cell).powi(2);
-            let receiver_gradient_cell = 1.0 / (1.0 + receiver_min_cell).powi(2);
-            let source_value_cell = 1.0 / (1.0 + source_min_cell);
-            let receiver_value_cell = 1.0 / (1.0 + receiver_min_cell);
-            let source_hessian_cell = radial_hessian_bound(source_min_cell);
-            let receiver_hessian_cell = radial_hessian_bound(receiver_min_cell);
-            let source_third_cell = radial_third_bound(source_min_cell);
-            let receiver_third_cell = radial_third_bound(receiver_min_cell);
-            let hessian_cell = source_hessian_cell * receiver_value_cell
-                + receiver_hessian_cell * source_value_cell
-                + 2.0 * source_gradient_cell * receiver_gradient_cell;
-            let third_cell = source_third_cell * receiver_value_cell
-                + receiver_third_cell * source_value_cell
-                + 3.0 * source_hessian_cell * receiver_gradient_cell
-                + 3.0 * source_gradient_cell * receiver_hessian_cell;
-            let maximum_relative_displacement = maximum_displacement
-                .source
-                .x
-                .hypot(maximum_displacement.receiver.x);
-            let center_relative_displacement = center_displacement_bound
-                .source
-                .x
-                .hypot(center_displacement_bound.receiver.x);
-            let radius_cell =
-                self.radius + maximum_relative_displacement + center_relative_displacement;
             let center_derivative_norm = center_derivative_bound.norm();
             let mut derivative_error = 0.0;
-            for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+            for (sample_index, (sample, pose)) in
+                self.samples.iter().zip(&coordinate.samples).enumerate()
+            {
                 let source_relative_derivative_bound =
                     pose.position_derivative_bound + pose.source_center_derivative_bound;
                 let receiver_relative_derivative_bound =
@@ -4020,7 +4028,8 @@ impl MutualBoundaryKernelExpansion {
                 let sample_relative_derivative_bound = source_relative_derivative_bound
                     .max(receiver_relative_derivative_bound)
                     * 2.0_f64.sqrt();
-                let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
+                let maximum_weight =
+                    sample.weight.abs() + weight_change_bounds[sample_index];
                 exact_derivative_magnitude_bound += maximum_weight
                     * (source_gradient_cell
                         * receiver_value_cell
