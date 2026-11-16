@@ -2853,6 +2853,7 @@ impl BoundaryKernelExpansion {
         }
 
         let mut total_weight = 0.0;
+        let mut absolute_weight = 0.0;
         let mut first_moment = BoundaryKernelVector::default();
         let mut radius: f64 = 0.0;
         for sample in &samples {
@@ -2864,6 +2865,7 @@ impl BoundaryKernelExpansion {
                 y: sample.position.y - sample_center.y,
             };
             total_weight += sample.weight;
+            absolute_weight += sample.weight.abs();
             first_moment.x += sample.weight * offset.x;
             first_moment.y += sample.weight * offset.y;
             radius = radius.max(offset.norm());
@@ -2883,6 +2885,7 @@ impl BoundaryKernelExpansion {
             sample_center,
             samples,
             total_weight,
+            absolute_weight,
             first_moment,
             radius,
         })
