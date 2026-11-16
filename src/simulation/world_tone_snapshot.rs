@@ -1415,10 +1415,9 @@ impl LocalResonanceWorldSnapshot {
         &self,
         catalog: &[BaseResource],
     ) -> Option<(usize, ResonanceForceAccumulator)> {
-        let hierarchy =
-            crate::resonance_mutual_hierarchy::MutualInteractionHierarchy::new(
-                &self.visibility_bounds,
-            )?;
+        let hierarchy = crate::resonance_mutual_hierarchy::MutualInteractionHierarchy::new(
+            &self.visibility_bounds,
+        )?;
         let pairs = hierarchy.unordered_pairs()?;
         let mut accumulator = ResonanceForceAccumulator::default();
         for (index_a, index_b) in pairs.iter().copied() {
