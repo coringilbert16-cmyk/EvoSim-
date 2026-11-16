@@ -968,6 +968,125 @@ impl ResonanceForceAccumulator {
         Some(staged)
     }
 
+    /// Validate, energy-settle, and atomically commit one complete Newtonian
+    /// movement batch. Force production is deliberately separate: this
+    /// transaction consumes the tick-local accumulated gradients and never
+    /// substitutes ambient-flow velocity for inertial motion.
+    pub(crate) fn commit_environmental_motion_transaction(
+        &self,
+        simulation: &mut Simulation,
+        accumulator: &ResonanceForceAccumulator,
+        delta_time: f64,
+    ) -> bool {
+        if self.tick != simulation.tick
+            || !delta_time.is_finite()
+            || delta_time <= 0.0
+        {
+            return false;
+        }
+        let catalog = &simulation.environment.catalog;
+        let vertical_period = Some(simulation.environment.height);
+        let Some(motions) = accumulator.stage_motion(
+            self,
+            delta_time,
+            catalog,
+            vertical_period,
+        ) else {
+            return false;
+        };
+        if motions.is_empty() {
+            return true;
+        }
+
+        // Reconstruct the complete post-step environmental world before any
+        // mutation. Stable snapshot indices remain the authority throughout.
+        let mut after_bodies = self.bodies.clone();
+        let mut moved_indices = Vec::with_capacity(motions.len());
+        let mut kinetic_energy_delta = 0.0;
+        for motion in &motions {
+            let Some(body) = after_bodies.get_mut(motion.body_index) else {
+                return false;
+            };
+            if body.environmental_identity != motion.environmental_identity
+                || *body != motion.before
+            {
+                return false;
+            }
+            *body = motion.after.clone();
+            moved_indices.push(motion.body_index);
+            kinetic_energy_delta +=
+                motion.kinetic_energy_after - motion.kinetic_energy_before;
+        }
+        if !kinetic_energy_delta.is_finite()
+            || !environmental_motion_batch_is_collision_free(
+                &self.bodies,
+                &after_bodies,
+                &moved_indices,
+                catalog,
+                simulation.environment.width,
+                simulation.environment.height,
+            )
+        {
+            return false;
+        }
+
+        // Only pairs involving at least one moved body can change. Re-evaluate
+        // those pairs against the complete before/after occluder inventory.
+        // This is exact for the proposed batch and avoids an unconditional
+        // all-pairs world inventory scan when only a subset moves.
+        let Some(pair_components) = environmental_motion_pair_potential_delta(
+            &self.bodies,
+            &after_bodies,
+            &moved_indices,
+            catalog,
+            self.tick,
+        ) else {
+            return false;
+        };
+
+        // Stage all accounting destinations independently. The live field is
+        // still untouched if energy funding or conservation validation fails.
+        let mut staged_ledger = simulation.energy_ledger;
+        let mut staged_usable_energy = simulation.environment.chemistry_usable_energy;
+        let mut staged_resonance = simulation.environment.resonant_energy.clone();
+        if !crate::energy_ledger::settle_environmental_pair_potential_and_kinetic_change(
+            &mut staged_ledger,
+            &mut staged_usable_energy,
+            &mut staged_resonance,
+            kinetic_energy_delta,
+            &pair_components,
+        ) {
+            return false;
+        }
+
+        let mut field_motions = Vec::with_capacity(motions.len());
+        for motion in motions {
+            let Some((cell_index, material_index)) = self.field_locator(motion.body_index) else {
+                return false;
+            };
+            field_motions.push((
+                cell_index,
+                material_index,
+                motion.before,
+                motion.after,
+            ));
+        }
+        if !simulation
+            .environment
+            .field
+            .commit_environmental_motion_batch(field_motions, catalog)
+        {
+            return false;
+        }
+
+        // No fallible operation follows the field commit: the matching energy
+        // state is installed as part of the same logical transaction.
+        simulation.energy_ledger = staged_ledger;
+        simulation.environment.chemistry_usable_energy = staged_usable_energy;
+        simulation.environment.resonant_energy = staged_resonance;
+        true
+    }
+
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
         self.bodies
             .into_iter()
@@ -1490,6 +1609,230 @@ fn owner_relative_physical_material(
     );
     world_material.owner_relative_origin = None;
     Some(world_material)
+}
+
+/// Conservative circular envelopes for rigid-body swept-path validation.
+/// The envelope encloses every constituent throughout rotation; it can reject
+/// a close but non-colliding pass, but cannot permit tunnelling or overlap.
+fn environmental_body_motion_envelope(
+    body: &PhysicalMaterial,
+    catalog: &[BaseResource],
+    vertical_period: f64,
+) -> Option<((f64, f64), f64)> {
+    let properties = body.mass_properties(catalog, Some(vertical_period))?;
+    let placements = body.placements.as_ref()?;
+    if placements.len() != body.material.parts.len() || placements.is_empty() {
+        return None;
+    }
+    let mut radius: f64 = 0.0;
+    for (index, placement) in placements.iter().enumerate() {
+        let shape = body.realized_shape_for_part(index, catalog)?;
+        let part_radius = shape.form.bounding_radius();
+        let dx = placement.x - properties.center_x;
+        let dy = (placement.y - properties.center_y + vertical_period * 0.5)
+            .rem_euclid(vertical_period)
+            - vertical_period * 0.5;
+        let extent = dx.hypot(dy) + part_radius;
+        if !extent.is_finite() || part_radius < 0.0 {
+            return None;
+        }
+        radius = radius.max(extent);
+    }
+    let center = (
+        properties.center_x,
+        properties.center_y.rem_euclid(vertical_period),
+    );
+    (center.0.is_finite() && center.1.is_finite() && radius.is_finite())
+        .then_some((center, radius))
+}
+
+fn environmental_periodic_delta(delta: f64, period: f64) -> f64 {
+    (delta + period * 0.5).rem_euclid(period) - period * 0.5
+}
+
+fn environmental_motion_batch_is_collision_free(
+    before_bodies: &[PhysicalMaterial],
+    after_bodies: &[PhysicalMaterial],
+    moved_indices: &[usize],
+    catalog: &[BaseResource],
+    world_width: f64,
+    world_height: f64,
+) -> bool {
+    if before_bodies.len() != after_bodies.len()
+        || !world_width.is_finite()
+        || world_width <= 0.0
+        || !world_height.is_finite()
+        || world_height <= 0.0
+    {
+        return false;
+    }
+    let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
+    if moved.len() != moved_indices.len()
+        || moved.iter().any(|index| *index >= before_bodies.len())
+    {
+        return false;
+    }
+    let mut starts = Vec::with_capacity(before_bodies.len());
+    let mut displacements = Vec::with_capacity(before_bodies.len());
+    let mut radii = Vec::with_capacity(before_bodies.len());
+    for index in 0..before_bodies.len() {
+        let Some((start, radius)) =
+            environmental_body_motion_envelope(&before_bodies[index], catalog, world_height)
+        else {
+            return false;
+        };
+        let Some((end, after_radius)) =
+            environmental_body_motion_envelope(&after_bodies[index], catalog, world_height)
+        else {
+            return false;
+        };
+        let tolerance = 1.0e-10 * radius.max(after_radius).max(1.0);
+        if (radius - after_radius).abs() > tolerance
+            || before_bodies[index].environmental_identity
+                != after_bodies[index].environmental_identity
+        {
+            return false;
+        }
+        starts.push(start);
+        displacements.push((
+            if moved.contains(&index) {
+                end.0 - start.0
+            } else {
+                0.0
+            },
+            if moved.contains(&index) {
+                environmental_periodic_delta(end.1 - start.1, world_height)
+            } else {
+                0.0
+            },
+        ));
+        radii.push(radius);
+        if moved.contains(&index) {
+            let end_x = start.0 + displacements[index].0;
+            if start.0 - radius < 0.0
+                || end_x - radius < 0.0
+                || start.0 + radius > world_width
+                || end_x + radius > world_width
+            {
+                return false;
+            }
+        }
+    }
+
+    for first in 0..before_bodies.len() {
+        for second in first + 1..before_bodies.len() {
+            if !moved.contains(&first) && !moved.contains(&second) {
+                continue;
+            }
+            let initial_x = starts[second].0 - starts[first].0;
+            let initial_y =
+                environmental_periodic_delta(starts[second].1 - starts[first].1, world_height);
+            let relative_dx = displacements[second].0 - displacements[first].0;
+            let relative_dy = displacements[second].1 - displacements[first].1;
+            let speed_squared = relative_dx * relative_dx + relative_dy * relative_dy;
+            let fraction = if speed_squared <= f64::EPSILON {
+                0.0
+            } else {
+                (-(initial_x * relative_dx + initial_y * relative_dy) / speed_squared)
+                    .clamp(0.0, 1.0)
+            };
+            let closest_x = initial_x + fraction * relative_dx;
+            let closest_y = initial_y + fraction * relative_dy;
+            let closest_distance = closest_x.hypot(closest_y);
+            let initial_distance = initial_x.hypot(initial_y);
+            let required_distance = radii[first] + radii[second];
+            let tolerance = 1.0e-10 * required_distance.max(initial_distance).max(1.0);
+            if initial_distance < required_distance {
+                // Existing overlaps are not silently legitimized, but an
+                // already-overlapping pair may separate without being blocked.
+                if closest_distance + tolerance < initial_distance {
+                    return false;
+                }
+            } else if closest_distance + tolerance < required_distance {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// Exact signed frequency-resolved pair-potential change for a staged motion
+/// batch. Every affected pair is evaluated once with all other field bodies as
+/// occluders; unaffected pair terms cancel and are not recomputed.
+fn environmental_motion_pair_potential_delta(
+    before_bodies: &[PhysicalMaterial],
+    after_bodies: &[PhysicalMaterial],
+    moved_indices: &[usize],
+    catalog: &[BaseResource],
+    tick: u64,
+) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
+    if before_bodies.len() != after_bodies.len() {
+        return None;
+    }
+    let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
+    let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
+    for first in 0..before_bodies.len() {
+        for second in first + 1..before_bodies.len() {
+            if !moved.contains(&first) && !moved.contains(&second) {
+                continue;
+            }
+            let before_occluders = before_bodies
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != first && *index != second)
+                .map(|(_, body)| body.clone())
+                .collect::<Vec<_>>();
+            let after_occluders = after_bodies
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != first && *index != second)
+                .map(|(_, body)| body.clone())
+                .collect::<Vec<_>>();
+            let before = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                &before_bodies[first],
+                &before_bodies[second],
+                &before_occluders,
+                catalog,
+                tick,
+            )?;
+            let after = crate::harmonics::resonance_pair_potential_components_with_occluders(
+                &after_bodies[first],
+                &after_bodies[second],
+                &after_occluders,
+                catalog,
+                tick,
+            )?;
+            for component in before.into_iter().map(|mut value| {
+                value.energy = -value.energy;
+                value
+            }).chain(after) {
+                if !component.energy.is_finite()
+                    || !component.frequency_cycles_per_day.is_finite()
+                    || component.frequency_cycles_per_day <= 0.0
+                {
+                    return None;
+                }
+                if let Some(existing) = totals.iter_mut().find(|existing| {
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day)
+                        .abs()
+                        <= 1.0e-9
+                }) {
+                    existing.energy += component.energy;
+                    if !existing.energy.is_finite() {
+                        return None;
+                    }
+                } else {
+                    totals.push(component);
+                }
+            }
+        }
+    }
+    totals.sort_by(|left, right| {
+        left.frequency_cycles_per_day
+            .partial_cmp(&right.frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(totals)
 }
 
 fn world_pair_potential_components_for_bodies(
