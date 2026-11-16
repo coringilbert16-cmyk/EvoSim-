@@ -94,8 +94,8 @@ impl MutualInteractionHierarchy {
         })
     }
 
-    fn maximum_extent(self) -> f64 {
-        (self.max_x - self.min_x).max(self.max_y - self.min_y)
+    fn maximum_extent(bounds: VisibilityBounds) -> f64 {
+        (bounds.max_x - bounds.min_x).max(bounds.max_y - bounds.min_y)
     }
 
     fn center(bounds: VisibilityBounds, x_axis: bool) -> f64 {
@@ -149,10 +149,11 @@ impl MutualInteractionHierarchy {
                     left: other_left,
                     right: other_right,
                 },
-            ) if a.bounds.maximum_extent() >= b.bounds.maximum_extent() => {
+            (NodeKind::Branch { left, right }, NodeKind::Branch { .. })
+                if Self::maximum_extent(a.bounds) >= Self::maximum_extent(b.bounds) =>
+            {
                 Self::visit_distinct(left, b, pairs)?;
                 Self::visit_distinct(right, b, pairs)?;
-                let _ = (other_left, other_right);
             }
             (
                 NodeKind::Branch { .. },
