@@ -1256,6 +1256,7 @@ impl LocalResonanceWorldSnapshot {
                     y: gradient.body_forces[body_index].1,
                     torque: gradient.body_torques[body_index],
                 },
+                absolute_error: None,
             })
             .collect::<Vec<_>>();
         contributions
@@ -1814,6 +1815,7 @@ mod tests {
             body_index,
             environmental_identity: identity,
             force: crate::harmonics::ResonanceBodyForce { x, y, torque },
+            absolute_error: Some(crate::harmonics::ResonanceBodyForce::default()),
         };
         assert!(accumulator.add(contribution(11, 11, 2.0, -1.0, 0.5)));
         assert!(accumulator.add(contribution(11, 11, -0.5, 3.0, 1.5)));
