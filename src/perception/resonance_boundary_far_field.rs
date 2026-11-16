@@ -5385,16 +5385,13 @@ mod tests {
         };
 
         let step = 1.0e-6;
-        for (coordinate_index, (coordinate_input, coordinate)) in
-            coordinates.iter().zip(&evaluation.coordinates).enumerate()
-        {
+        for (coordinate_index, coordinate) in evaluation.coordinates.iter().enumerate() {
             let taylor_fd = (taylor_potential(step, coordinate_index)
                 - taylor_potential(-step, coordinate_index))
                 / (2.0 * step);
             let exact_fd = (exact_potential(step, coordinate_index)
                 - exact_potential(-step, coordinate_index))
                 / (2.0 * step);
-            let _ = coordinate_input;
             assert!(
                 (coordinate.derivative - taylor_fd).abs() < 1.0e-8,
                 "coordinate {coordinate_index}: Taylor derivative={} finite difference={taylor_fd}",
