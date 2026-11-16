@@ -3799,6 +3799,131 @@ mod tests {
     }
 
     #[test]
+    fn mutual_pair_inventory_reconstructs_the_combined_world_force_and_potential() {
+        let mut simulation = Simulation::new(306, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x, y) in [
+            ("Carbon", 10.0, 10.0),
+            ("Hydrogen", 22.0, 10.0),
+            ("Nitrogen", 16.0, 16.0),
+        ] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should realize");
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical(x, y, physical, &catalog));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("world snapshot should be valid");
+        let identity_a = snapshot.bodies[0].environmental_identity;
+        let identity_b = snapshot.bodies[1].environmental_identity;
+        let combined = snapshot
+            .pair_force_and_potential_contributions(identity_a, identity_b, &catalog)
+            .expect("pair evaluation should produce the exact reference and mutual inventory");
+        assert!(
+            !combined.mutual_inventories.is_empty(),
+            "straight, visibility-certified pair geometry should retain mutual samples"
+        );
+
+        let mut mutual_potential = 0.0;
+        let mut mutual_potential_error = 0.0;
+        let mut mutual_forces =
+            vec![crate::harmonics::ResonanceBodyForce::default(); snapshot.bodies.len()];
+        let mut mutual_force_errors =
+            vec![crate::harmonics::ResonanceBodyForce::default(); snapshot.bodies.len()];
+
+        for inventory in &combined.mutual_inventories {
+            assert!(inventory.visibility_certified);
+            assert_eq!(inventory.coordinates.len(), inventory.body_slots.len() * 3);
+            assert!(inventory.samples.iter().all(|sample| {
+                sample.weight.is_finite()
+                    && sample.source_center.x.is_finite()
+                    && sample.source_center.y.is_finite()
+                    && sample.receiver_center.x.is_finite()
+                    && sample.receiver_center.y.is_finite()
+                    && sample.position.x.is_finite()
+                    && sample.position.y.is_finite()
+            }));
+            let expansion =
+                crate::resonance_boundary_far_field::MutualBoundaryKernelExpansion::new(
+                    inventory.samples.clone(),
+                    inventory.coordinates.clone(),
+                )
+                .expect("retained mutual inventory should form a valid two-distance expansion");
+            let evaluation = expansion
+                .evaluate()
+                .expect("mutual expansion should evaluate potential and every generalized coordinate");
+            mutual_potential += 0.5 * evaluation.potential;
+            mutual_potential_error += 0.5 * evaluation.error.potential;
+            assert_eq!(evaluation.coordinates.len(), inventory.body_slots.len() * 3);
+            for (body_offset, slot) in inventory.body_slots.iter().enumerate() {
+                let world_index = match slot {
+                    crate::harmonics::ResonanceMutualBoundaryBodySlot::Material(index)
+                    | crate::harmonics::ResonanceMutualBoundaryBodySlot::Occluder(index) => *index,
+                };
+                assert!(world_index < snapshot.bodies.len());
+                for axis in 0..3 {
+                    let coordinate_index = body_offset * 3 + axis;
+                    let coordinate = evaluation.coordinates[coordinate_index];
+                    let force = match axis {
+                        0 => &mut mutual_forces[world_index].x,
+                        1 => &mut mutual_forces[world_index].y,
+                        _ => &mut mutual_forces[world_index].torque,
+                    };
+                    let error = match axis {
+                        0 => &mut mutual_force_errors[world_index].x,
+                        1 => &mut mutual_force_errors[world_index].y,
+                        _ => &mut mutual_force_errors[world_index].torque,
+                    };
+                    *force -= 0.5 * coordinate.derivative;
+                    *error += 0.5 * coordinate.absolute_error;
+                }
+            }
+        }
+
+        let exact_potential = combined
+            .potential_components
+            .iter()
+            .map(|component| component.energy)
+            .sum::<f64>();
+        let exact_potential_error = combined.potential_error.unwrap_or(0.0);
+        assert!(
+            (mutual_potential - exact_potential).abs()
+                <= mutual_potential_error + exact_potential_error + 1.0e-8,
+            "mutual inventory scalar must agree with the exact pair potential inside its independent error bounds: mutual={mutual_potential:?}, exact={exact_potential:?}, mutual_error={mutual_potential_error:?}, exact_error={exact_potential_error:?}"
+        );
+        for exact in &combined.forces {
+            let approximate = mutual_forces[exact.body_index];
+            let error = mutual_force_errors[exact.body_index];
+            let exact_error = exact.absolute_error.unwrap_or_default();
+            assert!(
+                (approximate.x - exact.force.x).abs() <= error.x + exact_error.x + 1.0e-8
+                    && (approximate.y - exact.force.y).abs()
+                        <= error.y + exact_error.y + 1.0e-8
+                    && (approximate.torque - exact.force.torque).abs()
+                        <= error.torque + exact_error.torque + 1.0e-8,
+                "mutual inventory generalized force must agree with the exact reference inside independent coordinate bounds for body {}: mutual={approximate:?}, exact={:?}, mutual_error={error:?}, exact_error={exact_error:?}",
+                exact.body_index,
+                exact.force
+            );
+        }
+    }
+
+    #[test]
     fn complete_environmental_pair_accumulation_matches_shared_potential_gradient() {
         let mut simulation = Simulation::new(307, 1.0);
         clear_environment_physical_material(&mut simulation);
