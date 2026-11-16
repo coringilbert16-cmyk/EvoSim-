@@ -912,6 +912,10 @@ impl ResonanceForceAccumulator {
         else {
             return false;
         };
+        self.add_evaluation(evaluation)
+    }
+
+    fn add_evaluation(&mut self, evaluation: ResonanceWorldPairForceEvaluation) -> bool {
         let mut staged = self.clone();
         if !evaluation
             .forces
@@ -1427,6 +1431,223 @@ impl LocalResonanceWorldSnapshot {
     /// unordered pair still reaches an exact leaf evaluation; this introduces
     /// no approximate acceptance, distance cutoff, or runtime behavior.
     #[cfg(test)]
+    fn mutual_cluster_pair_evaluation(
+        &self,
+        bodies_a: &[usize],
+        bodies_b: &[usize],
+        catalog: &[BaseResource],
+    ) -> Option<(
+        ResonanceWorldPairForceEvaluation,
+        crate::resonance_mutual_hierarchy::MutualClusterErrorBounds,
+    )> {
+        use crate::resonance_boundary_far_field::{
+            MutualBoundaryKernelEvaluation, MutualBoundaryKernelExpansion,
+            MutualBoundaryKernelSample, MutualBoundaryPoseCoordinateDerivative,
+            MutualBoundaryPoseSampleDerivative,
+        };
+
+        if bodies_a.is_empty() || bodies_b.is_empty() {
+            return None;
+        }
+        let mut participants = bodies_a
+            .iter()
+            .chain(bodies_b)
+            .copied()
+            .collect::<Vec<_>>();
+        participants.sort_unstable();
+        if participants.windows(2).any(|pair| pair[0] == pair[1]) {
+            return None;
+        }
+
+        let mut inventories = Vec::new();
+        for index_a in bodies_a {
+            for index_b in bodies_b {
+                let identity_a = self.bodies.get(*index_a)?.environmental_identity;
+                let identity_b = self.bodies.get(*index_b)?.environmental_identity;
+                let pair = self.pair_force_and_potential_contributions(
+                    identity_a,
+                    identity_b,
+                    catalog,
+                )?;
+                // A curved, unresolved, or otherwise uncertified pair forces
+                // subdivision. An empty inventory is valid only when the exact
+                // generalized path proves that this pair has no interaction.
+                if pair.potential_error.is_none()
+                    || (pair.mutual_inventories.is_empty()
+                        && !pair.potential_components.is_empty())
+                {
+                    return None;
+                }
+                inventories.extend(pair.mutual_inventories);
+            }
+        }
+        if inventories.is_empty() {
+            return None;
+        }
+
+        let mut frequencies = Vec::new();
+        for inventory in &inventories {
+            if !inventory.visibility_certified
+                || !inventory.frequency_cycles_per_day.is_finite()
+                || inventory.frequency_cycles_per_day <= 0.0
+            {
+                return None;
+            }
+            if !frequencies.iter().any(|frequency: &f64| {
+                (*frequency - inventory.frequency_cycles_per_day).abs() <= 1.0e-9
+            }) {
+                frequencies.push(inventory.frequency_cycles_per_day);
+            }
+        }
+        frequencies.sort_by(f64::total_cmp);
+
+        let mut potential_components = Vec::with_capacity(frequencies.len());
+        let mut combined_kernel: Option<MutualBoundaryKernelEvaluation> = None;
+        for frequency in frequencies {
+            let mut samples = Vec::<MutualBoundaryKernelSample>::new();
+            let mut coordinate_samples =
+                vec![Vec::<MutualBoundaryPoseSampleDerivative>::new(); participants.len() * 3];
+
+            for inventory in inventories.iter().filter(|inventory| {
+                (inventory.frequency_cycles_per_day - frequency).abs() <= 1.0e-9
+            }) {
+                if inventory.coordinates.len() != inventory.body_slots.len() * 3 {
+                    return None;
+                }
+                let local_world_indices = inventory
+                    .body_slots
+                    .iter()
+                    .map(|slot| match slot {
+                        crate::harmonics::ResonanceMutualBoundaryBodySlot::Material(index)
+                        | crate::harmonics::ResonanceMutualBoundaryBodySlot::Occluder(index) => {
+                            Some(*index)
+                        }
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                if local_world_indices
+                    .iter()
+                    .any(|index| participants.binary_search(index).is_err())
+                {
+                    return None;
+                }
+
+                for (sample_index, sample) in inventory.samples.iter().enumerate() {
+                    samples.push(MutualBoundaryKernelSample {
+                        weight: 0.5 * sample.weight,
+                        ..*sample
+                    });
+                    for (participant_offset, world_index) in participants.iter().enumerate() {
+                        let local_body_offset = local_world_indices
+                            .iter()
+                            .position(|candidate| candidate == world_index);
+                        for axis in 0..3 {
+                            let mut pose = if let Some(local_body_offset) = local_body_offset {
+                                *inventory
+                                    .coordinates
+                                    .get(local_body_offset * 3 + axis)?
+                                    .samples
+                                    .get(sample_index)?
+                            } else {
+                                MutualBoundaryPoseSampleDerivative::default()
+                            };
+                            // The unordered pair potential is the mean of its
+                            // two ordered directions. Scale only the signed
+                            // spectral weight and its pose derivatives.
+                            pose.weight_derivative *= 0.5;
+                            pose.weight_derivative_bound *= 0.5;
+                            pose.weight_change_bound *= 0.5;
+                            coordinate_samples[participant_offset * 3 + axis].push(pose);
+                        }
+                    }
+                }
+            }
+
+            if samples.is_empty() {
+                continue;
+            }
+            let coordinates = coordinate_samples
+                .into_iter()
+                .map(|samples| MutualBoundaryPoseCoordinateDerivative { samples })
+                .collect();
+            let expansion = MutualBoundaryKernelExpansion::new(samples, coordinates)?;
+            let evaluation = expansion.evaluate()?;
+            if !evaluation.potential.is_finite()
+                || !evaluation.error.potential.is_finite()
+                || evaluation.error.potential < 0.0
+            {
+                return None;
+            }
+            potential_components.push(crate::harmonics::ResonancePairPotentialComponent {
+                frequency_cycles_per_day: frequency,
+                energy: evaluation.potential,
+            });
+            if let Some(combined) = &mut combined_kernel {
+                combined.potential += evaluation.potential;
+                combined.error.potential += evaluation.error.potential;
+                if combined.coordinates.len() != evaluation.coordinates.len()
+                    || combined.error.coordinates.len() != evaluation.error.coordinates.len()
+                {
+                    return None;
+                }
+                for ((target, incoming), error_target) in combined
+                    .coordinates
+                    .iter_mut()
+                    .zip(&evaluation.coordinates)
+                    .zip(combined.error.coordinates.iter_mut())
+                {
+                    target.derivative += incoming.derivative;
+                    target.absolute_bound += incoming.absolute_bound;
+                    target.absolute_error += incoming.absolute_error;
+                    target.sample_position_derivative += incoming.sample_position_derivative;
+                    target.sample_weight_derivative += incoming.sample_weight_derivative;
+                    *error_target += incoming.absolute_error;
+                }
+            } else {
+                combined_kernel = Some(evaluation);
+            }
+        }
+        let combined_kernel = combined_kernel?;
+        let certificate =
+            crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
+                true,
+                &participants,
+                combined_kernel.clone(),
+            )?;
+
+        let mut forces = Vec::with_capacity(participants.len());
+        for (body_offset, body_index) in participants.iter().copied().enumerate() {
+            let x = combined_kernel.coordinates[body_offset * 3];
+            let y = combined_kernel.coordinates[body_offset * 3 + 1];
+            let torque = combined_kernel.coordinates[body_offset * 3 + 2];
+            forces.push(ResonanceWorldBodyForce {
+                body_index,
+                environmental_identity: self.bodies.get(body_index)?.environmental_identity,
+                force: crate::harmonics::ResonanceBodyForce {
+                    x: -x.derivative,
+                    y: -y.derivative,
+                    torque: -torque.derivative,
+                },
+                absolute_error: Some(crate::harmonics::ResonanceBodyForce {
+                    x: x.absolute_error,
+                    y: y.absolute_error,
+                    torque: torque.absolute_error,
+                }),
+            });
+        }
+        potential_components.sort_by(|left, right| {
+            left.frequency_cycles_per_day
+                .total_cmp(&right.frequency_cycles_per_day)
+        });
+        let evaluation = ResonanceWorldPairForceEvaluation {
+            forces,
+            potential_components,
+            mutual_inventories: Vec::new(),
+            potential_error: Some(combined_kernel.error.potential),
+        };
+        Some((evaluation, certificate.errors))
+    }
+
+    #[cfg(test)]
     pub(crate) fn accumulate_complete_pair_forces(
         &self,
         catalog: &[BaseResource],
@@ -1434,28 +1655,42 @@ impl LocalResonanceWorldSnapshot {
         let hierarchy = crate::resonance_mutual_hierarchy::MutualInteractionHierarchy::new(
             &self.visibility_bounds,
         )?;
-        let traversal = hierarchy.evaluate_adaptive(
+        let expansion = 2.0 * self.maximum_rotation_margin + 1.0e-4;
+        let traversal = hierarchy.evaluate_adaptive_with_visibility(
+            &self.visibility_hierarchy,
+            expansion,
             crate::resonance_mutual_hierarchy::MutualErrorTolerance {
-                potential: 0.0,
-                force_x: 0.0,
-                force_y: 0.0,
-                torque: 0.0,
+                potential: 1.0e-5,
+                force_x: 1.0e-5,
+                force_y: 1.0e-5,
+                torque: 1.0e-5,
             },
-            |_, _| -> Option<crate::resonance_mutual_hierarchy::MutualClusterCertificate<()>> {
-                None
+            |bodies_a, bodies_b| {
+                let (evaluation, errors) =
+                    self.mutual_cluster_pair_evaluation(bodies_a, bodies_b, catalog)?;
+                Some((evaluation, errors))
             },
-            |_, _| Some(()),
+            |index_a, index_b| {
+                let identity_a = self.bodies.get(index_a)?.environmental_identity;
+                let identity_b = self.bodies.get(index_b)?.environmental_identity;
+                self.pair_force_and_potential_contributions(identity_a, identity_b, catalog)
+            },
         )?;
-        let pairs = traversal.exact_pairs;
+
         let mut accumulator = ResonanceForceAccumulator::default();
-        for (index_a, index_b) in pairs.iter().copied() {
-            let identity_a = self.bodies.get(index_a)?.environmental_identity;
-            let identity_b = self.bodies.get(index_b)?.environmental_identity;
-            if !accumulator.add_pair(self, identity_a, identity_b, catalog) {
+        for exact in traversal.exact_pair_evaluations {
+            if !accumulator.add_evaluation(exact.evaluation) {
                 return None;
             }
         }
-        Some((pairs.len(), accumulator))
+        let mut pair_count = traversal.exact_pairs.len();
+        for accepted in traversal.accepted_cluster_pairs {
+            pair_count += accepted.bodies_a.len() * accepted.bodies_b.len();
+            if !accumulator.add_evaluation(accepted.evaluation) {
+                return None;
+            }
+        }
+        Some((pair_count, accumulator))
     }
 
     /// Independent complete-world gradient of the same unordered-pair
