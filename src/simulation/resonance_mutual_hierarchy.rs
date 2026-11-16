@@ -86,7 +86,10 @@ impl MutualClusterErrorBounds {
             actual.push(bound.body_index);
         }
         actual.sort_unstable();
-        actual == expected && !actual.windows(2).any(|pair| pair[0] == pair[1])
+        !actual.windows(2).any(|pair| pair[0] == pair[1])
+            && expected
+                .iter()
+                .all(|body_index| actual.binary_search(body_index).is_ok())
     }
 
     fn within_numeric_tolerance(&self, tolerance: &MutualErrorTolerance) -> bool {
@@ -105,6 +108,55 @@ impl MutualClusterErrorBounds {
                     && bound.torque <= tolerance.torque
             })
     }
+}
+
+/// Convert a complete two-distance mutual boundary evaluation into the
+/// hierarchy's independent per-body potential/force/torque certificate.
+/// participating_body_indices must include source, receiver, and every
+/// occluder whose generalized coordinate received a derivative.
+pub(crate) fn mutual_boundary_cluster_certificate(
+    visibility_certified: bool,
+    participating_body_indices: &[usize],
+    evaluation: crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation,
+) -> Option<MutualClusterCertificate<crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation>> {
+    if !visibility_certified
+        || participating_body_indices
+            .windows(2)
+            .any(|pair| pair[0] == pair[1])
+        || evaluation.coordinates.len() != participating_body_indices.len().checked_mul(3)?
+        || evaluation.error.coordinates.len() != evaluation.coordinates.len()
+        || !evaluation.error.potential.is_finite()
+        || evaluation.error.potential < 0.0
+    {
+        return None;
+    }
+    let mut bodies = Vec::with_capacity(participating_body_indices.len());
+    for (body_offset, body_index) in participating_body_indices.iter().copied().enumerate() {
+        let coordinate_offset = body_offset.checked_mul(3)?;
+        let force_x = evaluation.error.coordinates[coordinate_offset];
+        let force_y = evaluation.error.coordinates[coordinate_offset + 1];
+        let torque = evaluation.error.coordinates[coordinate_offset + 2];
+        if ![force_x, force_y, torque]
+            .iter()
+            .all(|error| error.is_finite() && *error >= 0.0)
+        {
+            return None;
+        }
+        bodies.push(BodyInteractionErrorBound {
+            body_index,
+            force_x,
+            force_y,
+            torque,
+        });
+    }
+    Some(MutualClusterCertificate {
+        visibility_certified,
+        evaluation,
+        errors: MutualClusterErrorBounds {
+            potential: evaluation.error.potential,
+            bodies,
+        },
+    })
 }
 
 #[derive(Clone, Debug)]
