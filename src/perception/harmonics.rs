@@ -2994,16 +2994,32 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<ResonanceBoundaryInteractionSample>> {
-    let receptions = material_aura_receptions_with_occluders_prepared(
-        source,
-        receiver,
-        occluders,
-        catalog,
-        tick,
-        prepared_source,
-    )?;
+    directional_resonance_boundary_interaction_frame_with_prepared_emitters(
+        source, receiver, occluders, catalog, tick, prepared_source, prepared_receiver,
+    )
+    .map(|(samples, _)| samples)
+}
+
+fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+    prepared_source: Option<&MaterialResonanceEmitter>,
+    prepared_receiver: Option<&MaterialResonanceEmitter>,
+) -> Option<(Vec<ResonanceBoundaryInteractionSample>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>)> {
+    let (receptions, receiver_bodies) =
+        material_aura_receptions_with_occluders_and_geometry_prepared(
+            source,
+            receiver,
+            occluders,
+            catalog,
+            tick,
+            prepared_source,
+        )?;
     if receptions.is_empty() {
-        return Some(Vec::new());
+        return Some((Vec::new(), receiver_bodies));
     }
 
     let (receiver_x, receiver_y, _) = environmental_material_geometry(receiver)?;
@@ -3085,7 +3101,7 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
             receiver_spectrum: local_field,
         });
     }
-    Some(samples)
+    Some((samples, receiver_bodies))
 }
 
 /// One symmetric resonance-derived pair potential for an isolated pair,
