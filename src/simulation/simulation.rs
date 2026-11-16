@@ -29,6 +29,9 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
+const PHYSICS_TIME_STEP_DAYS: f64 =
+    1.0 / crate::harmonics::TICKS_PER_SIMULATED_DAY as f64;
+
 fn environmental_material_identity_set(environment: &Environment) -> HashSet<u64> {
     environment
         .field
@@ -2114,6 +2117,21 @@ impl Simulation {
         // be initiated by breached organisms because the decision loop is gated
         // by living_ids. Existing BREAK/COMBINE transactions still settle normally.
         self.release_finished_dead_organisms(&living_ids);
+        // One simulation tick is exactly 1 / TICKS_PER_SIMULATED_DAY simulated
+        // days. Runtime ticks_per_second changes pacing only, never physics dt.
+        if let Some(world_snapshot) =
+            crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
+        {
+            if let Some((_pair_count, accumulator)) =
+                world_snapshot.accumulate_complete_pair_forces(&self.environment.catalog)
+            {
+                let _ = world_snapshot.commit_environmental_motion_transaction(
+                    self,
+                    &accumulator,
+                    PHYSICS_TIME_STEP_DAYS,
+                );
+            }
+        }
         self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,

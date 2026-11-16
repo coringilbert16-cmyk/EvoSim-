@@ -841,6 +841,8 @@ pub(crate) struct ResonanceForceAccumulator {
     /// certified adaptive potential-error bound.
     pair_potential_error: Option<f64>,
     pair_evaluation_count: usize,
+    /// Body count covered by a complete-world hierarchy evaluation.
+    complete_world_body_count: Option<usize>,
 }
 
 #[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
@@ -894,6 +896,7 @@ impl ResonanceForceAccumulator {
         }) {
             return false;
         }
+        self.complete_world_body_count = None;
         self.bodies.insert(body_index, (identity, next, next_error));
         true
     }
@@ -980,7 +983,10 @@ impl ResonanceForceAccumulator {
         catalog: &[BaseResource],
         vertical_period: Option<f64>,
     ) -> Option<Vec<ResonanceWorldBodyMotion>> {
-        if !delta_time.is_finite() || delta_time < 0.0 {
+        if !delta_time.is_finite()
+            || delta_time < 0.0
+            || self.complete_world_body_count.is_some_and(|count| count != snapshot.bodies.len())
+        {
             return None;
         }
         let mut staged = Vec::with_capacity(self.bodies.len());
@@ -1045,6 +1051,15 @@ impl ResonanceForceAccumulator {
         Option<f64>,
     ) {
         (&self.pair_potential_components, self.pair_potential_error)
+    }
+
+    /// Potential inventory is reusable only when it came from a complete
+    /// adaptive traversal of this world's unordered body pairs.
+    pub(crate) fn complete_world_potential_components(
+        &self,
+    ) -> Option<&[crate::harmonics::ResonancePairPotentialComponent]> {
+        self.complete_world_body_count
+            .map(|_| self.pair_potential_components.as_slice())
     }
 
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
@@ -1151,6 +1166,77 @@ impl LocalResonanceWorldSnapshot {
         })
     }
 
+    /// Rebuild the tick-local geometry, emitters, and visibility hierarchy for a
+    /// proposed world-body state while preserving the original field-slot mapping.
+    fn with_environmental_bodies(
+        &self,
+        bodies: Vec<PhysicalMaterial>,
+        catalog: &[BaseResource],
+    ) -> Option<Self> {
+        if bodies.is_empty() || bodies.len() != self.field_locators.len() {
+            return None;
+        }
+        let resonant_indices = (0..bodies.len()).collect::<Vec<_>>();
+        let emitters = crate::harmonics::material_resonance_emitters_at_tick(
+            &bodies,
+            &resonant_indices,
+            catalog,
+            self.tick,
+        )?;
+        let mut receiver_indices = HashMap::with_capacity(bodies.len());
+        for (index, body) in bodies.iter().enumerate() {
+            let identity = body.environmental_identity;
+            if identity == 0 {
+                continue;
+            }
+            match receiver_indices.entry(identity) {
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(Some(index));
+                }
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    entry.insert(None);
+                }
+            }
+        }
+        let visibility_bounds = bodies
+            .iter()
+            .map(|body| {
+                let geometry =
+                    crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
+                        body, catalog,
+                    )?;
+                crate::resonance_visibility::VisibilityBounds::new(
+                    geometry.min_x,
+                    geometry.min_y,
+                    geometry.max_x,
+                    geometry.max_y,
+                )
+            })
+            .collect::<Option<Vec<_>>>()?;
+        let maximum_rotation_margin = visibility_bounds
+            .iter()
+            .map(|bounds| (bounds.max_x - bounds.min_x).hypot(bounds.max_y - bounds.min_y) * 1.0e-4)
+            .fold(0.0, f64::max);
+        if !maximum_rotation_margin.is_finite() {
+            return None;
+        }
+        let visibility_hierarchy =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&visibility_bounds)?;
+        let resonant_index_set = resonant_indices.iter().copied().collect();
+        Some(Self {
+            tick: self.tick,
+            bodies,
+            field_locators: self.field_locators.clone(),
+            resonant_indices,
+            resonant_index_set,
+            receiver_indices,
+            emitters,
+            visibility_bounds,
+            visibility_hierarchy,
+            maximum_rotation_margin,
+        })
+    }
+
     /// Resolve a snapshot body to its original environmental field slot.
     pub(crate) fn field_locator(&self, body_index: usize) -> Option<(usize, usize)> {
         self.field_locators.get(body_index).copied().flatten()
@@ -1210,17 +1296,14 @@ impl LocalResonanceWorldSnapshot {
             return false;
         }
 
-        // A moved body can also change the visibility of pairs for which it
-        // is a third-party occluder. Re-evaluate the complete pair inventory
-        // against both world states so no occlusion-mediated energy change is
-        // omitted. The scalable potential hierarchy must replace this oracle
-        // before the transaction is enabled in the standard large-world tick.
+        // Re-evaluate the complete world potential after motion. The pre-move
+        // inventory comes directly from the force pass when available; both
+        // states use the same adaptive mutual hierarchy and exact leaf fallback.
         let Some(pair_components) = environmental_motion_pair_potential_delta(
-            &self.bodies,
-            &after_bodies,
-            &moved_indices,
+            self,
+            after_bodies,
+            accumulator.complete_world_potential_components(),
             catalog,
-            self.tick,
         ) else {
             return false;
         };
@@ -1679,6 +1762,24 @@ impl LocalResonanceWorldSnapshot {
                 return None;
             }
         }
+        // A body with existing momentum must keep moving even when it has no
+        // resonant pair this tick. Static zero-force bodies need no staged write.
+        for (body_index, body) in self.bodies.iter().enumerate() {
+            if body.inertial_motion.velocity_x != 0.0
+                || body.inertial_motion.velocity_y != 0.0
+                || body.inertial_motion.angular_velocity != 0.0
+            {
+                if !accumulator.add(ResonanceWorldBodyForce {
+                    body_index,
+                    environmental_identity: body.environmental_identity,
+                    force: crate::harmonics::ResonanceBodyForce::default(),
+                    absolute_error: Some(crate::harmonics::ResonanceBodyForce::default()),
+                }) {
+                    return None;
+                }
+            }
+        }
+        accumulator.complete_world_body_count = Some(self.bodies.len());
         Some((pair_count, accumulator))
     }
 
@@ -2101,81 +2202,57 @@ fn environmental_motion_batch_is_collision_free(
 /// batch. Every affected pair is evaluated once with all other field bodies as
 /// occluders; unaffected pair terms cancel and are not recomputed.
 fn environmental_motion_pair_potential_delta(
-    before_bodies: &[PhysicalMaterial],
-    after_bodies: &[PhysicalMaterial],
-    moved_indices: &[usize],
+    before_snapshot: &LocalResonanceWorldSnapshot,
+    after_bodies: Vec<PhysicalMaterial>,
+    before_components: Option<&[crate::harmonics::ResonancePairPotentialComponent]>,
     catalog: &[BaseResource],
-    tick: u64,
 ) -> Option<Vec<crate::harmonics::ResonancePairPotentialComponent>> {
-    if before_bodies.len() != after_bodies.len() {
+    if after_bodies.len() != before_snapshot.bodies.len() {
         return None;
     }
-    let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len())
-    {
-        return None;
-    }
+    let before_components = if let Some(components) = before_components {
+        components.to_vec()
+    } else {
+        let (_, before_accumulator) = before_snapshot.accumulate_complete_pair_forces(catalog)?;
+        before_accumulator
+            .complete_world_potential_components()?
+            .to_vec()
+    };
+    let after_snapshot = before_snapshot.with_environmental_bodies(after_bodies, catalog)?;
+    let (_, after_accumulator) = after_snapshot.accumulate_complete_pair_forces(catalog)?;
+    let after_components = after_accumulator.complete_world_potential_components()?;
+
     let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
-    for first in 0..before_bodies.len() {
-        for second in first + 1..before_bodies.len() {
-            let before_occluders = before_bodies
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| *index != first && *index != second)
-                .map(|(_, body)| body.clone())
-                .collect::<Vec<_>>();
-            let after_occluders = after_bodies
-                .iter()
-                .enumerate()
-                .filter(|(index, _)| *index != first && *index != second)
-                .map(|(_, body)| body.clone())
-                .collect::<Vec<_>>();
-            let before = crate::harmonics::resonance_pair_potential_components_with_occluders(
-                &before_bodies[first],
-                &before_bodies[second],
-                &before_occluders,
-                catalog,
-                tick,
-            )?;
-            let after = crate::harmonics::resonance_pair_potential_components_with_occluders(
-                &after_bodies[first],
-                &after_bodies[second],
-                &after_occluders,
-                catalog,
-                tick,
-            )?;
-            for component in before
-                .into_iter()
-                .map(|mut value| {
-                    value.energy = -value.energy;
-                    value
-                })
-                .chain(after)
-            {
-                if !component.energy.is_finite()
-                    || !component.frequency_cycles_per_day.is_finite()
-                    || component.frequency_cycles_per_day <= 0.0
-                {
-                    return None;
-                }
-                if let Some(existing) = totals.iter_mut().find(|existing| {
-                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
-                        <= 1.0e-9
-                }) {
-                    existing.energy += component.energy;
-                    if !existing.energy.is_finite() {
-                        return None;
-                    }
-                } else {
-                    totals.push(component);
-                }
+    for (component, sign) in before_components
+        .iter()
+        .map(|component| (component, -1.0))
+        .chain(after_components.iter().map(|component| (component, 1.0)))
+    {
+        let energy = component.energy * sign;
+        if !energy.is_finite()
+            || !component.frequency_cycles_per_day.is_finite()
+            || component.frequency_cycles_per_day <= 0.0
+        {
+            return None;
+        }
+        if let Some(existing) = totals.iter_mut().find(|existing| {
+            (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                <= 1.0e-9
+        }) {
+            existing.energy += energy;
+            if !existing.energy.is_finite() {
+                return None;
             }
+        } else {
+            totals.push(crate::harmonics::ResonancePairPotentialComponent {
+                frequency_cycles_per_day: component.frequency_cycles_per_day,
+                energy,
+            });
         }
     }
     totals.sort_by(|left, right| {
         left.frequency_cycles_per_day
-            .partial_cmp(&right.frequency_cycles_per_day)
-            .unwrap_or(std::cmp::Ordering::Equal)
+            .total_cmp(&right.frequency_cycles_per_day)
     });
     Some(totals)
 }
@@ -4284,6 +4361,65 @@ mod tests {
     }
 
     #[test]
+    fn live_tick_advances_environmental_momentum_by_one_physics_tick() {
+        let mut moving = Simulation::new(887, 10.0);
+        let mut reference = Simulation::new(887, 10.0);
+        clear_environment_physical_material(&mut moving);
+        clear_environment_physical_material(&mut reference);
+
+        let make_body = |simulation: &mut Simulation, velocity_x: f64| {
+            let catalog = simulation.environment.catalog.clone();
+            let mut body = PhysicalMaterial::realized(
+                Material::free_base("Hydrogen", 1.0),
+                vec![Placement {
+                    x: 210.0,
+                    y: 210.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("single environmental body should be realized");
+            body.inertial_motion.velocity_x = velocity_x;
+            assert!(simulation.environment.field.deposit_physical(
+                210.0,
+                210.0,
+                body,
+                &catalog,
+            ));
+            simulation
+                .environment
+                .field
+                .assign_missing_material_identities();
+        };
+        make_body(&mut moving, crate::harmonics::TICKS_PER_SIMULATED_DAY as f64);
+        make_body(&mut reference, 0.0);
+
+        moving.step();
+        reference.step();
+
+        let x_position = |simulation: &Simulation| {
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| cell.physical_materials.iter())
+                .find(|body| body.material.parts.iter().any(|(name, amount)| {
+                    name == "Hydrogen" && (*amount - 1.0).abs() <= 1.0e-9
+                }))
+                .and_then(|body| body.placements.as_ref())
+                .and_then(|placements| placements.first())
+                .map(|placement| placement.x)
+                .expect("environmental body should remain in the field")
+        };
+        let displacement_difference = x_position(&moving) - x_position(&reference);
+        assert!(
+            (displacement_difference - 1.0).abs() <= 1.0e-7,
+            "one physics tick should advance a 24,000-unit/day body by one world unit; observed differential displacement {displacement_difference:?}"
+        );
+    }
+
+    #[test]
     fn environmental_newtonian_motion_commits_field_and_energy_together() {
         let mut simulation = Simulation::new(409, 1.0);
         clear_environment_physical_material(&mut simulation);
@@ -4357,13 +4493,12 @@ mod tests {
             "the proposed Newtonian movement should pass swept collision validation"
         );
         let staged_pair_delta = environmental_motion_pair_potential_delta(
-            &snapshot.bodies,
-            &staged_after,
-            &staged_indices,
+            &snapshot,
+            staged_after,
+            accumulator.complete_world_potential_components(),
             &catalog,
-            snapshot.tick,
         )
-        .expect("complete pair-potential delta should be evaluable");
+        .expect("adaptive complete-world pair-potential delta should be evaluable");
         let mut staged_ledger = simulation.energy_ledger;
         let mut staged_usable = simulation.environment.chemistry_usable_energy;
         let mut staged_resonance = simulation.environment.resonant_energy.clone();
