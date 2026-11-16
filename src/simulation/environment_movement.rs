@@ -42,16 +42,12 @@ pub(crate) fn apply_environmental_resonance_movement(
     };
     drop(materials);
 
-    let mut moved = 0;
-    for (identity, (dx, dy)) in identities.into_iter().zip(displacements) {
-        if dx == 0.0 && dy == 0.0 {
-            continue;
-        }
-        if field.move_physical_material_by_identity(identity, dx, dy, catalog) {
-            moved += 1;
-        }
-    }
-    moved
+    let proposals = identities
+        .into_iter()
+        .zip(displacements)
+        .map(|(identity, (dx, dy))| (identity, dx, dy))
+        .collect::<Vec<_>>();
+    field.move_physical_materials_by_identity(&proposals, catalog)
 }
 
 #[cfg(test)]
