@@ -330,6 +330,44 @@ impl MutualInteractionHierarchy {
         Some(result)
     }
 
+
+    /// Apply the existing conservative group-visibility certificate before
+    /// asking the kernel evaluator for any cluster error bounds.
+    pub(crate) fn evaluate_adaptive_with_visibility<C, E>(
+        &self,
+        visibility: &crate::resonance_visibility::ResonanceVisibilityHierarchy,
+        visibility_expansion: f64,
+        tolerance: MutualErrorTolerance,
+        mut evaluate_kernel: C,
+        evaluate_exact: E,
+    ) -> Option<AdaptiveTraversalResult>
+    where
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterErrorBounds>,
+        E: FnMut(usize, usize) -> Option<()>,
+    {
+        self.evaluate_adaptive(
+            tolerance,
+            |bodies_a, bodies_b| {
+                let visibility_certified = visibility.certify_groups_unoccluded(
+                    bodies_a,
+                    bodies_b,
+                    visibility_expansion,
+                )?;
+                if !visibility_certified {
+                    return Some(MutualClusterCertificate {
+                        visibility_certified: false,
+                        errors: MutualClusterErrorBounds::default(),
+                    });
+                }
+                Some(MutualClusterCertificate {
+                    visibility_certified: true,
+                    errors: evaluate_kernel(bodies_a, bodies_b)?,
+                })
+            },
+            evaluate_exact,
+        )
+    }
+
     fn visit_self_adaptive<C, E>(
         node: &Node,
         tolerance: &MutualErrorTolerance,
