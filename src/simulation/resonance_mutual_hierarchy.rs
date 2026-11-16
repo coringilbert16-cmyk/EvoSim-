@@ -675,6 +675,53 @@ mod tests {
         ));
     }
 
+
+    #[test]
+    fn adaptive_visibility_gate_accepts_clear_groups_and_subdivides_blocked_groups() {
+        let bodies = [
+            bounds(0.0, 0.0, 0.2, 0.2),
+            bounds(1.0, 0.0, 0.2, 0.2),
+            bounds(8.0, 0.0, 0.2, 0.2),
+            bounds(9.0, 0.0, 0.2, 0.2),
+        ];
+        let tree = MutualInteractionHierarchy::new(&bodies).unwrap();
+        let clear_visibility =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&bodies).unwrap();
+        let clear = tree
+            .evaluate_adaptive_with_visibility(
+                &clear_visibility,
+                0.0,
+                strict_tolerance(),
+                |a, b| Some(zero_error_certificate(a, b, true).errors),
+                |_, _| Some(()),
+            )
+            .unwrap();
+        assert_eq!(clear.accepted_cluster_pairs.len(), 1);
+        assert!(clear.exact_pairs.is_empty());
+
+        let blocked_bounds = [
+            bodies[0],
+            bodies[1],
+            bodies[2],
+            bodies[3],
+            bounds(4.0, 0.0, 0.3, 0.3),
+        ];
+        let blocked_visibility =
+            crate::resonance_visibility::ResonanceVisibilityHierarchy::new(&blocked_bounds)
+                .unwrap();
+        let blocked = tree
+            .evaluate_adaptive_with_visibility(
+                &blocked_visibility,
+                0.0,
+                strict_tolerance(),
+                |a, b| Some(zero_error_certificate(a, b, true).errors),
+                |_, _| Some(()),
+            )
+            .unwrap();
+        assert!(blocked.accepted_cluster_pairs.is_empty());
+        assert_eq!(blocked.exact_pairs, exact_pairs(bodies.len()));
+    }
+
     #[test]
     fn adaptive_traversal_subdivides_when_any_independent_error_or_visibility_fails() {
         let layout = [
