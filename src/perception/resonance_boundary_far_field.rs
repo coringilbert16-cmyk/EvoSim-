@@ -3722,7 +3722,6 @@ impl MutualBoundaryKernelExpansion {
         }
         let mut center = MutualBoundaryProductVector::default();
         let mut total_weight = 0.0;
-        let mut absolute_weight = 0.0;
         for sample in &samples {
             let values = [
                 sample.source_center.x,
@@ -3741,7 +3740,6 @@ impl MutualBoundaryKernelExpansion {
             center.receiver.x += sample.position.x - sample.receiver_center.x;
             center.receiver.y += sample.position.y - sample.receiver_center.y;
             total_weight += sample.weight;
-            absolute_weight += sample.weight.abs();
         }
         let inverse_count = 1.0 / samples.len() as f64;
         center = center.scale(inverse_count);
@@ -3781,7 +3779,6 @@ impl MutualBoundaryKernelExpansion {
             coordinates,
             center,
             total_weight,
-            absolute_weight,
             first_moment,
             radius,
         })
