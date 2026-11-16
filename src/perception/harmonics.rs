@@ -3631,39 +3631,37 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     0,
                 )?;
 
-            let mut add_coordinate = |local_body: usize,
-                                      axis: usize,
-                                      derivative: f64,
-                                      absolute_error: f64| {
-                let contribution = result.get_mut(local_body)?;
-                let scale = 1.0;
-                match axis {
-                    0 => {
-                        contribution.force.x -= scale * derivative;
-                        contribution.absolute_error.x += scale * absolute_error;
+            let mut add_coordinate =
+                |local_body: usize, axis: usize, derivative: f64, absolute_error: f64| {
+                    let contribution = result.get_mut(local_body)?;
+                    let scale = 1.0;
+                    match axis {
+                        0 => {
+                            contribution.force.x -= scale * derivative;
+                            contribution.absolute_error.x += scale * absolute_error;
+                        }
+                        1 => {
+                            contribution.force.y -= scale * derivative;
+                            contribution.absolute_error.y += scale * absolute_error;
+                        }
+                        2 => {
+                            contribution.force.torque -= scale * derivative;
+                            contribution.absolute_error.torque += scale * absolute_error;
+                        }
+                        _ => return None,
                     }
-                    1 => {
-                        contribution.force.y -= scale * derivative;
-                        contribution.absolute_error.y += scale * absolute_error;
-                    }
-                    2 => {
-                        contribution.force.torque -= scale * derivative;
-                        contribution.absolute_error.torque += scale * absolute_error;
-                    }
-                    _ => return None,
-                }
-                [
-                    contribution.force.x,
-                    contribution.force.y,
-                    contribution.force.torque,
-                    contribution.absolute_error.x,
-                    contribution.absolute_error.y,
-                    contribution.absolute_error.torque,
-                ]
-                .iter()
-                .all(|value| value.is_finite())
-                .then_some(())
-            };
+                    [
+                        contribution.force.x,
+                        contribution.force.y,
+                        contribution.force.torque,
+                        contribution.absolute_error.x,
+                        contribution.absolute_error.y,
+                        contribution.absolute_error.torque,
+                    ]
+                    .iter()
+                    .all(|value| value.is_finite())
+                    .then_some(())
+                };
             for (coordinate_index, coordinate) in evaluation.coordinates.iter().enumerate() {
                 let local_body = coordinate_index / 3;
                 let axis = coordinate_index % 3;
