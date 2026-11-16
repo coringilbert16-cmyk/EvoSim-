@@ -510,7 +510,6 @@ pub(crate) struct ResonanceBodyForceWithError {
 
 /// One ordered source/receiver evaluation from the same frequency-resolved
 /// scalar boundary potential used to derive its generalized force and torque.
-#[cfg(test)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ResonanceMutualBoundaryBodySlot {
     Material(usize),
@@ -521,7 +520,6 @@ pub(crate) enum ResonanceMutualBoundaryBodySlot {
 /// retain their pair-specific geometry; body_slots maps the local generalized
 /// coordinates back to source/receiver material indices and the caller's
 /// occluder slice.
-#[cfg(test)]
 #[allow(dead_code)] // Consumed by the world mutual hierarchy integration.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ResonanceMutualBoundaryFrequencyInventory {
@@ -4012,7 +4010,6 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         potential_components,
         potential_error,
         forces: combined,
-        #[cfg(test)]
         mutual_inventories: ab
             .mutual_inventories
             .into_iter()
