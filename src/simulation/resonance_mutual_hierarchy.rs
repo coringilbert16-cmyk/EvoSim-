@@ -923,6 +923,24 @@ mod tests {
             .is_none());
     }
 
+
+    #[test]
+    fn adaptive_traversal_retains_exact_leaf_evaluations() {
+        let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        let result = tree
+            .evaluate_adaptive(
+                strict_tolerance(),
+                |_, _| -> Option<MutualClusterCertificate<usize>> { None },
+                |a, b| Some(a * 10 + b),
+            )
+            .unwrap();
+        assert_eq!(result.exact_pairs, vec![(0, 1)]);
+        assert_eq!(result.exact_pair_evaluations.len(), 1);
+        assert_eq!(result.exact_pair_evaluations[0].pair, (0, 1));
+        assert_eq!(result.exact_pair_evaluations[0].evaluation, 1);
+    }
+
     #[test]
     fn mutual_tree_rejects_invalid_bounds_and_preserves_world_extent() {
         let invalid = [VisibilityBounds {
