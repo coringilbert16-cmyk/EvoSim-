@@ -3664,10 +3664,12 @@ impl MutualBoundaryProductVector {
 /// First-order product-moment expansion of the complete two-distance
 /// boundary kernel over an inventory of pair-specific exact samples.
 ///
-/// The expanded variables are (p-c_source, p-c_receiver), so both attenuation
-/// factors and their cross derivatives belong to one scalar potential. The
-/// caller must certify visibility, endpoint provenance, and exact sample
-/// correspondence for every term before this evaluator can be accepted.
+/// One expansion is frequency-specific: the caller preserves matched-frequency
+/// grouping and signed spectral coefficients instead of combining distinct
+/// frequencies. The expanded variables are (p-c_source, p-c_receiver), so both
+/// attenuation factors and their cross derivatives belong to one scalar
+/// potential. The caller must certify visibility, endpoint provenance, and
+/// exact sample correspondence for every term before this evaluator can be accepted.
 #[derive(Clone, Debug, PartialEq)]
 #[allow(dead_code)]
 pub(crate) struct MutualBoundaryKernelExpansion {
