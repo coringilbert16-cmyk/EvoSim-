@@ -2586,6 +2586,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         {
             left_coordinate.derivative += right_coordinate.derivative;
             left_coordinate.absolute_bound += right_coordinate.absolute_bound;
+            left_coordinate.absolute_error += right_coordinate.absolute_error;
             left_coordinate.sample_position_derivative +=
                 right_coordinate.sample_position_derivative;
             left_coordinate.sample_weight_derivative += right_coordinate.sample_weight_derivative;
@@ -2606,7 +2607,9 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         left.boundary.error.source_force += roundoff;
         left.boundary.error.receiver_force += roundoff;
         for coordinate in &mut left.coordinates {
-            coordinate.absolute_bound += 128.0 * f64::EPSILON * (coordinate.absolute_bound + 1.0);
+            let roundoff = 128.0 * f64::EPSILON * (coordinate.absolute_bound + 1.0);
+            coordinate.absolute_bound += roundoff;
+            coordinate.absolute_error += roundoff;
         }
 
         let finite = [
@@ -2624,6 +2627,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             && left.coordinates.iter().all(|coordinate| {
                 coordinate.derivative.is_finite()
                     && coordinate.absolute_bound.is_finite()
+                    && coordinate.absolute_error.is_finite()
                     && coordinate.sample_position_derivative.is_finite()
                     && coordinate.sample_weight_derivative.is_finite()
             });
