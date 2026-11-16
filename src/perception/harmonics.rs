@@ -2789,6 +2789,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
                 receiver_center_derivative: coordinate.receiver_center_derivative,
                 source_center_derivative_bound: coordinate.source_center_derivative_bound,
                 receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                source_center_displacement_bound: coordinate.source_center_displacement_bound,
+                receiver_center_displacement_bound: coordinate.receiver_center_displacement_bound,
                 samples: order
                     .iter()
                     .map(|index| coordinate.samples[*index])
@@ -2816,6 +2818,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
                 receiver_center_derivative: coordinate.receiver_center_derivative,
                 source_center_derivative_bound: coordinate.source_center_derivative_bound,
                 receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                source_center_displacement_bound: coordinate.source_center_displacement_bound,
+                receiver_center_displacement_bound: coordinate.receiver_center_displacement_bound,
                 samples: left_derivatives,
             });
             right_coordinates.push(BoundaryPoseCoordinateDerivative {
@@ -2823,6 +2827,8 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
                 receiver_center_derivative: coordinate.receiver_center_derivative,
                 source_center_derivative_bound: coordinate.source_center_derivative_bound,
                 receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                source_center_displacement_bound: coordinate.source_center_displacement_bound,
+                receiver_center_displacement_bound: coordinate.receiver_center_displacement_bound,
                 samples: right_derivatives,
             });
         }
@@ -3354,6 +3360,11 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
         0.0,
         &body_motion,
     )?;
+    let source_center_displacement_bound = inventory.source_translation_bound();
+    let receiver_center_displacement_bound = inventory
+        .body_motion()
+        .first()?
+        .maximum_point_displacement()?;
 
     // A signature identifies one target-edge partition. Different edges are
     // evaluated independently, then their derivatives and errors are summed.
@@ -3636,6 +3647,8 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                         receiver_center_derivative_bound: receiver_center_derivative
                             .x
                             .hypot(receiver_center_derivative.y),
+                        source_center_displacement_bound,
+                        receiver_center_displacement_bound,
                         samples: pose_samples,
                     });
                 }
