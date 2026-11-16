@@ -3286,12 +3286,10 @@ impl BoundaryKernelExpansion {
             .iter()
             .map(|sample| sample.position_displacement_bound)
             .fold(0.0_f64, f64::max);
-        let source_min = source_distance
-            - center_displacement
-            - coordinate.source_center_displacement_bound;
-        let receiver_min = receiver_distance
-            - center_displacement
-            - coordinate.receiver_center_displacement_bound;
+        let source_min =
+            source_distance - center_displacement - coordinate.source_center_displacement_bound;
+        let receiver_min =
+            receiver_distance - center_displacement - coordinate.receiver_center_displacement_bound;
         if !source_min.is_finite()
             || !receiver_min.is_finite()
             || source_min <= f64::EPSILON
@@ -3310,10 +3308,8 @@ impl BoundaryKernelExpansion {
             y: source_gradient.y * receiver_value + receiver_gradient.y * source_value,
         };
         let hessian_apply = |vector: BoundaryKernelVector| {
-            let source_hessian =
-                radial_hessian_apply(source_delta, source_distance, vector);
-            let receiver_hessian =
-                radial_hessian_apply(receiver_delta, receiver_distance, vector);
+            let source_hessian = radial_hessian_apply(source_delta, source_distance, vector);
+            let receiver_hessian = radial_hessian_apply(receiver_delta, receiver_distance, vector);
             BoundaryKernelVector {
                 x: source_hessian.x * receiver_value
                     + receiver_hessian.x * source_value
@@ -3337,10 +3333,10 @@ impl BoundaryKernelExpansion {
                 x: sample.position.x - center.x,
                 y: sample.position.y - center.y,
             };
-            first_moment_derivative.x += pose.weight_derivative * offset.x
-                + sample.weight * (pose.position_derivative.x);
-            first_moment_derivative.y += pose.weight_derivative * offset.y
-                + sample.weight * (pose.position_derivative.y);
+            first_moment_derivative.x +=
+                pose.weight_derivative * offset.x + sample.weight * (pose.position_derivative.x);
+            first_moment_derivative.y +=
+                pose.weight_derivative * offset.y + sample.weight * (pose.position_derivative.y);
         }
         let inverse_count = 1.0 / self.samples.len() as f64;
         center_derivative.x *= inverse_count;
@@ -3423,8 +3419,7 @@ impl BoundaryKernelExpansion {
         for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
             let maximum_weight = sample.weight.abs() + pose.absolute_weight_change_bound;
             let offset_radius = radius_bound;
-            let delta_derivative_bound =
-                pose.position_derivative_bound + center_derivative_bound;
+            let delta_derivative_bound = pose.position_derivative_bound + center_derivative_bound;
             approximation_error += maximum_weight
                 * (0.5
                     * third_bound
@@ -3445,20 +3440,16 @@ impl BoundaryKernelExpansion {
             * (derivative.abs() + exact_bound.absolute_bound + approximation_error + 1.0);
         let absolute_error = approximation_error + roundoff_guard;
         let absolute_bound = exact_bound.absolute_bound + absolute_error;
-        [
-            derivative,
-            absolute_error,
-            absolute_bound,
-        ]
-        .iter()
-        .all(|value| value.is_finite())
-        .then_some(BoundaryPoseDerivativeEvaluation {
-            derivative,
-            absolute_bound,
-            absolute_error,
-            sample_position_derivative: exact_bound.sample_position_derivative,
-            sample_weight_derivative: exact_bound.sample_weight_derivative,
-        })
+        [derivative, absolute_error, absolute_bound]
+            .iter()
+            .all(|value| value.is_finite())
+            .then_some(BoundaryPoseDerivativeEvaluation {
+                derivative,
+                absolute_bound,
+                absolute_error,
+                sample_position_derivative: exact_bound.sample_position_derivative,
+                sample_weight_derivative: exact_bound.sample_weight_derivative,
+            })
     }
 
     /// Exact discrete sum, retained as the differential oracle.
@@ -4416,10 +4407,8 @@ mod tests {
             sample(4.1, 1.8, -0.15),
         ];
         let center = BoundaryKernelVector {
-            x: samples.iter().map(|entry| entry.position.x).sum::<f64>()
-                / samples.len() as f64,
-            y: samples.iter().map(|entry| entry.position.y).sum::<f64>()
-                / samples.len() as f64,
+            x: samples.iter().map(|entry| entry.position.x).sum::<f64>() / samples.len() as f64,
+            y: samples.iter().map(|entry| entry.position.y).sum::<f64>() / samples.len() as f64,
         };
         let expansion = BoundaryKernelExpansion::new(source, receiver, center, samples.clone())
             .expect("finite sample cluster");
@@ -4493,9 +4482,15 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let moved_center = BoundaryKernelVector {
-                x: moved_samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                x: moved_samples
+                    .iter()
+                    .map(|entry| entry.position.x)
+                    .sum::<f64>()
                     / moved_samples.len() as f64,
-                y: moved_samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                y: moved_samples
+                    .iter()
+                    .map(|entry| entry.position.y)
+                    .sum::<f64>()
                     / moved_samples.len() as f64,
             };
             BoundaryKernelExpansion::new(
