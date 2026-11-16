@@ -2867,7 +2867,16 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
             right_coordinates,
             half_coordinate_error_budget,
         )?;
-        combine(left, right, center, radius)
+        let combined = combine(left, right, center, radius)?;
+        let error = combined.boundary.error;
+        (error.potential <= budget.potential
+            && error.source_force <= budget.source_force
+            && error.receiver_force <= budget.receiver_force
+            && combined
+                .coordinates
+                .iter()
+                .all(|coordinate| coordinate.absolute_error <= coordinate_error_budget))
+        .then_some(combined)
     }
 
     evaluate(
