@@ -2109,6 +2109,7 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
     receiver_center: super::resonance_boundary_far_field::BoundaryKernelVector,
     mut samples: Vec<super::resonance_boundary_far_field::WeightedBoundaryKernelSample>,
 ) -> Option<super::resonance_boundary_far_field::BoundaryPotentialEvaluation> {
+    use crate::source_exposure::VisibilityBodyMotionBound;
     use super::resonance_boundary_far_field::{
         BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialEvaluation,
     };
@@ -3242,7 +3243,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
 ) -> Option<Vec<ResonanceBodyForceWithError>> {
     use super::resonance_boundary_far_field::{
         BoundaryKernelVector, BoundaryPoseCoordinateDerivative, BoundaryPotentialError,
-        BoundarySampleMotionBound, VisibilityBodyMotionBound, WeightedBoundaryKernelSample,
+        BoundarySampleMotionBound, WeightedBoundaryKernelSample,
     };
 
     let prepared_source = emitters
