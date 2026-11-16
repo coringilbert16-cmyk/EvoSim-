@@ -330,7 +330,6 @@ impl MutualInteractionHierarchy {
         Some(result)
     }
 
-
     /// Apply the existing conservative group-visibility certificate before
     /// asking the kernel evaluator for any cluster error bounds.
     pub(crate) fn evaluate_adaptive_with_visibility<C, E>(
@@ -766,7 +765,10 @@ mod tests {
                 assert!(result.accepted_cluster_pairs.iter().all(|accepted| {
                     !accepted.bodies_a.contains(&0) && !accepted.bodies_b.contains(&0)
                 }));
-                assert!(result.exact_pairs.iter().any(|pair| pair.0 == 0 || pair.1 == 0));
+                assert!(result
+                    .exact_pairs
+                    .iter()
+                    .any(|pair| pair.0 == 0 || pair.1 == 0));
             }
         }
     }
