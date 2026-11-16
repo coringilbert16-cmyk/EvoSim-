@@ -710,14 +710,17 @@ impl ActiveMaterialField {
         if identity == 0 || !dx.is_finite() || !dy.is_finite() {
             return false;
         }
-        let Some((source_cell, source_index)) = self.cells.iter().enumerate().find_map(
-            |(cell_index, cell)| {
-                cell.physical_materials
-                    .iter()
-                    .position(|material| material.environmental_identity == identity)
-                    .map(|material_index| (cell_index, material_index))
-            },
-        ) else {
+        let Some((source_cell, source_index)) =
+            self.cells
+                .iter()
+                .enumerate()
+                .find_map(|(cell_index, cell)| {
+                    cell.physical_materials
+                        .iter()
+                        .position(|material| material.environmental_identity == identity)
+                        .map(|material_index| (cell_index, material_index))
+                })
+        else {
             return false;
         };
         let original = &self.cells[source_cell].physical_materials[source_index];
@@ -821,7 +824,9 @@ impl ActiveMaterialField {
 
         // All checks are complete. Keep the same object identity and move the
         // complete realized object atomically between its anchor cells.
-        self.cells[source_cell].physical_materials.remove(source_index);
+        self.cells[source_cell]
+            .physical_materials
+            .remove(source_index);
         self.cells[destination].physical_materials.push(candidate);
         self.mark_cell_changed(source_cell);
         if destination != source_cell {
