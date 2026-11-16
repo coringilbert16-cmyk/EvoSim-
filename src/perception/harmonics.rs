@@ -1994,7 +1994,8 @@ pub(crate) fn accumulate_resonance_pair_displacements(
         if a >= b || b >= material_count || !seen_pairs.insert((a, b)) {
             return None;
         }
-        if !on_a.0.is_finite() || !on_a.1.is_finite() || !on_b.0.is_finite() || !on_b.1.is_finite() {
+        if !on_a.0.is_finite() || !on_a.1.is_finite() || !on_b.0.is_finite() || !on_b.1.is_finite()
+        {
             return None;
         }
         accumulated[a].0 += on_a.0;
