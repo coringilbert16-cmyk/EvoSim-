@@ -4364,7 +4364,7 @@ mod tests {
         );
     }
 
-        #[test]
+    #[test]
     fn environmental_newtonian_motion_commits_field_and_energy_together() {
         let mut simulation = Simulation::new(409, 1.0);
         clear_environment_physical_material(&mut simulation);
