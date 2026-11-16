@@ -1449,11 +1449,7 @@ impl LocalResonanceWorldSnapshot {
         if bodies_a.is_empty() || bodies_b.is_empty() {
             return None;
         }
-        let mut participants = bodies_a
-            .iter()
-            .chain(bodies_b)
-            .copied()
-            .collect::<Vec<_>>();
+        let mut participants = bodies_a.iter().chain(bodies_b).copied().collect::<Vec<_>>();
         participants.sort_unstable();
         if participants.windows(2).any(|pair| pair[0] == pair[1]) {
             return None;
@@ -1464,17 +1460,13 @@ impl LocalResonanceWorldSnapshot {
             for index_b in bodies_b {
                 let identity_a = self.bodies.get(*index_a)?.environmental_identity;
                 let identity_b = self.bodies.get(*index_b)?.environmental_identity;
-                let pair = self.pair_force_and_potential_contributions(
-                    identity_a,
-                    identity_b,
-                    catalog,
-                )?;
+                let pair =
+                    self.pair_force_and_potential_contributions(identity_a, identity_b, catalog)?;
                 // A curved, unresolved, or otherwise uncertified pair forces
                 // subdivision. An empty inventory is valid only when the exact
                 // generalized path proves that this pair has no interaction.
                 if pair.potential_error.is_none()
-                    || (pair.mutual_inventories.is_empty()
-                        && !pair.potential_components.is_empty())
+                    || (pair.mutual_inventories.is_empty() && !pair.potential_components.is_empty())
                 {
                     return None;
                 }
@@ -1607,12 +1599,11 @@ impl LocalResonanceWorldSnapshot {
             }
         }
         let combined_kernel = combined_kernel?;
-        let certificate =
-            crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
-                true,
-                &participants,
-                combined_kernel.clone(),
-            )?;
+        let certificate = crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
+            true,
+            &participants,
+            combined_kernel.clone(),
+        )?;
 
         let mut forces = Vec::with_capacity(participants.len());
         for (body_offset, body_index) in participants.iter().copied().enumerate() {
