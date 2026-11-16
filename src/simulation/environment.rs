@@ -723,13 +723,16 @@ impl ActiveMaterialField {
         let original = &self.cells[source_cell].physical_materials[source_index];
         if !original.is_realized()
             || !original.material.is_valid_for_catalog(catalog)
-            || !original.material.is_empty().not()
+            || original.material.is_empty()
         {
             return false;
         }
         let Some(original_placements) = original.placements.as_ref() else {
             return false;
         };
+        if original_placements.is_empty() {
+            return false;
+        }
         let mut candidate = original.clone();
         let Some(placements) = candidate.placements.as_mut() else {
             return false;
@@ -812,7 +815,7 @@ impl ActiveMaterialField {
         else {
             return false;
         };
-        if destination >= self.cells.len() || original_placements.is_empty() {
+        if destination >= self.cells.len() {
             return false;
         }
 
