@@ -4493,16 +4493,11 @@ mod tests {
                     .sum::<f64>()
                     / moved_samples.len() as f64,
             };
-            BoundaryKernelExpansion::new(
-                moved_source,
-                moved_receiver,
-                moved_center,
-                moved_samples,
-            )
-            .expect("small pose perturbation remains valid")
-            .evaluate()
-            .expect("Taylor expansion remains separated")
-            .potential
+            BoundaryKernelExpansion::new(moved_source, moved_receiver, moved_center, moved_samples)
+                .expect("small pose perturbation remains valid")
+                .evaluate()
+                .expect("Taylor expansion remains separated")
+                .potential
         };
         let step = 1.0e-6;
         let finite_difference =
