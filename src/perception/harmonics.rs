@@ -3712,8 +3712,8 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             // different material pairs.
             let mutual_samples = weighted_samples
                 .iter()
-                .map(|sample| {
-                    crate::resonance_boundary_far_field::MutualBoundaryKernelSample {
+                .map(
+                    |sample| crate::resonance_boundary_far_field::MutualBoundaryKernelSample {
                         source_center: BoundaryKernelVector {
                             x: source_center.0,
                             y: source_center.1,
@@ -3724,8 +3724,8 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                         },
                         position: sample.position,
                         weight: sample.weight,
-                    }
-                })
+                    },
+                )
                 .collect::<Vec<_>>();
             let mutual_coordinates = coordinates
                 .iter()
