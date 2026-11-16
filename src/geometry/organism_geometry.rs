@@ -7,7 +7,6 @@
 use crate::resources::BaseResource;
 use crate::structure::OrganismStructure;
 
-pub(crate) use crate::physical_body_geometry::source_path_blocked_for_candidates;
 pub use crate::physical_body_geometry::{PhysicalBodyGeometry as OrganismBodyGeometry, PlacedForm};
 
 impl crate::physical_body_geometry::PhysicalBodyGeometry {
