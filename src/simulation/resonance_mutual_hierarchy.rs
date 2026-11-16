@@ -108,26 +108,28 @@ impl MutualClusterErrorBounds {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct MutualClusterCertificate {
+pub(crate) struct MutualClusterCertificate<T> {
     pub(crate) visibility_certified: bool,
+    pub(crate) evaluation: T,
     pub(crate) errors: MutualClusterErrorBounds,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct AcceptedClusterPair {
+pub(crate) struct AcceptedClusterPair<T> {
     pub(crate) bodies_a: Vec<usize>,
     pub(crate) bodies_b: Vec<usize>,
+    pub(crate) evaluation: T,
     pub(crate) errors: MutualClusterErrorBounds,
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) struct AdaptiveTraversalResult {
-    pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair>,
+pub(crate) struct AdaptiveTraversalResult<T> {
+    pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair<T>>,
     pub(crate) exact_pairs: Vec<(usize, usize)>,
     pub(crate) accumulated_errors: MutualClusterErrorBounds,
 }
 
-impl AdaptiveTraversalResult {
+impl<T> AdaptiveTraversalResult<T> {
     fn try_accumulate_errors(
         &mut self,
         errors: &MutualClusterErrorBounds,
@@ -303,14 +305,14 @@ impl MutualInteractionHierarchy {
     /// Traverse mutual cluster pairs, accepting only independently certified
     /// potential, x/y force, torque, and visibility bounds. Rejected clusters
     /// subdivide; body/body leaves always use the exact callback.
-    pub(crate) fn evaluate_adaptive<C, E>(
+    pub(crate) fn evaluate_adaptive<T, C, E>(
         &self,
         tolerance: MutualErrorTolerance,
         mut evaluate_cluster: C,
         mut evaluate_exact: E,
-    ) -> Option<AdaptiveTraversalResult>
+    ) -> Option<AdaptiveTraversalResult<T>>
     where
-        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
         E: FnMut(usize, usize) -> Option<()>,
     {
         if !tolerance.is_valid() {
@@ -332,7 +334,7 @@ impl MutualInteractionHierarchy {
 
     /// Apply the existing conservative group-visibility certificate before
     /// asking the kernel evaluator for any cluster error bounds.
-    pub(crate) fn evaluate_adaptive_with_visibility<C, E>(
+    pub(crate) fn evaluate_adaptive_with_visibility<T, C, E>(
         &self,
         visibility: &crate::resonance_visibility::ResonanceVisibilityHierarchy,
         visibility_expansion: f64,
@@ -341,7 +343,7 @@ impl MutualInteractionHierarchy {
         evaluate_exact: E,
     ) -> Option<AdaptiveTraversalResult>
     where
-        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterErrorBounds>,
+        C: FnMut(&[usize], &[usize]) -> Option<(T, MutualClusterErrorBounds)>,
         E: FnMut(usize, usize) -> Option<()>,
     {
         self.evaluate_adaptive(
@@ -353,29 +355,28 @@ impl MutualInteractionHierarchy {
                     visibility_expansion,
                 )?;
                 if !visibility_certified {
-                    return Some(MutualClusterCertificate {
-                        visibility_certified: false,
-                        errors: MutualClusterErrorBounds::default(),
-                    });
+                    return None;
                 }
+                let (evaluation, errors) = evaluate_kernel(bodies_a, bodies_b)?;
                 Some(MutualClusterCertificate {
                     visibility_certified: true,
-                    errors: evaluate_kernel(bodies_a, bodies_b)?,
+                    evaluation,
+                    errors,
                 })
             },
             evaluate_exact,
         )
     }
 
-    fn visit_self_adaptive<C, E>(
+    fn visit_self_adaptive<T, C, E>(
         node: &Node,
         tolerance: &MutualErrorTolerance,
         evaluate_cluster: &mut C,
         evaluate_exact: &mut E,
-        result: &mut AdaptiveTraversalResult,
+        result: &mut AdaptiveTraversalResult<T>,
     ) -> Option<()>
     where
-        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
         E: FnMut(usize, usize) -> Option<()>,
     {
         if let NodeKind::Branch { left, right } = &node.kind {
@@ -393,16 +394,16 @@ impl MutualInteractionHierarchy {
         Some(())
     }
 
-    fn visit_distinct_adaptive<C, E>(
+    fn visit_distinct_adaptive<T, C, E>(
         a: &Node,
         b: &Node,
         tolerance: &MutualErrorTolerance,
         evaluate_cluster: &mut C,
         evaluate_exact: &mut E,
-        result: &mut AdaptiveTraversalResult,
+        result: &mut AdaptiveTraversalResult<T>,
     ) -> Option<()>
     where
-        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
         E: FnMut(usize, usize) -> Option<()>,
     {
         if let (NodeKind::Leaf(index_a), NodeKind::Leaf(index_b)) = (&a.kind, &b.kind) {
@@ -424,6 +425,7 @@ impl MutualInteractionHierarchy {
                 result.accepted_cluster_pairs.push(AcceptedClusterPair {
                     bodies_a,
                     bodies_b,
+                    evaluation: certificate.evaluation,
                     errors: certificate.errors,
                 });
                 return Some(());
