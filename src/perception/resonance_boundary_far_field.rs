@@ -97,7 +97,11 @@ pub(crate) struct BoundaryPoseCoordinateDerivative {
 #[allow(dead_code)]
 pub(crate) struct BoundaryPoseDerivativeEvaluation {
     pub(crate) derivative: f64,
+    /// Conservative magnitude envelope across the certified pose cell.
     pub(crate) absolute_bound: f64,
+    /// Floating-point evaluation error at the reference pose; distinct from
+    /// the derivative's magnitude envelope.
+    pub(crate) absolute_error: f64,
     pub(crate) sample_position_derivative: f64,
     pub(crate) sample_weight_derivative: f64,
 }
@@ -3220,12 +3224,14 @@ impl BoundaryKernelExpansion {
         let result = BoundaryPoseDerivativeEvaluation {
             derivative,
             absolute_bound: absolute_bound + roundoff_guard,
+            absolute_error: roundoff_guard,
             sample_position_derivative,
             sample_weight_derivative,
         };
         [
             result.derivative,
             result.absolute_bound,
+            result.absolute_error,
             result.sample_position_derivative,
             result.sample_weight_derivative,
         ]
@@ -4169,6 +4175,7 @@ mod tests {
             evaluation.derivative
         );
         assert!(evaluation.absolute_bound >= evaluation.derivative.abs());
+        assert!(evaluation.absolute_error.is_finite() && evaluation.absolute_error > 0.0);
         assert!(evaluation.sample_position_derivative.abs() > 0.0);
         assert!(evaluation.sample_weight_derivative.abs() > 0.0);
     }
