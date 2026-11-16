@@ -1934,11 +1934,11 @@ struct EnvironmentalMovementEmitter {
 fn environmental_movement_emitter(
     physical: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
+    baseline_mass: f64,
     tick: u64,
 ) -> Option<EnvironmentalMovementEmitter> {
     let (x, y, _, spectrum) = environmental_material_resonance(physical, catalog, tick)?;
-    let baselines = ResourceBaselines::from_catalog(catalog);
-    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baselines.mass);
+    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baseline_mass);
     (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
         x,
         y,
@@ -1991,8 +1991,9 @@ pub(crate) fn resonance_pair_push_pull(
     if std::ptr::eq(a, b) {
         return Some(((0.0, 0.0), (0.0, 0.0)));
     }
-    let a = environmental_movement_emitter(a, catalog, tick)?;
-    let b = environmental_movement_emitter(b, catalog, tick)?;
+    let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
+    let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
+    let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
     resonance_pair_push_pull_from_emitters(&a, &b)
 }
 
@@ -2004,9 +2005,10 @@ pub(crate) fn environmental_resonance_displacements(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<(f64, f64)>> {
+    let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let emitters = materials
         .iter()
-        .map(|material| environmental_movement_emitter(material, catalog, tick))
+        .map(|material| environmental_movement_emitter(material, catalog, baseline_mass, tick))
         .collect::<Option<Vec<_>>>()?;
     let mut accumulated = vec![(0.0, 0.0); emitters.len()];
 
