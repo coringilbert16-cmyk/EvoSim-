@@ -539,7 +539,6 @@ pub(crate) struct ResonanceDirectionalGeneralizedEvaluation {
     pub(crate) potential_components: Vec<ResonancePairPotentialComponent>,
     pub(crate) potential_error: f64,
     pub(crate) forces: Vec<ResonanceBodyForceWithError>,
-    #[cfg(test)]
     pub(crate) mutual_inventories: Vec<ResonanceMutualBoundaryFrequencyInventory>,
 }
 
@@ -3342,14 +3341,12 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     let mut result = vec![ResonanceBodyForceWithError::default(); occluders.len() + 2];
     let mut potential_components = Vec::new();
     let mut potential_error = 0.0;
-    #[cfg(test)]
     let mut mutual_inventories = Vec::new();
     if samples.is_empty() {
         return Some(ResonanceDirectionalGeneralizedEvaluation {
             potential_components,
             potential_error,
             forces: result,
-            #[cfg(test)]
             mutual_inventories: Vec::new(),
         });
     }
@@ -3710,7 +3707,6 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                 }
             }
 
-            #[cfg(test)]
             {
                 // Preserve the exact pair-specific samples and their complete
                 // generalized-coordinate Jacobians for the mutual world evaluator.
@@ -3919,7 +3915,6 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             potential_components,
             potential_error,
             forces: mapped,
-            #[cfg(test)]
             mutual_inventories,
         },
     )
