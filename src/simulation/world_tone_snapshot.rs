@@ -1422,13 +1422,7 @@ impl LocalResonanceWorldSnapshot {
             for index_b in index_a + 1..self.bodies.len() {
                 let identity_a = self.bodies[index_a].environmental_identity;
                 let identity_b = self.bodies[index_b].environmental_identity;
-                let contributions =
-                    self.pair_force_contributions(identity_a, identity_b, catalog)?;
-                if contributions.len() != self.bodies.len()
-                    || !contributions
-                        .into_iter()
-                        .all(|contribution| accumulator.add(contribution))
-                {
+                if !accumulator.add_pair(self, identity_a, identity_b, catalog) {
                     return None;
                 }
                 pair_count = pair_count.checked_add(1)?;
@@ -2364,6 +2358,19 @@ mod tests {
         assert_eq!(
             pair_count, 3,
             "three bodies have exactly three unordered pairs"
+        );
+        let (potential_components, potential_error) = accumulator.pair_potential_inventory();
+        assert!(
+            potential_components.iter().all(|component| {
+                component.frequency_cycles_per_day.is_finite()
+                    && component.frequency_cycles_per_day > 0.0
+                    && component.energy.is_finite()
+            }),
+            "the complete pair traversal must retain finite frequency-resolved potential"
+        );
+        assert!(
+            potential_error.map_or(true, |error| error.is_finite() && error >= 0.0),
+            "the combined potential error must remain conservative and finite"
         );
         let forces = accumulator.into_body_forces();
         assert_eq!(
