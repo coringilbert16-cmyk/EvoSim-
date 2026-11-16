@@ -45,7 +45,7 @@ pub(crate) struct BodyInteractionErrorBound {
     pub(crate) torque: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct MutualClusterErrorBounds {
     pub(crate) potential: f64,
     pub(crate) bodies: Vec<BodyInteractionErrorBound>,
@@ -58,10 +58,7 @@ impl MutualClusterErrorBounds {
         bodies_b: &[usize],
         tolerance: &MutualErrorTolerance,
     ) -> bool {
-        if !self.potential.is_finite()
-            || self.potential < 0.0
-            || self.potential > tolerance.potential
-        {
+        if !self.within_numeric_tolerance(tolerance) {
             return false;
         }
         let mut expected = bodies_a
@@ -92,6 +89,23 @@ impl MutualClusterErrorBounds {
         actual.sort_unstable();
         actual == expected && !actual.windows(2).any(|pair| pair[0] == pair[1])
     }
+
+    fn within_numeric_tolerance(&self, tolerance: &MutualErrorTolerance) -> bool {
+        self.potential.is_finite()
+            && self.potential >= 0.0
+            && self.potential <= tolerance.potential
+            && self.bodies.iter().all(|bound| {
+                bound.force_x.is_finite()
+                    && bound.force_y.is_finite()
+                    && bound.torque.is_finite()
+                    && bound.force_x >= 0.0
+                    && bound.force_y >= 0.0
+                    && bound.torque >= 0.0
+                    && bound.force_x <= tolerance.force_x
+                    && bound.force_y <= tolerance.force_y
+                    && bound.torque <= tolerance.torque
+            })
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -111,6 +125,40 @@ pub(crate) struct AcceptedClusterPair {
 pub(crate) struct AdaptiveTraversalResult {
     pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair>,
     pub(crate) exact_pairs: Vec<(usize, usize)>,
+    pub(crate) accumulated_errors: MutualClusterErrorBounds,
+}
+
+impl AdaptiveTraversalResult {
+    fn try_accumulate_errors(
+        &mut self,
+        errors: &MutualClusterErrorBounds,
+        tolerance: &MutualErrorTolerance,
+    ) -> bool {
+        let mut combined = self.accumulated_errors.clone();
+        combined.potential += errors.potential;
+        if !combined.potential.is_finite() {
+            return false;
+        }
+        for incoming in &errors.bodies {
+            if let Some(existing) = combined
+                .bodies
+                .iter_mut()
+                .find(|bound| bound.body_index == incoming.body_index)
+            {
+                existing.force_x += incoming.force_x;
+                existing.force_y += incoming.force_y;
+                existing.torque += incoming.torque;
+            } else {
+                combined.bodies.push(*incoming);
+            }
+        }
+        combined.bodies.sort_by_key(|bound| bound.body_index);
+        if !combined.within_numeric_tolerance(tolerance) {
+            return false;
+        }
+        self.accumulated_errors = combined;
+        true
+    }
 }
 
 /// Immutable spatial hierarchy over the exact world-snapshot body indices.
@@ -336,6 +384,7 @@ impl MutualInteractionHierarchy {
                 && certificate
                     .errors
                     .is_within(&bodies_a, &bodies_b, tolerance)
+                && result.try_accumulate_errors(&certificate.errors, tolerance)
             {
                 result.accepted_cluster_pairs.push(AcceptedClusterPair {
                     bodies_a,
