@@ -3207,7 +3207,10 @@ fn material_part_translation_derivative(
     unit_index: usize,
     coordinate: usize,
 ) -> Option<super::resonance_boundary_far_field::BoundaryKernelVector> {
-    let part = geometry.parts.iter().find(|part| part.unit_index == unit_index)?;
+    let part = geometry
+        .parts
+        .iter()
+        .find(|part| part.unit_index == unit_index)?;
     let derivative = match coordinate {
         0 => (1.0, 0.0),
         1 => (0.0, 1.0),
