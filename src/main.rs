@@ -9,6 +9,8 @@ mod environment;
 mod environment_chemistry_experiment;
 #[path = "simulation/environment_flow.rs"]
 mod environment_flow;
+#[path = "simulation/environment_movement.rs"]
+mod environmental_movement;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "chemistry/expulsion.rs"]
