@@ -3482,10 +3482,8 @@ mod tests {
         let left = make_carbon(0.0);
         let near = make_carbon(4.0);
         let far = make_carbon(8.0);
-        let (near_left, near_right) =
-            resonance_pair_push_pull(&left, &near, &catalog, 0).unwrap();
-        let (far_left, far_right) =
-            resonance_pair_push_pull(&left, &far, &catalog, 0).unwrap();
+        let (near_left, near_right) = resonance_pair_push_pull(&left, &near, &catalog, 0).unwrap();
+        let (far_left, far_right) = resonance_pair_push_pull(&left, &far, &catalog, 0).unwrap();
         let (reverse_right, reverse_left) =
             resonance_pair_push_pull(&near, &left, &catalog, 0).unwrap();
 
@@ -3516,8 +3514,7 @@ mod tests {
         };
         let carbon = make_material("Carbon", 0.0);
         let hydrogen = make_material("Hydrogen", 4.0);
-        let (_, attraction) =
-            resonance_pair_push_pull(&carbon, &hydrogen, &catalog, 0).unwrap();
+        let (_, attraction) = resonance_pair_push_pull(&carbon, &hydrogen, &catalog, 0).unwrap();
         assert!(attraction.0 < 0.0, "opposing phase should attract");
 
         let mut quadrature_catalog = crate::resources::default_catalog();
