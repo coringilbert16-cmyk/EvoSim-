@@ -1115,13 +1115,12 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
                 super::ResonanceMutualBoundaryBodySlot::Occluder(index) => [1usize, 3][index],
             })
             .collect::<Vec<_>>();
-        let certificate =
-            crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
-                inventory.visibility_certified,
-                &participants,
-                evaluation.clone(),
-            )
-            .expect("actual visibility-certified inventory should map to complete body errors");
+        let certificate = crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
+            inventory.visibility_certified,
+            &participants,
+            evaluation.clone(),
+        )
+        .expect("actual visibility-certified inventory should map to complete body errors");
         assert_eq!(certificate.errors.bodies.len(), participants.len());
         assert!(certificate.errors.bodies.iter().all(|bound| {
             bound.force_x.is_finite() && bound.force_y.is_finite() && bound.torque.is_finite()
