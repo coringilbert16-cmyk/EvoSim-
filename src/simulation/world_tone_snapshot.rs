@@ -794,6 +794,19 @@ pub(crate) struct ResonanceWorldBodyForce {
     pub(crate) absolute_error: Option<crate::harmonics::ResonanceBodyForce>,
 }
 
+/// Complete interaction result for one unordered environmental pair. The
+/// potential and its uncertainty are retained alongside the generalized
+/// multi-body force contributions so movement can settle the same interaction
+/// whose gradient generated the staged acceleration.
+#[derive(Clone, Debug)]
+pub(crate) struct ResonanceWorldPairForceEvaluation {
+    pub(crate) forces: Vec<ResonanceWorldBodyForce>,
+    pub(crate) potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
+    /// None marks the exact reference fallback, whose force derivative has no
+    /// certified adaptive-kernel error estimate.
+    pub(crate) potential_error: Option<f64>,
+}
+
 /// A validated, immutable proposal for advancing one world body. The caller
 /// still owns collision checks, energy settlement, and the eventual atomic commit.
 #[derive(Clone, Debug)]
@@ -1187,12 +1200,12 @@ impl LocalResonanceWorldSnapshot {
     /// Derive the complete force contribution for one environmental material
     /// pair. Every other free environmental material remains an occluder and
     /// receives its own gradient contribution. No organism bodies are present.
-    pub(crate) fn pair_force_contributions(
+    pub(crate) fn pair_force_and_potential_contributions(
         &self,
         identity_a: u64,
         identity_b: u64,
         catalog: &[BaseResource],
-    ) -> Option<Vec<ResonanceWorldBodyForce>> {
+    ) -> Option<ResonanceWorldPairForceEvaluation> {
         if identity_a == 0 || identity_b == 0 || identity_a == identity_b {
             return None;
         }
@@ -1234,21 +1247,18 @@ impl LocalResonanceWorldSnapshot {
                 catalog,
                 self.tick,
             );
-        let (forces, errors) = if let Some(evaluations) = generalized {
-            if evaluations.len() != occluder_indices.len() + 2 {
-                return None;
-            }
-            (
-                evaluations
-                    .iter()
-                    .map(|entry| entry.force)
-                    .collect::<Vec<_>>(),
-                evaluations
-                    .iter()
-                    .map(|entry| Some(entry.absolute_error))
-                    .collect::<Vec<_>>(),
-            )
-        } else {
+        let (forces, errors, potential_components, potential_error) =
+            if let Some(evaluation) = generalized {
+                if evaluation.forces.len() != occluder_indices.len() + 2 {
+                    return None;
+                }
+                (
+                    evaluation.forces.iter().map(|entry| entry.force).collect::<Vec<_>>(),
+                    evaluation.forces.iter().map(|entry| Some(entry.absolute_error)).collect::<Vec<_>>(),
+                    evaluation.potential_components,
+                    Some(evaluation.potential_error),
+                )
+            } else {
             // Curved or unresolved visibility retains the exact finite-difference
             // reference path. Its derivative error is explicitly uncertified.
             let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
@@ -1261,7 +1271,17 @@ impl LocalResonanceWorldSnapshot {
                 catalog,
                 self.tick,
             )?;
-            (forces, vec![None; occluder_indices.len() + 2])
+            let potential_components =
+                crate::harmonics::resonance_pair_potential_components_with_prepared_emitters(
+                    &self.bodies[index_a],
+                    &self.bodies[index_b],
+                    &occluders,
+                    catalog,
+                    self.tick,
+                    self.emitters.iter().find(|emitter| emitter.source_index == index_a),
+                    self.emitters.iter().find(|emitter| emitter.source_index == index_b),
+                )?;
+            (forces, vec![None; occluder_indices.len() + 2], potential_components, None)
         };
         if forces.len() != occluder_indices.len() + 2 || errors.len() != forces.len() {
             return None;
@@ -1279,8 +1299,8 @@ impl LocalResonanceWorldSnapshot {
             force_by_index[body_index] = forces[offset + 2];
             error_by_index[body_index] = errors[offset + 2];
         }
-        Some(
-            force_by_index
+        Some(ResonanceWorldPairForceEvaluation {
+            forces: force_by_index
                 .into_iter()
                 .zip(error_by_index)
                 .enumerate()
@@ -1293,7 +1313,20 @@ impl LocalResonanceWorldSnapshot {
                     },
                 )
                 .collect(),
-        )
+            potential_components,
+            potential_error,
+        })
+    }
+
+    /// Compatibility view for force-only correctness tests and callers.
+    pub(crate) fn pair_force_contributions(
+        &self,
+        identity_a: u64,
+        identity_b: u64,
+        catalog: &[BaseResource],
+    ) -> Option<Vec<ResonanceWorldBodyForce>> {
+        self.pair_force_and_potential_contributions(identity_a, identity_b, catalog)
+            .map(|evaluation| evaluation.forces)
     }
 
     /// Sum the exact force gradients for the complete environmental pair
