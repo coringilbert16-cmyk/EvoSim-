@@ -4401,6 +4401,129 @@ mod tests {
     }
 
     #[test]
+    fn generalized_derivative_matches_the_same_taylor_scalar_and_bounds_exact_remainder() {
+        let source = BoundaryKernelVector { x: 0.0, y: -0.2 };
+        let receiver = BoundaryKernelVector { x: 8.0, y: 0.7 };
+        let samples = vec![
+            sample(4.0, 1.0, 0.8),
+            sample(4.3, 1.2, -0.25),
+            sample(3.8, 1.6, 0.35),
+            sample(4.1, 1.8, -0.15),
+        ];
+        let center = BoundaryKernelVector {
+            x: samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                / samples.len() as f64,
+            y: samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                / samples.len() as f64,
+        };
+        let expansion = BoundaryKernelExpansion::new(source, receiver, center, samples.clone())
+            .expect("finite sample cluster");
+        let coordinate = BoundaryPoseCoordinateDerivative {
+            source_center_derivative: BoundaryKernelVector { x: 0.2, y: -0.1 },
+            receiver_center_derivative: BoundaryKernelVector { x: -0.05, y: 0.07 },
+            source_center_derivative_bound: 0.25,
+            receiver_center_derivative_bound: 0.1,
+            source_center_displacement_bound: 0.001,
+            receiver_center_displacement_bound: 0.001,
+            samples: vec![
+                BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector { x: 0.1, y: 0.03 },
+                    weight_derivative: 0.04,
+                    position_derivative_bound: 0.2,
+                    absolute_weight_derivative_bound: 0.05,
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                },
+                BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector { x: -0.02, y: 0.08 },
+                    weight_derivative: -0.03,
+                    position_derivative_bound: 0.2,
+                    absolute_weight_derivative_bound: 0.04,
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                },
+                BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector { x: 0.04, y: -0.06 },
+                    weight_derivative: 0.02,
+                    position_derivative_bound: 0.2,
+                    absolute_weight_derivative_bound: 0.03,
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                },
+                BoundarySamplePoseDerivative {
+                    position_derivative: BoundaryKernelVector { x: -0.03, y: 0.01 },
+                    weight_derivative: -0.01,
+                    position_derivative_bound: 0.2,
+                    absolute_weight_derivative_bound: 0.02,
+                    position_displacement_bound: 0.001,
+                    absolute_weight_change_bound: 0.001,
+                },
+            ],
+        };
+        let approximate = expansion
+            .evaluate_approximate_pose_coordinate_derivative(&coordinate)
+            .expect("Taylor scalar derivative has a certified remainder");
+        let exact = expansion
+            .evaluate_pose_coordinate_derivative(&coordinate)
+            .expect("exact discrete derivative remains available");
+
+        let moved_taylor_potential = |q: f64| {
+            let moved_source = BoundaryKernelVector {
+                x: source.x + q * coordinate.source_center_derivative.x,
+                y: source.y + q * coordinate.source_center_derivative.y,
+            };
+            let moved_receiver = BoundaryKernelVector {
+                x: receiver.x + q * coordinate.receiver_center_derivative.x,
+                y: receiver.y + q * coordinate.receiver_center_derivative.y,
+            };
+            let moved_samples = samples
+                .iter()
+                .zip(&coordinate.samples)
+                .map(|(sample, pose)| WeightedBoundaryKernelSample {
+                    position: BoundaryKernelVector {
+                        x: sample.position.x + q * pose.position_derivative.x,
+                        y: sample.position.y + q * pose.position_derivative.y,
+                    },
+                    weight: sample.weight + q * pose.weight_derivative,
+                })
+                .collect::<Vec<_>>();
+            let moved_center = BoundaryKernelVector {
+                x: moved_samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                    / moved_samples.len() as f64,
+                y: moved_samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                    / moved_samples.len() as f64,
+            };
+            BoundaryKernelExpansion::new(
+                moved_source,
+                moved_receiver,
+                moved_center,
+                moved_samples,
+            )
+            .expect("small pose perturbation remains valid")
+            .evaluate()
+            .expect("Taylor expansion remains separated")
+            .potential
+        };
+        let step = 1.0e-6;
+        let finite_difference =
+            (moved_taylor_potential(step) - moved_taylor_potential(-step)) / (2.0 * step);
+        assert!(
+            (approximate.derivative - finite_difference).abs() < 1.0e-8,
+            "Taylor derivative={} finite difference={finite_difference}",
+            approximate.derivative
+        );
+        assert!(
+            (exact.derivative - approximate.derivative).abs() <= approximate.absolute_error,
+            "exact={} Taylor={} remainder={}",
+            exact.derivative,
+            approximate.derivative,
+            approximate.absolute_error
+        );
+        assert!(approximate.absolute_bound >= approximate.derivative.abs());
+        assert!(approximate.absolute_error.is_finite() && approximate.absolute_error > 0.0);
+    }
+
+    #[test]
     fn angular_pose_derivative_includes_boundary_motion_and_projected_extent_torque() {
         let source = BoundaryKernelVector { x: 0.3, y: 2.0 };
         let receiver_center = BoundaryKernelVector { x: 0.0, y: 0.0 };
