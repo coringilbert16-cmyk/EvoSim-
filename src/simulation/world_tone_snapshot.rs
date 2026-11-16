@@ -802,6 +802,9 @@ pub(crate) struct ResonanceWorldBodyForce {
 pub(crate) struct ResonanceWorldPairForceEvaluation {
     pub(crate) forces: Vec<ResonanceWorldBodyForce>,
     pub(crate) potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
+    /// Pair-specific frequency inventories remapped to immutable world-body indices.
+    pub(crate) mutual_inventories:
+        Vec<crate::harmonics::ResonanceMutualBoundaryFrequencyInventory>,
     /// None marks the exact reference fallback, whose force derivative has no
     /// certified adaptive-kernel error estimate.
     pub(crate) potential_error: Option<f64>,
@@ -1307,10 +1310,21 @@ impl LocalResonanceWorldSnapshot {
                 catalog,
                 self.tick,
             );
-        let (forces, errors, potential_components, potential_error) =
+        let (forces, errors, potential_components, mutual_inventories, potential_error) =
             if let Some(evaluation) = generalized {
                 if evaluation.forces.len() != occluder_indices.len() + 2 {
                     return None;
+                }
+                let mut mutual_inventories = evaluation.mutual_inventories;
+                for inventory in &mut mutual_inventories {
+                    for slot in &mut inventory.body_slots {
+                        if let crate::harmonics::ResonanceMutualBoundaryBodySlot::Occluder(
+                            local_index,
+                        ) = slot
+                        {
+                            *local_index = *occluder_indices.get(*local_index)?;
+                        }
+                    }
                 }
                 (
                     evaluation
@@ -1324,6 +1338,7 @@ impl LocalResonanceWorldSnapshot {
                         .map(|entry| Some(entry.absolute_error))
                         .collect::<Vec<_>>(),
                     evaluation.potential_components,
+                    mutual_inventories,
                     Some(evaluation.potential_error),
                 )
             } else {
@@ -1357,6 +1372,7 @@ impl LocalResonanceWorldSnapshot {
                     forces,
                     vec![None; occluder_indices.len() + 2],
                     potential_components,
+                    Vec::new(),
                     None,
                 )
             };
@@ -1372,7 +1388,7 @@ impl LocalResonanceWorldSnapshot {
         force_by_index[index_b] = forces[1];
         error_by_index[index_a] = errors[0];
         error_by_index[index_b] = errors[1];
-        for (offset, body_index) in occluder_indices.into_iter().enumerate() {
+        for (offset, body_index) in occluder_indices.iter().copied().enumerate() {
             force_by_index[body_index] = forces[offset + 2];
             error_by_index[body_index] = errors[offset + 2];
         }
@@ -1391,6 +1407,7 @@ impl LocalResonanceWorldSnapshot {
                 )
                 .collect(),
             potential_components,
+            mutual_inventories,
             potential_error,
         })
     }
