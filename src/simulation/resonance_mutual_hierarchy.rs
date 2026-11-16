@@ -94,6 +94,10 @@ impl MutualInteractionHierarchy {
         })
     }
 
+    fn maximum_extent(self) -> f64 {
+        (self.max_x - self.min_x).max(self.max_y - self.min_y)
+    }
+
     fn center(bounds: VisibilityBounds, x_axis: bool) -> f64 {
         if x_axis {
             bounds.min_x * 0.5 + bounds.max_x * 0.5
@@ -131,17 +135,34 @@ impl MutualInteractionHierarchy {
                 }
                 pairs.push(((*index_a).min(*index_b), (*index_a).max(*index_b)));
             }
-            (NodeKind::Branch { left, right }, _) if a.count >= b.count || b.count == 1 => {
+            (NodeKind::Branch { left, right }, NodeKind::Leaf(_)) => {
                 Self::visit_distinct(left, b, pairs)?;
                 Self::visit_distinct(right, b, pairs)?;
             }
-            (_, NodeKind::Branch { left, right }) => {
+            (NodeKind::Leaf(_), NodeKind::Branch { left, right }) => {
                 Self::visit_distinct(a, left, pairs)?;
                 Self::visit_distinct(a, right, pairs)?;
             }
-            (NodeKind::Branch { left, right }, _) => {
+            (
+                NodeKind::Branch { left, right },
+                NodeKind::Branch {
+                    left: other_left,
+                    right: other_right,
+                },
+            ) if a.bounds.maximum_extent() >= b.bounds.maximum_extent() => {
                 Self::visit_distinct(left, b, pairs)?;
                 Self::visit_distinct(right, b, pairs)?;
+                let _ = (other_left, other_right);
+            }
+            (
+                NodeKind::Branch { .. },
+                NodeKind::Branch {
+                    left: other_left,
+                    right: other_right,
+                },
+            ) => {
+                Self::visit_distinct(a, other_left, pairs)?;
+                Self::visit_distinct(a, other_right, pairs)?;
             }
         }
         Some(())
