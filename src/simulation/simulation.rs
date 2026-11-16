@@ -932,12 +932,6 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
-        self.step_with_transport_reuse::<true>();
-    }
-
-    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
-        &mut self,
-    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
@@ -947,6 +941,9 @@ impl Simulation {
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
+        // Stable physical IDs are independent of the ambient-flow sampler and
+        // must be ready before any chemistry or force snapshot is constructed.
+        self.environment.field.assign_missing_material_identities();
 
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
@@ -1025,17 +1022,9 @@ impl Simulation {
             })
             .collect();
 
-        // Ambient transport runs before environmental reaction discovery. Flow is
-        // allowed to change contacts and interrupt activation naturally; chemistry
-        // rules are not relaxed to guarantee any particular reaction.
-        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
-            REUSE_SINGLETON_CENTER_VELOCITY,
-        >(
-            &mut self.environment.field,
-            &self.environment.catalog,
-            self.environment.width,
-            self.environment.height,
-        );
+        // Ambient flow remains a read-only overdamped velocity field. It does
+        // not translate, rotate, damp, or otherwise mutate free material bodies;
+        // Newtonian resonance motion below is their sole live movement authority.
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it

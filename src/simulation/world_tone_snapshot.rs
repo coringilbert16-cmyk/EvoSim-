@@ -4385,10 +4385,6 @@ mod tests {
                 .environment
                 .field
                 .deposit_physical(210.0, 210.0, body, &catalog,));
-            simulation
-                .environment
-                .field
-                .assign_missing_material_identities();
         };
         make_body(
             &mut moving,
@@ -4417,7 +4413,12 @@ mod tests {
                 .map(|placement| placement.x)
                 .expect("environmental body should remain in the field")
         };
-        let displacement_difference = x_position(&moving) - x_position(&reference);
+        let reference_x = x_position(&reference);
+        assert!(
+            (reference_x - 210.0).abs() <= 1.0e-7,
+            "a body at rest must not be advected by the ambient flow field; observed x={reference_x:?}"
+        );
+        let displacement_difference = x_position(&moving) - reference_x;
         assert!(
             (displacement_difference - 1.0).abs() <= 1.0e-7,
             "one physics tick should advance a 24,000-unit/day body by one world unit; observed differential displacement {displacement_difference:?}"
