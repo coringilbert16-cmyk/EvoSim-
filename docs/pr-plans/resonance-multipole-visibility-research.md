@@ -1498,3 +1498,39 @@ the broad-phase query contains every geometrically possible blocker, nor that
 the same candidate/event inventory persists throughout a pose cell. Those
 remain the next certification obligations. The exact visibility partition
 continues to be the reference result.
+
+## 42. Taylor-consistent generalized force and torque remainder — 2026-11-16
+
+The generalized-coordinate evaluator now differentiates the same first-order
+two-distance boundary scalar accepted for potential:
+
+`U_hat = W_0 g(c) + grad(g)(c) dot M_1`, where
+`g(p) = 1 / ((1+|p-c_a|)(1+|p-c_b|))`.
+
+The derivative includes the changing signed total weight, arithmetic sample
+center, first moment, both source/receiver reference positions, every sample
+position, and every signed projected-extent weight. The exact discrete
+generalized derivative remains available as the differential oracle; it is no
+longer substituted as the force/torque result for an accepted Taylor scalar.
+
+A separate conservative derivative-remainder bound uses the product-kernel
+Hessian and third-derivative envelopes. Its minimum-distance domain subtracts
+the full sample-cluster radius, sample-center motion, and source/receiver
+pose-cell displacement. The bound includes per-sample position and weight
+derivative envelopes and is checked independently for every generalized
+coordinate. Adaptive sample subdivision divides each coordinate budget
+between children and rechecks the cumulative bound after recombination.
+
+Regressions compare the analytic derivative of the Taylor scalar against
+finite differences of that same scalar for simultaneous source/receiver
+translation, sample motion, signed-weight change, and receiver rotation.
+They also compare the Taylor derivative against the exact discrete derivative
+and require the latter's difference to fit inside the reported remainder.
+
+This closes the scalar/derivative consistency gap for the existing
+source/receiver-boundary sample expansion. It does not yet provide a
+body-cluster mutual approximation: exact source-dependent boundary samples
+and their visibility provenance remain pair-specific. The next mutual-kernel
+stage must retain those correspondences while forming product moments in both
+distance factors, and must continue to certify potential plus every body's
+force and torque independently before cluster acceptance.
