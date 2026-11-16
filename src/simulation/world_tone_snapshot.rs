@@ -834,6 +834,10 @@ pub(crate) struct ResonanceForceAccumulator {
             Option<crate::harmonics::ResonanceBodyForce>,
         ),
     >,
+    pair_potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
+    /// None means at least one interaction used the exact fallback without a
+    /// certified adaptive potential-error bound.
+    pair_potential_error: Option<f64>,
 }
 
 #[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
@@ -900,16 +904,46 @@ impl ResonanceForceAccumulator {
         identity_b: u64,
         catalog: &[BaseResource],
     ) -> bool {
-        let Some(contributions) =
-            snapshot.pair_force_contributions(identity_a, identity_b, catalog)
+        let Some(evaluation) =
+            snapshot.pair_force_and_potential_contributions(identity_a, identity_b, catalog)
         else {
             return false;
         };
         let mut staged = self.clone();
-        if !contributions
+        if !evaluation
+            .forces
             .into_iter()
             .all(|contribution| staged.add(contribution))
         {
+            return false;
+        }
+        for component in evaluation.potential_components {
+            if !component.frequency_cycles_per_day.is_finite()
+                || component.frequency_cycles_per_day <= 0.0
+                || !component.energy.is_finite()
+            {
+                return false;
+            }
+            if let Some(existing) = staged.pair_potential_components.iter_mut().find(|existing| {
+                (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                    <= 1.0e-9
+            }) {
+                existing.energy += component.energy;
+                if !existing.energy.is_finite() {
+                    return false;
+                }
+            } else {
+                staged.pair_potential_components.push(component);
+            }
+        }
+        staged.pair_potential_components.sort_by(|left, right| {
+            left.frequency_cycles_per_day.total_cmp(&right.frequency_cycles_per_day)
+        });
+        staged.pair_potential_error = staged
+            .pair_potential_error
+            .zip(evaluation.potential_error)
+            .map(|(current, added)| current + added);
+        if staged.pair_potential_error.is_some_and(|error| !error.is_finite() || error < 0.0) {
             return false;
         }
         *self = staged;
@@ -979,6 +1013,18 @@ impl ResonanceForceAccumulator {
             });
         }
         Some(staged)
+    }
+
+    /// Return the accumulated signed pair-potential inventory and its
+    /// conservative absolute error. An absent error means an exact fallback
+    /// participated and the inventory is not certified by the adaptive kernel.
+    pub(crate) fn pair_potential_inventory(
+        &self,
+    ) -> (
+        &[crate::harmonics::ResonancePairPotentialComponent],
+        Option<f64>,
+    ) {
+        (&self.pair_potential_components, self.pair_potential_error)
     }
 
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
