@@ -1428,9 +1428,8 @@ impl LocalResonanceWorldSnapshot {
     }
 
     /// Sum the exact force gradients for the complete environmental pair
-    /// potential through the test-only mutual dual-tree traversal. Every
-    /// unordered pair still reaches an exact leaf evaluation; this introduces
-    /// no approximate acceptance, distance cutoff, or runtime behavior.
+    /// potential through the adaptive mutual dual-tree traversal. Cluster
+    /// acceptance is independently certified; rejected pairs reach exact leaves.
     fn mutual_cluster_pair_evaluation(
         &self,
         bodies_a: &[usize],
