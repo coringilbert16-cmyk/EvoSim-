@@ -1755,9 +1755,7 @@ fn environmental_motion_pair_potential_delta(
         return None;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len()
-        || moved.iter().any(|index| *index >= before_bodies.len())
-    {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
         return None;
     }
     let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
