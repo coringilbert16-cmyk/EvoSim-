@@ -3688,9 +3688,10 @@ impl MutualBoundaryKernelExpansion {
                             pose.receiver_center_derivative,
                             pose.position_derivative,
                         ];
-                        vectors.iter().any(|vector| {
-                            !vector.x.is_finite() || !vector.y.is_finite()
-                        }) || !pose.weight_derivative.is_finite()
+                        vectors
+                            .iter()
+                            .any(|vector| !vector.x.is_finite() || !vector.y.is_finite())
+                            || !pose.weight_derivative.is_finite()
                             || [
                                 pose.source_center_derivative_bound,
                                 pose.receiver_center_derivative_bound,
@@ -3814,16 +3815,10 @@ impl MutualBoundaryKernelExpansion {
             },
         };
         let hessian_apply = |vector: MutualBoundaryProductVector| {
-            let source_hessian = radial_hessian_apply(
-                self.center.source,
-                source_distance,
-                vector.source,
-            );
-            let receiver_hessian = radial_hessian_apply(
-                self.center.receiver,
-                receiver_distance,
-                vector.receiver,
-            );
+            let source_hessian =
+                radial_hessian_apply(self.center.source, source_distance, vector.source);
+            let receiver_hessian =
+                radial_hessian_apply(self.center.receiver, receiver_distance, vector.receiver);
             MutualBoundaryProductVector {
                 source: BoundaryKernelVector {
                     x: source_hessian.x * receiver_value
@@ -3839,8 +3834,7 @@ impl MutualBoundaryKernelExpansion {
                 },
             }
         };
-        let potential =
-            self.total_weight * kernel + gradient.dot(self.first_moment);
+        let potential = self.total_weight * kernel + gradient.dot(self.first_moment);
         let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
         let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
         let source_value_bound = 1.0 / (1.0 + source_min);
@@ -3916,7 +3910,11 @@ impl MutualBoundaryKernelExpansion {
                 };
                 first_moment_derivative = first_moment_derivative
                     .add(offset.scale(pose.weight_derivative))
-                    .add(relative_derivative.subtract(center_derivative).scale(sample.weight));
+                    .add(
+                        relative_derivative
+                            .subtract(center_derivative)
+                            .scale(sample.weight),
+                    );
 
                 let source_value_at_sample = 1.0
                     / (1.0
@@ -3962,9 +3960,10 @@ impl MutualBoundaryKernelExpansion {
                     pose.position_displacement_bound + pose.source_center_displacement_bound;
                 center_displacement_bound.receiver.x +=
                     pose.position_displacement_bound + pose.receiver_center_displacement_bound;
-                maximum_displacement.source.x = maximum_displacement.source.x.max(
-                    pose.position_displacement_bound + pose.source_center_displacement_bound,
-                );
+                maximum_displacement.source.x = maximum_displacement
+                    .source
+                    .x
+                    .max(pose.position_displacement_bound + pose.source_center_displacement_bound);
                 maximum_displacement.receiver.x = maximum_displacement.receiver.x.max(
                     pose.position_displacement_bound + pose.receiver_center_displacement_bound,
                 );
@@ -4026,18 +4025,11 @@ impl MutualBoundaryKernelExpansion {
                     * 2.0_f64.sqrt();
                 let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
                 derivative_error += maximum_weight
-                    * (0.5
-                        * third_cell
-                        * radius_cell
-                        * radius_cell
-                        * center_derivative_norm
-                        + hessian_cell * radius_cell
+                    * (0.5 * third_cell * radius_cell * radius_cell * center_derivative_norm
+                        + hessian_cell
+                            * radius_cell
                             * (sample_relative_derivative_bound + center_derivative_norm))
-                    + 0.5
-                        * pose.weight_derivative_bound
-                        * hessian_cell
-                        * radius_cell
-                        * radius_cell;
+                    + 0.5 * pose.weight_derivative_bound * hessian_cell * radius_cell * radius_cell;
             }
 
             let hessian_center_derivative = hessian_apply(center_derivative);
@@ -4046,10 +4038,7 @@ impl MutualBoundaryKernelExpansion {
                 + gradient.dot(first_moment_derivative);
             let roundoff = 256.0
                 * f64::EPSILON
-                * (derivative.abs()
-                    + exact_derivative_magnitude_bound
-                    + derivative_error
-                    + 1.0);
+                * (derivative.abs() + exact_derivative_magnitude_bound + derivative_error + 1.0);
             let absolute_error = derivative_error + roundoff;
             let absolute_bound = exact_derivative_magnitude_bound + absolute_error;
             if ![
@@ -5327,9 +5316,8 @@ mod tests {
                 .collect(),
         };
         let coordinates = vec![source_translation, receiver_translation, receiver_torque];
-        let expansion =
-            MutualBoundaryKernelExpansion::new(samples.clone(), coordinates.clone())
-                .expect("pair-specific mutual sample inventory is valid");
+        let expansion = MutualBoundaryKernelExpansion::new(samples.clone(), coordinates.clone())
+            .expect("pair-specific mutual sample inventory is valid");
         let evaluation = expansion
             .evaluate()
             .expect("complete two-distance product expansion is separated");
@@ -5416,9 +5404,7 @@ mod tests {
             assert!(coordinate.absolute_bound >= coordinate.derivative.abs());
         }
         let exact_at_reference = exact_potential(0.0, 0);
-        assert!(
-            (evaluation.potential - exact_at_reference).abs() <= evaluation.error.potential
-        );
+        assert!((evaluation.potential - exact_at_reference).abs() <= evaluation.error.potential);
         assert_eq!(
             evaluation.error.coordinates.len(),
             evaluation.coordinates.len()
