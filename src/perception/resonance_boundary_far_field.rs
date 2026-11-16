@@ -3552,6 +3552,503 @@ fn radial_hessian_apply(
     }
 }
 
+/// One exact source/receiver-boundary contribution in a mutual body-cluster
+/// interaction. Each term retains its own source-dependent boundary sample;
+/// no receiver samples are shared or averaged across different body pairs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MutualBoundaryKernelSample {
+    pub(crate) source_center: BoundaryKernelVector,
+    pub(crate) receiver_center: BoundaryKernelVector,
+    pub(crate) position: BoundaryKernelVector,
+    pub(crate) weight: f64,
+}
+
+/// One world generalized-coordinate derivative for one exact mutual sample.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct MutualBoundaryPoseSampleDerivative {
+    pub(crate) source_center_derivative: BoundaryKernelVector,
+    pub(crate) receiver_center_derivative: BoundaryKernelVector,
+    pub(crate) position_derivative: BoundaryKernelVector,
+    pub(crate) weight_derivative: f64,
+    pub(crate) source_center_derivative_bound: f64,
+    pub(crate) receiver_center_derivative_bound: f64,
+    pub(crate) position_derivative_bound: f64,
+    pub(crate) weight_derivative_bound: f64,
+    pub(crate) source_center_displacement_bound: f64,
+    pub(crate) receiver_center_displacement_bound: f64,
+    pub(crate) position_displacement_bound: f64,
+    pub(crate) weight_change_bound: f64,
+}
+
+/// All per-sample Jacobians for one generalized world coordinate. Coordinate
+/// order is supplied by the caller, normally body-major x/y/angle.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MutualBoundaryPoseCoordinateDerivative {
+    pub(crate) samples: Vec<MutualBoundaryPoseSampleDerivative>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct MutualBoundaryKernelError {
+    pub(crate) potential: f64,
+    /// Independent derivative remainder for each caller-supplied body DOF.
+    pub(crate) coordinates: Vec<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MutualBoundaryKernelEvaluation {
+    pub(crate) potential: f64,
+    pub(crate) coordinates: Vec<BoundaryPoseDerivativeEvaluation>,
+    pub(crate) error: MutualBoundaryKernelError,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct MutualBoundaryProductVector {
+    source: BoundaryKernelVector,
+    receiver: BoundaryKernelVector,
+}
+
+impl MutualBoundaryProductVector {
+    fn dot(self, other: Self) -> f64 {
+        self.source.dot(other.source) + self.receiver.dot(other.receiver)
+    }
+
+    fn norm(self) -> f64 {
+        self.dot(self).sqrt()
+    }
+
+    fn add(self, other: Self) -> Self {
+        Self {
+            source: BoundaryKernelVector {
+                x: self.source.x + other.source.x,
+                y: self.source.y + other.source.y,
+            },
+            receiver: BoundaryKernelVector {
+                x: self.receiver.x + other.receiver.x,
+                y: self.receiver.y + other.receiver.y,
+            },
+        }
+    }
+
+    fn subtract(self, other: Self) -> Self {
+        Self {
+            source: BoundaryKernelVector {
+                x: self.source.x - other.source.x,
+                y: self.source.y - other.source.y,
+            },
+            receiver: BoundaryKernelVector {
+                x: self.receiver.x - other.receiver.x,
+                y: self.receiver.y - other.receiver.y,
+            },
+        }
+    }
+
+    fn scale(self, scale: f64) -> Self {
+        Self {
+            source: BoundaryKernelVector {
+                x: self.source.x * scale,
+                y: self.source.y * scale,
+            },
+            receiver: BoundaryKernelVector {
+                x: self.receiver.x * scale,
+                y: self.receiver.y * scale,
+            },
+        }
+    }
+}
+
+/// First-order product-moment expansion of the complete two-distance
+/// boundary kernel over an inventory of pair-specific exact samples.
+///
+/// The expanded variables are (p-c_source, p-c_receiver), so both attenuation
+/// factors and their cross derivatives belong to one scalar potential. The
+/// caller must certify visibility, endpoint provenance, and exact sample
+/// correspondence for every term before this evaluator can be accepted.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MutualBoundaryKernelExpansion {
+    samples: Vec<MutualBoundaryKernelSample>,
+    coordinates: Vec<MutualBoundaryPoseCoordinateDerivative>,
+    center: MutualBoundaryProductVector,
+    total_weight: f64,
+    absolute_weight: f64,
+    first_moment: MutualBoundaryProductVector,
+    radius: f64,
+}
+
+impl MutualBoundaryKernelExpansion {
+    pub(crate) fn new(
+        samples: Vec<MutualBoundaryKernelSample>,
+        coordinates: Vec<MutualBoundaryPoseCoordinateDerivative>,
+    ) -> Option<Self> {
+        if samples.is_empty()
+            || coordinates
+                .iter()
+                .any(|coordinate| coordinate.samples.len() != samples.len())
+        {
+            return None;
+        }
+        let mut center = MutualBoundaryProductVector::default();
+        let mut total_weight = 0.0;
+        let mut absolute_weight = 0.0;
+        for sample in &samples {
+            let values = [
+                sample.source_center.x,
+                sample.source_center.y,
+                sample.receiver_center.x,
+                sample.receiver_center.y,
+                sample.position.x,
+                sample.position.y,
+                sample.weight,
+            ];
+            if values.iter().any(|value| !value.is_finite()) {
+                return None;
+            }
+            center.source.x += sample.position.x - sample.source_center.x;
+            center.source.y += sample.position.y - sample.source_center.y;
+            center.receiver.x += sample.position.x - sample.receiver_center.x;
+            center.receiver.y += sample.position.y - sample.receiver_center.y;
+            total_weight += sample.weight;
+            absolute_weight += sample.weight.abs();
+        }
+        let inverse_count = 1.0 / samples.len() as f64;
+        center = center.scale(inverse_count);
+        let mut first_moment = MutualBoundaryProductVector::default();
+        let mut radius: f64 = 0.0;
+        for sample in &samples {
+            let relative = MutualBoundaryProductVector {
+                source: BoundaryKernelVector {
+                    x: sample.position.x - sample.source_center.x,
+                    y: sample.position.y - sample.source_center.y,
+                },
+                receiver: BoundaryKernelVector {
+                    x: sample.position.x - sample.receiver_center.x,
+                    y: sample.position.y - sample.receiver_center.y,
+                },
+            };
+            let offset = relative.subtract(center);
+            first_moment = first_moment.add(offset.scale(sample.weight));
+            radius = radius.max(offset.norm());
+        }
+        [
+            center.source.x,
+            center.source.y,
+            center.receiver.x,
+            center.receiver.y,
+            total_weight,
+            absolute_weight,
+            first_moment.source.x,
+            first_moment.source.y,
+            first_moment.receiver.x,
+            first_moment.receiver.y,
+            radius,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(Self {
+            samples,
+            coordinates,
+            center,
+            total_weight,
+            absolute_weight,
+            first_moment,
+            radius,
+        })
+    }
+
+    /// Evaluate one shared Taylor scalar and its derivative for every supplied
+    /// body coordinate. Potential and coordinate errors are independent.
+    pub(crate) fn evaluate(&self) -> Option<MutualBoundaryKernelEvaluation> {
+        let source_distance = self.center.source.norm();
+        let receiver_distance = self.center.receiver.norm();
+        let source_min = source_distance - self.radius;
+        let receiver_min = receiver_distance - self.radius;
+        if !source_min.is_finite()
+            || !receiver_min.is_finite()
+            || source_min <= f64::EPSILON
+            || receiver_min <= f64::EPSILON
+        {
+            return None;
+        }
+        let (source_value, source_gradient) =
+            radial_kernel_value_gradient(self.center.source, source_distance);
+        let (receiver_value, receiver_gradient) =
+            radial_kernel_value_gradient(self.center.receiver, receiver_distance);
+        let kernel = source_value * receiver_value;
+        let gradient = MutualBoundaryProductVector {
+            source: BoundaryKernelVector {
+                x: source_gradient.x * receiver_value,
+                y: source_gradient.y * receiver_value,
+            },
+            receiver: BoundaryKernelVector {
+                x: receiver_gradient.x * source_value,
+                y: receiver_gradient.y * source_value,
+            },
+        };
+        let hessian_apply = |vector: MutualBoundaryProductVector| {
+            let source_hessian = radial_hessian_apply(
+                self.center.source,
+                source_distance,
+                vector.source,
+            );
+            let receiver_hessian = radial_hessian_apply(
+                self.center.receiver,
+                receiver_distance,
+                vector.receiver,
+            );
+            MutualBoundaryProductVector {
+                source: BoundaryKernelVector {
+                    x: source_hessian.x * receiver_value
+                        + source_gradient.x * receiver_gradient.dot(vector.receiver),
+                    y: source_hessian.y * receiver_value
+                        + source_gradient.y * receiver_gradient.dot(vector.receiver),
+                },
+                receiver: BoundaryKernelVector {
+                    x: receiver_hessian.x * source_value
+                        + receiver_gradient.x * source_gradient.dot(vector.source),
+                    y: receiver_hessian.y * source_value
+                        + receiver_gradient.y * source_gradient.dot(vector.source),
+                },
+            }
+        };
+        let potential =
+            self.total_weight * kernel + gradient.dot(self.first_moment);
+        let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
+        let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
+        let source_value_bound = 1.0 / (1.0 + source_min);
+        let receiver_value_bound = 1.0 / (1.0 + receiver_min);
+        let source_hessian_bound = radial_hessian_bound(source_min);
+        let receiver_hessian_bound = radial_hessian_bound(receiver_min);
+        let source_third_bound = radial_third_bound(source_min);
+        let receiver_third_bound = radial_third_bound(receiver_min);
+        let hessian_bound = source_hessian_bound * receiver_value_bound
+            + receiver_hessian_bound * source_value_bound
+            + 2.0 * source_gradient_bound * receiver_gradient_bound;
+        let third_bound = source_third_bound * receiver_value_bound
+            + receiver_third_bound * source_value_bound
+            + 3.0 * source_hessian_bound * receiver_gradient_bound
+            + 3.0 * source_gradient_bound * receiver_hessian_bound;
+        let potential_roundoff = 128.0
+            * f64::EPSILON
+            * (potential.abs() + self.absolute_weight + self.first_moment.norm() + 1.0);
+        let potential_error =
+            0.5 * self.absolute_weight * hessian_bound * self.radius * self.radius
+                + potential_roundoff;
+        if !potential.is_finite() || !potential_error.is_finite() {
+            return None;
+        }
+
+        let mut coordinate_evaluations = Vec::with_capacity(self.coordinates.len());
+        for coordinate in &self.coordinates {
+            let mut center_derivative = MutualBoundaryProductVector::default();
+            let mut total_weight_derivative = 0.0;
+            for pose in &coordinate.samples {
+                center_derivative.source.x +=
+                    pose.position_derivative.x - pose.source_center_derivative.x;
+                center_derivative.source.y +=
+                    pose.position_derivative.y - pose.source_center_derivative.y;
+                center_derivative.receiver.x +=
+                    pose.position_derivative.x - pose.receiver_center_derivative.x;
+                center_derivative.receiver.y +=
+                    pose.position_derivative.y - pose.receiver_center_derivative.y;
+                total_weight_derivative += pose.weight_derivative;
+            }
+            center_derivative = center_derivative.scale(1.0 / self.samples.len() as f64);
+
+            let mut first_moment_derivative = MutualBoundaryProductVector::default();
+            let mut derivative = total_weight_derivative * kernel;
+            let mut exact_derivative_magnitude_bound = 0.0;
+            let mut sample_position_derivative = 0.0;
+            let mut sample_weight_derivative = 0.0;
+            let mut center_displacement_bound = MutualBoundaryProductVector::default();
+            let mut maximum_displacement = MutualBoundaryProductVector::default();
+            let mut center_derivative_bound = MutualBoundaryProductVector::default();
+
+            for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+                let relative = MutualBoundaryProductVector {
+                    source: BoundaryKernelVector {
+                        x: sample.position.x - sample.source_center.x,
+                        y: sample.position.y - sample.source_center.y,
+                    },
+                    receiver: BoundaryKernelVector {
+                        x: sample.position.x - sample.receiver_center.x,
+                        y: sample.position.y - sample.receiver_center.y,
+                    },
+                };
+                let offset = relative.subtract(self.center);
+                let relative_derivative = MutualBoundaryProductVector {
+                    source: BoundaryKernelVector {
+                        x: pose.position_derivative.x - pose.source_center_derivative.x,
+                        y: pose.position_derivative.y - pose.source_center_derivative.y,
+                    },
+                    receiver: BoundaryKernelVector {
+                        x: pose.position_derivative.x - pose.receiver_center_derivative.x,
+                        y: pose.position_derivative.y - pose.receiver_center_derivative.y,
+                    },
+                };
+                first_moment_derivative = first_moment_derivative
+                    .add(offset.scale(pose.weight_derivative))
+                    .add(relative_derivative.subtract(center_derivative).scale(sample.weight));
+
+                let source_value_at_sample = 1.0
+                    / (1.0
+                        + (relative.source.x * relative.source.x
+                            + relative.source.y * relative.source.y)
+                            .sqrt());
+                let receiver_value_at_sample = 1.0
+                    / (1.0
+                        + (relative.receiver.x * relative.receiver.x
+                            + relative.receiver.y * relative.receiver.y)
+                            .sqrt());
+                let sample_kernel = source_value_at_sample * receiver_value_at_sample;
+                let source_distance_at_sample = relative.source.norm();
+                let receiver_distance_at_sample = relative.receiver.norm();
+                let (_, source_sample_gradient) =
+                    radial_kernel_value_gradient(relative.source, source_distance_at_sample);
+                let (_, receiver_sample_gradient) =
+                    radial_kernel_value_gradient(relative.receiver, receiver_distance_at_sample);
+                let sample_position_term = sample.weight
+                    * (source_sample_gradient.dot(pose.position_derivative)
+                        * receiver_value_at_sample
+                        + receiver_sample_gradient.dot(pose.position_derivative)
+                            * source_value_at_sample);
+                let sample_weight_term = sample_kernel * pose.weight_derivative;
+                sample_position_derivative += sample_position_term;
+                sample_weight_derivative += sample_weight_term;
+
+                let source_relative_derivative_bound =
+                    pose.position_derivative_bound + pose.source_center_derivative_bound;
+                let receiver_relative_derivative_bound =
+                    pose.position_derivative_bound + pose.receiver_center_derivative_bound;
+                let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
+                exact_derivative_magnitude_bound += maximum_weight
+                    * (source_gradient_bound
+                        * receiver_value_bound
+                        * source_relative_derivative_bound
+                        + receiver_gradient_bound
+                            * source_value_bound
+                            * receiver_relative_derivative_bound)
+                    + source_value_bound * receiver_value_bound * pose.weight_derivative_bound;
+
+                center_displacement_bound.source.x +=
+                    pose.position_displacement_bound + pose.source_center_displacement_bound;
+                center_displacement_bound.receiver.x +=
+                    pose.position_displacement_bound + pose.receiver_center_displacement_bound;
+                maximum_displacement.source.x = maximum_displacement.source.x.max(
+                    pose.position_displacement_bound + pose.source_center_displacement_bound,
+                );
+                maximum_displacement.receiver.x = maximum_displacement.receiver.x.max(
+                    pose.position_displacement_bound + pose.receiver_center_displacement_bound,
+                );
+                center_derivative_bound.source.x += source_relative_derivative_bound;
+                center_derivative_bound.receiver.x += receiver_relative_derivative_bound;
+            }
+            let inverse_count = 1.0 / self.samples.len() as f64;
+            center_displacement_bound = center_displacement_bound.scale(inverse_count);
+            center_derivative_bound = center_derivative_bound.scale(inverse_count);
+            let source_min_cell = source_distance
+                - self.radius
+                - maximum_displacement.source.x
+                - center_displacement_bound.source.x;
+            let receiver_min_cell = receiver_distance
+                - self.radius
+                - maximum_displacement.receiver.x
+                - center_displacement_bound.receiver.x;
+            if !source_min_cell.is_finite()
+                || !receiver_min_cell.is_finite()
+                || source_min_cell <= f64::EPSILON
+                || receiver_min_cell <= f64::EPSILON
+            {
+                return None;
+            }
+            let source_gradient_cell = 1.0 / (1.0 + source_min_cell).powi(2);
+            let receiver_gradient_cell = 1.0 / (1.0 + receiver_min_cell).powi(2);
+            let source_value_cell = 1.0 / (1.0 + source_min_cell);
+            let receiver_value_cell = 1.0 / (1.0 + receiver_min_cell);
+            let source_hessian_cell = radial_hessian_bound(source_min_cell);
+            let receiver_hessian_cell = radial_hessian_bound(receiver_min_cell);
+            let source_third_cell = radial_third_bound(source_min_cell);
+            let receiver_third_cell = radial_third_bound(receiver_min_cell);
+            let hessian_cell = source_hessian_cell * receiver_value_cell
+                + receiver_hessian_cell * source_value_cell
+                + 2.0 * source_gradient_cell * receiver_gradient_cell;
+            let third_cell = source_third_cell * receiver_value_cell
+                + receiver_third_cell * source_value_cell
+                + 3.0 * source_hessian_cell * receiver_gradient_cell
+                + 3.0 * source_gradient_cell * receiver_hessian_cell;
+            let radius_cell = self.radius
+                + maximum_displacement.source.x.max(maximum_displacement.receiver.x)
+                + center_displacement_bound.source.x.max(center_displacement_bound.receiver.x);
+            let center_derivative_norm = center_derivative_bound.norm();
+            let mut derivative_error = 0.0;
+            for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+                let source_relative_derivative_bound =
+                    pose.position_derivative_bound + pose.source_center_derivative_bound;
+                let receiver_relative_derivative_bound =
+                    pose.position_derivative_bound + pose.receiver_center_derivative_bound;
+                let sample_relative_derivative_bound = source_relative_derivative_bound
+                    .max(receiver_relative_derivative_bound)
+                    * 2.0_f64.sqrt();
+                let maximum_weight = sample.weight.abs() + pose.weight_change_bound;
+                derivative_error += maximum_weight
+                    * (0.5
+                        * third_cell
+                        * radius_cell
+                        * radius_cell
+                        * center_derivative_norm
+                        + hessian_cell * radius_cell
+                            * (sample_relative_derivative_bound + center_derivative_norm))
+                    + 0.5
+                        * pose.weight_derivative_bound
+                        * hessian_cell
+                        * radius_cell
+                        * radius_cell;
+            }
+
+            let hessian_center_derivative = hessian_apply(center_derivative);
+            derivative += self.total_weight * gradient.dot(center_derivative)
+                + hessian_center_derivative.dot(self.first_moment)
+                + gradient.dot(first_moment_derivative);
+            let roundoff = 256.0
+                * f64::EPSILON
+                * (derivative.abs()
+                    + exact_derivative_magnitude_bound
+                    + derivative_error
+                    + 1.0);
+            let absolute_error = derivative_error + roundoff;
+            let absolute_bound = exact_derivative_magnitude_bound + absolute_error;
+            if ![
+                derivative,
+                absolute_error,
+                absolute_bound,
+                sample_position_derivative,
+                sample_weight_derivative,
+            ]
+            .iter()
+            .all(|value| value.is_finite())
+            {
+                return None;
+            }
+            coordinate_evaluations.push(BoundaryPoseDerivativeEvaluation {
+                derivative,
+                absolute_bound,
+                absolute_error,
+                sample_position_derivative,
+                sample_weight_derivative,
+            });
+        }
+        Some(MutualBoundaryKernelEvaluation {
+            potential,
+            coordinates: coordinate_evaluations,
+            error: MutualBoundaryKernelError {
+                potential: potential_error,
+                coordinates: coordinate_evaluations
+                    .iter()
+                    .map(|coordinate| coordinate.absolute_error)
+                    .collect(),
+            },
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
