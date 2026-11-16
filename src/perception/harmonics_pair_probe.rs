@@ -1112,9 +1112,7 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
             .iter()
             .map(|slot| match *slot {
                 super::ResonanceMutualBoundaryBodySlot::Material(index) => index,
-                super::ResonanceMutualBoundaryBodySlot::Occluder(index) => {
-                    [1usize, 3][index]
-                }
+                super::ResonanceMutualBoundaryBodySlot::Occluder(index) => [1usize, 3][index],
             })
             .collect::<Vec<_>>();
         let certificate =
@@ -1126,9 +1124,7 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
             .expect("actual visibility-certified inventory should map to complete body errors");
         assert_eq!(certificate.errors.bodies.len(), participants.len());
         assert!(certificate.errors.bodies.iter().all(|bound| {
-            bound.force_x.is_finite()
-                && bound.force_y.is_finite()
-                && bound.torque.is_finite()
+            bound.force_x.is_finite() && bound.force_y.is_finite() && bound.torque.is_finite()
         }));
         let exact_potential = exact_discrete_potential(&inventory.samples, None, 0.0);
         assert!(
