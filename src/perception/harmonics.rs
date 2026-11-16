@@ -3392,7 +3392,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             for &sample_index in &sample_indices {
                 let sample = &samples[sample_index];
                 let coefficient = coefficient_for_sample(sample);
-                let MaterialAuraBoundary::Straight { start, end, .. } = sample.boundary else {
+                let MaterialAuraBoundary::Straight { .. } = sample.boundary else {
                     return None;
                 };
                 let weight = coefficient * sample.projected_extent;
@@ -3407,7 +3407,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     weight,
                 });
                 sample_motion.push(BoundarySampleMotionBound::default());
-                coefficients.push((coefficient, start, end));
+                coefficients.push(coefficient);
             }
             let absolute_weight = weighted_samples
                 .iter()
@@ -3469,7 +3469,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                                 target_unit,
                                 coordinate_axis,
                             )?;
-                            target_angular = f64::from(coordinate_axis == 2);
+                            target_angular = if coordinate_axis == 2 { 1.0 } else { 0.0 };
                         }
                         let mut blocker_translation = BoundaryKernelVector::default();
                         let mut blocker_angular = 0.0;
@@ -3480,7 +3480,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                                 blocker_unit,
                                 coordinate_axis,
                             )?;
-                            blocker_angular = f64::from(coordinate_axis == 2);
+                            blocker_angular = if coordinate_axis == 2 { 1.0 } else { 0.0 };
                         }
                         let start_resolved =
                             super::resonance_boundary_far_field::resolve_boundary_endpoint_pose_derivative_with_source(
@@ -3539,7 +3539,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                             .derivative
                             .x
                             .hypot(end_resolved.derivative.y);
-                        let (coefficient, _, _) = coefficients[sample_offset];
+                        let coefficient = coefficients[sample_offset];
                         let derivative =
                             super::resonance_boundary_far_field::straight_interval_sample_pose_derivative(
                                 BoundaryKernelVector {
