@@ -434,10 +434,20 @@ impl MutualInteractionHierarchy {
                 if Self::maximum_extent(a.bounds) >= Self::maximum_extent(b.bounds) =>
             {
                 Self::visit_distinct_adaptive(
-                    left, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                    left,
+                    b,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
                 Self::visit_distinct_adaptive(
-                    right, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                    right,
+                    b,
+                    tolerance,
+                    evaluate_cluster,
+                    evaluate_exact,
+                    result,
                 )?;
             }
             (
@@ -564,7 +574,6 @@ mod tests {
             .is_empty());
     }
 
-
     fn zero_error_certificate(
         bodies_a: &[usize],
         bodies_b: &[usize],
@@ -659,7 +668,6 @@ mod tests {
             assert_eq!(result.exact_pairs, exact_pairs(layout.len()));
         }
     }
-
 
     #[test]
     fn adaptive_traversal_enforces_cumulative_world_error_budgets() {
