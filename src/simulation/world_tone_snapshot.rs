@@ -803,7 +803,6 @@ pub(crate) struct ResonanceWorldPairForceEvaluation {
     pub(crate) forces: Vec<ResonanceWorldBodyForce>,
     pub(crate) potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// Pair-specific frequency inventories remapped to immutable world-body indices.
-    #[cfg(test)]
     pub(crate) mutual_inventories: Vec<crate::harmonics::ResonanceMutualBoundaryFrequencyInventory>,
     /// None marks the exact reference fallback, whose force derivative has no
     /// certified adaptive-kernel error estimate.
@@ -1314,14 +1313,12 @@ impl LocalResonanceWorldSnapshot {
                 catalog,
                 self.tick,
             );
-        #[cfg(test)]
         let mut mutual_inventories = Vec::new();
         let (forces, errors, potential_components, potential_error) =
             if let Some(evaluation) = generalized {
                 if evaluation.forces.len() != occluder_indices.len() + 2 {
                     return None;
                 }
-                #[cfg(test)]
                 {
                     mutual_inventories = evaluation.mutual_inventories;
                     for inventory in &mut mutual_inventories {
@@ -1414,7 +1411,6 @@ impl LocalResonanceWorldSnapshot {
                 )
                 .collect(),
             potential_components,
-            #[cfg(test)]
             mutual_inventories,
             potential_error,
         })
@@ -1435,7 +1431,6 @@ impl LocalResonanceWorldSnapshot {
     /// potential through the test-only mutual dual-tree traversal. Every
     /// unordered pair still reaches an exact leaf evaluation; this introduces
     /// no approximate acceptance, distance cutoff, or runtime behavior.
-    #[cfg(test)]
     fn mutual_cluster_pair_evaluation(
         &self,
         bodies_a: &[usize],
@@ -1643,7 +1638,6 @@ impl LocalResonanceWorldSnapshot {
         Some((evaluation, certificate.errors))
     }
 
-    #[cfg(test)]
     pub(crate) fn accumulate_complete_pair_forces(
         &self,
         catalog: &[BaseResource],
