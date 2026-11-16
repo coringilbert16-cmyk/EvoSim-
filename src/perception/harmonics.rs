@@ -1744,6 +1744,12 @@ pub(crate) struct MaterialResonanceEmitter {
     emitted: ToneSpectrum,
 }
 
+impl MaterialResonanceEmitter {
+    pub(crate) fn source_index(&self) -> usize {
+        self.source_index
+    }
+}
+
 /// Prepare the unoccluded material-origin emitters once for a simulation tick.
 pub(crate) fn material_resonance_emitters_at_tick(
     materials: &[crate::physical_material::PhysicalMaterial],
