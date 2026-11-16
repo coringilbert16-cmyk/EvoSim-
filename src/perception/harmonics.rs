@@ -1974,6 +1974,55 @@ fn translated_physical_material(
     Some(translated)
 }
 
+/// The single response scale maps accumulated resonance response to a
+/// bounded per-update displacement: the displacement magnitude approaches,
+/// but never reaches, one world unit for arbitrarily large input.
+#[allow(dead_code)] // Consumed by the environmental movement integration in PR 3.
+const RESONANCE_MOVEMENT_RESPONSE_SCALE: f64 = 0.1;
+
+type ResonancePairMovementContribution = (usize, usize, ((f64, f64), (f64, f64)));
+
+/// Accumulate already-computed unordered-pair contributions and convert each
+/// material's net response into a bounded direct positional displacement.
+///
+/// Pair indices must be supplied once in ascending order (a < b). This keeps
+/// pair discovery separate from accumulation and prevents double-counting.
+#[allow(dead_code)] // Consumed by the environmental movement integration in PR 3.
+pub(crate) fn accumulate_resonance_pair_displacements(
+    material_count: usize,
+    contributions: &[ResonancePairMovementContribution],
+) -> Option<Vec<(f64, f64)>> {
+    let mut accumulated = vec![(0.0, 0.0); material_count];
+    let mut seen_pairs = std::collections::HashSet::with_capacity(contributions.len());
+    for &(a, b, (on_a, on_b)) in contributions {
+        if a >= b || b >= material_count || !seen_pairs.insert((a, b)) {
+            return None;
+        }
+        if !on_a.0.is_finite() || !on_a.1.is_finite() || !on_b.0.is_finite() || !on_b.1.is_finite()
+        {
+            return None;
+        }
+        accumulated[a].0 += on_a.0;
+        accumulated[a].1 += on_a.1;
+        accumulated[b].0 += on_b.0;
+        accumulated[b].1 += on_b.1;
+    }
+
+    accumulated
+        .into_iter()
+        .map(|(x, y)| {
+            let magnitude = x.hypot(y);
+            if !magnitude.is_finite() {
+                return None;
+            }
+            let factor = RESONANCE_MOVEMENT_RESPONSE_SCALE
+                / (1.0 + RESONANCE_MOVEMENT_RESPONSE_SCALE * magnitude);
+            let displacement = (x * factor, y * factor);
+            (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
+        })
+        .collect()
+}
+
 /// Isolated-pair force derived from the spatial gradient of the single
 /// symmetric potential. The caller must ensure no third-party body can occlude
 /// the pair; use the occluder-aware variant otherwise. The centered difference
@@ -3559,6 +3608,32 @@ mod tests {
             resonance_pair_push_pull(&source, &receiver, &quadrature_catalog, 0).unwrap();
         assert!(on_source.0.abs() < 1e-8 && on_source.1.abs() < 1e-8);
         assert!(on_receiver.0.abs() < 1e-8 && on_receiver.1.abs() < 1e-8);
+    }
+
+    #[test]
+    fn accumulated_resonance_displacements_are_symmetric_bounded_and_deterministic() {
+        let contributions = [
+            (0, 1, ((-10.0, 0.0), (10.0, 0.0))),
+            (0, 2, ((0.0, -10.0), (0.0, 10.0))),
+        ];
+        let first = accumulate_resonance_pair_displacements(3, &contributions).unwrap();
+        let second = accumulate_resonance_pair_displacements(3, &contributions).unwrap();
+        assert_eq!(first, second);
+        assert!(first[0].0 < 0.0 && first[0].1 < 0.0);
+        assert!(first[1].0 > 0.0 && first[1].1.abs() < 1e-12);
+        assert!(first[2].1 > 0.0 && first[2].0.abs() < 1e-12);
+        assert!(first.iter().all(|(x, y)| x.hypot(*y) < 1.0));
+    }
+
+    #[test]
+    fn accumulated_resonance_displacements_reject_duplicate_or_invalid_pairs() {
+        let duplicate = [
+            (0, 1, ((-1.0, 0.0), (1.0, 0.0))),
+            (0, 1, ((-1.0, 0.0), (1.0, 0.0))),
+        ];
+        assert!(accumulate_resonance_pair_displacements(2, &duplicate).is_none());
+        let reversed = [(1, 0, ((1.0, 0.0), (-1.0, 0.0)))];
+        assert!(accumulate_resonance_pair_displacements(2, &reversed).is_none());
     }
 
     #[test]

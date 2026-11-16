@@ -693,6 +693,156 @@ impl ActiveMaterialField {
             .collect()
     }
 
+    /// Translate one complete environmental physical object without changing
+    /// its composition, realized shapes, internal bonds, or stable identity.
+    ///
+    /// The move is rejected unless every constituent remains inside the field
+    /// and no constituent penetrates another realized physical object. Existing
+    /// boundary contact is allowed. Source removal and destination insertion
+    /// are committed together, then each touched cell is invalidated once.
+    pub(crate) fn move_physical_material_by_identity(
+        &mut self,
+        identity: u64,
+        dx: f64,
+        dy: f64,
+        catalog: &[crate::resources::BaseResource],
+    ) -> bool {
+        if identity == 0 || !dx.is_finite() || !dy.is_finite() {
+            return false;
+        }
+        let Some((source_cell, source_index)) =
+            self.cells
+                .iter()
+                .enumerate()
+                .find_map(|(cell_index, cell)| {
+                    cell.physical_materials
+                        .iter()
+                        .position(|material| material.environmental_identity == identity)
+                        .map(|material_index| (cell_index, material_index))
+                })
+        else {
+            return false;
+        };
+        if dx == 0.0 && dy == 0.0 {
+            return true;
+        }
+        let original = &self.cells[source_cell].physical_materials[source_index];
+        if !original.is_realized()
+            || !original.material.is_valid_for_catalog(catalog)
+            || original.material.is_empty()
+        {
+            return false;
+        }
+        let Some(original_placements) = original.placements.as_ref() else {
+            return false;
+        };
+        if original_placements.is_empty() {
+            return false;
+        }
+        let mut candidate = original.clone();
+        {
+            let Some(placements) = candidate.placements.as_mut() else {
+                return false;
+            };
+            for placement in placements.iter_mut() {
+                placement.x += dx;
+                placement.y += dy;
+                if !placement.x.is_finite() || !placement.y.is_finite() {
+                    return false;
+                }
+            }
+        }
+
+        let Some(placements) = candidate.placements.as_ref() else {
+            return false;
+        };
+        let field_width = self.width_cells as f64 * self.cell_size;
+        let field_height = self.height_cells as f64 * self.cell_size;
+        let mut candidate_parts = Vec::with_capacity(placements.len());
+        for (part_index, placement) in placements.iter().copied().enumerate() {
+            let Some(shape) = candidate.realized_shape_for_part(part_index, catalog) else {
+                return false;
+            };
+            let radius = shape.form.bounding_radius();
+            if !radius.is_finite()
+                || radius < 0.0
+                || placement.x - radius < 0.0
+                || placement.x + radius > field_width
+                || placement.y - radius < 0.0
+                || placement.y + radius > field_height
+            {
+                return false;
+            }
+            candidate_parts.push(crate::material_geometry::PlacedMaterialPart {
+                part_index,
+                form: shape.form,
+                placement,
+            });
+        }
+        if candidate_parts.is_empty() {
+            return false;
+        }
+
+        // Check against the whole field. Movement is infrequent at this stage,
+        // and this avoids an incomplete neighborhood query for large composites.
+        for (cell_index, cell) in self.cells.iter().enumerate() {
+            for (material_index, other) in cell.physical_materials.iter().enumerate() {
+                if cell_index == source_cell && material_index == source_index {
+                    continue;
+                }
+                if !other.is_realized() {
+                    return false;
+                }
+                let Some(other_placements) = other.placements.as_ref() else {
+                    return false;
+                };
+                for (part_index, placement) in other_placements.iter().copied().enumerate() {
+                    let Some(shape) = other.realized_shape_for_part(part_index, catalog) else {
+                        return false;
+                    };
+                    let other_part = crate::material_geometry::PlacedMaterialPart {
+                        part_index,
+                        form: shape.form,
+                        placement,
+                    };
+                    if candidate_parts.iter().any(|candidate_part| {
+                        crate::material_geometry::placed_forms_penetrate(
+                            candidate_part,
+                            &other_part,
+                            crate::material_geometry::GEOMETRY_EPSILON,
+                        )
+                    }) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        let Some(destination) = candidate
+            .placements
+            .as_ref()
+            .and_then(|items| items.first())
+            .and_then(|anchor| self.index_for_position(anchor.x, anchor.y))
+        else {
+            return false;
+        };
+        if destination >= self.cells.len() {
+            return false;
+        }
+
+        // All checks are complete. Keep the same object identity and move the
+        // complete realized object atomically between its anchor cells.
+        self.cells[source_cell]
+            .physical_materials
+            .remove(source_index);
+        self.cells[destination].physical_materials.push(candidate);
+        self.mark_cell_changed(source_cell);
+        if destination != source_cell {
+            self.mark_cell_changed(destination);
+        }
+        true
+    }
+
     /// Atomically replace an environmental physical composite with its
     /// already-validated split pieces. The source is compared against the
     /// expected snapshot before any mutation, and every destination is checked
