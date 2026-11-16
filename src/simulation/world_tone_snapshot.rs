@@ -1654,7 +1654,8 @@ fn environmental_motion_batch_is_collision_free(
         return false;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len())
+    {
         return false;
     }
     let mut starts = Vec::with_capacity(before_bodies.len());
@@ -1755,7 +1756,8 @@ fn environmental_motion_pair_potential_delta(
         return None;
     }
     let moved = moved_indices.iter().copied().collect::<HashSet<_>>();
-    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len()) {
+    if moved.len() != moved_indices.len() || moved.iter().any(|index| *index >= before_bodies.len())
+    {
         return None;
     }
     let mut totals = Vec::<crate::harmonics::ResonancePairPotentialComponent>::new();
@@ -3804,12 +3806,10 @@ mod tests {
                 &catalog,
             )
             .expect("environmental material should be realized");
-            assert!(simulation.environment.field.deposit_physical(
-                x,
-                y,
-                physical,
-                &catalog,
-            ));
+            assert!(simulation
+                .environment
+                .field
+                .deposit_physical(x, y, physical, &catalog,));
         }
         simulation
             .environment
