@@ -968,113 +968,6 @@ impl ResonanceForceAccumulator {
         Some(staged)
     }
 
-    /// Validate, energy-settle, and atomically commit one complete Newtonian
-    /// movement batch. Force production is deliberately separate: this
-    /// transaction consumes the tick-local accumulated gradients and never
-    /// substitutes ambient-flow velocity for inertial motion.
-    pub(crate) fn commit_environmental_motion_transaction(
-        &self,
-        simulation: &mut Simulation,
-        accumulator: &ResonanceForceAccumulator,
-        delta_time: f64,
-    ) -> bool {
-        if self.tick != simulation.tick || !delta_time.is_finite() || delta_time <= 0.0 {
-            return false;
-        }
-        let catalog = &simulation.environment.catalog;
-        let vertical_period = Some(simulation.environment.height);
-        let Some(motions) = accumulator.stage_motion(self, delta_time, catalog, vertical_period)
-        else {
-            return false;
-        };
-        if motions.is_empty() {
-            return true;
-        }
-
-        // Reconstruct the complete post-step environmental world before any
-        // mutation. Stable snapshot indices remain the authority throughout.
-        let mut after_bodies = self.bodies.clone();
-        let mut moved_indices = Vec::with_capacity(motions.len());
-        let mut kinetic_energy_delta = 0.0;
-        for motion in &motions {
-            let Some(body) = after_bodies.get_mut(motion.body_index) else {
-                return false;
-            };
-            if body.environmental_identity != motion.environmental_identity
-                || *body != motion.before
-            {
-                return false;
-            }
-            *body = motion.after.clone();
-            moved_indices.push(motion.body_index);
-            kinetic_energy_delta += motion.kinetic_energy_after - motion.kinetic_energy_before;
-        }
-        if !kinetic_energy_delta.is_finite()
-            || !environmental_motion_batch_is_collision_free(
-                &self.bodies,
-                &after_bodies,
-                &moved_indices,
-                catalog,
-                simulation.environment.width,
-                simulation.environment.height,
-            )
-        {
-            return false;
-        }
-
-        // A moved body can also change the visibility of pairs for which it
-        // is a third-party occluder. Re-evaluate the complete pair inventory
-        // against both world states so no occlusion-mediated energy change is
-        // omitted. The scalable potential hierarchy must replace this oracle
-        // before the transaction is enabled in the standard large-world tick.
-        let Some(pair_components) = environmental_motion_pair_potential_delta(
-            &self.bodies,
-            &after_bodies,
-            &moved_indices,
-            catalog,
-            self.tick,
-        ) else {
-            return false;
-        };
-
-        // Stage all accounting destinations independently. The live field is
-        // still untouched if energy funding or conservation validation fails.
-        let mut staged_ledger = simulation.energy_ledger;
-        let mut staged_usable_energy = simulation.environment.chemistry_usable_energy;
-        let mut staged_resonance = simulation.environment.resonant_energy.clone();
-        if !crate::energy_ledger::settle_environmental_pair_potential_and_kinetic_change(
-            &mut staged_ledger,
-            &mut staged_usable_energy,
-            &mut staged_resonance,
-            kinetic_energy_delta,
-            &pair_components,
-        ) {
-            return false;
-        }
-
-        let mut field_motions = Vec::with_capacity(motions.len());
-        for motion in motions {
-            let Some((cell_index, material_index)) = self.field_locator(motion.body_index) else {
-                return false;
-            };
-            field_motions.push((cell_index, material_index, motion.before, motion.after));
-        }
-        if !simulation
-            .environment
-            .field
-            .commit_environmental_motion_batch(field_motions, catalog)
-        {
-            return false;
-        }
-
-        // No fallible operation follows the field commit: the matching energy
-        // state is installed as part of the same logical transaction.
-        simulation.energy_ledger = staged_ledger;
-        simulation.environment.chemistry_usable_energy = staged_usable_energy;
-        simulation.environment.resonant_energy = staged_resonance;
-        true
-    }
-
     pub(crate) fn into_body_forces(self) -> Vec<ResonanceWorldBodyForce> {
         self.bodies
             .into_iter()
@@ -1182,6 +1075,113 @@ impl LocalResonanceWorldSnapshot {
     /// Resolve a snapshot body to its original environmental field slot.
     pub(crate) fn field_locator(&self, body_index: usize) -> Option<(usize, usize)> {
         self.field_locators.get(body_index).copied().flatten()
+    }
+
+    /// Validate, energy-settle, and atomically commit one complete Newtonian
+    /// movement batch. Force production is deliberately separate: this
+    /// transaction consumes the tick-local accumulated gradients and never
+    /// substitutes ambient-flow velocity for inertial motion.
+    pub(crate) fn commit_environmental_motion_transaction(
+        &self,
+        simulation: &mut Simulation,
+        accumulator: &ResonanceForceAccumulator,
+        delta_time: f64,
+    ) -> bool {
+        if self.tick != simulation.tick || !delta_time.is_finite() || delta_time <= 0.0 {
+            return false;
+        }
+        let catalog = &simulation.environment.catalog;
+        let vertical_period = Some(simulation.environment.height);
+        let Some(motions) = accumulator.stage_motion(self, delta_time, catalog, vertical_period)
+        else {
+            return false;
+        };
+        if motions.is_empty() {
+            return true;
+        }
+
+        // Reconstruct the complete post-step environmental world before any
+        // mutation. Stable snapshot indices remain the authority throughout.
+        let mut after_bodies = self.bodies.clone();
+        let mut moved_indices = Vec::with_capacity(motions.len());
+        let mut kinetic_energy_delta = 0.0;
+        for motion in &motions {
+            let Some(body) = after_bodies.get_mut(motion.body_index) else {
+                return false;
+            };
+            if body.environmental_identity != motion.environmental_identity
+                || *body != motion.before
+            {
+                return false;
+            }
+            *body = motion.after.clone();
+            moved_indices.push(motion.body_index);
+            kinetic_energy_delta += motion.kinetic_energy_after - motion.kinetic_energy_before;
+        }
+        if !kinetic_energy_delta.is_finite()
+            || !environmental_motion_batch_is_collision_free(
+                &self.bodies,
+                &after_bodies,
+                &moved_indices,
+                catalog,
+                simulation.environment.width,
+                simulation.environment.height,
+            )
+        {
+            return false;
+        }
+
+        // A moved body can also change the visibility of pairs for which it
+        // is a third-party occluder. Re-evaluate the complete pair inventory
+        // against both world states so no occlusion-mediated energy change is
+        // omitted. The scalable potential hierarchy must replace this oracle
+        // before the transaction is enabled in the standard large-world tick.
+        let Some(pair_components) = environmental_motion_pair_potential_delta(
+            &self.bodies,
+            &after_bodies,
+            &moved_indices,
+            catalog,
+            self.tick,
+        ) else {
+            return false;
+        };
+
+        // Stage all accounting destinations independently. The live field is
+        // still untouched if energy funding or conservation validation fails.
+        let mut staged_ledger = simulation.energy_ledger;
+        let mut staged_usable_energy = simulation.environment.chemistry_usable_energy;
+        let mut staged_resonance = simulation.environment.resonant_energy.clone();
+        if !crate::energy_ledger::settle_environmental_pair_potential_and_kinetic_change(
+            &mut staged_ledger,
+            &mut staged_usable_energy,
+            &mut staged_resonance,
+            kinetic_energy_delta,
+            &pair_components,
+        ) {
+            return false;
+        }
+
+        let mut field_motions = Vec::with_capacity(motions.len());
+        for motion in motions {
+            let Some((cell_index, material_index)) = self.field_locator(motion.body_index) else {
+                return false;
+            };
+            field_motions.push((cell_index, material_index, motion.before, motion.after));
+        }
+        if !simulation
+            .environment
+            .field
+            .commit_environmental_motion_batch(field_motions, catalog)
+        {
+            return false;
+        }
+
+        // No fallible operation follows the field commit: the matching energy
+        // state is installed as part of the same logical transaction.
+        simulation.energy_ledger = staged_ledger;
+        simulation.environment.chemistry_usable_energy = staged_usable_energy;
+        simulation.environment.resonant_energy = staged_resonance;
+        true
     }
 
     /// Derive the complete force contribution for one environmental material
