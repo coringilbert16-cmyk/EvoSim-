@@ -114,6 +114,7 @@ impl MutualClusterErrorBounds {
 /// hierarchy's independent per-body potential/force/torque certificate.
 /// participating_body_indices must include source, receiver, and every
 /// occluder whose generalized coordinate received a derivative.
+#[allow(dead_code)] // Activated when the complete world pair inventory feeds this evaluator.
 pub(crate) fn mutual_boundary_cluster_certificate(
     visibility_certified: bool,
     participating_body_indices: &[usize],
