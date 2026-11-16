@@ -845,11 +845,8 @@ impl ResonanceForceAccumulator {
         }) {
             return false;
         }
-        let (existing_identity, current, current_error) = self
-            .bodies
-            .get(&body_index)
-            .copied()
-            .unwrap_or((
+        let (existing_identity, current, current_error) =
+            self.bodies.get(&body_index).copied().unwrap_or((
                 identity,
                 crate::harmonics::ResonanceBodyForce::default(),
                 Some(crate::harmonics::ResonanceBodyForce::default()),
