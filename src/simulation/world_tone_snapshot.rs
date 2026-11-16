@@ -3731,4 +3731,143 @@ mod tests {
             "shared-potential forces and torques must conserve total angular momentum"
         );
     }
+
+
+    #[test]
+    fn environmental_swept_collision_validation_rejects_tunnelling() {
+        let mut simulation = Simulation::new(401, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (x, y) in [(5.0, 10.0), (15.0, 10.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base("Carbon", 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should be physically realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &catalog,
+            ));
+        }
+        let before = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter().cloned())
+            .collect::<Vec<_>>();
+        assert_eq!(before.len(), 2);
+        let mut after = before.clone();
+        after[0].placements.as_mut().unwrap()[0].x = 25.0;
+        assert!(
+            !environmental_motion_batch_is_collision_free(
+                &before,
+                &after,
+                &[0],
+                &catalog,
+                simulation.environment.width,
+                simulation.environment.height,
+            ),
+            "the swept body envelope must reject a path through a stationary body"
+        );
+        after[0].placements.as_mut().unwrap()[0].x = 2.0;
+        assert!(
+            environmental_motion_batch_is_collision_free(
+                &before,
+                &after,
+                &[0],
+                &catalog,
+                simulation.environment.width,
+                simulation.environment.height,
+            ),
+            "a clear path moving away from the other body should remain admissible"
+        );
+    }
+
+    #[test]
+    fn environmental_newtonian_motion_commits_field_and_energy_together() {
+        let mut simulation = Simulation::new(409, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let catalog = simulation.environment.catalog.clone();
+        for (name, x, y) in [("Carbon", 10.0, 10.0), ("Hydrogen", 30.0, 10.0)] {
+            let physical = PhysicalMaterial::realized(
+                Material::free_base(name, 1.0),
+                vec![Placement {
+                    x,
+                    y,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("environmental material should be realized");
+            assert!(simulation.environment.field.deposit_physical(
+                x,
+                y,
+                physical,
+                &catalog,
+            ));
+        }
+        simulation
+            .environment
+            .field
+            .assign_missing_material_identities();
+        simulation.environment.chemistry_usable_energy = 1.0e6;
+        simulation.energy_ledger.total_usable_energy_held = 1.0e6;
+
+        let snapshot = LocalResonanceWorldSnapshot::from_simulation(&simulation)
+            .expect("environmental world snapshot should be valid");
+        let body_index = 0;
+        let identity = snapshot.bodies[body_index].environmental_identity;
+        let before_position = snapshot.bodies[body_index]
+            .placements
+            .as_ref()
+            .unwrap()[0]
+            .x;
+        let mut accumulator = ResonanceForceAccumulator::default();
+        assert!(accumulator.add(ResonanceWorldBodyForce {
+            body_index,
+            environmental_identity: identity,
+            force: crate::harmonics::ResonanceBodyForce {
+                x: 0.01,
+                y: 0.0,
+                torque: 0.0,
+            },
+            absolute_error: Some(crate::harmonics::ResonanceBodyForce::default()),
+        }));
+
+        assert!(snapshot.commit_environmental_motion_transaction(
+            &mut simulation,
+            &accumulator,
+            0.01,
+        ));
+        let after_position = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .find(|body| body.environmental_identity == identity)
+            .expect("moved material should remain in the field")
+            .placements
+            .as_ref()
+            .unwrap()[0]
+            .x;
+        assert!(
+            after_position > before_position,
+            "the force proposal should advance the material along +x"
+        );
+        assert!(
+            simulation.energy_ledger.total_pair_interaction_potential_held.is_finite()
+                && simulation.environment.chemistry_usable_energy.is_finite()
+                && simulation.environment.resonant_energy.total_energy().is_some(),
+            "field movement and its matching energy settlement must both commit"
+        );
+    }
 }
