@@ -324,7 +324,7 @@ pub(crate) struct VisibilityEventPoseCellBound {
 }
 
 pub(crate) fn visibility_part(
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_index: usize,
     unit_index: usize,
 ) -> Option<&crate::organism_geometry::PlacedForm> {
@@ -396,7 +396,7 @@ pub(crate) fn visibility_world_point(
 #[allow(dead_code)]
 pub(crate) fn bound_straight_boundary_intersection_event_over_pose_cell(
     event: &VisibilityCutEvent,
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_motion: &[VisibilityBodyMotionBound],
 ) -> Option<VisibilityEventPoseCellBound> {
     let (
@@ -766,7 +766,7 @@ fn merge_visibility_cuts(mut cuts: Vec<VisibilityCutRecord>) -> Vec<VisibilityCu
 /// of the uniquely identified placed constituent. Ambiguous unit identities
 /// fail closed instead of selecting an arbitrary matching part.
 fn localize_boundary_point(
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     body_index: usize,
     unit_index: usize,
     point: (f64, f64),
@@ -1617,7 +1617,7 @@ mod tests {
 
     #[test]
     fn straight_intersection_event_derives_conservative_pose_cell_bounds() {
-        let target = crate::organism_geometry::OrganismBodyGeometry {
+        let target = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 0,
                 form: crate::resources::Form::Rectangle {
@@ -1650,7 +1650,7 @@ mod tests {
             .expect("rectangle has a left edge");
         let target_start_local = target_vertices[target_edge_index];
         let target_end_local = target_vertices[(target_edge_index + 1) % target_vertices.len()];
-        let blocker = crate::organism_geometry::OrganismBodyGeometry {
+        let blocker = crate::physical_body_geometry::PhysicalBodyGeometry {
             parts: vec![crate::physical_body_geometry::PlacedForm {
                 unit_index: 7,
                 form: crate::resources::Form::Line { length: 2.0 },
@@ -2326,7 +2326,7 @@ fn angle_interval_for_bounds(
 
 fn reference_angle_for_bodies(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
 ) -> Option<f64> {
     let Some(body) = bodies.first() else {
         return Some(0.0);
@@ -2349,7 +2349,7 @@ fn reference_angle_for_bodies(
 
 fn body_angular_intervals(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     reference_angle: f64,
 ) -> Option<Vec<(f64, f64)>> {
     bodies
@@ -2366,7 +2366,7 @@ fn body_angular_intervals(
 
 fn body_minimum_distances(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
 ) -> Option<Vec<f64>> {
     bodies
         .iter()
@@ -2492,7 +2492,7 @@ impl VisibilityPoseCellCandidateInventory {
     fn validate_pose(
         &self,
         source: (f64, f64),
-        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
         target_body_indices: &[usize],
     ) -> Option<()> {
         if bodies.len() != self.body_motion.len()
@@ -2611,7 +2611,7 @@ impl VisibilityPoseCellCandidateInventory {
     pub(crate) fn certifies_target_signature(
         &self,
         source: (f64, f64),
-        bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+        bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
         target_body_indices: &[usize],
         target_body_index: usize,
         signature: &VisibilityCutSignature,
@@ -2635,7 +2635,7 @@ impl VisibilityPoseCellCandidateInventory {
 }
 
 fn maximum_geometry_radius_about_pivot(
-    body: &crate::organism_geometry::OrganismBodyGeometry,
+    body: &crate::physical_body_geometry::PhysicalBodyGeometry,
     pivot: (f64, f64),
 ) -> Option<f64> {
     if !pivot.0.is_finite() || !pivot.1.is_finite() {
@@ -2664,7 +2664,7 @@ fn maximum_geometry_radius_about_pivot(
 /// and curved boundary on that target shares the same inventory.
 pub(crate) fn build_visibility_pose_cell_candidate_inventory(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     source_translation_bound: f64,
     body_motion: &[VisibilityBodyMotionBound],
@@ -2962,7 +2962,7 @@ fn index_critical_points_by_body(
 
 pub(crate) fn visible_polygonal_intervals(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
     let targets: Vec<_> = (0..bodies.len()).collect();
     visible_polygonal_intervals_for_targets(source, bodies, &targets)
@@ -2973,7 +2973,7 @@ pub(crate) fn visible_polygonal_intervals(
 /// of environmental particles when only organism energy holders receive input.
 fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     motion_envelope: Option<&VisibilityPoseCellMotionEnvelope<'_>>,
     candidate_inventory: Option<&VisibilityPoseCellCandidateInventory>,
@@ -3680,7 +3680,7 @@ fn visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
 /// Exact current-pose visibility with stable event provenance.
 pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     visible_polygonal_intervals_for_targets_with_cut_provenance_and_motion(
@@ -3698,7 +3698,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_cut_provenance(
 /// fall back/subdivide on any change.
 pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     source_translation_bound: f64,
     body_motion: &[VisibilityBodyMotionBound],
@@ -3729,7 +3729,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_provenance(
 /// motion envelope and preserves body/unit identity.
 pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     source_translation_bound: f64,
     body_motion: &[VisibilityBodyMotionBound],
@@ -3751,7 +3751,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets_with_pose_cell_inventory(
 /// Preserve the established interval-only API for existing geometry consumers.
 pub(crate) fn visible_polygonal_intervals_for_targets(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
     Some(
@@ -3772,7 +3772,7 @@ pub(crate) fn visible_polygonal_intervals_for_targets(
 #[allow(dead_code)]
 pub(crate) fn visible_polygonal_intervals_for_targets_with_provenance(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryIntervalWithProvenance>> {
     visible_polygonal_intervals_for_targets_with_cut_provenance(source, bodies, target_body_indices)
@@ -4784,7 +4784,7 @@ fn add_circle_circle_intersections(
 #[allow(dead_code)]
 pub(crate) fn visible_circular_arc_intervals(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
 ) -> Option<Vec<ExposedCircularArcInterval>> {
     let targets: Vec<_> = (0..bodies.len()).collect();
     visible_circular_arc_intervals_for_targets(source, bodies, &targets)
@@ -4794,7 +4794,7 @@ pub(crate) fn visible_circular_arc_intervals(
 /// still participate in blocker intersections and occlusion classification.
 pub(crate) fn visible_circular_arc_intervals_for_targets(
     source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedCircularArcInterval>> {
     use crate::capillary_geometry::FluidBoundaryPiece;
@@ -6365,7 +6365,7 @@ mod parallel_lane_partition_tests {
 /// by a second independently credited exposure calculation.
 pub(crate) fn visible_parallel_polygonal_intervals_for_targets(
     toward_source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<Vec<ExposedBoundaryInterval>> {
     use crate::resources::Form;
@@ -6602,7 +6602,7 @@ pub(crate) struct ParallelRayInteractionPath {
 
 pub(crate) fn parallel_projected_widths_by_body_for_targets(
     toward_source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<ParallelExposureWidths> {
     Some(parallel_exposure_with_paths_for_targets(toward_source, bodies, target_body_indices)?.0)
@@ -6616,7 +6616,7 @@ const EXACT_INTERSECTION_BODY_LIMIT: usize = 256;
 
 pub(crate) fn parallel_exposure_with_paths_for_targets(
     toward_source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
     parallel_exposure_with_exact_intersections(
@@ -6629,7 +6629,7 @@ pub(crate) fn parallel_exposure_with_paths_for_targets(
 
 fn parallel_exposure_with_exact_intersections(
     toward_source: (f64, f64),
-    bodies: &[crate::organism_geometry::OrganismBodyGeometry],
+    bodies: &[crate::physical_body_geometry::PhysicalBodyGeometry],
     target_body_indices: &[usize],
     exact_intersections: bool,
 ) -> Option<(ParallelExposureWidths, Vec<ParallelRayInteractionPath>)> {
