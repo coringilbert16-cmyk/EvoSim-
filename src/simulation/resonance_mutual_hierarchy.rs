@@ -362,7 +362,7 @@ impl MutualInteractionHierarchy {
     ) -> Option<AdaptiveTraversalResult<T>>
     where
         C: FnMut(&[usize], &[usize]) -> Option<(T, MutualClusterErrorBounds)>,
-        E: FnMut(usize, usize) -> Option<()>,
+        E: FnMut(usize, usize) -> Option<T>,
     {
         self.evaluate_adaptive(
             tolerance,
@@ -395,7 +395,7 @@ impl MutualInteractionHierarchy {
     ) -> Option<()>
     where
         C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
-        E: FnMut(usize, usize) -> Option<()>,
+        E: FnMut(usize, usize) -> Option<T>,
     {
         if let NodeKind::Branch { left, right } = &node.kind {
             Self::visit_self_adaptive(left, tolerance, evaluate_cluster, evaluate_exact, result)?;
@@ -422,7 +422,7 @@ impl MutualInteractionHierarchy {
     ) -> Option<()>
     where
         C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate<T>>,
-        E: FnMut(usize, usize) -> Option<()>,
+        E: FnMut(usize, usize) -> Option<T>,
     {
         if let (NodeKind::Leaf(index_a), NodeKind::Leaf(index_b)) = (&a.kind, &b.kind) {
             let pair = ((*index_a).min(*index_b), (*index_a).max(*index_b));
