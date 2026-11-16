@@ -925,10 +925,14 @@ impl ResonanceForceAccumulator {
             {
                 return false;
             }
-            if let Some(existing) = staged.pair_potential_components.iter_mut().find(|existing| {
-                (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
-                    <= 1.0e-9
-            }) {
+            if let Some(existing) = staged
+                .pair_potential_components
+                .iter_mut()
+                .find(|existing| {
+                    (existing.frequency_cycles_per_day - component.frequency_cycles_per_day).abs()
+                        <= 1.0e-9
+                })
+            {
                 existing.energy += component.energy;
                 if !existing.energy.is_finite() {
                     return false;
@@ -938,7 +942,8 @@ impl ResonanceForceAccumulator {
             }
         }
         staged.pair_potential_components.sort_by(|left, right| {
-            left.frequency_cycles_per_day.total_cmp(&right.frequency_cycles_per_day)
+            left.frequency_cycles_per_day
+                .total_cmp(&right.frequency_cycles_per_day)
         });
         staged.pair_potential_error = if staged.pair_evaluation_count == 0 {
             evaluation.potential_error
@@ -949,7 +954,10 @@ impl ResonanceForceAccumulator {
                 .map(|(current, added)| current + added)
         };
         staged.pair_evaluation_count += 1;
-        if staged.pair_potential_error.is_some_and(|error| !error.is_finite() || error < 0.0) {
+        if staged
+            .pair_potential_error
+            .is_some_and(|error| !error.is_finite() || error < 0.0)
+        {
             return false;
         }
         *self = staged;
@@ -1305,36 +1313,53 @@ impl LocalResonanceWorldSnapshot {
                     return None;
                 }
                 (
-                    evaluation.forces.iter().map(|entry| entry.force).collect::<Vec<_>>(),
-                    evaluation.forces.iter().map(|entry| Some(entry.absolute_error)).collect::<Vec<_>>(),
+                    evaluation
+                        .forces
+                        .iter()
+                        .map(|entry| entry.force)
+                        .collect::<Vec<_>>(),
+                    evaluation
+                        .forces
+                        .iter()
+                        .map(|entry| Some(entry.absolute_error))
+                        .collect::<Vec<_>>(),
                     evaluation.potential_components,
                     Some(evaluation.potential_error),
                 )
             } else {
-            // Curved or unresolved visibility retains the exact finite-difference
-            // reference path. Its derivative error is explicitly uncertified.
-            let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
-                &self.bodies[index_a],
-                &self.bodies[index_b],
-                &occluders,
-                &self.emitters,
-                index_a,
-                index_b,
-                catalog,
-                self.tick,
-            )?;
-            let potential_components =
-                crate::harmonics::resonance_pair_potential_components_with_prepared_emitters(
+                // Curved or unresolved visibility retains the exact finite-difference
+                // reference path. Its derivative error is explicitly uncertified.
+                let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
                     &self.bodies[index_a],
                     &self.bodies[index_b],
                     &occluders,
+                    &self.emitters,
+                    index_a,
+                    index_b,
                     catalog,
                     self.tick,
-                    self.emitters.iter().find(|emitter| emitter.source_index == index_a),
-                    self.emitters.iter().find(|emitter| emitter.source_index == index_b),
                 )?;
-            (forces, vec![None; occluder_indices.len() + 2], potential_components, None)
-        };
+                let potential_components =
+                    crate::harmonics::resonance_pair_potential_components_with_prepared_emitters(
+                        &self.bodies[index_a],
+                        &self.bodies[index_b],
+                        &occluders,
+                        catalog,
+                        self.tick,
+                        self.emitters
+                            .iter()
+                            .find(|emitter| emitter.source_index == index_a),
+                        self.emitters
+                            .iter()
+                            .find(|emitter| emitter.source_index == index_b),
+                    )?;
+                (
+                    forces,
+                    vec![None; occluder_indices.len() + 2],
+                    potential_components,
+                    None,
+                )
+            };
         if forces.len() != occluder_indices.len() + 2 || errors.len() != forces.len() {
             return None;
         }
