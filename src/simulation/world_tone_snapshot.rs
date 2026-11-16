@@ -789,6 +789,9 @@ pub(crate) struct ResonanceWorldBodyForce {
     pub(crate) body_index: usize,
     pub(crate) environmental_identity: u64,
     pub(crate) force: crate::harmonics::ResonanceBodyForce,
+    /// Independent absolute errors for x force, y force, and COM torque.
+    /// None denotes an exact-reference fallback without a certified derivative bound.
+    pub(crate) absolute_error: Option<crate::harmonics::ResonanceBodyForce>,
 }
 
 /// A validated, immutable proposal for advancing one world body. The caller
@@ -810,7 +813,14 @@ pub(crate) struct ResonanceWorldBodyMotion {
 #[derive(Clone, Debug, Default)]
 #[allow(dead_code)] // Consumed by the forthcoming runtime force-integration stage.
 pub(crate) struct ResonanceForceAccumulator {
-    bodies: std::collections::BTreeMap<usize, (u64, crate::harmonics::ResonanceBodyForce)>,
+    bodies: std::collections::BTreeMap<
+        usize,
+        (
+            u64,
+            crate::harmonics::ResonanceBodyForce,
+            Option<crate::harmonics::ResonanceBodyForce>,
+        ),
+    >,
 }
 
 #[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
@@ -821,14 +831,29 @@ impl ResonanceForceAccumulator {
         let body_index = contribution.body_index;
         let identity = contribution.environmental_identity;
         let force = contribution.force;
+        let absolute_error = contribution.absolute_error;
         if !force.x.is_finite() || !force.y.is_finite() || !force.torque.is_finite() {
             return false;
         }
-        let (existing_identity, current) = self
+        if absolute_error.is_some_and(|error| {
+            !error.x.is_finite()
+                || !error.y.is_finite()
+                || !error.torque.is_finite()
+                || error.x < 0.0
+                || error.y < 0.0
+                || error.torque < 0.0
+        }) {
+            return false;
+        }
+        let (existing_identity, current, current_error) = self
             .bodies
             .get(&body_index)
             .copied()
-            .unwrap_or((identity, crate::harmonics::ResonanceBodyForce::default()));
+            .unwrap_or((
+                identity,
+                crate::harmonics::ResonanceBodyForce::default(),
+                Some(crate::harmonics::ResonanceBodyForce::default()),
+            ));
         if existing_identity != identity {
             return false;
         }
@@ -840,7 +865,21 @@ impl ResonanceForceAccumulator {
         if !next.x.is_finite() || !next.y.is_finite() || !next.torque.is_finite() {
             return false;
         }
-        self.bodies.insert(body_index, (identity, next));
+        let next_error = current_error.zip(absolute_error).map(|(current, added)| {
+            crate::harmonics::ResonanceBodyForce {
+                x: current.x + added.x,
+                y: current.y + added.y,
+                torque: current.torque + added.torque,
+            }
+        });
+        if next_error.is_some_and(|error| {
+            !error.x.is_finite()
+                || !error.y.is_finite()
+                || !error.torque.is_finite()
+        }) {
+            return false;
+        }
+        self.bodies.insert(body_index, (identity, next, next_error));
         true
     }
 
@@ -883,7 +922,7 @@ impl ResonanceForceAccumulator {
             return None;
         }
         let mut staged = Vec::with_capacity(self.bodies.len());
-        for (body_index, (identity, force)) in &self.bodies {
+        for (body_index, (identity, force, _absolute_error)) in &self.bodies {
             let before = snapshot.bodies.get(*body_index)?;
             if before.environmental_identity != *identity {
                 return None;
@@ -938,10 +977,13 @@ impl ResonanceForceAccumulator {
         self.bodies
             .into_iter()
             .map(
-                |(body_index, (environmental_identity, force))| ResonanceWorldBodyForce {
-                    body_index,
-                    environmental_identity,
-                    force,
+                |(body_index, (environmental_identity, force, absolute_error))| {
+                    ResonanceWorldBodyForce {
+                        body_index,
+                        environmental_identity,
+                        force,
+                        absolute_error,
+                    }
                 },
             )
             .collect()
