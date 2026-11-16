@@ -1977,16 +1977,20 @@ fn translated_physical_material(
 /// The single response scale maps accumulated resonance response to a
 /// bounded per-update displacement: the displacement magnitude approaches,
 /// but never reaches, one world unit for arbitrarily large input.
+#[allow(dead_code)] // Consumed by the environmental movement integration in PR 3.
 const RESONANCE_MOVEMENT_RESPONSE_SCALE: f64 = 0.1;
+
+type ResonancePairMovementContribution = (usize, usize, ((f64, f64), (f64, f64)));
 
 /// Accumulate already-computed unordered-pair contributions and convert each
 /// material's net response into a bounded direct positional displacement.
 ///
 /// Pair indices must be supplied once in ascending order (a < b). This keeps
 /// pair discovery separate from accumulation and prevents double-counting.
+#[allow(dead_code)] // Consumed by the environmental movement integration in PR 3.
 pub(crate) fn accumulate_resonance_pair_displacements(
     material_count: usize,
-    contributions: &[(usize, usize, ((f64, f64), (f64, f64)))],
+    contributions: &[ResonancePairMovementContribution],
 ) -> Option<Vec<(f64, f64)>> {
     let mut accumulated = vec![(0.0, 0.0); material_count];
     let mut seen_pairs = std::collections::HashSet::with_capacity(contributions.len());
