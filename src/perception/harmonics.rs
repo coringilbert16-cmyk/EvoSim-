@@ -3777,7 +3777,6 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     coordinates: mutual_coordinates,
                     visibility_certified: true,
                 });
-
             }
 
             let tolerance = 1.0e-7 * absolute_weight.max(1.0);
