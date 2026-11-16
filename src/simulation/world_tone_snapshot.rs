@@ -1425,7 +1425,11 @@ impl LocalResonanceWorldSnapshot {
                 force_y: 0.0,
                 torque: 0.0,
             },
-            |_, _| None,
+            |_, _| -> Option<
+                crate::resonance_mutual_hierarchy::MutualClusterCertificate<()>,
+            > {
+                None
+            },
             |_, _| Some(()),
         )?;
         let pairs = traversal.exact_pairs;
