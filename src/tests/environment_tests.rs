@@ -786,7 +786,6 @@ fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells
     );
 }
 
-
 #[test]
 fn environmental_material_translation_preserves_complete_object_and_identity() {
     let catalog = crate::resources::default_catalog();
@@ -855,4 +854,3 @@ fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atom
     assert!(!field.move_physical_material_by_identity(identity, -20.0, 0.0, &catalog));
     assert_eq!(field.cells, before);
 }
-
