@@ -926,7 +926,6 @@ mod tests {
             .is_none());
     }
 
-
     #[test]
     fn adaptive_traversal_retains_exact_leaf_evaluations() {
         let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
