@@ -139,9 +139,12 @@ pub(crate) fn mutual_boundary_cluster_certificate(
     let mut bodies = Vec::with_capacity(participating_body_indices.len());
     for (body_offset, body_index) in participating_body_indices.iter().copied().enumerate() {
         let coordinate_offset = body_offset.checked_mul(3)?;
-        let force_x = evaluation.error.coordinates[coordinate_offset];
-        let force_y = evaluation.error.coordinates[coordinate_offset + 1];
-        let torque = evaluation.error.coordinates[coordinate_offset + 2];
+        let force_x = evaluation.error.coordinates[coordinate_offset]
+            .max(evaluation.coordinates[coordinate_offset].absolute_error);
+        let force_y = evaluation.error.coordinates[coordinate_offset + 1]
+            .max(evaluation.coordinates[coordinate_offset + 1].absolute_error);
+        let torque = evaluation.error.coordinates[coordinate_offset + 2]
+            .max(evaluation.coordinates[coordinate_offset + 2].absolute_error);
         if ![force_x, force_y, torque]
             .iter()
             .all(|error| error.is_finite() && *error >= 0.0)
