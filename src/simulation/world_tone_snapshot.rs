@@ -3863,9 +3863,9 @@ mod tests {
                     inventory.coordinates.clone(),
                 )
                 .expect("retained mutual inventory should form a valid two-distance expansion");
-            let evaluation = expansion
-                .evaluate()
-                .expect("mutual expansion should evaluate potential and every generalized coordinate");
+            let evaluation = expansion.evaluate().expect(
+                "mutual expansion should evaluate potential and every generalized coordinate",
+            );
             mutual_potential += 0.5 * evaluation.potential;
             mutual_potential_error += 0.5 * evaluation.error.potential;
             assert_eq!(evaluation.coordinates.len(), inventory.body_slots.len() * 3);
