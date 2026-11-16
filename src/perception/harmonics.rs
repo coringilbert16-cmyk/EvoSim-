@@ -1388,7 +1388,12 @@ fn material_aura_receptions_with_occluders_prepared(
     prepared_emitter: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<MaterialAuraReception>> {
     material_aura_receptions_with_occluders_and_geometry_prepared(
-        source, receiver, occluders, catalog, tick, prepared_emitter,
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_emitter,
     )
     .map(|(receptions, _, _)| receptions)
 }
@@ -1400,7 +1405,11 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
-) -> Option<(Vec<MaterialAuraReception>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>, Vec<Option<usize>>)> {
+ ) -> Option<(
+    Vec<MaterialAuraReception>,
+    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
+    Vec<Option<usize>>,
+)> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -3004,7 +3013,13 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<Vec<ResonanceBoundaryInteractionSample>> {
     directional_resonance_boundary_interaction_frame_with_prepared_emitters(
-        source, receiver, occluders, catalog, tick, prepared_source, prepared_receiver,
+        source,
+        receiver,
+        occluders,
+        catalog,
+        tick,
+        prepared_source,
+        prepared_receiver,
     )
     .map(|(samples, _, _)| samples)
 }
@@ -3017,7 +3032,11 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     tick: u64,
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
-) -> Option<(Vec<ResonanceBoundaryInteractionSample>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>, Vec<Option<usize>>)> {
+ ) -> Option<(
+    Vec<ResonanceBoundaryInteractionSample>,
+    Vec<crate::physical_body_geometry::PhysicalBodyGeometry>,
+    Vec<Option<usize>>,
+)> {
     let (receptions, receiver_bodies, receiver_body_occluder_indices) =
         material_aura_receptions_with_occluders_and_geometry_prepared(
             source,
@@ -3123,8 +3142,7 @@ fn resonance_endpoint_indices(
             unit_index,
             ..
         } => Some((*body_index, *unit_index, 0, 0)),
-        BoundaryEndpointProvenance::RigidVisibilityIntersection { event, .. } => {
-            match event {
+        BoundaryEndpointProvenance::RigidVisibilityIntersection { event, .. } => match event {
                 VisibilityCutEvent::StraightBoundaryIntersection {
                     blocker_body_index,
                     blocker_unit_index,
@@ -3160,9 +3178,8 @@ fn resonance_endpoint_indices(
                 )),
                 VisibilityCutEvent::TargetVertex { .. } | VisibilityCutEvent::Unresolved { .. } => {
                     None
-                }
             }
-        }
+        },
         BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. } => None,
     }
 }
@@ -3223,14 +3240,16 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     tick: u64,
 ) -> Option<Vec<ResonanceBodyForceWithError>> {
     use super::resonance_boundary_far_field::{
-        BoundaryKernelVector, BoundaryPoseCoordinateDerivative,
-        BoundaryPotentialError, BoundarySampleMotionBound, VisibilityBodyMotionBound,
-        WeightedBoundaryKernelSample,
+        BoundaryKernelVector, BoundaryPoseCoordinateDerivative, BoundaryPotentialError,
+        BoundarySampleMotionBound, VisibilityBodyMotionBound, WeightedBoundaryKernelSample,
     };
 
-    let prepared_source = emitters.iter().find(|emitter| emitter.source_index == source_index)?;
-    let prepared_receiver =
-        emitters.iter().find(|emitter| emitter.source_index == receiver_index)?;
+    let prepared_source = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == source_index)?;
+    let prepared_receiver = emitters
+        .iter()
+        .find(|emitter| emitter.source_index == receiver_index)?;
     let (samples, geometries, occluder_mapping) =
         directional_resonance_boundary_interaction_frame_with_prepared_emitters(
             source,
@@ -3311,8 +3330,11 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
 
     // A signature identifies one target-edge partition. Different edges are
     // evaluated independently, then their derivatives and errors are summed.
-    let mut groups: Vec<(crate::source_exposure::VisibilityCutSignature, usize, Vec<usize>)> =
-        Vec::new();
+    let mut groups: Vec<(
+        crate::source_exposure::VisibilityCutSignature,
+        usize,
+        Vec<usize>,
+    )> = Vec::new();
     for (sample_index, sample) in samples.iter().enumerate() {
         let signature = sample.visibility_signature.as_ref()?.clone();
         let start = sample.start_provenance.as_ref()?;
@@ -3336,8 +3358,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     }
 
     for (signature, target_unit, sample_indices) in groups {
-        let endpoint_provenance =
-            signature.endpoint_provenance_for_target(0, target_unit)?;
+        let endpoint_provenance = signature.endpoint_provenance_for_target(0, target_unit)?;
         let endpoints = endpoint_provenance.iter().collect::<Vec<_>>();
         let ordered_cuts = signature.ordered_cut_parameters();
         let sampled_signatures = [signature.clone()];
@@ -3352,8 +3373,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                         .abs()
                         <= 1.0e-9
                         && !frequencies.iter().any(|frequency: &f64| {
-                            (*frequency - source_component.frequency_cycles_per_day).abs()
-                                <= 1.0e-9
+                            (*frequency - source_component.frequency_cycles_per_day).abs() <= 1.0e-9
                         })
                     {
                         frequencies.push(source_component.frequency_cycles_per_day);
@@ -3442,8 +3462,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     let mut pose_samples = Vec::with_capacity(sample_indices.len());
                     for (sample_offset, &sample_index) in sample_indices.iter().enumerate() {
                         let sample = &samples[sample_index];
-                        let MaterialAuraBoundary::Straight { start, end, normal } =
-                            sample.boundary
+                        let MaterialAuraBoundary::Straight { start, end, normal } = sample.boundary
                         else {
                             return None;
                         };
@@ -3522,23 +3541,27 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                         let close_point = |left: BoundaryKernelVector, right: (f64, f64)| {
                             (left.x - right.0).hypot(left.y - right.1)
                                 <= 1.0e-8
-                                    * left.x.abs().max(left.y.abs()).max(right.0.abs()).max(right.1.abs()).max(1.0)
+                                    * left
+                                        .x
+                                        .abs()
+                                        .max(left.y.abs())
+                                        .max(right.0.abs())
+                                        .max(right.1.abs())
+                                        .max(1.0)
                         };
                         if !close_point(start_resolved.point, start)
                             || !close_point(end_resolved.point, end)
                         {
                             return None;
                         }
-                        let source_derivative_bound = source_center_derivative.x
-                            .hypot(source_center_derivative.y);
+                        let source_derivative_bound =
+                            source_center_derivative.x.hypot(source_center_derivative.y);
                         let start_derivative_bound = start_resolved
                             .derivative
                             .x
                             .hypot(start_resolved.derivative.y);
-                        let end_derivative_bound = end_resolved
-                            .derivative
-                            .x
-                            .hypot(end_resolved.derivative.y);
+                        let end_derivative_bound =
+                            end_resolved.derivative.x.hypot(end_resolved.derivative.y);
                         let coefficient = coefficients[sample_offset];
                         let derivative =
                             super::resonance_boundary_far_field::straight_interval_sample_pose_derivative(
@@ -3569,9 +3592,11 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                     coordinates.push(BoundaryPoseCoordinateDerivative {
                         source_center_derivative,
                         receiver_center_derivative,
-                        source_center_derivative_bound: source_center_derivative.x
+                        source_center_derivative_bound: source_center_derivative
+                            .x
                             .hypot(source_center_derivative.y),
-                        receiver_center_derivative_bound: receiver_center_derivative.x
+                        receiver_center_derivative_bound: receiver_center_derivative
+                            .x
                             .hypot(receiver_center_derivative.y),
                         samples: pose_samples,
                     });
