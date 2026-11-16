@@ -199,7 +199,7 @@ mod tests {
                 .map(|index| bounds(index as f64, 0.0, 0.0, 0.0))
                 .collect::<Vec<_>>(),
             (0..24)
-                .map(|index| bounds(3.0, -2.0, 0.5, 0.5))
+                .map(|_| bounds(3.0, -2.0, 0.5, 0.5))
                 .collect::<Vec<_>>(),
             (0..31)
                 .map(|index| {
