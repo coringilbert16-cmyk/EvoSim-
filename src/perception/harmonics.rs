@@ -1383,7 +1383,7 @@ fn material_aura_receptions_with_occluders_prepared(
     material_aura_receptions_with_occluders_and_geometry_prepared(
         source, receiver, occluders, catalog, tick, prepared_emitter,
     )
-    .map(|(receptions, _)| receptions)
+    .map(|(receptions, _, _)| receptions)
 }
 
 fn material_aura_receptions_with_occluders_and_geometry_prepared(
@@ -1434,8 +1434,9 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
     // occluders; the source itself is excluded because its aura originates
     // inside its own geometry.
     let mut receiver_bodies = Vec::with_capacity(1 + occluders.len());
+    let mut receiver_body_occluder_indices = vec![None];
     receiver_bodies.push(receiver_geometry);
-    for occluder in occluders {
+    for (occluder_index, occluder) in occluders.iter().enumerate() {
         if std::ptr::eq(occluder, source) || std::ptr::eq(occluder, receiver) {
             continue;
         }
@@ -1448,6 +1449,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
             &geometry,
         ) {
             receiver_bodies.push(geometry);
+            receiver_body_occluder_indices.push(Some(occluder_index));
         }
     }
 
@@ -1460,7 +1462,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
         tick,
         prepared_emitter,
     )?;
-    Some((receptions, receiver_bodies))
+    Some((receptions, receiver_bodies, receiver_body_occluder_indices))
 }
 
 /// Conservative AABB broad phase for possible occluders between a point
@@ -2997,7 +2999,7 @@ pub(crate) fn directional_resonance_boundary_interaction_samples_with_prepared_e
     directional_resonance_boundary_interaction_frame_with_prepared_emitters(
         source, receiver, occluders, catalog, tick, prepared_source, prepared_receiver,
     )
-    .map(|(samples, _)| samples)
+    .map(|(samples, _, _)| samples)
 }
 
 fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
@@ -3009,7 +3011,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
 ) -> Option<(Vec<ResonanceBoundaryInteractionSample>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>)> {
-    let (receptions, receiver_bodies) =
+    let (receptions, receiver_bodies, receiver_body_occluder_indices) =
         material_aura_receptions_with_occluders_and_geometry_prepared(
             source,
             receiver,
@@ -3019,7 +3021,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
             prepared_source,
         )?;
     if receptions.is_empty() {
-        return Some((Vec::new(), receiver_bodies));
+        return Some((Vec::new(), receiver_bodies, receiver_body_occluder_indices));
     }
 
     let (receiver_x, receiver_y, _) = environmental_material_geometry(receiver)?;
@@ -3101,7 +3103,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
             receiver_spectrum: local_field,
         });
     }
-    Some((samples, receiver_bodies))
+    Some((samples, receiver_bodies, receiver_body_occluder_indices))
 }
 
 /// One symmetric resonance-derived pair potential for an isolated pair,
