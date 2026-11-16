@@ -5240,6 +5240,192 @@ mod tests {
     }
 
     #[test]
+    fn mutual_product_moments_match_one_scalar_for_translation_and_torque() {
+        let samples = vec![
+            MutualBoundaryKernelSample {
+                source_center: BoundaryKernelVector { x: 0.0, y: 0.0 },
+                receiver_center: BoundaryKernelVector { x: 8.0, y: 0.3 },
+                position: BoundaryKernelVector { x: 4.0, y: 1.0 },
+                weight: 0.8,
+            },
+            MutualBoundaryKernelSample {
+                source_center: BoundaryKernelVector { x: 0.1, y: -0.05 },
+                receiver_center: BoundaryKernelVector { x: 8.1, y: 0.25 },
+                position: BoundaryKernelVector { x: 4.3, y: 1.3 },
+                weight: -0.25,
+            },
+            MutualBoundaryKernelSample {
+                source_center: BoundaryKernelVector { x: -0.05, y: 0.08 },
+                receiver_center: BoundaryKernelVector { x: 7.9, y: 0.4 },
+                position: BoundaryKernelVector { x: 3.8, y: 1.7 },
+                weight: 0.35,
+            },
+        ];
+        let make_pose = |source_derivative: BoundaryKernelVector,
+                         receiver_derivative: BoundaryKernelVector,
+                         position_derivative: BoundaryKernelVector,
+                         weight_derivative: f64| {
+            MutualBoundaryPoseSampleDerivative {
+                source_center_derivative: source_derivative,
+                receiver_center_derivative: receiver_derivative,
+                position_derivative,
+                weight_derivative,
+                source_center_derivative_bound: source_derivative.norm() + 0.1,
+                receiver_center_derivative_bound: receiver_derivative.norm() + 0.1,
+                position_derivative_bound: position_derivative.norm() + 0.1,
+                weight_derivative_bound: weight_derivative.abs() + 0.1,
+                source_center_displacement_bound: 0.001,
+                receiver_center_displacement_bound: 0.001,
+                position_displacement_bound: 0.001,
+                weight_change_bound: 0.001,
+            }
+        };
+        let source_translation = MutualBoundaryPoseCoordinateDerivative {
+            samples: samples
+                .iter()
+                .map(|_| {
+                    make_pose(
+                        BoundaryKernelVector { x: 1.0, y: 0.0 },
+                        BoundaryKernelVector::default(),
+                        BoundaryKernelVector::default(),
+                        0.0,
+                    )
+                })
+                .collect(),
+        };
+        let receiver_translation = MutualBoundaryPoseCoordinateDerivative {
+            samples: samples
+                .iter()
+                .map(|_| {
+                    make_pose(
+                        BoundaryKernelVector::default(),
+                        BoundaryKernelVector { x: 0.0, y: 1.0 },
+                        BoundaryKernelVector::default(),
+                        0.0,
+                    )
+                })
+                .collect(),
+        };
+        let receiver_torque = MutualBoundaryPoseCoordinateDerivative {
+            samples: samples
+                .iter()
+                .map(|sample| {
+                    let offset = BoundaryKernelVector {
+                        x: sample.position.x - sample.receiver_center.x,
+                        y: sample.position.y - sample.receiver_center.y,
+                    };
+                    make_pose(
+                        BoundaryKernelVector::default(),
+                        BoundaryKernelVector::default(),
+                        BoundaryKernelVector {
+                            x: -offset.y,
+                            y: offset.x,
+                        },
+                        0.02,
+                    )
+                })
+                .collect(),
+        };
+        let coordinates = vec![source_translation, receiver_translation, receiver_torque];
+        let expansion =
+            MutualBoundaryKernelExpansion::new(samples.clone(), coordinates.clone())
+                .expect("pair-specific mutual sample inventory is valid");
+        let evaluation = expansion
+            .evaluate()
+            .expect("complete two-distance product expansion is separated");
+
+        let exact_potential = |q: f64, coordinate_index: usize| {
+            samples
+                .iter()
+                .zip(&coordinates[coordinate_index].samples)
+                .map(|(sample, pose)| {
+                    let source = BoundaryKernelVector {
+                        x: sample.source_center.x + q * pose.source_center_derivative.x,
+                        y: sample.source_center.y + q * pose.source_center_derivative.y,
+                    };
+                    let receiver = BoundaryKernelVector {
+                        x: sample.receiver_center.x + q * pose.receiver_center_derivative.x,
+                        y: sample.receiver_center.y + q * pose.receiver_center_derivative.y,
+                    };
+                    let position = BoundaryKernelVector {
+                        x: sample.position.x + q * pose.position_derivative.x,
+                        y: sample.position.y + q * pose.position_derivative.y,
+                    };
+                    let source_distance = BoundaryKernelVector {
+                        x: position.x - source.x,
+                        y: position.y - source.y,
+                    }
+                    .norm();
+                    let receiver_distance = BoundaryKernelVector {
+                        x: position.x - receiver.x,
+                        y: position.y - receiver.y,
+                    }
+                    .norm();
+                    (sample.weight + q * pose.weight_derivative)
+                        / ((1.0 + source_distance) * (1.0 + receiver_distance))
+                })
+                .sum::<f64>()
+        };
+        let taylor_potential = |q: f64, coordinate_index: usize| {
+            let moved_samples = samples
+                .iter()
+                .zip(&coordinates[coordinate_index].samples)
+                .map(|(sample, pose)| MutualBoundaryKernelSample {
+                    source_center: BoundaryKernelVector {
+                        x: sample.source_center.x + q * pose.source_center_derivative.x,
+                        y: sample.source_center.y + q * pose.source_center_derivative.y,
+                    },
+                    receiver_center: BoundaryKernelVector {
+                        x: sample.receiver_center.x + q * pose.receiver_center_derivative.x,
+                        y: sample.receiver_center.y + q * pose.receiver_center_derivative.y,
+                    },
+                    position: BoundaryKernelVector {
+                        x: sample.position.x + q * pose.position_derivative.x,
+                        y: sample.position.y + q * pose.position_derivative.y,
+                    },
+                    weight: sample.weight + q * pose.weight_derivative,
+                })
+                .collect::<Vec<_>>();
+            MutualBoundaryKernelExpansion::new(moved_samples, Vec::new())
+                .expect("perturbed mutual samples remain valid")
+                .evaluate()
+                .expect("perturbed product expansion remains separated")
+                .potential
+        };
+
+        let step = 1.0e-6;
+        for coordinate_index in 0..coordinates.len() {
+            let taylor_fd = (taylor_potential(step, coordinate_index)
+                - taylor_potential(-step, coordinate_index))
+                / (2.0 * step);
+            let exact_fd = (exact_potential(step, coordinate_index)
+                - exact_potential(-step, coordinate_index))
+                / (2.0 * step);
+            let coordinate = &evaluation.coordinates[coordinate_index];
+            assert!(
+                (coordinate.derivative - taylor_fd).abs() < 1.0e-8,
+                "coordinate {coordinate_index}: Taylor derivative={} finite difference={taylor_fd}",
+                coordinate.derivative
+            );
+            assert!(
+                (coordinate.derivative - exact_fd).abs() <= coordinate.absolute_error,
+                "coordinate {coordinate_index}: exact={exact_fd} Taylor={} error={}",
+                coordinate.derivative,
+                coordinate.absolute_error
+            );
+            assert!(coordinate.absolute_bound >= coordinate.derivative.abs());
+        }
+        let exact_at_reference = exact_potential(0.0, 0);
+        assert!(
+            (evaluation.potential - exact_at_reference).abs() <= evaluation.error.potential
+        );
+        assert_eq!(
+            evaluation.error.coordinates.len(),
+            evaluation.coordinates.len()
+        );
+    }
+
+    #[test]
     fn pose_coordinate_derivative_rejects_incomplete_or_understated_envelopes() {
         let expansion = BoundaryKernelExpansion::new(
             BoundaryKernelVector { x: 0.0, y: 0.0 },
