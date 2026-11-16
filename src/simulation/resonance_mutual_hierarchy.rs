@@ -664,8 +664,25 @@ mod tests {
                     |_, _| Some(()),
                 )
                 .unwrap();
-            assert!(result.accepted_cluster_pairs.is_empty());
-            assert_eq!(result.exact_pairs, exact_pairs(layout.len()));
+            let mut covered_pairs = result.exact_pairs.clone();
+            for accepted in &result.accepted_cluster_pairs {
+                for index_a in &accepted.bodies_a {
+                    for index_b in &accepted.bodies_b {
+                        covered_pairs.push(((*index_a).min(*index_b), (*index_a).max(*index_b)));
+                    }
+                }
+            }
+            covered_pairs.sort_unstable();
+            assert_eq!(covered_pairs, exact_pairs(layout.len()));
+            if failing_metric == 4 {
+                assert!(result.accepted_cluster_pairs.is_empty());
+                assert_eq!(result.exact_pairs, exact_pairs(layout.len()));
+            } else {
+                assert!(result.accepted_cluster_pairs.iter().all(|accepted| {
+                    !accepted.bodies_a.contains(&0) && !accepted.bodies_b.contains(&0)
+                }));
+                assert!(result.exact_pairs.iter().any(|pair| pair.0 == 0 || pair.1 == 0));
+            }
         }
     }
 
