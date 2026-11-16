@@ -1121,35 +1121,70 @@ impl LocalResonanceWorldSnapshot {
             .iter()
             .map(|index| self.bodies[*index].clone())
             .collect::<Vec<_>>();
-        let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
-            &self.bodies[index_a],
-            &self.bodies[index_b],
-            &occluders,
-            &self.emitters,
-            index_a,
-            index_b,
-            catalog,
-            self.tick,
-        )?;
-        if forces.len() != occluder_indices.len() + 2 {
+        let generalized =
+            crate::harmonics::resonance_multi_body_generalized_forces_with_prepared_emitters(
+                &self.bodies[index_a],
+                &self.bodies[index_b],
+                &occluders,
+                &self.emitters,
+                index_a,
+                index_b,
+                catalog,
+                self.tick,
+            );
+        let (forces, errors) = if let Some(evaluations) = generalized {
+            if evaluations.len() != occluder_indices.len() + 2 {
+                return None;
+            }
+            (
+                evaluations.iter().map(|entry| entry.force).collect::<Vec<_>>(),
+                evaluations
+                    .iter()
+                    .map(|entry| Some(entry.absolute_error))
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            // Curved or unresolved visibility retains the exact finite-difference
+            // reference path. Its derivative error is explicitly uncertified.
+            let forces = crate::harmonics::resonance_multi_body_forces_with_prepared_emitters(
+                &self.bodies[index_a],
+                &self.bodies[index_b],
+                &occluders,
+                &self.emitters,
+                index_a,
+                index_b,
+                catalog,
+                self.tick,
+            )?;
+            (forces, vec![None; occluder_indices.len() + 2])
+        };
+        if forces.len() != occluder_indices.len() + 2
+            || errors.len() != forces.len()
+        {
             return None;
         }
 
         let mut force_by_index =
             vec![crate::harmonics::ResonanceBodyForce::default(); self.bodies.len()];
+        let mut error_by_index = vec![None; self.bodies.len()];
         force_by_index[index_a] = forces[0];
         force_by_index[index_b] = forces[1];
+        error_by_index[index_a] = errors[0];
+        error_by_index[index_b] = errors[1];
         for (offset, body_index) in occluder_indices.into_iter().enumerate() {
             force_by_index[body_index] = forces[offset + 2];
+            error_by_index[body_index] = errors[offset + 2];
         }
         Some(
             force_by_index
                 .into_iter()
+                .zip(error_by_index)
                 .enumerate()
-                .map(|(body_index, force)| ResonanceWorldBodyForce {
+                .map(|(body_index, (force, absolute_error))| ResonanceWorldBodyForce {
                     body_index,
                     environmental_identity: self.bodies[body_index].environmental_identity,
                     force,
+                    absolute_error,
                 })
                 .collect(),
         )
