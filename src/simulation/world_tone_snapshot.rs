@@ -803,6 +803,7 @@ pub(crate) struct ResonanceWorldPairForceEvaluation {
     pub(crate) forces: Vec<ResonanceWorldBodyForce>,
     pub(crate) potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// Pair-specific frequency inventories remapped to immutable world-body indices.
+    #[cfg(test)]
     pub(crate) mutual_inventories: Vec<crate::harmonics::ResonanceMutualBoundaryFrequencyInventory>,
     /// None marks the exact reference fallback, whose force derivative has no
     /// certified adaptive-kernel error estimate.
@@ -1313,19 +1314,24 @@ impl LocalResonanceWorldSnapshot {
                 catalog,
                 self.tick,
             );
-        let (forces, errors, potential_components, mutual_inventories, potential_error) =
+        #[cfg(test)]
+        let mut mutual_inventories = Vec::new();
+        let (forces, errors, potential_components, potential_error) =
             if let Some(evaluation) = generalized {
                 if evaluation.forces.len() != occluder_indices.len() + 2 {
                     return None;
                 }
-                let mut mutual_inventories = evaluation.mutual_inventories;
-                for inventory in &mut mutual_inventories {
-                    for slot in &mut inventory.body_slots {
-                        if let crate::harmonics::ResonanceMutualBoundaryBodySlot::Occluder(
-                            local_index,
-                        ) = slot
-                        {
-                            *local_index = *occluder_indices.get(*local_index)?;
+                #[cfg(test)]
+                {
+                    mutual_inventories = evaluation.mutual_inventories;
+                    for inventory in &mut mutual_inventories {
+                        for slot in &mut inventory.body_slots {
+                            if let crate::harmonics::ResonanceMutualBoundaryBodySlot::Occluder(
+                                local_index,
+                            ) = slot
+                            {
+                                *local_index = *occluder_indices.get(*local_index)?;
+                            }
                         }
                     }
                 }
@@ -1341,7 +1347,6 @@ impl LocalResonanceWorldSnapshot {
                         .map(|entry| Some(entry.absolute_error))
                         .collect::<Vec<_>>(),
                     evaluation.potential_components,
-                    mutual_inventories,
                     Some(evaluation.potential_error),
                 )
             } else {
@@ -1375,7 +1380,6 @@ impl LocalResonanceWorldSnapshot {
                     forces,
                     vec![None; occluder_indices.len() + 2],
                     potential_components,
-                    Vec::new(),
                     None,
                 )
             };
@@ -1410,6 +1414,7 @@ impl LocalResonanceWorldSnapshot {
                 )
                 .collect(),
             potential_components,
+            #[cfg(test)]
             mutual_inventories,
             potential_error,
         })
