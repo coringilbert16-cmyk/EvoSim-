@@ -3488,23 +3488,24 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                             )?;
                             target_angular = if coordinate_axis == 2 { 1.0 } else { 0.0 };
                         }
-                        let endpoint_translation = |body_index: usize,
-                                                    unit_index: usize|
-                         -> Option<(BoundaryKernelVector, f64)> {
-                            if coordinate_body > 0 && coordinate_body - 1 == body_index {
-                                Some((
-                                    material_part_translation_derivative(
-                                        geometries.get(body_index)?,
-                                        *body_centers_of_mass.get(body_index)?,
-                                        unit_index,
-                                        coordinate_axis,
-                                    )?,
-                                    if coordinate_axis == 2 { 1.0 } else { 0.0 },
-                                ))
-                            } else {
-                                Some((BoundaryKernelVector::default(), 0.0))
-                            }
-                        };
+                        let endpoint_translation =
+                            |body_index: usize,
+                             unit_index: usize|
+                             -> Option<(BoundaryKernelVector, f64)> {
+                                if coordinate_body > 0 && coordinate_body - 1 == body_index {
+                                    Some((
+                                        material_part_translation_derivative(
+                                            geometries.get(body_index)?,
+                                            *body_centers_of_mass.get(body_index)?,
+                                            unit_index,
+                                            coordinate_axis,
+                                        )?,
+                                        if coordinate_axis == 2 { 1.0 } else { 0.0 },
+                                    ))
+                                } else {
+                                    Some((BoundaryKernelVector::default(), 0.0))
+                                }
+                            };
                         let (start_blocker_translation, start_blocker_angular) =
                             endpoint_translation(blocker_body, blocker_unit)?;
                         let start_resolved =
