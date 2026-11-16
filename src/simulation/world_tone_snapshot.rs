@@ -838,6 +838,7 @@ pub(crate) struct ResonanceForceAccumulator {
     /// None means at least one interaction used the exact fallback without a
     /// certified adaptive potential-error bound.
     pair_potential_error: Option<f64>,
+    pair_evaluation_count: usize,
 }
 
 #[allow(dead_code)] // Keep the transactional accumulator independently testable before tick wiring.
@@ -939,10 +940,15 @@ impl ResonanceForceAccumulator {
         staged.pair_potential_components.sort_by(|left, right| {
             left.frequency_cycles_per_day.total_cmp(&right.frequency_cycles_per_day)
         });
-        staged.pair_potential_error = staged
-            .pair_potential_error
-            .zip(evaluation.potential_error)
-            .map(|(current, added)| current + added);
+        staged.pair_potential_error = if staged.pair_evaluation_count == 0 {
+            evaluation.potential_error
+        } else {
+            staged
+                .pair_potential_error
+                .zip(evaluation.potential_error)
+                .map(|(current, added)| current + added)
+        };
+        staged.pair_evaluation_count += 1;
         if staged.pair_potential_error.is_some_and(|error| !error.is_finite() || error < 0.0) {
             return false;
         }
