@@ -3344,6 +3344,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             potential_components,
             potential_error,
             forces: result,
+            mutual_inventories: Vec::new(),
         });
     }
     if geometries.is_empty()
@@ -3843,6 +3844,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             potential_components,
             potential_error,
             forces: mapped,
+            mutual_inventories: Vec::new(),
         },
     )
 }
@@ -3939,6 +3941,7 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         potential_components,
         potential_error,
         forces: combined,
+        mutual_inventories: Vec::new(),
     })
 }
 
