@@ -785,3 +785,74 @@ fn environmental_bond_index_tracks_only_existing_bonds_and_updates_changed_cells
         "removing a bonded material must remove its bond locator"
     );
 }
+
+
+#[test]
+fn environmental_material_translation_preserves_complete_object_and_identity() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let physical = PhysicalMaterial::realized(
+        make_raw("Carbon", 1.0),
+        vec![crate::structure::Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.25,
+        }],
+        &catalog,
+    )
+    .expect("carbon should be physically realizable");
+    let source_cell = field.index_for_position(10.0, 10.0).unwrap();
+    assert!(field.deposit_physical_at_index(source_cell, physical, &catalog));
+    field.assign_missing_material_identities();
+    let original = field.cells[source_cell].physical_materials[0].clone();
+    let identity = original.environmental_identity;
+    let total_before = field.total_material();
+
+    assert!(field.move_physical_material_by_identity(identity, 25.0, 5.0, &catalog));
+
+    let destination = field.index_for_position(35.0, 15.0).unwrap();
+    assert!(field.cells[source_cell].physical_materials.is_empty());
+    let moved = &field.cells[destination].physical_materials[0];
+    assert_eq!(moved.environmental_identity, identity);
+    assert_eq!(moved.material, original.material);
+    assert_eq!(moved.internal_connections, original.internal_connections);
+    assert_eq!(moved.realized_shapes, original.realized_shapes);
+    assert_eq!(moved.owner_relative_origin, original.owner_relative_origin);
+    let old_placement = original.placements.as_ref().unwrap()[0];
+    let new_placement = moved.placements.as_ref().unwrap()[0];
+    assert!((new_placement.x - (old_placement.x + 25.0)).abs() < 1e-12);
+    assert!((new_placement.y - (old_placement.y + 5.0)).abs() < 1e-12);
+    assert_eq!(field.total_material(), total_before);
+}
+
+#[test]
+fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atomically() {
+    let catalog = crate::resources::default_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let make_carbon = |x| {
+        PhysicalMaterial::realized(
+            make_raw("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("carbon should be physically realizable")
+    };
+    let source_cell = field.index_for_position(10.0, 10.0).unwrap();
+    let obstacle_cell = field.index_for_position(35.0, 10.0).unwrap();
+    assert!(field.deposit_physical_at_index(source_cell, make_carbon(10.0), &catalog));
+    assert!(field.deposit_physical_at_index(obstacle_cell, make_carbon(35.0), &catalog));
+    field.assign_missing_material_identities();
+    let source = field.cells[source_cell].physical_materials[0].clone();
+    let identity = source.environmental_identity;
+    let before = field.cells.clone();
+
+    assert!(!field.move_physical_material_by_identity(identity, 25.0, 0.0, &catalog));
+    assert_eq!(field.cells, before);
+    assert!(!field.move_physical_material_by_identity(identity, -20.0, 0.0, &catalog));
+    assert_eq!(field.cells, before);
+}
+
