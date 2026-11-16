@@ -1912,6 +1912,47 @@ pub(crate) fn resonance_pair_potential_with_occluders(
     potential.is_finite().then_some(potential)
 }
 
+/// Calculate one symmetric, radial push/pull contribution for an isolated material pair.
+///
+/// Positive constructive cross-energy pushes the materials apart; negative
+/// destructive cross-energy pulls them together. The existing symmetric pair
+/// potential supplies the signed strength, and center-to-center direction
+/// supplies the movement vector. This is not a force or time integrator.
+///
+/// The returned vectors are equal and opposite. The caller evaluates each
+/// unordered pair once and accumulates the contributions for both materials.
+#[allow(dead_code)] // Consumed by PR 2 movement application.
+pub(crate) fn resonance_pair_push_pull(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<((f64, f64), (f64, f64))> {
+    if std::ptr::eq(a, b) {
+        return Some(((0.0, 0.0), (0.0, 0.0)));
+    }
+    let (a_x, a_y, _, _) = environmental_material_resonance(a, catalog, tick)?;
+    let (b_x, b_y, _, _) = environmental_material_resonance(b, catalog, tick)?;
+    let dx = b_x - a_x;
+    let dy = b_y - a_y;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() {
+        return None;
+    }
+    if distance <= f64::EPSILON {
+        return Some(((0.0, 0.0), (0.0, 0.0)));
+    }
+
+    // The potential already includes reciprocal aura reception and the
+    // existing continuous distance attenuation; do not attenuate it twice.
+    let strength = resonance_pair_potential(a, b, catalog, tick)?;
+    let on_b = (strength * dx / distance, strength * dy / distance);
+    if !on_b.0.is_finite() || !on_b.1.is_finite() {
+        return None;
+    }
+    Some(((-on_b.0, -on_b.1), on_b))
+}
+
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
 fn translated_physical_material(
     physical: &crate::physical_material::PhysicalMaterial,
@@ -3421,6 +3462,106 @@ mod tests {
         );
         assert!((force_on_left.0 + force_on_near.0).abs() < 1e-12);
         assert!((force_on_left.1 + force_on_near.1).abs() < 1e-12);
+    }
+
+    #[test]
+    fn resonance_pair_push_pull_is_symmetric_and_distance_attenuated() {
+        let catalog = crate::resources::default_catalog();
+        let make_carbon = |x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base("Carbon", 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("carbon should have a valid realized physical shape")
+        };
+        let left = make_carbon(0.0);
+        let near = make_carbon(4.0);
+        let far = make_carbon(8.0);
+        let (near_left, near_right) =
+            resonance_pair_push_pull(&left, &near, &catalog, 0).unwrap();
+        let (far_left, far_right) =
+            resonance_pair_push_pull(&left, &far, &catalog, 0).unwrap();
+        let (reverse_right, reverse_left) =
+            resonance_pair_push_pull(&near, &left, &catalog, 0).unwrap();
+
+        assert!(near_right.0 > 0.0, "in-phase pair should repel");
+        assert!(near_right.1.abs() < 1e-10);
+        assert!((near_left.0 + near_right.0).abs() < 1e-12);
+        assert!((near_left.1 + near_right.1).abs() < 1e-12);
+        assert!((near_left.0 - reverse_left.0).abs() < 1e-12);
+        assert!((near_right.0 - reverse_right.0).abs() < 1e-12);
+        assert!(near_right.0.abs() > far_right.0.abs());
+        assert!(far_left.0.is_finite());
+    }
+
+    #[test]
+    fn resonance_pair_push_pull_attracts_opposing_phase_and_ignores_quadrature() {
+        let catalog = crate::resources::default_catalog();
+        let make_material = |name: &str, x| {
+            crate::physical_material::PhysicalMaterial::realized(
+                crate::resources::Material::free_base(name, 1.0),
+                vec![crate::structure::Placement {
+                    x,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                }],
+                &catalog,
+            )
+            .expect("material should have a valid realized physical shape")
+        };
+        let carbon = make_material("Carbon", 0.0);
+        let hydrogen = make_material("Hydrogen", 4.0);
+        let (_, attraction) =
+            resonance_pair_push_pull(&carbon, &hydrogen, &catalog, 0).unwrap();
+        assert!(attraction.0 < 0.0, "opposing phase should attract");
+
+        let mut quadrature_catalog = crate::resources::default_catalog();
+        for resource in &mut quadrature_catalog {
+            resource.properties.mass = 1.0;
+            resource.properties.cohesion = 1.0;
+            resource.properties.reactivity = 1.0;
+        }
+        let carbon_properties = quadrature_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Carbon")
+            .unwrap();
+        carbon_properties.properties.cohesion = 2.0;
+        carbon_properties.properties.reactivity = 0.0;
+        quadrature_catalog
+            .iter_mut()
+            .find(|resource| resource.name == "Hydrogen")
+            .unwrap()
+            .properties
+            .cohesion = 7.0 / 6.0;
+        let source = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![crate::structure::Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &quadrature_catalog,
+        )
+        .unwrap();
+        let receiver = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Hydrogen", 1.0),
+            vec![crate::structure::Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            }],
+            &quadrature_catalog,
+        )
+        .unwrap();
+        let (on_source, on_receiver) =
+            resonance_pair_push_pull(&source, &receiver, &quadrature_catalog, 0).unwrap();
+        assert!(on_source.0.abs() < 1e-8 && on_source.1.abs() < 1e-8);
+        assert!(on_receiver.0.abs() < 1e-8 && on_receiver.1.abs() < 1e-8);
     }
 
     #[test]
