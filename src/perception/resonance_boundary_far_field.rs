@@ -3556,6 +3556,7 @@ fn radial_hessian_apply(
 /// interaction. Each term retains its own source-dependent boundary sample;
 /// no receiver samples are shared or averaged across different body pairs.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryKernelSample {
     pub(crate) source_center: BoundaryKernelVector,
     pub(crate) receiver_center: BoundaryKernelVector,
@@ -3565,6 +3566,7 @@ pub(crate) struct MutualBoundaryKernelSample {
 
 /// One world generalized-coordinate derivative for one exact mutual sample.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryPoseSampleDerivative {
     pub(crate) source_center_derivative: BoundaryKernelVector,
     pub(crate) receiver_center_derivative: BoundaryKernelVector,
@@ -3583,11 +3585,13 @@ pub(crate) struct MutualBoundaryPoseSampleDerivative {
 /// All per-sample Jacobians for one generalized world coordinate. Coordinate
 /// order is supplied by the caller, normally body-major x/y/angle.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryPoseCoordinateDerivative {
     pub(crate) samples: Vec<MutualBoundaryPoseSampleDerivative>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryKernelError {
     pub(crate) potential: f64,
     /// Independent derivative remainder for each caller-supplied body DOF.
@@ -3595,6 +3599,7 @@ pub(crate) struct MutualBoundaryKernelError {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryKernelEvaluation {
     pub(crate) potential: f64,
     pub(crate) coordinates: Vec<BoundaryPoseDerivativeEvaluation>,
@@ -3664,6 +3669,7 @@ impl MutualBoundaryProductVector {
 /// caller must certify visibility, endpoint provenance, and exact sample
 /// correspondence for every term before this evaluator can be accepted.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(dead_code)]
 pub(crate) struct MutualBoundaryKernelExpansion {
     samples: Vec<MutualBoundaryKernelSample>,
     coordinates: Vec<MutualBoundaryPoseCoordinateDerivative>,
@@ -3674,6 +3680,7 @@ pub(crate) struct MutualBoundaryKernelExpansion {
     radius: f64,
 }
 
+#[allow(dead_code)]
 impl MutualBoundaryKernelExpansion {
     pub(crate) fn new(
         samples: Vec<MutualBoundaryKernelSample>,
