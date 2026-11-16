@@ -3835,6 +3835,51 @@ mod tests {
             absolute_error: Some(crate::harmonics::ResonanceBodyForce::default()),
         }));
 
+        let staged_motions = accumulator
+            .stage_motion(&snapshot, 0.01, &catalog, Some(simulation.environment.height))
+            .expect("Newtonian pose staging should succeed");
+        assert_eq!(staged_motions.len(), 1);
+        let mut staged_after = snapshot.bodies.clone();
+        let mut staged_kinetic_delta = 0.0;
+        let mut staged_indices = Vec::new();
+        for motion in &staged_motions {
+            staged_after[motion.body_index] = motion.after.clone();
+            staged_kinetic_delta += motion.kinetic_energy_after - motion.kinetic_energy_before;
+            staged_indices.push(motion.body_index);
+        }
+        assert!(
+            environmental_motion_batch_is_collision_free(
+                &snapshot.bodies,
+                &staged_after,
+                &staged_indices,
+                &catalog,
+                simulation.environment.width,
+                simulation.environment.height,
+            ),
+            "the proposed Newtonian movement should pass swept collision validation"
+        );
+        let staged_pair_delta = environmental_motion_pair_potential_delta(
+            &snapshot.bodies,
+            &staged_after,
+            &staged_indices,
+            &catalog,
+            snapshot.tick,
+        )
+        .expect("complete pair-potential delta should be evaluable");
+        let mut staged_ledger = simulation.energy_ledger;
+        let mut staged_usable = simulation.environment.chemistry_usable_energy;
+        let mut staged_resonance = simulation.environment.resonant_energy.clone();
+        assert!(
+            crate::energy_ledger::settle_environmental_pair_potential_and_kinetic_change(
+                &mut staged_ledger,
+                &mut staged_usable,
+                &mut staged_resonance,
+                staged_kinetic_delta,
+                &staged_pair_delta,
+            ),
+            "kinetic and pair-potential changes should settle against the funded environment"
+        );
+
         assert!(snapshot.commit_environmental_motion_transaction(
             &mut simulation,
             &accumulator,
