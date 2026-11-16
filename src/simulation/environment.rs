@@ -736,8 +736,12 @@ impl ActiveMaterialField {
                     && material.placements.as_ref().is_some_and(|p| !p.is_empty());
                 if valid {
                     for (part_index, placement) in material
-                        .placements.as_ref().expect("validated placements")
-                        .iter().copied().enumerate()
+                        .placements
+                        .as_ref()
+                        .expect("validated placements")
+                        .iter()
+                        .copied()
+                        .enumerate()
                     {
                         let Some(shape) = material.realized_shape_for_part(part_index, catalog)
                         else {
@@ -767,8 +771,7 @@ impl ActiveMaterialField {
 
         let field_width = self.width_cells as f64 * self.cell_size;
         let field_height = self.height_cells as f64 * self.cell_size;
-        let mut candidates: Vec<Option<Candidate>> =
-            (0..snapshots.len()).map(|_| None).collect();
+        let mut candidates: Vec<Option<Candidate>> = (0..snapshots.len()).map(|_| None).collect();
 
         for &(identity, dx, dy) in displacements {
             if identity == 0 || !dx.is_finite() || !dy.is_finite() || (dx == 0.0 && dy == 0.0) {
@@ -824,7 +827,10 @@ impl ActiveMaterialField {
             if !valid || translated_parts.is_empty() {
                 continue;
             }
-            let Some(anchor) = candidate_material.placements.as_ref().and_then(|p| p.first())
+            let Some(anchor) = candidate_material
+                .placements
+                .as_ref()
+                .and_then(|p| p.first())
             else {
                 continue;
             };
@@ -869,7 +875,10 @@ impl ActiveMaterialField {
                 })
             };
             if collides {
-                candidates[index].as_mut().expect("candidate exists").accepted = false;
+                candidates[index]
+                    .as_mut()
+                    .expect("candidate exists")
+                    .accepted = false;
             }
         }
 
