@@ -1107,6 +1107,29 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
         let evaluation = expansion
             .evaluate()
             .expect("actual mutual expansion should be separated and finite");
+        let participants = inventory
+            .body_slots
+            .iter()
+            .map(|slot| match *slot {
+                super::ResonanceMutualBoundaryBodySlot::Material(index) => index,
+                super::ResonanceMutualBoundaryBodySlot::Occluder(index) => {
+                    [1usize, 3][index]
+                }
+            })
+            .collect::<Vec<_>>();
+        let certificate =
+            crate::simulation::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
+                inventory.visibility_certified,
+                &participants,
+                evaluation.clone(),
+            )
+            .expect("actual visibility-certified inventory should map to complete body errors");
+        assert_eq!(certificate.errors.bodies.len(), participants.len());
+        assert!(certificate.errors.bodies.iter().all(|bound| {
+            bound.force_x.is_finite()
+                && bound.force_y.is_finite()
+                && bound.torque.is_finite()
+        }));
         let exact_potential = exact_discrete_potential(&inventory.samples, None, 0.0);
         assert!(
             (evaluation.potential - exact_potential).abs() <= evaluation.error.potential + 1.0e-10,
