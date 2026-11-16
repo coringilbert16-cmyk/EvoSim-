@@ -3339,6 +3339,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     let mut result = vec![ResonanceBodyForceWithError::default(); occluders.len() + 2];
     let mut potential_components = Vec::new();
     let mut potential_error = 0.0;
+    let mut mutual_inventories = Vec::new();
     if samples.is_empty() {
         return Some(ResonanceDirectionalGeneralizedEvaluation {
             potential_components,
@@ -3704,6 +3705,72 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                 }
             }
 
+            // Preserve the exact pair-specific samples and their complete
+            // generalized-coordinate Jacobians for the mutual world evaluator.
+            // This is the same frequency slice used by the exact directional
+            // potential/force calculation above; no samples are averaged across
+            // different material pairs.
+            let mutual_samples = weighted_samples
+                .iter()
+                .map(|sample| {
+                    crate::resonance_boundary_far_field::MutualBoundaryKernelSample {
+                        source_center: BoundaryKernelVector {
+                            x: source_center.0,
+                            y: source_center.1,
+                        },
+                        receiver_center: BoundaryKernelVector {
+                            x: receiver_center.0,
+                            y: receiver_center.1,
+                        },
+                        position: sample.position,
+                        weight: sample.weight,
+                    }
+                })
+                .collect::<Vec<_>>();
+            let mutual_coordinates = coordinates
+                .iter()
+                .map(|coordinate| {
+                    crate::resonance_boundary_far_field::MutualBoundaryPoseCoordinateDerivative {
+                        samples: coordinate
+                            .samples
+                            .iter()
+                            .map(|sample| {
+                                crate::resonance_boundary_far_field::MutualBoundaryPoseSampleDerivative {
+                                    source_center_derivative: coordinate.source_center_derivative,
+                                    receiver_center_derivative: coordinate.receiver_center_derivative,
+                                    position_derivative: sample.position_derivative,
+                                    weight_derivative: sample.weight_derivative,
+                                    source_center_derivative_bound: coordinate.source_center_derivative_bound,
+                                    receiver_center_derivative_bound: coordinate.receiver_center_derivative_bound,
+                                    position_derivative_bound: sample.position_derivative_bound,
+                                    weight_derivative_bound: sample.absolute_weight_derivative_bound,
+                                    source_center_displacement_bound: coordinate.source_center_displacement_bound,
+                                    receiver_center_displacement_bound: coordinate.receiver_center_displacement_bound,
+                                    position_displacement_bound: sample.position_displacement_bound,
+                                    weight_change_bound: sample.absolute_weight_change_bound,
+                                }
+                            })
+                            .collect(),
+                    }
+                })
+                .collect::<Vec<_>>();
+            let mut body_slots = Vec::with_capacity(geometries.len() + 1);
+            body_slots.push(ResonanceMutualBoundaryBodySlot::Material(source_index));
+            body_slots.push(ResonanceMutualBoundaryBodySlot::Material(receiver_index));
+            for original_occluder in occluder_mapping.iter().skip(1) {
+                body_slots.push(ResonanceMutualBoundaryBodySlot::Occluder(
+                    (*original_occluder)?,
+                ));
+            }
+            mutual_inventories.push(ResonanceMutualBoundaryFrequencyInventory {
+                frequency_cycles_per_day: frequency,
+                body_slots,
+                visibility_signature: signature.clone(),
+                samples: mutual_samples,
+                coordinates: mutual_coordinates,
+                visibility_certified: true,
+            });
+
             let tolerance = 1.0e-7 * absolute_weight.max(1.0);
             let evaluation =
                 evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker_inventory(
@@ -3844,7 +3911,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
             potential_components,
             potential_error,
             forces: mapped,
-            mutual_inventories: Vec::new(),
+            mutual_inventories,
         },
     )
 }
@@ -3941,7 +4008,11 @@ pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
         potential_components,
         potential_error,
         forces: combined,
-        mutual_inventories: Vec::new(),
+        mutual_inventories: ab
+            .mutual_inventories
+            .into_iter()
+            .chain(ba.mutual_inventories)
+            .collect(),
     })
 }
 
