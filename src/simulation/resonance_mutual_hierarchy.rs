@@ -11,7 +11,6 @@ use crate::resonance_visibility::VisibilityBounds;
 #[derive(Clone, Debug)]
 struct Node {
     bounds: VisibilityBounds,
-    count: usize,
     kind: NodeKind,
 }
 
@@ -65,7 +64,6 @@ impl MutualInteractionHierarchy {
         if indices.len() == 1 {
             return Some(Node {
                 bounds: union,
-                count: 1,
                 kind: NodeKind::Leaf(indices[0]),
             });
         }
@@ -86,7 +84,6 @@ impl MutualInteractionHierarchy {
         let right = Self::build_node(bounds, right_indices)?;
         Some(Node {
             bounds: union,
-            count: left.count.checked_add(right.count)?,
             kind: NodeKind::Branch {
                 left: Box::new(left),
                 right: Box::new(right),
