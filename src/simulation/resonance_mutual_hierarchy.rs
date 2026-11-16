@@ -980,6 +980,85 @@ mod tests {
     }
 
     #[test]
+    fn mutual_product_kernel_errors_map_to_each_body_and_include_occluders() {
+        use crate::resonance_boundary_far_field::{
+            BoundaryPoseDerivativeEvaluation, MutualBoundaryKernelError,
+            MutualBoundaryKernelEvaluation,
+        };
+
+        let participants = [0usize, 1, 2, 3, 99];
+        let make_evaluation = |error: f64| MutualBoundaryKernelEvaluation {
+            potential: 1.0,
+            coordinates: vec![
+                BoundaryPoseDerivativeEvaluation {
+                    derivative: 0.0,
+                    absolute_bound: error,
+                    absolute_error: error,
+                    ..BoundaryPoseDerivativeEvaluation::default()
+                };
+                participants.len() * 3
+            ],
+            error: MutualBoundaryKernelError {
+                potential: error,
+                coordinates: vec![error; participants.len() * 3],
+            },
+        };
+        let certificate = mutual_boundary_cluster_certificate(
+            true,
+            &participants,
+            make_evaluation(0.001),
+        )
+        .unwrap();
+        assert_eq!(certificate.errors.bodies.len(), participants.len());
+        assert_eq!(
+            certificate
+                .errors
+                .bodies
+                .iter()
+                .map(|body| body.body_index)
+                .collect::<Vec<_>>(),
+            participants
+        );
+        assert_eq!(certificate.errors.bodies[4].force_x, 0.001);
+        assert_eq!(certificate.errors.bodies[4].force_y, 0.001);
+        assert_eq!(certificate.errors.bodies[4].torque, 0.001);
+
+        let layout = [
+            bounds(0.0, 0.0, 0.2, 0.2),
+            bounds(1.0, 0.0, 0.2, 0.2),
+            bounds(8.0, 0.0, 0.2, 0.2),
+            bounds(9.0, 0.0, 0.2, 0.2),
+        ];
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        let result = tree
+            .evaluate_adaptive(
+                MutualErrorTolerance {
+                    potential: 0.01,
+                    force_x: 0.01,
+                    force_y: 0.01,
+                    torque: 0.01,
+                },
+                |_, _| {
+                    mutual_boundary_cluster_certificate(
+                        true,
+                        &participants,
+                        make_evaluation(0.001),
+                    )
+                },
+                |_, _| Some(make_evaluation(0.0)),
+            )
+            .unwrap();
+        assert_eq!(result.accepted_cluster_pairs.len(), 1);
+        assert_eq!(result.exact_pairs, vec![(0, 1), (2, 3)]);
+        assert_eq!(result.accumulated_errors.bodies.len(), participants.len());
+        assert!(result
+            .accumulated_errors
+            .bodies
+            .iter()
+            .any(|body| body.body_index == 99));
+    }
+
+    #[test]
     fn adaptive_traversal_retains_exact_leaf_evaluations() {
         let layout = [bounds(0.0, 0.0, 0.1, 0.1), bounds(1.0, 0.0, 0.1, 0.1)];
         let tree = MutualInteractionHierarchy::new(&layout).unwrap();
