@@ -1118,7 +1118,7 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
             })
             .collect::<Vec<_>>();
         let certificate =
-            crate::simulation::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
+            crate::resonance_mutual_hierarchy::mutual_boundary_cluster_certificate(
                 inventory.visibility_certified,
                 &participants,
                 evaluation.clone(),
