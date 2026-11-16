@@ -723,6 +723,9 @@ impl ActiveMaterialField {
         else {
             return false;
         };
+        if dx == 0.0 && dy == 0.0 {
+            return true;
+        }
         let original = &self.cells[source_cell].physical_materials[source_index];
         if !original.is_realized()
             || !original.material.is_valid_for_catalog(catalog)
