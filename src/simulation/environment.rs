@@ -740,17 +740,22 @@ impl ActiveMaterialField {
             return false;
         }
         let mut candidate = original.clone();
-        let Some(placements) = candidate.placements.as_mut() else {
-            return false;
-        };
-        for placement in placements.iter_mut() {
-            placement.x += dx;
-            placement.y += dy;
-            if !placement.x.is_finite() || !placement.y.is_finite() {
+        {
+            let Some(placements) = candidate.placements.as_mut() else {
                 return false;
+            };
+            for placement in placements.iter_mut() {
+                placement.x += dx;
+                placement.y += dy;
+                if !placement.x.is_finite() || !placement.y.is_finite() {
+                    return false;
+                }
             }
         }
 
+        let Some(placements) = candidate.placements.as_ref() else {
+            return false;
+        };
         let field_width = self.width_cells as f64 * self.cell_size;
         let field_height = self.height_cells as f64 * self.cell_size;
         let mut candidate_parts = Vec::with_capacity(placements.len());
