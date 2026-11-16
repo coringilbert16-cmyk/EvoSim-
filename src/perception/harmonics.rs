@@ -1994,11 +1994,7 @@ pub(crate) fn accumulate_resonance_pair_displacements(
         if a >= b || b >= material_count || !seen_pairs.insert((a, b)) {
             return None;
         }
-        if !on_a.0.is_finite()
-            || !on_a.1.is_finite()
-            || !on_b.0.is_finite()
-            || !on_b.1.is_finite()
-        {
+        if !on_a.0.is_finite() || !on_a.1.is_finite() || !on_b.0.is_finite() || !on_b.1.is_finite() {
             return None;
         }
         accumulated[a].0 += on_a.0;
@@ -2017,8 +2013,7 @@ pub(crate) fn accumulate_resonance_pair_displacements(
             let factor = RESONANCE_MOVEMENT_RESPONSE_SCALE
                 / (1.0 + RESONANCE_MOVEMENT_RESPONSE_SCALE * magnitude);
             let displacement = (x * factor, y * factor);
-            (displacement.0.is_finite() && displacement.1.is_finite())
-                .then_some(displacement)
+            (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
         })
         .collect()
 }
