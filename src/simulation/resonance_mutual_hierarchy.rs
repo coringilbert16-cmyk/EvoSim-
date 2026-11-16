@@ -632,6 +632,39 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn adaptive_traversal_enforces_cumulative_world_error_budgets() {
+        let layout = (0..8)
+            .map(|index| bounds(index as f64, 0.0, 0.1, 0.1))
+            .collect::<Vec<_>>();
+        let tree = MutualInteractionHierarchy::new(&layout).unwrap();
+        for charge_potential in [true, false] {
+            let result = tree
+                .evaluate_adaptive(
+                    strict_tolerance(),
+                    |a, b| {
+                        let mut certificate = zero_error_certificate(a, b, true);
+                        certificate.errors.potential = if charge_potential { 0.06 } else { 0.0 };
+                        for body in &mut certificate.errors.bodies {
+                            body.force_x = if charge_potential { 0.0 } else { 0.06 };
+                        }
+                        Some(certificate)
+                    },
+                    |_, _| Some(()),
+                )
+                .unwrap();
+            assert_eq!(result.accepted_cluster_pairs.len(), 1);
+            assert!(result.accumulated_errors.potential <= strict_tolerance().potential);
+            assert!(result.accumulated_errors.bodies.iter().all(|bound| {
+                bound.force_x <= strict_tolerance().force_x
+                    && bound.force_y <= strict_tolerance().force_y
+                    && bound.torque <= strict_tolerance().torque
+            }));
+            assert_eq!(result.exact_pairs.len(), 12);
+        }
+    }
+
     #[test]
     fn adaptive_traversal_rejects_missing_or_duplicate_body_error_bounds() {
         let tolerance = strict_tolerance();
