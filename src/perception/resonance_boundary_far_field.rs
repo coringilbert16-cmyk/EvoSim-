@@ -4627,10 +4627,8 @@ mod tests {
             sample(1.8, 1.8, 0.35),
         ];
         let center = BoundaryKernelVector {
-            x: samples.iter().map(|entry| entry.position.x).sum::<f64>()
-                / samples.len() as f64,
-            y: samples.iter().map(|entry| entry.position.y).sum::<f64>()
-                / samples.len() as f64,
+            x: samples.iter().map(|entry| entry.position.x).sum::<f64>() / samples.len() as f64,
+            y: samples.iter().map(|entry| entry.position.y).sum::<f64>() / samples.len() as f64,
         };
         let expansion = BoundaryKernelExpansion::new(source, receiver, center, samples.clone())
             .expect("finite angular sample cluster");
@@ -4674,9 +4672,15 @@ mod tests {
                 })
                 .collect::<Vec<_>>();
             let moved_center = BoundaryKernelVector {
-                x: moved_samples.iter().map(|entry| entry.position.x).sum::<f64>()
+                x: moved_samples
+                    .iter()
+                    .map(|entry| entry.position.x)
+                    .sum::<f64>()
                     / moved_samples.len() as f64,
-                y: moved_samples.iter().map(|entry| entry.position.y).sum::<f64>()
+                y: moved_samples
+                    .iter()
+                    .map(|entry| entry.position.y)
+                    .sum::<f64>()
                     / moved_samples.len() as f64,
             };
             BoundaryKernelExpansion::new(source, receiver, moved_center, moved_samples)
