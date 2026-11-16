@@ -3391,9 +3391,15 @@ impl BoundaryKernelExpansion {
         let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
         let source_hessian_bound = radial_hessian_bound(source_min);
         let receiver_hessian_bound = radial_hessian_bound(receiver_min);
+        let source_third_bound = radial_third_bound(source_min);
+        let receiver_third_bound = radial_third_bound(receiver_min);
         let hessian_bound = source_hessian_bound * receiver_value_bound
             + receiver_hessian_bound * source_value_bound
             + 2.0 * source_gradient_bound * receiver_gradient_bound;
+        let third_bound = source_third_bound * receiver_value_bound
+            + receiver_third_bound * source_value_bound
+            + 3.0 * source_hessian_bound * receiver_gradient_bound
+            + 3.0 * source_gradient_bound * receiver_hessian_bound;
         let radius_bound = self.radius + maximum_sample_displacement + center_displacement;
         let center_derivative_bound = coordinate
             .samples
