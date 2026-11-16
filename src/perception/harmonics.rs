@@ -1393,7 +1393,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
     prepared_emitter: Option<&MaterialResonanceEmitter>,
-) -> Option<(Vec<MaterialAuraReception>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>)> {
+) -> Option<(Vec<MaterialAuraReception>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>, Vec<Option<usize>>)> {
     // This API consumes world-resolved placements. Stored materials carrying
     // an owner-relative origin must be transformed by their owner first.
     if source.owner_relative_origin.is_some()
@@ -1405,7 +1405,7 @@ fn material_aura_receptions_with_occluders_and_geometry_prepared(
         return None;
     }
     if std::ptr::eq(source, receiver) {
-        return Some(Vec::new());
+        return Some((Vec::new(), Vec::new(), Vec::new()));
     }
     let receiver_geometry =
         crate::physical_body_geometry::PhysicalBodyGeometry::from_physical_material(
@@ -3010,7 +3010,7 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
     tick: u64,
     prepared_source: Option<&MaterialResonanceEmitter>,
     prepared_receiver: Option<&MaterialResonanceEmitter>,
-) -> Option<(Vec<ResonanceBoundaryInteractionSample>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>)> {
+) -> Option<(Vec<ResonanceBoundaryInteractionSample>, Vec<crate::physical_body_geometry::PhysicalBodyGeometry>, Vec<Option<usize>>)> {
     let (receptions, receiver_bodies, receiver_body_occluder_indices) =
         material_aura_receptions_with_occluders_and_geometry_prepared(
             source,
