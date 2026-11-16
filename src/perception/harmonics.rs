@@ -510,11 +510,34 @@ pub(crate) struct ResonanceBodyForceWithError {
 
 /// One ordered source/receiver evaluation from the same frequency-resolved
 /// scalar boundary potential used to derive its generalized force and torque.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ResonanceMutualBoundaryBodySlot {
+    Material(usize),
+    Occluder(usize),
+}
+
+/// Frequency-specific, visibility-certified raw boundary inventory. Samples
+/// retain their pair-specific geometry; body_slots maps the local generalized
+/// coordinates back to source/receiver material indices and the caller's
+/// occluder slice.
+#[allow(dead_code)] // Consumed by the world mutual hierarchy integration.
+#[derive(Clone, Debug)]
+pub(crate) struct ResonanceMutualBoundaryFrequencyInventory {
+    pub(crate) frequency_cycles_per_day: f64,
+    pub(crate) body_slots: Vec<ResonanceMutualBoundaryBodySlot>,
+    pub(crate) visibility_signature: crate::source_exposure::VisibilityCutSignature,
+    pub(crate) samples: Vec<crate::resonance_boundary_far_field::MutualBoundaryKernelSample>,
+    pub(crate) coordinates:
+        Vec<crate::resonance_boundary_far_field::MutualBoundaryPoseCoordinateDerivative>,
+    pub(crate) visibility_certified: bool,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct ResonanceDirectionalGeneralizedEvaluation {
     pub(crate) potential_components: Vec<ResonancePairPotentialComponent>,
     pub(crate) potential_error: f64,
     pub(crate) forces: Vec<ResonanceBodyForceWithError>,
+    pub(crate) mutual_inventories: Vec<ResonanceMutualBoundaryFrequencyInventory>,
 }
 
 /// A spatially attributed environmental signal after passing through the
