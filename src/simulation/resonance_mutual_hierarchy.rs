@@ -341,7 +341,7 @@ impl MutualInteractionHierarchy {
         tolerance: MutualErrorTolerance,
         mut evaluate_kernel: C,
         evaluate_exact: E,
-    ) -> Option<AdaptiveTraversalResult>
+    ) -> Option<AdaptiveTraversalResult<T>>
     where
         C: FnMut(&[usize], &[usize]) -> Option<(T, MutualClusterErrorBounds)>,
         E: FnMut(usize, usize) -> Option<()>,
@@ -617,7 +617,7 @@ mod tests {
         bodies_a: &[usize],
         bodies_b: &[usize],
         visibility_certified: bool,
-    ) -> MutualClusterCertificate {
+    ) -> MutualClusterCertificate<()> {
         let bodies = bodies_a
             .iter()
             .chain(bodies_b.iter())
@@ -631,6 +631,7 @@ mod tests {
             .collect();
         MutualClusterCertificate {
             visibility_certified,
+            evaluation: (),
             errors: MutualClusterErrorBounds {
                 potential: 0.0,
                 bodies,
@@ -692,7 +693,7 @@ mod tests {
                 &clear_visibility,
                 0.0,
                 strict_tolerance(),
-                |a, b| Some(zero_error_certificate(a, b, true).errors),
+                |a, b| Some(((), zero_error_certificate(a, b, true).errors)),
                 |_, _| Some(()),
             )
             .unwrap();
@@ -714,7 +715,7 @@ mod tests {
                 &blocked_visibility,
                 0.0,
                 strict_tolerance(),
-                |a, b| Some(zero_error_certificate(a, b, true).errors),
+                |a, b| Some(((), zero_error_certificate(a, b, true).errors)),
                 |_, _| Some(()),
             )
             .unwrap();
