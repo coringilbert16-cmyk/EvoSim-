@@ -6,6 +6,7 @@
 //! harmonics.
 
 use crate::resources::{ResourceBaselines, ResourceProperties};
+use crate::source_exposure::VisibilityBodyMotionBound;
 
 /// Simulation-time convention: one simulated day contains 24,000 ticks.
 pub(crate) const TICKS_PER_SIMULATED_DAY: u64 = 24_000;
@@ -2112,7 +2113,6 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive(
     use super::resonance_boundary_far_field::{
         BoundaryKernelExpansion, BoundaryKernelVector, BoundaryPotentialEvaluation,
     };
-    use crate::source_exposure::VisibilityBodyMotionBound;
 
     if samples.is_empty() {
         return None;
