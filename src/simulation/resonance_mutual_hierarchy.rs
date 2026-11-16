@@ -674,7 +674,6 @@ mod tests {
         ));
     }
 
-
     #[test]
     fn adaptive_visibility_gate_accepts_clear_groups_and_subdivides_blocked_groups() {
         let bodies = [
