@@ -778,15 +778,29 @@ mod tests {
             .map(|index| bounds(index as f64, 0.0, 0.1, 0.1))
             .collect::<Vec<_>>();
         let tree = MutualInteractionHierarchy::new(&layout).unwrap();
-        for charge_potential in [true, false] {
+        for charged_metric in 0..4 {
             let result = tree
                 .evaluate_adaptive(
                     strict_tolerance(),
                     |a, b| {
                         let mut certificate = zero_error_certificate(a, b, true);
-                        certificate.errors.potential = if charge_potential { 0.06 } else { 0.0 };
-                        for body in &mut certificate.errors.bodies {
-                            body.force_x = if charge_potential { 0.0 } else { 0.06 };
+                        match charged_metric {
+                            0 => certificate.errors.potential = 0.06,
+                            1 => {
+                                for body in &mut certificate.errors.bodies {
+                                    body.force_x = 0.06;
+                                }
+                            }
+                            2 => {
+                                for body in &mut certificate.errors.bodies {
+                                    body.force_y = 0.06;
+                                }
+                            }
+                            _ => {
+                                for body in &mut certificate.errors.bodies {
+                                    body.torque = 0.06;
+                                }
+                            }
                         }
                         Some(certificate)
                     },
