@@ -803,8 +803,7 @@ pub(crate) struct ResonanceWorldPairForceEvaluation {
     pub(crate) forces: Vec<ResonanceWorldBodyForce>,
     pub(crate) potential_components: Vec<crate::harmonics::ResonancePairPotentialComponent>,
     /// Pair-specific frequency inventories remapped to immutable world-body indices.
-    pub(crate) mutual_inventories:
-        Vec<crate::harmonics::ResonanceMutualBoundaryFrequencyInventory>,
+    pub(crate) mutual_inventories: Vec<crate::harmonics::ResonanceMutualBoundaryFrequencyInventory>,
     /// None marks the exact reference fallback, whose force derivative has no
     /// certified adaptive-kernel error estimate.
     pub(crate) potential_error: Option<f64>,
