@@ -621,6 +621,7 @@ impl VisibilityCutSignature {
         self.ordered_parameters
             .iter()
             .copied()
+            .filter(|parameter| *parameter > 1.0e-10 && *parameter < 1.0 - 1.0e-10)
             .map(|parameter| (parameter, 0.0))
             .collect()
     }
