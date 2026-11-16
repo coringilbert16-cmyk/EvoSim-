@@ -3836,7 +3836,12 @@ mod tests {
         }));
 
         let staged_motions = accumulator
-            .stage_motion(&snapshot, 0.01, &catalog, Some(simulation.environment.height))
+            .stage_motion(
+                &snapshot,
+                0.01,
+                &catalog,
+                Some(simulation.environment.height),
+            )
             .expect("Newtonian pose staging should succeed");
         assert_eq!(staged_motions.len(), 1);
         let mut staged_after = snapshot.bodies.clone();
