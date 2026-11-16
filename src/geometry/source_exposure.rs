@@ -307,6 +307,7 @@ pub(crate) struct VisibilityCutSignature {
     interval_visibility: Vec<bool>,
     interval_blocker_bodies: Vec<Vec<(usize, usize)>>,
     ordered_events: Vec<VisibilityEventIdentity>,
+    ordered_event_provenance: Vec<VisibilityCutEvent>,
     ordered_parameters: Vec<f64>,
 }
 
@@ -582,6 +583,47 @@ impl PartialEq for VisibilityCutSignature {
 }
 
 impl VisibilityCutSignature {
+    /// Reconstruct the complete ordered endpoint provenance for one target
+    /// edge. Keeping the original events is essential: exposed intervals alone
+    /// omit cuts inside blocked intervals, but those events still constrain
+    /// the continuous visibility certificate.
+    pub(crate) fn endpoint_provenance_for_target(
+        &self,
+        target_body_index: usize,
+        target_unit_index: usize,
+    ) -> Option<Vec<BoundaryEndpointProvenance>> {
+        if self.ordered_event_provenance.len() != self.ordered_parameters.len()
+            || self.ordered_event_provenance.len() != self.ordered_events.len()
+        {
+            return None;
+        }
+        self.ordered_event_provenance
+            .iter()
+            .zip(&self.ordered_parameters)
+            .map(|(event, parameter)| {
+                let cut = VisibilityCutRecord {
+                    parameter: *parameter,
+                    events: vec![event.clone()],
+                    unresolved: false,
+                };
+                let provenance =
+                    endpoint_provenance_from_cut(&cut, target_body_index, target_unit_index);
+                (!matches!(
+                    provenance,
+                    BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. }
+                ))
+                .then_some(provenance)
+            })
+            .collect()
+    }
+
+    pub(crate) fn ordered_cut_parameters(&self) -> Vec<(f64, f64)> {
+        self.ordered_parameters
+            .iter()
+            .copied()
+            .map(|parameter| (parameter, 0.0))
+            .collect()
+    }
     /// Prove that each event remains valid and that its parameter interval
     /// stays strictly ordered throughout the pose cell. The caller must supply
     /// independently conservative bounds for every event; sampled equality
