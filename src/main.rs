@@ -37,6 +37,10 @@ mod world_tone;
 #[allow(dead_code)] // Live settlement uses this snapshot; audit helpers remain test-only.
 mod world_tone_snapshot;
 
+#[cfg(test)]
+#[path = "simulation/resonance_mutual_hierarchy.rs"]
+mod resonance_mutual_hierarchy;
+
 // Active physical geometry authority stack.
 #[path = "geometry/capillary_geometry.rs"]
 mod capillary_geometry;
