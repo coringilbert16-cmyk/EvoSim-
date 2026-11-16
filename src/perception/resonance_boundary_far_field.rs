@@ -3286,10 +3286,14 @@ impl BoundaryKernelExpansion {
             .iter()
             .map(|sample| sample.position_displacement_bound)
             .fold(0.0_f64, f64::max);
-        let source_min =
-            source_distance - center_displacement - coordinate.source_center_displacement_bound;
-        let receiver_min =
-            receiver_distance - center_displacement - coordinate.receiver_center_displacement_bound;
+        let source_min = source_distance
+            - self.radius
+            - center_displacement
+            - coordinate.source_center_displacement_bound;
+        let receiver_min = receiver_distance
+            - self.radius
+            - center_displacement
+            - coordinate.receiver_center_displacement_bound;
         if !source_min.is_finite()
             || !receiver_min.is_finite()
             || source_min <= f64::EPSILON
