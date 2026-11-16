@@ -1534,3 +1534,41 @@ and their visibility provenance remain pair-specific. The next mutual-kernel
 stage must retain those correspondences while forming product moments in both
 distance factors, and must continue to certify potential plus every body's
 force and torque independently before cluster acceptance.
+
+## 43. Pair-specific mutual two-distance product moments — 2026-11-16
+
+A test-only mutual boundary kernel primitive now accepts an inventory of exact
+source/receiver/sample terms. It does not assume that different source/receiver
+pairs share boundary samples. Each term retains its own source center, receiver
+center, sample point, and signed weight.
+
+The expanded variable is the four-dimensional pair
+`z = (p - c_source, p - c_receiver)`. The evaluator forms the joint center and
+signed first moment, then approximates the complete product
+`1 / ((1+|p-c_source|)(1+|p-c_receiver|))` with one scalar Taylor expansion.
+Its Hessian and third-derivative bounds include both radial factors and their
+cross terms. Generalized derivatives include source-center, receiver-center,
+sample-position, and signed-weight motion, all differentiated from that same
+scalar.
+
+Potential and each generalized-coordinate derivative have separate
+conservative remainder bounds. Pose-cell envelopes are accumulated across all
+independent coordinates, including sample/source/receiver displacement and
+signed-weight change. This prevents a coordinate's error estimate from
+silently assuming that all other bodies remain fixed.
+
+The hierarchy adapter maps body-major x/y/angle derivative errors into
+independent per-body force/torque budgets. It requires every source/receiver
+cluster member to be represented while allowing additional participating
+bodies, such as occluders, to carry their own error entries. A visibility-gated
+hierarchy regression now accepts the actual mutual product-moment evaluation
+payload; separate tests compare its derivatives against finite differences of
+the same Taylor scalar and bound the exact discrete derivative difference.
+
+This is still a test-only evaluator. The remaining connection is to extract
+the exact frequency-resolved, signed, pair-specific boundary sample and
+generalized-coordinate inventory from the existing world pair evaluator and
+feed it to this mutual expansion. Visibility/event certification must remain
+attached to those exact samples. Only after that integration and adversarial
+differential validation should the hierarchy replace exact pair leaves with
+accepted approximate body-cluster interactions.
