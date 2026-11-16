@@ -1,4 +1,4 @@
-//! Test-only mutual dual-tree traversal for complete environmental interactions.
+//! Mutual dual-tree traversal for complete environmental interactions.
 //!
 //! The adaptive traversal accepts a cluster pair only when the caller supplies
 //! a complete visibility certificate and independent potential, per-body x/y
