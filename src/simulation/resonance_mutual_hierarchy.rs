@@ -122,11 +122,21 @@ pub(crate) struct AcceptedClusterPair<T> {
     pub(crate) errors: MutualClusterErrorBounds,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub(crate) struct AdaptiveTraversalResult<T> {
     pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair<T>>,
     pub(crate) exact_pairs: Vec<(usize, usize)>,
     pub(crate) accumulated_errors: MutualClusterErrorBounds,
+}
+
+impl<T> Default for AdaptiveTraversalResult<T> {
+    fn default() -> Self {
+        Self {
+            accepted_cluster_pairs: Vec::new(),
+            exact_pairs: Vec::new(),
+            accumulated_errors: MutualClusterErrorBounds::default(),
+        }
+    }
 }
 
 impl<T> AdaptiveTraversalResult<T> {
