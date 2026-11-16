@@ -685,7 +685,7 @@ mod tests {
             .evaluate_adaptive(
                 strict_tolerance(),
                 |a, b| Some(zero_error_certificate(a, b, true)),
-                |_, _| Some(()),
+                |a, b| Some((vec![a], vec![b])),
             )
             .unwrap();
 
@@ -775,7 +775,7 @@ mod tests {
                         }
                         Some(certificate)
                     },
-                    |_, _| Some(()),
+                    |a, b| Some((vec![a], vec![b])),
                 )
                 .unwrap();
             let mut covered_pairs = result.exact_pairs.clone();
@@ -835,7 +835,7 @@ mod tests {
                         }
                         Some(certificate)
                     },
-                    |_, _| Some(()),
+                    |a, b| Some((vec![a], vec![b])),
                 )
                 .unwrap();
             assert_eq!(
