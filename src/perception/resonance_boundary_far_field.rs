@@ -3587,7 +3587,7 @@ pub(crate) struct MutualBoundaryPoseCoordinateDerivative {
     pub(crate) samples: Vec<MutualBoundaryPoseSampleDerivative>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct MutualBoundaryKernelError {
     pub(crate) potential: f64,
     /// Independent derivative remainder for each caller-supplied body DOF.
@@ -3680,9 +3680,39 @@ impl MutualBoundaryKernelExpansion {
         coordinates: Vec<MutualBoundaryPoseCoordinateDerivative>,
     ) -> Option<Self> {
         if samples.is_empty()
-            || coordinates
-                .iter()
-                .any(|coordinate| coordinate.samples.len() != samples.len())
+            || coordinates.iter().any(|coordinate| {
+                coordinate.samples.len() != samples.len()
+                    || coordinate.samples.iter().any(|pose| {
+                        let vectors = [
+                            pose.source_center_derivative,
+                            pose.receiver_center_derivative,
+                            pose.position_derivative,
+                        ];
+                        vectors.iter().any(|vector| {
+                            !vector.x.is_finite() || !vector.y.is_finite()
+                        }) || !pose.weight_derivative.is_finite()
+                            || [
+                                pose.source_center_derivative_bound,
+                                pose.receiver_center_derivative_bound,
+                                pose.position_derivative_bound,
+                                pose.weight_derivative_bound,
+                                pose.source_center_displacement_bound,
+                                pose.receiver_center_displacement_bound,
+                                pose.position_displacement_bound,
+                                pose.weight_change_bound,
+                            ]
+                            .iter()
+                            .any(|value| !value.is_finite() || *value < 0.0)
+                            || pose.source_center_derivative.norm()
+                                > pose.source_center_derivative_bound + 64.0 * f64::EPSILON
+                            || pose.receiver_center_derivative.norm()
+                                > pose.receiver_center_derivative_bound + 64.0 * f64::EPSILON
+                            || pose.position_derivative.norm()
+                                > pose.position_derivative_bound + 64.0 * f64::EPSILON
+                            || pose.weight_derivative.abs()
+                                > pose.weight_derivative_bound + 64.0 * f64::EPSILON
+                    })
+            })
         {
             return None;
         }
@@ -3974,9 +4004,16 @@ impl MutualBoundaryKernelExpansion {
                 + receiver_third_cell * source_value_cell
                 + 3.0 * source_hessian_cell * receiver_gradient_cell
                 + 3.0 * source_gradient_cell * receiver_hessian_cell;
-            let radius_cell = self.radius
-                + maximum_displacement.source.x.max(maximum_displacement.receiver.x)
-                + center_displacement_bound.source.x.max(center_displacement_bound.receiver.x);
+            let maximum_relative_displacement = maximum_displacement
+                .source
+                .x
+                .hypot(maximum_displacement.receiver.x);
+            let center_relative_displacement = center_displacement_bound
+                .source
+                .x
+                .hypot(center_displacement_bound.receiver.x);
+            let radius_cell =
+                self.radius + maximum_relative_displacement + center_relative_displacement;
             let center_derivative_norm = center_derivative_bound.norm();
             let mut derivative_error = 0.0;
             for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
@@ -4035,15 +4072,16 @@ impl MutualBoundaryKernelExpansion {
                 sample_weight_derivative,
             });
         }
+        let coordinate_errors = coordinate_evaluations
+            .iter()
+            .map(|coordinate| coordinate.absolute_error)
+            .collect();
         Some(MutualBoundaryKernelEvaluation {
             potential,
             coordinates: coordinate_evaluations,
             error: MutualBoundaryKernelError {
                 potential: potential_error,
-                coordinates: coordinate_evaluations
-                    .iter()
-                    .map(|coordinate| coordinate.absolute_error)
-                    .collect(),
+                coordinates: coordinate_errors,
             },
         })
     }
