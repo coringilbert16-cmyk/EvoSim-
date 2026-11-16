@@ -4037,9 +4037,7 @@ impl MutualBoundaryKernelExpansion {
                         + receiver_gradient_cell
                             * source_value_cell
                             * receiver_relative_derivative_bound)
-                    + source_value_cell
-                        * receiver_value_cell
-                        * pose.weight_derivative_bound;
+                    + source_value_cell * receiver_value_cell * pose.weight_derivative_bound;
                 derivative_error += maximum_weight
                     * (0.5 * third_cell * radius_cell * radius_cell * center_derivative_norm
                         + hessian_cell
