@@ -2577,9 +2577,14 @@ pub(crate) fn evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker
         || coordinates
             .iter()
             .any(|coordinate| coordinate.samples.len() != samples.len())
-        || ![budget.potential, budget.source_force, budget.receiver_force, coordinate_error_budget]
-            .iter()
-            .all(|value| value.is_finite() && *value >= 0.0)
+        || ![
+            budget.potential,
+            budget.source_force,
+            budget.receiver_force,
+            coordinate_error_budget,
+        ]
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0)
     {
         return None;
     }
