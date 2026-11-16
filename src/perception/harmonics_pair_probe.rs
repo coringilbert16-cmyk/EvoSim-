@@ -1033,7 +1033,6 @@ fn mutual_boundary_pair_error_bounds_hold_across_adversarial_pose_sweep() {
     }
 }
 
-
 #[test]
 fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
     use crate::resonance_boundary_far_field::MutualBoundaryKernelExpansion;
@@ -1041,23 +1040,12 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
     let catalog = crate::resources::default_catalog();
     let bodies = probe_world([0.0; 12], &catalog);
     let source_indices = (0..bodies.len()).collect::<Vec<_>>();
-    let emitters = super::material_resonance_emitters_at_tick(
-        &bodies,
-        &source_indices,
-        &catalog,
-        0,
-    )
-    .expect("all adversarial world bodies should prepare resonance emitters");
+    let emitters =
+        super::material_resonance_emitters_at_tick(&bodies, &source_indices, &catalog, 0)
+            .expect("all adversarial world bodies should prepare resonance emitters");
     let occluders = vec![bodies[1].clone(), bodies[3].clone()];
     let generalized = super::resonance_multi_body_generalized_forces_with_prepared_emitters(
-        &bodies[0],
-        &bodies[2],
-        &occluders,
-        &emitters,
-        0,
-        2,
-        &catalog,
-        0,
+        &bodies[0], &bodies[2], &occluders, &emitters, 0, 2, &catalog, 0,
     )
     .expect("actual occluded pair should produce generalized boundary inventories");
 
@@ -1066,33 +1054,44 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
         "the actual pair evaluator must preserve frequency-specific mutual inventories"
     );
 
-    let exact_discrete_potential = |samples: &[crate::resonance_boundary_far_field::MutualBoundaryKernelSample],
-                                    coordinate: Option<&crate::resonance_boundary_far_field::MutualBoundaryPoseCoordinateDerivative>,
-                                    q: f64| {
-        samples
-            .iter()
-            .enumerate()
-            .map(|(index, sample)| {
-                let pose = coordinate.map(|coordinate| &coordinate.samples[index]);
-                let source = pose.map_or(sample.source_center, |pose| crate::resonance_boundary_far_field::BoundaryKernelVector {
-                    x: sample.source_center.x + q * pose.source_center_derivative.x,
-                    y: sample.source_center.y + q * pose.source_center_derivative.y,
-                });
-                let receiver = pose.map_or(sample.receiver_center, |pose| crate::resonance_boundary_far_field::BoundaryKernelVector {
-                    x: sample.receiver_center.x + q * pose.receiver_center_derivative.x,
-                    y: sample.receiver_center.y + q * pose.receiver_center_derivative.y,
-                });
-                let position = pose.map_or(sample.position, |pose| crate::resonance_boundary_far_field::BoundaryKernelVector {
-                    x: sample.position.x + q * pose.position_derivative.x,
-                    y: sample.position.y + q * pose.position_derivative.y,
-                });
-                let weight = sample.weight + q * pose.map_or(0.0, |pose| pose.weight_derivative);
-                let source_distance = (position.x - source.x).hypot(position.y - source.y);
-                let receiver_distance = (position.x - receiver.x).hypot(position.y - receiver.y);
-                weight / ((1.0 + source_distance) * (1.0 + receiver_distance))
-            })
-            .sum::<f64>()
-    };
+    let exact_discrete_potential =
+        |samples: &[crate::resonance_boundary_far_field::MutualBoundaryKernelSample],
+         coordinate: Option<
+            &crate::resonance_boundary_far_field::MutualBoundaryPoseCoordinateDerivative,
+        >,
+         q: f64| {
+            samples
+                .iter()
+                .enumerate()
+                .map(|(index, sample)| {
+                    let pose = coordinate.map(|coordinate| &coordinate.samples[index]);
+                    let source = pose.map_or(sample.source_center, |pose| {
+                        crate::resonance_boundary_far_field::BoundaryKernelVector {
+                            x: sample.source_center.x + q * pose.source_center_derivative.x,
+                            y: sample.source_center.y + q * pose.source_center_derivative.y,
+                        }
+                    });
+                    let receiver = pose.map_or(sample.receiver_center, |pose| {
+                        crate::resonance_boundary_far_field::BoundaryKernelVector {
+                            x: sample.receiver_center.x + q * pose.receiver_center_derivative.x,
+                            y: sample.receiver_center.y + q * pose.receiver_center_derivative.y,
+                        }
+                    });
+                    let position = pose.map_or(sample.position, |pose| {
+                        crate::resonance_boundary_far_field::BoundaryKernelVector {
+                            x: sample.position.x + q * pose.position_derivative.x,
+                            y: sample.position.y + q * pose.position_derivative.y,
+                        }
+                    });
+                    let weight =
+                        sample.weight + q * pose.map_or(0.0, |pose| pose.weight_derivative);
+                    let source_distance = (position.x - source.x).hypot(position.y - source.y);
+                    let receiver_distance =
+                        (position.x - receiver.x).hypot(position.y - receiver.y);
+                    weight / ((1.0 + source_distance) * (1.0 + receiver_distance))
+                })
+                .sum::<f64>()
+        };
 
     let mut exercised_coordinates = 0usize;
     for inventory in &generalized.mutual_inventories {
@@ -1110,8 +1109,7 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
             .expect("actual mutual expansion should be separated and finite");
         let exact_potential = exact_discrete_potential(&inventory.samples, None, 0.0);
         assert!(
-            (evaluation.potential - exact_potential).abs()
-                <= evaluation.error.potential + 1.0e-10,
+            (evaluation.potential - exact_potential).abs() <= evaluation.error.potential + 1.0e-10,
             "frequency {}: actual sample potential error exceeded certificate",
             inventory.frequency_cycles_per_day
         );
@@ -1119,15 +1117,9 @@ fn mutual_hierarchy_inventory_bounds_actual_occluded_pose_jacobians() {
         let step = 1.0e-6;
         for (coordinate_index, coordinate) in evaluation.coordinates.iter().enumerate() {
             let pose = &inventory.coordinates[coordinate_index];
-            let exact_derivative = (exact_discrete_potential(
-                &inventory.samples,
-                Some(pose),
-                step,
-            ) - exact_discrete_potential(
-                &inventory.samples,
-                Some(pose),
-                -step,
-            )) / (2.0 * step);
+            let exact_derivative = (exact_discrete_potential(&inventory.samples, Some(pose), step)
+                - exact_discrete_potential(&inventory.samples, Some(pose), -step))
+                / (2.0 * step);
             assert!(
                 (coordinate.derivative - exact_derivative).abs()
                     <= coordinate.absolute_error + 2.0e-7,
