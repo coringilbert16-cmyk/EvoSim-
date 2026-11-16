@@ -20,6 +20,99 @@ enum NodeKind {
     Branch { left: Box<Node>, right: Box<Node> },
 }
 
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MutualErrorTolerance {
+    pub(crate) potential: f64,
+    pub(crate) force_x: f64,
+    pub(crate) force_y: f64,
+    pub(crate) torque: f64,
+}
+
+impl MutualErrorTolerance {
+    fn is_valid(self) -> bool {
+        [self.potential, self.force_x, self.force_y, self.torque]
+            .into_iter()
+            .all(|value| value.is_finite() && value >= 0.0)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct BodyInteractionErrorBound {
+    pub(crate) body_index: usize,
+    pub(crate) force_x: f64,
+    pub(crate) force_y: f64,
+    pub(crate) torque: f64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MutualClusterErrorBounds {
+    pub(crate) potential: f64,
+    pub(crate) bodies: Vec<BodyInteractionErrorBound>,
+}
+
+impl MutualClusterErrorBounds {
+    fn is_within(
+        &self,
+        bodies_a: &[usize],
+        bodies_b: &[usize],
+        tolerance: &MutualErrorTolerance,
+    ) -> bool {
+        if !self.potential.is_finite()
+            || self.potential < 0.0
+            || self.potential > tolerance.potential
+        {
+            return false;
+        }
+        let mut expected = bodies_a
+            .iter()
+            .chain(bodies_b.iter())
+            .copied()
+            .collect::<Vec<_>>();
+        expected.sort_unstable();
+        if expected.windows(2).any(|pair| pair[0] == pair[1]) {
+            return false;
+        }
+        let mut actual = Vec::with_capacity(self.bodies.len());
+        for bound in &self.bodies {
+            if !bound.force_x.is_finite()
+                || !bound.force_y.is_finite()
+                || !bound.torque.is_finite()
+                || bound.force_x < 0.0
+                || bound.force_y < 0.0
+                || bound.torque < 0.0
+                || bound.force_x > tolerance.force_x
+                || bound.force_y > tolerance.force_y
+                || bound.torque > tolerance.torque
+            {
+                return false;
+            }
+            actual.push(bound.body_index);
+        }
+        actual.sort_unstable();
+        actual == expected && !actual.windows(2).any(|pair| pair[0] == pair[1])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MutualClusterCertificate {
+    pub(crate) visibility_certified: bool,
+    pub(crate) errors: MutualClusterErrorBounds,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct AcceptedClusterPair {
+    pub(crate) bodies_a: Vec<usize>,
+    pub(crate) bodies_b: Vec<usize>,
+    pub(crate) errors: MutualClusterErrorBounds,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AdaptiveTraversalResult {
+    pub(crate) accepted_cluster_pairs: Vec<AcceptedClusterPair>,
+    pub(crate) exact_pairs: Vec<(usize, usize)>,
+}
+
 /// Immutable spatial hierarchy over the exact world-snapshot body indices.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct MutualInteractionHierarchy {
