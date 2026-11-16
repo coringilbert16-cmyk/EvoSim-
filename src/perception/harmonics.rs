@@ -847,12 +847,24 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 /// only the interference term (combined energy minus the two separate
 /// energies); it is not by itself a mechanical potential or force.
 pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
-    let components = spectrum_cross_energy_components(a, b)?;
-    let energy = components
-        .iter()
-        .map(|component| component.energy)
-        .sum::<f64>();
-    energy.is_finite().then_some(energy)
+    spectrum_energy(a)?;
+    spectrum_energy(b)?;
+    let mut energy = 0.0;
+    for left in &a.components {
+        for right in &b.components {
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            energy += 2.0
+                * left.amplitude
+                * right.amplitude
+                * (left.phase_radians - right.phase_radians).cos();
+            if !energy.is_finite() {
+                return None;
+            }
+        }
+    }
+    Some(energy)
 }
 
 /// Preserve the cross-energy term by frequency so conservative work can
