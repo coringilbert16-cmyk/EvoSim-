@@ -1407,28 +1407,28 @@ impl LocalResonanceWorldSnapshot {
     }
 
     /// Sum the exact force gradients for the complete environmental pair
-    /// potential. Every unordered pair contributes once; all other bodies are
-    /// occluders and receive that pair's gradient contribution. This is a
-    /// small-world correctness oracle only: the nested pair traversal plus
-    /// per-pair multi-body finite differences is not suitable for live ticks.
-    #[allow(dead_code)] // Used by conservation tests until a scalable evaluator is proven.
+    /// potential through the test-only mutual dual-tree traversal. Every
+    /// unordered pair still reaches an exact leaf evaluation; this introduces
+    /// no approximate acceptance, distance cutoff, or runtime behavior.
+    #[cfg(test)]
     pub(crate) fn accumulate_complete_pair_forces(
         &self,
         catalog: &[BaseResource],
     ) -> Option<(usize, ResonanceForceAccumulator)> {
+        let hierarchy =
+            crate::resonance_mutual_hierarchy::MutualInteractionHierarchy::new(
+                &self.visibility_bounds,
+            )?;
+        let pairs = hierarchy.unordered_pairs()?;
         let mut accumulator = ResonanceForceAccumulator::default();
-        let mut pair_count = 0usize;
-        for index_a in 0..self.bodies.len() {
-            for index_b in index_a + 1..self.bodies.len() {
-                let identity_a = self.bodies[index_a].environmental_identity;
-                let identity_b = self.bodies[index_b].environmental_identity;
-                if !accumulator.add_pair(self, identity_a, identity_b, catalog) {
-                    return None;
-                }
-                pair_count = pair_count.checked_add(1)?;
+        for (index_a, index_b) in pairs.iter().copied() {
+            let identity_a = self.bodies.get(index_a)?.environmental_identity;
+            let identity_b = self.bodies.get(index_b)?.environmental_identity;
+            if !accumulator.add_pair(self, identity_a, identity_b, catalog) {
+                return None;
             }
         }
-        Some((pair_count, accumulator))
+        Some((pairs.len(), accumulator))
     }
 
     /// Independent complete-world gradient of the same unordered-pair
