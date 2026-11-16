@@ -2825,7 +2825,7 @@ pub(crate) fn certify_boundary_pose_cell_generalized(
     let boundary = certify_boundary_pose_cell(expansion, ordered_visibility_cuts, sample_motion)?;
     let coordinates = coordinates
         .iter()
-        .map(|coordinate| expansion.evaluate_pose_coordinate_derivative(coordinate))
+        .map(|coordinate| expansion.evaluate_approximate_pose_coordinate_derivative(coordinate))
         .collect::<Option<Vec<_>>>()?;
     Some(BoundaryPoseCellGeneralizedEvaluation {
         boundary,
@@ -4288,6 +4288,8 @@ mod tests {
                 receiver_center_derivative: BoundaryKernelVector::default(),
                 source_center_derivative_bound: source_dx.hypot(source_dy),
                 receiver_center_derivative_bound: 0.0,
+                source_center_displacement_bound: 0.0,
+                receiver_center_displacement_bound: 0.0,
                 samples: vec![BoundarySamplePoseDerivative {
                     position_derivative: BoundaryKernelVector {
                         x: sample_dx,
@@ -4347,6 +4349,8 @@ mod tests {
             receiver_center_derivative: BoundaryKernelVector { x: 0.0, y: 0.0 },
             source_center_derivative_bound: 0.5,
             receiver_center_derivative_bound: 0.0,
+            source_center_displacement_bound: 0.0,
+            receiver_center_displacement_bound: 0.0,
             samples: vec![BoundarySamplePoseDerivative {
                 position_derivative: BoundaryKernelVector { x: -0.3, y: 0.8 },
                 weight_derivative: 0.12,
@@ -4436,6 +4440,8 @@ mod tests {
             receiver_center_derivative: BoundaryKernelVector::default(),
             source_center_derivative_bound: 0.0,
             receiver_center_derivative_bound: 0.0,
+            source_center_displacement_bound: 0.0,
+            receiver_center_displacement_bound: 0.0,
             samples: vec![BoundarySamplePoseDerivative {
                 position_derivative: geometry.midpoint_derivative,
                 weight_derivative: coefficient * geometry.projected_extent_derivative,
@@ -4507,6 +4513,8 @@ mod tests {
             receiver_center_derivative: BoundaryKernelVector::default(),
             source_center_derivative_bound: 1.0,
             receiver_center_derivative_bound: 0.0,
+            source_center_displacement_bound: 0.0,
+            receiver_center_displacement_bound: 0.0,
             samples: vec![BoundarySamplePoseDerivative {
                 position_derivative: BoundaryKernelVector { x: 0.0, y: 1.0 },
                 weight_derivative: 0.0,
