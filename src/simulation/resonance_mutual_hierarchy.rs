@@ -119,10 +119,10 @@ pub(crate) fn mutual_boundary_cluster_certificate(
     participating_body_indices: &[usize],
     evaluation: crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation,
 ) -> Option<MutualClusterCertificate<crate::resonance_boundary_far_field::MutualBoundaryKernelEvaluation>> {
+    let mut sorted_body_indices = participating_body_indices.to_vec();
+    sorted_body_indices.sort_unstable();
     if !visibility_certified
-        || participating_body_indices
-            .windows(2)
-            .any(|pair| pair[0] == pair[1])
+        || sorted_body_indices.windows(2).any(|pair| pair[0] == pair[1])
         || evaluation.coordinates.len() != participating_body_indices.len().checked_mul(3)?
         || evaluation.error.coordinates.len() != evaluation.coordinates.len()
         || !evaluation.error.potential.is_finite()
@@ -130,6 +130,7 @@ pub(crate) fn mutual_boundary_cluster_certificate(
     {
         return None;
     }
+    let potential_error = evaluation.error.potential;
     let mut bodies = Vec::with_capacity(participating_body_indices.len());
     for (body_offset, body_index) in participating_body_indices.iter().copied().enumerate() {
         let coordinate_offset = body_offset.checked_mul(3)?;
@@ -153,7 +154,7 @@ pub(crate) fn mutual_boundary_cluster_certificate(
         visibility_certified,
         evaluation,
         errors: MutualClusterErrorBounds {
-            potential: evaluation.error.potential,
+            potential: potential_error,
             bodies,
         },
     })
