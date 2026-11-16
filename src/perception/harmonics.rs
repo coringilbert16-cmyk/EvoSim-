@@ -500,6 +500,13 @@ pub(crate) struct ResonanceBodyForce {
     pub(crate) torque: f64,
 }
 
+/// A generalized resonance gradient and its independent absolute numerical error.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ResonanceBodyForceWithError {
+    pub(crate) force: ResonanceBodyForce,
+    pub(crate) absolute_error: ResonanceBodyForce,
+}
+
 /// A spatially attributed environmental signal after passing through the
 /// organism's existing realized resonance geometry. This does not add a
 /// separate sensory system: it preserves which boundary location contributed
@@ -3104,6 +3111,644 @@ fn directional_resonance_boundary_interaction_frame_with_prepared_emitters(
         });
     }
     Some((samples, receiver_bodies, receiver_body_occluder_indices))
+}
+
+fn resonance_endpoint_indices(
+    provenance: &crate::source_exposure::BoundaryEndpointProvenance,
+) -> Option<(usize, usize, usize, usize)> {
+    use crate::source_exposure::{BoundaryEndpointProvenance, VisibilityCutEvent};
+    match provenance {
+        BoundaryEndpointProvenance::RigidTargetVertex {
+            body_index,
+            unit_index,
+            ..
+        } => Some((*body_index, *unit_index, 0, 0)),
+        BoundaryEndpointProvenance::RigidVisibilityIntersection { event, .. } => {
+            match event {
+                VisibilityCutEvent::StraightBoundaryIntersection {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    ..
+                }
+                | VisibilityCutEvent::CircleStraightIntersection {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    ..
+                }
+                | VisibilityCutEvent::RayThroughRigidFeature {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    ..
+                }
+                | VisibilityCutEvent::RayThroughCircleTangent {
+                    blocker_body_index,
+                    blocker_unit_index,
+                    target_body_index,
+                    target_unit_index,
+                    ..
+                } => Some((
+                    *target_body_index,
+                    *target_unit_index,
+                    *blocker_body_index,
+                    *blocker_unit_index,
+                )),
+                VisibilityCutEvent::TargetVertex { .. } | VisibilityCutEvent::Unresolved { .. } => {
+                    None
+                }
+            }
+        }
+        BoundaryEndpointProvenance::UnresolvedVisibilityCut { .. } => None,
+    }
+}
+
+fn material_center_derivative(
+    center: (f64, f64),
+    center_of_mass: (f64, f64),
+    coordinate: usize,
+) -> Option<super::resonance_boundary_far_field::BoundaryKernelVector> {
+    let derivative = match coordinate {
+        0 => (1.0, 0.0),
+        1 => (0.0, 1.0),
+        2 => (-(center.1 - center_of_mass.1), center.0 - center_of_mass.0),
+        _ => return None,
+    };
+    (derivative.0.is_finite() && derivative.1.is_finite()).then_some(
+        super::resonance_boundary_far_field::BoundaryKernelVector {
+            x: derivative.0,
+            y: derivative.1,
+        },
+    )
+}
+
+fn material_part_translation_derivative(
+    geometry: &crate::physical_body_geometry::PhysicalBodyGeometry,
+    center_of_mass: (f64, f64),
+    unit_index: usize,
+    coordinate: usize,
+) -> Option<super::resonance_boundary_far_field::BoundaryKernelVector> {
+    let part = crate::source_exposure::visibility_part(geometry, 0, unit_index)?;
+    let derivative = match coordinate {
+        0 => (1.0, 0.0),
+        1 => (0.0, 1.0),
+        2 => (-(part.y - center_of_mass.1), part.x - center_of_mass.0),
+        _ => return None,
+    };
+    (derivative.0.is_finite() && derivative.1.is_finite()).then_some(
+        super::resonance_boundary_far_field::BoundaryKernelVector {
+            x: derivative.0,
+            y: derivative.1,
+        },
+    )
+}
+
+/// Evaluate one ordered source/receiver direction through the existing
+/// frequency-resolved samples, complete endpoint provenance, and one swept
+/// blocker inventory. Unsupported curved or unresolved samples fail closed so
+/// the caller can retain the exact visibility-aware reference evaluator.
+#[allow(clippy::too_many_arguments)]
+fn directional_resonance_generalized_forces_with_prepared_emitters(
+    source: &crate::physical_material::PhysicalMaterial,
+    receiver: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    emitters: &[MaterialResonanceEmitter],
+    source_index: usize,
+    receiver_index: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForceWithError>> {
+    use super::resonance_boundary_far_field::{
+        BoundaryKernelVector, BoundaryPoseCoordinateDerivative, BoundaryPoseSampleDerivative,
+        BoundaryPotentialError, BoundarySampleMotionBound, VisibilityBodyMotionBound,
+        WeightedBoundaryKernelSample,
+    };
+
+    let prepared_source = emitters.iter().find(|emitter| emitter.source_index == source_index)?;
+    let prepared_receiver =
+        emitters.iter().find(|emitter| emitter.source_index == receiver_index)?;
+    let (samples, geometries, occluder_mapping) =
+        directional_resonance_boundary_interaction_frame_with_prepared_emitters(
+            source,
+            receiver,
+            occluders,
+            catalog,
+            tick,
+            Some(prepared_source),
+            Some(prepared_receiver),
+        )?;
+    let mut result = vec![ResonanceBodyForceWithError::default(); occluders.len() + 2];
+    if samples.is_empty() {
+        return Some(result);
+    }
+    if geometries.is_empty()
+        || geometries.len() != occluder_mapping.len()
+        || occluder_mapping.first() != Some(&None)
+    {
+        return None;
+    }
+
+    // Reuse the exact geometry frame returned by the reception path. It is
+    // receiver-first, followed by precisely the occluders retained by its
+    // conservative source-to-boundary envelope.
+    let mut body_materials = Vec::with_capacity(geometries.len());
+    body_materials.push(receiver);
+    for original_index in occluder_mapping.iter().skip(1) {
+        body_materials.push(occluders.get((*original_index)?)?);
+    }
+    let body_centers = body_materials
+        .iter()
+        .map(|material| environmental_material_geometry(material).map(|(x, y, _)| (x, y)))
+        .collect::<Option<Vec<_>>>()?;
+    let body_centers_of_mass = body_materials
+        .iter()
+        .map(|material| {
+            let properties = material.mass_properties(catalog, None)?;
+            Some((properties.center_x, properties.center_y))
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let source_center = environmental_material_geometry(source)?;
+    let source_center = (source_center.0, source_center.1);
+    let source_center_of_mass = source.mass_properties(catalog, None)?;
+    let source_center_of_mass = (
+        source_center_of_mass.center_x,
+        source_center_of_mass.center_y,
+    );
+    let receiver_center = body_centers[0];
+
+    let mut body_motion = Vec::with_capacity(geometries.len());
+    for (geometry, center_of_mass) in geometries.iter().zip(&body_centers_of_mass) {
+        let radius_bound = geometry
+            .parts
+            .iter()
+            .map(|part| {
+                (part.x - center_of_mass.0).hypot(part.y - center_of_mass.1)
+                    + part.form.bounding_radius()
+            })
+            .fold(0.0_f64, f64::max);
+        if !radius_bound.is_finite() {
+            return None;
+        }
+        body_motion.push(VisibilityBodyMotionBound {
+            translation_bound: 0.0,
+            angular_bound_radians: 0.0,
+            rotation_pivot: *center_of_mass,
+            radius_bound,
+        });
+    }
+    let target_body_indices = [0usize];
+    let inventory = crate::source_exposure::build_visibility_pose_cell_candidate_inventory(
+        source_center,
+        &geometries,
+        &target_body_indices,
+        0.0,
+        &body_motion,
+    )?;
+
+    // A signature identifies one target-edge partition. Different edges are
+    // evaluated independently, then their derivatives and errors are summed.
+    let mut groups: Vec<(crate::source_exposure::VisibilityCutSignature, usize, Vec<usize>)> =
+        Vec::new();
+    for (sample_index, sample) in samples.iter().enumerate() {
+        let signature = sample.visibility_signature.as_ref()?.clone();
+        let start = sample.start_provenance.as_ref()?;
+        let end = sample.end_provenance.as_ref()?;
+        let (target_body, target_unit, _, _) = resonance_endpoint_indices(start)?;
+        let (end_target_body, end_target_unit, _, _) = resonance_endpoint_indices(end)?;
+        if target_body != 0 || end_target_body != 0 || target_unit != end_target_unit {
+            return None;
+        }
+        if !matches!(sample.boundary, MaterialAuraBoundary::Straight { .. }) {
+            return None;
+        }
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|(existing, unit, _)| existing == &signature && *unit == target_unit)
+        {
+            group.2.push(sample_index);
+        } else {
+            groups.push((signature, target_unit, vec![sample_index]));
+        }
+    }
+
+    for (signature, target_unit, sample_indices) in groups {
+        let endpoint_provenance =
+            signature.endpoint_provenance_for_target(0, target_unit)?;
+        let endpoints = endpoint_provenance.iter().collect::<Vec<_>>();
+        let ordered_cuts = signature.ordered_cut_parameters();
+        let sampled_signatures = [signature.clone()];
+
+        let mut frequencies = Vec::new();
+        for &sample_index in &sample_indices {
+            let sample = &samples[sample_index];
+            for source_component in &sample.source_emitted_spectrum.components {
+                for receiver_component in &sample.receiver_emitted_spectrum.components {
+                    if (source_component.frequency_cycles_per_day
+                        - receiver_component.frequency_cycles_per_day)
+                        .abs()
+                        <= 1.0e-9
+                        && !frequencies.iter().any(|frequency: &f64| {
+                            (*frequency - source_component.frequency_cycles_per_day).abs()
+                                <= 1.0e-9
+                        })
+                    {
+                        frequencies.push(source_component.frequency_cycles_per_day);
+                    }
+                }
+            }
+        }
+        frequencies.sort_by(f64::total_cmp);
+
+        for frequency in frequencies {
+            let coefficient_for_sample = |sample: &ResonanceBoundaryInteractionSample| {
+                let mut coefficient = 0.0;
+                for source_component in &sample.source_emitted_spectrum.components {
+                    for receiver_component in &sample.receiver_emitted_spectrum.components {
+                        if (source_component.frequency_cycles_per_day - frequency).abs() <= 1.0e-9
+                            && (receiver_component.frequency_cycles_per_day - frequency).abs()
+                                <= 1.0e-9
+                        {
+                            coefficient += 2.0
+                                * source_component.amplitude
+                                * receiver_component.amplitude
+                                * (source_component.phase_radians
+                                    - receiver_component.phase_radians)
+                                    .cos()
+                                * sample.source_mass_scale
+                                * sample.receiver_mass_scale;
+                        }
+                    }
+                }
+                coefficient
+            };
+
+            let mut weighted_samples = Vec::with_capacity(sample_indices.len());
+            let mut sample_motion = Vec::with_capacity(sample_indices.len());
+            let mut coefficients = Vec::with_capacity(sample_indices.len());
+            for &sample_index in &sample_indices {
+                let sample = &samples[sample_index];
+                let coefficient = coefficient_for_sample(sample);
+                let MaterialAuraBoundary::Straight { start, end, .. } = sample.boundary else {
+                    return None;
+                };
+                let weight = coefficient * sample.projected_extent;
+                if !weight.is_finite() || !coefficient.is_finite() {
+                    return None;
+                }
+                weighted_samples.push(WeightedBoundaryKernelSample {
+                    position: BoundaryKernelVector {
+                        x: sample.receiver_x,
+                        y: sample.receiver_y,
+                    },
+                    weight,
+                });
+                sample_motion.push(BoundarySampleMotionBound::default());
+                coefficients.push((coefficient, start, end));
+            }
+            let absolute_weight = weighted_samples
+                .iter()
+                .map(|sample| sample.weight.abs())
+                .sum::<f64>();
+            if !absolute_weight.is_finite() || absolute_weight <= f64::EPSILON {
+                continue;
+            }
+
+            let mut coordinates = Vec::with_capacity((geometries.len() + 1) * 3);
+            for coordinate_body in 0..=geometries.len() {
+                for coordinate_axis in 0..3 {
+                    let source_coordinate = coordinate_body == 0;
+                    let source_center_derivative = if source_coordinate {
+                        material_center_derivative(
+                            source_center,
+                            source_center_of_mass,
+                            coordinate_axis,
+                        )?
+                    } else {
+                        BoundaryKernelVector::default()
+                    };
+                    let receiver_center_derivative = if coordinate_body == 1 {
+                        material_center_derivative(
+                            receiver_center,
+                            body_centers_of_mass[0],
+                            coordinate_axis,
+                        )?
+                    } else {
+                        BoundaryKernelVector::default()
+                    };
+                    let mut pose_samples = Vec::with_capacity(sample_indices.len());
+                    for (sample_offset, &sample_index) in sample_indices.iter().enumerate() {
+                        let sample = &samples[sample_index];
+                        let MaterialAuraBoundary::Straight { start, end, normal } =
+                            sample.boundary
+                        else {
+                            return None;
+                        };
+                        let start_provenance = sample.start_provenance.as_ref()?;
+                        let end_provenance = sample.end_provenance.as_ref()?;
+                        let (target_body, target_unit, blocker_body, blocker_unit) =
+                            resonance_endpoint_indices(start_provenance)?;
+                        if target_body != 0 {
+                            return None;
+                        }
+                        let (end_target_body, end_target_unit, _, _) =
+                            resonance_endpoint_indices(end_provenance)?;
+                        if end_target_body != target_body || end_target_unit != target_unit {
+                            return None;
+                        }
+
+                        let mut target_translation = BoundaryKernelVector::default();
+                        let mut target_angular = 0.0;
+                        if coordinate_body > 0 && coordinate_body - 1 == target_body {
+                            target_translation = material_part_translation_derivative(
+                                &geometries[target_body],
+                                body_centers_of_mass[target_body],
+                                target_unit,
+                                coordinate_axis,
+                            )?;
+                            target_angular = f64::from(coordinate_axis == 2);
+                        }
+                        let mut blocker_translation = BoundaryKernelVector::default();
+                        let mut blocker_angular = 0.0;
+                        if coordinate_body > 0 && coordinate_body - 1 == blocker_body {
+                            blocker_translation = material_part_translation_derivative(
+                                geometries.get(blocker_body)?,
+                                *body_centers_of_mass.get(blocker_body)?,
+                                blocker_unit,
+                                coordinate_axis,
+                            )?;
+                            blocker_angular = f64::from(coordinate_axis == 2);
+                        }
+                        let start_resolved =
+                            super::resonance_boundary_far_field::resolve_boundary_endpoint_pose_derivative_with_source(
+                                start_provenance,
+                                target_body,
+                                target_unit,
+                                blocker_body,
+                                blocker_unit,
+                                &geometries,
+                                BoundaryKernelVector {
+                                    x: source_center.0,
+                                    y: source_center.1,
+                                },
+                                source_center_derivative,
+                                target_translation,
+                                target_angular,
+                                blocker_translation,
+                                blocker_angular,
+                            )?;
+                        let end_indices = resonance_endpoint_indices(end_provenance)?;
+                        let end_resolved =
+                            super::resonance_boundary_far_field::resolve_boundary_endpoint_pose_derivative_with_source(
+                                end_provenance,
+                                end_indices.0,
+                                end_indices.1,
+                                end_indices.2,
+                                end_indices.3,
+                                &geometries,
+                                BoundaryKernelVector {
+                                    x: source_center.0,
+                                    y: source_center.1,
+                                },
+                                source_center_derivative,
+                                target_translation,
+                                target_angular,
+                                blocker_translation,
+                                blocker_angular,
+                            )?;
+                        let close_point = |left: BoundaryKernelVector, right: (f64, f64)| {
+                            (left.x - right.0).hypot(left.y - right.1)
+                                <= 1.0e-8
+                                    * left.x.abs().max(left.y.abs()).max(right.0.abs()).max(right.1.abs()).max(1.0)
+                        };
+                        if !close_point(start_resolved.point, start)
+                            || !close_point(end_resolved.point, end)
+                        {
+                            return None;
+                        }
+                        let source_derivative_bound = source_center_derivative.x
+                            .hypot(source_center_derivative.y);
+                        let start_derivative_bound = start_resolved
+                            .derivative
+                            .x
+                            .hypot(start_resolved.derivative.y);
+                        let end_derivative_bound = end_resolved
+                            .derivative
+                            .x
+                            .hypot(end_resolved.derivative.y);
+                        let (coefficient, _, _) = coefficients[sample_offset];
+                        let derivative =
+                            super::resonance_boundary_far_field::straight_interval_sample_pose_derivative(
+                                BoundaryKernelVector {
+                                    x: source_center.0,
+                                    y: source_center.1,
+                                },
+                                BoundaryKernelVector { x: start.0, y: start.1 },
+                                BoundaryKernelVector { x: end.0, y: end.1 },
+                                BoundaryKernelVector {
+                                    x: normal.0,
+                                    y: normal.1,
+                                },
+                                source_center_derivative,
+                                start_resolved.derivative,
+                                end_resolved.derivative,
+                                0.0,
+                                0.0,
+                                0.0,
+                                source_derivative_bound,
+                                start_derivative_bound,
+                                end_derivative_bound,
+                                0.0,
+                                coefficient,
+                            )?;
+                        pose_samples.push(derivative);
+                    }
+                    coordinates.push(BoundaryPoseCoordinateDerivative {
+                        source_center_derivative,
+                        receiver_center_derivative,
+                        source_center_derivative_bound: source_center_derivative.x
+                            .hypot(source_center_derivative.y),
+                        receiver_center_derivative_bound: receiver_center_derivative.x
+                            .hypot(receiver_center_derivative.y),
+                        samples: pose_samples,
+                    });
+                }
+            }
+
+            let tolerance = 1.0e-7 * absolute_weight.max(1.0);
+            let evaluation =
+                evaluate_boundary_kernel_samples_adaptive_generalized_with_blocker_inventory(
+                    BoundaryKernelVector {
+                        x: source_center.0,
+                        y: source_center.1,
+                    },
+                    BoundaryKernelVector {
+                        x: receiver_center.0,
+                        y: receiver_center.1,
+                    },
+                    weighted_samples,
+                    BoundaryPotentialError {
+                        potential: tolerance,
+                        source_force: tolerance,
+                        receiver_force: tolerance,
+                    },
+                    &ordered_cuts,
+                    sample_motion,
+                    coordinates,
+                    &signature,
+                    &sampled_signatures,
+                    &endpoints,
+                    &inventory,
+                    source_center,
+                    &geometries,
+                    &target_body_indices,
+                    0,
+                )?;
+
+            let mut add_coordinate = |local_body: usize,
+                                      axis: usize,
+                                      derivative: f64,
+                                      absolute_error: f64| {
+                let contribution = result.get_mut(local_body)?;
+                let scale = 0.5;
+                match axis {
+                    0 => {
+                        contribution.force.x -= scale * derivative;
+                        contribution.absolute_error.x += scale * absolute_error;
+                    }
+                    1 => {
+                        contribution.force.y -= scale * derivative;
+                        contribution.absolute_error.y += scale * absolute_error;
+                    }
+                    2 => {
+                        contribution.force.torque -= scale * derivative;
+                        contribution.absolute_error.torque += scale * absolute_error;
+                    }
+                    _ => return None,
+                }
+                [
+                    contribution.force.x,
+                    contribution.force.y,
+                    contribution.force.torque,
+                    contribution.absolute_error.x,
+                    contribution.absolute_error.y,
+                    contribution.absolute_error.torque,
+                ]
+                .iter()
+                .all(|value| value.is_finite())
+                .then_some(())
+            };
+            for (coordinate_index, coordinate) in evaluation.coordinates.iter().enumerate() {
+                let local_body = coordinate_index / 3;
+                let axis = coordinate_index % 3;
+                add_coordinate(
+                    local_body,
+                    axis,
+                    coordinate.derivative,
+                    coordinate.absolute_error,
+                )?;
+            }
+        }
+    }
+
+    // Map the local receiver-first geometry inventory back to the caller's
+    // original occluder ordering. Stable world identities are attached later
+    // by the immutable world snapshot.
+    let mut mapped = vec![ResonanceBodyForceWithError::default(); occluders.len() + 2];
+    mapped[0] = result[0];
+    mapped[1] = result[1];
+    for (geometry_index, original_occluder) in occluder_mapping.iter().enumerate().skip(1) {
+        let original_occluder = (*original_occluder)?;
+        let target = mapped.get_mut(original_occluder + 2)?;
+        let local = result[geometry_index + 1];
+        target.force.x += local.force.x;
+        target.force.y += local.force.y;
+        target.force.torque += local.force.torque;
+        target.absolute_error.x += local.absolute_error.x;
+        target.absolute_error.y += local.absolute_error.y;
+        target.absolute_error.torque += local.absolute_error.torque;
+    }
+    mapped
+        .iter()
+        .all(|entry| {
+            [
+                entry.force.x,
+                entry.force.y,
+                entry.force.torque,
+                entry.absolute_error.x,
+                entry.absolute_error.y,
+                entry.absolute_error.torque,
+            ]
+            .iter()
+            .all(|value| value.is_finite() && *value >= if value == &entry.force.x || value == &entry.force.y || value == &entry.force.torque { f64::NEG_INFINITY } else { 0.0 })
+        })
+        .then_some(mapped)
+}
+
+/// Combine the two directional frequency-resolved gradients into the existing
+/// symmetric pair potential. Every participant receives the half-weighted
+/// derivative from each direction; error bounds are accumulated independently.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn resonance_multi_body_generalized_forces_with_prepared_emitters(
+    a: &crate::physical_material::PhysicalMaterial,
+    b: &crate::physical_material::PhysicalMaterial,
+    occluders: &[crate::physical_material::PhysicalMaterial],
+    emitters: &[MaterialResonanceEmitter],
+    index_a: usize,
+    index_b: usize,
+    catalog: &[crate::resources::BaseResource],
+    tick: u64,
+) -> Option<Vec<ResonanceBodyForceWithError>> {
+    let ab = directional_resonance_generalized_forces_with_prepared_emitters(
+        a, b, occluders, emitters, index_a, index_b, catalog, tick,
+    )?;
+    let ba = directional_resonance_generalized_forces_with_prepared_emitters(
+        b, a, occluders, emitters, index_b, index_a, catalog, tick,
+    )?;
+    if ab.len() != occluders.len() + 2 || ba.len() != ab.len() {
+        return None;
+    }
+    let mut combined = vec![ResonanceBodyForceWithError::default(); ab.len()];
+    for index in 0..combined.len() {
+        let (ab_index, ba_index) = if index == 0 {
+            (0, 1)
+        } else if index == 1 {
+            (1, 0)
+        } else {
+            (index, index)
+        };
+        let left = ab[ab_index];
+        let right = ba[ba_index];
+        let target = &mut combined[index];
+        target.force.x = 0.5 * (left.force.x + right.force.x);
+        target.force.y = 0.5 * (left.force.y + right.force.y);
+        target.force.torque = 0.5 * (left.force.torque + right.force.torque);
+        target.absolute_error.x = 0.5 * (left.absolute_error.x + right.absolute_error.x);
+        target.absolute_error.y = 0.5 * (left.absolute_error.y + right.absolute_error.y);
+        target.absolute_error.torque =
+            0.5 * (left.absolute_error.torque + right.absolute_error.torque);
+    }
+    combined
+        .iter()
+        .all(|entry| {
+            [
+                entry.force.x,
+                entry.force.y,
+                entry.force.torque,
+                entry.absolute_error.x,
+                entry.absolute_error.y,
+                entry.absolute_error.torque,
+            ]
+            .iter()
+            .all(|value| value.is_finite())
+                && entry.absolute_error.x >= 0.0
+                && entry.absolute_error.y >= 0.0
+                && entry.absolute_error.torque >= 0.0
+        })
+        .then_some(combined)
 }
 
 /// One symmetric resonance-derived pair potential for an isolated pair,
