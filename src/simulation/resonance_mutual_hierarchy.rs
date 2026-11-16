@@ -617,7 +617,7 @@ mod tests {
         bodies_a: &[usize],
         bodies_b: &[usize],
         visibility_certified: bool,
-    ) -> MutualClusterCertificate<()> {
+    ) -> MutualClusterCertificate<(Vec<usize>, Vec<usize>)> {
         let bodies = bodies_a
             .iter()
             .chain(bodies_b.iter())
@@ -631,7 +631,7 @@ mod tests {
             .collect();
         MutualClusterCertificate {
             visibility_certified,
-            evaluation: (),
+            evaluation: (bodies_a.to_vec(), bodies_b.to_vec()),
             errors: MutualClusterErrorBounds {
                 potential: 0.0,
                 bodies,
@@ -670,6 +670,10 @@ mod tests {
         let accepted = &result.accepted_cluster_pairs[0];
         assert_eq!(accepted.bodies_a.len(), 2);
         assert_eq!(accepted.bodies_b.len(), 2);
+        assert_eq!(
+            accepted.evaluation,
+            (accepted.bodies_a.clone(), accepted.bodies_b.clone())
+        );
         assert!(accepted.errors.is_within(
             &accepted.bodies_a,
             &accepted.bodies_b,
