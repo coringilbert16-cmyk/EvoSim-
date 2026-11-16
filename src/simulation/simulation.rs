@@ -29,8 +29,6 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
-const PHYSICS_TIME_STEP_DAYS: f64 = 1.0 / crate::harmonics::TICKS_PER_SIMULATED_DAY as f64;
-
 fn environmental_material_identity_set(environment: &Environment) -> HashSet<u64> {
     environment
         .field
@@ -932,6 +930,12 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        self.step_with_transport_reuse::<true>();
+    }
+
+    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
+        &mut self,
+    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
@@ -941,10 +945,6 @@ impl Simulation {
         self.environmental_local_resonance_samples.clear();
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
-        // Stable physical IDs are independent of the ambient-flow sampler and
-        // must be ready before any chemistry or force snapshot is constructed.
-        self.environment.field.assign_missing_material_identities();
-
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
 
@@ -1022,9 +1022,17 @@ impl Simulation {
             })
             .collect();
 
-        // Ambient flow remains a read-only overdamped velocity field. It does
-        // not translate, rotate, damp, or otherwise mutate free material bodies;
-        // Newtonian resonance motion below is their sole live movement authority.
+        // Ambient transport remains the current movement authority until the
+        // mutual force evaluator can meet the standard-world performance gate.
+        // Its behavior is retained unchanged while Newtonian activation is gated.
+        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
+            REUSE_SINGLETON_CENTER_VELOCITY,
+        >(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            self.environment.width,
+            self.environment.height,
+        );
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
@@ -2107,19 +2115,6 @@ impl Simulation {
         self.release_finished_dead_organisms(&living_ids);
         // One simulation tick is exactly 1 / TICKS_PER_SIMULATED_DAY simulated
         // days. Runtime ticks_per_second changes pacing only, never physics dt.
-        if let Some(world_snapshot) =
-            crate::world_tone_snapshot::LocalResonanceWorldSnapshot::from_simulation(self)
-        {
-            if let Some((_pair_count, accumulator)) =
-                world_snapshot.accumulate_complete_pair_forces(&self.environment.catalog)
-            {
-                let _ = world_snapshot.commit_environmental_motion_transaction(
-                    self,
-                    &accumulator,
-                    PHYSICS_TIME_STEP_DAYS,
-                );
-            }
-        }
         self.energy_ledger.total_usable_energy_held = crate::reproduction::total_usable_energy_held(
             &self.organisms,
             &self.decomposing_bodies,

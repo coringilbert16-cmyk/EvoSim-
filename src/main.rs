@@ -38,7 +38,7 @@ mod world_tone;
 mod world_tone_snapshot;
 
 #[path = "simulation/resonance_mutual_hierarchy.rs"]
-#[allow(dead_code)] // The live tick uses the adaptive evaluator; audit helpers remain.
+#[allow(dead_code)] // Runtime activation is gated on standard-world evaluator performance.
 mod resonance_mutual_hierarchy;
 
 // Active physical geometry authority stack.

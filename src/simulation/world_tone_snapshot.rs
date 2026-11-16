@@ -812,7 +812,7 @@ pub(crate) struct ResonanceWorldPairForceEvaluation {
 /// A validated, immutable proposal for advancing one world body. The caller
 /// still owns collision checks, energy settlement, and the eventual atomic commit.
 #[derive(Clone, Debug)]
-#[allow(dead_code)] // Consumed by the live movement/energy transaction.
+#[allow(dead_code)] // Prepared for Newtonian movement; runtime activation remains gated.
 pub(crate) struct ResonanceWorldBodyMotion {
     pub(crate) body_index: usize,
     pub(crate) environmental_identity: u64,
@@ -826,7 +826,7 @@ pub(crate) struct ResonanceWorldBodyMotion {
 /// are accumulated before any body is advanced, so a body participating in
 /// several interactions receives their vector sum exactly once.
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)] // Live Newtonian ticks accumulate force and potential state here.
+#[allow(dead_code)] // Staged until the mutual evaluator meets the runtime performance gate.
 pub(crate) struct ResonanceForceAccumulator {
     bodies: std::collections::BTreeMap<
         usize,
@@ -845,7 +845,7 @@ pub(crate) struct ResonanceForceAccumulator {
     complete_world_body_count: Option<usize>,
 }
 
-#[allow(dead_code)] // Audit and focused test helpers share the live accumulator API.
+#[allow(dead_code)] // Focused tests and audit helpers exercise the staged transaction API.
 impl ResonanceForceAccumulator {
     /// Add one environmental body's contribution. Reject identity changes,
     /// non-finite gradients, and overflow without partially modifying the sum.
@@ -4364,71 +4364,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn live_tick_advances_environmental_momentum_by_one_physics_tick() {
-        let mut moving = Simulation::new(887, 10.0);
-        let mut reference = Simulation::new(887, 10.0);
-        clear_environment_physical_material(&mut moving);
-        clear_environment_physical_material(&mut reference);
-
-        let make_body = |simulation: &mut Simulation, velocity_x: f64| {
-            let catalog = simulation.environment.catalog.clone();
-            let mut body = PhysicalMaterial::realized(
-                Material::free_base("Hydrogen", 1.0),
-                vec![Placement {
-                    x: 210.0,
-                    y: 210.0,
-                    rotation_radians: 0.0,
-                }],
-                &catalog,
-            )
-            .expect("single environmental body should be realized");
-            body.inertial_motion.velocity_x = velocity_x;
-            assert!(simulation
-                .environment
-                .field
-                .deposit_physical(210.0, 210.0, body, &catalog,));
-        };
-        make_body(
-            &mut moving,
-            crate::harmonics::TICKS_PER_SIMULATED_DAY as f64,
-        );
-        make_body(&mut reference, 0.0);
-
-        moving.step();
-        reference.step();
-
-        let x_position = |simulation: &Simulation| {
-            simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| cell.physical_materials.iter())
-                .find(|body| {
-                    body.material
-                        .parts
-                        .iter()
-                        .any(|(name, amount)| name == "Hydrogen" && (*amount - 1.0).abs() <= 1.0e-9)
-                })
-                .and_then(|body| body.placements.as_ref())
-                .and_then(|placements| placements.first())
-                .map(|placement| placement.x)
-                .expect("environmental body should remain in the field")
-        };
-        let reference_x = x_position(&reference);
-        assert!(
-            (reference_x - 210.0).abs() <= 1.0e-7,
-            "a body at rest must not be advected by the ambient flow field; observed x={reference_x:?}"
-        );
-        let displacement_difference = x_position(&moving) - reference_x;
-        assert!(
-            (displacement_difference - 1.0).abs() <= 1.0e-7,
-            "one physics tick should advance a 24,000-unit/day body by one world unit; observed differential displacement {displacement_difference:?}"
-        );
-    }
-
-    #[test]
+        #[test]
     fn environmental_newtonian_motion_commits_field_and_energy_together() {
         let mut simulation = Simulation::new(409, 1.0);
         clear_environment_physical_material(&mut simulation);

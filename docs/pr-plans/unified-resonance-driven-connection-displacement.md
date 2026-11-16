@@ -471,3 +471,18 @@ This audit compares the live branch against the original objective: free environ
 ### Completion definition
 
 This PR is not complete when the force helpers compile or when a staged topology transaction passes in isolation. It is complete only when the ordinary live environmental tick uses one chemistry-only Newtonian movement authority; free materials visibly move from the existing physical interaction law; compatible approach and activation progress through real motion; COMBINE/BREAK/displacement resolve through the same atomic movement/chemistry/energy boundary; organism code remains unchanged; and full CI is green.
+
+
+## 12. Runtime evaluator activation gate — 2026-11-16
+
+A live Newtonian integration attempt was committed and validated through the standard CI baseline, then **disabled** because its measured throughput was not acceptable.
+
+- The attempted implementation used the shared physics clock, (1 / 24{,}000) simulated days per tick, and connected the adaptive hierarchy to the live movement/energy transaction.
+- In the standard 60-second, seed-42 baseline with 1,280 initial physical materials, that commit completed at tick 1. The preceding green PR head completed at tick 229 under the same requested setup.
+- The bottleneck is visible in `mutual_cluster_pair_evaluation`: an accepted cluster still loops through every `bodies_a × bodies_b` pair and calls `pair_force_and_potential_contributions` to build its inventories. The hierarchy's current far-field callback therefore retains pair-level work instead of producing the needed cluster aggregate directly.
+- Live activation was reverted. The existing ambient transport path remains the live material movement authority for now; the Newtonian staging, adaptive hierarchy, and before/after energy-transaction foundations remain available for focused tests.
+- The physical-time mapping is settled by `TICKS_PER_SIMULATED_DAY`; the remaining force-evaluator issue is computational, not a request for a user-selected tick rate.
+
+**Still required before live Newtonian activation:** make accepted mutual clusters compute their frequency-resolved boundary interaction and independent potential/force/torque bounds without enumerating every body pair; verify error bounds against the small-world exact oracle; and pass the standard 1,280-material baseline without the throughput collapse.
+
+**Still required for PR completion:** chemistry-native compatible-face approach and exact continuous snapping; activation coupled to the same geometric/resonance progress; physical incumbent push/displacement with adjacent reconnection; and one atomic movement/topology/activation/energy/field commit with full rollback. The new `connection_faces` API is still isolated from production contact discovery. Organism code remains out of scope.
