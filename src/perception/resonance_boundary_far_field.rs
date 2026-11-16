@@ -3240,6 +3240,216 @@ impl BoundaryKernelExpansion {
         .then_some(result)
     }
 
+    /// Differentiate the same first-order Taylor scalar potential returned
+    /// by evaluate(). The exact discrete derivative remains available above
+    /// as an oracle; this path adds a conservative bound on the derivative
+    /// remainder so force and torque cannot silently use a different energy.
+    pub(crate) fn evaluate_approximate_pose_coordinate_derivative(
+        &self,
+        coordinate: &BoundaryPoseCoordinateDerivative,
+    ) -> Option<BoundaryPoseDerivativeEvaluation> {
+        let exact_bound = self.evaluate_pose_coordinate_derivative(coordinate)?;
+        if coordinate.samples.len() != self.samples.len() || self.samples.is_empty() {
+            return None;
+        }
+
+        let center = self.sample_center;
+        let source_delta = BoundaryKernelVector {
+            x: center.x - self.source_center.x,
+            y: center.y - self.source_center.y,
+        };
+        let receiver_delta = BoundaryKernelVector {
+            x: center.x - self.receiver_center.x,
+            y: center.y - self.receiver_center.y,
+        };
+        let source_distance = source_delta.norm();
+        let receiver_distance = receiver_delta.norm();
+        let center_displacement = coordinate
+            .samples
+            .iter()
+            .map(|sample| sample.position_displacement_bound)
+            .sum::<f64>()
+            / coordinate.samples.len() as f64;
+        let maximum_sample_displacement = coordinate
+            .samples
+            .iter()
+            .map(|sample| sample.position_displacement_bound)
+            .fold(0.0_f64, f64::max);
+        let source_min = source_distance
+            - center_displacement
+            - coordinate.source_center_derivative_bound;
+        let receiver_min = receiver_distance
+            - center_displacement
+            - coordinate.receiver_center_derivative_bound;
+        if !source_min.is_finite()
+            || !receiver_min.is_finite()
+            || source_min <= f64::EPSILON
+            || receiver_min <= f64::EPSILON
+        {
+            return None;
+        }
+
+        let (source_value, source_gradient) =
+            radial_kernel_value_gradient(source_delta, source_distance);
+        let (receiver_value, receiver_gradient) =
+            radial_kernel_value_gradient(receiver_delta, receiver_distance);
+        let kernel = source_value * receiver_value;
+        let gradient = BoundaryKernelVector {
+            x: source_gradient.x * receiver_value + receiver_gradient.x * source_value,
+            y: source_gradient.y * receiver_value + receiver_gradient.y * source_value,
+        };
+        let hessian_apply = |vector: BoundaryKernelVector| {
+            let source_hessian =
+                radial_hessian_apply(source_delta, source_distance, vector);
+            let receiver_hessian =
+                radial_hessian_apply(receiver_delta, receiver_distance, vector);
+            BoundaryKernelVector {
+                x: source_hessian.x * receiver_value
+                    + receiver_hessian.x * source_value
+                    + source_gradient.x * receiver_gradient.dot(vector)
+                    + receiver_gradient.x * source_gradient.dot(vector),
+                y: source_hessian.y * receiver_value
+                    + receiver_hessian.y * source_value
+                    + source_gradient.y * receiver_gradient.dot(vector)
+                    + receiver_gradient.y * source_gradient.dot(vector),
+            }
+        };
+
+        let mut center_derivative = BoundaryKernelVector::default();
+        let mut total_weight_derivative = 0.0;
+        let mut first_moment_derivative = BoundaryKernelVector::default();
+        for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+            center_derivative.x += pose.position_derivative.x;
+            center_derivative.y += pose.position_derivative.y;
+            total_weight_derivative += pose.weight_derivative;
+            let offset = BoundaryKernelVector {
+                x: sample.position.x - center.x,
+                y: sample.position.y - center.y,
+            };
+            first_moment_derivative.x += pose.weight_derivative * offset.x
+                + sample.weight * (pose.position_derivative.x);
+            first_moment_derivative.y += pose.weight_derivative * offset.y
+                + sample.weight * (pose.position_derivative.y);
+        }
+        let inverse_count = 1.0 / self.samples.len() as f64;
+        center_derivative.x *= inverse_count;
+        center_derivative.y *= inverse_count;
+        first_moment_derivative.x -= self.total_weight * center_derivative.x;
+        first_moment_derivative.y -= self.total_weight * center_derivative.y;
+
+        let source_motion = coordinate.source_center_derivative;
+        let receiver_motion = coordinate.receiver_center_derivative;
+        let source_hessian_motion =
+            radial_hessian_apply(source_delta, source_distance, source_motion);
+        let receiver_hessian_motion =
+            radial_hessian_apply(receiver_delta, receiver_distance, receiver_motion);
+        let gradient_derivative_from_centers = BoundaryKernelVector {
+            x: hessian_apply(center_derivative).x
+                - receiver_value * source_hessian_motion.x
+                - receiver_gradient.x * source_gradient.dot(source_motion)
+                - source_value * receiver_hessian_motion.x
+                - source_gradient.x * receiver_gradient.dot(receiver_motion),
+            y: hessian_apply(center_derivative).y
+                - receiver_value * source_hessian_motion.y
+                - receiver_gradient.y * source_gradient.dot(source_motion)
+                - source_value * receiver_hessian_motion.y
+                - source_gradient.y * receiver_gradient.dot(receiver_motion),
+        };
+        let scalar_gradient_source = BoundaryKernelVector {
+            x: -source_gradient.x * receiver_value,
+            y: -source_gradient.y * receiver_value,
+        };
+        let scalar_gradient_receiver = BoundaryKernelVector {
+            x: -receiver_gradient.x * source_value,
+            y: -receiver_gradient.y * source_value,
+        };
+        let derivative = total_weight_derivative * kernel
+            + self.total_weight
+                * (gradient.dot(center_derivative)
+                    + scalar_gradient_source.dot(source_motion)
+                    + scalar_gradient_receiver.dot(receiver_motion))
+            + gradient_derivative_from_centers.dot(self.first_moment)
+            + gradient.dot(first_moment_derivative);
+        if !derivative.is_finite() {
+            return None;
+        }
+
+        let source_value_bound = 1.0 / (1.0 + source_min);
+        let receiver_value_bound = 1.0 / (1.0 + receiver_min);
+        let source_gradient_bound = 1.0 / (1.0 + source_min).powi(2);
+        let receiver_gradient_bound = 1.0 / (1.0 + receiver_min).powi(2);
+        let source_hessian_bound = radial_hessian_bound(source_min);
+        let receiver_hessian_bound = radial_hessian_bound(receiver_min);
+        let source_third_bound = radial_third_bound(source_min);
+        let receiver_third_bound = radial_third_bound(receiver_min);
+        let hessian_bound = source_hessian_bound * receiver_value_bound
+            + receiver_hessian_bound * source_value_bound
+            + 2.0 * source_gradient_bound * receiver_gradient_bound;
+        let third_bound = source_third_bound * receiver_value_bound
+            + receiver_third_bound * source_value_bound
+            + 3.0 * source_hessian_bound * receiver_gradient_bound
+            + 3.0 * source_gradient_bound * receiver_hessian_bound;
+        let radius_bound = self.radius + maximum_sample_displacement + center_displacement;
+        let center_derivative_bound = coordinate
+            .samples
+            .iter()
+            .map(|sample| sample.position_derivative_bound)
+            .sum::<f64>()
+            / coordinate.samples.len() as f64;
+        if ![
+            hessian_bound,
+            third_bound,
+            radius_bound,
+            center_derivative_bound,
+        ]
+        .iter()
+        .all(|value| value.is_finite() && *value >= 0.0)
+        {
+            return None;
+        }
+
+        let mut approximation_error = 0.0;
+        for (sample, pose) in self.samples.iter().zip(&coordinate.samples) {
+            let maximum_weight = sample.weight.abs() + pose.absolute_weight_change_bound;
+            let offset_radius = radius_bound;
+            let delta_derivative_bound =
+                pose.position_derivative_bound + center_derivative_bound;
+            approximation_error += maximum_weight
+                * (0.5
+                    * third_bound
+                    * offset_radius
+                    * offset_radius
+                    * (center_derivative_bound
+                        + coordinate.source_center_derivative_bound
+                        + coordinate.receiver_center_derivative_bound)
+                    + hessian_bound * offset_radius * delta_derivative_bound)
+                + 0.5
+                    * pose.absolute_weight_derivative_bound
+                    * hessian_bound
+                    * offset_radius
+                    * offset_radius;
+        }
+        let roundoff_guard = 256.0
+            * f64::EPSILON
+            * (derivative.abs() + exact_bound.absolute_bound + approximation_error + 1.0);
+        let absolute_error = approximation_error + roundoff_guard;
+        let absolute_bound = exact_bound.absolute_bound + absolute_error;
+        [
+            derivative,
+            absolute_error,
+            absolute_bound,
+        ]
+        .iter()
+        .all(|value| value.is_finite())
+        .then_some(BoundaryPoseDerivativeEvaluation {
+            derivative,
+            absolute_bound,
+            absolute_error,
+            sample_position_derivative: exact_bound.sample_position_derivative,
+            sample_weight_derivative: exact_bound.sample_weight_derivative,
+        })
+    }
+
     /// Exact discrete sum, retained as the differential oracle.
     #[cfg(test)]
     fn exact_potential(&self) -> f64 {
