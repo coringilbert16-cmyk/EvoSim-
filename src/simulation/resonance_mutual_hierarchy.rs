@@ -160,6 +160,162 @@ impl MutualInteractionHierarchy {
         Some(())
     }
 
+
+    /// Traverse mutual cluster pairs, accepting only independently certified
+    /// potential, x/y force, torque, and visibility bounds. Rejected clusters
+    /// subdivide; body/body leaves always use the exact callback.
+    pub(crate) fn evaluate_adaptive<C, E>(
+        &self,
+        tolerance: MutualErrorTolerance,
+        mut evaluate_cluster: C,
+        mut evaluate_exact: E,
+    ) -> Option<AdaptiveTraversalResult>
+    where
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        E: FnMut(usize, usize) -> Option<()>,
+    {
+        if !tolerance.is_valid() {
+            return None;
+        }
+        let mut result = AdaptiveTraversalResult::default();
+        if let Some(root) = &self.root {
+            Self::visit_self_adaptive(
+                root,
+                &tolerance,
+                &mut evaluate_cluster,
+                &mut evaluate_exact,
+                &mut result,
+            )?;
+        }
+        result.exact_pairs.sort_unstable();
+        Some(result)
+    }
+
+    fn visit_self_adaptive<C, E>(
+        node: &Node,
+        tolerance: &MutualErrorTolerance,
+        evaluate_cluster: &mut C,
+        evaluate_exact: &mut E,
+        result: &mut AdaptiveTraversalResult,
+    ) -> Option<()>
+    where
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        E: FnMut(usize, usize) -> Option<()>,
+    {
+        if let NodeKind::Branch { left, right } = &node.kind {
+            Self::visit_self_adaptive(left, tolerance, evaluate_cluster, evaluate_exact, result)?;
+            Self::visit_distinct_adaptive(
+                left,
+                right,
+                tolerance,
+                evaluate_cluster,
+                evaluate_exact,
+                result,
+            )?;
+            Self::visit_self_adaptive(right, tolerance, evaluate_cluster, evaluate_exact, result)?;
+        }
+        Some(())
+    }
+
+    fn visit_distinct_adaptive<C, E>(
+        a: &Node,
+        b: &Node,
+        tolerance: &MutualErrorTolerance,
+        evaluate_cluster: &mut C,
+        evaluate_exact: &mut E,
+        result: &mut AdaptiveTraversalResult,
+    ) -> Option<()>
+    where
+        C: FnMut(&[usize], &[usize]) -> Option<MutualClusterCertificate>,
+        E: FnMut(usize, usize) -> Option<()>,
+    {
+        if let (NodeKind::Leaf(index_a), NodeKind::Leaf(index_b)) = (&a.kind, &b.kind) {
+            let pair = ((*index_a).min(*index_b), (*index_a).max(*index_b));
+            evaluate_exact(pair.0, pair.1)?;
+            result.exact_pairs.push(pair);
+            return Some(());
+        }
+
+        let bodies_a = Self::body_indices(a);
+        let bodies_b = Self::body_indices(b);
+        if let Some(certificate) = evaluate_cluster(&bodies_a, &bodies_b) {
+            if certificate.visibility_certified
+                && certificate
+                    .errors
+                    .is_within(&bodies_a, &bodies_b, tolerance)
+            {
+                result.accepted_cluster_pairs.push(AcceptedClusterPair {
+                    bodies_a,
+                    bodies_b,
+                    errors: certificate.errors,
+                });
+                return Some(());
+            }
+        }
+
+        match (&a.kind, &b.kind) {
+            (NodeKind::Branch { left, right }, NodeKind::Leaf(_)) => {
+                Self::visit_distinct_adaptive(
+                    left, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+                Self::visit_distinct_adaptive(
+                    right, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+            }
+            (NodeKind::Leaf(_), NodeKind::Branch { left, right }) => {
+                Self::visit_distinct_adaptive(
+                    a, left, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+                Self::visit_distinct_adaptive(
+                    a, right, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+            }
+            (NodeKind::Branch { left, right }, NodeKind::Branch { .. })
+                if Self::maximum_extent(a.bounds) >= Self::maximum_extent(b.bounds) =>
+            {
+                Self::visit_distinct_adaptive(
+                    left, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+                Self::visit_distinct_adaptive(
+                    right, b, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+            }
+            (
+                NodeKind::Branch { .. },
+                NodeKind::Branch {
+                    left: other_left,
+                    right: other_right,
+                },
+            ) => {
+                Self::visit_distinct_adaptive(
+                    a, other_left, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+                Self::visit_distinct_adaptive(
+                    a, other_right, tolerance, evaluate_cluster, evaluate_exact, result,
+                )?;
+            }
+            (NodeKind::Leaf(_), NodeKind::Leaf(_)) => unreachable!(),
+        }
+        Some(())
+    }
+
+    fn body_indices(node: &Node) -> Vec<usize> {
+        let mut indices = Vec::new();
+        Self::collect_body_indices(node, &mut indices);
+        indices.sort_unstable();
+        indices
+    }
+
+    fn collect_body_indices(node: &Node, indices: &mut Vec<usize>) {
+        match &node.kind {
+            NodeKind::Leaf(index) => indices.push(*index),
+            NodeKind::Branch { left, right } => {
+                Self::collect_body_indices(left, indices);
+                Self::collect_body_indices(right, indices);
+            }
+        }
+    }
+
     /// Aggregate bounds are exposed to tests so future acceptance can require
     /// geometric/visibility/kernel certificates on the same cluster pair.
     #[cfg(test)]
