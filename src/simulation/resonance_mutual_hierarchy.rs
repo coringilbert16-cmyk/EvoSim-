@@ -675,7 +675,7 @@ mod tests {
             )
             .unwrap();
 
-        assert!(result.exact_pairs.is_empty());
+        assert_eq!(result.exact_pairs, vec![(0, 1), (2, 3)]);
         assert_eq!(result.accepted_cluster_pairs.len(), 1);
         let accepted = &result.accepted_cluster_pairs[0];
         assert_eq!(accepted.bodies_a.len(), 2);
@@ -712,7 +712,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(clear.accepted_cluster_pairs.len(), 1);
-        assert!(clear.exact_pairs.is_empty());
+        assert_eq!(clear.exact_pairs, vec![(0, 1), (2, 3)]);
 
         let blocked_bounds = [
             bodies[0],
@@ -824,14 +824,17 @@ mod tests {
                     |_, _| Some(()),
                 )
                 .unwrap();
-            assert_eq!(result.accepted_cluster_pairs.len(), 1);
+            assert_eq!(
+                result.accepted_cluster_pairs.len(),
+                if charged_metric == 0 { 1 } else { 2 }
+            );
             assert!(result.accumulated_errors.potential <= strict_tolerance().potential);
             assert!(result.accumulated_errors.bodies.iter().all(|bound| {
                 bound.force_x <= strict_tolerance().force_x
                     && bound.force_y <= strict_tolerance().force_y
                     && bound.torque <= strict_tolerance().torque
             }));
-            assert_eq!(result.exact_pairs.len(), 12);
+            assert_eq!(result.exact_pairs.len(), 20);
         }
     }
 
