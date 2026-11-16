@@ -3223,7 +3223,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
     tick: u64,
 ) -> Option<Vec<ResonanceBodyForceWithError>> {
     use super::resonance_boundary_far_field::{
-        BoundaryKernelVector, BoundaryPoseCoordinateDerivative, BoundaryPoseSampleDerivative,
+        BoundaryKernelVector, BoundaryPoseCoordinateDerivative,
         BoundaryPotentialError, BoundarySampleMotionBound, VisibilityBodyMotionBound,
         WeightedBoundaryKernelSample,
     };
@@ -3613,7 +3613,7 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                                       derivative: f64,
                                       absolute_error: f64| {
                 let contribution = result.get_mut(local_body)?;
-                let scale = 0.5;
+                let scale = 1.0;
                 match axis {
                     0 => {
                         contribution.force.x -= scale * derivative;
@@ -3683,7 +3683,10 @@ fn directional_resonance_generalized_forces_with_prepared_emitters(
                 entry.absolute_error.torque,
             ]
             .iter()
-            .all(|value| value.is_finite() && *value >= if value == &entry.force.x || value == &entry.force.y || value == &entry.force.torque { f64::NEG_INFINITY } else { 0.0 })
+            .all(|value| value.is_finite())
+                && entry.absolute_error.x >= 0.0
+                && entry.absolute_error.y >= 0.0
+                && entry.absolute_error.torque >= 0.0
         })
         .then_some(mapped)
 }
