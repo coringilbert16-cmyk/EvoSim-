@@ -966,7 +966,7 @@ impl ActiveMaterialField {
                     snapshots[index].bounds.expect("audited target")
                 };
                 for &(_, other_is_candidate, other_index) in &active {
-                    if is_candidate == other_is_candidate || (is_candidate && other_index == index)
+                    if is_candidate == other_is_candidate || other_index == index
                     {
                         continue;
                     }
