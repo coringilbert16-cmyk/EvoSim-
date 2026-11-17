@@ -725,6 +725,10 @@ impl ActiveMaterialField {
             accepted: bool,
         }
 
+        let profile_started = std::time::Instant::now();
+        let profile_movement = std::env::var("EVOSIM_PROFILE_MOVEMENT")
+            .is_ok_and(|value| value == "1" || value == "true");
+        let snapshot_started = std::time::Instant::now();
         let mut snapshots = Vec::new();
         let mut identity_to_index = HashMap::new();
         for (cell_index, cell) in self.cells.iter().enumerate() {
@@ -769,6 +773,8 @@ impl ActiveMaterialField {
             }
         }
 
+        let snapshot_elapsed = snapshot_started.elapsed();
+        let candidate_started = std::time::Instant::now();
         let field_width = self.width_cells as f64 * self.cell_size;
         let field_height = self.height_cells as f64 * self.cell_size;
         let mut candidates: Vec<Option<Candidate>> = (0..snapshots.len()).map(|_| None).collect();
@@ -848,6 +854,10 @@ impl ActiveMaterialField {
             });
         }
 
+        let candidate_elapsed = candidate_started.elapsed();
+        let mut original_collision_rejections = 0usize;
+        let original_collision_started = std::time::Instant::now();
+
         // Preserve the existing transaction's conservative rule: a candidate
         // may not penetrate any other object's current placement, even if that
         // other object also proposes a move.
@@ -873,9 +883,13 @@ impl ActiveMaterialField {
                 })
             });
             if collides {
+                original_collision_rejections += 1;
                 candidate_slot.as_mut().expect("candidate exists").accepted = false;
             }
         }
+        let original_collision_elapsed = original_collision_started.elapsed();
+        let mut mover_overlap_rejections = 0usize;
+        let mover_overlap_started = std::time::Instant::now();
 
         // Also reject both movers if their proposed final placements intersect.
         for a in 0..candidates.len() {
@@ -897,12 +911,16 @@ impl ActiveMaterialField {
                     })
                 };
                 if overlaps {
+                    mover_overlap_rejections += 1;
                     candidates[a].as_mut().expect("candidate exists").accepted = false;
                     candidates[b].as_mut().expect("candidate exists").accepted = false;
                 }
             }
         }
 
+        let mover_overlap_elapsed = mover_overlap_started.elapsed();
+        let candidates_count_for_profile = candidates.iter().filter(|candidate| candidate.is_some()).count();
+        let commit_started = std::time::Instant::now();
         let accepted_count = candidates
             .iter()
             .filter(|candidate| candidate.as_ref().is_some_and(|item| item.accepted))
@@ -941,6 +959,23 @@ impl ActiveMaterialField {
         }
         for cell_index in touched {
             self.mark_cell_changed(cell_index);
+        }
+        if profile_movement {
+            eprintln!(
+                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns={} total_ns={}",
+                snapshots.len(),
+                displacements.len(),
+                candidates_count_for_profile,
+                original_collision_rejections,
+                mover_overlap_rejections,
+                accepted_count,
+                snapshot_elapsed.as_nanos(),
+                candidate_elapsed.as_nanos(),
+                original_collision_elapsed.as_nanos(),
+                mover_overlap_elapsed.as_nanos(),
+                commit_started.elapsed().as_nanos(),
+                profile_started.elapsed().as_nanos()
+            );
         }
         accepted_count
     }
