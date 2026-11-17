@@ -2193,8 +2193,7 @@ fn environmental_movement_parallel_pair_forces(
     let ordered_forces =
         crate::deterministic_parallel::map_ordered_chunks(&ranges, chunk_count, |_, chunk| {
             let range = *chunk.first().ok_or(0_usize)?;
-            let (mut a, mut b) =
-                environmental_movement_pair_at(range.start, emitters.len());
+            let (mut a, mut b) = environmental_movement_pair_at(range.start, emitters.len());
             let mut forces = Vec::with_capacity(range.end - range.start);
             let mut sampled_cross_energy_ns = 0_u128;
             let mut sampled_matching_ns = 0_u128;
