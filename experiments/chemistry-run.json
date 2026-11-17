@@ -5,7 +5,7 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR362 split world-tone organism settlement vs hotspot settlement; matched 60-second seed-42 movement-enabled run; whole-tick and movement profiles enabled; 2026-11-17",
-  "profile_movement": true,
-  "profile_tick": true
+  "request_note": "PR362 final clean matched 60-second seed-42 movement-enabled throughput run; all profiling disabled; standard 1,280-object environment; 2026-11-17",
+  "profile_movement": false,
+  "profile_tick": false
 }
