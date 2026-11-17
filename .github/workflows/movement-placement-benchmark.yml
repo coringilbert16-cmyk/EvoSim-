@@ -1,0 +1,122 @@
+name: Movement Placement Matched Benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/movement-placement-benchmark.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matched-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare current-main worktree
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git worktree add --detach /tmp/evosim-main origin/main
+          mkdir -p benchmark-artifacts
+
+      - name: Run 10 matched pairs (60 seconds each, profiling disabled)
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          pr_dir="$GITHUB_WORKSPACE"
+          main_dir="/tmp/evosim-main"
+          run_one() {
+            label="$1"
+            dir="$2"
+            seed="$3"
+            log="$GITHUB_WORKSPACE/benchmark-artifacts/${label}-seed-${seed}.log"
+            diagnostics="$GITHUB_WORKSPACE/benchmark-artifacts/${label}-seed-${seed}.jsonl"
+            echo "=== START label=$label seed=$seed source=$dir ==="
+            cd "$dir"
+            env -u EVOSIM_PROFILE_MOVEMENT timeout 100s cargo run --locked -- \
+              --headless \
+              --environment-chemistry-experiment \
+              --seconds 60 \
+              --seed "$seed" \
+              --diagnostics "$diagnostics" \
+              --diagnostic-interval 100 2>&1 | tee "$log"
+            echo "=== FINISH label=$label seed=$seed ==="
+          }
+
+          for seed in 42 43 44 45 46 47 48 49 50 51; do
+            # Alternate order between pairs to reduce systematic order/load bias.
+            if (( seed % 2 == 0 )); then
+              run_one main "$main_dir" "$seed"
+              run_one pr365 "$pr_dir" "$seed"
+            else
+              run_one pr365 "$pr_dir" "$seed"
+              run_one main "$main_dir" "$seed"
+            fi
+          done
+
+      - name: Calculate paired throughput summary
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import csv, glob, re, os, statistics, math
+          rows = []
+          for path in sorted(glob.glob("benchmark-artifacts/*.log")):
+              name = os.path.basename(path)
+              label = "main" if name.startswith("main-") else "pr365"
+              seed = int(re.search(r"seed-(\\d+)", name).group(1))
+              text = open(path, encoding="utf-8", errors="replace").read()
+              matches = re.findall(r"SIMULATION_END[^\\n]*?tick[= :]+(\\d+)[^\\n]*?elapsed[= :]+([0-9.]+)", text)
+              if not matches:
+                  matches = re.findall(r"tick[= :]+(\\d+)[^\\n]*?elapsed[= :]+([0-9.]+)", text)
+              if not matches:
+                  print(f"Could not parse final tick/elapsed from {name}")
+                  continue
+              ticks, seconds = matches[-1]
+              ticks, seconds = int(ticks), float(seconds)
+              rows.append({"seed": seed, "revision": label, "ticks": ticks,
+                           "seconds": seconds, "ticks_per_minute": ticks * 60.0 / seconds})
+          with open("benchmark-artifacts/results.csv", "w", newline="") as f:
+              w = csv.DictWriter(f, fieldnames=["seed","revision","ticks","seconds","ticks_per_minute"])
+              w.writeheader()
+              w.writerows(sorted(rows, key=lambda r: (r["seed"], r["revision"])))
+          by = {(r["seed"], r["revision"]): r["ticks_per_minute"] for r in rows}
+          paired = [(by[s, "pr365"] / by[s, "main"] - 1.0) * 100.0
+                    for s in range(42, 52) if (s, "pr365") in by and (s, "main") in by]
+          print(f"Completed runs: {len(rows)} / 20; complete pairs: {len(paired)} / 10")
+          for seed in range(42, 52):
+              a, b = by.get((seed, "main")), by.get((seed, "pr365"))
+              print(f"seed={seed}: main={a if a is not None else 'MISSING'} ticks/min; "
+                    f"pr365={b if b is not None else 'MISSING'} ticks/min")
+          if paired:
+              mean = statistics.mean(paired)
+              sd = statistics.stdev(paired) if len(paired) > 1 else 0.0
+              se = sd / math.sqrt(len(paired))
+              # 95% normal-approximation interval; report sample size alongside it.
+              print(f"Paired PR-vs-main mean change: {mean:.2f}%")
+              print(f"Paired change SD: {sd:.2f} percentage points; SE: {se:.2f}")
+              print(f"Approx. 95% CI: [{mean-1.96*se:.2f}%, {mean+1.96*se:.2f}%]")
+              print(f"Median paired change: {statistics.median(paired):.2f}%")
+          if len(rows) != 20 or len(paired) != 10:
+              raise SystemExit("Benchmark incomplete: inspect run logs and do not treat as acceptance evidence.")
+          PY
+
+      - name: Upload all benchmark logs and results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-placement-matched-10-pairs
+          path: benchmark-artifacts/
+          if-no-files-found: error
+          retention-days: 30
