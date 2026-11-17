@@ -869,9 +869,7 @@ fn spectrum_cross_energy_inner(
     let validation_started = timings.as_ref().map(|_| std::time::Instant::now());
     spectrum_energy(a)?;
     spectrum_energy(b)?;
-    if let (Some((validation_ns, _)), Some(started)) =
-        (timings.as_mut(), validation_started)
-    {
+    if let (Some((validation_ns, _)), Some(started)) = (timings.as_mut(), validation_started) {
         **validation_ns += started.elapsed().as_nanos();
     }
 
