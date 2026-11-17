@@ -72,10 +72,10 @@ jobs:
           for path in sorted(glob.glob("benchmark-artifacts/*.log")):
               name = os.path.basename(path)
               label = "main" if name.startswith("main-") else "pr365"
-              seed = int(re.search(r"seed-(\\d+)", name).group(1))
+              seed = int(re.search(r"seed-(\d+)", name).group(1))
               text = open(path, encoding="utf-8", errors="replace").read()
               matches = re.findall(
-                  r"ENVIRONMENTAL CHEMISTRY END: tick=(\\d+) elapsed_wall_seconds=([0-9.]+)",
+                  r"ENVIRONMENTAL CHEMISTRY END: tick=(\d+) elapsed_wall_seconds=([0-9.]+)",
                   text
               )
               if not matches:
