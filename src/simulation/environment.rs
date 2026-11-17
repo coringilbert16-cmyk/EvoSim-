@@ -700,6 +700,346 @@ impl ActiveMaterialField {
     /// and no constituent penetrates another realized physical object. Existing
     /// boundary contact is allowed. Source removal and destination insertion
     /// are committed together, then each touched cell is invalidated once.
+    /// Apply a set of environmental translations using one field snapshot.
+    ///
+    /// Candidate geometry is prepared once, then checked against the original
+    /// field and against other proposed final placements. Cell membership is
+    /// rebuilt in one pass, avoiding a full-field scan for each mover.
+    pub(crate) fn move_physical_materials_by_identity(
+        &mut self,
+        displacements: &[(u64, f64, f64)],
+        catalog: &[crate::resources::BaseResource],
+    ) -> usize {
+        use std::collections::{HashMap, HashSet};
+
+        #[derive(Clone, Copy)]
+        struct Bounds {
+            min_x: f64,
+            max_x: f64,
+            min_y: f64,
+            max_y: f64,
+        }
+        impl Bounds {
+            fn from_parts(parts: &[crate::material_geometry::PlacedMaterialPart]) -> Option<Self> {
+                let mut bounds = Self {
+                    min_x: f64::INFINITY,
+                    max_x: f64::NEG_INFINITY,
+                    min_y: f64::INFINITY,
+                    max_y: f64::NEG_INFINITY,
+                };
+                for part in parts {
+                    let radius = part.form.bounding_radius();
+                    if !radius.is_finite()
+                        || radius < 0.0
+                        || !part.placement.x.is_finite()
+                        || !part.placement.y.is_finite()
+                    {
+                        return None;
+                    }
+                    bounds.min_x = bounds.min_x.min(part.placement.x - radius);
+                    bounds.max_x = bounds.max_x.max(part.placement.x + radius);
+                    bounds.min_y = bounds.min_y.min(part.placement.y - radius);
+                    bounds.max_y = bounds.max_y.max(part.placement.y + radius);
+                }
+                (!parts.is_empty()).then_some(bounds)
+            }
+
+            fn overlaps(self, other: Self) -> bool {
+                let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
+                self.min_x <= other.max_x + epsilon
+                    && other.min_x <= self.max_x + epsilon
+                    && self.min_y <= other.max_y + epsilon
+                    && other.min_y <= self.max_y + epsilon
+            }
+        }
+        struct Snapshot {
+            identity: u64,
+            source_cell: usize,
+            material: PhysicalMaterial,
+            original_parts: Option<Vec<crate::material_geometry::PlacedMaterialPart>>,
+            bounds: Option<Bounds>,
+        }
+        struct Candidate {
+            material: PhysicalMaterial,
+            parts: Vec<crate::material_geometry::PlacedMaterialPart>,
+            bounds: Bounds,
+            destination: usize,
+            accepted: bool,
+        }
+
+        let profile_started = std::time::Instant::now();
+        let profile_movement = std::env::var("EVOSIM_PROFILE_MOVEMENT")
+            .is_ok_and(|value| value == "1" || value == "true");
+        let snapshot_started = std::time::Instant::now();
+        let mut snapshots = Vec::new();
+        let mut identity_to_index = HashMap::new();
+        for (cell_index, cell) in self.cells.iter().enumerate() {
+            for material in &cell.physical_materials {
+                let mut parts = Vec::new();
+                let valid = material.is_realized()
+                    && material.material.is_valid_for_catalog(catalog)
+                    && !material.material.is_empty()
+                    && material.placements.as_ref().is_some_and(|p| !p.is_empty());
+                if valid {
+                    for (part_index, placement) in material
+                        .placements
+                        .as_ref()
+                        .expect("validated placements")
+                        .iter()
+                        .copied()
+                        .enumerate()
+                    {
+                        let Some(shape) = material.realized_shape_for_part(part_index, catalog)
+                        else {
+                            parts.clear();
+                            break;
+                        };
+                        parts.push(crate::material_geometry::PlacedMaterialPart {
+                            part_index,
+                            form: shape.form,
+                            placement,
+                        });
+                    }
+                }
+                let original_parts = (valid && !parts.is_empty()).then_some(parts);
+                let bounds = original_parts.as_deref().and_then(Bounds::from_parts);
+                let index = snapshots.len();
+                if material.environmental_identity != 0 {
+                    identity_to_index.insert(material.environmental_identity, index);
+                }
+                snapshots.push(Snapshot {
+                    identity: material.environmental_identity,
+                    source_cell: cell_index,
+                    material: material.clone(),
+                    original_parts,
+                    bounds,
+                });
+            }
+        }
+
+        let snapshot_elapsed = snapshot_started.elapsed();
+        let candidate_started = std::time::Instant::now();
+        let field_width = self.width_cells as f64 * self.cell_size;
+        let field_height = self.height_cells as f64 * self.cell_size;
+        let mut candidates: Vec<Option<Candidate>> = (0..snapshots.len()).map(|_| None).collect();
+
+        for &(identity, dx, dy) in displacements {
+            if identity == 0 || !dx.is_finite() || !dy.is_finite() || (dx == 0.0 && dy == 0.0) {
+                continue;
+            }
+            let Some(&index) = identity_to_index.get(&identity) else {
+                continue;
+            };
+            if snapshots[index].original_parts.is_none() {
+                continue;
+            }
+            let mut candidate_material = snapshots[index].material.clone();
+            let Some(mut placements) = candidate_material.placements.clone() else {
+                continue;
+            };
+            let mut valid = true;
+            for placement in &mut placements {
+                placement.x += dx;
+                placement.y += dy;
+                if !placement.x.is_finite() || !placement.y.is_finite() {
+                    valid = false;
+                    break;
+                }
+            }
+            if !valid {
+                continue;
+            }
+            candidate_material.placements = Some(placements.clone());
+            let mut translated_parts = Vec::with_capacity(placements.len());
+            for (part_index, placement) in placements.into_iter().enumerate() {
+                let Some(shape) = candidate_material.realized_shape_for_part(part_index, catalog)
+                else {
+                    valid = false;
+                    break;
+                };
+                let radius = shape.form.bounding_radius();
+                if !radius.is_finite()
+                    || radius < 0.0
+                    || placement.x - radius < 0.0
+                    || placement.x + radius > field_width
+                    || placement.y - radius < 0.0
+                    || placement.y + radius > field_height
+                {
+                    valid = false;
+                    break;
+                }
+                translated_parts.push(crate::material_geometry::PlacedMaterialPart {
+                    part_index,
+                    form: shape.form,
+                    placement,
+                });
+            }
+            if !valid || translated_parts.is_empty() {
+                continue;
+            }
+            let Some(anchor) = candidate_material
+                .placements
+                .as_ref()
+                .and_then(|p| p.first())
+            else {
+                continue;
+            };
+            let Some(destination) = self.index_for_position(anchor.x, anchor.y) else {
+                continue;
+            };
+            if destination >= self.cells.len() {
+                continue;
+            }
+            let Some(bounds) = Bounds::from_parts(&translated_parts) else {
+                continue;
+            };
+            candidates[index] = Some(Candidate {
+                material: candidate_material,
+                parts: translated_parts,
+                bounds,
+                destination,
+                accepted: true,
+            });
+        }
+
+        let candidate_elapsed = candidate_started.elapsed();
+        let mut original_collision_rejections = 0usize;
+        let original_collision_started = std::time::Instant::now();
+
+        // Preserve the existing transaction's conservative rule: a candidate
+        // may not penetrate any other object's current placement, even if that
+        // other object also proposes a move.
+        for (index, candidate_slot) in candidates.iter_mut().enumerate() {
+            let Some(candidate) = candidate_slot.as_ref() else {
+                continue;
+            };
+            let collides = snapshots.iter().enumerate().any(|(other_index, other)| {
+                if other_index == index {
+                    return false;
+                }
+                let Some(other_parts) = other.original_parts.as_ref() else {
+                    return true;
+                };
+                let Some(other_bounds) = other.bounds else {
+                    return true;
+                };
+                if !candidate.bounds.overlaps(other_bounds) {
+                    return false;
+                }
+                candidate.parts.iter().any(|part| {
+                    other_parts.iter().any(|other_part| {
+                        crate::material_geometry::placed_forms_penetrate(
+                            part,
+                            other_part,
+                            crate::material_geometry::GEOMETRY_EPSILON,
+                        )
+                    })
+                })
+            });
+            if collides {
+                original_collision_rejections += 1;
+                candidate_slot.as_mut().expect("candidate exists").accepted = false;
+            }
+        }
+        let original_collision_elapsed = original_collision_started.elapsed();
+        let mut mover_overlap_rejections = 0usize;
+        let mover_overlap_started = std::time::Instant::now();
+
+        // Also reject both movers if their proposed final placements intersect.
+        for a in 0..candidates.len() {
+            for b in (a + 1)..candidates.len() {
+                let overlaps = {
+                    let (Some(a_candidate), Some(b_candidate)) =
+                        (candidates[a].as_ref(), candidates[b].as_ref())
+                    else {
+                        continue;
+                    };
+                    if !a_candidate.bounds.overlaps(b_candidate.bounds) {
+                        continue;
+                    }
+                    a_candidate.parts.iter().any(|part| {
+                        b_candidate.parts.iter().any(|other_part| {
+                            crate::material_geometry::placed_forms_penetrate(
+                                part,
+                                other_part,
+                                crate::material_geometry::GEOMETRY_EPSILON,
+                            )
+                        })
+                    })
+                };
+                if overlaps {
+                    mover_overlap_rejections += 1;
+                    candidates[a].as_mut().expect("candidate exists").accepted = false;
+                    candidates[b].as_mut().expect("candidate exists").accepted = false;
+                }
+            }
+        }
+
+        let mover_overlap_elapsed = mover_overlap_started.elapsed();
+        let candidates_count_for_profile = candidates
+            .iter()
+            .filter(|candidate| candidate.is_some())
+            .count();
+        let commit_started = std::time::Instant::now();
+        let accepted_count = candidates
+            .iter()
+            .filter(|candidate| candidate.as_ref().is_some_and(|item| item.accepted))
+            .count();
+        if accepted_count == 0 {
+            return 0;
+        }
+
+        let mut replacements = HashMap::new();
+        let mut touched = HashSet::new();
+        for (index, candidate) in candidates.into_iter().enumerate() {
+            if let Some(candidate) = candidate.filter(|item| item.accepted) {
+                touched.insert(snapshots[index].source_cell);
+                touched.insert(candidate.destination);
+                replacements.insert(
+                    snapshots[index].identity,
+                    (candidate.destination, candidate.material),
+                );
+            }
+        }
+
+        let mut rebuilt = vec![Vec::new(); self.cells.len()];
+        for (cell_index, cell) in self.cells.iter_mut().enumerate() {
+            for material in std::mem::take(&mut cell.physical_materials) {
+                if let Some((destination, moved)) =
+                    replacements.remove(&material.environmental_identity)
+                {
+                    rebuilt[destination].push(moved);
+                } else {
+                    rebuilt[cell_index].push(material);
+                }
+            }
+        }
+        for (cell, materials) in self.cells.iter_mut().zip(rebuilt) {
+            cell.physical_materials = materials;
+        }
+        for cell_index in touched {
+            self.mark_cell_changed(cell_index);
+        }
+        if profile_movement {
+            eprintln!(
+                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns={} total_ns={}",
+                snapshots.len(),
+                displacements.len(),
+                candidates_count_for_profile,
+                original_collision_rejections,
+                mover_overlap_rejections,
+                accepted_count,
+                snapshot_elapsed.as_nanos(),
+                candidate_elapsed.as_nanos(),
+                original_collision_elapsed.as_nanos(),
+                mover_overlap_elapsed.as_nanos(),
+                commit_started.elapsed().as_nanos(),
+                profile_started.elapsed().as_nanos()
+            );
+        }
+        accepted_count
+    }
+
     pub(crate) fn move_physical_material_by_identity(
         &mut self,
         identity: u64,

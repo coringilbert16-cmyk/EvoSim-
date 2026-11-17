@@ -13,9 +13,9 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "requested_duration_seconds": 300,
             "planned_ticks": 3000,
             "initial_physical_material_count": 1280,
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280,
-            "initial_constituent_count": 2560,
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80,
+            "initial_constituent_count": 1360,
         },
         "resource_coverage": {
             "excluded_resources": ["Water"] if water_excluded else [],
@@ -109,8 +109,8 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
             write_run(root, 43)
             report = build_report(root, [42, 43], 300)
         self.assertEqual(report["experiment"]["total_simulated_seconds"], 600)
-        self.assertIn("1,280 established two-constituent molecules", report["experiment"]["initial_environment"])
-        self.assertIn("zero independent resources", report["experiment"]["initial_environment"])
+        self.assertIn("1,200 independent resources plus 80 established two-constituent molecules", report["experiment"]["initial_environment"])
+        self.assertIn("1,360 constituents", report["experiment"]["initial_environment"])
         self.assertEqual(report["reaction_totals"]["COMBINE"]["committed"], 2)
         self.assertEqual(report["molecular_development"]["reaction_created_products_reused_as_parents"], 2)
         self.assertEqual(report["organization"]["cross_seed_recurrent_product_families"][0]["seed_count"], 2)

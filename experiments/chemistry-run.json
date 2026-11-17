@@ -3,6 +3,6 @@
   "seeds": [42],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Main baseline matched 60-second seed-42 benchmark for PR359 comparison.",
+  "request_note": "PR359 corrected 1,200 independent resources plus 80 molecules; 60-second seed-42 movement integration validation.",
   "profile_movement": true
 }

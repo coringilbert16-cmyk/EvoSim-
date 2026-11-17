@@ -152,9 +152,9 @@ def _load_seed(root: Path, seed: int, duration: int) -> tuple[dict[str, Any], li
         "seed": seed,
         "requested_duration_seconds": duration,
         "initial_physical_material_count": 1280,
-        "initial_independent_resource_count": 0,
-        "initial_molecule_count": 1280,
-        "initial_constituent_count": 2560,
+        "initial_independent_resource_count": 1200,
+        "initial_molecule_count": 80,
+        "initial_constituent_count": 1360,
     }
     for key, value in expected.items():
         if source.get(key) != value:
@@ -308,7 +308,7 @@ def analyze(
             "world_width": world_width,
             "horizontal_boundary": "periodic wrap" if world_width is not None else "not normalized",
             "vertical_boundary": "hard walls; no periodic normalization",
-            "starting_inventory": "1,280 established two-constituent molecules; zero independent resources; 2,560 constituents",
+            "starting_inventory": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents",
         },
         "summary": summary,
         "molecule_instances": instances,

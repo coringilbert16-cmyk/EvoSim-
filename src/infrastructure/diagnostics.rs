@@ -624,6 +624,24 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             interval: interval.max(1),
             totals: EnvironmentalChemistryDiagnosticTotals::default(),
         };
+        let (initial_independent_resource_count, initial_molecule_count, initial_constituent_count) =
+            simulation
+                .environment
+                .field
+                .cells
+                .iter()
+                .flat_map(|cell| &cell.physical_materials)
+                .fold(
+                    (0_usize, 0_usize, 0_usize),
+                    |(resources, molecules, constituents), material| {
+                        let part_count = material.material.parts.len();
+                        (
+                            resources + usize::from(part_count == 1),
+                            molecules + usize::from(part_count > 1),
+                            constituents + part_count,
+                        )
+                    },
+                );
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
             "version": 2,
@@ -633,9 +651,9 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "planned_ticks": planned_ticks,
             "organism_count": simulation.organisms.len(),
             "initial_physical_material_count": physical_material_count(simulation),
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280,
-            "initial_constituent_count": simulation.environment.field.cells.iter().flat_map(|cell| &cell.physical_materials).map(|material| material.material.parts.len()).sum::<usize>(),
+            "initial_independent_resource_count": initial_independent_resource_count,
+            "initial_molecule_count": initial_molecule_count,
+            "initial_constituent_count": initial_constituent_count,
             "initial_material_inventory": environmental_material_inventory(simulation),
             "excluded_resources": ["Water"],
             "pile_sizes": pile_sizes,

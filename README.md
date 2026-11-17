@@ -102,7 +102,7 @@ The default simulation now uses the established renderer configuration; this is 
 - S-shaped left-to-right flow with its renderer-tested response doubled; the existing speed falloff, bend vortices, mass mobility, and obstacle wakes are retained.
 - The 2,400-tick day/night world-tone cycle remains independent of runtime playback speed.
 
-The 1,280-resource setup, hotspot, and flow are part of the default simulation. The organism-free chemistry fixture reuses the same resource seeding logic rather than defining a separate environment.
+The default simulation starts with 1,280 independent resources. The organism-free chemistry experiment uses the same 1,280 physical-material footprint, seeded as 1,200 independent resources plus 80 intact two-constituent molecules, distributed through randomized piles.
 
 ## Design and implementation invariants
 

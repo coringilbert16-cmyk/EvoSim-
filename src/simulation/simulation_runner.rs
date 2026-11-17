@@ -220,8 +220,28 @@ fn run_environment_chemistry_experiment(
         panic!("failed to create environmental chemistry diagnostics {diagnostics_path}: {error}")
     });
 
+    let (physical_objects, independent_resources, molecules, constituents) = simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+        .fold(
+            (0_usize, 0_usize, 0_usize, 0_usize),
+            |mut counts, material| {
+                counts.0 += 1;
+                counts.3 += material.material.parts.len();
+                if material.material.parts.len() == 1 {
+                    counts.1 += 1;
+                } else {
+                    counts.2 += 1;
+                }
+                counts
+            },
+        );
+
     println!(
-        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources=0 molecules=1280 constituents=2560 physical_objects=1280 piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
+        "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources={independent_resources} molecules={molecules} constituents={constituents} physical_objects={physical_objects} piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
         duration_seconds,
         planned_ticks,
         simulation.organisms.len(),

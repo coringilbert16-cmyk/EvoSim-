@@ -38,8 +38,8 @@ def write_seed(root: Path, seed: int) -> None:
         "input": {
             "seed": seed, "requested_duration_seconds": 300,
             "initial_physical_material_count": 1280,
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280, "initial_constituent_count": 2560,
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80, "initial_constituent_count": 1360,
         },
         "reactions": {
             "elemental_bond_pairs": {
@@ -107,7 +107,7 @@ class ReactionNetworkAnalyzerTests(unittest.TestCase):
             write_seed(root, 42)
             path = root / "seed-42-chemistry.json"
             data = json.loads(path.read_text(encoding="utf-8"))
-            data["input"]["initial_independent_resource_count"] = 1200
+            data["input"]["initial_independent_resource_count"] = 1199
             path.write_text(json.dumps(data), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "initial_independent_resource_count"):
                 analyze(root, [42], 300)

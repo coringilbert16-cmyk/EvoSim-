@@ -4151,4 +4151,233 @@ mod tests {
             "restoration must preserve the same signed structural potential"
         );
     }
+
+    #[test]
+    fn resonance_movement_creates_a_live_contact_for_environmental_combine_discovery() {
+        let mut simulation = crate::state::Simulation::new(35903, 10.0);
+        let catalog = simulation.environment.catalog.clone();
+        simulation.environment.width = 30.0;
+        simulation.environment.height = 30.0;
+
+        let eligible_contact = |source_a: &PhysicalMaterial,
+                                source_b: &PhysicalMaterial,
+                                environment: &Environment| {
+            let Some((mut structure, indices_a)) = restored_source(source_a, environment) else {
+                return false;
+            };
+            let Some(indices_b) = crate::material_restoration::restore_material(
+                &mut structure,
+                source_b,
+                origin(),
+                &catalog,
+            ) else {
+                return false;
+            };
+            let mut cache = ConnectionCompatibilityCache::new();
+            let mut work = FIELD_COMPONENT_PAIR_LIMIT;
+            let Some(selected) = select_best_contact(
+                &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
+            ) else {
+                return false;
+            };
+            if selected.candidate.distance > 0.25 || selected.candidate.facing <= 0.5 {
+                return false;
+            }
+            let name_a = structure.units[selected.unit_a]
+                .material
+                .parts
+                .first()
+                .map(|part| part.0.as_str());
+            let name_b = structure.units[selected.unit_b]
+                .material
+                .parts
+                .first()
+                .map(|part| part.0.as_str());
+            name_a.zip(name_b).is_some_and(|(name_a, name_b)| {
+                crate::geometry_reference_library::resolve_live_contact_candidate(
+                    name_a,
+                    &structure.units[selected.unit_a],
+                    name_b,
+                    &structure.units[selected.unit_b],
+                    selected.candidate,
+                    &catalog,
+                )
+                .is_some()
+            })
+        };
+
+        let mut moved_fixture = None;
+        'search: for resource_a in &catalog {
+            if resource_a.physical_state == crate::resources::PhysicalState::Fluid {
+                continue;
+            }
+            for resource_b in &catalog {
+                if resource_b.physical_state == crate::resources::PhysicalState::Fluid {
+                    continue;
+                }
+                let Some(adhesion) =
+                    crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
+                else {
+                    continue;
+                };
+                if adhesion.net <= 0.0 {
+                    continue;
+                }
+
+                // Find a naturally attractive phase pair first. This does not
+                // inject a force: it selects a normal resonance state whose
+                // actual movement pass should close a small physical gap.
+                let mut attractive_tick = None;
+                let probe_a = PhysicalMaterial::realized(
+                    Material::free_base(resource_a.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 10.0,
+                        y: 10.0,
+                        rotation_radians: 0.0,
+                    }],
+                    &catalog,
+                )
+                .expect("catalog resource A must realize");
+                let probe_b = PhysicalMaterial::realized(
+                    Material::free_base(resource_b.name.clone(), 1.0),
+                    vec![Placement {
+                        x: 13.0,
+                        y: 10.0,
+                        rotation_radians: 0.0,
+                    }],
+                    &catalog,
+                )
+                .expect("catalog resource B must realize");
+                for tick in 0..2400_u64 {
+                    let Some((_, force_on_b)) = crate::harmonics::resonance_pair_push_pull(
+                        &probe_a, &probe_b, &catalog, tick,
+                    ) else {
+                        continue;
+                    };
+                    if force_on_b.0 < -1.0e-12 {
+                        attractive_tick = Some(tick);
+                        break;
+                    }
+                }
+                let Some(tick) = attractive_tick else {
+                    continue;
+                };
+
+                for distance_step in 1..=400 {
+                    let distance = 1.5 + distance_step as f64 * 0.01;
+                    let source_a = PhysicalMaterial::realized(
+                        Material::free_base(resource_a.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0,
+                            y: 10.0,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    )
+                    .expect("catalog resource A must realize");
+                    let source_b = PhysicalMaterial::realized(
+                        Material::free_base(resource_b.name.clone(), 1.0),
+                        vec![Placement {
+                            x: 10.0 + distance,
+                            y: 10.0,
+                            rotation_radians: 0.0,
+                        }],
+                        &catalog,
+                    )
+                    .expect("catalog resource B must realize");
+                    if eligible_contact(&source_a, &source_b, &simulation.environment) {
+                        continue;
+                    }
+
+                    let mut field = crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+                    if !field.deposit_physical(10.0, 10.0, source_a, &catalog)
+                        || !field.deposit_physical(10.0 + distance, 10.0, source_b, &catalog)
+                    {
+                        continue;
+                    }
+                    field.assign_missing_material_identities();
+                    let identities = field
+                        .cells
+                        .iter()
+                        .flat_map(|cell| cell.physical_materials.iter())
+                        .map(|material| material.environmental_identity)
+                        .collect::<Vec<_>>();
+                    if identities.len() != 2 {
+                        continue;
+                    }
+
+                    let moved =
+                        crate::environmental_movement::apply_environmental_resonance_movement(
+                            &mut field, &catalog, tick,
+                        );
+                    if moved == 0 {
+                        continue;
+                    }
+                    let get_by_identity = |identity| {
+                        field
+                            .cells
+                            .iter()
+                            .flat_map(|cell| cell.physical_materials.iter())
+                            .find(|material| material.environmental_identity == identity)
+                            .cloned()
+                    };
+                    let (Some(moved_a), Some(moved_b)) = (
+                        get_by_identity(identities[0]),
+                        get_by_identity(identities[1]),
+                    ) else {
+                        continue;
+                    };
+                    if !eligible_contact(&moved_a, &moved_b, &simulation.environment) {
+                        continue;
+                    }
+
+                    moved_fixture = Some((field, moved_a, moved_b, tick));
+                    break 'search;
+                }
+            }
+        }
+
+        let (field, moved_a, moved_b, movement_tick) = moved_fixture.unwrap_or_else(|| {
+            panic!(
+                "no deterministic naturally attractive pair was moved from a non-contact pose into a live chemical contact"
+            )
+        });
+        assert!(
+            eligible_contact(&moved_a, &moved_b, &simulation.environment),
+            "movement must leave the two sources in a live chemical contact"
+        );
+
+        simulation.environment.field = field;
+        simulation.environment.chemistry_usable_energy = 1_000.0;
+        let mut accumulation = BTreeMap::new();
+        let mut discovered = None;
+        for tick in movement_tick..movement_tick + 500 {
+            let mut discovery_work =
+                crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 4;
+            let operations = accumulate_environmental(
+                &simulation.environment,
+                &mut accumulation,
+                &mut simulation.chemistry_library,
+                tick,
+                &mut discovery_work,
+            );
+            let mut realization_work =
+                crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
+            let scheduled = schedule_environmental_operations(
+                operations,
+                tick,
+                &mut realization_work,
+                &mut accumulation,
+            );
+            if let Some(operation) = scheduled.into_iter().next() {
+                discovered = Some(operation);
+                break;
+            }
+        }
+        assert!(
+            discovered.is_some(),
+            "normal environmental COMBINE discovery did not activate the contact created by movement; movement_tick={movement_tick}, accumulated={:?}",
+            accumulation.values().copied().collect::<Vec<_>>()
+        );
+    }
 }
