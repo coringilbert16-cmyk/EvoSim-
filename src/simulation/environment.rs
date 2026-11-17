@@ -712,15 +712,55 @@ impl ActiveMaterialField {
     ) -> usize {
         use std::collections::{HashMap, HashSet};
 
+        #[derive(Clone, Copy)]
+        struct Bounds {
+            min_x: f64,
+            max_x: f64,
+            min_y: f64,
+            max_y: f64,
+        }
+        impl Bounds {
+            fn from_parts(parts: &[crate::material_geometry::PlacedMaterialPart]) -> Option<Self> {
+                let mut bounds = Self {
+                    min_x: f64::INFINITY,
+                    max_x: f64::NEG_INFINITY,
+                    min_y: f64::INFINITY,
+                    max_y: f64::NEG_INFINITY,
+                };
+                for part in parts {
+                    let radius = part.form.bounding_radius();
+                    if !radius.is_finite() || radius < 0.0
+                        || !part.placement.x.is_finite() || !part.placement.y.is_finite()
+                    {
+                        return None;
+                    }
+                    bounds.min_x = bounds.min_x.min(part.placement.x - radius);
+                    bounds.max_x = bounds.max_x.max(part.placement.x + radius);
+                    bounds.min_y = bounds.min_y.min(part.placement.y - radius);
+                    bounds.max_y = bounds.max_y.max(part.placement.y + radius);
+                }
+                (!parts.is_empty()).then_some(bounds)
+            }
+
+            fn overlaps(self, other: Self) -> bool {
+                let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
+                self.min_x <= other.max_x + epsilon
+                    && other.min_x <= self.max_x + epsilon
+                    && self.min_y <= other.max_y + epsilon
+                    && other.min_y <= self.max_y + epsilon
+            }
+        }
         struct Snapshot {
             identity: u64,
             source_cell: usize,
             material: PhysicalMaterial,
             original_parts: Option<Vec<crate::material_geometry::PlacedMaterialPart>>,
+            bounds: Option<Bounds>,
         }
         struct Candidate {
             material: PhysicalMaterial,
             parts: Vec<crate::material_geometry::PlacedMaterialPart>,
+            bounds: Bounds,
             destination: usize,
             accepted: bool,
         }
@@ -760,6 +800,7 @@ impl ActiveMaterialField {
                     }
                 }
                 let original_parts = (valid && !parts.is_empty()).then_some(parts);
+                let bounds = original_parts.as_deref().and_then(Bounds::from_parts);
                 let index = snapshots.len();
                 if material.environmental_identity != 0 {
                     identity_to_index.insert(material.environmental_identity, index);
@@ -769,6 +810,7 @@ impl ActiveMaterialField {
                     source_cell: cell_index,
                     material: material.clone(),
                     original_parts,
+                    bounds,
                 });
             }
         }
@@ -846,9 +888,13 @@ impl ActiveMaterialField {
             if destination >= self.cells.len() {
                 continue;
             }
+            let Some(bounds) = Bounds::from_parts(&translated_parts) else {
+                continue;
+            };
             candidates[index] = Some(Candidate {
                 material: candidate_material,
                 parts: translated_parts,
+                bounds,
                 destination,
                 accepted: true,
             });
@@ -872,6 +918,12 @@ impl ActiveMaterialField {
                 let Some(other_parts) = other.original_parts.as_ref() else {
                     return true;
                 };
+                let Some(other_bounds) = other.bounds else {
+                    return true;
+                };
+                if !candidate.bounds.overlaps(other_bounds) {
+                    return false;
+                }
                 candidate.parts.iter().any(|part| {
                     other_parts.iter().any(|other_part| {
                         crate::material_geometry::placed_forms_penetrate(
@@ -900,6 +952,9 @@ impl ActiveMaterialField {
                     else {
                         continue;
                     };
+                    if !a_candidate.bounds.overlaps(b_candidate.bounds) {
+                        continue;
+                    }
                     a_candidate.parts.iter().any(|part| {
                         b_candidate.parts.iter().any(|other_part| {
                             crate::material_geometry::placed_forms_penetrate(
