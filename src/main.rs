@@ -144,6 +144,12 @@ mod structural_blueprint;
 mod transformation;
 
 // Simulation and application runtime.
+#[allow(
+    dead_code,
+    reason = "The shared execution primitive is integrated by later optimization stages"
+)]
+#[path = "infrastructure/deterministic_parallel.rs"]
+mod deterministic_parallel;
 #[path = "infrastructure/math.rs"]
 mod math;
 #[path = "ui/resource_visualization.rs"]
