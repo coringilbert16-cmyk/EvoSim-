@@ -61,7 +61,7 @@ jobs:
         if: success()
         timeout-minutes: 3
         env:
-          EVOSIM_PROFILE_MOVEMENT: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 365 && '1' || '0' }}
+          EVOSIM_PROFILE_MOVEMENT: ${{ (github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.number == 365)) && '1' || '0' }}
         run: |
           set -euo pipefail
           cargo run --locked -- \
