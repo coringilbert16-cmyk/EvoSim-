@@ -875,7 +875,9 @@ fn spectrum_cross_energy_validated_profiled(
     // costs without changing summation order or the cross-energy result.
     let frequency_started = std::time::Instant::now();
     let mut matching_pairs =
-        Vec::with_capacity(a.components.len().saturating_mul(b.components.len()));
+        [(0_usize, 0_usize); MAX_SPECTRAL_COMPONENTS * MAX_SPECTRAL_COMPONENTS];
+    let mut matching_pair_count = 0_usize;
+    let mut overflow_matching_pairs = Vec::new();
     let mut comparisons = 0_u64;
     for (left_index, left) in a.components.iter().enumerate() {
         for (right_index, right) in b.components.iter().enumerate() {
@@ -883,17 +885,27 @@ fn spectrum_cross_energy_validated_profiled(
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
                 continue;
             }
-            matching_pairs.push((left_index, right_index));
+            if matching_pair_count < matching_pairs.len() {
+                matching_pairs[matching_pair_count] = (left_index, right_index);
+            } else {
+                overflow_matching_pairs.push((left_index, right_index));
+            }
+            matching_pair_count += 1;
         }
     }
     let frequency_elapsed = frequency_started.elapsed().as_nanos();
     *frequency_match_ns += frequency_elapsed;
     *frequency_comparisons += comparisons;
-    *frequency_matches += matching_pairs.len() as u64;
+    *frequency_matches += matching_pair_count as u64;
 
     let phase_started = std::time::Instant::now();
     let mut energy = 0.0;
-    for (left_index, right_index) in matching_pairs {
+    let stored_pair_count = matching_pair_count.min(matching_pairs.len());
+    let phase_pairs = matching_pairs[..stored_pair_count]
+        .iter()
+        .copied()
+        .chain(overflow_matching_pairs);
+    for (left_index, right_index) in phase_pairs {
         let left = &a.components[left_index];
         let right = &b.components[right_index];
         energy += 2.0
