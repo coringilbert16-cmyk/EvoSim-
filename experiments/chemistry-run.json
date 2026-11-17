@@ -5,6 +5,6 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "60-second seed-42 profile after per-pass spectrum validation caching.",
+  "request_note": "60-second seed-42 profile separating frequency matching from phase/cosine work.",
   "profile_movement": true
 }
