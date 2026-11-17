@@ -2061,21 +2061,26 @@ pub(crate) fn resonance_pair_push_pull(
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
     let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
-    // The isolated-pair reference has its own one-use validation cache.
-    let mut a_validated = false;
-    let mut b_validated = false;
-    let mut validation_ns = 0;
-    resonance_pair_push_pull_from_emitters(
-        &a,
-        &b,
-        &mut a_validated,
-        &mut b_validated,
-        false,
-        &mut validation_ns,
-        false,
-        &mut 0,
-        &mut 0,
-    )
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let distance = dx.hypot(dy);
+    if !distance.is_finite() {
+        return None;
+    }
+    if distance <= f64::EPSILON {
+        return Some(((0.0, 0.0), (0.0, 0.0)));
+    }
+    let cross_energy = spectrum_cross_energy(&a.spectrum, &b.spectrum)?;
+    let strength =
+        cross_energy * (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
+    if !strength.is_finite() {
+        return None;
+    }
+    let on_b = (strength * dx / distance, strength * dy / distance);
+    if !on_b.0.is_finite() || !on_b.1.is_finite() {
+        return None;
+    }
+    Some(((-on_b.0, -on_b.1), on_b))
 }
 
 /// Precompute each environmental material's resonance once, then evaluate
