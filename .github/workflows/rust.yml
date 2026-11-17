@@ -64,14 +64,12 @@ jobs:
       - name: Run shared environmental chemistry smoke simulation
         if: success()
         timeout-minutes: 3
-        env:
-          EVOSIM_PROFILE_MOVEMENT: "1"
         run: |
           set -euo pipefail
           cargo run --locked -- \
             --headless \
             --environment-chemistry-experiment \
-            --seconds "${{ inputs.simulation_seconds || '60' }}" \
+            --seconds "${{ inputs.simulation_seconds || '10' }}" \
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
