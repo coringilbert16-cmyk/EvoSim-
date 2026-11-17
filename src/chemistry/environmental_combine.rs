@@ -4361,22 +4361,8 @@ mod tests {
             )
         });
         assert!(
-            !eligible_contact(
-                &PhysicalMaterial::realized(
-                    moved_a.material.clone(),
-                    moved_a.placements.clone().unwrap(),
-                    &catalog,
-                )
-                .expect("moved source A must remain realizable"),
-                &PhysicalMaterial::realized(
-                    moved_b.material.clone(),
-                    moved_b.placements.clone().unwrap(),
-                    &catalog,
-                )
-                .expect("moved source B must remain realizable"),
-                &simulation.environment,
-            ) || moved_a.placements != moved_b.placements,
-            "movement must preserve distinct physical source placements"
+            eligible_contact(&moved_a, &moved_b, &simulation.environment),
+            "movement must leave the two sources in a live chemical contact"
         );
 
         simulation.environment.field = field;
