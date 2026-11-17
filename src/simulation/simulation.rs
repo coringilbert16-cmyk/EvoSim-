@@ -29,6 +29,11 @@ fn should_prepare_transformation(
 
 const BUDDING_AVAILABILITY_FRACTION: f64 = 0.90;
 
+fn whole_tick_profiling_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("EVOSIM_PROFILE_TICK").is_some())
+}
+
 fn environmental_material_identity_set(environment: &Environment) -> HashSet<u64> {
     environment
         .field
@@ -948,7 +953,7 @@ impl Simulation {
 
         // Whole-tick profiling is opt-in and samples one tick in ten. The
         // ordinary simulation path does not create timers or collect phase data.
-        let profile_tick = std::env::var_os("EVOSIM_PROFILE_TICK").is_some() && self.tick % 10 == 0;
+        let profile_tick = whole_tick_profiling_enabled() && self.tick % 10 == 0;
         let tick_profile_started = profile_tick.then(std::time::Instant::now);
         let mut profile_phase_started = tick_profile_started;
         let mut profile_phases: Vec<(&str, u128)> = if profile_tick {
