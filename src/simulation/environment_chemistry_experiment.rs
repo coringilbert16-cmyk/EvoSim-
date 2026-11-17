@@ -319,11 +319,7 @@ fn seed_randomized_molecular_resources(
             identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
         }
         identities.shuffle(&mut rng);
-        objects.extend(
-            identities
-                .into_iter()
-                .map(|name| (vec![name], false)),
-        );
+        objects.extend(identities.into_iter().map(|name| (vec![name], false)));
 
         let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
         let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
