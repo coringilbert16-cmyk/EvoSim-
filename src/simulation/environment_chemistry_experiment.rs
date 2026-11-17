@@ -11,7 +11,9 @@ use crate::state::{EnergyLedger, Simulation};
 use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
 const ENVIRONMENT_OBJECT_COUNT: usize = 1_280;
-const ENVIRONMENT_MOLECULE_COUNT: usize = ENVIRONMENT_OBJECT_COUNT;
+const ENVIRONMENT_MOLECULE_COUNT: usize = 80;
+const ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT: usize =
+    ENVIRONMENT_OBJECT_COUNT - ENVIRONMENT_MOLECULE_COUNT;
 
 // Two-constituent structures previously observed as reaction-created products.
 // Every type receives an equal starting share; the final remainder is assigned
@@ -272,7 +274,7 @@ fn place_molecule_prototype(
     molecule
 }
 
-/// Seed 1,280 intact, known two-constituent molecules in randomized piles.
+/// Seed 1,200 independent resources and 80 intact, known two-constituent molecules in randomized piles.
 fn seed_randomized_molecular_resources(
     field: &mut ActiveMaterialField,
     catalog: &[crate::resources::BaseResource],
@@ -311,6 +313,18 @@ fn seed_randomized_molecular_resources(
         Vec::new()
     };
     let objects: Vec<(Vec<String>, bool)> = if include_molecules {
+        let mut objects = Vec::with_capacity(ENVIRONMENT_OBJECT_COUNT);
+        let mut identities = resource_names.clone();
+        while identities.len() < ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT {
+            identities.push(resource_names[rng.gen_range(0..resource_names.len())].clone());
+        }
+        identities.shuffle(&mut rng);
+        objects.extend(
+            identities
+                .into_iter()
+                .map(|name| (vec![name], false)),
+        );
+
         let mut molecules = Vec::with_capacity(ENVIRONMENT_MOLECULE_COUNT);
         let base_share = ENVIRONMENT_MOLECULE_COUNT / KNOWN_TWO_UNIT_MOLECULES.len();
         let remainder = ENVIRONMENT_MOLECULE_COUNT % KNOWN_TWO_UNIT_MOLECULES.len();
@@ -322,7 +336,9 @@ fn seed_randomized_molecular_resources(
             ));
         }
         molecules.shuffle(&mut rng);
-        molecules
+        objects.extend(molecules);
+        objects.shuffle(&mut rng);
+        objects
     } else {
         let mut identities = resource_names.clone();
         while identities.len() < ENVIRONMENT_OBJECT_COUNT {
@@ -707,7 +723,7 @@ mod tests {
     }
 
     #[test]
-    fn fixture_has_1280_known_two_unit_molecules_and_no_organisms() {
+    fn fixture_has_1200_independent_resources_and_80_known_molecules() {
         let first = build(42);
         let second = build(42);
         assert_eq!(first.pile_sizes, second.pile_sizes);
@@ -797,7 +813,7 @@ mod tests {
                 .iter()
                 .filter(|m| m.material.parts.len() == 1)
                 .count(),
-            0
+            ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT
         );
         assert_eq!(
             materials
@@ -821,16 +837,16 @@ mod tests {
         assert_eq!(
             molecule_type_counts
                 .values()
-                .filter(|count| **count == 72)
+                .filter(|count| **count == 5)
                 .count(),
-            2
+            8
         );
         assert_eq!(
             molecule_type_counts
                 .values()
-                .filter(|count| **count == 71)
+                .filter(|count| **count == 4)
                 .count(),
-            16
+            10
         );
         let hs = materials
             .iter()
@@ -846,8 +862,8 @@ mod tests {
                     && m.material.parts.iter().any(|p| p.0 == "Hydrogen")
             })
             .count();
-        assert_eq!(hs, 72);
-        assert_eq!(ch, 71);
+        assert_eq!(hs, 5);
+        assert_eq!(ch, 5);
         let mut represented_types = std::collections::BTreeSet::new();
         for cell in &first.simulation.environment.field.cells {
             for material in &cell.physical_materials {
@@ -883,7 +899,9 @@ mod tests {
             .iter()
             .map(|cell| cell.total_amount())
             .sum::<f64>();
-        assert!((total_material - (2 * ENVIRONMENT_MOLECULE_COUNT) as f64).abs() < 1e-6);
+        let expected_constituents =
+            ENVIRONMENT_INDEPENDENT_RESOURCE_COUNT + 2 * ENVIRONMENT_MOLECULE_COUNT;
+        assert!((total_material - expected_constituents as f64).abs() < 1e-6);
         assert!(
             simulation.energy_inventory_snapshot().is_balanced(1e-7),
             "environment-only chemistry ticks must conserve energy"
