@@ -2038,28 +2038,10 @@ pub(crate) fn resonance_pair_push_pull(
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
     let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
-    // The isolated-pair reference validates through the public cross-energy
-    // path because it does not share a prevalidated movement-pass snapshot.
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let distance = dx.hypot(dy);
-    if !distance.is_finite() {
-        return None;
-    }
-    if distance <= f64::EPSILON {
-        return Some(((0.0, 0.0), (0.0, 0.0)));
-    }
-    let cross_energy = spectrum_cross_energy(&a.spectrum, &b.spectrum)?;
-    let strength = cross_energy * (a.mass_scale * b.mass_scale)
-        / ((1.0 + distance) * (1.0 + distance));
-    if !strength.is_finite() {
-        return None;
-    }
-    let on_b = (strength * dx / distance, strength * dy / distance);
-    if !on_b.0.is_finite() || !on_b.1.is_finite() {
-        return None;
-    }
-    Some(((-on_b.0, -on_b.1), on_b))
+    // The isolated-pair reference has no shared validation pass.
+    spectrum_energy(&a.spectrum)?;
+    spectrum_energy(&b.spectrum)?;
+    resonance_pair_push_pull_from_emitters(&a, &b, false, &mut 0, &mut 0)
 }
 
 /// Precompute each environmental material's resonance once, then evaluate
@@ -3125,6 +3107,10 @@ mod tests {
                 .expect("valid quadrature spectra should be accepted");
         let different_frequency = spectrum_cross_energy(&make(0.0, 440.0), &make(0.0, 441.0))
             .expect("valid distinct-frequency spectra should be accepted");
+        assert_eq!(
+            spectrum_cross_energy_validated(&make(0.0, 440.0), &make(0.0, 440.0)),
+            Some(in_phase)
+        );
 
         assert!((in_phase - 0.5).abs() < 1e-12);
         assert!((opposite + 0.5).abs() < 1e-12);
