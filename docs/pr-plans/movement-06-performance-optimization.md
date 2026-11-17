@@ -28,3 +28,31 @@ The movement-disabled baseline is already below the acceptance target. Therefore
 ## Acceptance
 
 A 60-second run must complete **more than 800 ticks** with movement enabled and the standard 1,280 physical objects. It must also show valid chemistry accounting, no lifecycle errors, preserved molecular identity, and no geometry/invariant regressions.
+
+
+## First matched profile (seed 42, 60 seconds)
+
+The movement-enabled run completed 208 ticks. The raw per-tick profile covered ticks 1–208 and averaged:
+
+- 1,284 live objects and 823,394 unordered pairs per tick (the initial environment contained 1,280 objects).
+- Resonance emitter construction: 2.68 ms/tick.
+- Spectrum validation: 0.08 ms/tick.
+- Resonance pair loop: 148.26 ms/tick.
+- Bounded response calculation: 0.05 ms/tick.
+- Placement transaction: 39.53 ms/tick, including 17.31 ms of original-position collision checks and 16.04 ms of mover-overlap checks.
+
+The pair loop is the primary movement bottleneck. Sampled profiling estimates approximately 125.9 ms/tick in frequency matching. Placement collision validation is the second target.
+
+## Pair-frequency lookup optimization
+
+The next implementation replaces the full nested frequency comparison scan with a bounded sorted-index range lookup:
+
+- Each emitter precomputes a sorted index of its at-most-four spectral components.
+- For each left component, binary search finds a conservative range of possible right-side matches.
+- The original absolute-difference predicate (less than or equal to 1e-9) is still applied to every candidate, including a floating-point rounding margin around the search interval.
+- Matching components are accumulated in their original order, preserving the prior floating-point summation order.
+- No physical pairs or valid frequency matches are omitted.
+
+A differential unit test compares the optimized result exactly against the original nested all-pairs implementation, including tolerance-boundary and multiple-match cases.
+
+The 208-tick result is a useful improvement over the previous 157-tick run, but the >800 ticks/minute target remains unmet. The new lookup must pass full CI and a matched experiment before its performance effect is accepted.
