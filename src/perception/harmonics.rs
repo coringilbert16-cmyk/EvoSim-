@@ -2309,7 +2309,7 @@ fn environmental_movement_worker_count() -> usize {
     static WORKER_COUNT: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
     *WORKER_COUNT.get_or_init(|| {
         std::thread::available_parallelism()
-            .map(usize::from)
+            .map(|count| count.get())
             .unwrap_or(1)
     })
 }
@@ -4796,7 +4796,7 @@ mod tests {
 mod environmental_movement_parallel_tests {
     use super::{
         environmental_movement_displacements_from_pair_forces,
-        environmental_movement_pair_count, environmental_movement_pair_forces,
+        environmental_movement_pair_count, environmental_movement_parallel_pair_forces,
         environmental_movement_phase_components, environmental_movement_pair_force,
         EnvironmentalMovementEmitter, ToneComponent, ToneSpectrum,
     };
