@@ -144,6 +144,8 @@ mod structural_blueprint;
 mod transformation;
 
 // Simulation and application runtime.
+#[path = "infrastructure/deterministic_parallel.rs"]
+mod deterministic_parallel;
 #[path = "infrastructure/math.rs"]
 mod math;
 #[path = "ui/resource_visualization.rs"]
