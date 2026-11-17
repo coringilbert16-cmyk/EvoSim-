@@ -2041,6 +2041,91 @@ fn environmental_movement_cross_energy(
     environmental_movement_cross_energy_inner::<false>(a, b, &mut comparisons, &mut matches)
 }
 
+#[cfg(test)]
+mod environmental_movement_frequency_match_tests {
+    use super::*;
+
+    fn emitter(frequencies: &[f64]) -> EnvironmentalMovementEmitter {
+        let mut phase_components =
+            [EnvironmentalMovementPhaseComponent::default(); MAX_SPECTRAL_COMPONENTS];
+        for (index, frequency) in frequencies.iter().copied().enumerate() {
+            phase_components[index] = EnvironmentalMovementPhaseComponent {
+                frequency_cycles_per_day: frequency,
+                in_phase_amplitude: index as f64 + 0.5,
+                quadrature_amplitude: index as f64 * 0.25,
+            };
+        }
+        phase_components[..frequencies.len()]
+            .sort_unstable_by(|a, b| a.frequency_cycles_per_day.total_cmp(&b.frequency_cycles_per_day));
+        EnvironmentalMovementEmitter {
+            x: 0.0,
+            y: 0.0,
+            mass_scale: 1.0,
+            spectrum: ToneSpectrum::empty(),
+            phase_components,
+            phase_component_count: frequencies.len(),
+        }
+    }
+
+    fn reference_cross_energy(
+        a: &EnvironmentalMovementEmitter,
+        b: &EnvironmentalMovementEmitter,
+    ) -> f64 {
+        let mut energy = 0.0;
+        for left in &a.phase_components[..a.phase_component_count] {
+            for right in &b.phase_components[..b.phase_component_count] {
+                if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() <= 1e-9 {
+                    energy += 2.0
+                        * (left.in_phase_amplitude * right.in_phase_amplitude
+                            + left.quadrature_amplitude * right.quadrature_amplitude);
+                }
+            }
+        }
+        energy
+    }
+
+    #[test]
+    fn ordered_frequency_windows_preserve_all_tolerance_matches() {
+        let a = emitter(&[40.0, 10.0, 30.0, 20.0]);
+        let b = emitter(&[30.0 - 5e-10, 10.0 + 5e-10, 40.0, 20.0 + 2e-9]);
+        let mut comparisons = 0;
+        let mut matches = 0;
+
+        let actual = environmental_movement_cross_energy_inner::<true>(
+            &a,
+            &b,
+            &mut comparisons,
+            &mut matches,
+        )
+        .expect("valid component data should produce cross-energy");
+
+        assert!((actual - reference_cross_energy(&a, &b)).abs() < 1e-12);
+        assert_eq!(matches, 3);
+        assert!(comparisons < 16, "ordered scan should avoid the full 4x4 comparison");
+    }
+
+    #[test]
+    fn ordered_frequency_windows_handle_no_matches() {
+        let a = emitter(&[10.0, 20.0, 30.0, 40.0]);
+        let b = emitter(&[11.0, 21.0, 31.0, 41.0]);
+        let mut comparisons = 0;
+        let mut matches = 0;
+
+        let actual = environmental_movement_cross_energy_inner::<true>(
+            &a,
+            &b,
+            &mut comparisons,
+            &mut matches,
+        )
+        .expect("valid component data should produce cross-energy");
+
+        assert_eq!(actual, 0.0);
+        assert_eq!(matches, 0);
+        assert!(comparisons < 16);
+    }
+}
+
+
 fn environmental_movement_cross_energy_profiled(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
