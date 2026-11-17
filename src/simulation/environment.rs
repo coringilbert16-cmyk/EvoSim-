@@ -1064,6 +1064,13 @@ impl ActiveMaterialField {
             if candidate_index == other_index {
                 continue;
             }
+            // Pair results are sorted by candidate index, so all of one
+            // candidate's possible collisions are contiguous. Once an exact
+            // penetration is found, the original per-candidate `any` check
+            // would stop; preserve that short-circuit here as well.
+            if colliding_candidates[candidate_index] {
+                continue;
+            }
             let candidate = candidates[candidate_index]
                 .as_ref()
                 .expect("candidate index must remain populated");
@@ -1080,7 +1087,7 @@ impl ActiveMaterialField {
                     )
                 })
             });
-            colliding_candidates[candidate_index] |= collides;
+            colliding_candidates[candidate_index] = collides;
         }
         for (index, collides) in colliding_candidates.into_iter().enumerate() {
             if collides {
