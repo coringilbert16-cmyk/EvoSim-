@@ -1092,6 +1092,9 @@ impl Simulation {
                 &living_ids,
             );
         }
+        if profile_tick {
+            finish_profile_phase("world_tone_organism_settlement");
+        }
         if let Some(hotspot) = self.hotspot {
             self.environmental_chemistry_diagnostics
                 .hotspot_settlement_succeeded = Some(crate::hotspot::settle_environment_inputs(
@@ -1102,7 +1105,7 @@ impl Simulation {
             ));
         }
         if profile_tick {
-            finish_profile_phase("world_inputs_and_hotspot");
+            finish_profile_phase("hotspot_settlement");
         }
 
         // Environmental chemistry is a first-class owner and must run
