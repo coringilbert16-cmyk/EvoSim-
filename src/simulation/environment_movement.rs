@@ -36,7 +36,8 @@ pub(crate) fn apply_environmental_resonance_movement(
     }
 
     // Opt-in phase timing keeps normal simulation runs free of profiling output.
-    let profile_movement = std::env::var("EVOSIM_PROFILE_MOVEMENT").is_ok_and(|value| value == "1" || value == "true");
+    let profile_movement = std::env::var("EVOSIM_PROFILE_MOVEMENT")
+        .is_ok_and(|value| value == "1" || value == "true");
 
     let resonance_started = std::time::Instant::now();
     let Some(displacements) =
