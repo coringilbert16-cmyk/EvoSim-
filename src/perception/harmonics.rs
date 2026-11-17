@@ -1982,6 +1982,10 @@ fn environmental_movement_emitter(
 fn resonance_pair_push_pull_from_emitters(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
+    a_spectrum_validated: &mut bool,
+    b_spectrum_validated: &mut bool,
+    profile_validation: bool,
+    validation_ns: &mut u128,
     sample_cross_energy: bool,
     sampled_cross_energy_ns: &mut u128,
     sampled_matching_ns: &mut u128,
@@ -1994,6 +1998,25 @@ fn resonance_pair_push_pull_from_emitters(
     }
     if distance <= f64::EPSILON {
         return Some(((0.0, 0.0), (0.0, 0.0)));
+    }
+
+    // Validate each immutable emitter spectrum only on its first actual
+    // cross-energy use. Coincident pairs continue to bypass validation.
+    if !*a_spectrum_validated {
+        let started = profile_validation.then(std::time::Instant::now);
+        spectrum_energy(&a.spectrum)?;
+        if let Some(started) = started {
+            *validation_ns += started.elapsed().as_nanos();
+        }
+        *a_spectrum_validated = true;
+    }
+    if !*b_spectrum_validated {
+        let started = profile_validation.then(std::time::Instant::now);
+        spectrum_energy(&b.spectrum)?;
+        if let Some(started) = started {
+            *validation_ns += started.elapsed().as_nanos();
+        }
+        *b_spectrum_validated = true;
     }
 
     // Each material's emitted aura uses the existing continuous 1/(1+d)
@@ -2038,10 +2061,21 @@ pub(crate) fn resonance_pair_push_pull(
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
     let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
-    // The isolated-pair reference has no shared validation pass.
-    spectrum_energy(&a.spectrum)?;
-    spectrum_energy(&b.spectrum)?;
-    resonance_pair_push_pull_from_emitters(&a, &b, false, &mut 0, &mut 0)
+    // The isolated-pair reference has its own one-use validation cache.
+    let mut a_validated = false;
+    let mut b_validated = false;
+    let mut validation_ns = 0;
+    resonance_pair_push_pull_from_emitters(
+        &a,
+        &b,
+        &mut a_validated,
+        &mut b_validated,
+        false,
+        &mut validation_ns,
+        false,
+        &mut 0,
+        &mut 0,
+    )
 }
 
 /// Precompute each environmental material's resonance once, then evaluate
@@ -2064,17 +2098,12 @@ pub(crate) fn environmental_resonance_displacements(
         .collect::<Option<Vec<_>>>()?;
     let emitter_ns = emitter_started.elapsed().as_nanos();
 
-    // Every emitter owns an immutable spectrum for the full pair pass.
-    // Validate each spectrum once rather than repeating the same scan for
-    // every unordered pair. With fewer than two emitters no pair is evaluated,
-    // so preserve the previous behavior of not rejecting an unused spectrum.
-    let validation_started = std::time::Instant::now();
-    if emitters.len() >= 2 {
-        for emitter in &emitters {
-            spectrum_energy(&emitter.spectrum)?;
-        }
-    }
-    let validation_ns = validation_started.elapsed().as_nanos();
+    // Cache validity lazily: coincident pairs skip cross-energy entirely, so
+    // their spectra must retain the old behavior of not being validated.
+    // Once an emitter participates in a non-coincident pair, its owned
+    // spectrum is immutable for the remainder of this movement pass.
+    let mut validated_spectra = vec![false; emitters.len()];
+    let mut validation_ns = 0_u128;
 
     let mut accumulated = vec![(0.0, 0.0); emitters.len()];
     let pair_started = std::time::Instant::now();
@@ -2086,9 +2115,14 @@ pub(crate) fn environmental_resonance_displacements(
     for a in 0..emitters.len() {
         for b in (a + 1)..emitters.len() {
             let sample = pair_count % CROSS_ENERGY_SAMPLE_STRIDE == 0;
+            let (before_b, from_b) = validated_spectra.split_at_mut(b);
             let (_, on_b) = resonance_pair_push_pull_from_emitters(
                 &emitters[a],
                 &emitters[b],
+                &mut before_b[a],
+                &mut from_b[0],
+                profile,
+                &mut validation_ns,
                 sample && profile,
                 &mut sampled_cross_energy_ns,
                 &mut sampled_matching_ns,
