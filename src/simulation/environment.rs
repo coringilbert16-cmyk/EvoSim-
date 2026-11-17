@@ -903,6 +903,194 @@ impl ActiveMaterialField {
         }
 
         let candidate_elapsed = candidate_started.elapsed();
+
+        // Optional workload-only telemetry. This does not participate in any
+        // placement decision; it measures conservative AABB candidate counts
+        // for sweep-and-prune and several uniform-grid cell sizes.
+        if std::env::var("EVOSIM_AUDIT_MOVEMENT_SPATIAL")
+            .is_ok_and(|value| value == "1" || value == "true")
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static AUDIT_PASS: AtomicU64 = AtomicU64::new(0);
+            let pass = AUDIT_PASS.fetch_add(1, Ordering::Relaxed) + 1;
+            let candidate_entries: Vec<_> = candidates
+                .iter()
+                .enumerate()
+                .filter_map(|(index, candidate)| {
+                    candidate.as_ref().map(|candidate| (index, candidate.bounds))
+                })
+                .collect();
+            let valid_targets: Vec<_> = snapshots
+                .iter()
+                .enumerate()
+                .filter_map(|(index, snapshot)| snapshot.bounds.map(|bounds| (index, bounds)))
+                .collect();
+            let nonzero_proposals = displacements
+                .iter()
+                .filter(|(_, dx, dy)| dx.is_finite() && dy.is_finite() && (*dx != 0.0 || *dy != 0.0))
+                .count();
+
+            // Count cross-set pairs considered by an X-axis sweep, and the
+            // subset surviving the full conservative 2D AABB predicate.
+            let mut events = Vec::with_capacity(candidate_entries.len() + valid_targets.len());
+            events.extend(candidate_entries.iter().map(|(index, bounds)| {
+                (bounds.min_x, bounds.max_x, true, *index)
+            }));
+            events.extend(valid_targets.iter().map(|(index, bounds)| {
+                (bounds.min_x, bounds.max_x, false, *index)
+            }));
+            events.sort_unstable_by(|a, b| {
+                a.0.total_cmp(&b.0)
+                    .then_with(|| b.2.cmp(&a.2))
+                    .then_with(|| a.3.cmp(&b.3))
+            });
+            let mut active: Vec<(f64, bool, usize)> = Vec::new();
+            let mut sweep_x_pairs = 0usize;
+            let mut sweep_aabb_pairs = 0usize;
+            for (min_x, max_x, is_candidate, index) in events {
+                active.retain(|(active_max_x, _, _)| {
+                    *active_max_x + crate::material_geometry::GEOMETRY_EPSILON >= min_x
+                });
+                let current_bounds = if is_candidate {
+                    candidates[index].as_ref().expect("audited candidate").bounds
+                } else {
+                    snapshots[index].bounds.expect("audited target")
+                };
+                for &(_, other_is_candidate, other_index) in &active {
+                    if is_candidate == other_is_candidate
+                        || (is_candidate && other_index == index)
+                    {
+                        continue;
+                    }
+                    sweep_x_pairs += 1;
+                    let other_bounds = if other_is_candidate {
+                        candidates[other_index].as_ref().expect("audited candidate").bounds
+                    } else {
+                        snapshots[other_index].bounds.expect("audited target")
+                    };
+                    if current_bounds.overlaps(other_bounds) {
+                        sweep_aabb_pairs += 1;
+                    }
+                }
+                active.push((max_x, is_candidate, index));
+            }
+
+            eprintln!(
+                "MOVEMENT_SPATIAL_SWEEP pass={} objects={} proposals={} nonzero_proposals={} valid_targets={} candidates={} x_interval_pairs={} aabb_pairs={} invalid_snapshots={}",
+                pass,
+                snapshots.len(),
+                displacements.len(),
+                nonzero_proposals,
+                valid_targets.len(),
+                candidate_entries.len(),
+                sweep_x_pairs,
+                sweep_aabb_pairs,
+                snapshots.len().saturating_sub(valid_targets.len())
+            );
+
+            for grid_size in [12.5_f64, 25.0, 50.0, 100.0] {
+                let mut target_cells: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+                let mut anchor_occupancy: HashMap<(i64, i64), usize> = HashMap::new();
+                let mut target_cell_references = 0usize;
+                for &(index, bounds) in &valid_targets {
+                    let min_col = (bounds.min_x / grid_size).floor() as i64;
+                    let max_col = (bounds.max_x / grid_size).floor() as i64;
+                    let min_row = (bounds.min_y / grid_size).floor() as i64;
+                    let max_row = (bounds.max_y / grid_size).floor() as i64;
+                    let center_cell = (
+                        (((bounds.min_x + bounds.max_x) * 0.5) / grid_size).floor() as i64,
+                        (((bounds.min_y + bounds.max_y) * 0.5) / grid_size).floor() as i64,
+                    );
+                    *anchor_occupancy.entry(center_cell).or_default() += 1;
+                    for row in min_row..=max_row {
+                        for col in min_col..=max_col {
+                            target_cells.entry((col, row)).or_default().push(index);
+                            target_cell_references += 1;
+                        }
+                    }
+                }
+
+                let occupied_cells = anchor_occupancy.len();
+                let max_anchor_occupancy = anchor_occupancy.values().copied().max().unwrap_or(0);
+                let mean_anchor_occupancy = if occupied_cells == 0 {
+                    0.0
+                } else {
+                    valid_targets.len() as f64 / occupied_cells as f64
+                };
+                let max_bucket_occupancy = target_cells.values().map(Vec::len).max().unwrap_or(0);
+
+                let mut cross_pairs = HashSet::new();
+                let mut cross_aabb_pairs = 0usize;
+                for &(candidate_index, bounds) in &candidate_entries {
+                    let min_col = (bounds.min_x / grid_size).floor() as i64;
+                    let max_col = (bounds.max_x / grid_size).floor() as i64;
+                    let min_row = (bounds.min_y / grid_size).floor() as i64;
+                    let max_row = (bounds.max_y / grid_size).floor() as i64;
+                    for row in min_row..=max_row {
+                        for col in min_col..=max_col {
+                            if let Some(targets) = target_cells.get(&(col, row)) {
+                                for &target_index in targets {
+                                    if target_index == candidate_index
+                                        || !cross_pairs.insert((candidate_index, target_index))
+                                    {
+                                        continue;
+                                    }
+                                    if bounds.overlaps(
+                                        snapshots[target_index].bounds.expect("valid target bounds"),
+                                    ) {
+                                        cross_aabb_pairs += 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut mover_cells: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+                for (slot, &(_, bounds)) in candidate_entries.iter().enumerate() {
+                    let min_col = (bounds.min_x / grid_size).floor() as i64;
+                    let max_col = (bounds.max_x / grid_size).floor() as i64;
+                    let min_row = (bounds.min_y / grid_size).floor() as i64;
+                    let max_row = (bounds.max_y / grid_size).floor() as i64;
+                    for row in min_row..=max_row {
+                        for col in min_col..=max_col {
+                            mover_cells.entry((col, row)).or_default().push(slot);
+                        }
+                    }
+                }
+                let mut mover_pairs = HashSet::new();
+                let mut mover_aabb_pairs = 0usize;
+                for slots in mover_cells.values() {
+                    for left in 0..slots.len() {
+                        for right in (left + 1)..slots.len() {
+                            let a = slots[left];
+                            let b = slots[right];
+                            if !mover_pairs.insert((a, b)) {
+                                continue;
+                            }
+                            if candidate_entries[a].1.overlaps(candidate_entries[b].1) {
+                                mover_aabb_pairs += 1;
+                            }
+                        }
+                    }
+                }
+
+                eprintln!(
+                    "MOVEMENT_SPATIAL_GRID pass={} cell_size={} occupied_anchor_cells={} mean_anchor_occupancy={:.2} max_anchor_occupancy={} max_aabb_bucket_occupancy={} aabb_cell_references={} cross_grid_pairs={} cross_aabb_pairs={} mover_grid_pairs={} mover_aabb_pairs={}",
+                    pass,
+                    grid_size,
+                    occupied_cells,
+                    mean_anchor_occupancy,
+                    max_anchor_occupancy,
+                    max_bucket_occupancy,
+                    target_cell_references,
+                    cross_pairs.len(),
+                    cross_aabb_pairs,
+                    mover_pairs.len(),
+                    mover_aabb_pairs
+                );
+            }
+        }
         let mut original_collision_rejections = 0usize;
         let original_collision_started = std::time::Instant::now();
 
