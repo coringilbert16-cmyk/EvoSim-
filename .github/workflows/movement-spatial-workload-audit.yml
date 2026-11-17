@@ -1,0 +1,45 @@
+name: Movement Spatial Workload Audit
+
+on:
+  push:
+    branches:
+      - audit/movement-spatial-workload
+
+permissions:
+  contents: read
+
+jobs:
+  workload-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out audit revision
+        uses: actions/checkout@v4
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Run standard 60-second workload with spatial telemetry
+        timeout-minutes: 10
+        env:
+          EVOSIM_PROFILE_MOVEMENT: "1"
+          EVOSIM_AUDIT_MOVEMENT_SPATIAL: "1"
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics movement-spatial-audit.jsonl \
+            --diagnostic-interval 100 2>&1 | tee movement-spatial-audit.log
+      - name: Upload spatial workload measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-spatial-workload-audit
+          path: |
+            movement-spatial-audit.log
+            movement-spatial-audit.jsonl
+          if-no-files-found: error
+          retention-days: 30
