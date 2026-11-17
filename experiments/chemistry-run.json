@@ -1,7 +1,8 @@
 {
-  "run": false,
-  "seeds": [42, 43, 44, 45, 46],
-  "duration_seconds": 300,
+  "run": true,
+  "seeds": [42],
+  "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Completed approved five-seed five-minute instance-level opportunity diagnostics experiment"
+  "request_note": "Main baseline matched 60-second seed-42 benchmark for PR359 comparison.",
+  "profile_movement": true
 }
