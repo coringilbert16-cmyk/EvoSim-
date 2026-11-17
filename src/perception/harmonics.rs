@@ -1953,7 +1953,10 @@ struct EnvironmentalMovementEmitter {
 
 fn environmental_movement_phase_components(
     spectrum: &ToneSpectrum,
-) -> Option<([EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS], usize)> {
+) -> Option<(
+    [EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS],
+    usize,
+)> {
     if spectrum.components.len() > MAX_SPECTRAL_COMPONENTS {
         return None;
     }
