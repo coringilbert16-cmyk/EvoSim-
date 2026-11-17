@@ -110,6 +110,8 @@ The split 60-second seed-42 experiment completed successfully (workflow run [441
 
 The whole-tick profiler now caches the opt-in environment setting with `OnceLock`, avoiding an environment lookup on every simulation tick. It remains disabled unless `EVOSIM_PROFILE_TICK` is set before process startup.
 
-A final clean 60-second seed-42 run with movement enabled and both profilers disabled is in progress. Its throughput, chemistry diagnostics, inventory, lifecycle checks, and energy residual are the acceptance evidence; profiler runs are not substitutes for this clean measurement.
+The final clean 60-second seed-42 run completed with movement enabled and both profilers disabled. It completed 212 ticks in the requested 60-second observation (212 ticks/minute). The run retained all 1,360 constituents and ended with 1,287 physical materials. The chemistry analyzer reported 13 committed BREAKs, 6 COMBINEs, and 1 DISPLACEMENT; molecular lifecycle validation errors were zero; final energy residual was approximately `-8.20e-7`. The observation and aggregate analysis workflow passed: [run 44119619970](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44119619970).
+
+This confirms the optimized movement path is functioning with chemistry and energy accounting intact, but the measured throughput remains far below the >1,009 ticks/minute target. The next meaningful gains require safe parallel computation of movement and world-tone exposure, not reduced physics or skipped work.
 
 See [the staged parallel optimization roadmap](parallel-optimization-roadmap.md) for the proposed PR 363–367 sequence. Each implementation PR is intended to target the then-current `main`, not another feature branch.
