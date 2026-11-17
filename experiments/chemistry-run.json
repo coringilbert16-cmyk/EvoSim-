@@ -1,11 +1,11 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [
     42
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR362 final clean matched 60-second seed-42 movement-enabled throughput run; all profiling disabled; standard 1,280-object environment; 2026-11-17",
+  "request_note": "Inactive after PR362 final clean validation request; profiling disabled by default.",
   "profile_movement": false,
   "profile_tick": false
 }
