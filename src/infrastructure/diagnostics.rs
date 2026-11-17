@@ -624,24 +624,20 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             interval: interval.max(1),
             totals: EnvironmentalChemistryDiagnosticTotals::default(),
         };
-        let (initial_independent_resource_count, initial_molecule_count, initial_constituent_count) =
-            simulation
-                .environment
-                .field
-                .cells
-                .iter()
-                .flat_map(|cell| &cell.physical_materials)
-                .fold(
-                    (0_usize, 0_usize, 0_usize),
-                    |(resources, molecules, constituents), material| {
-                        let part_count = material.material.parts.len();
-                        (
-                            resources + usize::from(part_count == 1),
-                            molecules + usize::from(part_count > 1),
-                            constituents + part_count,
-                        )
-                    },
-                );
+        let (initial_independent_resource_count, initial_molecule_count, initial_constituent_count) = simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| &cell.physical_materials)
+            .fold((0_usize, 0_usize, 0_usize), |(resources, molecules, constituents), material| {
+                let part_count = material.material.parts.len();
+                (
+                    resources + usize::from(part_count == 1),
+                    molecules + usize::from(part_count > 1),
+                    constituents + part_count,
+                )
+            });
         recorder.write_event(json!({
             "event": "environmental_chemistry_header",
             "version": 2,
