@@ -1776,4 +1776,12 @@ mod movement_placement_sweep_tests {
             );
         }
     }
+    #[test]
+    fn sweeps_return_no_pairs_for_empty_inputs() {
+        let empty: [MovementBounds; 0] = [];
+        assert!(movement_overlapping_pairs(&empty).is_empty());
+        assert!(movement_cross_overlapping_pairs(&empty, &empty).is_empty());
+        assert!(movement_cross_overlapping_pairs(&[], &empty).is_empty());
+        assert!(movement_cross_overlapping_pairs(&empty, &[]).is_empty());
+    }
 }
