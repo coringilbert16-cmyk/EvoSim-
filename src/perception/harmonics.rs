@@ -1970,23 +1970,24 @@ fn environmental_movement_phase_components(
     Some((phase_components, spectrum.components.len()))
 }
 
-fn environmental_movement_cross_energy_inner(
+#[inline]
+fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
-    mut frequency_comparisons: Option<&mut u64>,
-    mut frequency_matches: Option<&mut u64>,
+    frequency_comparisons: &mut u64,
+    frequency_matches: &mut u64,
 ) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
         for right in &b.phase_components[..b.phase_component_count] {
-            if let Some(comparisons) = frequency_comparisons.as_deref_mut() {
-                *comparisons += 1;
+            if PROFILE {
+                *frequency_comparisons += 1;
             }
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
                 continue;
             }
-            if let Some(matches) = frequency_matches.as_deref_mut() {
-                *matches += 1;
+            if PROFILE {
+                *frequency_matches += 1;
             }
             energy += 2.0
                 * (left.in_phase_amplitude * right.in_phase_amplitude
@@ -2003,7 +2004,9 @@ fn environmental_movement_cross_energy(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
 ) -> Option<f64> {
-    environmental_movement_cross_energy_inner(a, b, None, None)
+    let mut comparisons = 0;
+    let mut matches = 0;
+    environmental_movement_cross_energy_inner::<false>(a, b, &mut comparisons, &mut matches)
 }
 
 fn environmental_movement_cross_energy_profiled(
@@ -2016,11 +2019,11 @@ fn environmental_movement_cross_energy_profiled(
     let mut comparisons = 0_u64;
     let mut matches = 0_u64;
     let started = std::time::Instant::now();
-    let energy = environmental_movement_cross_energy_inner(
+    let energy = environmental_movement_cross_energy_inner::<true>(
         a,
         b,
-        Some(&mut comparisons),
-        Some(&mut matches),
+        &mut comparisons,
+        &mut matches,
     );
     *matching_ns += started.elapsed().as_nanos();
     *frequency_comparisons += comparisons;
@@ -3295,6 +3298,29 @@ mod tests {
             (actual - environmental_movement_cross_energy(&emitter_b, &emitter_a).unwrap()).abs()
                 < 1e-12
         );
+
+        let make_single = |phase_radians: f64| ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.5,
+                phase_radians,
+            }],
+        };
+        for phase in [
+            0.0,
+            std::f64::consts::PI,
+            std::f64::consts::FRAC_PI_2,
+        ] {
+            let left = make_single(0.0);
+            let right = make_single(phase);
+            let expected = spectrum_cross_energy(&left, &right).unwrap();
+            let actual = environmental_movement_cross_energy(
+                &make_emitter(left),
+                &make_emitter(right),
+            )
+            .unwrap();
+            assert!((actual - expected).abs() < 1e-12);
+        }
     }
 
     #[test]
