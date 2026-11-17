@@ -13,14 +13,9 @@
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum OrderedChunkError<E> {
     /// A worker returned an application-level error.
-    Worker {
-        chunk_index: usize,
-        source: E,
-    },
+    Worker { chunk_index: usize, source: E },
     /// A worker panicked. All other workers are joined before this is returned.
-    Panicked {
-        chunk_index: usize,
-    },
+    Panicked { chunk_index: usize },
 }
 
 /// Evaluate contiguous chunks on scoped workers and collect their outputs in
@@ -132,10 +127,7 @@ mod tests {
                 assert_eq!(ranges.first().map(|range| range.0), Some(0));
                 assert_eq!(ranges.last().map(|range| range.1), Some(item_count));
 
-                let sizes: Vec<_> = ranges
-                    .iter()
-                    .map(|(start, end)| end - start)
-                    .collect();
+                let sizes: Vec<_> = ranges.iter().map(|(start, end)| end - start).collect();
                 assert!(sizes.iter().all(|size| *size > 0));
                 let minimum = *sizes.iter().min().unwrap();
                 let maximum = *sizes.iter().max().unwrap();
@@ -219,10 +211,7 @@ mod tests {
             Ok::<_, ()>(chunk.to_vec())
         });
 
-        assert_eq!(
-            result,
-            Err(OrderedChunkError::Panicked { chunk_index: 1 })
-        );
+        assert_eq!(result, Err(OrderedChunkError::Panicked { chunk_index: 1 }));
     }
 
     #[test]
