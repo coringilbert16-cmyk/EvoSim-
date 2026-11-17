@@ -1970,6 +1970,11 @@ fn environmental_movement_phase_components(
             quadrature_amplitude: component.amplitude * sin_phase,
         };
     }
+    // Pair evaluation benefits from ordered frequency windows. The source
+    // spectrum is amplitude-sorted, so normalize this small fixed array once
+    // per emitter rather than scanning every component pair for every object pair.
+    phase_components[..spectrum.components.len()]
+        .sort_unstable_by(|a, b| a.frequency_cycles_per_day.total_cmp(&b.frequency_cycles_per_day));
     Some((phase_components, spectrum.components.len()))
 }
 
@@ -1980,14 +1985,37 @@ fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
     frequency_comparisons: &mut u64,
     frequency_matches: &mut u64,
 ) -> Option<f64> {
+    let left_components = &a.phase_components[..a.phase_component_count];
+    let right_components = &b.phase_components[..b.phase_component_count];
     let mut energy = 0.0;
-    for left in &a.phase_components[..a.phase_component_count] {
-        for right in &b.phase_components[..b.phase_component_count] {
+    let mut right_start = 0;
+
+    // Both component slices are frequency-sorted. For each left component,
+    // skip right-side frequencies below its tolerance window, then visit only
+    // the frequencies inside that window. This preserves the original
+    // all-matches-within-1e-9 rule (including near-duplicate frequencies)
+    // while avoiding the full 4x4 comparison for every material pair.
+    for left in left_components {
+        let lower_frequency = left.frequency_cycles_per_day - 1e-9;
+        while right_start < right_components.len() {
             if PROFILE {
                 *frequency_comparisons += 1;
             }
-            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
-                continue;
+            if right_components[right_start].frequency_cycles_per_day >= lower_frequency {
+                break;
+            }
+            right_start += 1;
+        }
+
+        let upper_frequency = left.frequency_cycles_per_day + 1e-9;
+        let mut right_index = right_start;
+        while right_index < right_components.len() {
+            if PROFILE {
+                *frequency_comparisons += 1;
+            }
+            let right = &right_components[right_index];
+            if right.frequency_cycles_per_day > upper_frequency {
+                break;
             }
             if PROFILE {
                 *frequency_matches += 1;
@@ -1998,6 +2026,7 @@ fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
             if !energy.is_finite() {
                 return None;
             }
+            right_index += 1;
         }
     }
     Some(energy)
