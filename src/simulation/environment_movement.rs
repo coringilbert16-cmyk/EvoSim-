@@ -35,11 +35,23 @@ pub(crate) fn apply_environmental_resonance_movement(
         materials.push(material);
     }
 
+    // Opt-in phase timing keeps normal simulation runs free of profiling output.
+    let profile_movement = std::env::var_os("EVOSIM_PROFILE_MOVEMENT").is_some();
+
+    let resonance_started = std::time::Instant::now();
     let Some(displacements) =
         crate::harmonics::environmental_resonance_displacements(&materials, catalog, tick)
     else {
+        if profile_movement {
+            eprintln!(
+                "MOVEMENT_PROFILE tick={tick} phase=resonance elapsed_ns={} objects={}",
+                resonance_started.elapsed().as_nanos(),
+                materials.len()
+            );
+        }
         return 0;
     };
+    let resonance_elapsed = resonance_started.elapsed();
     drop(materials);
 
     let proposals = identities
@@ -47,7 +59,23 @@ pub(crate) fn apply_environmental_resonance_movement(
         .zip(displacements)
         .map(|(identity, (dx, dy))| (identity, dx, dy))
         .collect::<Vec<_>>();
-    field.move_physical_materials_by_identity(&proposals, catalog)
+
+    let placement_started = std::time::Instant::now();
+    let moved = field.move_physical_materials_by_identity(&proposals, catalog);
+    let placement_elapsed = placement_started.elapsed();
+
+    if profile_movement {
+        eprintln!(
+            "MOVEMENT_PROFILE tick={tick} objects={} proposals={} moved={} resonance_ns={} placement_ns={}",
+            proposals.len(),
+            proposals.iter().filter(|(_, dx, dy)| *dx != 0.0 || *dy != 0.0).count(),
+            moved,
+            resonance_elapsed.as_nanos(),
+            placement_elapsed.as_nanos()
+        );
+    }
+
+    moved
 }
 
 #[cfg(test)]
