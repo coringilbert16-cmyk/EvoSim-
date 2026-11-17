@@ -4152,7 +4152,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn resonance_movement_creates_a_live_contact_for_environmental_combine_discovery() {
         let mut simulation = crate::state::Simulation::new(35903, 10.0);
@@ -4177,12 +4176,7 @@ mod tests {
             let mut cache = ConnectionCompatibilityCache::new();
             let mut work = FIELD_COMPONENT_PAIR_LIMIT;
             let Some(selected) = select_best_contact(
-                &structure,
-                &indices_a,
-                &indices_b,
-                &catalog,
-                &mut cache,
-                &mut work,
+                &structure, &indices_a, &indices_b, &catalog, &mut cache, &mut work,
             ) else {
                 return false;
             };
@@ -4255,14 +4249,9 @@ mod tests {
                 )
                 .expect("catalog resource B must realize");
                 for tick in 0..2400_u64 {
-                    let Some((_, force_on_b)) =
-                        crate::harmonics::resonance_pair_push_pull(
-                            &probe_a,
-                            &probe_b,
-                            &catalog,
-                            tick,
-                        )
-                    else {
+                    let Some((_, force_on_b)) = crate::harmonics::resonance_pair_push_pull(
+                        &probe_a, &probe_b, &catalog, tick,
+                    ) else {
                         continue;
                     };
                     if force_on_b.0 < -1.0e-12 {
@@ -4300,15 +4289,9 @@ mod tests {
                         continue;
                     }
 
-                    let mut field =
-                        crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
+                    let mut field = crate::environment::ActiveMaterialField::new(30.0, 30.0, 10.0);
                     if !field.deposit_physical(10.0, 10.0, source_a, &catalog)
-                        || !field.deposit_physical(
-                            10.0 + distance,
-                            10.0,
-                            source_b,
-                            &catalog,
-                        )
+                        || !field.deposit_physical(10.0 + distance, 10.0, source_b, &catalog)
                     {
                         continue;
                     }
@@ -4323,11 +4306,10 @@ mod tests {
                         continue;
                     }
 
-                    let moved = crate::environmental_movement::apply_environmental_resonance_movement(
-                        &mut field,
-                        &catalog,
-                        tick,
-                    );
+                    let moved =
+                        crate::environmental_movement::apply_environmental_resonance_movement(
+                            &mut field, &catalog, tick,
+                        );
                     if moved == 0 {
                         continue;
                     }
@@ -4398,5 +4380,4 @@ mod tests {
             accumulation.values().copied().collect::<Vec<_>>()
         );
     }
-
 }
