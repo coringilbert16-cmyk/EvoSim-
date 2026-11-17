@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
   push:
-    branches: [main, chemistry/reaction-network-diagnostics]
+    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration]
     paths:
       - experiments/chemistry-run.json
 
@@ -67,7 +67,7 @@ jobs:
               seeds = config.get("seeds", [])
               duration = int(config.get("duration_seconds", 300))
               interval = int(config.get("diagnostic_interval", 100))
-              profile_movement = False
+              profile_movement = bool(config.get("profile_movement", False))
           else:
               raw = os.environ["SEEDS_INPUT"]
               parts = [part.strip() for part in raw.split(",") if part.strip()]
