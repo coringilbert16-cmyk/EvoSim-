@@ -1064,10 +1064,10 @@ impl ActiveMaterialField {
             if candidate_index == other_index {
                 continue;
             }
-            // Pair results are sorted by candidate index, so all of one
-            // candidate's possible collisions are contiguous. Once an exact
-            // penetration is found, the original per-candidate `any` check
-            // would stop; preserve that short-circuit here as well.
+            // The cross-sweep sorts (query_index, target_index) pairs
+            // lexicographically, keeping each candidate's collisions
+            // contiguous. Once an exact penetration is found, the original
+            // per-candidate `any` check would stop; preserve that short-circuit.
             if colliding_candidates[candidate_index] {
                 continue;
             }
