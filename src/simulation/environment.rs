@@ -1039,8 +1039,7 @@ impl ActiveMaterialField {
             .iter()
             .enumerate()
             .filter_map(|(index, snapshot)| {
-                (snapshot.original_parts.is_some() && snapshot.bounds.is_some())
-                    .then_some(index)
+                (snapshot.original_parts.is_some() && snapshot.bounds.is_some()).then_some(index)
             })
             .collect();
         let snapshot_bounds: Vec<_> = valid_snapshot_indices
