@@ -919,7 +919,10 @@ impl ActiveMaterialField {
         }
 
         let mover_overlap_elapsed = mover_overlap_started.elapsed();
-        let candidates_count_for_profile = candidates.iter().filter(|candidate| candidate.is_some()).count();
+        let candidates_count_for_profile = candidates
+            .iter()
+            .filter(|candidate| candidate.is_some())
+            .count();
         let commit_started = std::time::Instant::now();
         let accepted_count = candidates
             .iter()
