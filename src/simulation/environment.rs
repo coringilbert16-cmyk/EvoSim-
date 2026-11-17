@@ -927,18 +927,24 @@ impl ActiveMaterialField {
                 .collect();
             let nonzero_proposals = displacements
                 .iter()
-                .filter(|(_, dx, dy)| dx.is_finite() && dy.is_finite() && (*dx != 0.0 || *dy != 0.0))
+                .filter(|(_, dx, dy)| {
+                    dx.is_finite() && dy.is_finite() && (*dx != 0.0 || *dy != 0.0)
+                })
                 .count();
 
             // Count cross-set pairs considered by an X-axis sweep, and the
             // subset surviving the full conservative 2D AABB predicate.
             let mut events = Vec::with_capacity(candidate_entries.len() + valid_targets.len());
-            events.extend(candidate_entries.iter().map(|(index, bounds)| {
-                (bounds.min_x, bounds.max_x, true, *index)
-            }));
-            events.extend(valid_targets.iter().map(|(index, bounds)| {
-                (bounds.min_x, bounds.max_x, false, *index)
-            }));
+            events.extend(
+                candidate_entries
+                    .iter()
+                    .map(|(index, bounds)| (bounds.min_x, bounds.max_x, true, *index)),
+            );
+            events.extend(
+                valid_targets
+                    .iter()
+                    .map(|(index, bounds)| (bounds.min_x, bounds.max_x, false, *index)),
+            );
             events.sort_unstable_by(|a, b| {
                 a.0.total_cmp(&b.0)
                     .then_with(|| b.2.cmp(&a.2))
@@ -952,19 +958,24 @@ impl ActiveMaterialField {
                     *active_max_x + crate::material_geometry::GEOMETRY_EPSILON >= min_x
                 });
                 let current_bounds = if is_candidate {
-                    candidates[index].as_ref().expect("audited candidate").bounds
+                    candidates[index]
+                        .as_ref()
+                        .expect("audited candidate")
+                        .bounds
                 } else {
                     snapshots[index].bounds.expect("audited target")
                 };
                 for &(_, other_is_candidate, other_index) in &active {
-                    if is_candidate == other_is_candidate
-                        || (is_candidate && other_index == index)
+                    if is_candidate == other_is_candidate || (is_candidate && other_index == index)
                     {
                         continue;
                     }
                     sweep_x_pairs += 1;
                     let other_bounds = if other_is_candidate {
-                        candidates[other_index].as_ref().expect("audited candidate").bounds
+                        candidates[other_index]
+                            .as_ref()
+                            .expect("audited candidate")
+                            .bounds
                     } else {
                         snapshots[other_index].bounds.expect("audited target")
                     };
@@ -1036,7 +1047,9 @@ impl ActiveMaterialField {
                                         continue;
                                     }
                                     if bounds.overlaps(
-                                        snapshots[target_index].bounds.expect("valid target bounds"),
+                                        snapshots[target_index]
+                                            .bounds
+                                            .expect("valid target bounds"),
                                     ) {
                                         cross_aabb_pairs += 1;
                                     }
