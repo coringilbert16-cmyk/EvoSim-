@@ -1,6 +1,6 @@
 # PR 5: Benchmark and finalize resonance-driven movement
 
-**Status:** Functional validation complete; full Rust CI passed. Performance acceptance identified a material regression that is documented below and is deferred from this integration sequence.
+**Status:** Functional validation complete; full Rust CI passed. Performance target remains unmet; the measured regression is documented below and becomes the next focused optimization task.
 **Base:** `main`
 **Goal:** Verify the completed movement system at the standard environment scale, report its measured cost, and close the integration sequence without expanding the physics model.
 
@@ -11,6 +11,10 @@
 3. Verified the same initial environment in both runs: 1,200 independent resources, 80 two-constituent molecules, 1,360 constituents, and 1,280 physical objects.
 4. Confirmed movement, chemistry integration, energy accounting, and lifecycle validation in the movement-enabled run.
 5. Ran full Rust CI and Clippy successfully on the PR head.
+
+## Performance acceptance target
+
+The required target is **more than 800 completed ticks per minute** (more than 13.33 ticks/second) with resonance movement enabled, using the standard 60-second seed-42 workload of 1,280 physical objects. Movement must remain active and chemistry/invariant checks must remain valid. Disabling movement or reducing the workload does not satisfy acceptance.
 
 ## Matched throughput results
 
@@ -57,7 +61,7 @@ Both runs retained all six active non-Water resources and completed the full 60-
 
 ## CI
 
-- Rust CI / Clippy passed on PR head `397ded2836156098a7aa622dd7deb7db175d47bd`.
+- Rust CI / Clippy passed on final PR head `64be6159bb4cad0cc73518be0478014196957109`.
 - [Rust CI run](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44100044295)
 - [Matched movement-enabled experiment](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44099663816)
 - [Matched movement-disabled baseline](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44100857940)
@@ -68,4 +72,4 @@ The five-step movement integration sequence is functionally complete: resonance 
 
 Performance is **not yet acceptable at this scale**. A follow-up should target the exact pair-calculation loop and then remeasure placement validation. Preserve the current pairwise resonance law, same-phase repulsion, opposing-phase attraction, quadrature neutrality, distance attenuation, and existing placement transaction. Do not introduce a multipole hierarchy, generalized physics engine, persistent velocity/acceleration, or unrelated chemistry redesign.
 
-Optimization is deliberately deferred from this validation/reporting change; the measured regression is recorded as the next engineering priority.
+The >800 ticks/minute target is not met by these measurements. Optimization is deliberately outside this validation/reporting change; the measured regression is recorded as the next engineering priority.
