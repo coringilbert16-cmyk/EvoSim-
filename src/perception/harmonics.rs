@@ -847,8 +847,35 @@ fn spectrum_energy(spectrum: &ToneSpectrum) -> Option<f64> {
 /// only the interference term (combined energy minus the two separate
 /// energies); it is not by itself a mechanical potential or force.
 pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
+    spectrum_cross_energy_inner(a, b, None)
+}
+
+/// Profile validation and component matching separately for sampled movement
+/// pairs. Timing is opt-in and never adds clock reads to the normal path.
+fn spectrum_cross_energy_profiled(
+    a: &ToneSpectrum,
+    b: &ToneSpectrum,
+    validation_ns: &mut u128,
+    matching_ns: &mut u128,
+) -> Option<f64> {
+    spectrum_cross_energy_inner(a, b, Some((validation_ns, matching_ns)))
+}
+
+fn spectrum_cross_energy_inner(
+    a: &ToneSpectrum,
+    b: &ToneSpectrum,
+    mut timings: Option<(&mut u128, &mut u128)>,
+) -> Option<f64> {
+    let validation_started = timings.as_ref().map(|_| std::time::Instant::now());
     spectrum_energy(a)?;
     spectrum_energy(b)?;
+    if let (Some((validation_ns, _)), Some(started)) =
+        (timings.as_mut(), validation_started)
+    {
+        **validation_ns += started.elapsed().as_nanos();
+    }
+
+    let matching_started = timings.as_ref().map(|_| std::time::Instant::now());
     let mut energy = 0.0;
     for left in &a.components {
         for right in &b.components {
@@ -863,6 +890,9 @@ pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Optio
                 return None;
             }
         }
+    }
+    if let (Some((_, matching_ns)), Some(started)) = (timings.as_mut(), matching_started) {
+        **matching_ns += started.elapsed().as_nanos();
     }
     Some(energy)
 }
@@ -1955,6 +1985,8 @@ fn resonance_pair_push_pull_from_emitters(
     b: &EnvironmentalMovementEmitter,
     sample_cross_energy: bool,
     sampled_cross_energy_ns: &mut u128,
+    sampled_validation_ns: &mut u128,
+    sampled_matching_ns: &mut u128,
 ) -> Option<((f64, f64), (f64, f64))> {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
@@ -1971,7 +2003,12 @@ fn resonance_pair_push_pull_from_emitters(
     let attenuation = (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
     let cross_energy = if sample_cross_energy {
         let started = std::time::Instant::now();
-        let value = spectrum_cross_energy(&a.spectrum, &b.spectrum)?;
+        let value = spectrum_cross_energy_profiled(
+            &a.spectrum,
+            &b.spectrum,
+            sampled_validation_ns,
+            sampled_matching_ns,
+        )?;
         *sampled_cross_energy_ns += started.elapsed().as_nanos();
         value
     } else {
@@ -2004,7 +2041,7 @@ pub(crate) fn resonance_pair_push_pull(
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
     let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
-    resonance_pair_push_pull_from_emitters(&a, &b, false, &mut 0)
+    resonance_pair_push_pull_from_emitters(&a, &b, false, &mut 0, &mut 0, &mut 0)
 }
 
 /// Precompute each environmental material's resonance once, then evaluate
@@ -2031,6 +2068,8 @@ pub(crate) fn environmental_resonance_displacements(
     let pair_started = std::time::Instant::now();
     let mut pair_count = 0_u64;
     let mut sampled_cross_energy_ns = 0_u128;
+    let mut sampled_validation_ns = 0_u128;
+    let mut sampled_matching_ns = 0_u128;
     const CROSS_ENERGY_SAMPLE_STRIDE: u64 = 256;
 
     for a in 0..emitters.len() {
@@ -2041,6 +2080,8 @@ pub(crate) fn environmental_resonance_displacements(
                 &emitters[b],
                 sample && profile,
                 &mut sampled_cross_energy_ns,
+                &mut sampled_validation_ns,
+                &mut sampled_matching_ns,
             )?;
             accumulated[a].0 -= on_b.0;
             accumulated[a].1 -= on_b.1;
@@ -2070,15 +2111,19 @@ pub(crate) fn environmental_resonance_displacements(
     if profile {
         let sampled_pairs = pair_count.div_ceil(CROSS_ENERGY_SAMPLE_STRIDE);
         eprintln!(
-            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_pairs={} estimated_cross_energy_total_ns={}",
+            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_validation_ns={} sampled_matching_ns={} sampled_pairs={} estimated_cross_energy_total_ns={} estimated_validation_total_ns={} estimated_matching_total_ns={}",
             materials.len(),
             pair_count,
             emitter_ns,
             pair_ns,
             response_ns,
             sampled_cross_energy_ns,
+            sampled_validation_ns,
+            sampled_matching_ns,
             sampled_pairs,
-            sampled_cross_energy_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128
+            sampled_cross_energy_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
+            sampled_validation_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
+            sampled_matching_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128
         );
     }
 
