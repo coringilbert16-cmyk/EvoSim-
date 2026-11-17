@@ -2124,6 +2124,196 @@ pub(crate) fn resonance_pair_push_pull(
     Some(((-on_b.0, -on_b.1), on_b))
 }
 
+#[derive(Clone, Copy)]
+struct EnvironmentalMovementPairRange {
+    start: usize,
+    end: usize,
+}
+
+fn environmental_movement_pair_count(material_count: usize) -> Option<usize> {
+    material_count
+        .checked_mul(material_count.saturating_sub(1))?
+        .checked_div(2)
+}
+
+fn environmental_movement_pair_row_start(row: usize, material_count: usize) -> usize {
+    row * (2 * material_count - row - 1) / 2
+}
+
+fn environmental_movement_pair_at(
+    pair_index: usize,
+    material_count: usize,
+) -> (usize, usize) {
+    let mut low = 0;
+    let mut high = material_count - 1;
+    while low < high {
+        let middle = low + (high - low).div_ceil(2);
+        if environmental_movement_pair_row_start(middle, material_count) <= pair_index {
+            low = middle;
+        } else {
+            high = middle - 1;
+        }
+    }
+    let a = low;
+    let b = a + 1 + pair_index - environmental_movement_pair_row_start(a, material_count);
+    (a, b)
+}
+
+/// Calculate every unordered pair on balanced contiguous pair-index ranges.
+/// Results are flattened in lexicographic (a, b) order so the authoritative
+/// floating-point accumulation can remain exactly in its original order.
+fn environmental_movement_parallel_pair_forces(
+    emitters: &[EnvironmentalMovementEmitter],
+    worker_count: usize,
+) -> Option<Vec<(f64, f64)>> {
+    let pair_count = environmental_movement_pair_count(emitters.len())?;
+    if pair_count == 0 {
+        return Some(Vec::new());
+    }
+    let chunk_count = worker_count.max(1).min(pair_count);
+    let base_size = pair_count / chunk_count;
+    let remainder = pair_count % chunk_count;
+    let mut start = 0;
+    let ranges: Vec<_> = (0..chunk_count)
+        .map(|chunk_index| {
+            let size = base_size + usize::from(chunk_index < remainder);
+            let range = EnvironmentalMovementPairRange {
+                start,
+                end: start + size,
+            };
+            start = range.end;
+            range
+        })
+        .collect();
+
+    // Match the former lazy-validation rule: a spectrum is validated only
+    // when that material participates in a non-coincident pair. OnceLock
+    // makes this check safe when several workers encounter the same emitter.
+    let validated_spectra: Vec<std::sync::OnceLock<bool>> = (0..emitters.len())
+        .map(|_| std::sync::OnceLock::new())
+        .collect();
+
+    let ordered_forces = crate::deterministic_parallel::map_ordered_chunks(
+        &ranges,
+        chunk_count,
+        |_, chunk| {
+            let range = *chunk.first().ok_or(0_usize)?;
+            let (mut a, mut b) =
+                environmental_movement_pair_at(range.start, emitters.len());
+            let mut forces = Vec::with_capacity(range.end - range.start);
+            let mut sampled_cross_energy_ns = 0_u128;
+            let mut sampled_matching_ns = 0_u128;
+            let mut sampled_frequency_comparisons = 0_u64;
+            let mut sampled_frequency_matches = 0_u64;
+
+            for _pair_index in range.start..range.end {
+                let dx = emitters[b].x - emitters[a].x;
+                let dy = emitters[b].y - emitters[a].y;
+                let distance = dx.hypot(dy);
+                if !distance.is_finite() {
+                    return Err(a);
+                }
+
+                if distance > f64::EPSILON {
+                    if !*validated_spectra[a]
+                        .get_or_init(|| spectrum_energy(&emitters[a].spectrum).is_some())
+                    {
+                        return Err(a);
+                    }
+                    if !*validated_spectra[b]
+                        .get_or_init(|| spectrum_energy(&emitters[b].spectrum).is_some())
+                    {
+                        return Err(b);
+                    }
+                    let force = environmental_movement_pair_force(
+                        &emitters[a],
+                        &emitters[b],
+                        dx,
+                        dy,
+                        distance,
+                        false,
+                        &mut sampled_cross_energy_ns,
+                        &mut sampled_matching_ns,
+                        &mut sampled_frequency_comparisons,
+                        &mut sampled_frequency_matches,
+                    )
+                    .ok_or(a)?;
+                    forces.push(force);
+                } else {
+                    forces.push((0.0, 0.0));
+                }
+
+                if b + 1 < emitters.len() {
+                    b += 1;
+                } else {
+                    a += 1;
+                    b = a + 1;
+                }
+            }
+            Ok(forces)
+        },
+    )
+    .ok()?;
+
+    (ordered_forces.len() == pair_count).then_some(ordered_forces)
+}
+
+fn environmental_movement_displacements_from_pair_forces(
+    material_count: usize,
+    pair_forces: &[(f64, f64)],
+) -> Option<Vec<(f64, f64)>> {
+    let expected_pairs = environmental_movement_pair_count(material_count)?;
+    if pair_forces.len() != expected_pairs {
+        return None;
+    }
+
+    // This serial reduction is intentional. It preserves the exact original
+    // unordered-pair summation order, avoiding worker-count-dependent rounding.
+    let mut accumulated = vec![(0.0, 0.0); material_count];
+    if material_count >= 2 {
+        let (mut a, mut b) = (0, 1);
+        for &(on_b_x, on_b_y) in pair_forces {
+            if !on_b_x.is_finite() || !on_b_y.is_finite() {
+                return None;
+            }
+            accumulated[a].0 -= on_b_x;
+            accumulated[a].1 -= on_b_y;
+            accumulated[b].0 += on_b_x;
+            accumulated[b].1 += on_b_y;
+
+            if b + 1 < material_count {
+                b += 1;
+            } else {
+                a += 1;
+                b = a + 1;
+            }
+        }
+    }
+
+    accumulated
+        .into_iter()
+        .map(|(x, y)| {
+            let magnitude = x.hypot(y);
+            if !magnitude.is_finite() {
+                return None;
+            }
+            let factor = RESONANCE_MOVEMENT_RESPONSE_SCALE
+                / (1.0 + RESONANCE_MOVEMENT_RESPONSE_SCALE * magnitude);
+            let displacement = (x * factor, y * factor);
+            (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
+        })
+        .collect()
+}
+
+fn environmental_movement_worker_count() -> usize {
+    static WORKER_COUNT: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    *WORKER_COUNT.get_or_init(|| {
+        std::thread::available_parallelism()
+            .map(usize::from)
+            .unwrap_or(1)
+    })
+}
+
 /// Precompute each environmental material's resonance once, then evaluate
 /// every unordered pair exactly once. This is the live-tick path: it avoids
 /// rebuilding spectra and geometric boundary visibility for every pair.
@@ -2143,6 +2333,23 @@ pub(crate) fn environmental_resonance_displacements(
         .map(|material| environmental_movement_emitter(material, catalog, baseline_mass, tick))
         .collect::<Option<Vec<_>>>()?;
     let emitter_ns = emitter_started.elapsed().as_nanos();
+
+    // Keep opt-in profiling on the serial reference path so instrumentation
+    // does not distort worker scheduling or the clean performance path.
+    let worker_count = environmental_movement_worker_count();
+    let pair_count = environmental_movement_pair_count(emitters.len())?;
+    if !profile && worker_count > 1 && pair_count >= 4_096 {
+        let pair_started = std::time::Instant::now();
+        let pair_forces =
+            environmental_movement_parallel_pair_forces(&emitters, worker_count)?;
+        let pair_ns = pair_started.elapsed().as_nanos();
+        let response_started = std::time::Instant::now();
+        let displacements =
+            environmental_movement_displacements_from_pair_forces(emitters.len(), &pair_forces)?;
+        let response_ns = response_started.elapsed().as_nanos();
+        let _ = (total_started, emitter_ns, pair_ns, response_ns);
+        return Some(displacements);
+    }
 
     // Cache validity lazily: coincident pairs skip cross-energy entirely, so
     // their spectra retain the existing behavior of not being validated.
@@ -4581,6 +4788,101 @@ mod tests {
                 "harmonic at {} cycles/day did not follow the shared clock with its derived oscillator lag",
                 component.frequency_cycles_per_day
             );
+        }
+    }
+}
+
+#[cfg(test)]
+mod environmental_movement_parallel_tests {
+    use super::{
+        environmental_movement_displacements_from_pair_forces,
+        environmental_movement_pair_count, environmental_movement_pair_forces,
+        environmental_movement_phase_components, environmental_movement_pair_force,
+        EnvironmentalMovementEmitter, ToneComponent, ToneSpectrum,
+    };
+
+    #[test]
+    fn parallel_pair_forces_match_sequential_reference_in_original_order() {
+        let spectra = [
+            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.7, phase_radians: 0.2 }] },
+            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.4, phase_radians: 1.1 }] },
+            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 880.0, amplitude: 0.3, phase_radians: -0.4 }] },
+            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.6, phase_radians: 2.0 }] },
+            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.2, phase_radians: -1.0 }] },
+        ];
+        let positions = [(0.0, 0.0), (1.0, 0.0), (1.0, 0.0), (2.5, -0.5), (-1.0, 1.5)];
+        let emitters: Vec<_> = spectra
+            .into_iter()
+            .zip(positions)
+            .map(|(spectrum, (x, y))| {
+                let (phase_components, phase_component_count) =
+                    environmental_movement_phase_components(&spectrum).unwrap();
+                EnvironmentalMovementEmitter {
+                    x,
+                    y,
+                    mass_scale: 1.0,
+                    spectrum,
+                    phase_components,
+                    phase_component_count,
+                }
+            })
+            .collect();
+
+        let parallel = environmental_movement_parallel_pair_forces(&emitters, 3).unwrap();
+        let mut sequential = Vec::new();
+        let mut sampled_cross_energy_ns = 0;
+        let mut sampled_matching_ns = 0;
+        let mut sampled_frequency_comparisons = 0;
+        let mut sampled_frequency_matches = 0;
+        for a in 0..emitters.len() {
+            for b in (a + 1)..emitters.len() {
+                let dx = emitters[b].x - emitters[a].x;
+                let dy = emitters[b].y - emitters[a].y;
+                let distance = dx.hypot(dy);
+                let force = if distance <= f64::EPSILON {
+                    (0.0, 0.0)
+                } else {
+                    environmental_movement_pair_force(
+                        &emitters[a],
+                        &emitters[b],
+                        dx,
+                        dy,
+                        distance,
+                        false,
+                        &mut sampled_cross_energy_ns,
+                        &mut sampled_matching_ns,
+                        &mut sampled_frequency_comparisons,
+                        &mut sampled_frequency_matches,
+                    )
+                    .unwrap()
+                };
+                sequential.push(force);
+            }
+        }
+
+        assert_eq!(parallel, sequential);
+        let parallel_displacements =
+            environmental_movement_displacements_from_pair_forces(emitters.len(), &parallel)
+                .unwrap();
+        let sequential_displacements =
+            environmental_movement_displacements_from_pair_forces(emitters.len(), &sequential)
+                .unwrap();
+        assert_eq!(parallel_displacements, sequential_displacements);
+        assert_eq!(parallel.len(), environmental_movement_pair_count(emitters.len()).unwrap());
+    }
+
+    #[test]
+    fn pair_index_mapping_covers_lexicographic_pairs() {
+        for material_count in 2..32 {
+            let mut expected = Vec::new();
+            for a in 0..material_count {
+                for b in (a + 1)..material_count {
+                    expected.push((a, b));
+                }
+            }
+            for (index, pair) in expected.into_iter().enumerate() {
+                assert_eq!(super::environmental_movement_pair_at(index, material_count), pair);
+            }
         }
     }
 }
