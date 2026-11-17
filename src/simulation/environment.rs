@@ -1017,64 +1017,79 @@ impl ActiveMaterialField {
         let mut original_collision_rejections = 0usize;
         let original_collision_started = std::time::Instant::now();
 
-        // Invalid original geometry remains fail-closed exactly as before: any
-        // candidate is rejected when another snapshot cannot be bounded.
-        let has_invalid_snapshot = snapshots
-            .iter()
-            .any(|snapshot| snapshot.original_parts.is_none() || snapshot.bounds.is_none());
-        if has_invalid_snapshot {
-            for candidate in candidates.iter_mut().flatten() {
-                candidate.accepted = false;
+        // Preserve the original per-candidate fail-closed behavior: an
+        // invalid snapshot rejects every other candidate, but never rejects
+        // the candidate against its own original snapshot.
+        for (index, candidate) in candidates.iter_mut().enumerate() {
+            if candidate.is_some()
+                && snapshots.iter().enumerate().any(|(other_index, snapshot)| {
+                    other_index != index
+                        && (snapshot.original_parts.is_none() || snapshot.bounds.is_none())
+                })
+            {
+                candidate
+                    .as_mut()
+                    .expect("candidate checked as populated")
+                    .accepted = false;
                 original_collision_rejections += 1;
             }
-        } else {
-            let snapshot_bounds: Vec<_> = snapshots
-                .iter()
-                .map(|snapshot| snapshot.bounds.expect("validated snapshot bounds"))
-                .collect();
-            let mut candidate_indices = Vec::new();
-            let mut candidate_bounds = Vec::new();
-            for (index, candidate) in candidates.iter().enumerate() {
-                if let Some(candidate) = candidate {
-                    candidate_indices.push(index);
-                    candidate_bounds.push(candidate.bounds);
-                }
-            }
+        }
 
-            let possible_collisions =
-                movement_cross_overlapping_pairs(&candidate_bounds, &snapshot_bounds);
-            let mut colliding_candidates = vec![false; candidates.len()];
-            for (candidate_slot, other_index) in possible_collisions {
-                let candidate_index = candidate_indices[candidate_slot];
-                if candidate_index == other_index {
-                    continue;
-                }
-                let candidate = candidates[candidate_index]
-                    .as_ref()
-                    .expect("candidate index must remain populated");
-                let other_parts = snapshots[other_index]
-                    .original_parts
-                    .as_ref()
-                    .expect("validated snapshot geometry");
-                let collides = candidate.parts.iter().any(|part| {
-                    other_parts.iter().any(|other_part| {
-                        crate::material_geometry::placed_forms_penetrate(
-                            part,
-                            other_part,
-                            crate::material_geometry::GEOMETRY_EPSILON,
-                        )
-                    })
-                });
-                colliding_candidates[candidate_index] |= collides;
+        let valid_snapshot_indices: Vec<_> = snapshots
+            .iter()
+            .enumerate()
+            .filter_map(|(index, snapshot)| {
+                (snapshot.original_parts.is_some() && snapshot.bounds.is_some())
+                    .then_some(index)
+            })
+            .collect();
+        let snapshot_bounds: Vec<_> = valid_snapshot_indices
+            .iter()
+            .map(|&index| snapshots[index].bounds.expect("filtered snapshot bounds"))
+            .collect();
+        let mut candidate_indices = Vec::new();
+        let mut candidate_bounds = Vec::new();
+        for (index, candidate) in candidates.iter().enumerate() {
+            if let Some(candidate) = candidate {
+                candidate_indices.push(index);
+                candidate_bounds.push(candidate.bounds);
             }
-            for (index, collides) in colliding_candidates.into_iter().enumerate() {
-                if collides {
-                    original_collision_rejections += 1;
-                    candidates[index]
-                        .as_mut()
-                        .expect("colliding candidate must exist")
-                        .accepted = false;
-                }
+        }
+
+        let possible_collisions =
+            movement_cross_overlapping_pairs(&candidate_bounds, &snapshot_bounds);
+        let mut colliding_candidates = vec![false; candidates.len()];
+        for (candidate_slot, snapshot_slot) in possible_collisions {
+            let candidate_index = candidate_indices[candidate_slot];
+            let other_index = valid_snapshot_indices[snapshot_slot];
+            if candidate_index == other_index {
+                continue;
+            }
+            let candidate = candidates[candidate_index]
+                .as_ref()
+                .expect("candidate index must remain populated");
+            let other_parts = snapshots[other_index]
+                .original_parts
+                .as_ref()
+                .expect("filtered snapshot geometry");
+            let collides = candidate.parts.iter().any(|part| {
+                other_parts.iter().any(|other_part| {
+                    crate::material_geometry::placed_forms_penetrate(
+                        part,
+                        other_part,
+                        crate::material_geometry::GEOMETRY_EPSILON,
+                    )
+                })
+            });
+            colliding_candidates[candidate_index] |= collides;
+        }
+        for (index, collides) in colliding_candidates.into_iter().enumerate() {
+            if collides {
+                original_collision_rejections += 1;
+                candidates[index]
+                    .as_mut()
+                    .expect("colliding candidate must exist")
+                    .accepted = false;
             }
         }
         let original_collision_elapsed = original_collision_started.elapsed();
