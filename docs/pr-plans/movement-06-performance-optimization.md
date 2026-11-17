@@ -56,3 +56,11 @@ The next implementation replaces the full nested frequency comparison scan with 
 A differential unit test compares the optimized result exactly against the original nested all-pairs implementation, including tolerance-boundary and multiple-match cases.
 
 The 208-tick result is a useful improvement over the previous 157-tick run, but the >800 ticks/minute target remains unmet. The new lookup must pass full CI and a matched experiment before its performance effect is accepted.
+
+## Frequency-index regression and rollback (2026-11-17)
+
+The matched 60-second seed-42 run after the sorted-frequency-index change completed 139 ticks in 60.408 seconds (about 138 ticks/minute), compared with 208 ticks/minute on the preceding pair-loop restructuring. The profiled pair loop increased from about 148 ms/tick to 290–293 ms/tick, while placement remained about 40 ms/tick. Chemistry integrity and energy accounting remained valid, but this optimization materially regressed throughput.
+
+The sorted-frequency index and its differential test have therefore been reverted. The earlier all-pairs restructuring from commit 4d91b58190317ed7b786170149caf8f2a12bfd43 is retained unchanged. No interaction pairs, frequency tolerance, force law, placement rules, or chemistry behavior are intentionally changed by this rollback.
+
+Next validation: rerun the standard 60-second seed-42 movement-enabled experiment with the same 1,280-object workload and profiling enabled. Compare against 208 ticks/minute. Do not proceed to another optimization until this rollback measurement confirms the expected recovery.
