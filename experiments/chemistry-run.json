@@ -5,7 +5,7 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR362 whole-tick phase profiling; matched 60-second seed-42 movement-enabled run; sample one tick in ten; standard 1280-object workload; 2026-11-17",
+  "request_note": "PR362 split world-tone organism settlement vs hotspot settlement; matched 60-second seed-42 movement-enabled run; whole-tick and movement profiles enabled; 2026-11-17",
   "profile_movement": true,
   "profile_tick": true
 }
