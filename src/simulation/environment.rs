@@ -729,8 +729,10 @@ impl ActiveMaterialField {
                 };
                 for part in parts {
                     let radius = part.form.bounding_radius();
-                    if !radius.is_finite() || radius < 0.0
-                        || !part.placement.x.is_finite() || !part.placement.y.is_finite()
+                    if !radius.is_finite()
+                        || radius < 0.0
+                        || !part.placement.x.is_finite()
+                        || !part.placement.y.is_finite()
                     {
                         return None;
                     }
