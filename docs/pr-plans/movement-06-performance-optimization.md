@@ -43,19 +43,9 @@ The movement-enabled run completed 208 ticks. The raw per-tick profile covered t
 
 The pair loop is the primary movement bottleneck. Sampled profiling estimates approximately 125.9 ms/tick in frequency matching. Placement collision validation is the second target.
 
-## Pair-frequency lookup optimization
+## Pair-frequency lookup optimization — rejected
 
-The next implementation replaces the full nested frequency comparison scan with a bounded sorted-index range lookup:
-
-- Each emitter precomputes a sorted index of its at-most-four spectral components.
-- For each left component, binary search finds a conservative range of possible right-side matches.
-- The original absolute-difference predicate (less than or equal to 1e-9) is still applied to every candidate, including a floating-point rounding margin around the search interval.
-- Matching components are accumulated in their original order, preserving the prior floating-point summation order.
-- No physical pairs or valid frequency matches are omitted.
-
-A differential unit test compares the optimized result exactly against the original nested all-pairs implementation, including tolerance-boundary and multiple-match cases.
-
-The 208-tick result is a useful improvement over the previous 157-tick run, but the >1,009 ticks/minute target remains unmet. The new lookup must pass full CI and a matched experiment before its performance effect is accepted.
+A bounded sorted-index lookup was evaluated and rejected. It materially regressed throughput (139 ticks in 60.408 seconds versus 208 ticks in the preceding run) and increased the profiled pair-loop cost. The index and its differential test were reverted. The retained implementation is the direct all-pairs scan with the safe outer-loop geometry reuse described above. Do not reintroduce sorted lookup without a materially different design and a measured reason to retest it.
 
 ## Frequency-index regression and rollback (2026-11-17)
 
@@ -82,7 +72,7 @@ The next diagnostic pass expands beyond movement. An opt-in `EVOSIM_PROFILE_TICK
 
 The sampler is disabled by default and creates no timers or phase records on ordinary ticks when disabled. Existing movement profiling remains available independently. The experiment workflow now exposes the whole-tick profiler as a separate opt-in setting.
 
-The next standard experiment will collect both profiles on the same runner image and same 60-second seed-42 workload. We will use the measured phase costs to prioritize the next optimization, including non-movement work such as ambient transport snapshot construction and organism processing. No simulation behavior or chemistry rules are changed by this diagnostic instrumentation.
+The follow-up run split world-tone settlement from hotspot settlement on the same 60-second seed-42 workload. The measurements identify world-tone settlement—not hotspot settlement—as the substantial non-movement target. The standard workload contains no organisms, so organism-processing costs must be measured separately before generalizing to organism-present workloads. No simulation behavior or chemistry rules are changed by this diagnostic instrumentation.
 
 ## Whole-tick profile results (seed 42, 60 seconds)
 
@@ -107,3 +97,19 @@ The movement subprofile measured a median 181.7 ms/tick in the resonance pair lo
 The run confirms that the next optimization should not be selected solely from movement profiling. I split the world-input measurement into world-tone organism settlement and hotspot settlement to identify which part owns the approximately 80 ms/tick. No physics or chemistry behavior is changed by this instrumentation.
 
 The 164-tick profiling run was executed while several full Rust CI workflows were running concurrently. Treat its absolute throughput as diagnostic only; the phase proportions are useful for prioritization, but an isolated matched run is required before accepting a throughput comparison. The world-input phase has since been split into separate world-tone organism settlement and hotspot settlement measurements. A follow-up run will be launched after CI is idle.
+
+
+## Final split profile and diagnostic cleanup (2026-11-17)
+
+The split 60-second seed-42 experiment completed successfully (workflow run [44115581483](https://github.com/coringilbert16-cmyk/EvoSim-/actions/runs/44115581483)). The experiment and aggregate analysis jobs passed.
+
+- World-tone settlement: approximately 95–114 ms/tick.
+- Hotspot settlement: approximately 1.0–1.1 ms/tick.
+- Movement remained the dominant measured phase in this profiled run.
+- The run's absolute throughput is diagnostic only because profiling and concurrent hosted-runner activity affect timing.
+
+The whole-tick profiler now caches the opt-in environment setting with `OnceLock`, avoiding an environment lookup on every simulation tick. It remains disabled unless `EVOSIM_PROFILE_TICK` is set before process startup.
+
+A final clean 60-second seed-42 run with movement enabled and both profilers disabled is in progress. Its throughput, chemistry diagnostics, inventory, lifecycle checks, and energy residual are the acceptance evidence; profiler runs are not substitutes for this clean measurement.
+
+See [the staged parallel optimization roadmap](parallel-optimization-roadmap.md) for the proposed PR 363–367 sequence. Each implementation PR is intended to target the then-current `main`, not another feature branch.
