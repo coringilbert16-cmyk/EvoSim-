@@ -946,6 +946,21 @@ impl Simulation {
         self.tick += 1;
         self.environmental_chemistry_diagnostics.tick = self.tick;
 
+        // Whole-tick profiling is opt-in and samples one tick in ten. The
+        // ordinary simulation path does not create timers or collect phase data.
+        let profile_tick = std::env::var_os("EVOSIM_PROFILE_TICK").is_some()
+            && self.tick % 10 == 0;
+        let tick_profile_started = profile_tick.then(std::time::Instant::now);
+        let mut profile_phase_started = tick_profile_started;
+        let mut profile_phases: Vec<(&str, u128)> = Vec::with_capacity(16);
+        let mut finish_profile_phase = |name: &'static str| {
+            if let Some(started) = profile_phase_started.take() {
+                let now = std::time::Instant::now();
+                profile_phases.push((name, now.duration_since(started).as_nanos()));
+                profile_phase_started = Some(now);
+            }
+        };
+
         // Divide the realization budget across owners; the remainder rotates by tick.
         let chemistry_owner_count = self.organisms.len();
 
@@ -1023,6 +1038,10 @@ impl Simulation {
             })
             .collect();
 
+        if profile_tick {
+            finish_profile_phase("tick_prelude");
+        }
+
         // Ambient transport runs before environmental reaction discovery. Flow is
         // allowed to change contacts and interrupt activation naturally; chemistry
         // rules are not relaxed to guarantee any particular reaction.
@@ -1034,6 +1053,9 @@ impl Simulation {
             self.environment.width,
             self.environment.height,
         );
+        if profile_tick {
+            finish_profile_phase("ambient_transport");
+        }
 
         // Resonance movement runs after ambient transport and before reaction
         // discovery, so chemistry sees the updated environmental contacts.
@@ -1042,6 +1064,9 @@ impl Simulation {
             &self.environment.catalog,
             self.tick,
         );
+        if profile_tick {
+            finish_profile_phase("resonance_movement");
+        }
 
         let decision_parameters = self.decision_parameters;
         // The confirmed seed scale is deterministic for the catalog. Compute it
@@ -1073,6 +1098,10 @@ impl Simulation {
                 &mut self.energy_ledger,
             ));
         }
+        if profile_tick {
+            finish_profile_phase("world_inputs_and_hotspot");
+        }
+
         // Environmental chemistry is a first-class owner and must run
         // even when the world contains no organisms. Reserve half of the
         // realization and discovery budgets for the field, independently of
@@ -1097,6 +1126,9 @@ impl Simulation {
                 .as_nanos()
                 .min(u64::MAX as u128) as u64;
         self.environment.field.ensure_environmental_bond_index();
+        if profile_tick {
+            finish_profile_phase("resonance_snapshot_and_bond_index");
+        }
         let environmental_break_operations =
             crate::chemical_reaction::accumulate_environmental_with_diagnostics(
                 &self.environment,
@@ -1112,6 +1144,10 @@ impl Simulation {
             .break_ready_candidates = environmental_break_operations.len();
         self.environmental_chemistry_diagnostics
             .break_discovery_work_remaining = environmental_break_discovery_remaining;
+        if profile_tick {
+            finish_profile_phase("environmental_break_discovery");
+        }
+
         // Split the field-owned discovery share between COMBINE and the new
         // coupled displacement path; BREAK retains its independent quarter.
         let mut environmental_combine_discovery_remaining =
@@ -1132,6 +1168,10 @@ impl Simulation {
             .combine_ready_candidates = environmental_combine_operations.len();
         self.environmental_chemistry_diagnostics
             .combine_discovery_work_remaining = environmental_combine_discovery_remaining;
+
+        if profile_tick {
+            finish_profile_phase("environmental_combine_discovery");
+        }
 
         let mut environmental_break_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 4;
@@ -1245,6 +1285,10 @@ impl Simulation {
                     post_commit_source_cell_materials,
                     molecular_lifecycle,
                 });
+        }
+
+        if profile_tick {
+            finish_profile_phase("environmental_break_resolution");
         }
 
         // Environmental COMBINE receives its own bounded share of the field's
@@ -1365,6 +1409,10 @@ impl Simulation {
             );
         }
 
+        if profile_tick {
+            finish_profile_phase("environmental_combine_resolution");
+        }
+
         let mut environmental_displacement_discovery_remaining =
             crate::chemical_reaction::MAX_REACTION_CANDIDATE_INSPECTIONS_PER_TICK / 8;
         let mut displacement_discovery =
@@ -1384,6 +1432,10 @@ impl Simulation {
             .displacement_ready_candidates = environmental_displacement_operations.len();
         self.environmental_chemistry_diagnostics
             .displacement_discovery_work_remaining = environmental_displacement_discovery_remaining;
+
+        if profile_tick {
+            finish_profile_phase("environmental_displacement_discovery");
+        }
 
         let mut environmental_displacement_work_remaining =
             crate::chemical_reaction::MAX_REACTION_REALIZATIONS_PER_TICK / 8;
@@ -1489,6 +1541,10 @@ impl Simulation {
                     post_commit_source_cell_materials,
                     molecular_lifecycle,
                 });
+        }
+
+        if profile_tick {
+            finish_profile_phase("environmental_displacement_resolution");
         }
 
         let mut carried_chemistry_work = 0;
@@ -1604,6 +1660,10 @@ impl Simulation {
                 }
             }
         }
+        if profile_tick {
+            finish_profile_phase("organism_chemistry_and_maintenance");
+        }
+
         {
             let (organisms, environment) = (&mut self.organisms, &mut self.environment);
             let mut movement_spatial_index =
@@ -2033,6 +2093,10 @@ impl Simulation {
                 }
             }
         }
+        if profile_tick {
+            finish_profile_phase("organism_decisions_and_movement");
+        }
+
         let mut offspring = Vec::new();
         let mut next_organism_id = self.next_organism_id;
         for organism in &mut self.organisms {
@@ -2138,6 +2202,17 @@ impl Simulation {
                 + Self::environmental_structural_energy_held(&self.environment);
         self.environmental_chemistry_diagnostics
             .accumulation_entries = self.chemical_reaction_accumulation.len();
+
+        if profile_tick {
+            finish_profile_phase("reproduction_and_tick_finalization");
+            drop(finish_profile_phase);
+            let total_ns = tick_profile_started
+                .map_or(0, |started| started.elapsed().as_nanos());
+            eprintln!(
+                "SIMULATION_TICK_PROFILE tick={} total_ns={} phases={:?}",
+                self.tick, total_ns, profile_phases
+            );
+        }
     }
     /// Transfer a dead, fully disconnected organism into environmental material.
     ///
