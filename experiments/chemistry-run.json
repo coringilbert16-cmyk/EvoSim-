@@ -1,10 +1,10 @@
 {
-  "run": true,
+  "run": false,
   "seeds": [
     42
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "60-second seed-42 internal resonance phase profile: emitter construction, unordered pair loop, sampled spectrum cross-energy, and displacement conversion.",
+  "request_note": "Reset one-shot trigger before second-stage resonance validation-versus-matching profile.",
   "profile_movement": true
 }
