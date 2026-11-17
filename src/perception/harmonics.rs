@@ -2022,12 +2022,8 @@ fn environmental_movement_cross_energy_profiled(
     let mut comparisons = 0_u64;
     let mut matches = 0_u64;
     let started = std::time::Instant::now();
-    let energy = environmental_movement_cross_energy_inner::<true>(
-        a,
-        b,
-        &mut comparisons,
-        &mut matches,
-    );
+    let energy =
+        environmental_movement_cross_energy_inner::<true>(a, b, &mut comparisons, &mut matches);
     *matching_ns += started.elapsed().as_nanos();
     *frequency_comparisons += comparisons;
     *frequency_matches += matches;
@@ -3309,19 +3305,13 @@ mod tests {
                 phase_radians,
             }],
         };
-        for phase in [
-            0.0,
-            std::f64::consts::PI,
-            std::f64::consts::FRAC_PI_2,
-        ] {
+        for phase in [0.0, std::f64::consts::PI, std::f64::consts::FRAC_PI_2] {
             let left = make_single(0.0);
             let right = make_single(phase);
             let expected = spectrum_cross_energy(&left, &right).unwrap();
-            let actual = environmental_movement_cross_energy(
-                &make_emitter(left),
-                &make_emitter(right),
-            )
-            .unwrap();
+            let actual =
+                environmental_movement_cross_energy(&make_emitter(left), &make_emitter(right))
+                    .unwrap();
             assert!((actual - expected).abs() < 1e-12);
         }
     }
