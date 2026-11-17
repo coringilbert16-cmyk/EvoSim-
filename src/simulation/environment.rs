@@ -917,7 +917,9 @@ impl ActiveMaterialField {
                 .iter()
                 .enumerate()
                 .filter_map(|(index, candidate)| {
-                    candidate.as_ref().map(|candidate| (index, candidate.bounds))
+                    candidate
+                        .as_ref()
+                        .map(|candidate| (index, candidate.bounds))
                 })
                 .collect();
             let valid_targets: Vec<_> = snapshots
