@@ -1164,6 +1164,21 @@ impl ActiveMaterialField {
             .filter(|candidate| candidate.as_ref().is_some_and(|item| item.accepted))
             .count();
         if accepted_count == 0 {
+            if profile_movement {
+                eprintln!(
+                    "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted=0 snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns=0 total_ns={}",
+                    snapshots.len(),
+                    displacements.len(),
+                    candidates_count_for_profile,
+                    original_collision_rejections,
+                    mover_overlap_rejections,
+                    snapshot_elapsed.as_nanos(),
+                    candidate_elapsed.as_nanos(),
+                    original_collision_elapsed.as_nanos(),
+                    mover_overlap_elapsed.as_nanos(),
+                    profile_started.elapsed().as_nanos()
+                );
+            }
             return 0;
         }
 
