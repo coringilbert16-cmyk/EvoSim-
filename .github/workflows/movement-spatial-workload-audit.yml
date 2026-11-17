@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - audit/movement-spatial-workload
+  pull_request:
+    branches: [main]
 
 permissions:
   contents: read
