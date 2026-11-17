@@ -2015,8 +2015,8 @@ pub(crate) fn environmental_resonance_displacements(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<(f64, f64)>> {
-    let profile = std::env::var("EVOSIM_PROFILE_MOVEMENT")
-        .is_ok_and(|value| value == "1" || value == "true");
+    let profile =
+        std::env::var("EVOSIM_PROFILE_MOVEMENT").is_ok_and(|value| value == "1" || value == "true");
     let total_started = std::time::Instant::now();
 
     let emitter_started = std::time::Instant::now();
