@@ -1,10 +1,8 @@
 {
   "run": true,
-  "seeds": [
-    42
-  ],
+  "seeds": [42],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "60-second seed-42 profile separating frequency matching from phase/cosine work with stack-buffered samples.",
+  "request_note": "PR359 controlled 60-second seed-42 post-optimization benchmark; profile movement stages.",
   "profile_movement": true
 }
