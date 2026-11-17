@@ -1017,16 +1017,25 @@ impl ActiveMaterialField {
         let mut original_collision_rejections = 0usize;
         let original_collision_started = std::time::Instant::now();
 
-        // Preserve the original per-candidate fail-closed behavior: an
-        // invalid snapshot rejects every other candidate, but never rejects
-        // the candidate against its own original snapshot.
+        // Preserve the original per-candidate fail-closed behavior while
+        // checking invalid snapshots only once instead of rescanning the full
+        // snapshot list for every candidate.
+        let invalid_snapshot_count = snapshots
+            .iter()
+            .filter(|snapshot| {
+                snapshot.original_parts.is_none() || snapshot.bounds.is_none()
+            })
+            .count();
         for (index, candidate) in candidates.iter_mut().enumerate() {
-            if candidate.is_some()
-                && snapshots.iter().enumerate().any(|(other_index, snapshot)| {
-                    other_index != index
-                        && (snapshot.original_parts.is_none() || snapshot.bounds.is_none())
-                })
-            {
+            let own_snapshot_is_invalid = snapshots.get(index).is_some_and(|snapshot| {
+                snapshot.original_parts.is_none() || snapshot.bounds.is_none()
+            });
+            let invalid_other_snapshot_count = if own_snapshot_is_invalid {
+                invalid_snapshot_count.saturating_sub(1)
+            } else {
+                invalid_snapshot_count
+            };
+            if candidate.is_some() && invalid_other_snapshot_count > 0 {
                 candidate
                     .as_mut()
                     .expect("candidate checked as populated")
