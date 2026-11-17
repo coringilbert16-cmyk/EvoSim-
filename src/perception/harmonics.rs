@@ -2109,6 +2109,8 @@ fn environmental_movement_emitter(
     let (phase_components, phase_component_count) =
         environmental_movement_phase_components(&spectrum)?;
     let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baseline_mass);
+    let frequency_order =
+        environmental_movement_frequency_order(&phase_components, phase_component_count);
     (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
         x,
         y,
@@ -2116,10 +2118,7 @@ fn environmental_movement_emitter(
         spectrum,
         phase_components,
         phase_component_count,
-        frequency_order: environmental_movement_frequency_order(
-            &phase_components,
-            phase_component_count,
-        ),
+        frequency_order,
     })
 }
 
