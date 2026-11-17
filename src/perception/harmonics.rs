@@ -1953,6 +1953,8 @@ fn environmental_movement_emitter(
 fn resonance_pair_push_pull_from_emitters(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
+    sample_cross_energy: bool,
+    sampled_cross_energy_ns: &mut u128,
 ) -> Option<((f64, f64), (f64, f64))> {
     let dx = b.x - a.x;
     let dy = b.y - a.y;
@@ -1967,7 +1969,15 @@ fn resonance_pair_push_pull_from_emitters(
     // Each material's emitted aura uses the existing continuous 1/(1+d)
     // attenuation. Cross-energy multiplies the two received amplitudes.
     let attenuation = (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
-    let strength = spectrum_cross_energy(&a.spectrum, &b.spectrum)? * attenuation;
+    let cross_energy = if sample_cross_energy {
+        let started = std::time::Instant::now();
+        let value = spectrum_cross_energy(&a.spectrum, &b.spectrum)?;
+        *sampled_cross_energy_ns += started.elapsed().as_nanos();
+        value
+    } else {
+        spectrum_cross_energy(&a.spectrum, &b.spectrum)?
+    };
+    let strength = cross_energy * attenuation;
     if !strength.is_finite() {
         return None;
     }
@@ -1994,7 +2004,7 @@ pub(crate) fn resonance_pair_push_pull(
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
     let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
-    resonance_pair_push_pull_from_emitters(&a, &b)
+    resonance_pair_push_pull_from_emitters(&a, &b, false, &mut 0)
 }
 
 /// Precompute each environmental material's resonance once, then evaluate
@@ -2005,24 +2015,44 @@ pub(crate) fn environmental_resonance_displacements(
     catalog: &[crate::resources::BaseResource],
     tick: u64,
 ) -> Option<Vec<(f64, f64)>> {
+    let profile = std::env::var("EVOSIM_PROFILE_MOVEMENT")
+        .is_ok_and(|value| value == "1" || value == "true");
+    let total_started = std::time::Instant::now();
+
+    let emitter_started = std::time::Instant::now();
     let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
     let emitters = materials
         .iter()
         .map(|material| environmental_movement_emitter(material, catalog, baseline_mass, tick))
         .collect::<Option<Vec<_>>>()?;
+    let emitter_ns = emitter_started.elapsed().as_nanos();
+
     let mut accumulated = vec![(0.0, 0.0); emitters.len()];
+    let pair_started = std::time::Instant::now();
+    let mut pair_count = 0_u64;
+    let mut sampled_cross_energy_ns = 0_u128;
+    const CROSS_ENERGY_SAMPLE_STRIDE: u64 = 256;
 
     for a in 0..emitters.len() {
         for b in (a + 1)..emitters.len() {
-            let (_, on_b) = resonance_pair_push_pull_from_emitters(&emitters[a], &emitters[b])?;
+            let sample = pair_count % CROSS_ENERGY_SAMPLE_STRIDE == 0;
+            let (_, on_b) = resonance_pair_push_pull_from_emitters(
+                &emitters[a],
+                &emitters[b],
+                sample && profile,
+                &mut sampled_cross_energy_ns,
+            )?;
             accumulated[a].0 -= on_b.0;
             accumulated[a].1 -= on_b.1;
             accumulated[b].0 += on_b.0;
             accumulated[b].1 += on_b.1;
+            pair_count += 1;
         }
     }
+    let pair_ns = pair_started.elapsed().as_nanos();
 
-    accumulated
+    let response_started = std::time::Instant::now();
+    let result = accumulated
         .into_iter()
         .map(|(x, y)| {
             let magnitude = x.hypot(y);
@@ -2034,7 +2064,26 @@ pub(crate) fn environmental_resonance_displacements(
             let displacement = (x * factor, y * factor);
             (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
         })
-        .collect()
+        .collect();
+    let response_ns = response_started.elapsed().as_nanos();
+
+    if profile {
+        let sampled_pairs = pair_count.div_ceil(CROSS_ENERGY_SAMPLE_STRIDE);
+        eprintln!(
+            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_pairs={} estimated_cross_energy_total_ns={}",
+            materials.len(),
+            pair_count,
+            emitter_ns,
+            pair_ns,
+            response_ns,
+            sampled_cross_energy_ns,
+            sampled_pairs,
+            sampled_cross_energy_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128
+        );
+    }
+
+    let _ = total_started;
+    result
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
