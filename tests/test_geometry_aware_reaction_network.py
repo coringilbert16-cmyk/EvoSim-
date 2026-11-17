@@ -48,9 +48,9 @@ def write_seed(root):
             "seed": 42,
             "requested_duration_seconds": 300,
             "initial_physical_material_count": 1280,
-            "initial_independent_resource_count": 0,
-            "initial_molecule_count": 1280,
-            "initial_constituent_count": 2560,
+            "initial_independent_resource_count": 1200,
+            "initial_molecule_count": 80,
+            "initial_constituent_count": 1360,
         },
         "molecular_history": {
             "validation_errors": [],

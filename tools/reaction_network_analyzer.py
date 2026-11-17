@@ -53,8 +53,8 @@ def load_seed(root, seed, duration):
     expected = {
         "seed": seed, "requested_duration_seconds": duration,
         "initial_physical_material_count": 1280,
-        "initial_independent_resource_count": 0,
-        "initial_molecule_count": 1280, "initial_constituent_count": 2560,
+        "initial_independent_resource_count": 1200,
+        "initial_molecule_count": 80, "initial_constituent_count": 1360,
     }
     for key, value in expected.items():
         if source.get(key) != value:
@@ -246,7 +246,7 @@ def analyze(root, seeds, duration):
         "schema_version": 1,
         "experiment": {
             "seeds": seeds, "duration_seconds_per_seed": duration,
-            "starting_inventory": "1,280 established two-constituent molecules; zero independent resources; 2,560 constituents; six active elements; Water excluded",
+            "starting_inventory": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents; six active elements; Water excluded",
             "family_definition": "exact constituent composition plus undirected bond topology; excludes bond energy, endpoint geometry, placement, and environmental identity",
         },
         "validation": {"all_seeds_present": len(seed_rows) == len(seeds), "all_runs_match_1280_molecule_start": True, "all_lifecycle_checks_pass": True},
