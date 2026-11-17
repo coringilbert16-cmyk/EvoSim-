@@ -5,6 +5,6 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR362 matched 60-second seed-42 movement-enabled performance and detailed movement profiling run.",
+  "request_note": "PR362 matched 60-second seed-42 movement-enabled performance and detailed movement profiling after frequency-index optimization; 2026-11-17",
   "profile_movement": true
 }
