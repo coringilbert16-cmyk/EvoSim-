@@ -1949,6 +1949,10 @@ struct EnvironmentalMovementEmitter {
     spectrum: ToneSpectrum,
     phase_components: [EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS],
     phase_component_count: usize,
+    /// Component indices ordered by frequency for bounded range lookup.
+    /// The original component array remains untouched so cross-energy sums
+    /// retain their original floating-point accumulation order.
+    frequency_order: [usize; MAX_SPECTRAL_COMPONENTS],
 }
 
 fn environmental_movement_phase_components(
@@ -1974,14 +1978,80 @@ fn environmental_movement_phase_components(
 }
 
 #[inline]
+fn environmental_movement_frequency_order(
+    components: &[EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS],
+    count: usize,
+) -> [usize; MAX_SPECTRAL_COMPONENTS] {
+    let mut order = [0, 1, 2, 3];
+    order[..count].sort_by(|left, right| {
+        components[*left]
+            .frequency_cycles_per_day
+            .partial_cmp(&components[*right].frequency_cycles_per_day)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    order
+}
+
+/// Find all right-hand components within the existing inclusive 1e-9
+/// frequency tolerance. Binary-search bounds avoid testing every component
+/// pair; the returned bit mask is then consumed in original component order.
+#[inline]
+fn environmental_movement_matching_mask(
+    frequency: f64,
+    emitter: &EnvironmentalMovementEmitter,
+) -> (u8, u64) {
+    let order = &emitter.frequency_order[..emitter.phase_component_count];
+    let mut comparisons = 0_u64;
+
+    let mut low = 0;
+    let mut high = order.len();
+    while low < high {
+        let middle = low + (high - low) / 2;
+        comparisons += 1;
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day
+            < frequency - 1e-9
+        {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    let start = low;
+
+    low = start;
+    high = order.len();
+    while low < high {
+        let middle = low + (high - low) / 2;
+        comparisons += 1;
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day
+            <= frequency + 1e-9
+        {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+
+    let mut mask = 0_u8;
+    for &index in &order[start..low] {
+        mask |= 1 << index;
+    }
+    (mask, comparisons)
+}
+
+#[inline]
 fn environmental_movement_cross_energy(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
 ) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
-        for right in &b.phase_components[..b.phase_component_count] {
-            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+        let (matching, _) =
+            environmental_movement_matching_mask(left.frequency_cycles_per_day, b);
+        for (right_index, right) in
+            b.phase_components[..b.phase_component_count].iter().enumerate()
+        {
+            if matching & (1 << right_index) == 0 {
                 continue;
             }
             energy += 2.0
@@ -2006,9 +2076,13 @@ fn environmental_movement_cross_energy_profiled(
     let started = std::time::Instant::now();
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
-        for right in &b.phase_components[..b.phase_component_count] {
-            *frequency_comparisons += 1;
-            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+        let (matching, comparisons) =
+            environmental_movement_matching_mask(left.frequency_cycles_per_day, b);
+        *frequency_comparisons += comparisons;
+        for (right_index, right) in
+            b.phase_components[..b.phase_component_count].iter().enumerate()
+        {
+            if matching & (1 << right_index) == 0 {
                 continue;
             }
             *frequency_matches += 1;
@@ -2042,6 +2116,10 @@ fn environmental_movement_emitter(
         spectrum,
         phase_components,
         phase_component_count,
+        frequency_order: environmental_movement_frequency_order(
+            &phase_components,
+            phase_component_count,
+        ),
     })
 }
 
@@ -4583,4 +4661,55 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn movement_frequency_range_lookup_matches_naive_all_pairs_with_original_sum_order() {
+        let frequencies = [
+            [440.0, 880.0, 440.0 + 0.5e-9, 1320.0],
+            [1320.0, 440.0 + 1.0e-9, 440.0, 1760.0],
+            [440.0 - 1.0e-9, 440.0 + 1.0e-9, 880.0, 1760.0],
+            [440.0 + 1.01e-9, 880.0 - 1.0e-9, 1320.0, 1760.0],
+        ];
+        for left_frequencies in frequencies {
+            for right_frequencies in frequencies {
+                let make_emitter = |values: [f64; 4], phase_offset: f64| {
+                    let mut phase_components =
+                        [EnvironmentalMovementPhaseComponent::default(); MAX_SPECTRAL_COMPONENTS];
+                    for (index, frequency) in values.into_iter().enumerate() {
+                        phase_components[index] = EnvironmentalMovementPhaseComponent {
+                            frequency_cycles_per_day: frequency,
+                            in_phase_amplitude: (index as f64 + 1.0) * phase_offset,
+                            quadrature_amplitude: (index as f64 + 0.5) * phase_offset,
+                        };
+                    }
+                    EnvironmentalMovementEmitter {
+                        x: 0.0,
+                        y: 0.0,
+                        mass_scale: 1.0,
+                        spectrum: ToneSpectrum::empty(),
+                        phase_components,
+                        phase_component_count: 4,
+                        frequency_order: environmental_movement_frequency_order(&phase_components, 4),
+                    }
+                };
+                let a = make_emitter(left_frequencies, 0.25);
+                let b = make_emitter(right_frequencies, 0.5);
+                let mut expected = 0.0;
+                for left in &a.phase_components {
+                    for right in &b.phase_components {
+                        if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs()
+                            <= 1e-9
+                        {
+                            expected += 2.0
+                                * (left.in_phase_amplitude * right.in_phase_amplitude
+                                    + left.quadrature_amplitude * right.quadrature_amplitude);
+                        }
+                    }
+                }
+                let actual = environmental_movement_cross_energy(&a, &b).unwrap();
+                assert_eq!(actual, expected);
+            }
+        }
+    }
+
+
 }
