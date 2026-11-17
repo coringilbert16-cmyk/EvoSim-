@@ -856,80 +856,10 @@ pub(crate) fn spectrum_cross_energy(a: &ToneSpectrum, b: &ToneSpectrum) -> Optio
 /// the same immutable movement pass. The caller must not mutate either
 /// spectrum between validation and this calculation.
 fn spectrum_cross_energy_validated(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
-    spectrum_cross_energy_validated_inner(a, b, None)
+    spectrum_cross_energy_validated_inner(a, b)
 }
 
-/// Profile only component matching for sampled movement pairs. Validation is
-/// measured once per emitter before the pair loop, not once per pair.
-fn spectrum_cross_energy_validated_profiled(
-    a: &ToneSpectrum,
-    b: &ToneSpectrum,
-    matching_ns: &mut u128,
-    frequency_match_ns: &mut u128,
-    phase_ns: &mut u128,
-    frequency_comparisons: &mut u64,
-    frequency_matches: &mut u64,
-) -> Option<f64> {
-    // The sampled path records matching indices first, then evaluates their
-    // phase terms in the original nested-loop order. This separates the two
-    // costs without changing summation order or the cross-energy result.
-    let frequency_started = std::time::Instant::now();
-    let mut matching_pairs =
-        [(0_usize, 0_usize); MAX_SPECTRAL_COMPONENTS * MAX_SPECTRAL_COMPONENTS];
-    let mut matching_pair_count = 0_usize;
-    let mut overflow_matching_pairs = Vec::new();
-    let mut comparisons = 0_u64;
-    for (left_index, left) in a.components.iter().enumerate() {
-        for (right_index, right) in b.components.iter().enumerate() {
-            comparisons += 1;
-            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
-                continue;
-            }
-            if matching_pair_count < matching_pairs.len() {
-                matching_pairs[matching_pair_count] = (left_index, right_index);
-            } else {
-                overflow_matching_pairs.push((left_index, right_index));
-            }
-            matching_pair_count += 1;
-        }
-    }
-    let frequency_elapsed = frequency_started.elapsed().as_nanos();
-    *frequency_match_ns += frequency_elapsed;
-    *frequency_comparisons += comparisons;
-    *frequency_matches += matching_pair_count as u64;
-
-    let phase_started = std::time::Instant::now();
-    let mut energy = 0.0;
-    let stored_pair_count = matching_pair_count.min(matching_pairs.len());
-    let phase_pairs = matching_pairs[..stored_pair_count]
-        .iter()
-        .copied()
-        .chain(overflow_matching_pairs);
-    for (left_index, right_index) in phase_pairs {
-        let left = &a.components[left_index];
-        let right = &b.components[right_index];
-        energy += 2.0
-            * left.amplitude
-            * right.amplitude
-            * (left.phase_radians - right.phase_radians).cos();
-        if !energy.is_finite() {
-            let phase_elapsed = phase_started.elapsed().as_nanos();
-            *phase_ns += phase_elapsed;
-            *matching_ns += frequency_elapsed + phase_elapsed;
-            return None;
-        }
-    }
-    let phase_elapsed = phase_started.elapsed().as_nanos();
-    *phase_ns += phase_elapsed;
-    *matching_ns += frequency_elapsed + phase_elapsed;
-    Some(energy)
-}
-
-fn spectrum_cross_energy_validated_inner(
-    a: &ToneSpectrum,
-    b: &ToneSpectrum,
-    _matching_ns: Option<&mut u128>,
-) -> Option<f64> {
+fn spectrum_cross_energy_validated_inner(a: &ToneSpectrum, b: &ToneSpectrum) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.components {
         for right in &b.components {
@@ -2005,11 +1935,97 @@ pub(crate) fn resonance_pair_potential_with_occluders(
 }
 
 /// Cached source data for the inexpensive environmental movement pass.
+#[derive(Clone, Copy, Debug, Default)]
+struct EnvironmentalMovementPhaseComponent {
+    frequency_cycles_per_day: f64,
+    in_phase_amplitude: f64,
+    quadrature_amplitude: f64,
+}
+
 struct EnvironmentalMovementEmitter {
     x: f64,
     y: f64,
     mass_scale: f64,
     spectrum: ToneSpectrum,
+    phase_components: [EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS],
+    phase_component_count: usize,
+}
+
+fn environmental_movement_phase_components(
+    spectrum: &ToneSpectrum,
+) -> Option<([EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS], usize)> {
+    if spectrum.components.len() > MAX_SPECTRAL_COMPONENTS {
+        return None;
+    }
+    let mut phase_components =
+        [EnvironmentalMovementPhaseComponent::default(); MAX_SPECTRAL_COMPONENTS];
+    for (index, component) in spectrum.components.iter().enumerate() {
+        let (sin_phase, cos_phase) = component.phase_radians.sin_cos();
+        phase_components[index] = EnvironmentalMovementPhaseComponent {
+            frequency_cycles_per_day: component.frequency_cycles_per_day,
+            in_phase_amplitude: component.amplitude * cos_phase,
+            quadrature_amplitude: component.amplitude * sin_phase,
+        };
+    }
+    Some((phase_components, spectrum.components.len()))
+}
+
+fn environmental_movement_cross_energy_inner(
+    a: &EnvironmentalMovementEmitter,
+    b: &EnvironmentalMovementEmitter,
+    mut frequency_comparisons: Option<&mut u64>,
+    mut frequency_matches: Option<&mut u64>,
+) -> Option<f64> {
+    let mut energy = 0.0;
+    for left in &a.phase_components[..a.phase_component_count] {
+        for right in &b.phase_components[..b.phase_component_count] {
+            if let Some(comparisons) = frequency_comparisons.as_deref_mut() {
+                *comparisons += 1;
+            }
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            if let Some(matches) = frequency_matches.as_deref_mut() {
+                *matches += 1;
+            }
+            energy += 2.0
+                * (left.in_phase_amplitude * right.in_phase_amplitude
+                    + left.quadrature_amplitude * right.quadrature_amplitude);
+            if !energy.is_finite() {
+                return None;
+            }
+        }
+    }
+    Some(energy)
+}
+
+fn environmental_movement_cross_energy(
+    a: &EnvironmentalMovementEmitter,
+    b: &EnvironmentalMovementEmitter,
+) -> Option<f64> {
+    environmental_movement_cross_energy_inner(a, b, None, None)
+}
+
+fn environmental_movement_cross_energy_profiled(
+    a: &EnvironmentalMovementEmitter,
+    b: &EnvironmentalMovementEmitter,
+    matching_ns: &mut u128,
+    frequency_comparisons: &mut u64,
+    frequency_matches: &mut u64,
+) -> Option<f64> {
+    let mut comparisons = 0_u64;
+    let mut matches = 0_u64;
+    let started = std::time::Instant::now();
+    let energy = environmental_movement_cross_energy_inner(
+        a,
+        b,
+        Some(&mut comparisons),
+        Some(&mut matches),
+    );
+    *matching_ns += started.elapsed().as_nanos();
+    *frequency_comparisons += comparisons;
+    *frequency_matches += matches;
+    energy
 }
 
 fn environmental_movement_emitter(
@@ -2019,12 +2035,16 @@ fn environmental_movement_emitter(
     tick: u64,
 ) -> Option<EnvironmentalMovementEmitter> {
     let (x, y, _, spectrum) = environmental_material_resonance(physical, catalog, tick)?;
+    let (phase_components, phase_component_count) =
+        environmental_movement_phase_components(&spectrum)?;
     let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baseline_mass);
     (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
         x,
         y,
         mass_scale,
         spectrum,
+        phase_components,
+        phase_component_count,
     })
 }
 
@@ -2041,8 +2061,6 @@ fn resonance_pair_push_pull_from_emitters(
     sample_cross_energy: bool,
     sampled_cross_energy_ns: &mut u128,
     sampled_matching_ns: &mut u128,
-    sampled_frequency_match_ns: &mut u128,
-    sampled_phase_ns: &mut u128,
     sampled_frequency_comparisons: &mut u64,
     sampled_frequency_matches: &mut u64,
 ) -> Option<((f64, f64), (f64, f64))> {
@@ -2080,19 +2098,17 @@ fn resonance_pair_push_pull_from_emitters(
     let attenuation = (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
     let cross_energy = if sample_cross_energy {
         let started = std::time::Instant::now();
-        let value = spectrum_cross_energy_validated_profiled(
-            &a.spectrum,
-            &b.spectrum,
+        let value = environmental_movement_cross_energy_profiled(
+            a,
+            b,
             sampled_matching_ns,
-            sampled_frequency_match_ns,
-            sampled_phase_ns,
             sampled_frequency_comparisons,
             sampled_frequency_matches,
         )?;
         *sampled_cross_energy_ns += started.elapsed().as_nanos();
         value
     } else {
-        spectrum_cross_energy_validated(&a.spectrum, &b.spectrum)?
+        environmental_movement_cross_energy(a, b)?
     };
     let strength = cross_energy * attenuation;
     if !strength.is_finite() {
@@ -2175,8 +2191,6 @@ pub(crate) fn environmental_resonance_displacements(
     let mut pair_count = 0_u64;
     let mut sampled_cross_energy_ns = 0_u128;
     let mut sampled_matching_ns = 0_u128;
-    let mut sampled_frequency_match_ns = 0_u128;
-    let mut sampled_phase_ns = 0_u128;
     let mut sampled_frequency_comparisons = 0_u64;
     let mut sampled_frequency_matches = 0_u64;
     const CROSS_ENERGY_SAMPLE_STRIDE: u64 = 256;
@@ -2195,8 +2209,6 @@ pub(crate) fn environmental_resonance_displacements(
                 sample && profile,
                 &mut sampled_cross_energy_ns,
                 &mut sampled_matching_ns,
-                &mut sampled_frequency_match_ns,
-                &mut sampled_phase_ns,
                 &mut sampled_frequency_comparisons,
                 &mut sampled_frequency_matches,
             )?;
@@ -2228,7 +2240,7 @@ pub(crate) fn environmental_resonance_displacements(
     if profile {
         let sampled_pairs = pair_count.div_ceil(CROSS_ENERGY_SAMPLE_STRIDE);
         eprintln!(
-            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} validation_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_validation_ns=0 sampled_matching_ns={} sampled_frequency_match_ns={} sampled_phase_ns={} sampled_frequency_comparisons={} sampled_frequency_matches={} sampled_pairs={} estimated_cross_energy_total_ns={} estimated_validation_total_ns={} estimated_matching_total_ns={} estimated_frequency_match_total_ns={} estimated_phase_total_ns={} estimated_frequency_comparisons_total={} estimated_frequency_matches_total={}",
+            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} validation_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_validation_ns=0 sampled_matching_ns={} sampled_frequency_comparisons={} sampled_frequency_matches={} sampled_pairs={} estimated_cross_energy_total_ns={} estimated_validation_total_ns={} estimated_matching_total_ns={} estimated_frequency_comparisons_total={} estimated_frequency_matches_total={}",
             materials.len(),
             pair_count,
             emitter_ns,
@@ -2237,16 +2249,12 @@ pub(crate) fn environmental_resonance_displacements(
             response_ns,
             sampled_cross_energy_ns,
             sampled_matching_ns,
-            sampled_frequency_match_ns,
-            sampled_phase_ns,
             sampled_frequency_comparisons,
             sampled_frequency_matches,
             sampled_pairs,
             sampled_cross_energy_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
             validation_ns,
             sampled_matching_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
-            sampled_frequency_match_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
-            sampled_phase_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
             sampled_frequency_comparisons.saturating_mul(pair_count) / sampled_pairs.max(1),
             sampled_frequency_matches.saturating_mul(pair_count) / sampled_pairs.max(1)
         );
@@ -3227,7 +3235,28 @@ mod tests {
             Some(in_phase)
         );
 
-        let multi_a = ToneSpectrum {
+        assert!((in_phase - 0.5).abs() < 1e-12);
+        assert!((opposite + 0.5).abs() < 1e-12);
+        assert!(quadrature.abs() < 1e-12);
+        assert!(different_frequency.abs() < 1e-12);
+    }
+
+    #[test]
+    fn cached_movement_phasors_preserve_multi_component_cross_energy() {
+        let make_emitter = |spectrum: ToneSpectrum| {
+            let (phase_components, phase_component_count) =
+                environmental_movement_phase_components(&spectrum)
+                    .expect("bounded spectrum should fit cached phasor components");
+            EnvironmentalMovementEmitter {
+                x: 0.0,
+                y: 0.0,
+                mass_scale: 1.0,
+                spectrum,
+                phase_components,
+                phase_component_count,
+            }
+        };
+        let a = ToneSpectrum {
             components: vec![
                 ToneComponent {
                     frequency_cycles_per_day: 441.0,
@@ -3241,7 +3270,7 @@ mod tests {
                 },
             ],
         };
-        let multi_b = ToneSpectrum {
+        let b = ToneSpectrum {
             components: vec![
                 ToneComponent {
                     frequency_cycles_per_day: 440.0,
@@ -3249,34 +3278,23 @@ mod tests {
                     phase_radians: 0.9,
                 },
                 ToneComponent {
-                    frequency_cycles_per_day: 441.0,
+                    frequency_cycles_per_day: 441.0 + 5e-10,
                     amplitude: 0.7,
                     phase_radians: 1.2,
                 },
             ],
         };
-        let expected = spectrum_cross_energy(&multi_a, &multi_b)
-            .expect("valid multi-component spectra should be accepted");
-        let (mut matching_ns, mut frequency_ns, mut phase_ns) = (0, 0, 0);
-        let (mut comparisons, mut matches) = (0, 0);
-        let profiled = spectrum_cross_energy_validated_profiled(
-            &multi_a,
-            &multi_b,
-            &mut matching_ns,
-            &mut frequency_ns,
-            &mut phase_ns,
-            &mut comparisons,
-            &mut matches,
+        let emitter_a = make_emitter(a.clone());
+        let emitter_b = make_emitter(b.clone());
+        let expected = spectrum_cross_energy(&a, &b)
+            .expect("valid spectra should be accepted by reference implementation");
+        let actual = environmental_movement_cross_energy(&emitter_a, &emitter_b)
+            .expect("valid cached spectra should be accepted");
+        assert!((actual - expected).abs() < 1e-12);
+        assert!(
+            (actual - environmental_movement_cross_energy(&emitter_b, &emitter_a).unwrap()).abs()
+                < 1e-12
         );
-        assert_eq!(profiled, Some(expected));
-        assert_eq!(comparisons, 4);
-        assert_eq!(matches, 2);
-        assert_eq!(matching_ns, frequency_ns + phase_ns);
-
-        assert!((in_phase - 0.5).abs() < 1e-12);
-        assert!((opposite + 0.5).abs() < 1e-12);
-        assert!(quadrature.abs() < 1e-12);
-        assert!(different_frequency.abs() < 1e-12);
     }
 
     #[test]
