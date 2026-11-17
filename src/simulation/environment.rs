@@ -94,7 +94,6 @@ fn initial_material_identity() -> u64 {
     1
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MovementBounds {
     min_x: f64,
@@ -183,18 +182,28 @@ fn movement_cross_overlapping_pairs(
 
     let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
     let mut events = Vec::with_capacity(query_bounds.len() + target_bounds.len());
-    events.extend(query_bounds.iter().enumerate().map(|(index, bounds)| Event {
-        min_x: bounds.min_x,
-        max_x: bounds.max_x,
-        index,
-        is_target: false,
-    }));
-    events.extend(target_bounds.iter().enumerate().map(|(index, bounds)| Event {
-        min_x: bounds.min_x,
-        max_x: bounds.max_x,
-        index,
-        is_target: true,
-    }));
+    events.extend(
+        query_bounds
+            .iter()
+            .enumerate()
+            .map(|(index, bounds)| Event {
+                min_x: bounds.min_x,
+                max_x: bounds.max_x,
+                index,
+                is_target: false,
+            }),
+    );
+    events.extend(
+        target_bounds
+            .iter()
+            .enumerate()
+            .map(|(index, bounds)| Event {
+                min_x: bounds.min_x,
+                max_x: bounds.max_x,
+                index,
+                is_target: true,
+            }),
+    );
     events.sort_unstable_by(|a, b| {
         a.min_x
             .total_cmp(&b.min_x)
@@ -1612,7 +1621,6 @@ fn distribute_evenly(
 #[path = "../tests/environment_tests.rs"]
 mod environment_tests;
 
-
 #[cfg(test)]
 mod movement_placement_sweep_tests {
     use super::{movement_cross_overlapping_pairs, movement_overlapping_pairs, MovementBounds};
@@ -1671,8 +1679,18 @@ mod movement_placement_sweep_tests {
             ],
             vec![
                 bounds(0.0, 1.0, 0.0, 1.0),
-                bounds(1.0 + crate::material_geometry::GEOMETRY_EPSILON, 2.0, 0.0, 1.0),
-                bounds(1.0 + 2.0 * crate::material_geometry::GEOMETRY_EPSILON, 2.0, 0.0, 1.0),
+                bounds(
+                    1.0 + crate::material_geometry::GEOMETRY_EPSILON,
+                    2.0,
+                    0.0,
+                    1.0,
+                ),
+                bounds(
+                    1.0 + 2.0 * crate::material_geometry::GEOMETRY_EPSILON,
+                    2.0,
+                    0.0,
+                    1.0,
+                ),
             ],
         ];
         for case in cases {
