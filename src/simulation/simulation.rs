@@ -951,7 +951,11 @@ impl Simulation {
         let profile_tick = std::env::var_os("EVOSIM_PROFILE_TICK").is_some() && self.tick % 10 == 0;
         let tick_profile_started = profile_tick.then(std::time::Instant::now);
         let mut profile_phase_started = tick_profile_started;
-        let mut profile_phases: Vec<(&str, u128)> = Vec::with_capacity(16);
+        let mut profile_phases: Vec<(&str, u128)> = if profile_tick {
+            Vec::with_capacity(16)
+        } else {
+            Vec::new()
+        };
         let mut finish_profile_phase = |name: &'static str| {
             if let Some(started) = profile_phase_started.take() {
                 let now = std::time::Instant::now();
