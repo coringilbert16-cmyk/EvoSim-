@@ -2140,10 +2140,7 @@ fn environmental_movement_pair_row_start(row: usize, material_count: usize) -> u
     row * (2 * material_count - row - 1) / 2
 }
 
-fn environmental_movement_pair_at(
-    pair_index: usize,
-    material_count: usize,
-) -> (usize, usize) {
+fn environmental_movement_pair_at(pair_index: usize, material_count: usize) -> (usize, usize) {
     let mut low = 0;
     let mut high = material_count - 1;
     while low < high {
@@ -2193,10 +2190,8 @@ fn environmental_movement_parallel_pair_forces(
         .map(|_| std::sync::OnceLock::new())
         .collect();
 
-    let ordered_forces = crate::deterministic_parallel::map_ordered_chunks(
-        &ranges,
-        chunk_count,
-        |_, chunk| {
+    let ordered_forces =
+        crate::deterministic_parallel::map_ordered_chunks(&ranges, chunk_count, |_, chunk| {
             let range = *chunk.first().ok_or(0_usize)?;
             let (mut a, mut b) =
                 environmental_movement_pair_at(range.start, emitters.len());
@@ -2251,9 +2246,8 @@ fn environmental_movement_parallel_pair_forces(
                 }
             }
             Ok(forces)
-        },
-    )
-    .ok()?;
+        })
+        .ok()?;
 
     (ordered_forces.len() == pair_count).then_some(ordered_forces)
 }
@@ -2340,8 +2334,7 @@ pub(crate) fn environmental_resonance_displacements(
     let pair_count = environmental_movement_pair_count(emitters.len())?;
     if !profile && worker_count > 1 && pair_count >= 4_096 {
         let pair_started = std::time::Instant::now();
-        let pair_forces =
-            environmental_movement_parallel_pair_forces(&emitters, worker_count)?;
+        let pair_forces = environmental_movement_parallel_pair_forces(&emitters, worker_count)?;
         let pair_ns = pair_started.elapsed().as_nanos();
         let response_started = std::time::Instant::now();
         let displacements =
@@ -4795,20 +4788,50 @@ mod tests {
 #[cfg(test)]
 mod environmental_movement_parallel_tests {
     use super::{
-        environmental_movement_displacements_from_pair_forces,
-        environmental_movement_pair_count, environmental_movement_parallel_pair_forces,
-        environmental_movement_phase_components, environmental_movement_pair_force,
-        EnvironmentalMovementEmitter, ToneComponent, ToneSpectrum,
+        environmental_movement_displacements_from_pair_forces, environmental_movement_pair_count,
+        environmental_movement_pair_force, environmental_movement_parallel_pair_forces,
+        environmental_movement_phase_components, EnvironmentalMovementEmitter, ToneComponent,
+        ToneSpectrum,
     };
 
     #[test]
     fn parallel_pair_forces_match_sequential_reference_in_original_order() {
         let spectra = [
-            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.7, phase_radians: 0.2 }] },
-            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.4, phase_radians: 1.1 }] },
-            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 880.0, amplitude: 0.3, phase_radians: -0.4 }] },
-            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.6, phase_radians: 2.0 }] },
-            ToneSpectrum { components: vec![ToneComponent { frequency_cycles_per_day: 440.0, amplitude: 0.2, phase_radians: -1.0 }] },
+            ToneSpectrum {
+                components: vec![ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.7,
+                    phase_radians: 0.2,
+                }],
+            },
+            ToneSpectrum {
+                components: vec![ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.4,
+                    phase_radians: 1.1,
+                }],
+            },
+            ToneSpectrum {
+                components: vec![ToneComponent {
+                    frequency_cycles_per_day: 880.0,
+                    amplitude: 0.3,
+                    phase_radians: -0.4,
+                }],
+            },
+            ToneSpectrum {
+                components: vec![ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.6,
+                    phase_radians: 2.0,
+                }],
+            },
+            ToneSpectrum {
+                components: vec![ToneComponent {
+                    frequency_cycles_per_day: 440.0,
+                    amplitude: 0.2,
+                    phase_radians: -1.0,
+                }],
+            },
         ];
         let positions = [(0.0, 0.0), (1.0, 0.0), (1.0, 0.0), (2.5, -0.5), (-1.0, 1.5)];
         let emitters: Vec<_> = spectra
@@ -4868,7 +4891,10 @@ mod environmental_movement_parallel_tests {
             environmental_movement_displacements_from_pair_forces(emitters.len(), &sequential)
                 .unwrap();
         assert_eq!(parallel_displacements, sequential_displacements);
-        assert_eq!(parallel.len(), environmental_movement_pair_count(emitters.len()).unwrap());
+        assert_eq!(
+            parallel.len(),
+            environmental_movement_pair_count(emitters.len()).unwrap()
+        );
     }
 
     #[test]
@@ -4881,7 +4907,10 @@ mod environmental_movement_parallel_tests {
                 }
             }
             for (index, pair) in expected.into_iter().enumerate() {
-                assert_eq!(super::environmental_movement_pair_at(index, material_count), pair);
+                assert_eq!(
+                    super::environmental_movement_pair_at(index, material_count),
+                    pair
+                );
             }
         }
     }
