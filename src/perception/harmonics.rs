@@ -1974,23 +1974,15 @@ fn environmental_movement_phase_components(
 }
 
 #[inline]
-fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
+fn environmental_movement_cross_energy(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
-    frequency_comparisons: &mut u64,
-    frequency_matches: &mut u64,
 ) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
         for right in &b.phase_components[..b.phase_component_count] {
-            if PROFILE {
-                *frequency_comparisons += 1;
-            }
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
                 continue;
-            }
-            if PROFILE {
-                *frequency_matches += 1;
             }
             energy += 2.0
                 * (left.in_phase_amplitude * right.in_phase_amplitude
@@ -2003,15 +1995,7 @@ fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
     Some(energy)
 }
 
-fn environmental_movement_cross_energy(
-    a: &EnvironmentalMovementEmitter,
-    b: &EnvironmentalMovementEmitter,
-) -> Option<f64> {
-    let mut comparisons = 0;
-    let mut matches = 0;
-    environmental_movement_cross_energy_inner::<false>(a, b, &mut comparisons, &mut matches)
-}
-
+#[inline]
 fn environmental_movement_cross_energy_profiled(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
@@ -2019,15 +2003,26 @@ fn environmental_movement_cross_energy_profiled(
     frequency_comparisons: &mut u64,
     frequency_matches: &mut u64,
 ) -> Option<f64> {
-    let mut comparisons = 0_u64;
-    let mut matches = 0_u64;
     let started = std::time::Instant::now();
-    let energy =
-        environmental_movement_cross_energy_inner::<true>(a, b, &mut comparisons, &mut matches);
+    let mut energy = 0.0;
+    for left in &a.phase_components[..a.phase_component_count] {
+        for right in &b.phase_components[..b.phase_component_count] {
+            *frequency_comparisons += 1;
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            *frequency_matches += 1;
+            energy += 2.0
+                * (left.in_phase_amplitude * right.in_phase_amplitude
+                    + left.quadrature_amplitude * right.quadrature_amplitude);
+            if !energy.is_finite() {
+                *matching_ns += started.elapsed().as_nanos();
+                return None;
+            }
+        }
+    }
     *matching_ns += started.elapsed().as_nanos();
-    *frequency_comparisons += comparisons;
-    *frequency_matches += matches;
-    energy
+    Some(energy)
 }
 
 fn environmental_movement_emitter(
@@ -2053,48 +2048,19 @@ fn environmental_movement_emitter(
 /// Evaluate one symmetric radial pair contribution from cached material
 /// spectra. Cross-energy exists only for matching frequencies and naturally
 /// carries the relative phase through the existing phasor calculation.
-fn resonance_pair_push_pull_from_emitters(
+#[inline]
+fn environmental_movement_pair_force(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
-    a_spectrum_validated: &mut bool,
-    b_spectrum_validated: &mut bool,
-    profile_validation: bool,
-    validation_ns: &mut u128,
+    dx: f64,
+    dy: f64,
+    distance: f64,
     sample_cross_energy: bool,
     sampled_cross_energy_ns: &mut u128,
     sampled_matching_ns: &mut u128,
     sampled_frequency_comparisons: &mut u64,
     sampled_frequency_matches: &mut u64,
-) -> Option<((f64, f64), (f64, f64))> {
-    let dx = b.x - a.x;
-    let dy = b.y - a.y;
-    let distance = dx.hypot(dy);
-    if !distance.is_finite() {
-        return None;
-    }
-    if distance <= f64::EPSILON {
-        return Some(((0.0, 0.0), (0.0, 0.0)));
-    }
-
-    // Validate each immutable emitter spectrum only on its first actual
-    // cross-energy use. Coincident pairs continue to bypass validation.
-    if !*a_spectrum_validated {
-        let started = profile_validation.then(std::time::Instant::now);
-        spectrum_energy(&a.spectrum)?;
-        if let Some(started) = started {
-            *validation_ns += started.elapsed().as_nanos();
-        }
-        *a_spectrum_validated = true;
-    }
-    if !*b_spectrum_validated {
-        let started = profile_validation.then(std::time::Instant::now);
-        spectrum_energy(&b.spectrum)?;
-        if let Some(started) = started {
-            *validation_ns += started.elapsed().as_nanos();
-        }
-        *b_spectrum_validated = true;
-    }
-
+) -> Option<(f64, f64)> {
     // Each material's emitted aura uses the existing continuous 1/(1+d)
     // attenuation. Cross-energy multiplies the two received amplitudes.
     let attenuation = (a.mass_scale * b.mass_scale) / ((1.0 + distance) * (1.0 + distance));
@@ -2117,10 +2083,7 @@ fn resonance_pair_push_pull_from_emitters(
         return None;
     }
     let on_b = (strength * dx / distance, strength * dy / distance);
-    if !on_b.0.is_finite() || !on_b.1.is_finite() {
-        return None;
-    }
-    Some(((-on_b.0, -on_b.1), on_b))
+    (on_b.0.is_finite() && on_b.1.is_finite()).then_some(on_b)
 }
 
 /// Calculate one symmetric, radial push/pull contribution for an isolated
@@ -2182,9 +2145,7 @@ pub(crate) fn environmental_resonance_displacements(
     let emitter_ns = emitter_started.elapsed().as_nanos();
 
     // Cache validity lazily: coincident pairs skip cross-energy entirely, so
-    // their spectra must retain the old behavior of not being validated.
-    // Once an emitter participates in a non-coincident pair, its owned
-    // spectrum is immutable for the remainder of this movement pass.
+    // their spectra retain the existing behavior of not being validated.
     let mut validated_spectra = vec![false; emitters.len()];
     let mut validation_ns = 0_u128;
 
@@ -2199,25 +2160,51 @@ pub(crate) fn environmental_resonance_displacements(
 
     for a in 0..emitters.len() {
         for b in (a + 1)..emitters.len() {
-            let sample = pair_count % CROSS_ENERGY_SAMPLE_STRIDE == 0;
-            let (before_b, from_b) = validated_spectra.split_at_mut(b);
-            let (_, on_b) = resonance_pair_push_pull_from_emitters(
-                &emitters[a],
-                &emitters[b],
-                &mut before_b[a],
-                &mut from_b[0],
-                profile,
-                &mut validation_ns,
-                sample && profile,
-                &mut sampled_cross_energy_ns,
-                &mut sampled_matching_ns,
-                &mut sampled_frequency_comparisons,
-                &mut sampled_frequency_matches,
-            )?;
-            accumulated[a].0 -= on_b.0;
-            accumulated[a].1 -= on_b.1;
-            accumulated[b].0 += on_b.0;
-            accumulated[b].1 += on_b.1;
+            let dx = emitters[b].x - emitters[a].x;
+            let dy = emitters[b].y - emitters[a].y;
+            let distance = dx.hypot(dy);
+            if !distance.is_finite() {
+                return None;
+            }
+            if distance > f64::EPSILON {
+                // Validate each immutable spectrum only on its first actual
+                // cross-energy use. This preserves the coincident-pair rule
+                // while removing two indexed mutable borrows per pair.
+                if !validated_spectra[a] {
+                    let started = profile.then(std::time::Instant::now);
+                    spectrum_energy(&emitters[a].spectrum)?;
+                    if let Some(started) = started {
+                        validation_ns += started.elapsed().as_nanos();
+                    }
+                    validated_spectra[a] = true;
+                }
+                if !validated_spectra[b] {
+                    let started = profile.then(std::time::Instant::now);
+                    spectrum_energy(&emitters[b].spectrum)?;
+                    if let Some(started) = started {
+                        validation_ns += started.elapsed().as_nanos();
+                    }
+                    validated_spectra[b] = true;
+                }
+
+                let sample = pair_count % CROSS_ENERGY_SAMPLE_STRIDE == 0;
+                let (on_b_x, on_b_y) = environmental_movement_pair_force(
+                    &emitters[a],
+                    &emitters[b],
+                    dx,
+                    dy,
+                    distance,
+                    sample && profile,
+                    &mut sampled_cross_energy_ns,
+                    &mut sampled_matching_ns,
+                    &mut sampled_frequency_comparisons,
+                    &mut sampled_frequency_matches,
+                )?;
+                accumulated[a].0 -= on_b_x;
+                accumulated[a].1 -= on_b_y;
+                accumulated[b].0 += on_b_x;
+                accumulated[b].1 += on_b_y;
+            }
             pair_count += 1;
         }
     }

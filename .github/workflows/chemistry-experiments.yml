@@ -23,8 +23,13 @@ on:
         required: true
         default: false
         type: boolean
+      profile_tick:
+        description: "Record sampled whole-tick phase timings (one tick in ten)."
+        required: true
+        default: false
+        type: boolean
   push:
-    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance]
+    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance, movement/06-performance-optimization]
     paths:
       - experiments/chemistry-run.json
 
@@ -40,6 +45,7 @@ jobs:
       duration_seconds: ${{ steps.parameters.outputs.duration_seconds }}
       diagnostic_interval: ${{ steps.parameters.outputs.diagnostic_interval }}
       profile_movement: ${{ steps.parameters.outputs.profile_movement }}
+      profile_tick: ${{ steps.parameters.outputs.profile_tick }}
     steps:
       - uses: actions/checkout@v4
       - name: Validate experiment parameters
@@ -50,6 +56,7 @@ jobs:
           DURATION_SECONDS: ${{ inputs.duration_seconds }}
           DIAGNOSTIC_INTERVAL: ${{ inputs.diagnostic_interval }}
           PROFILE_MOVEMENT_INPUT: ${{ inputs.profile_movement }}
+          PROFILE_TICK_INPUT: ${{ inputs.profile_tick }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -68,6 +75,7 @@ jobs:
               duration = int(config.get("duration_seconds", 300))
               interval = int(config.get("diagnostic_interval", 100))
               profile_movement = bool(config.get("profile_movement", False))
+              profile_tick = bool(config.get("profile_tick", False))
           else:
               raw = os.environ["SEEDS_INPUT"]
               parts = [part.strip() for part in raw.split(",") if part.strip()]
@@ -77,6 +85,7 @@ jobs:
               duration = int(os.environ["DURATION_SECONDS"])
               interval = int(os.environ["DIAGNOSTIC_INTERVAL"])
               profile_movement = os.environ["PROFILE_MOVEMENT_INPUT"].lower() == "true"
+              profile_tick = os.environ["PROFILE_TICK_INPUT"].lower() == "true"
 
           if not isinstance(seeds, list) or not seeds or len(seeds) > 25:
               raise SystemExit("Provide between 1 and 25 independent seeds.")
@@ -95,6 +104,7 @@ jobs:
               output.write("duration_seconds=" + str(duration) + chr(10))
               output.write("diagnostic_interval=" + str(interval) + chr(10))
               output.write("profile_movement=" + str(profile_movement).lower() + chr(10))
+              output.write("profile_tick=" + str(profile_tick).lower() + chr(10))
           print(f"Validated {len(seeds)} seeds: {seeds}")
           print(f"Duration per seed: {duration}s; diagnostic interval: {interval} ticks")
           PY
@@ -119,6 +129,7 @@ jobs:
           DURATION_SECONDS: ${{ needs.prepare.outputs.duration_seconds }}
           DIAGNOSTIC_INTERVAL: ${{ needs.prepare.outputs.diagnostic_interval }}
           EVOSIM_PROFILE_MOVEMENT: ${{ needs.prepare.outputs.profile_movement }}
+          EVOSIM_PROFILE_TICK: ${{ needs.prepare.outputs.profile_tick }}
         run: |
           set -euo pipefail
           mkdir -p observations
