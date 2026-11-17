@@ -61,6 +61,43 @@ jobs:
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
+      - name: Run shared environmental chemistry smoke simulation
+        if: success()
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds "${{ inputs.simulation_seconds || '10' }}" \
+            --seed 42 \
+            --diagnostics environmental-chemistry-smoke.jsonl \
+            --diagnostic-interval 100
+      - name: Analyze shared chemistry smoke output
+        if: success()
+        run: |
+          python3 tools/chemistry_analyzer.py environmental-chemistry-smoke.jsonl \
+            --json-out environmental-chemistry-smoke-analysis.json \
+            --markdown-out environmental-chemistry-smoke-analysis.md
+      - name: Analyze shared chemical organization output
+        if: success()
+        run: |
+          python3 tools/chemistry_organization_analyzer.py environmental-chemistry-smoke.jsonl \
+            --json-out environmental-chemistry-smoke-organization.json \
+            --markdown-out environmental-chemistry-smoke-organization.md
+      - name: Upload shared environmental chemistry smoke output
+        if: always() && hashFiles('environmental-chemistry-smoke.jsonl') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: environmental-chemistry-smoke-output
+          path: |
+            environmental-chemistry-smoke.jsonl
+            environmental-chemistry-smoke-analysis.json
+            environmental-chemistry-smoke-analysis.md
+            environmental-chemistry-smoke-organization.json
+            environmental-chemistry-smoke-organization.md
+          if-no-files-found: error
+          retention-days: 14
       - name: Capture rustfmt correction patch
         if: always()
         run: |
