@@ -1,8 +1,10 @@
 {
   "run": true,
-  "seeds": [42],
+  "seeds": [
+    42
+  ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR359 corrected 1,200 independent resources plus 80 molecules; 60-second seed-42 movement integration validation.",
+  "request_note": "PR361: approved standard 60-second seed-42 movement acceptance and profiling run; 1,200 independent resources plus 80 molecules.",
   "profile_movement": true
 }
