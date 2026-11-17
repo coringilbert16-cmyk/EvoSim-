@@ -70,7 +70,34 @@ jobs:
             --seconds 60 \
             --seed 42 \
             --diagnostics environmental-chemistry-default-baseline.jsonl \
-            --diagnostic-interval 100
+            --diagnostic-interval 100 2>&1 | tee movement-placement-pr365.log
+      - name: Profile baseline main movement placement
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 5
+        env:
+          EVOSIM_PROFILE_MOVEMENT: "1"
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git worktree add --detach /tmp/evosim-main origin/main
+          cd /tmp/evosim-main
+          cargo run --locked -- \
+            --headless \
+            --environment-chemistry-experiment \
+            --seconds 60 \
+            --seed 42 \
+            --diagnostics /tmp/environment-chemistry-main-profile.jsonl \
+            --diagnostic-interval 100 2>&1 | tee "$GITHUB_WORKSPACE/movement-placement-main.log"
+      - name: Upload movement placement profile logs
+        if: always() && (hashFiles('movement-placement-pr365.log') != '' || hashFiles('movement-placement-main.log') != '')
+        uses: actions/upload-artifact@v4
+        with:
+          name: movement-placement-profile-logs
+          path: |
+            movement-placement-pr365.log
+            movement-placement-main.log
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Analyze default environmental chemistry baseline
         if: success()
         run: |
