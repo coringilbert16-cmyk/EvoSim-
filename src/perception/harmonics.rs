@@ -3326,6 +3326,10 @@ mod tests {
                 spectrum,
                 phase_components,
                 phase_component_count,
+                frequency_order: environmental_movement_frequency_order(
+                    &phase_components,
+                    phase_component_count,
+                ),
             }
         };
         let a = ToneSpectrum {
