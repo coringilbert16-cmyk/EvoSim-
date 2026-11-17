@@ -149,7 +149,7 @@ fn movement_overlapping_pairs(bounds: &[MovementBounds]) -> Vec<(usize, usize)> 
             .then_with(|| a.cmp(&b))
     });
 
-    let mut active = Vec::new();
+    let mut active: Vec<usize> = Vec::new();
     let mut pairs = Vec::new();
     for current in order {
         let current_bounds = bounds[current];
