@@ -1,10 +1,10 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [
     42
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Reset one-shot trigger before second-stage resonance validation-versus-matching profile.",
+  "request_note": "60-second seed-42 profile separating spectrum validation from frequency matching and phase calculation.",
   "profile_movement": true
 }
