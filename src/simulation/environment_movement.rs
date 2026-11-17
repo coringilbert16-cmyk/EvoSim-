@@ -148,18 +148,8 @@ mod tests {
     fn rejected_boundary_and_collision_moves_leave_the_field_unchanged() {
         let catalog = crate::resources::default_catalog();
         let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
-        assert!(field.deposit_physical(
-            20.0,
-            50.0,
-            make_carbon(&catalog, 20.0, 50.0),
-            &catalog
-        ));
-        assert!(field.deposit_physical(
-            40.0,
-            50.0,
-            make_carbon(&catalog, 40.0, 50.0),
-            &catalog
-        ));
+        assert!(field.deposit_physical(20.0, 50.0, make_carbon(&catalog, 20.0, 50.0), &catalog));
+        assert!(field.deposit_physical(40.0, 50.0, make_carbon(&catalog, 40.0, 50.0), &catalog));
         field.assign_missing_material_identities();
 
         let identity = field
@@ -203,7 +193,10 @@ mod tests {
         let catalog = crate::resources::default_catalog();
         let composite = Material {
             parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 1.0)],
-            internal_bonds: vec![InternalBond { part_a: 0, part_b: 1 }],
+            internal_bonds: vec![InternalBond {
+                part_a: 0,
+                part_b: 1,
+            }],
         };
         let physical = PhysicalMaterial::realized(
             composite,
@@ -226,7 +219,9 @@ mod tests {
         assert!(field.deposit_physical(30.0, 50.0, physical, &catalog));
         field.assign_missing_material_identities();
 
-        let before = field.cells.iter()
+        let before = field
+            .cells
+            .iter()
             .flat_map(|cell| cell.physical_materials.iter())
             .next()
             .unwrap()
