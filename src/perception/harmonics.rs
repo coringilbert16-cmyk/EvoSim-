@@ -2008,9 +2008,7 @@ fn environmental_movement_matching_mask(
     while low < high {
         let middle = low + (high - low) / 2;
         comparisons += 1;
-        if emitter.phase_components[order[middle]].frequency_cycles_per_day
-            < frequency - 1e-9
-        {
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day < frequency - 1e-9 {
             low = middle + 1;
         } else {
             high = middle;
@@ -2023,9 +2021,7 @@ fn environmental_movement_matching_mask(
     while low < high {
         let middle = low + (high - low) / 2;
         comparisons += 1;
-        if emitter.phase_components[order[middle]].frequency_cycles_per_day
-            <= frequency + 1e-9
-        {
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day <= frequency + 1e-9 {
             low = middle + 1;
         } else {
             high = middle;
@@ -2046,10 +2042,10 @@ fn environmental_movement_cross_energy(
 ) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
-        let (matching, _) =
-            environmental_movement_matching_mask(left.frequency_cycles_per_day, b);
-        for (right_index, right) in
-            b.phase_components[..b.phase_component_count].iter().enumerate()
+        let (matching, _) = environmental_movement_matching_mask(left.frequency_cycles_per_day, b);
+        for (right_index, right) in b.phase_components[..b.phase_component_count]
+            .iter()
+            .enumerate()
         {
             if matching & (1 << right_index) == 0 {
                 continue;
@@ -2079,8 +2075,9 @@ fn environmental_movement_cross_energy_profiled(
         let (matching, comparisons) =
             environmental_movement_matching_mask(left.frequency_cycles_per_day, b);
         *frequency_comparisons += comparisons;
-        for (right_index, right) in
-            b.phase_components[..b.phase_component_count].iter().enumerate()
+        for (right_index, right) in b.phase_components[..b.phase_component_count]
+            .iter()
+            .enumerate()
         {
             if matching & (1 << right_index) == 0 {
                 continue;
@@ -4687,7 +4684,10 @@ mod tests {
                         spectrum: ToneSpectrum::empty(),
                         phase_components,
                         phase_component_count: 4,
-                        frequency_order: environmental_movement_frequency_order(&phase_components, 4),
+                        frequency_order: environmental_movement_frequency_order(
+                            &phase_components,
+                            4,
+                        ),
                     }
                 };
                 let a = make_emitter(left_frequencies, 0.25);
@@ -4709,6 +4709,4 @@ mod tests {
             }
         }
     }
-
-
 }
