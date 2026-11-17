@@ -1,6 +1,6 @@
 # PR 6: Reach the movement-enabled throughput target
 
-**Target:** More than 800 completed simulation ticks per minute (>13.33 ticks/s) with resonance movement enabled, seed 42, 60 seconds, and the standard 1,280-object environment.
+**Target:** More than 1,009 completed simulation ticks per minute (>16.82 ticks/s) with resonance movement enabled, seed 42, 60 seconds, and the standard 1,280-object environment.
 
 ## Baseline and constraint
 
@@ -27,7 +27,7 @@ The movement-disabled baseline is already below the acceptance target. Therefore
 
 ## Acceptance
 
-A 60-second run must complete **more than 800 ticks** with movement enabled and the standard 1,280 physical objects. It must also show valid chemistry accounting, no lifecycle errors, preserved molecular identity, and no geometry/invariant regressions.
+A 60-second run must complete **more than 1,009 ticks** with movement enabled and the standard 1,280 physical objects. It must also show valid chemistry accounting, no lifecycle errors, preserved molecular identity, and no geometry/invariant regressions.
 
 
 ## First matched profile (seed 42, 60 seconds)
@@ -55,7 +55,7 @@ The next implementation replaces the full nested frequency comparison scan with 
 
 A differential unit test compares the optimized result exactly against the original nested all-pairs implementation, including tolerance-boundary and multiple-match cases.
 
-The 208-tick result is a useful improvement over the previous 157-tick run, but the >800 ticks/minute target remains unmet. The new lookup must pass full CI and a matched experiment before its performance effect is accepted.
+The 208-tick result is a useful improvement over the previous 157-tick run, but the >1,009 ticks/minute target remains unmet. The new lookup must pass full CI and a matched experiment before its performance effect is accepted.
 
 ## Frequency-index regression and rollback (2026-11-17)
 
