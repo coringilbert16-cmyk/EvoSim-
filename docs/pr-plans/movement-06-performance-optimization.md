@@ -64,3 +64,22 @@ The matched 60-second seed-42 run after the sorted-frequency-index change comple
 The sorted-frequency index and its differential test have therefore been reverted. The earlier all-pairs restructuring from commit 4d91b58190317ed7b786170149caf8f2a12bfd43 is retained unchanged. No interaction pairs, frequency tolerance, force law, placement rules, or chemistry behavior are intentionally changed by this rollback.
 
 Next validation: rerun the standard 60-second seed-42 movement-enabled experiment with the same 1,280-object workload and profiling enabled. Compare against 208 ticks/minute. Do not proceed to another optimization until this rollback measurement confirms the expected recovery.
+
+## Whole-tick profiling expansion (2026-11-17)
+
+The rollback experiment did not provide a fair comparison with the 208-tick run because the hosted runner image changed. The rollback run completed 136 ticks in 60.41 seconds; the pair loop measured 211.8 ms/tick and placement 72.8 ms/tick. A second run on the older runner image showed 139 ticks and a 291.2 ms/tick pair loop. The large shifts in both movement and placement timings make runner variation a material confounder. No further performance conclusion will be drawn from those cross-image comparisons.
+
+The next diagnostic pass expands beyond movement. An opt-in `EVOSIM_PROFILE_TICK` sampler records one tick in ten and separates:
+- Tick prelude and transformation/living-state work.
+- Ambient transport.
+- Resonance movement.
+- World-tone inputs and hotspot settlement.
+- Local resonance snapshot and environmental bond-index construction.
+- Environmental BREAK, COMBINE, and displacement discovery/resolution.
+- Organism chemistry and maintenance.
+- Organism decisions and movement.
+- Reproduction and tick finalization.
+
+The sampler is disabled by default and creates no timers or phase records on ordinary ticks when disabled. Existing movement profiling remains available independently. The experiment workflow now exposes the whole-tick profiler as a separate opt-in setting.
+
+The next standard experiment will collect both profiles on the same runner image and same 60-second seed-42 workload. We will use the measured phase costs to prioritize the next optimization, including non-movement work such as ambient transport snapshot construction and organism processing. No simulation behavior or chemistry rules are changed by this diagnostic instrumentation.
