@@ -1022,9 +1022,7 @@ impl ActiveMaterialField {
         // snapshot list for every candidate.
         let invalid_snapshot_count = snapshots
             .iter()
-            .filter(|snapshot| {
-                snapshot.original_parts.is_none() || snapshot.bounds.is_none()
-            })
+            .filter(|snapshot| snapshot.original_parts.is_none() || snapshot.bounds.is_none())
             .count();
         for (index, candidate) in candidates.iter_mut().enumerate() {
             let own_snapshot_is_invalid = snapshots.get(index).is_some_and(|snapshot| {
