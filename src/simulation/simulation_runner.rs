@@ -226,16 +226,19 @@ fn run_environment_chemistry_experiment(
         .cells
         .iter()
         .flat_map(|cell| cell.physical_materials.iter())
-        .fold((0_usize, 0_usize, 0_usize, 0_usize), |mut counts, material| {
-            counts.0 += 1;
-            counts.3 += material.material.parts.len();
-            if material.material.parts.len() == 1 {
-                counts.1 += 1;
-            } else {
-                counts.2 += 1;
-            }
-            counts
-        });
+        .fold(
+            (0_usize, 0_usize, 0_usize, 0_usize),
+            |mut counts, material| {
+                counts.0 += 1;
+                counts.3 += material.material.parts.len();
+                if material.material.parts.len() == 1 {
+                    counts.1 += 1;
+                } else {
+                    counts.2 += 1;
+                }
+                counts
+            },
+        );
 
     println!(
         "ENVIRONMENTAL CHEMISTRY START: seed={seed} duration_seconds={:?} tick_limit={:?} organisms={} independent_resources={independent_resources} molecules={molecules} constituents={constituents} physical_objects={physical_objects} piles={:?} hotspot={:?} diagnostics={diagnostics_path}",
