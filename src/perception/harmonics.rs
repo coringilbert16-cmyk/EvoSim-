@@ -1974,23 +1974,15 @@ fn environmental_movement_phase_components(
 }
 
 #[inline]
-fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
+fn environmental_movement_cross_energy(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
-    frequency_comparisons: &mut u64,
-    frequency_matches: &mut u64,
 ) -> Option<f64> {
     let mut energy = 0.0;
     for left in &a.phase_components[..a.phase_component_count] {
         for right in &b.phase_components[..b.phase_component_count] {
-            if PROFILE {
-                *frequency_comparisons += 1;
-            }
             if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
                 continue;
-            }
-            if PROFILE {
-                *frequency_matches += 1;
             }
             energy += 2.0
                 * (left.in_phase_amplitude * right.in_phase_amplitude
@@ -2003,15 +1995,7 @@ fn environmental_movement_cross_energy_inner<const PROFILE: bool>(
     Some(energy)
 }
 
-fn environmental_movement_cross_energy(
-    a: &EnvironmentalMovementEmitter,
-    b: &EnvironmentalMovementEmitter,
-) -> Option<f64> {
-    let mut comparisons = 0;
-    let mut matches = 0;
-    environmental_movement_cross_energy_inner::<false>(a, b, &mut comparisons, &mut matches)
-}
-
+#[inline]
 fn environmental_movement_cross_energy_profiled(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
@@ -2019,15 +2003,26 @@ fn environmental_movement_cross_energy_profiled(
     frequency_comparisons: &mut u64,
     frequency_matches: &mut u64,
 ) -> Option<f64> {
-    let mut comparisons = 0_u64;
-    let mut matches = 0_u64;
     let started = std::time::Instant::now();
-    let energy =
-        environmental_movement_cross_energy_inner::<true>(a, b, &mut comparisons, &mut matches);
+    let mut energy = 0.0;
+    for left in &a.phase_components[..a.phase_component_count] {
+        for right in &b.phase_components[..b.phase_component_count] {
+            *frequency_comparisons += 1;
+            if (left.frequency_cycles_per_day - right.frequency_cycles_per_day).abs() > 1e-9 {
+                continue;
+            }
+            *frequency_matches += 1;
+            energy += 2.0
+                * (left.in_phase_amplitude * right.in_phase_amplitude
+                    + left.quadrature_amplitude * right.quadrature_amplitude);
+            if !energy.is_finite() {
+                *matching_ns += started.elapsed().as_nanos();
+                return None;
+            }
+        }
+    }
     *matching_ns += started.elapsed().as_nanos();
-    *frequency_comparisons += comparisons;
-    *frequency_matches += matches;
-    energy
+    Some(energy)
 }
 
 fn environmental_movement_emitter(
