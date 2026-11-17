@@ -94,6 +94,147 @@ fn initial_material_identity() -> u64 {
     1
 }
 
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MovementBounds {
+    min_x: f64,
+    max_x: f64,
+    min_y: f64,
+    max_y: f64,
+}
+
+impl MovementBounds {
+    fn from_parts(parts: &[crate::material_geometry::PlacedMaterialPart]) -> Option<Self> {
+        let mut bounds = Self {
+            min_x: f64::INFINITY,
+            max_x: f64::NEG_INFINITY,
+            min_y: f64::INFINITY,
+            max_y: f64::NEG_INFINITY,
+        };
+        for part in parts {
+            let radius = part.form.bounding_radius();
+            if !radius.is_finite()
+                || radius < 0.0
+                || !part.placement.x.is_finite()
+                || !part.placement.y.is_finite()
+            {
+                return None;
+            }
+            bounds.min_x = bounds.min_x.min(part.placement.x - radius);
+            bounds.max_x = bounds.max_x.max(part.placement.x + radius);
+            bounds.min_y = bounds.min_y.min(part.placement.y - radius);
+            bounds.max_y = bounds.max_y.max(part.placement.y + radius);
+        }
+        (!parts.is_empty()).then_some(bounds)
+    }
+
+    fn overlaps(self, other: Self) -> bool {
+        let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
+        self.min_x <= other.max_x + epsilon
+            && other.min_x <= self.max_x + epsilon
+            && self.min_y <= other.max_y + epsilon
+            && other.min_y <= self.max_y + epsilon
+    }
+}
+
+/// Return every overlapping pair once. The sweep only removes pairs whose
+/// conservative x intervals cannot overlap; the full AABB test remains the
+/// authoritative broad phase before exact placed-form intersection.
+fn movement_overlapping_pairs(bounds: &[MovementBounds]) -> Vec<(usize, usize)> {
+    let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
+    let mut order: Vec<_> = (0..bounds.len()).collect();
+    order.sort_unstable_by(|&a, &b| {
+        bounds[a]
+            .min_x
+            .total_cmp(&bounds[b].min_x)
+            .then_with(|| a.cmp(&b))
+    });
+
+    let mut active = Vec::new();
+    let mut pairs = Vec::new();
+    for current in order {
+        let current_bounds = bounds[current];
+        active.retain(|&other| bounds[other].max_x + epsilon >= current_bounds.min_x);
+        for &other in &active {
+            if current_bounds.overlaps(bounds[other]) {
+                pairs.push((other.min(current), other.max(current)));
+            }
+        }
+        active.push(current);
+    }
+    pairs.sort_unstable();
+    pairs
+}
+
+/// Return (query index, target index) for all cross-set AABB overlaps.
+/// Both sets are swept together, so queries whose minimum x precedes a target
+/// are retained and compared when that target enters the active interval.
+fn movement_cross_overlapping_pairs(
+    query_bounds: &[MovementBounds],
+    target_bounds: &[MovementBounds],
+) -> Vec<(usize, usize)> {
+    #[derive(Clone, Copy)]
+    struct Event {
+        min_x: f64,
+        max_x: f64,
+        index: usize,
+        is_target: bool,
+    }
+
+    let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
+    let mut events = Vec::with_capacity(query_bounds.len() + target_bounds.len());
+    events.extend(query_bounds.iter().enumerate().map(|(index, bounds)| Event {
+        min_x: bounds.min_x,
+        max_x: bounds.max_x,
+        index,
+        is_target: false,
+    }));
+    events.extend(target_bounds.iter().enumerate().map(|(index, bounds)| Event {
+        min_x: bounds.min_x,
+        max_x: bounds.max_x,
+        index,
+        is_target: true,
+    }));
+    events.sort_unstable_by(|a, b| {
+        a.min_x
+            .total_cmp(&b.min_x)
+            .then_with(|| b.is_target.cmp(&a.is_target))
+            .then_with(|| a.index.cmp(&b.index))
+    });
+
+    let mut active: Vec<Event> = Vec::new();
+    let mut pairs = Vec::new();
+    for event in events {
+        active.retain(|other| other.max_x + epsilon >= event.min_x);
+        let current_bounds = if event.is_target {
+            target_bounds[event.index]
+        } else {
+            query_bounds[event.index]
+        };
+        for other in &active {
+            if event.is_target == other.is_target {
+                continue;
+            }
+            let other_bounds = if other.is_target {
+                target_bounds[other.index]
+            } else {
+                query_bounds[other.index]
+            };
+            if current_bounds.overlaps(other_bounds) {
+                let pair = if event.is_target {
+                    (other.index, event.index)
+                } else {
+                    (event.index, other.index)
+                };
+                pairs.push(pair);
+            }
+        }
+        active.push(event);
+    }
+    pairs.sort_unstable();
+    pairs
+}
+
 pub(crate) enum FieldDeposit {
     Logical(Material),
     Physical(PhysicalMaterial),
@@ -712,46 +853,7 @@ impl ActiveMaterialField {
     ) -> usize {
         use std::collections::{HashMap, HashSet};
 
-        #[derive(Clone, Copy)]
-        struct Bounds {
-            min_x: f64,
-            max_x: f64,
-            min_y: f64,
-            max_y: f64,
-        }
-        impl Bounds {
-            fn from_parts(parts: &[crate::material_geometry::PlacedMaterialPart]) -> Option<Self> {
-                let mut bounds = Self {
-                    min_x: f64::INFINITY,
-                    max_x: f64::NEG_INFINITY,
-                    min_y: f64::INFINITY,
-                    max_y: f64::NEG_INFINITY,
-                };
-                for part in parts {
-                    let radius = part.form.bounding_radius();
-                    if !radius.is_finite()
-                        || radius < 0.0
-                        || !part.placement.x.is_finite()
-                        || !part.placement.y.is_finite()
-                    {
-                        return None;
-                    }
-                    bounds.min_x = bounds.min_x.min(part.placement.x - radius);
-                    bounds.max_x = bounds.max_x.max(part.placement.x + radius);
-                    bounds.min_y = bounds.min_y.min(part.placement.y - radius);
-                    bounds.max_y = bounds.max_y.max(part.placement.y + radius);
-                }
-                (!parts.is_empty()).then_some(bounds)
-            }
-
-            fn overlaps(self, other: Self) -> bool {
-                let epsilon = crate::material_geometry::GEOMETRY_EPSILON;
-                self.min_x <= other.max_x + epsilon
-                    && other.min_x <= self.max_x + epsilon
-                    && self.min_y <= other.max_y + epsilon
-                    && other.min_y <= self.max_y + epsilon
-            }
-        }
+        type Bounds = MovementBounds;
         struct Snapshot {
             identity: u64,
             source_cell: usize,
@@ -906,27 +1008,46 @@ impl ActiveMaterialField {
         let mut original_collision_rejections = 0usize;
         let original_collision_started = std::time::Instant::now();
 
-        // Preserve the existing transaction's conservative rule: a candidate
-        // may not penetrate any other object's current placement, even if that
-        // other object also proposes a move.
-        for (index, candidate_slot) in candidates.iter_mut().enumerate() {
-            let Some(candidate) = candidate_slot.as_ref() else {
-                continue;
-            };
-            let collides = snapshots.iter().enumerate().any(|(other_index, other)| {
-                if other_index == index {
-                    return false;
+        // Invalid original geometry remains fail-closed exactly as before: any
+        // candidate is rejected when another snapshot cannot be bounded.
+        let has_invalid_snapshot = snapshots
+            .iter()
+            .any(|snapshot| snapshot.original_parts.is_none() || snapshot.bounds.is_none());
+        if has_invalid_snapshot {
+            for candidate in candidates.iter_mut().flatten() {
+                candidate.accepted = false;
+                original_collision_rejections += 1;
+            }
+        } else {
+            let snapshot_bounds: Vec<_> = snapshots
+                .iter()
+                .map(|snapshot| snapshot.bounds.expect("validated snapshot bounds"))
+                .collect();
+            let mut candidate_indices = Vec::new();
+            let mut candidate_bounds = Vec::new();
+            for (index, candidate) in candidates.iter().enumerate() {
+                if let Some(candidate) = candidate {
+                    candidate_indices.push(index);
+                    candidate_bounds.push(candidate.bounds);
                 }
-                let Some(other_parts) = other.original_parts.as_ref() else {
-                    return true;
-                };
-                let Some(other_bounds) = other.bounds else {
-                    return true;
-                };
-                if !candidate.bounds.overlaps(other_bounds) {
-                    return false;
+            }
+
+            let possible_collisions =
+                movement_cross_overlapping_pairs(&candidate_bounds, &snapshot_bounds);
+            let mut colliding_candidates = vec![false; candidates.len()];
+            for (candidate_slot, other_index) in possible_collisions {
+                let candidate_index = candidate_indices[candidate_slot];
+                if candidate_index == other_index {
+                    continue;
                 }
-                candidate.parts.iter().any(|part| {
+                let candidate = candidates[candidate_index]
+                    .as_ref()
+                    .expect("candidate index must remain populated");
+                let other_parts = snapshots[other_index]
+                    .original_parts
+                    .as_ref()
+                    .expect("validated snapshot geometry");
+                let collides = candidate.parts.iter().any(|part| {
                     other_parts.iter().any(|other_part| {
                         crate::material_geometry::placed_forms_penetrate(
                             part,
@@ -934,47 +1055,67 @@ impl ActiveMaterialField {
                             crate::material_geometry::GEOMETRY_EPSILON,
                         )
                     })
-                })
-            });
-            if collides {
-                original_collision_rejections += 1;
-                candidate_slot.as_mut().expect("candidate exists").accepted = false;
+                });
+                colliding_candidates[candidate_index] |= collides;
+            }
+            for (index, collides) in colliding_candidates.into_iter().enumerate() {
+                if collides {
+                    original_collision_rejections += 1;
+                    candidates[index]
+                        .as_mut()
+                        .expect("colliding candidate must exist")
+                        .accepted = false;
+                }
             }
         }
         let original_collision_elapsed = original_collision_started.elapsed();
         let mut mover_overlap_rejections = 0usize;
         let mover_overlap_started = std::time::Instant::now();
 
-        // Also reject both movers if their proposed final placements intersect.
-        for a in 0..candidates.len() {
-            for b in (a + 1)..candidates.len() {
-                let overlaps = {
-                    let (Some(a_candidate), Some(b_candidate)) =
-                        (candidates[a].as_ref(), candidates[b].as_ref())
-                    else {
-                        continue;
-                    };
-                    if !a_candidate.bounds.overlaps(b_candidate.bounds) {
-                        continue;
-                    }
-                    a_candidate.parts.iter().any(|part| {
-                        b_candidate.parts.iter().any(|other_part| {
-                            crate::material_geometry::placed_forms_penetrate(
-                                part,
-                                other_part,
-                                crate::material_geometry::GEOMETRY_EPSILON,
-                            )
-                        })
-                    })
-                };
-                if overlaps {
-                    mover_overlap_rejections += 1;
-                    candidates[a].as_mut().expect("candidate exists").accepted = false;
-                    candidates[b].as_mut().expect("candidate exists").accepted = false;
-                }
+        // The sweep emits every overlapping candidate AABB pair, independent
+        // of current acceptance. Exact shape penetration remains authoritative.
+        let mut mover_indices = Vec::new();
+        let mut mover_bounds = Vec::new();
+        for (index, candidate) in candidates.iter().enumerate() {
+            if let Some(candidate) = candidate {
+                mover_indices.push(index);
+                mover_bounds.push(candidate.bounds);
             }
         }
-
+        let possible_mover_overlaps = movement_overlapping_pairs(&mover_bounds);
+        let mut overlapping_movers = vec![false; candidates.len()];
+        for (a_slot, b_slot) in possible_mover_overlaps {
+            let a = mover_indices[a_slot];
+            let b = mover_indices[b_slot];
+            let a_candidate = candidates[a]
+                .as_ref()
+                .expect("mover candidate must remain populated");
+            let b_candidate = candidates[b]
+                .as_ref()
+                .expect("mover candidate must remain populated");
+            let overlaps = a_candidate.parts.iter().any(|part| {
+                b_candidate.parts.iter().any(|other_part| {
+                    crate::material_geometry::placed_forms_penetrate(
+                        part,
+                        other_part,
+                        crate::material_geometry::GEOMETRY_EPSILON,
+                    )
+                })
+            });
+            if overlaps {
+                mover_overlap_rejections += 1;
+                overlapping_movers[a] = true;
+                overlapping_movers[b] = true;
+            }
+        }
+        for (index, overlaps) in overlapping_movers.into_iter().enumerate() {
+            if overlaps {
+                candidates[index]
+                    .as_mut()
+                    .expect("overlapping mover candidate must exist")
+                    .accepted = false;
+            }
+        }
         let mover_overlap_elapsed = mover_overlap_started.elapsed();
         let candidates_count_for_profile = candidates
             .iter()
@@ -1470,3 +1611,121 @@ fn distribute_evenly(
 #[cfg(test)]
 #[path = "../tests/environment_tests.rs"]
 mod environment_tests;
+
+
+#[cfg(test)]
+mod movement_placement_sweep_tests {
+    use super::{movement_cross_overlapping_pairs, movement_overlapping_pairs, MovementBounds};
+
+    fn bounds(min_x: f64, max_x: f64, min_y: f64, max_y: f64) -> MovementBounds {
+        MovementBounds {
+            min_x,
+            max_x,
+            min_y,
+            max_y,
+        }
+    }
+
+    fn brute_force_pairs(bounds: &[MovementBounds]) -> Vec<(usize, usize)> {
+        let mut pairs = Vec::new();
+        for a in 0..bounds.len() {
+            for b in (a + 1)..bounds.len() {
+                if bounds[a].overlaps(bounds[b]) {
+                    pairs.push((a, b));
+                }
+            }
+        }
+        pairs
+    }
+
+    fn brute_force_cross(
+        query: &[MovementBounds],
+        target: &[MovementBounds],
+    ) -> Vec<(usize, usize)> {
+        let mut pairs = Vec::new();
+        for (query_index, query_bounds) in query.iter().enumerate() {
+            for (target_index, target_bounds) in target.iter().enumerate() {
+                if query_bounds.overlaps(*target_bounds) {
+                    pairs.push((query_index, target_index));
+                }
+            }
+        }
+        pairs
+    }
+
+    #[test]
+    fn sweep_matches_brute_force_for_adversarial_intervals() {
+        let cases = [
+            vec![
+                bounds(0.0, 4.0, 0.0, 4.0),
+                bounds(4.0, 8.0, 0.0, 4.0),
+                bounds(8.0, 12.0, 0.0, 4.0),
+                bounds(1.0, 2.0, 8.0, 9.0),
+                bounds(2.0, 3.0, 2.0, 3.0),
+            ],
+            vec![
+                bounds(-10.0, 10.0, -10.0, 10.0),
+                bounds(-9.0, 9.0, -9.0, 9.0),
+                bounds(10.0, 11.0, 0.0, 1.0),
+                bounds(11.0, 12.0, 0.0, 1.0),
+            ],
+            vec![
+                bounds(0.0, 1.0, 0.0, 1.0),
+                bounds(1.0 + crate::material_geometry::GEOMETRY_EPSILON, 2.0, 0.0, 1.0),
+                bounds(1.0 + 2.0 * crate::material_geometry::GEOMETRY_EPSILON, 2.0, 0.0, 1.0),
+            ],
+        ];
+        for case in cases {
+            assert_eq!(movement_overlapping_pairs(&case), brute_force_pairs(&case));
+        }
+    }
+
+    #[test]
+    fn cross_sweep_matches_brute_force_when_queries_start_before_targets() {
+        let query = [
+            bounds(0.0, 10.0, 0.0, 10.0),
+            bounds(5.0, 6.0, 5.0, 6.0),
+            bounds(20.0, 21.0, 0.0, 1.0),
+        ];
+        let target = [
+            bounds(8.0, 9.0, 8.0, 9.0),
+            bounds(0.0, 1.0, 0.0, 1.0),
+            bounds(6.0, 7.0, 5.0, 6.0),
+        ];
+        assert_eq!(
+            movement_cross_overlapping_pairs(&query, &target),
+            brute_force_cross(&query, &target)
+        );
+    }
+
+    #[test]
+    fn sweep_matches_brute_force_for_deterministic_randomized_bounds() {
+        let mut state = 0x9e37_79b9_u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state as f64 / u64::MAX as f64) * 200.0 - 100.0
+        };
+        for count in [1, 2, 7, 32, 127] {
+            let generated: Vec<_> = (0..count)
+                .map(|_| {
+                    let x = next();
+                    let y = next();
+                    let width = next().abs() * 0.05;
+                    let height = next().abs() * 0.05;
+                    bounds(x, x + width, y, y + height)
+                })
+                .collect();
+            assert_eq!(
+                movement_overlapping_pairs(&generated),
+                brute_force_pairs(&generated)
+            );
+            let split = count / 2;
+            assert_eq!(
+                movement_cross_overlapping_pairs(&generated[..split], &generated[split..]),
+                brute_force_cross(&generated[..split], &generated[split..])
+            );
+        }
+    }
+}
