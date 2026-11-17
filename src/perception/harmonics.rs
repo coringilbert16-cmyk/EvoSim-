@@ -2023,7 +2023,6 @@ fn environmental_movement_matching_mask(
     }
     let start = low;
 
-    low = start;
     high = order.len();
     while low < high {
         let middle = low + (high - low) / 2;
