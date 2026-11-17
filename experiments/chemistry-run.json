@@ -1,10 +1,10 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [
     42
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Reset one-shot experiment trigger before controlled broadphase profiling run.",
+  "request_note": "Controlled 60-second seed-42 movement broadphase profiling run.",
   "profile_movement": true
 }
