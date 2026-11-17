@@ -83,3 +83,25 @@ The next diagnostic pass expands beyond movement. An opt-in `EVOSIM_PROFILE_TICK
 The sampler is disabled by default and creates no timers or phase records on ordinary ticks when disabled. Existing movement profiling remains available independently. The experiment workflow now exposes the whole-tick profiler as a separate opt-in setting.
 
 The next standard experiment will collect both profiles on the same runner image and same 60-second seed-42 workload. We will use the measured phase costs to prioritize the next optimization, including non-movement work such as ambient transport snapshot construction and organism processing. No simulation behavior or chemistry rules are changed by this diagnostic instrumentation.
+
+## Whole-tick profile results (seed 42, 60 seconds)
+
+The first expanded-profile run completed 164 ticks in 60.085 seconds (about 164 ticks/minute), with 1,280 initial physical objects and 1,360 constituents. The run used the Ubuntu 26.04.1 hosted image. It retained 1,286 physical resources and 1,360 constituents at completion; the energy residual was approximately `-4.92e-7`.
+
+Median sampled phase times across 16 samples (one tick in ten):
+
+| Phase | Median |
+|---|---:|
+| Resonance movement | 246.2 ms/tick |
+| World-tone organism settlement plus hotspot | 79.6 ms/tick |
+| Environmental BREAK discovery | 12.4 ms/tick |
+| Ambient transport | 11.5 ms/tick |
+| Environmental BREAK resolution and event recording | 9.7 ms/tick |
+| Resonance snapshot plus environmental bond index | 2.7 ms/tick |
+| Environmental COMBINE discovery | 0.23 ms/tick |
+| Displacement discovery | 0.34 ms/tick |
+| Organism processing | below 0.01 ms/tick in this organism-free workload |
+
+The movement subprofile measured a median 181.7 ms/tick in the resonance pair loop and 58.3 ms/tick in placement validation. Thus movement remains the largest measured cost, but the combined world-tone/hotspot phase is a substantial second target. The organism phases are effectively absent because this standard chemistry workload starts with zero organisms; they must be measured separately on an organism-present workload before generalizing.
+
+The run confirms that the next optimization should not be selected solely from movement profiling. I split the world-input measurement into world-tone organism settlement and hotspot settlement to identify which part owns the approximately 80 ms/tick. No physics or chemistry behavior is changed by this instrumentation.
