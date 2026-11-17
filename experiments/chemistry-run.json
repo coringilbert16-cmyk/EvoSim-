@@ -5,6 +5,6 @@
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR359 60-second seed-42 benchmark after ordered resonance frequency matching optimization.",
-  "profile_movement": true
+  "request_note": "PR359 functional integration validation with resonance matching optimization deferred.",
+  "profile_movement": false
 }
