@@ -1,8 +1,10 @@
 {
   "run": true,
-  "seeds": [42],
+  "seeds": [
+    42
+  ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "PR359 controlled 60-second seed-42 post-optimization benchmark; profile movement stages.",
+  "request_note": "PR359 60-second seed-42 benchmark after ordered resonance frequency matching optimization.",
   "profile_movement": true
 }
