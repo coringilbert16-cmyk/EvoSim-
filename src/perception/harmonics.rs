@@ -2003,12 +2003,19 @@ fn environmental_movement_matching_mask(
     let order = &emitter.frequency_order[..emitter.phase_component_count];
     let mut comparisons = 0_u64;
 
+    // Expand the search interval by a rounding margin, then apply the exact
+    // original absolute-difference predicate below. This keeps the binary
+    // search a conservative candidate filter, never the source of eligibility.
+    let rounding_margin = 2.0 * f64::EPSILON * frequency.abs().max(1.0);
+    let lower_bound = frequency - 1e-9 - rounding_margin;
+    let upper_bound = frequency + 1e-9 + rounding_margin;
+
     let mut low = 0;
     let mut high = order.len();
     while low < high {
         let middle = low + (high - low) / 2;
         comparisons += 1;
-        if emitter.phase_components[order[middle]].frequency_cycles_per_day < frequency - 1e-9 {
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day < lower_bound {
             low = middle + 1;
         } else {
             high = middle;
@@ -2021,7 +2028,7 @@ fn environmental_movement_matching_mask(
     while low < high {
         let middle = low + (high - low) / 2;
         comparisons += 1;
-        if emitter.phase_components[order[middle]].frequency_cycles_per_day <= frequency + 1e-9 {
+        if emitter.phase_components[order[middle]].frequency_cycles_per_day <= upper_bound {
             low = middle + 1;
         } else {
             high = middle;
@@ -2030,7 +2037,9 @@ fn environmental_movement_matching_mask(
 
     let mut mask = 0_u8;
     for &index in &order[start..low] {
-        mask |= 1 << index;
+        if (frequency - emitter.phase_components[index].frequency_cycles_per_day).abs() <= 1e-9 {
+            mask |= 1 << index;
+        }
     }
     (mask, comparisons)
 }
