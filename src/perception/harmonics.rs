@@ -1973,8 +1973,10 @@ fn environmental_movement_phase_components(
     // Pair evaluation benefits from ordered frequency windows. The source
     // spectrum is amplitude-sorted, so normalize this small fixed array once
     // per emitter rather than scanning every component pair for every object pair.
-    phase_components[..spectrum.components.len()]
-        .sort_unstable_by(|a, b| a.frequency_cycles_per_day.total_cmp(&b.frequency_cycles_per_day));
+    phase_components[..spectrum.components.len()].sort_unstable_by(|a, b| {
+        a.frequency_cycles_per_day
+            .total_cmp(&b.frequency_cycles_per_day)
+    });
     Some((phase_components, spectrum.components.len()))
 }
 
@@ -2055,8 +2057,10 @@ mod environmental_movement_frequency_match_tests {
                 quadrature_amplitude: index as f64 * 0.25,
             };
         }
-        phase_components[..frequencies.len()]
-            .sort_unstable_by(|a, b| a.frequency_cycles_per_day.total_cmp(&b.frequency_cycles_per_day));
+        phase_components[..frequencies.len()].sort_unstable_by(|a, b| {
+            a.frequency_cycles_per_day
+                .total_cmp(&b.frequency_cycles_per_day)
+        });
         EnvironmentalMovementEmitter {
             x: 0.0,
             y: 0.0,
@@ -2101,7 +2105,10 @@ mod environmental_movement_frequency_match_tests {
 
         assert!((actual - reference_cross_energy(&a, &b)).abs() < 1e-12);
         assert_eq!(matches, 3);
-        assert!(comparisons < 16, "ordered scan should avoid the full 4x4 comparison");
+        assert!(
+            comparisons < 16,
+            "ordered scan should avoid the full 4x4 comparison"
+        );
     }
 
     #[test]
@@ -2124,7 +2131,6 @@ mod environmental_movement_frequency_match_tests {
         assert!(comparisons < 16);
     }
 }
-
 
 fn environmental_movement_cross_energy_profiled(
     a: &EnvironmentalMovementEmitter,
