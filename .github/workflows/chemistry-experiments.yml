@@ -24,7 +24,7 @@ on:
         default: false
         type: boolean
   push:
-    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance]
+    branches: [main, chemistry/reaction-network-diagnostics, movement/03-chemistry-integration, movement/05-performance-acceptance, movement/06-performance-optimization]
     paths:
       - experiments/chemistry-run.json
 
