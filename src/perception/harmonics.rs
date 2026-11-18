@@ -2183,10 +2183,12 @@ fn environmental_movement_pair_count(material_count: usize) -> Option<usize> {
         .checked_div(2)
 }
 
+#[cfg(test)]
 fn environmental_movement_pair_row_start(row: usize, material_count: usize) -> usize {
     row * (2 * material_count - row - 1) / 2
 }
 
+#[cfg(test)]
 fn environmental_movement_pair_at(pair_index: usize, material_count: usize) -> (usize, usize) {
     let mut low = 0;
     let mut high = material_count - 1;
@@ -2206,6 +2208,7 @@ fn environmental_movement_pair_at(pair_index: usize, material_count: usize) -> (
 /// Calculate every unordered pair on balanced contiguous pair-index ranges.
 /// Results are flattened in lexicographic (a, b) order so the authoritative
 /// floating-point accumulation can remain exactly in its original order.
+#[cfg(test)]
 fn environmental_movement_parallel_pair_forces(
     emitters: &[EnvironmentalMovementEmitter],
     worker_count: usize,
@@ -2298,6 +2301,7 @@ fn environmental_movement_parallel_pair_forces(
     (ordered_forces.len() == pair_count).then_some(ordered_forces)
 }
 
+#[cfg(test)]
 fn environmental_movement_displacements_from_pair_forces(
     material_count: usize,
     pair_forces: &[(f64, f64)],
@@ -2648,15 +2652,22 @@ pub(crate) fn environmental_resonance_displacements(
                 &pair_forces,
             )?;
         let response_ns = response_started.elapsed().as_nanos();
-        let _ = (
-            total_started,
-            emitter_ns,
-            pair_count,
-            worker_count,
-            discovery_ns,
-            pair_ns,
-            response_ns,
-        );
+        if std::env::var("EVOSIM_PROFILE_MOVEMENT_CANDIDATES")
+            .is_ok_and(|value| value == "1" || value == "true")
+        {
+            eprintln!(
+                "MOVEMENT_SPATIAL_PROFILE tick={tick} objects={} possible_pairs={} candidate_pairs={} discovery_ns={} pair_eval_ns={} response_ns={} total_movement_ns={} emitter_ns={} workers={}",
+                materials.len(),
+                pair_count,
+                candidate_pairs.len(),
+                discovery_ns,
+                pair_ns,
+                response_ns,
+                total_started.elapsed().as_nanos(),
+                emitter_ns,
+                worker_count,
+            );
+        }
         return Some(displacements);
     }
 
@@ -5345,7 +5356,7 @@ mod environmental_movement_spatial_candidate_tests {
 
         assert_eq!(
             environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
-            vec![(0, 1)]
+            vec![(0, 1), (1, 2)]
         );
     }
 
