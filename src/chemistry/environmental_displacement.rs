@@ -2902,15 +2902,9 @@ mod tests {
         anchor_unit: usize,
         molecule: &crate::physical_material::PhysicalMaterial,
         active_part: usize,
+        minimum_activation_increment: f64,
         catalog: &[BaseResource],
     ) -> Option<(OrganismStructure, Vec<usize>, ConnectionPairCandidate, f64)> {
-        let mut best: Option<(
-            OrganismStructure,
-            Vec<usize>,
-            ConnectionPairCandidate,
-            f64,
-            f64,
-        )> = None;
         for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
@@ -2979,25 +2973,14 @@ mod tests {
                         ) else {
                             continue;
                         };
-                        if best
-                            .as_ref()
-                            .map_or(true, |current| activation_increment > current.4)
-                        {
-                            best = Some((
-                                combined.clone(),
-                                indices.clone(),
-                                candidate,
-                                investment,
-                                activation_increment,
-                            ));
+                        if activation_increment >= minimum_activation_increment {
+                            return Some((combined, indices, candidate, investment));
                         }
                     }
                 }
             }
         }
-        best.map(|(combined, indices, candidate, investment, _)| {
-            (combined, indices, candidate, investment)
-        })
+        None
     }
 
     /// Find a standalone target atom that can replace the catalyst's temporary
@@ -3007,9 +2990,9 @@ mod tests {
         old_bond: Bond,
         anchor_unit: usize,
         target_name: &str,
+        minimum_activation_increment: f64,
         catalog: &[BaseResource],
     ) -> Option<(OrganismStructure, usize, ConnectionPairCandidate, f64)> {
-        let mut best: Option<(OrganismStructure, usize, ConnectionPairCandidate, f64, f64)> = None;
         for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
@@ -3073,25 +3056,14 @@ mod tests {
                         ) else {
                             continue;
                         };
-                        if best
-                            .as_ref()
-                            .map_or(true, |current| activation_increment > current.4)
-                        {
-                            best = Some((
-                                combined.clone(),
-                                incoming_unit,
-                                candidate,
-                                investment,
-                                activation_increment,
-                            ));
+                        if activation_increment >= minimum_activation_increment {
+                            return Some((combined, incoming_unit, candidate, investment));
                         }
                     }
                 }
             }
         }
-        best.map(|(combined, incoming_unit, candidate, investment, _)| {
-            (combined, incoming_unit, candidate, investment)
-        })
+        None
     }
 
     /// Calculate activation from sustained ordinary contact, without seeding
@@ -3163,6 +3135,7 @@ mod tests {
                 old_substrate_bond,
                 0,
                 "Hydrogen",
+                0.0,
                 &catalog,
             )
             .expect("direct P-H control must find a valid contact");
@@ -3183,6 +3156,17 @@ mod tests {
         // O-H and O-P are tested as oxygen carriers. Oxygen binds phosphorus
         // strongly, while the temporary P-O bond is less intact and more
         // reactive than the original P-C substrate bond.
+        let substrate_anchor = substrate_structure.units[0].properties(&catalog).unwrap();
+        let substrate_displaced = substrate_structure.units[1].properties(&catalog).unwrap();
+        let first_barrier = crate::chemistry::activation_barrier_from_bond_properties(
+            old_substrate_bond.strength,
+            substrate_anchor.reactivity,
+            substrate_displaced.reactivity,
+            catalog_reactivity_baseline(),
+        )
+        .unwrap();
+        let first_minimum_increment =
+            first_barrier * crate::chemistry::CHEMICAL_DISSIPATION * 1.1;
         for carrier_partner in ["Hydrogen", "Phosphorus"] {
             let carrier = crate::environment_chemistry_experiment::realize_natural_molecule(
                 &["Oxygen".to_owned(), carrier_partner.to_owned()],
@@ -3196,6 +3180,7 @@ mod tests {
                     0,
                     &carrier,
                     0,
+                    first_minimum_increment,
                     &catalog,
                 )
                 .unwrap_or_else(|| {
@@ -3260,6 +3245,18 @@ mod tests {
                     intermediate_bond,
                     0,
                     "Hydrogen",
+                    crate::chemistry::activation_barrier_from_bond_properties(
+                        intermediate_bond.strength,
+                        first_trial.structure.units[0].properties(&catalog).unwrap().reactivity,
+                        first_trial.structure.units[carrier_indices[0]]
+                            .properties(&catalog)
+                            .unwrap()
+                            .reactivity,
+                        catalog_reactivity_baseline(),
+                    )
+                    .unwrap()
+                        * crate::chemistry::CHEMICAL_DISSIPATION
+                        * 1.1,
                     &catalog,
                 )
                 .expect("Hydrogen target must find a valid contact with the temporary P-O bond");
