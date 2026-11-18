@@ -324,6 +324,7 @@ fn run_environment_chemistry_experiment(
         .finish(&simulation)
         .expect("failed to finalize environmental chemistry diagnostics");
     let final_inventory = simulation.energy_inventory_snapshot();
+    crate::property_profile::report();
     println!(
         "ENVIRONMENTAL CHEMISTRY END: tick={} elapsed_wall_seconds={:.3} physical_resources={} constituents={} last_tick_COMBINE_committed={} last_tick_BREAK_committed={} energy_residual={:?} diagnostics={diagnostics_path}",
         simulation.tick,
