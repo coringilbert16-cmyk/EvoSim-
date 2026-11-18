@@ -1181,10 +1181,7 @@ mod genome_core_identity_tests {
             .expect("initial realization should establish a cache key");
 
         organism.mark_position_changed();
-        let _ = organism.developmental_realization_cached_for_reference(
-            &catalog,
-            first_reference,
-        );
+        let _ = organism.developmental_realization_cached_for_reference(&catalog, first_reference);
         let moved_key = organism
             .cached_developmental_revision
             .expect("moved realization should establish a cache key");
