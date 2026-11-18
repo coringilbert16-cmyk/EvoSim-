@@ -97,6 +97,8 @@ mod combine_runtime;
 mod decomposition;
 #[path = "infrastructure/diagnostics.rs"]
 mod diagnostics;
+#[path = "infrastructure/property_profile.rs"]
+mod property_profile;
 #[allow(
     dead_code,
     reason = "Staged graph analysis API is integrated in a later chemistry stage"
