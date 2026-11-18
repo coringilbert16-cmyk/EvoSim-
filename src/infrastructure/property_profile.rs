@@ -20,15 +20,14 @@ pub(crate) enum Metric {
     StructuralUnitValidationSite = 7,
     EnvironmentalMovementValidationSite = 8,
     BroadPhaseValidationSite = 9,
-    EnvironmentSnapshotValidationSite = 10,
-    MaterialStorageValidationSite = 11,
-    PhysicalMaterialShapeValidationSite = 12,
-    PhysicalMaterialConstructionValidationSite = 13,
-    StructuralUnitGeometryValidationSite = 14,
-    EnvironmentMutationValidationSite = 15,
+    MaterialStorageValidationSite = 10,
+    PhysicalMaterialShapeValidationSite = 11,
+    PhysicalMaterialConstructionValidationSite = 12,
+    StructuralUnitGeometryValidationSite = 13,
+    EnvironmentMutationValidationSite = 14,
 }
 
-const METRIC_COUNT: usize = 16;
+const METRIC_COUNT: usize = 15;
 
 struct Counter {
     calls: AtomicU64,
@@ -46,7 +45,6 @@ impl Counter {
 
 static ENABLED: OnceLock<bool> = OnceLock::new();
 static COUNTERS: [Counter; METRIC_COUNT] = [
-    Counter::new(),
     Counter::new(),
     Counter::new(),
     Counter::new(),
@@ -117,8 +115,7 @@ pub(crate) fn report() {
         "structural_unit_validation_site",
         "environmental_movement_validation_site",
         "broad_phase_validation_site",
-        "environment_snapshot_validation_site",
-        "material_storage_validation_site",
+            "material_storage_validation_site",
         "physical_material_shape_validation_site",
         "physical_material_construction_validation_site",
         "structural_unit_geometry_validation_site",
