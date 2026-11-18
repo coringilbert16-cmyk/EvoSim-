@@ -90,8 +90,10 @@ impl Bvh {
             item_pos: vec![usize::MAX; max_id + 1],
             items, leaf_size,
         };
-        for (i, b) in tree.items.iter().enumerate() { tree.item_pos[b.id] = i; }
         tree.build(0, tree.items.len());
+        // BVH construction partitions the item array; rebuild the identity map
+        // afterward so future refits update each object's actual leaf slot.
+        for (i, b) in tree.items.iter().enumerate() { tree.item_pos[b.id] = i; }
         tree
     }
     fn range_bounds(&self, lo: usize, hi: usize) -> Bounds {
