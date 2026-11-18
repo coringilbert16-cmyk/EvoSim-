@@ -2892,7 +2892,6 @@ mod tests {
         }
     }
 
-
     /// Find a molecule pose whose selected constituent can replace an existing
     /// bond partner through the ordinary displacement contact and COMBINE checks.
     /// The returned candidate is discovered only after removing the old bond on
@@ -2911,9 +2910,7 @@ mod tests {
                     let placement = crate::structure::Placement {
                         x: f64::from(x_step) * 0.2,
                         y: f64::from(y_step) * 0.2,
-                        rotation_radians: std::f64::consts::TAU
-                            * f64::from(rotation_step)
-                            / 16.0,
+                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
                     };
                     let mut combined = base.clone();
                     let indices = crate::material_restoration::restore_material(
@@ -2993,9 +2990,10 @@ mod tests {
                             / 16.0,
                     };
                     let mut combined = base.clone();
-                    let incoming_unit = combined.add_unit(
-                        crate::structure::StructuralUnit::new(target_name, placement),
-                    );
+                    let incoming_unit = combined.add_unit(crate::structure::StructuralUnit::new(
+                        target_name,
+                        placement,
+                    ));
                     if crate::construction_runtime::placed_unit_overlaps(
                         &combined,
                         &combined.units[incoming_unit],
@@ -3069,13 +3067,8 @@ mod tests {
         )?;
         let mut accumulated = 0.0;
         for tick in 1..=crate::harmonics::TICKS_PER_SIMULATED_DAY {
-            accumulated = accumulate_incoming_activation(
-                anchor,
-                incoming,
-                candidate,
-                accumulated,
-                catalog,
-            )?;
+            accumulated =
+                accumulate_incoming_activation(anchor, incoming, candidate, accumulated, catalog)?;
             let signal = crate::chemistry::normalized_chemistry_to_activation_signal(accumulated)?;
             if crate::chemistry::activated(signal, barrier) {
                 return Some((signal, tick));
@@ -3147,8 +3140,7 @@ mod tests {
         .expect("direct H-C control must build a valid trial");
         println!(
             "CATALYST_DIRECT_CONTROL|H-S_to_H-C|activation_ticks={}|external_input={:.9}",
-            direct_activation.1,
-            direct_trial.energy.required_external_input,
+            direct_activation.1, direct_trial.energy.required_external_input,
         );
 
         // O-H and O-P are the two strongest candidates for this role:
@@ -3170,7 +3162,9 @@ mod tests {
                     &catalog,
                 )
                 .unwrap_or_else(|| {
-                    panic!("Oxygen-{carrier_partner} carrier must find a valid H replacement contact")
+                    panic!(
+                        "Oxygen-{carrier_partner} carrier must find a valid H replacement contact"
+                    )
                 });
             let catalyst_bond = combined
                 .bonds
@@ -3195,7 +3189,9 @@ mod tests {
                 &catalog,
             )
             .unwrap_or_else(|| {
-                panic!("Oxygen-{carrier_partner} first contact must activate within one simulated day")
+                panic!(
+                    "Oxygen-{carrier_partner} first contact must activate within one simulated day"
+                )
             });
             let first_trial = build_displacement_trial(
                 &combined,
@@ -3212,9 +3208,11 @@ mod tests {
             )
             .expect("first carrier displacement must build a valid trial");
             assert!(
-                first_trial.structure.bonds.iter().any(|bond| {
-                    bond.has_same_identity(&catalyst_bond)
-                }),
+                first_trial
+                    .structure
+                    .bonds
+                    .iter()
+                    .any(|bond| { bond.has_same_identity(&catalyst_bond) }),
                 "the carrier's internal bond must survive the first displacement"
             );
 
@@ -3253,8 +3251,14 @@ mod tests {
             .expect("second displacement must regenerate the carrier");
 
             let catalyst_ids = (
-                second_trial.structure.physical_id(carrier_indices[0]).unwrap(),
-                second_trial.structure.physical_id(carrier_indices[1]).unwrap(),
+                second_trial
+                    .structure
+                    .physical_id(carrier_indices[0])
+                    .unwrap(),
+                second_trial
+                    .structure
+                    .physical_id(carrier_indices[1])
+                    .unwrap(),
             );
             assert!(
                 second_trial.structure.bonds.iter().any(|bond| {
@@ -3269,7 +3273,11 @@ mod tests {
                 second_trial.products.iter().any(|product| {
                     product.material.parts.len() == 2
                         && product.material.parts.iter().any(|part| part.0 == "Oxygen")
-                        && product.material.parts.iter().any(|part| part.0 == carrier_partner)
+                        && product
+                            .material
+                            .parts
+                            .iter()
+                            .any(|part| part.0 == carrier_partner)
                         && product.material.internal_bonds.len() == 1
                 }),
                 "the regenerated carrier must be exported as an intact physical molecule"
@@ -3277,7 +3285,11 @@ mod tests {
             assert!(
                 second_trial.products.iter().any(|product| {
                     product.material.parts.len() == 2
-                        && product.material.parts.iter().any(|part| part.0 == "Hydrogen")
+                        && product
+                            .material
+                            .parts
+                            .iter()
+                            .any(|part| part.0 == "Hydrogen")
                         && product.material.parts.iter().any(|part| part.0 == "Carbon")
                         && product.material.internal_bonds.len() == 1
                 }),
@@ -3303,5 +3315,4 @@ mod tests {
             );
         }
     }
-
 }
