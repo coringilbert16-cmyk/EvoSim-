@@ -69,7 +69,7 @@ jobs:
           cargo run --locked -- \
             --headless \
             --environment-chemistry-experiment \
-            --seconds "${{ inputs.simulation_seconds || '10' }}" \
+            --seconds "${{ github.event_name == 'pull_request' && github.head_ref == 'perf/world-tone-material-response' && '60' || inputs.simulation_seconds || '10' }}" \
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
