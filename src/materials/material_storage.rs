@@ -95,7 +95,7 @@ impl MaterialStorage {
             || instance.material.parts.is_empty()
             || !crate::property_profile::measure_call(
                 crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
+                || instance.material.is_valid_for_catalog(catalog),
             )
             || !Self::is_discrete(&instance.material)
         {
@@ -131,7 +131,7 @@ impl MaterialStorage {
                 || instance.material.parts.is_empty()
                 || !crate::property_profile::measure_call(
                     crate::property_profile::Metric::MaterialStorageValidationSite,
-                        || instance.material.is_valid_for_catalog(catalog),
+                    || instance.material.is_valid_for_catalog(catalog),
                 )
                 || !Self::is_discrete(&instance.material)
             {
@@ -165,7 +165,7 @@ impl MaterialStorage {
                 || instance.material.parts.is_empty()
                 || !crate::property_profile::measure_call(
                     crate::property_profile::Metric::MaterialStorageValidationSite,
-                        || instance.material.is_valid_for_catalog(catalog),
+                    || instance.material.is_valid_for_catalog(catalog),
                 )
                 || !Self::is_discrete(&instance.material)
             {
@@ -218,7 +218,7 @@ impl MaterialStorage {
             || instance.material.parts.is_empty()
             || !crate::property_profile::measure_call(
                 crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
+                || instance.material.is_valid_for_catalog(catalog),
             )
             || !Self::is_discrete(&instance.material)
         {
@@ -320,7 +320,7 @@ impl MaterialStorage {
     ) -> Option<PhysicalMaterial> {
         if !crate::property_profile::measure_call(
             crate::property_profile::Metric::MaterialStorageValidationSite,
-                || target.is_valid_for_catalog(catalog),
+            || target.is_valid_for_catalog(catalog),
                 ) || target.is_empty()
                 {
             return None;
@@ -330,7 +330,7 @@ impl MaterialStorage {
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
                         crate::property_profile::Metric::MaterialStorageValidationSite,
-                            || instance.material.is_valid_for_catalog(catalog),
+                        || instance.material.is_valid_for_catalog(catalog),
                     )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
@@ -349,7 +349,7 @@ impl MaterialStorage {
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
                         crate::property_profile::Metric::MaterialStorageValidationSite,
-                            || instance.material.is_valid_for_catalog(catalog),
+                        || instance.material.is_valid_for_catalog(catalog),
                     )
                     && Self::is_discrete(&instance.material) => {}
             _ => return None,
@@ -369,7 +369,7 @@ impl MaterialStorage {
         // cannot turn a failed COMBINE into lost source material.
         if !crate::property_profile::measure_call(
             crate::property_profile::Metric::MaterialStorageValidationSite,
-                || target.is_valid_for_catalog(catalog),
+            || target.is_valid_for_catalog(catalog),
                 ) || target.is_empty()
                 {
             return None;
@@ -379,7 +379,7 @@ impl MaterialStorage {
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
                         crate::property_profile::Metric::MaterialStorageValidationSite,
-                            || instance.material.is_valid_for_catalog(catalog),
+                        || instance.material.is_valid_for_catalog(catalog),
                     )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
@@ -406,7 +406,7 @@ impl MaterialStorage {
                         && instance.is_realized()
                         && crate::property_profile::measure_call(
                             crate::property_profile::Metric::MaterialStorageValidationSite,
-                                || instance.material.is_valid_for_catalog(catalog),
+                            || instance.material.is_valid_for_catalog(catalog),
                         )
                         && Self::is_discrete(&instance.material) =>
                 {
