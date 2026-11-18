@@ -2260,6 +2260,10 @@ mod tests {
     fn pushed_environmental_material_updates_source_and_destination_revisions() {
         let simulation = Simulation::new(0xB056, 10.0);
         let mut environment = simulation.environment.clone();
+        for cell in &mut environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         let catalog = environment.catalog.clone();
         let placement = Placement {
             x: 10.0,
