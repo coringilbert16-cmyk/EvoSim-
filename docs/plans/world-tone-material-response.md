@@ -98,3 +98,16 @@ Important existing ownership semantics to preserve:
 Existing tests include several that explicitly assert shadow geometry and ordered travelling-signal behavior. Those assertions must be replaced with uniform-exposure tests; they are not valid requirements under the approved model. Keep the ownership, nonliving heat, attached/developing, active-transformation, rejected-transaction, and inventory-reconciliation coverage.
 
 Implementation should introduce a material-only recipient snapshot rather than calling the existing geometry snapshot and merely ignoring its paths. This prevents the expensive geometry construction from remaining on the live tick path. The old geometry utilities may remain for other systems or legacy isolated tests, but the production world-tone settlement path must no longer call them.
+
+
+## Implementation progress
+
+The production tick path now uses `WorldToneRecipientSnapshot`, which enumerates material constituents directly from authoritative simulation state without constructing geometry bodies or exposure paths.
+
+- Each eligible material constituent receives one normalized source-width unit per tick; source frequency/envelope remain unchanged and total incident energy scales with recipient count.
+- Exact bitwise keys cover all `ResourceProperties` fields used by harmonic response. A per-settlement table computes the material response once per unique key and reuses the already-computed spectrum for retained-energy normalization.
+- Organism and environment reservoirs are staged once per holder. A complete spectrum-capacity/overflow preflight avoids cloning a reservoir for every constituent while preserving per-recipient all-or-heat behavior.
+- Living organism, attached/developing, environmental field, stored, decomposing, committed construction, and active-transformation recipient categories retain their prior ownership/heat treatment.
+- Production tests now exercise uniform recipient enumeration and settlement rather than requiring ordered travelling-signal paths.
+
+Full Rust tests, environmental smoke, Clippy, and the standard 60-second seed-42 benchmark remain pending. The legacy geometry snapshot is retained only for existing diagnostic/geometry tests and is no longer called by the production tick.
