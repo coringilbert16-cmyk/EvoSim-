@@ -1201,3 +1201,1936 @@ impl PhysicalConstituentGraph {
             ConnectionEndpoint::Fluid { x, y } => x.is_finite() && y.is_finite(),
             ConnectionEndpoint::Corner { .. } | ConnectionEndpoint::LineEndpoint { .. } => true,
         };
+        let primary: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        let mut assigned_core_ids = primary.clone();
+        let core_metadata_valid = primary.len() == self.genome_constituent_ids.len()
+            && primary.is_subset(&all_ids)
+            && self
+                .additional_genome_constituent_groups
+                .iter()
+                .all(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    let valid = !group.is_empty()
+                        && group_ids.len() == group.len()
+                        && group_ids.is_subset(&all_ids)
+                        && assigned_core_ids.is_disjoint(&group_ids);
+                    if valid {
+                        assigned_core_ids.extend(group_ids);
+                    }
+                    valid
+                });
+        if excluded_ids.is_empty()
+            || excluded.len() != excluded_ids.len()
+            || excluded.contains(&PhysicalConstituentId(0))
+            || !excluded.is_subset(&all_ids)
+            || excluded.len() >= self.units.len()
+            || all_ids.len() != self.units.len()
+            || all_ids.contains(&PhysicalConstituentId(0))
+            || self.next_constituent_id == 0
+            || self.next_constituent_id <= max_id
+            || !core_metadata_valid
+            || self.units.iter().any(|unit| {
+                !unit.placement.x.is_finite()
+                    || !unit.placement.y.is_finite()
+                    || !unit.placement.rotation_radians.is_finite()
+            })
+            || self.bonds.iter().any(|bond| {
+                bond.endpoint_a.constituent_id == bond.endpoint_b.constituent_id
+                    || !all_ids.contains(&bond.endpoint_a.constituent_id)
+                    || !all_ids.contains(&bond.endpoint_b.constituent_id)
+                    || !endpoint_is_finite(bond.endpoint_a.location)
+                    || !endpoint_is_finite(bond.endpoint_b.location)
+                    || !bond.strength.is_finite()
+                    || !(0.0..=1.0).contains(&bond.strength)
+                    || !bond.bond_energy.is_finite()
+                    || bond.bond_energy < 0.0
+            })
+        {
+            return None;
+        }
+
+        if !primary.is_disjoint(&excluded)
+            || self
+                .additional_genome_constituent_groups
+                .iter()
+                .any(|group| {
+                    let group_ids: HashSet<_> = group.iter().copied().collect();
+                    !group_ids.is_disjoint(&excluded) && !group_ids.is_subset(&excluded)
+                })
+        {
+            return None;
+        }
+
+        let mut view = self.clone();
+        view.remove_units_by_physical_ids(excluded_ids);
+        if view.units.is_empty() {
+            return None;
+        }
+        Some(view)
+    }
+
+    /// Returns true when every unit in `candidate` is already represented by
+    /// the same stable physical identity, material, and world pose in this graph.
+    /// This lets aggregate owners expose transient subgraph views without making
+    /// movement or world-tone consumers count those constituents twice.
+    pub(crate) fn contains_exact_physical_subgraph(&self, candidate: &Self) -> bool {
+        if candidate.units.is_empty() {
+            return false;
+        }
+        let mut seen = HashSet::new();
+        candidate.units.iter().all(|unit| {
+            unit.physical_id.0 != 0
+                && seen.insert(unit.physical_id)
+                && self
+                    .unit_index(unit.physical_id)
+                    .is_some_and(|index| self.units[index] == *unit)
+        })
+    }
+
+    pub fn physical_id(&self, unit_index: usize) -> Option<PhysicalConstituentId> {
+        self.units.get(unit_index).map(|u| u.physical_id)
+    }
+    pub fn unit_index(&self, id: PhysicalConstituentId) -> Option<usize> {
+        self.units.iter().position(|u| u.physical_id == id)
+    }
+    pub fn physical_constituent_ids(&self) -> Vec<PhysicalConstituentId> {
+        self.units.iter().map(|u| u.physical_id).collect()
+    }
+    fn endpoint_index(&self, e: BondEndpoint) -> Option<usize> {
+        self.unit_index(e.constituent_id)
+    }
+    pub fn is_valid_bond(&self, b: &Bond, c: &[BaseResource]) -> bool {
+        let Some(a) = self.endpoint_index(b.endpoint_a) else {
+            return false;
+        };
+        let Some(d) = self.endpoint_index(b.endpoint_b) else {
+            return false;
+        };
+        if !b.is_valid(|e| {
+            self.endpoint_index(e)
+                .and_then(|i| e.location.world_point(self.units.get(i)?, c))
+                .is_some()
+        }) {
+            return false;
+        }
+        if units_strictly_overlap(&self.units[a], &self.units[d], c) {
+            return false;
+        }
+        let Some(pa) = self.units[a].properties(c) else {
+            return false;
+        };
+        let Some(pb) = self.units[d].properties(c) else {
+            return false;
+        };
+        crate::combine::bond_integrity(pa, pb)
+            .is_some_and(|integrity| (0.0..=1.0).contains(&integrity))
+    }
+    /// Stable physical IDs that established the qualifying genome cavity.
+    pub fn genome_constituent_ids(&self) -> &[PhysicalConstituentId] {
+        &self.genome_constituent_ids
+    }
+
+    /// Persist the actual physical constituents forming a qualifying genome
+    /// cavity. No material recipe, topology, unit index, or first-unit rule is
+    /// introduced; identity is carried by the stable physical IDs.
+    pub fn set_genome_constituent_ids(
+        &mut self,
+        ids: impl IntoIterator<Item = PhysicalConstituentId>,
+    ) {
+        let mut ids: Vec<_> = ids.into_iter().filter(|id| id.0 != 0).collect();
+        ids.sort_unstable_by_key(|id| id.0);
+        ids.dedup();
+        ids.retain(|id| self.unit_index(*id).is_some());
+        let primary_ids: HashSet<_> = ids.iter().copied().collect();
+        for group in &mut self.additional_genome_constituent_groups {
+            group.retain(|id| !primary_ids.contains(id));
+        }
+        self.additional_genome_constituent_groups
+            .retain(|group| !group.is_empty());
+        self.genome_constituent_ids = ids;
+    }
+
+    pub fn clear_genome_constituent_ids(&mut self) {
+        self.genome_constituent_ids.clear();
+    }
+
+    /// Additional genome-core groups in this same physical aggregate. The
+    /// primary core remains available through `genome_constituent_ids` for
+    /// compatibility with existing single-organism callers.
+    pub fn additional_genome_constituent_groups(&self) -> &[Vec<PhysicalConstituentId>] {
+        &self.additional_genome_constituent_groups
+    }
+
+    /// Register a distinct genome core without duplicating any physical unit.
+    /// IDs already assigned to the primary or another core are ignored.
+    pub fn add_genome_constituent_group(
+        &mut self,
+        ids: impl IntoIterator<Item = PhysicalConstituentId>,
+    ) {
+        let mut assigned: HashSet<_> = self.genome_constituent_ids.iter().copied().collect();
+        for group in &self.additional_genome_constituent_groups {
+            assigned.extend(group.iter().copied());
+        }
+        let mut group: Vec<_> = ids
+            .into_iter()
+            .filter(|id| id.0 != 0 && self.unit_index(*id).is_some() && assigned.insert(*id))
+            .collect();
+        group.sort_unstable_by_key(|id| id.0);
+        group.dedup();
+        if !group.is_empty() {
+            self.additional_genome_constituent_groups.push(group);
+        }
+    }
+
+    pub fn clear_additional_genome_constituent_groups(&mut self) {
+        self.additional_genome_constituent_groups.clear();
+    }
+
+    /// The structural body is every bonded physical component that contains
+    /// non-fluid material. Genome-boundary IDs are never required for structural
+    /// membership, so the body can reorganize as the realized genome cavity changes.
+    pub fn structural_unit_indices(&self, catalog: &[BaseResource]) -> Vec<usize> {
+        let mut structural = Vec::new();
+        for component in self.connected_components() {
+            if component.len() < 2
+                || !component.iter().any(|&index| {
+                    self.units[index]
+                        .material
+                        .parts
+                        .first()
+                        .and_then(|(name, _)| {
+                            catalog.iter().find(|resource| resource.name == *name)
+                        })
+                        .is_some_and(|resource| {
+                            resource.physical_state != crate::resources::PhysicalState::Fluid
+                        })
+                })
+            {
+                continue;
+            }
+            structural.extend(component);
+        }
+        structural.sort_unstable();
+        structural
+    }
+    pub fn genome_connected(&self, unit_index: usize) -> bool {
+        if unit_index >= self.units.len()
+            || (self.genome_constituent_ids.is_empty()
+                && self.additional_genome_constituent_groups.is_empty())
+        {
+            return false;
+        }
+        self.connected_component_containing(unit_index)
+            .into_iter()
+            .any(|index| {
+                let id = self.units[index].physical_id;
+                self.genome_constituent_ids.contains(&id)
+                    || self
+                        .additional_genome_constituent_groups
+                        .iter()
+                        .any(|group| group.contains(&id))
+            })
+    }
+
+    pub fn direct_neighbor_indices(&self, unit_index: usize) -> Vec<usize> {
+        let Some(id) = self.physical_id(unit_index) else {
+            return Vec::new();
+        };
+        let mut neighbors = Vec::new();
+        for bond in &self.bonds {
+            let other = if bond.endpoint_a.constituent_id == id {
+                bond.endpoint_b.constituent_id
+            } else if bond.endpoint_b.constituent_id == id {
+                bond.endpoint_a.constituent_id
+            } else {
+                continue;
+            };
+            if let Some(index) = self.unit_index(other) {
+                if !neighbors.contains(&index) {
+                    neighbors.push(index);
+                }
+            }
+        }
+        neighbors.sort_unstable();
+        neighbors
+    }
+
+    pub fn component_contains_nonfluid(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
+        self.connected_component_containing(unit_index)
+            .into_iter()
+            .any(|index| {
+                self.units[index]
+                    .material
+                    .parts
+                    .first()
+                    .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
+                    .is_some_and(|resource| {
+                        resource.physical_state != crate::resources::PhysicalState::Fluid
+                    })
+            })
+    }
+
+    pub fn is_structurally_qualified(&self, unit_index: usize, catalog: &[BaseResource]) -> bool {
+        if unit_index >= self.units.len()
+            || self.connected_component_containing(unit_index).len() < 2
+        {
+            return false;
+        }
+        let Some((name, _)) = self
+            .units
+            .get(unit_index)
+            .and_then(|unit| unit.material.parts.first())
+        else {
+            return false;
+        };
+        let Some(resource) = catalog.iter().find(|resource| resource.name == *name) else {
+            return false;
+        };
+        if resource.physical_state != crate::resources::PhysicalState::Fluid {
+            return true;
+        }
+        self.component_contains_nonfluid(unit_index, catalog)
+    }
+
+    pub fn connected_component_containing(&self, start: usize) -> Vec<usize> {
+        if start >= self.units.len() {
+            return Vec::new();
+        }
+        let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
+        for bond in &self.bonds {
+            let (Some(a), Some(b)) = (
+                self.unit_index(bond.endpoint_a.constituent_id),
+                self.unit_index(bond.endpoint_b.constituent_id),
+            ) else {
+                continue;
+            };
+            adjacency[a].push(b);
+            adjacency[b].push(a);
+        }
+        let mut visited = vec![false; self.units.len()];
+        let mut stack = vec![start];
+        visited[start] = true;
+        let mut component = Vec::new();
+        while let Some(unit) = stack.pop() {
+            component.push(unit);
+            for &next in &adjacency[unit] {
+                if !visited[next] {
+                    visited[next] = true;
+                    stack.push(next);
+                }
+            }
+        }
+        component.sort_unstable();
+        component
+    }
+
+    pub fn connected_components(&self) -> Vec<Vec<usize>> {
+        let mut adjacency = vec![Vec::<usize>::new(); self.units.len()];
+        for b in &self.bonds {
+            let (Some(a), Some(d)) = (
+                self.unit_index(b.endpoint_a.constituent_id),
+                self.unit_index(b.endpoint_b.constituent_id),
+            ) else {
+                continue;
+            };
+            adjacency[a].push(d);
+            adjacency[d].push(a)
+        }
+        let mut visited = vec![false; self.units.len()];
+        let mut out = Vec::new();
+        for start in 0..self.units.len() {
+            if visited[start] {
+                continue;
+            }
+            let mut stack = vec![start];
+            visited[start] = true;
+            let mut component = Vec::new();
+            while let Some(u) = stack.pop() {
+                component.push(u);
+                for &next in &adjacency[u] {
+                    if !visited[next] {
+                        visited[next] = true;
+                        stack.push(next);
+                    }
+                }
+            }
+            component.sort_unstable();
+            out.push(component)
+        }
+        out
+    }
+    pub fn connection_load(
+        &self,
+        u: usize,
+        location: ConnectionEndpoint,
+        _c: &[BaseResource],
+    ) -> f64 {
+        let Some(id) = self.physical_id(u) else {
+            return 0.0;
+        };
+        self.bonds
+            .iter()
+            .filter(|b| b.touches(id, location))
+            .map(|b| crate::combine::experimental_bond_strength(b.bond_energy))
+            .sum()
+    }
+    pub fn break_bond(&mut self, i: usize) -> Option<Bond> {
+        if i < self.bonds.len() {
+            Some(self.bonds.remove(i))
+        } else {
+            None
+        }
+    }
+    pub fn break_matching_bond(&mut self, t: Bond) -> Option<Bond> {
+        let i = self.bonds.iter().position(|b| b.has_same_identity(&t))?;
+        self.break_bond(i)
+    }
+}
+pub type OrganismStructure = PhysicalConstituentGraph;
+pub fn formation_threshold(a: f64, b: f64, la: f64, lb: f64) -> f64 {
+    let la = la.max(0.0);
+    let lb = lb.max(0.0);
+    ((a + b) / 2.0) * (1.0 + la.sqrt() + lb.sqrt())
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hydrogen_line_endpoints_follow_rigid_rotation() {
+        let catalog = crate::resources::default_catalog();
+        let rotation = std::f64::consts::FRAC_PI_4;
+        let hydrogen = StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 10.0,
+                y: 20.0,
+                rotation_radians: rotation,
+            },
+        );
+        let left = ConnectionEndpoint::LineEndpoint { point_index: 0 }
+            .world_point(&hydrogen, &catalog)
+            .expect("thin Hydrogen rectangle has a line-like left endpoint");
+        let right = ConnectionEndpoint::LineEndpoint { point_index: 1 }
+            .world_point(&hydrogen, &catalog)
+            .expect("thin Hydrogen rectangle has a line-like right endpoint");
+
+        assert!((left.x - (10.0 - 0.5 * rotation.cos())).abs() < 1e-12);
+        assert!((left.y - (20.0 - 0.5 * rotation.sin())).abs() < 1e-12);
+        assert!((right.x - (10.0 + 0.5 * rotation.cos())).abs() < 1e-12);
+        assert!((right.y - (20.0 + 0.5 * rotation.sin())).abs() < 1e-12);
+        assert!((crate::connection_geometry::point_distance(left, right) - 1.0).abs() < 1e-12);
+    }
+    #[test]
+    fn external_aggregate_view_omits_complete_child_group_without_mutating_owner() {
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let child_a = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let child_b = aggregate.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id, child_b_id]);
+        aggregate.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                parent_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                child_a_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        let external = aggregate
+            .view_without_physical_ids(&[child_a_id, child_b_id])
+            .expect("complete child group can be excluded from an external view");
+        assert_eq!(external.physical_constituent_ids(), vec![parent_id]);
+        assert!(external.additional_genome_constituent_groups.is_empty());
+        assert!(external.bonds.is_empty());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
+        assert!(aggregate.view_without_physical_ids(&[child_a_id]).is_none());
+        aggregate.bonds[0].endpoint_a.location = ConnectionEndpoint::Boundary {
+            angle_radians: f64::NAN,
+        };
+        assert!(aggregate
+            .view_without_physical_ids(&[child_a_id, child_b_id])
+            .is_none());
+    }
+
+    #[test]
+    fn aggregate_replacement_returns_refreshed_view_with_remapped_bond_ids() {
+        let mut aggregate = OrganismStructure::new();
+        let selected_index = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let sibling_index = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = aggregate.physical_id(selected_index).unwrap();
+        let sibling_id = aggregate.physical_id(sibling_index).unwrap();
+
+        let mut replacement = OrganismStructure::new();
+        let carbon_index = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let hydrogen_index = replacement.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let carbon_id = replacement.physical_id(carbon_index).unwrap();
+        let hydrogen_id = replacement.physical_id(hydrogen_index).unwrap();
+        replacement.set_genome_constituent_ids([carbon_id]);
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                carbon_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                hydrogen_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let (remapping, refreshed) = aggregate
+            .replace_subgraph_remapping_new_ids_and_extract(&[selected_id], &replacement)
+            .expect("replacement and refreshed view should commit together");
+        let refreshed_hydrogen = remapping[&hydrogen_id];
+        assert_ne!(refreshed_hydrogen, sibling_id);
+        assert_eq!(
+            refreshed.physical_constituent_ids(),
+            vec![selected_id, refreshed_hydrogen]
+        );
+        assert_eq!(refreshed.genome_constituent_ids, vec![selected_id]);
+        assert_eq!(refreshed.bonds.len(), 1);
+        assert_eq!(
+            refreshed.bonds[0].endpoint_b.constituent_id,
+            refreshed_hydrogen
+        );
+        assert!(aggregate.unit_index(sibling_id).is_some());
+        assert!(aggregate.unit_index(refreshed_hydrogen).is_some());
+    }
+
+    #[test]
+    fn aggregate_subgraph_replacement_remaps_new_ids_without_aliasing_siblings() {
+        let mut aggregate = OrganismStructure::new();
+        let selected_index = aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let sibling_index = aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = aggregate.physical_id(selected_index).unwrap();
+        let sibling_id = aggregate.physical_id(sibling_index).unwrap();
+
+        let mut replacement = OrganismStructure::new();
+        let replacement_selected = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let replacement_new = replacement.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        replacement.units[replacement_selected].physical_id = selected_id;
+        let transient_new_id = replacement.physical_id(replacement_new).unwrap();
+        assert_eq!(transient_new_id, sibling_id);
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                selected_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                transient_new_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let remapping = aggregate
+            .replace_subgraph_remapping_new_ids(&[selected_id], &replacement)
+            .expect("valid replacement should commit");
+        let aggregate_new_id = remapping[&transient_new_id];
+
+        assert_ne!(aggregate_new_id, sibling_id);
+        assert_eq!(aggregate.unit_index(sibling_id), Some(0));
+        assert!(aggregate.unit_index(aggregate_new_id).is_some());
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == selected_id
+                && bond.endpoint_b.constituent_id == aggregate_new_id
+        }));
+        assert_eq!(aggregate.units.len(), 3);
+        assert_eq!(
+            aggregate
+                .units
+                .iter()
+                .map(|unit| unit.physical_id)
+                .collect::<HashSet<_>>()
+                .len(),
+            aggregate.units.len()
+        );
+    }
+
+    #[test]
+    fn aggregate_subgraph_replacement_rejects_dangling_bonds_atomically() {
+        let mut aggregate = OrganismStructure::new();
+        aggregate.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        aggregate.add_unit(StructuralUnit::new(
+            "Nitrogen",
+            Placement {
+                x: 4.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_next_id = aggregate.next_constituent_id;
+
+        let mut replacement = OrganismStructure::new();
+        let selected = replacement.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let selected_id = replacement.physical_id(selected).unwrap();
+        replacement.bonds.push(Bond {
+            endpoint_a: BondEndpoint::new(
+                selected_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                PhysicalConstituentId(999),
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let old_id = aggregate.physical_id(0).unwrap();
+        assert!(aggregate
+            .replace_subgraph_remapping_new_ids(&[old_id], &replacement)
+            .is_none());
+        assert!(aggregate
+            .replace_subgraph_remapping_new_ids_and_extract(&[old_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.next_constituent_id, before_next_id);
+    }
+
+    #[test]
+    fn only_fluid_resources_can_take_context_fitting_geometry() {
+        let catalog = crate::resources::default_catalog();
+        let mut water = StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(water.realize_default_geometry(&catalog));
+        let fitted = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: crate::resources::NOMINAL_UNIT_AREA,
+                boundary: Some(vec![(-0.5, 0.0), (0.0, 0.5), (0.5, 0.0), (0.0, -0.5)]),
+                arc_boundary: None,
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(water.realize_fluid_geometry(fitted.clone(), &catalog));
+        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
+
+        let mut bulk_water = StructuralUnit::from_material(
+            Material::free_base("Water", 4.0),
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .unwrap();
+        let bulk_fitted = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: Some(vec![(-1.0, 0.0), (0.0, 1.0), (1.0, 0.0), (0.0, -1.0)]),
+                arc_boundary: None,
+                multi_contact_boundary: None,
+            },
+        };
+        assert!(!water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(water.geometry.as_ref().unwrap().shape(), &fitted);
+        assert!(bulk_water.realize_fluid_geometry(bulk_fitted.clone(), &catalog));
+        assert_eq!(bulk_water.geometry.as_ref().unwrap().shape(), &bulk_fitted);
+
+        let half = 2.0_f64.sqrt() / 2.0;
+        let multi_contact = crate::resources::Shape {
+            form: crate::resources::Form::Fluid {
+                nominal_area: 2.0,
+                boundary: None,
+                arc_boundary: None,
+                multi_contact_boundary: Some(
+                    crate::capillary_geometry::MultiContactFluidBoundary {
+                        nominal_area: 2.0,
+                        pieces: vec![
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -half,
+                                start_y: -half,
+                                end_x: half,
+                                end_y: -half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: half,
+                                start_y: -half,
+                                end_x: half,
+                                end_y: half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: half,
+                                start_y: half,
+                                end_x: -half,
+                                end_y: half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                            crate::capillary_geometry::FluidBoundaryPiece::SolidContact {
+                                start_x: -half,
+                                start_y: half,
+                                end_x: -half,
+                                end_y: -half,
+                                contact_angle_radians: std::f64::consts::FRAC_PI_2,
+                            },
+                        ],
+                    },
+                ),
+            },
+        };
+        assert!(bulk_water.realize_fluid_geometry(multi_contact.clone(), &catalog));
+        assert_eq!(
+            bulk_water.geometry.as_ref().unwrap().shape(),
+            &multi_contact
+        );
+
+        let mut carbon = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        assert!(carbon.realize_default_geometry(&catalog));
+        assert!(!carbon.realize_fluid_geometry(fitted, &catalog));
+    }
+
+    #[test]
+    fn append_graph_remaps_local_ids_bonds_energy_and_core_groups_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut parent = OrganismStructure::new();
+        let parent_unit = parent.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = parent.physical_id(parent_unit).unwrap();
+        parent.set_genome_constituent_ids([parent_id]);
+
+        let mut developing = OrganismStructure::new();
+        let first = developing.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let second = developing.add_unit(StructuralUnit::new("Carbon", placement));
+        let first_id = developing.physical_id(first).unwrap();
+        let second_id = developing.physical_id(second).unwrap();
+        developing.set_genome_constituent_ids([first_id]);
+        developing.add_genome_constituent_group([second_id]);
+        developing.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                first_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                second_id,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let remap = parent.append_graph_remapping_ids(&developing).unwrap();
+        let mapped_first = remap[&first_id];
+        let mapped_second = remap[&second_id];
+        assert_ne!(mapped_first, first_id);
+        assert_ne!(mapped_second, second_id);
+        assert_eq!(parent.units.len(), 3);
+        assert_eq!(parent.bonds.len(), 1);
+        assert_eq!(parent.bonds[0].endpoint_a.constituent_id, mapped_first);
+        assert_eq!(parent.bonds[0].endpoint_b.constituent_id, mapped_second);
+        assert_eq!(parent.bonds[0].bond_energy, 2.5);
+        assert_eq!(parent.genome_constituent_ids(), &[parent_id]);
+        assert!(parent
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_first]));
+        assert!(parent
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_second]));
+        assert_eq!(
+            parent
+                .physical_constituent_ids()
+                .into_iter()
+                .collect::<HashSet<_>>()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn subgraph_preserves_stable_ids_and_only_internal_bonds() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_a_id),
+            endpoint_b: endpoint(child_b_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_a_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+
+        let subgraph = aggregate
+            .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
+            .expect("valid child subset");
+        assert_eq!(
+            subgraph.physical_constituent_ids(),
+            vec![child_a_id, child_b_id]
+        );
+        assert_eq!(subgraph.bonds.len(), 1);
+        assert_eq!(subgraph.bonds[0].bond_energy, 2.5);
+        assert_eq!(subgraph.genome_constituent_ids(), &[child_a_id]);
+        assert!(subgraph.additional_genome_constituent_groups().is_empty());
+
+        let mut extended = subgraph;
+        let added = extended.add_unit(StructuralUnit::new("Sulfur", placement));
+        assert_eq!(extended.physical_id(added), Some(PhysicalConstituentId(4)));
+        assert_eq!(aggregate.units.len(), 3);
+    }
+
+    #[test]
+    fn subgraph_replacement_preserves_cross_boundary_bonds_and_rejects_dangling_replacements() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let selected_ids = [child_core_id, child_body_id];
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&selected_ids, &[child_core_id])
+            .expect("valid attached subgraph");
+        replacement.units[1].placement.x = 1.0;
+        aggregate
+            .replace_subgraph_for_physical_ids(&selected_ids, &replacement)
+            .expect("replacement retains the crossing-bond endpoint");
+
+        assert_eq!(
+            aggregate.physical_constituent_ids(),
+            vec![parent_id, child_core_id, child_body_id]
+        );
+        assert_eq!(aggregate.bonds.len(), 2);
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == parent_id
+                && bond.endpoint_b.constituent_id == child_core_id
+                && bond.bond_energy == 1.25
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_core_id
+                && bond.endpoint_b.constituent_id == child_body_id
+                && bond.bond_energy == 2.5
+        }));
+
+        let before_rejection = aggregate.clone();
+        replacement
+            .units
+            .retain(|unit| unit.physical_id != child_core_id);
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&selected_ids, &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_rejection.units);
+        assert_eq!(aggregate.bonds, before_rejection.bonds);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before_rejection.genome_constituent_ids
+        );
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_rejection.additional_genome_constituent_groups
+        );
+        assert_eq!(
+            aggregate.next_constituent_id,
+            before_rejection.next_constituent_id
+        );
+    }
+
+    #[test]
+    fn division_partition_preserves_ids_and_returns_cross_boundary_bond_energy() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+
+        let (child, released_energy) = aggregate
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
+            .expect("valid aggregate division");
+        assert_eq!(released_energy, 1.25);
+        assert_eq!(aggregate.physical_constituent_ids(), vec![parent_id]);
+        assert!(aggregate.bonds.is_empty());
+        assert_eq!(
+            child.physical_constituent_ids(),
+            vec![child_core_id, child_body_id]
+        );
+        assert_eq!(child.bonds.len(), 1);
+        assert_eq!(child.bonds[0].bond_energy, 2.5);
+        assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
+        assert!(child.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn division_partition_settles_all_crossing_bond_energy_and_preserves_internal_bonds() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_core_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_core_id = aggregate.physical_id(parent_core_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_core_id]);
+        let parent_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let parent_body_id = aggregate.physical_id(parent_body_index).unwrap();
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Phosphorus", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_core_id),
+            endpoint_b: endpoint(parent_body_id),
+            strength: 0.8,
+            bond_energy: 4.0,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_body_id),
+            endpoint_b: endpoint(child_core_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.4,
+            bond_energy: 2.0,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_core_id),
+            endpoint_b: endpoint(child_body_id),
+            strength: 0.7,
+            bond_energy: 2.5,
+        });
+        let next_id_before = aggregate.next_constituent_id;
+
+        let (child, crossing_energy) = aggregate
+            .partition_subgraph_for_division(&[child_core_id, child_body_id], &[child_core_id])
+            .expect("valid aggregate division");
+
+        assert_eq!(crossing_energy, 3.25);
+        assert_eq!(
+            aggregate.physical_constituent_ids(),
+            vec![parent_core_id, parent_body_id]
+        );
+        assert_eq!(aggregate.bonds.len(), 1);
+        assert_eq!(aggregate.bonds[0].bond_energy, 4.0);
+        assert_eq!(aggregate.next_constituent_id, next_id_before);
+        assert_eq!(
+            child.physical_constituent_ids(),
+            vec![child_core_id, child_body_id]
+        );
+        assert_eq!(child.bonds.len(), 1);
+        assert_eq!(child.bonds[0].bond_energy, 2.5);
+        assert_eq!(child.genome_constituent_ids(), &[child_core_id]);
+        assert!(child.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn division_partition_rejects_partial_core_without_mutating_aggregate() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_a_id = aggregate.physical_id(child_a_index).unwrap();
+        let child_b_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_b_id = aggregate.physical_id(child_b_index).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id, child_b_id]);
+        let before = aggregate.clone();
+
+        assert!(aggregate
+            .partition_subgraph_for_division(&[child_a_id], &[child_a_id])
+            .is_none());
+        assert_eq!(aggregate.units, before.units);
+        assert_eq!(aggregate.bonds, before.bonds);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before.genome_constituent_ids
+        );
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before.additional_genome_constituent_groups
+        );
+        assert_eq!(aggregate.next_constituent_id, before.next_constituent_id);
+    }
+
+    #[test]
+    fn division_partition_rejects_partial_secondary_core_group_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_core_index = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_core_id = aggregate.physical_id(child_core_index).unwrap();
+        let child_body_index = aggregate.add_unit(StructuralUnit::new("Sulfur", placement));
+        let child_body_id = aggregate.physical_id(child_body_index).unwrap();
+        let other_core_a_index = aggregate.add_unit(StructuralUnit::new("Hydrogen", placement));
+        let other_core_a_id = aggregate.physical_id(other_core_a_index).unwrap();
+        let other_core_b_index = aggregate.add_unit(StructuralUnit::new("Phosphorus", placement));
+        let other_core_b_id = aggregate.physical_id(other_core_b_index).unwrap();
+        aggregate.add_genome_constituent_group([child_core_id]);
+        aggregate.add_genome_constituent_group([other_core_a_id, other_core_b_id]);
+        let before = aggregate.clone();
+
+        assert!(aggregate
+            .partition_subgraph_for_division(
+                &[child_core_id, child_body_id, other_core_a_id],
+                &[child_core_id]
+            )
+            .is_none());
+        assert_eq!(aggregate.units, before.units);
+        assert_eq!(aggregate.bonds, before.bonds);
+        assert_eq!(
+            aggregate.genome_constituent_ids,
+            before.genome_constituent_ids
+        );
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before.additional_genome_constituent_groups
+        );
+    }
+
+    #[test]
+    fn subgraph_rejects_partial_core_and_invalid_ids() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut graph = OrganismStructure::new();
+        let a = graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let b = graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let a_id = graph.physical_id(a).unwrap();
+        let b_id = graph.physical_id(b).unwrap();
+        graph.add_genome_constituent_group([a_id, b_id]);
+
+        assert!(graph.subgraph_for_physical_ids(&[a_id], &[a_id]).is_none());
+        assert!(graph
+            .subgraph_for_physical_ids(&[a_id, PhysicalConstituentId(999)], &[])
+            .is_none());
+        assert!(graph
+            .subgraph_for_physical_ids(&[a_id, a_id], &[])
+            .is_none());
+
+        let mut invalid_next_id = graph.clone();
+        invalid_next_id.next_constituent_id = 2;
+        assert!(invalid_next_id
+            .subgraph_for_physical_ids(&[a_id, b_id], &[])
+            .is_none());
+    }
+
+    #[test]
+    fn subgraph_rejects_empty_or_overlapping_genome_groups() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut empty_group_graph = OrganismStructure::new();
+        let parent = empty_group_graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = empty_group_graph.physical_id(parent).unwrap();
+        empty_group_graph.set_genome_constituent_ids([parent_id]);
+        let child = empty_group_graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = empty_group_graph.physical_id(child).unwrap();
+        empty_group_graph
+            .additional_genome_constituent_groups
+            .push(Vec::new());
+        assert!(empty_group_graph
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .is_none());
+
+        let mut overlapping_group_graph = OrganismStructure::new();
+        let parent = overlapping_group_graph.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = overlapping_group_graph.physical_id(parent).unwrap();
+        overlapping_group_graph.set_genome_constituent_ids([parent_id]);
+        let child = overlapping_group_graph.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = overlapping_group_graph.physical_id(child).unwrap();
+        overlapping_group_graph
+            .additional_genome_constituent_groups
+            .push(vec![parent_id]);
+        assert!(overlapping_group_graph
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .is_none());
+    }
+
+    #[test]
+    fn replacing_subgraph_preserves_cross_bonds_and_updates_only_attached_members() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent_index = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent_index).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        let endpoint =
+            |id| BondEndpoint::new(id, ConnectionEndpoint::Boundary { angle_radians: 0.0 });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_a_id),
+            endpoint_b: endpoint(child_b_id),
+            strength: 0.75,
+            bond_energy: 2.5,
+        });
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(parent_id),
+            endpoint_b: endpoint(child_a_id),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&[child_a_id, child_b_id], &[child_a_id])
+            .unwrap();
+        replacement.bonds[0].bond_energy = 3.5;
+        let new_index = replacement.add_unit(StructuralUnit::new("Sulfur", placement));
+        let new_id = replacement.physical_id(new_index).unwrap();
+        replacement.push_bond_unchecked(Bond {
+            endpoint_a: endpoint(child_b_id),
+            endpoint_b: endpoint(new_id),
+            strength: 0.6,
+            bond_energy: 0.75,
+        });
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_a_id, child_b_id], &replacement)
+            .is_some());
+        assert_eq!(aggregate.units.len(), 4);
+        assert_eq!(aggregate.genome_constituent_ids(), &[parent_id]);
+        assert!(aggregate
+            .additional_genome_constituent_groups()
+            .contains(&vec![child_a_id]));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == parent_id
+                && bond.endpoint_b.constituent_id == child_a_id
+                && (bond.bond_energy - 1.25).abs() < f64::EPSILON
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_a_id
+                && bond.endpoint_b.constituent_id == child_b_id
+                && (bond.bond_energy - 3.5).abs() < f64::EPSILON
+        }));
+        assert!(aggregate.bonds.iter().any(|bond| {
+            bond.endpoint_a.constituent_id == child_b_id && bond.endpoint_b.constituent_id == new_id
+        }));
+    }
+
+    #[test]
+    fn replacing_subgraph_rejects_empty_replacement_genome_group_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = aggregate.physical_id(child).unwrap();
+        let mut replacement = aggregate
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .unwrap();
+        replacement
+            .additional_genome_constituent_groups
+            .push(Vec::new());
+
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_primary = aggregate.genome_constituent_ids.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.genome_constituent_ids, before_primary);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
+    }
+
+    #[test]
+    fn replacing_subgraph_rejects_dangling_destination_bond_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_id = aggregate.physical_id(child).unwrap();
+        // Capture a valid replacement before injecting the malformed bond.
+        // The destination validation is what this test is intended to exercise.
+        let replacement = aggregate
+            .subgraph_for_physical_ids(&[child_id], &[])
+            .unwrap();
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                child_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                crate::structure::PhysicalConstituentId(u64::MAX),
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_primary = aggregate.genome_constituent_ids.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(aggregate.genome_constituent_ids, before_primary);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
+    }
+
+    #[test]
+    fn replacing_subgraph_rejects_lost_cross_bond_endpoint_atomically() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let parent = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let parent_id = aggregate.physical_id(parent).unwrap();
+        aggregate.set_genome_constituent_ids([parent_id]);
+        let child_a = aggregate.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let child_b = aggregate.add_unit(StructuralUnit::new("Carbon", placement));
+        let child_a_id = aggregate.physical_id(child_a).unwrap();
+        let child_b_id = aggregate.physical_id(child_b).unwrap();
+        aggregate.add_genome_constituent_group([child_a_id]);
+        aggregate.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                parent_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                child_a_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.25,
+        });
+        let replacement = aggregate
+            .subgraph_for_physical_ids(&[child_b_id], &[])
+            .unwrap();
+        let before_units = aggregate.units.clone();
+        let before_bonds = aggregate.bonds.clone();
+        let before_groups = aggregate.additional_genome_constituent_groups.clone();
+
+        assert!(aggregate
+            .replace_subgraph_for_physical_ids(&[child_a_id, child_b_id], &replacement)
+            .is_none());
+        assert_eq!(aggregate.units, before_units);
+        assert_eq!(aggregate.bonds, before_bonds);
+        assert_eq!(
+            aggregate.additional_genome_constituent_groups,
+            before_groups
+        );
+    }
+
+    #[test]
+    fn append_graph_into_nonempty_coreless_aggregate_keeps_source_core_additional() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        let existing = destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let existing_id = destination.physical_id(existing).unwrap();
+        assert!(destination.genome_constituent_ids().is_empty());
+
+        let mut source = OrganismStructure::new();
+        let core = source.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let core_id = source.physical_id(core).unwrap();
+        source.set_genome_constituent_ids([core_id]);
+
+        let remap = destination.append_graph_remapping_ids(&source).unwrap();
+        let mapped_core = remap[&core_id];
+        assert!(destination.genome_constituent_ids().is_empty());
+        assert!(destination
+            .additional_genome_constituent_groups()
+            .contains(&vec![mapped_core]));
+        assert_eq!(destination.physical_constituent_ids().len(), 2);
+        assert!(destination.unit_index(existing_id).is_some());
+    }
+
+    #[test]
+    fn append_graph_rejects_empty_source_genome_group_without_mutating_destination() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let before_units = destination.units.clone();
+        let before_bonds = destination.bonds.clone();
+
+        let mut source = OrganismStructure::new();
+        let parent = source.add_unit(StructuralUnit::new("Nitrogen", placement));
+        let parent_id = source.physical_id(parent).unwrap();
+        source.set_genome_constituent_ids([parent_id]);
+        source.additional_genome_constituent_groups.push(Vec::new());
+
+        assert!(destination.append_graph_remapping_ids(&source).is_none());
+        assert_eq!(destination.units, before_units);
+        assert_eq!(destination.bonds, before_bonds);
+    }
+
+    #[test]
+    fn append_graph_rejects_invalid_destination_ids_without_mutating_it() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        let first = destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let second = destination.add_unit(StructuralUnit::new("Nitrogen", placement));
+        destination.units[second].physical_id = destination.units[first].physical_id;
+        let original_units = destination.units.clone();
+        let original_bonds = destination.bonds.clone();
+
+        let mut source = OrganismStructure::new();
+        source.add_unit(StructuralUnit::new("Sulfur", placement));
+
+        assert!(destination.append_graph_remapping_ids(&source).is_none());
+        assert_eq!(destination.units, original_units);
+        assert_eq!(destination.bonds, original_bonds);
+    }
+
+    #[test]
+    fn append_graph_rejects_dangling_bond_without_mutating_destination() {
+        let placement = Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let mut destination = OrganismStructure::new();
+        destination.add_unit(StructuralUnit::new("Carbon", placement));
+        let original_units = destination.units.clone();
+        let original_bonds = destination.bonds.clone();
+
+        let mut invalid_source = OrganismStructure::new();
+        let source_unit = invalid_source.add_unit(StructuralUnit::new("Carbon", placement));
+        let source_id = invalid_source.physical_id(source_unit).unwrap();
+        invalid_source.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(
+                source_id,
+                ConnectionEndpoint::Boundary { angle_radians: 0.0 },
+            ),
+            endpoint_b: BondEndpoint::new(
+                PhysicalConstituentId(999),
+                ConnectionEndpoint::Boundary { angle_radians: 1.0 },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+
+        assert!(destination
+            .append_graph_remapping_ids(&invalid_source)
+            .is_none());
+        assert_eq!(destination.units, original_units);
+        assert_eq!(destination.bonds, original_bonds);
+    }
+
+    #[test]
+    fn structural_membership_follows_realized_bonded_components() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let a = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        assert!(s.structural_unit_indices(&catalog).is_empty());
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(
+                idb,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
+        s.set_genome_constituent_ids([idb]);
+        assert_eq!(s.structural_unit_indices(&catalog), vec![a, b]);
+    }
+
+    fn connect(s: &mut OrganismStructure, a: usize, b: usize) {
+        let ida = s.physical_id(a).unwrap();
+        let idb = s.physical_id(b).unwrap();
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(ida, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(
+                idb,
+                ConnectionEndpoint::Boundary {
+                    angle_radians: std::f64::consts::PI,
+                },
+            ),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+    }
+
+    fn water_chain_structure(names: &[&str]) -> (OrganismStructure, Vec<usize>) {
+        let mut s = OrganismStructure::new();
+        let mut units = Vec::new();
+        for (index, name) in names.iter().enumerate() {
+            units.push(s.add_unit(StructuralUnit::new(
+                *name,
+                Placement {
+                    x: index as f64,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            )));
+        }
+        for index in 0..units.len().saturating_sub(1) {
+            connect(&mut s, units[index], units[index + 1]);
+        }
+        let genome_id = s.physical_id(units[0]).unwrap();
+        s.set_genome_constituent_ids([genome_id]);
+        (s, units)
+    }
+
+    #[test]
+    fn water_structural_matrix_follows_component_nonfluid_rule() {
+        let catalog = crate::resources::default_catalog();
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Water", "Water", "Carbon"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(s.is_structurally_qualified(u[2], &catalog));
+        assert!(s.is_structurally_qualified(u[3], &catalog));
+        assert!(s.is_structurally_qualified(u[4], &catalog));
+
+        let (s, u) = water_chain_structure(&["Carbon", "Water", "Carbon", "Water", "Carbon"]);
+        assert!(s.is_structurally_qualified(u[1], &catalog));
+        assert!(s.is_structurally_qualified(u[3], &catalog));
+    }
+
+    #[test]
+    fn component_nonfluid_member_qualifies_fluid_water() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let genome = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let water = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let gid = s.physical_id(genome).unwrap();
+        let wid = s.physical_id(water).unwrap();
+        s.set_genome_constituent_ids([gid]);
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(wid, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert!(s.is_structurally_qualified(water, &catalog));
+    }
+
+    #[test]
+    fn water_water_chain_qualifies_when_component_contains_nonfluid() {
+        let catalog = crate::resources::default_catalog();
+        let mut s = OrganismStructure::new();
+        let genome = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let w1 = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let w2 = s.add_unit(StructuralUnit::new(
+            "Water",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let gid = s.physical_id(genome).unwrap();
+        let w1id = s.physical_id(w1).unwrap();
+        let w2id = s.physical_id(w2).unwrap();
+        s.set_genome_constituent_ids([gid]);
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(gid, ConnectionEndpoint::Boundary { angle_radians: 0.0 }),
+            endpoint_b: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        s.push_bond_unchecked(Bond {
+            endpoint_a: BondEndpoint::new(w1id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            endpoint_b: BondEndpoint::new(w2id, ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        });
+        assert!(s.is_structurally_qualified(w1, &catalog));
+        assert!(s.is_structurally_qualified(w2, &catalog));
+    }
+
+    #[test]
+    fn physical_constituents_receive_stable_ids() {
+        let mut s = OrganismStructure::new();
+        let a = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let b = s.add_unit(StructuralUnit::new(
+            "Hydrogen",
+            Placement {
+                x: 1.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        assert_ne!(s.physical_id(a), s.physical_id(b));
+    }
+    #[test]
+    fn aggregate_recognizes_transient_subgraph_by_stable_identity_material_and_pose() {
+        let pose = Placement {
+            x: 2.0,
+            y: 3.0,
+            rotation_radians: 0.25,
+        };
+        let mut aggregate = OrganismStructure::new();
+        let index = aggregate.add_unit(StructuralUnit::new("Carbon", pose));
+        let id = aggregate.physical_id(index).unwrap();
+
+        let mut view = OrganismStructure::new();
+        let mut unit = StructuralUnit::new("Carbon", pose);
+        unit.physical_id = id;
+        view.units.push(unit);
+        assert!(aggregate.contains_exact_physical_subgraph(&view));
+
+        view.units[0].placement.x += 0.25;
+        assert!(!aggregate.contains_exact_physical_subgraph(&view));
+        view.units[0].placement = pose;
+        view.units[0].material = Material::free_base("Water", 1.0);
+        assert!(!aggregate.contains_exact_physical_subgraph(&view));
+    }
+
+    #[test]
+    fn genome_constituent_ids_round_trip_through_serialization() {
+        let mut s = OrganismStructure::new();
+        let unit = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let id = s.physical_id(unit).unwrap();
+        s.set_genome_constituent_ids([id]);
+        let encoded = serde_json::to_string(&s).unwrap();
+        let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.genome_constituent_ids(), &[id]);
+        assert!(decoded.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn aggregate_genome_core_groups_round_trip_without_duplicating_units() {
+        let mut s = OrganismStructure::new();
+        let first = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let second = s.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 2.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let first_id = s.physical_id(first).unwrap();
+        let second_id = s.physical_id(second).unwrap();
+        s.set_genome_constituent_ids([first_id]);
+        s.add_genome_constituent_group([second_id, second_id, first_id]);
+        assert_eq!(s.units.len(), 2);
+        assert_eq!(s.additional_genome_constituent_groups(), &[vec![second_id]]);
+        let encoded = serde_json::to_string(&s).unwrap();
+        let decoded: OrganismStructure = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.genome_constituent_ids(), &[first_id]);
+        assert_eq!(
+            decoded.additional_genome_constituent_groups(),
+            &[vec![second_id]]
+        );
+        assert_eq!(decoded.units.len(), 2);
+
+        let mut pruned = decoded.clone();
+        pruned.remove_units_by_physical_ids(&[second_id]);
+        assert!(pruned.additional_genome_constituent_groups().is_empty());
+        assert_eq!(pruned.units.len(), 1);
+
+        let mut reassigned = decoded;
+        reassigned.set_genome_constituent_ids([first_id, second_id]);
+        assert!(reassigned.additional_genome_constituent_groups().is_empty());
+    }
+
+    #[test]
+    fn each_aggregate_genome_core_is_independently_recognized() {
+        let mut structure = OrganismStructure::new();
+        let primary = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let additional = structure.add_unit(StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 3.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        ));
+        let primary_id = structure.physical_id(primary).unwrap();
+        let additional_id = structure.physical_id(additional).unwrap();
+        structure.set_genome_constituent_ids([primary_id]);
+        structure.add_genome_constituent_group([additional_id]);
+
+        assert!(structure.genome_connected(primary));
+        assert!(structure.genome_connected(additional));
+    }
+
+    #[test]
+    fn bond_identity_uses_physical_ids() {
+        let a = PhysicalConstituentId(11);
+        let b = PhysicalConstituentId(22);
+        let x = Bond {
+            endpoint_a: BondEndpoint::new(a, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(b, ConnectionEndpoint::Corner { point_index: 1 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        let y = Bond {
+            endpoint_a: BondEndpoint::new(a, ConnectionEndpoint::Corner { point_index: 0 }),
+            endpoint_b: BondEndpoint::new(b, ConnectionEndpoint::Corner { point_index: 1 }),
+            strength: 0.5,
+            bond_energy: 1.0,
+        };
+        assert!(x.has_same_identity(&y));
+    }
+    #[test]
+    fn structural_unit_serialization_uses_material_directly() {
+        let unit = StructuralUnit::new(
+            "Carbon",
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        );
+        let encoded = serde_json::to_string(&unit).unwrap();
+        assert!(encoded.contains("\"material\":{\"parts\""));
+        let decoded: StructuralUnit = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.material, unit.material);
+    }
+    #[test]
+    fn legacy_structural_material_wrapper_deserializes() {
+        let encoded = r#"{"physical_id":0,"material":{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]}},"placement":{"x":0.0,"y":0.0,"rotation_radians":0.0}}"#;
+        let decoded: StructuralUnit = serde_json::from_str(encoded).unwrap();
+        assert_eq!(decoded.material, Material::free_base("Carbon", 1.0));
+        assert!(decoded.geometry.is_none());
+    }
+    #[test]
+    fn composite_material_is_rejected_as_structural_material() {
+        let material = Material {
+            parts: vec![("Carbon".into(), 2.0), ("Hydrogen".into(), 3.0)],
+            internal_bonds: vec![],
+        };
+        assert!(StructuralUnit::from_material(
+            material,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0
+            }
+        )
+        .is_none());
+    }
+}
