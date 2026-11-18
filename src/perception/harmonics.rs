@@ -2654,6 +2654,8 @@ pub(crate) fn environmental_resonance_displacements(
         std::env::var("EVOSIM_PROFILE_MOVEMENT").is_ok_and(|value| value == "1" || value == "true");
     let reference_all_pairs = std::env::var("EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS")
         .is_ok_and(|value| value == "1" || value == "true");
+    let profile_reference_timing = std::env::var("EVOSIM_PROFILE_MOVEMENT_REFERENCE")
+        .is_ok_and(|value| value == "1" || value == "true");
     let total_started = std::time::Instant::now();
 
     let emitter_started = std::time::Instant::now();
@@ -2800,7 +2802,7 @@ pub(crate) fn environmental_resonance_displacements(
         .collect();
     let response_ns = response_started.elapsed().as_nanos();
 
-    if profile {
+    if profile || profile_reference_timing {
         let sampled_pairs = pair_count.div_ceil(CROSS_ENERGY_SAMPLE_STRIDE);
         eprintln!(
             "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} validation_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_validation_ns=0 sampled_matching_ns={} sampled_frequency_comparisons={} sampled_frequency_matches={} sampled_pairs={} estimated_cross_energy_total_ns={} estimated_validation_total_ns={} estimated_matching_total_ns={} estimated_frequency_comparisons_total={} estimated_frequency_matches_total={}",
