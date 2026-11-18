@@ -2371,8 +2371,8 @@ fn environmental_movement_pair_support_radius(
     {
         return None;
     }
-    let reach = (2.0 * a.source_radius + b.source_radius)
-        .max(2.0 * b.source_radius + a.source_radius);
+    let reach =
+        (2.0 * a.source_radius + b.source_radius).max(2.0 * b.source_radius + a.source_radius);
     reach.is_finite().then_some(reach)
 }
 
