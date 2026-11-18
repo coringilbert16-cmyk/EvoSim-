@@ -129,7 +129,10 @@ impl MaterialStorage {
         for instance in instances {
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -160,7 +163,10 @@ impl MaterialStorage {
                 .copied()?;
             if !instance.is_realized()
                 || instance.material.parts.is_empty()
-                || !instance.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                 || !Self::is_discrete(&instance.material)
             {
                 return None;
@@ -210,7 +216,10 @@ impl MaterialStorage {
         };
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
             || !Self::is_discrete(&instance.material)
         {
             return Err(instance);
@@ -309,13 +318,19 @@ impl MaterialStorage {
         target: &Material,
         catalog: &[crate::resources::BaseResource],
     ) -> Option<PhysicalMaterial> {
-        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+        if !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || target.is_valid_for_catalog(catalog),
+                ) || target.is_empty() {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
                 if instance.is_realized()
-                    && instance.material.is_valid_for_catalog(catalog)
+                    && crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
                     && !instance.material.is_empty())
@@ -331,7 +346,10 @@ impl MaterialStorage {
         match self.entries.get(index)? {
             StoredMaterial::Physical(instance)
                 if instance.is_realized()
-                    && instance.material.is_valid_for_catalog(catalog)
+                    && crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                     && Self::is_discrete(&instance.material) => {}
             _ => return None,
         }
@@ -348,13 +366,19 @@ impl MaterialStorage {
         // Removal is a transfer boundary too: reject legacy/corrupt entries
         // before mutating the authoritative holder, so downstream validation
         // cannot turn a failed COMBINE into lost source material.
-        if !target.is_valid_for_catalog(catalog) || target.is_empty() {
+        if !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || target.is_valid_for_catalog(catalog),
+                ) || target.is_empty() {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
                 if instance.is_realized()
-                    && instance.material.is_valid_for_catalog(catalog)
+                    && crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
                     && !instance.material.is_empty())
@@ -378,7 +402,10 @@ impl MaterialStorage {
                     if !instance.material.has_internal_structure()
                         && !instance.material.is_empty()
                         && instance.is_realized()
-                        && instance.material.is_valid_for_catalog(catalog)
+                        && crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || instance.material.is_valid_for_catalog(catalog),
+                )
                         && Self::is_discrete(&instance.material) =>
                 {
                     Some(index)
