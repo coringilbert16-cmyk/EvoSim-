@@ -4783,14 +4783,14 @@ mod tests {
 
 #[cfg(test)]
 mod environmental_movement_parallel_tests {
-    use crate::harmonics::{environmental_material_resonance, update_organism_harmonics};
-    use crate::structure::Placement;
     use super::{
         environmental_movement_displacements_from_pair_forces, environmental_movement_pair_count,
         environmental_movement_pair_force, environmental_movement_parallel_pair_forces,
         environmental_movement_phase_components, EnvironmentalMovementEmitter, ToneComponent,
         ToneSpectrum,
     };
+    use crate::harmonics::{environmental_material_resonance, update_organism_harmonics};
+    use crate::structure::Placement;
 
     #[test]
     fn parallel_pair_forces_match_sequential_reference_in_original_order() {
