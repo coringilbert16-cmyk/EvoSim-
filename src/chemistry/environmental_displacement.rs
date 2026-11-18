@@ -3056,7 +3056,6 @@ mod tests {
     ) -> Option<(f64, u64)> {
         let anchor_properties = anchor.properties(catalog)?;
         let displaced_properties = displaced.properties(catalog)?;
-        let incoming_properties = incoming.properties(catalog)?;
         let baseline = catalog
             .iter()
             .map(|resource| resource.properties.reactivity)
@@ -3082,7 +3081,6 @@ mod tests {
                 return Some((signal, tick));
             }
         }
-        let _ = incoming_properties;
         None
     }
 
@@ -3292,11 +3290,16 @@ mod tests {
                     && second_trial.energy.required_external_input >= 0.0
             );
             println!(
-                "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|regenerated=true",
+                "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|cycle_activation_ticks={}|direct_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|cycle_external_input={:.9}|direct_external_input={:.9}|regenerated=true",
                 first_activation.1,
                 second_activation.1,
+                first_activation.1 + second_activation.1,
+                direct_activation.1,
                 first_trial.energy.required_external_input,
                 second_trial.energy.required_external_input,
+                first_trial.energy.required_external_input
+                    + second_trial.energy.required_external_input,
+                direct_trial.energy.required_external_input,
             );
         }
     }
