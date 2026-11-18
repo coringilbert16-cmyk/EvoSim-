@@ -2498,8 +2498,13 @@ fn environmental_movement_parallel_spatial_candidate_pair_forces(
             let mut sampled_matching_ns = 0_u128;
             let mut sampled_frequency_comparisons = 0_u64;
             let mut sampled_frequency_matches = 0_u64;
-            for pair_index in range.start..range.end {
-                let (a, b) = candidate_pairs[pair_index];
+            for (offset, &(a, b)) in candidate_pairs
+                .iter()
+                .enumerate()
+                .take(range.end)
+                .skip(range.start)
+            {
+                let pair_index = range.start + offset;
                 if a >= b || b >= emitters.len() {
                     return Err(pair_index);
                 }
