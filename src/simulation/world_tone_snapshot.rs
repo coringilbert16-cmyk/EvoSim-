@@ -15,7 +15,6 @@ use crate::state::{Organism, Simulation};
 use crate::structure::Placement;
 use crate::world_tone::{WorldToneCaptureFrame, WorldToneSample};
 
-
 /// One material constituent exposed to the spatially uniform world tone.
 /// No geometry or spatial data is needed to determine its response.
 #[derive(Clone, Copy, Debug)]
@@ -86,7 +85,8 @@ impl WorldToneRecipientSnapshot {
         for (organism_index, organism) in simulation.organisms.iter().enumerate() {
             if !organism.structure.units.is_empty() {
                 let owner = living_ids.contains(&organism.id).then_some(organism_index);
-                for (_, properties) in structure_material_properties(&organism.structure, catalog)? {
+                for (_, properties) in structure_material_properties(&organism.structure, catalog)?
+                {
                     recipients.push(WorldToneRecipient {
                         properties,
                         resonance_owner: owner,
@@ -116,7 +116,9 @@ impl WorldToneRecipientSnapshot {
         // Legacy decomposing structures remain recipients but have no reservoir.
         for decomposing in &simulation.decomposing_bodies {
             if !decomposing.structure.units.is_empty() {
-                for (_, properties) in structure_material_properties(&decomposing.structure, catalog)? {
+                for (_, properties) in
+                    structure_material_properties(&decomposing.structure, catalog)?
+                {
                     recipients.push(WorldToneRecipient {
                         properties,
                         resonance_owner: None,
@@ -231,9 +233,11 @@ impl WorldToneRecipientSnapshot {
         for recipient in &snapshot.recipients {
             let key = MaterialResponseKey::from(recipient.properties);
             if !response_cache.contains_key(&key) {
-                let Some(response_spectrum) =
-                    crate::harmonics::material_response_spectrum(recipient.properties, baselines, &signal)
-                else {
+                let Some(response_spectrum) = crate::harmonics::material_response_spectrum(
+                    recipient.properties,
+                    baselines,
+                    &signal,
+                ) else {
                     return;
                 };
                 let Some(response_energy) = spectrum_energy(&response_spectrum) else {
@@ -242,26 +246,24 @@ impl WorldToneRecipientSnapshot {
                 if response_energy > incident_per_recipient + 1e-9 {
                     return;
                 }
+                let response_energy = response_energy.min(incident_per_recipient);
                 let damping = crate::harmonics::damping_ratio(recipient.properties, baselines);
                 if !damping.is_finite() || damping < 0.0 {
                     return;
                 }
-                let retained_budget =
-                    response_energy - response_energy * damping.clamp(0.0, 1.0);
-                let Some(retained_spectrum) =
-                    crate::harmonics::transform_signal_to_energy_budget(
-                        recipient.properties,
-                        baselines,
-                        &signal,
-                        retained_budget,
-                    )
-                else {
+                let retained_budget = response_energy - response_energy * damping.clamp(0.0, 1.0);
+                let Some(retained_spectrum) = crate::harmonics::transform_signal_to_energy_budget(
+                    recipient.properties,
+                    baselines,
+                    &signal,
+                    retained_budget,
+                ) else {
                     return;
                 };
                 response_cache.insert(
                     key,
                     CachedMaterialResponse {
-                        response_energy: response_energy.min(incident_per_recipient),
+                        response_energy,
                         retained_spectrum,
                     },
                 );
@@ -422,9 +424,10 @@ fn can_deposit_spectrum(
         if energy <= f64::EPSILON {
             continue;
         }
-        if let Some((_, current)) = projected.iter_mut().find(|entry| {
-            (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9
-        }) {
+        if let Some((_, current)) = projected
+            .iter_mut()
+            .find(|entry| (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9)
+        {
             *current += energy;
             if !current.is_finite() {
                 return false;
@@ -2889,11 +2892,9 @@ mod tests {
         );
         assert!(
             snapshot.recipients.iter().all(|recipient| {
-                recipient.properties.mass.is_finite()
-                    && recipient.properties.mass > 0.0
+                recipient.properties.mass.is_finite() && recipient.properties.mass > 0.0
             }),
             "recipient enumeration should validate material properties without geometry"
         );
     }
-
 }
