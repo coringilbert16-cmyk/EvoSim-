@@ -182,14 +182,16 @@ impl OrganismBodyGeometry {
             f64::INFINITY,
             f64::NEG_INFINITY,
         );
-        for (unit_index, placement) in placements.iter().copied().enumerate() {
+        let shapes = physical.realized_shapes_for_parts(catalog)?;
+        for (unit_index, (placement, shape)) in
+            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+        {
             if !placement.x.is_finite()
                 || !placement.y.is_finite()
                 || !placement.rotation_radians.is_finite()
             {
                 return None;
             }
-            let shape = physical.realized_shape_for_part(unit_index, catalog)?;
             let radius = shape.form.bounding_radius();
             if !radius.is_finite() || radius < 0.0 {
                 return None;
