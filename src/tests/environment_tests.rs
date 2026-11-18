@@ -863,7 +863,6 @@ fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atom
     assert_eq!(field.cells, before);
 }
 
-
 #[test]
 fn persistent_movement_bvh_refits_match_brute_force_pair_sets() {
     use std::collections::BTreeSet;
@@ -931,14 +930,15 @@ fn persistent_movement_bvh_refits_match_brute_force_pair_sets() {
                 }
             }
             for target in &targets {
-                if candidate.identity != target.identity
-                    && candidate.bounds.overlaps(target.bounds)
-                {
+                if candidate.identity != target.identity && candidate.bounds.overlaps(target.bounds) {
                     brute_cross.insert((candidate.identity, target.identity));
                 }
             }
         }
-        assert_eq!(bvh_cross, brute_cross, "cross-set pairs differ at update {step}");
+        assert_eq!(
+            bvh_cross, brute_cross,
+            "cross-set pairs differ at update {step}"
+        );
 
         let mut bvh_movers = BTreeSet::new();
         let mut brute_movers = BTreeSet::new();
@@ -956,13 +956,13 @@ fn persistent_movement_bvh_refits_match_brute_force_pair_sets() {
                 let a = candidates[left];
                 let b = candidates[right];
                 if a.bounds.overlaps(b.bounds) {
-                    brute_movers.insert((
-                        a.identity.min(b.identity),
-                        a.identity.max(b.identity),
-                    ));
+                    brute_movers.insert((a.identity.min(b.identity), a.identity.max(b.identity)));
                 }
             }
         }
-        assert_eq!(bvh_movers, brute_movers, "mover pairs differ at update {step}");
+        assert_eq!(
+            bvh_movers, brute_movers,
+            "mover pairs differ at update {step}"
+        );
     }
 }
