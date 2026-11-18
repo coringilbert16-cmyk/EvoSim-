@@ -88,6 +88,9 @@ pub struct ActiveMaterialField {
     environmental_bond_index: Vec<(usize, usize, usize)>,
     #[serde(skip)]
     environmental_bond_index_initialized: bool,
+    /// Experimental persistent movement BVH cache. Disabled unless explicitly opted in.
+    #[serde(skip)]
+    movement_spatial_index: Option<MovementSpatialIndex>,
 }
 
 fn initial_material_identity() -> u64 {
@@ -133,6 +136,198 @@ impl MovementBounds {
             && other.min_x <= self.max_x + epsilon
             && self.min_y <= other.max_y + epsilon
             && other.min_y <= self.max_y + epsilon
+    }
+
+    fn union(self, other: Self) -> Self {
+        Self {
+            min_x: self.min_x.min(other.min_x),
+            max_x: self.max_x.max(other.max_x),
+            min_y: self.min_y.min(other.min_y),
+            max_y: self.max_y.max(other.max_y),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MovementBvhItem {
+    identity: u64,
+    bounds: MovementBounds,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct MovementBvhNode {
+    bounds: MovementBounds,
+    left: Option<usize>,
+    right: Option<usize>,
+    start: usize,
+    end: usize,
+}
+
+#[derive(Clone, Debug)]
+struct MovementBvh {
+    nodes: Vec<MovementBvhNode>,
+    items: Vec<MovementBvhItem>,
+    item_position: std::collections::HashMap<u64, usize>,
+    leaf_for_identity: std::collections::HashMap<u64, usize>,
+    leaf_capacity: usize,
+}
+
+impl Default for MovementBvh {
+    fn default() -> Self {
+        Self {
+            nodes: Vec::new(),
+            items: Vec::new(),
+            item_position: std::collections::HashMap::new(),
+            leaf_for_identity: std::collections::HashMap::new(),
+            leaf_capacity: 8,
+        }
+    }
+}
+
+impl MovementBvh {
+    fn new(items: Vec<MovementBvhItem>, leaf_capacity: usize) -> Self {
+        let mut tree = Self {
+            leaf_capacity: leaf_capacity.max(1),
+            ..Self::default()
+        };
+        tree.items = items;
+        if !tree.items.is_empty() {
+            tree.nodes.reserve(tree.items.len() * 2);
+            tree.build_node(0, tree.items.len());
+        }
+        // Building partitions the item array, so create the identity map afterward.
+        for (position, item) in tree.items.iter().enumerate() {
+            tree.item_position.insert(item.identity, position);
+        }
+        tree
+    }
+
+    fn range_bounds(&self, start: usize, end: usize) -> MovementBounds {
+        let mut bounds = self.items[start].bounds;
+        for item in &self.items[start + 1..end] {
+            bounds = MovementBounds::union(bounds, item.bounds);
+        }
+        bounds
+    }
+
+    fn build_node(&mut self, start: usize, end: usize) -> usize {
+        let index = self.nodes.len();
+        let bounds = self.range_bounds(start, end);
+        self.nodes.push(MovementBvhNode {
+            bounds,
+            left: None,
+            right: None,
+            start,
+            end,
+        });
+        if end - start > self.leaf_capacity {
+            let split_x = bounds.max_x - bounds.min_x >= bounds.max_y - bounds.min_y;
+            let middle = (start + end) / 2;
+            self.items[start..end].select_nth_unstable_by(middle - start, |a, b| {
+                let center_a = if split_x {
+                    a.bounds.min_x + a.bounds.max_x
+                } else {
+                    a.bounds.min_y + a.bounds.max_y
+                };
+                let center_b = if split_x {
+                    b.bounds.min_x + b.bounds.max_x
+                } else {
+                    b.bounds.min_y + b.bounds.max_y
+                };
+                center_a
+                    .total_cmp(&center_b)
+                    .then_with(|| a.identity.cmp(&b.identity))
+            });
+            let left = self.build_node(start, middle);
+            let right = self.build_node(middle, end);
+            self.nodes[index].left = Some(left);
+            self.nodes[index].right = Some(right);
+        } else {
+            for item in &self.items[start..end] {
+                self.leaf_for_identity.insert(item.identity, index);
+            }
+        }
+        index
+    }
+
+    fn update(&mut self, items: &[MovementBvhItem]) {
+        let identities_match = self.items.len() == items.len()
+            && items
+                .iter()
+                .all(|item| self.item_position.contains_key(&item.identity));
+        if !identities_match {
+            *self = Self::new(items.to_vec(), self.leaf_capacity);
+            return;
+        }
+        if self.nodes.is_empty() {
+            return;
+        }
+        let mut dirty = vec![false; self.nodes.len()];
+        for item in items {
+            let position = self.item_position[&item.identity];
+            if self.items[position].bounds != item.bounds {
+                self.items[position].bounds = item.bounds;
+                let leaf = self.leaf_for_identity[&item.identity];
+                dirty[leaf] = true;
+            }
+        }
+        self.refit_node(0, &dirty);
+    }
+
+    fn refit_node(&mut self, index: usize, dirty: &[bool]) -> MovementBounds {
+        let node = self.nodes[index];
+        let updated = if let (Some(left), Some(right)) = (node.left, node.right) {
+            MovementBounds::union(
+                self.refit_node(left, dirty),
+                self.refit_node(right, dirty),
+            )
+        } else if dirty[index] {
+            self.range_bounds(node.start, node.end)
+        } else {
+            node.bounds
+        };
+        self.nodes[index].bounds = updated;
+        updated
+    }
+
+    fn query(&self, bounds: MovementBounds, output: &mut Vec<u64>) {
+        if !self.nodes.is_empty() {
+            self.query_node(0, bounds, output);
+        }
+    }
+
+    fn query_node(&self, index: usize, bounds: MovementBounds, output: &mut Vec<u64>) {
+        let node = self.nodes[index];
+        if !node.bounds.overlaps(bounds) {
+            return;
+        }
+        if let (Some(left), Some(right)) = (node.left, node.right) {
+            self.query_node(left, bounds, output);
+            self.query_node(right, bounds, output);
+        } else {
+            for item in &self.items[node.start..node.end] {
+                if item.bounds.overlaps(bounds) {
+                    output.push(item.identity);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct MovementSpatialIndex {
+    targets: MovementBvh,
+    candidates: MovementBvh,
+}
+
+impl MovementSpatialIndex {
+    fn update(
+        &mut self,
+        targets: &[MovementBvhItem],
+        candidates: &[MovementBvhItem],
+    ) {
+        self.targets.update(targets);
+        self.candidates.update(candidates);
     }
 }
 
@@ -279,6 +474,7 @@ impl ActiveMaterialField {
             next_material_identity: initial_material_identity(),
             environmental_bond_index: Vec::new(),
             environmental_bond_index_initialized: true,
+            movement_spatial_index: None,
         }
     }
 
