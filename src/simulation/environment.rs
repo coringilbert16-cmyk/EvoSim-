@@ -1258,8 +1258,76 @@ impl ActiveMaterialField {
             }
         }
 
-        let possible_collisions =
-            movement_cross_overlapping_pairs(&candidate_bounds, &snapshot_bounds);
+        let use_persistent_bvh = std::env::var("EVOSIM_MOVEMENT_BVH_EXPERIMENT")
+            .is_ok_and(|value| value == "1" || value == "true");
+        let mut bvh_update_ns = 0u128;
+        let mut bvh_query_ns = 0u128;
+        let bvh_eligible = valid_snapshot_indices
+            .iter()
+            .all(|&index| snapshots[index].identity != 0)
+            && candidate_indices
+                .iter()
+                .all(|&index| snapshots[index].identity != 0);
+        let mut snapshot_slot_by_identity = HashMap::with_capacity(valid_snapshot_indices.len());
+        for (slot, &index) in valid_snapshot_indices.iter().enumerate() {
+            snapshot_slot_by_identity.insert(snapshots[index].identity, slot);
+        }
+        let mut candidate_slot_by_identity = HashMap::with_capacity(candidate_indices.len());
+        for (slot, &index) in candidate_indices.iter().enumerate() {
+            candidate_slot_by_identity.insert(snapshots[index].identity, slot);
+        }
+
+        let possible_collisions = if use_persistent_bvh && bvh_eligible {
+            let target_items: Vec<_> = valid_snapshot_indices
+                .iter()
+                .enumerate()
+                .map(|(slot, &index)| MovementBvhItem {
+                    identity: snapshots[index].identity,
+                    bounds: snapshot_bounds[slot],
+                })
+                .collect();
+            let candidate_items: Vec<_> = candidate_indices
+                .iter()
+                .enumerate()
+                .map(|(slot, &index)| MovementBvhItem {
+                    identity: snapshots[index].identity,
+                    bounds: candidate_bounds[slot],
+                })
+                .collect();
+            let update_started = std::time::Instant::now();
+            let spatial_index = self
+                .movement_spatial_index
+                .get_or_insert_with(MovementSpatialIndex::default);
+            spatial_index.update(&target_items, &candidate_items);
+            bvh_update_ns = update_started.elapsed().as_nanos();
+
+            let query_started = std::time::Instant::now();
+            let mut pairs = Vec::new();
+            let mut overlapping_identities = Vec::new();
+            for (candidate_slot, &candidate_index) in candidate_indices.iter().enumerate() {
+                let candidate_identity = snapshots[candidate_index].identity;
+                overlapping_identities.clear();
+                spatial_index.targets.query(
+                    candidate_bounds[candidate_slot],
+                    &mut overlapping_identities,
+                );
+                for &target_identity in &overlapping_identities {
+                    if target_identity == candidate_identity {
+                        continue;
+                    }
+                    if let Some(&snapshot_slot) =
+                        snapshot_slot_by_identity.get(&target_identity)
+                    {
+                        pairs.push((candidate_slot, snapshot_slot));
+                    }
+                }
+            }
+            pairs.sort_unstable();
+            bvh_query_ns += query_started.elapsed().as_nanos();
+            pairs
+        } else {
+            movement_cross_overlapping_pairs(&candidate_bounds, &snapshot_bounds)
+        };
         let mut colliding_candidates = vec![false; candidates.len()];
         for (candidate_slot, snapshot_slot) in possible_collisions {
             let candidate_index = candidate_indices[candidate_slot];
@@ -1315,7 +1383,35 @@ impl ActiveMaterialField {
                 mover_bounds.push(candidate.bounds);
             }
         }
-        let possible_mover_overlaps = movement_overlapping_pairs(&mover_bounds);
+        let possible_mover_overlaps = if use_persistent_bvh && bvh_eligible {
+            let spatial_index = self
+                .movement_spatial_index
+                .as_ref()
+                .expect("persistent movement BVH was initialized above");
+            let query_started = std::time::Instant::now();
+            let mut pairs = Vec::new();
+            let mut overlapping_identities = Vec::new();
+            for (a_slot, &a_index) in mover_indices.iter().enumerate() {
+                let a_identity = snapshots[a_index].identity;
+                overlapping_identities.clear();
+                spatial_index
+                    .candidates
+                    .query(mover_bounds[a_slot], &mut overlapping_identities);
+                for &b_identity in &overlapping_identities {
+                    if b_identity <= a_identity {
+                        continue;
+                    }
+                    if let Some(&b_slot) = candidate_slot_by_identity.get(&b_identity) {
+                        pairs.push((a_slot, b_slot));
+                    }
+                }
+            }
+            pairs.sort_unstable();
+            bvh_query_ns += query_started.elapsed().as_nanos();
+            pairs
+        } else {
+            movement_overlapping_pairs(&mover_bounds)
+        };
         let mut overlapping_movers = vec![false; candidates.len()];
         for (a_slot, b_slot) in possible_mover_overlaps {
             let a = mover_indices[a_slot];
@@ -1362,7 +1458,7 @@ impl ActiveMaterialField {
         if accepted_count == 0 {
             if profile_movement {
                 eprintln!(
-                    "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted=0 snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns=0 total_ns={}",
+                    "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted=0 snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} bvh_update_ns={} bvh_query_ns={} commit_ns=0 total_ns={}",
                     snapshots.len(),
                     displacements.len(),
                     candidates_count_for_profile,
@@ -1372,6 +1468,8 @@ impl ActiveMaterialField {
                     candidate_elapsed.as_nanos(),
                     original_collision_elapsed.as_nanos(),
                     mover_overlap_elapsed.as_nanos(),
+                    bvh_update_ns,
+                    bvh_query_ns,
                     profile_started.elapsed().as_nanos()
                 );
             }
@@ -1411,7 +1509,7 @@ impl ActiveMaterialField {
         }
         if profile_movement {
             eprintln!(
-                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns={} total_ns={}",
+                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} bvh_update_ns={} bvh_query_ns={} commit_ns={} total_ns={}",
                 snapshots.len(),
                 displacements.len(),
                 candidates_count_for_profile,
@@ -1422,6 +1520,8 @@ impl ActiveMaterialField {
                 candidate_elapsed.as_nanos(),
                 original_collision_elapsed.as_nanos(),
                 mover_overlap_elapsed.as_nanos(),
+                bvh_update_ns,
+                bvh_query_ns,
                 commit_started.elapsed().as_nanos(),
                 profile_started.elapsed().as_nanos()
             );
