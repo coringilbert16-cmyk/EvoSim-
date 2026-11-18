@@ -494,9 +494,21 @@ mod tests {
                 internal_bonds: Vec::new(),
             },
             vec![
-                Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 },
-                Placement { x: 12.0, y: 10.0, rotation_radians: 0.0 },
-                Placement { x: 14.0, y: 10.0, rotation_radians: 0.0 },
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 12.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 14.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
             ],
             &catalog,
         )
