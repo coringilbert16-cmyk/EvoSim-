@@ -73,6 +73,38 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
+      # PR #377: matched 60-second seed-42 comparison of spatial discovery
+      # against exhaustive enumeration using the same source-support predicate.
+      - name: Profile optimized resonance movement on the standard 60-second workload
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
+        timeout-minutes: 4
+        env:
+          EVOSIM_PROFILE_MOVEMENT: '1'
+        run: |
+          set -euo pipefail
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics movement-candidate.jsonl --diagnostic-interval 100 2>&1 | tee movement-candidate.log
+      - name: Profile exhaustive resonance movement reference on the same workload
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
+        timeout-minutes: 4
+        env:
+          EVOSIM_PROFILE_MOVEMENT: '1'
+          EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS: '1'
+        run: |
+          set -euo pipefail
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics movement-reference.jsonl --diagnostic-interval 100 2>&1 | tee movement-reference.log
+      - name: Upload PR #377 movement comparison
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 377 && hashFiles('movement-candidate.log') != '' && hashFiles('movement-reference.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: resonance-movement-comparison
+          path: |
+            movement-candidate.log
+            movement-reference.log
+            movement-candidate.jsonl
+            movement-reference.jsonl
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Profile material-property derivation on the standard 60-second workload
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 370
         timeout-minutes: 4
