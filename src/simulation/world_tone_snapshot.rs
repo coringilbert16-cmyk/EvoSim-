@@ -1,8 +1,7 @@
 //! One fail-closed world snapshot for directional environmental exposure.
 //!
-//! This assembles only physically realized geometry. Logical material stock has
-//! no spatial shape and is not an occluder. The live tick uses the resulting frame
-//! to settle direct sunlight into each living organism's existing energy holder.
+//! The legacy geometry snapshot below is retained for diagnostics and geometry tests.
+//! Production world-tone settlement uses a material-only recipient inventory.
 
 use std::collections::{HashMap, HashSet};
 
@@ -174,7 +173,7 @@ impl WorldToneRecipientSnapshot {
         (!recipients.is_empty()).then_some(Self { recipients })
     }
 
-    pub(crate) fn settle_living_organism_inputs(
+    pub(crate) fn settle_uniform_material_inputs(
         simulation: &mut Simulation,
         sample: WorldToneSample,
         living_ids: &HashSet<String>,
@@ -437,6 +436,7 @@ fn can_deposit_spectrum(
     true
 }
 
+#[allow(dead_code)] // Legacy geometry snapshot is retained for diagnostics and geometry tests.
 #[derive(Debug)]
 pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
@@ -455,6 +455,7 @@ pub(crate) struct WorldToneOccluderSnapshot {
     pub(crate) occluder_count: usize,
 }
 
+#[allow(dead_code)]
 impl WorldToneOccluderSnapshot {
     /// Assemble the same world-space occluder set for every receiver.
     ///
@@ -2398,7 +2399,7 @@ mod tests {
         let resonant_before =
             crate::reproduction::total_resonant_energy_held(&simulation.organisms);
 
-        WorldToneRecipientSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_uniform_material_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::new(),
@@ -2474,7 +2475,7 @@ mod tests {
         let external_before = simulation.energy_ledger.total_external_energy_input;
         let heat_before = simulation.energy_ledger.total_heat_dissipated;
         let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
-        WorldToneRecipientSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_uniform_material_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([owner_id]),
@@ -2618,7 +2619,7 @@ mod tests {
                 &simulation.decomposing_bodies,
             );
 
-        WorldToneRecipientSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_uniform_material_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::new(),
@@ -2727,7 +2728,7 @@ mod tests {
         let before_heat = simulation.energy_ledger.total_heat_dissipated;
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
 
-        WorldToneRecipientSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_uniform_material_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([living_id]),
@@ -2790,7 +2791,7 @@ mod tests {
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
         simulation.energy_ledger.total_heat_dissipated = f64::NAN;
 
-        WorldToneRecipientSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_uniform_material_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([living_id]),
