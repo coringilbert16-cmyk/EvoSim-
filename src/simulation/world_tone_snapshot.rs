@@ -232,7 +232,7 @@ impl WorldToneRecipientSnapshot {
 
         for recipient in &snapshot.recipients {
             let key = MaterialResponseKey::from(recipient.properties);
-            if !response_cache.contains_key(&key) {
+            if let std::collections::hash_map::Entry::Vacant(entry) = response_cache.entry(key) {
                 let Some(response_spectrum) = crate::harmonics::material_response_spectrum(
                     recipient.properties,
                     baselines,
@@ -260,13 +260,10 @@ impl WorldToneRecipientSnapshot {
                 else {
                     return;
                 };
-                response_cache.insert(
-                    key,
-                    CachedMaterialResponse {
-                        response_energy,
-                        retained_spectrum,
-                    },
-                );
+                entry.insert(CachedMaterialResponse {
+                    response_energy,
+                    retained_spectrum,
+                });
             }
             let Some(response) = response_cache.get(&key) else {
                 return;

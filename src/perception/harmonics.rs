@@ -969,6 +969,9 @@ pub(crate) fn transform_signal_to_energy_budget(
     {
         return None;
     }
+    if outgoing_energy_budget <= f64::EPSILON {
+        return Some(ToneSpectrum::empty());
+    }
     let transformed = material_response_spectrum(properties, baselines, incoming)?;
     normalize_spectrum_to_energy_budget(transformed, outgoing_energy_budget)
 }
