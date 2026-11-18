@@ -2891,4 +2891,480 @@ mod tests {
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
     }
+
+    /// Find a molecule pose whose selected constituent can replace an existing
+    /// bond partner through the ordinary displacement contact and COMBINE checks.
+    /// The returned candidate is discovered only after removing the old bond on
+    /// a trial graph; the returned source retains the old bond for trial building.
+    fn catalyst_molecule_contact(
+        base: &OrganismStructure,
+        old_bond: Bond,
+        anchor_unit: usize,
+        molecule: &crate::physical_material::PhysicalMaterial,
+        active_part: usize,
+        minimum_activation_increment: f64,
+        catalog: &[BaseResource],
+    ) -> Option<(OrganismStructure, Vec<usize>, ConnectionPairCandidate, f64)> {
+        for x_step in -8..=8 {
+            for y_step in -8..=8 {
+                for rotation_step in 0..16 {
+                    let placement = crate::structure::Placement {
+                        x: f64::from(x_step) * 0.2,
+                        y: f64::from(y_step) * 0.2,
+                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                    };
+                    let mut combined = base.clone();
+                    let indices = crate::material_restoration::restore_material(
+                        &mut combined,
+                        molecule,
+                        placement,
+                        catalog,
+                    )?;
+                    let incoming_unit = *indices.get(active_part)?;
+                    if indices.iter().any(|&index| {
+                        crate::construction_runtime::placed_unit_overlaps(
+                            &combined,
+                            &combined.units[index],
+                            &[index],
+                            catalog,
+                        )
+                    }) {
+                        continue;
+                    }
+                    let mut topology = combined.clone();
+                    if topology.break_matching_bond(old_bond).is_none() {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    for candidate in crate::contact::connection_pair_candidates_cached(
+                        &topology,
+                        anchor_unit,
+                        incoming_unit,
+                        catalog,
+                        &mut cache,
+                    ) {
+                        if !candidate.available_a
+                            || !candidate.available_b
+                            || candidate.distance < 0.0
+                            || candidate.distance
+                                > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            || !candidate.facing.is_finite()
+                            || candidate.facing <= 0.0
+                        {
+                            continue;
+                        }
+                        let Some((_, _, investment, _)) =
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &topology,
+                                anchor_unit,
+                                incoming_unit,
+                                candidate,
+                                catalog,
+                            )
+                        else {
+                            continue;
+                        };
+                        let Some(activation_increment) = accumulate_incoming_activation(
+                            &topology.units[anchor_unit],
+                            &topology.units[incoming_unit],
+                            candidate,
+                            0.0,
+                            catalog,
+                        ) else {
+                            continue;
+                        };
+                        if activation_increment >= minimum_activation_increment {
+                            return Some((combined, indices, candidate, investment));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Find a standalone target atom that can replace the catalyst's temporary
+    /// bond to the substrate using the same physical candidate evaluator.
+    fn catalyst_target_contact(
+        base: &OrganismStructure,
+        old_bond: Bond,
+        anchor_unit: usize,
+        target_name: &str,
+        minimum_activation_increment: f64,
+        catalog: &[BaseResource],
+    ) -> Option<(OrganismStructure, usize, ConnectionPairCandidate, f64)> {
+        for x_step in -8..=8 {
+            for y_step in -8..=8 {
+                for rotation_step in 0..16 {
+                    let placement = crate::structure::Placement {
+                        x: f64::from(x_step) * 0.2,
+                        y: f64::from(y_step) * 0.2,
+                        rotation_radians: std::f64::consts::TAU * f64::from(rotation_step) / 16.0,
+                    };
+                    let mut combined = base.clone();
+                    let incoming_unit = combined.add_unit(crate::structure::StructuralUnit::new(
+                        target_name,
+                        placement,
+                    ));
+                    if crate::construction_runtime::placed_unit_overlaps(
+                        &combined,
+                        &combined.units[incoming_unit],
+                        &[incoming_unit],
+                        catalog,
+                    ) {
+                        continue;
+                    }
+                    let mut topology = combined.clone();
+                    if topology.break_matching_bond(old_bond).is_none() {
+                        continue;
+                    }
+                    let mut cache = ConnectionCompatibilityCache::new();
+                    for candidate in crate::contact::connection_pair_candidates_cached(
+                        &topology,
+                        anchor_unit,
+                        incoming_unit,
+                        catalog,
+                        &mut cache,
+                    ) {
+                        if !candidate.available_a
+                            || !candidate.available_b
+                            || candidate.distance < 0.0
+                            || candidate.distance
+                                > crate::combine_runtime::COMBINE_CONTACT_TOLERANCE
+                            || !candidate.facing.is_finite()
+                            || candidate.facing <= 0.0
+                        {
+                            continue;
+                        }
+                        let Some((_, _, investment, _)) =
+                            crate::combine_runtime::selected_candidate_evaluation(
+                                &topology,
+                                anchor_unit,
+                                incoming_unit,
+                                candidate,
+                                catalog,
+                            )
+                        else {
+                            continue;
+                        };
+                        let Some(activation_increment) = accumulate_incoming_activation(
+                            &topology.units[anchor_unit],
+                            &topology.units[incoming_unit],
+                            candidate,
+                            0.0,
+                            catalog,
+                        ) else {
+                            continue;
+                        };
+                        if activation_increment >= minimum_activation_increment {
+                            return Some((combined, incoming_unit, candidate, investment));
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// Calculate activation from sustained ordinary contact, without seeding
+    /// activation or adding resonance/energy. Returns the first crossing tick.
+    fn catalyst_contact_activation(
+        anchor: &crate::structure::StructuralUnit,
+        displaced: &crate::structure::StructuralUnit,
+        incoming: &crate::structure::StructuralUnit,
+        candidate: ConnectionPairCandidate,
+        old_bond: Bond,
+        catalog: &[BaseResource],
+    ) -> Option<(f64, u64)> {
+        let anchor_properties = anchor.properties(catalog)?;
+        let displaced_properties = displaced.properties(catalog)?;
+        let baseline = catalog
+            .iter()
+            .map(|resource| resource.properties.reactivity)
+            .sum::<f64>()
+            / catalog.len() as f64;
+        let barrier = crate::chemistry::activation_barrier_from_bond_properties(
+            old_bond.strength,
+            anchor_properties.reactivity,
+            displaced_properties.reactivity,
+            baseline,
+        )?;
+        let mut accumulated = 0.0;
+        for tick in 1..=crate::harmonics::TICKS_PER_SIMULATED_DAY {
+            accumulated =
+                accumulate_incoming_activation(anchor, incoming, candidate, accumulated, catalog)?;
+            let signal = crate::chemistry::normalized_chemistry_to_activation_signal(accumulated)?;
+            if crate::chemistry::activated(signal, barrier) {
+                return Some((signal, tick));
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn oxygen_carrier_molecules_can_complete_and_survive_a_displacement_cycle() {
+        let catalog = default_catalog();
+        let origin = crate::structure::Placement {
+            x: 0.0,
+            y: 0.0,
+            rotation_radians: 0.0,
+        };
+        let substrate = crate::environment_chemistry_experiment::realize_natural_molecule(
+            &["Phosphorus".to_owned(), "Carbon".to_owned()],
+            origin,
+            &catalog,
+        );
+        let mut substrate_structure = OrganismStructure::new();
+        crate::material_restoration::restore_material(
+            &mut substrate_structure,
+            &substrate,
+            origin,
+            &catalog,
+        )
+        .expect("ordinary P-C molecule must restore");
+        let old_substrate_bond = *substrate_structure
+            .bonds
+            .first()
+            .expect("P-C substrate must contain its ordinary COMBINE bond");
+
+        // Direct P-C + H -> P-H + C is the no-carrier control. The weak P-H
+        // interaction should not activate the strong P-C bond by itself.
+        let (direct_source, direct_target, direct_candidate, _direct_investment) =
+            catalyst_target_contact(
+                &substrate_structure,
+                old_substrate_bond,
+                0,
+                "Hydrogen",
+                0.0,
+                &catalog,
+            )
+            .expect("direct P-H control must find a valid contact");
+        let direct_activation = catalyst_contact_activation(
+            &direct_source.units[0],
+            &direct_source.units[1],
+            &direct_source.units[direct_target],
+            direct_candidate,
+            old_substrate_bond,
+            &catalog,
+        );
+        assert!(
+            direct_activation.is_none(),
+            "direct P-C + H must remain below the P-C activation barrier for one simulated day"
+        );
+        println!("CATALYST_DIRECT_CONTROL|P-C_to_P-H|activated=false");
+
+        // O-H and O-P are tested as oxygen carriers. Oxygen binds phosphorus
+        // strongly, while the temporary P-O bond is less intact and more
+        // reactive than the original P-C substrate bond.
+        let substrate_anchor = substrate_structure.units[0].properties(&catalog).unwrap();
+        let substrate_displaced = substrate_structure.units[1].properties(&catalog).unwrap();
+        let first_barrier = crate::chemistry::activation_barrier_from_bond_properties(
+            old_substrate_bond.strength,
+            substrate_anchor.reactivity,
+            substrate_displaced.reactivity,
+            catalog_reactivity_baseline(),
+        )
+        .unwrap();
+        let first_minimum_increment = first_barrier * crate::chemistry::CHEMICAL_DISSIPATION * 1.1;
+        for carrier_partner in ["Hydrogen", "Phosphorus"] {
+            let carrier = crate::environment_chemistry_experiment::realize_natural_molecule(
+                &["Oxygen".to_owned(), carrier_partner.to_owned()],
+                origin,
+                &catalog,
+            );
+            let (combined, carrier_indices, first_candidate, first_investment) =
+                catalyst_molecule_contact(
+                    &substrate_structure,
+                    old_substrate_bond,
+                    0,
+                    &carrier,
+                    0,
+                    first_minimum_increment,
+                    &catalog,
+                )
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Oxygen-{carrier_partner} carrier must find a valid P replacement contact"
+                    )
+                });
+            let catalyst_bond = combined
+                .bonds
+                .iter()
+                .find(|bond| {
+                    let oxygen_id = combined.physical_id(carrier_indices[0]).unwrap();
+                    let partner_id = combined.physical_id(carrier_indices[1]).unwrap();
+                    (bond.endpoint_a.constituent_id == oxygen_id
+                        && bond.endpoint_b.constituent_id == partner_id)
+                        || (bond.endpoint_b.constituent_id == oxygen_id
+                            && bond.endpoint_a.constituent_id == partner_id)
+                })
+                .copied()
+                .expect("carrier's original internal bond must be retained");
+
+            let first_activation = catalyst_contact_activation(
+                &combined.units[0],
+                &combined.units[1],
+                &combined.units[carrier_indices[0]],
+                first_candidate,
+                old_substrate_bond,
+                &catalog,
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "Oxygen-{carrier_partner} first P-O contact must activate within one simulated day"
+                )
+            });
+            let first_trial = build_displacement_trial(
+                &combined,
+                0,
+                1,
+                carrier_indices[0],
+                old_substrate_bond,
+                first_candidate,
+                first_investment,
+                first_activation.0,
+                catalog_reactivity_baseline(),
+                0.0,
+                &catalog,
+            )
+            .expect("first carrier displacement must build a valid trial");
+            assert!(
+                first_trial
+                    .structure
+                    .bonds
+                    .iter()
+                    .any(|bond| { bond.has_same_identity(&catalyst_bond) }),
+                "the carrier's internal bond must survive the first displacement"
+            );
+
+            let intermediate_bond = first_trial.replacement_bond;
+            let (second_source, target_unit, second_candidate, second_investment) =
+                catalyst_target_contact(
+                    &first_trial.structure,
+                    intermediate_bond,
+                    0,
+                    "Hydrogen",
+                    crate::chemistry::activation_barrier_from_bond_properties(
+                        intermediate_bond.strength,
+                        first_trial.structure.units[0]
+                            .properties(&catalog)
+                            .unwrap()
+                            .reactivity,
+                        first_trial.structure.units[carrier_indices[0]]
+                            .properties(&catalog)
+                            .unwrap()
+                            .reactivity,
+                        catalog_reactivity_baseline(),
+                    )
+                    .unwrap()
+                        * crate::chemistry::CHEMICAL_DISSIPATION
+                        * 1.1,
+                    &catalog,
+                )
+                .expect("Hydrogen target must find a valid contact with the temporary P-O bond");
+            let second_activation = catalyst_contact_activation(
+                &second_source.units[0],
+                &second_source.units[carrier_indices[0]],
+                &second_source.units[target_unit],
+                second_candidate,
+                intermediate_bond,
+                &catalog,
+            )
+            .expect("second contact must activate within one simulated day");
+            let second_trial = build_displacement_trial(
+                &second_source,
+                0,
+                carrier_indices[0],
+                target_unit,
+                intermediate_bond,
+                second_candidate,
+                second_investment,
+                second_activation.0,
+                catalog_reactivity_baseline(),
+                0.0,
+                &catalog,
+            )
+            .expect("second displacement must regenerate the carrier");
+
+            let catalyst_ids = (
+                second_trial
+                    .structure
+                    .physical_id(carrier_indices[0])
+                    .unwrap(),
+                second_trial
+                    .structure
+                    .physical_id(carrier_indices[1])
+                    .unwrap(),
+            );
+            assert!(
+                second_trial.structure.bonds.iter().any(|bond| {
+                    (bond.endpoint_a.constituent_id == catalyst_ids.0
+                        && bond.endpoint_b.constituent_id == catalyst_ids.1)
+                        || (bond.endpoint_b.constituent_id == catalyst_ids.0
+                            && bond.endpoint_a.constituent_id == catalyst_ids.1)
+                }),
+                "the original Oxygen-{carrier_partner} molecule must be regenerated"
+            );
+            assert!(
+                second_trial.products.iter().any(|product| {
+                    product.material.parts.len() == 2
+                        && product.material.parts.iter().any(|part| part.0 == "Oxygen")
+                        && product
+                            .material
+                            .parts
+                            .iter()
+                            .any(|part| part.0 == carrier_partner)
+                        && product.material.internal_bonds.len() == 1
+                }),
+                "the regenerated carrier must be exported as an intact physical molecule"
+            );
+            assert!(
+                second_trial.products.iter().any(|product| {
+                    product.material.parts.len() == 2
+                        && product
+                            .material
+                            .parts
+                            .iter()
+                            .any(|part| part.0 == "Hydrogen")
+                        && product
+                            .material
+                            .parts
+                            .iter()
+                            .any(|part| part.0 == "Phosphorus")
+                        && product.material.internal_bonds.len() == 1
+                }),
+                "the net substrate transformation must produce a bonded P-H product"
+            );
+            assert!(first_trial.energy.required_external_input.is_finite());
+            assert!(second_trial.energy.required_external_input.is_finite());
+            assert!(
+                first_trial.energy.required_external_input >= 0.0
+                    && second_trial.energy.required_external_input >= 0.0
+            );
+            assert!(
+                first_trial
+                    .energy
+                    .residual(first_trial.energy.required_external_input)
+                    .is_some_and(|residual| residual.abs() <= 1e-12),
+                "first displacement must conserve energy at its calculated input"
+            );
+            assert!(
+                second_trial
+                    .energy
+                    .residual(second_trial.energy.required_external_input)
+                    .is_some_and(|residual| residual.abs() <= 1e-12),
+                "second displacement must conserve energy at its calculated input"
+            );
+            println!(
+                "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|cycle_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|cycle_external_input={:.9}|direct_activation=false|regenerated=true",
+                first_activation.1,
+                second_activation.1,
+                first_activation.1 + second_activation.1,
+                first_trial.energy.required_external_input,
+                second_trial.energy.required_external_input,
+                first_trial.energy.required_external_input
+                    + second_trial.energy.required_external_input,
+            );
+        }
+    }
 }
