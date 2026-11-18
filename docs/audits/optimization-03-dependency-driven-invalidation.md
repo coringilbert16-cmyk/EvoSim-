@@ -202,3 +202,16 @@ A deeper read of `DevelopmentalBlueprint::realization_at_length` showed that the
 The previous cache key contained only `structure_revision`. That meant movement or a different seed-scale reference could reuse a realization computed for different inputs. The cache key now includes structure and position revisions, the exact floating-point bit patterns of seed mass/length, and the exact origin/orientation bit patterns. Position changes also explicitly clear this cache key.
 
 A focused state test now verifies that moving an organism and changing the seed-scale reference each produce a distinct cache key. The catalog remains a fixed runtime dependency under the current code paths; any future catalog mutation must be incorporated into this key or trigger a full cache rebuild.
+
+
+### Harmonic-spectrum cache dependency correction
+
+The initial harmonic cache key included the current tick only when a world-tone sample was present. That was incomplete: the ordinary environmental cavity spectrum is also tick-dependent. `environmental_material_resonance` computes oscillator phase with `phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick)`, and `environmental_contributions` calls it even when no world-tone sample is supplied.
+
+The cache key now contains both:
+- The current tick, unconditionally.
+- Whether a world-tone sample is present.
+
+The presence bit is a separate dependency because the same tick can produce different spectra with and without the additional world-tone contribution. Focused tests verify that environmental material emission changes across ticks and that a no-world-tone harmonic update establishes a distinct key on the next tick.
+
+This correction deliberately retains per-tick harmonic evaluation. The underlying oscillator phase is continuous/tick-dependent, so converting this calculation to event-only work would change behavior. The safe optimization boundary here is limited to avoiding duplicate recalculation within the same exact dependency key.
