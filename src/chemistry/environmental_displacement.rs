@@ -2904,6 +2904,13 @@ mod tests {
         active_part: usize,
         catalog: &[BaseResource],
     ) -> Option<(OrganismStructure, Vec<usize>, ConnectionPairCandidate, f64)> {
+        let mut best: Option<(
+            OrganismStructure,
+            Vec<usize>,
+            ConnectionPairCandidate,
+            f64,
+            f64,
+        )> = None;
         for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
@@ -2952,7 +2959,7 @@ mod tests {
                         {
                             continue;
                         }
-                        if let Some((_, _, investment, _)) =
+                        let Some((_, _, investment, _)) =
                             crate::combine_runtime::selected_candidate_evaluation(
                                 &topology,
                                 anchor_unit,
@@ -2960,14 +2967,37 @@ mod tests {
                                 candidate,
                                 catalog,
                             )
+                        else {
+                            continue;
+                        };
+                        let Some(activation_increment) = accumulate_incoming_activation(
+                            &topology.units[anchor_unit],
+                            &topology.units[incoming_unit],
+                            candidate,
+                            0.0,
+                            catalog,
+                        ) else {
+                            continue;
+                        };
+                        if best
+                            .as_ref()
+                            .map_or(true, |current| activation_increment > current.4)
                         {
-                            return Some((combined, indices, candidate, investment));
+                            best = Some((
+                                combined.clone(),
+                                indices.clone(),
+                                candidate,
+                                investment,
+                                activation_increment,
+                            ));
                         }
                     }
                 }
             }
         }
-        None
+        best.map(|(combined, indices, candidate, investment, _)| {
+            (combined, indices, candidate, investment)
+        })
     }
 
     /// Find a standalone target atom that can replace the catalyst's temporary
@@ -3125,7 +3155,7 @@ mod tests {
             origin,
             &catalog,
         )
-        .expect("ordinary H-S molecule must restore");
+        .expect("ordinary P-C molecule must restore");
         let old_substrate_bond = *substrate_structure
             .bonds
             .first()
@@ -3133,7 +3163,7 @@ mod tests {
 
         // Direct P-C + H -> P-H + C is the no-carrier control. The weak P-H
         // interaction should not activate the strong P-C bond by itself.
-        let (direct_source, direct_target, direct_candidate, direct_investment) =
+        let (direct_source, direct_target, direct_candidate, _direct_investment) =
             catalyst_target_contact(
                 &substrate_structure,
                 old_substrate_bond,
