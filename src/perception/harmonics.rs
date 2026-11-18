@@ -5336,7 +5336,8 @@ mod environmental_movement_spatial_candidate_tests {
         environmental_movement_displacements_from_spatial_candidate_pair_forces,
         environmental_movement_pair_force,
         environmental_movement_parallel_spatial_candidate_pair_forces,
-        environmental_movement_phase_components, environmental_movement_spatial_candidate_pair_forces,
+        environmental_movement_phase_components,
+        environmental_movement_spatial_candidate_pair_forces,
         environmental_movement_spatial_candidate_pairs, EnvironmentalMovementEmitter,
         ToneComponent, ToneSpectrum,
     };
