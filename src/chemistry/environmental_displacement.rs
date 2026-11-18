@@ -3112,6 +3112,47 @@ mod tests {
             .first()
             .expect("H-S substrate must contain its ordinary COMBINE bond");
 
+        // Direct H-S + C -> H-C + S is the no-carrier control. A regenerated
+        // carrier is not useful catalysis unless its two-step route compares
+        // favorably with this ordinary one-step pathway.
+        let (direct_source, direct_target, direct_candidate, direct_investment) =
+            catalyst_target_contact(
+                &substrate_structure,
+                old_substrate_bond,
+                0,
+                "Carbon",
+                &catalog,
+            )
+            .expect("direct H-C control must find a valid contact");
+        let direct_activation = catalyst_contact_activation(
+            &direct_source.units[0],
+            &direct_source.units[1],
+            &direct_source.units[direct_target],
+            direct_candidate,
+            old_substrate_bond,
+            &catalog,
+        )
+        .expect("direct H-C control must activate within one simulated day");
+        let direct_trial = build_displacement_trial(
+            &direct_source,
+            0,
+            1,
+            direct_target,
+            old_substrate_bond,
+            direct_candidate,
+            direct_investment,
+            direct_activation.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("direct H-C control must build a valid trial");
+        println!(
+            "CATALYST_DIRECT_CONTROL|H-S_to_H-C|activation_ticks={}|external_input={:.9}",
+            direct_activation.1,
+            direct_trial.energy.required_external_input,
+        );
+
         // O-H and O-P are the two strongest candidates for this role:
         // oxygen binds the hydrogen anchor strongly, while the temporary H-O
         // substrate bond has low integrity and can be displaced again.
