@@ -277,10 +277,7 @@ impl MovementBvh {
     fn refit_node(&mut self, index: usize, dirty: &[bool]) -> MovementBounds {
         let node = self.nodes[index];
         let updated = if let (Some(left), Some(right)) = (node.left, node.right) {
-            MovementBounds::union(
-                self.refit_node(left, dirty),
-                self.refit_node(right, dirty),
-            )
+            MovementBounds::union(self.refit_node(left, dirty), self.refit_node(right, dirty))
         } else if dirty[index] {
             self.range_bounds(node.start, node.end)
         } else {
@@ -321,11 +318,7 @@ struct MovementSpatialIndex {
 }
 
 impl MovementSpatialIndex {
-    fn update(
-        &mut self,
-        targets: &[MovementBvhItem],
-        candidates: &[MovementBvhItem],
-    ) {
+    fn update(&mut self, targets: &[MovementBvhItem], candidates: &[MovementBvhItem]) {
         self.targets.update(targets);
         self.candidates.update(candidates);
     }
@@ -1318,9 +1311,7 @@ impl ActiveMaterialField {
                     if target_identity == candidate_identity {
                         continue;
                     }
-                    if let Some(&snapshot_slot) =
-                        snapshot_slot_by_identity.get(&target_identity)
-                    {
+                    if let Some(&snapshot_slot) = snapshot_slot_by_identity.get(&target_identity) {
                         pairs.push((candidate_slot, snapshot_slot));
                     }
                 }
