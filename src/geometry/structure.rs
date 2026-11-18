@@ -57,7 +57,10 @@ impl StructuralUnit {
         ) {
             return None;
         }
-        Some(self.material.weighted_properties(catalog))
+        Some(
+            self.material
+                .weighted_properties_after_catalog_validation(catalog),
+        )
     }
     fn external_geometry_resource<'a>(
         &self,

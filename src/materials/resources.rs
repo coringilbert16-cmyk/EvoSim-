@@ -532,9 +532,6 @@ impl Material {
     }
 
     pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties {
-        let _profile = crate::property_profile::measure(
-            crate::property_profile::Metric::MaterialWeightedProperties,
-        );
         if !self.is_valid_for_catalog(catalog) {
             return ResourceProperties {
                 mass: f64::NAN,
@@ -544,6 +541,19 @@ impl Material {
                 cohesion: f64::NAN,
             };
         }
+        self.weighted_properties_after_catalog_validation(catalog)
+    }
+
+    /// Derive weighted properties when the caller has already validated this
+    /// material against the same catalog. Keep this crate-private so callers
+    /// cannot accidentally bypass the public fail-closed validation boundary.
+    pub(crate) fn weighted_properties_after_catalog_validation(
+        &self,
+        catalog: &[BaseResource],
+    ) -> ResourceProperties {
+        let _profile = crate::property_profile::measure(
+            crate::property_profile::Metric::MaterialWeightedProperties,
+        );
         let mut mass = 0.0;
         let mut pe = 0.0;
         let mut reac = 0.0;
