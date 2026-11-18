@@ -5492,3 +5492,53 @@ mod environmental_movement_spatial_candidate_tests {
         .is_none());
     }
 }
+
+
+#[cfg(test)]
+mod environmental_material_radius_tests {
+    use super::environmental_material_source_radius;
+    use crate::physical_material::PhysicalMaterial;
+    use crate::resources::Material;
+    use crate::structure::Placement;
+
+    #[test]
+    fn material_radius_includes_realized_constituent_surface_extent() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![("Carbon".to_owned(), 1.0), ("Hydrogen".to_owned(), 1.0)],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 13.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("physical material fixture should realize");
+        let center = (11.5, 10.0);
+        let shapes = physical.realized_shapes_for_parts(&catalog).unwrap();
+        let placements = physical.placements.as_ref().unwrap();
+        let expected = placements
+            .iter()
+            .zip(shapes)
+            .map(|(placement, shape)| {
+                (placement.x - center.0).hypot(placement.y - center.1)
+                    + shape.form.bounding_radius()
+            })
+            .fold(0.0_f64, f64::max);
+
+        assert_eq!(
+            environmental_material_source_radius(&physical, &catalog, center.0, center.1),
+            Some(expected)
+        );
+    }
+}
