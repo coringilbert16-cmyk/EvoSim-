@@ -2622,14 +2622,7 @@ fn environmental_contributions(
 
             for (a, b, _) in &segments {
                 if let Some((perception, contribution)) = environmental_contribution(
-                    source_x,
-                    source_y,
-                    extent,
-                    &emitted,
-                    mass_scale,
-                    *a,
-                    *b,
-                    center,
+                    source_x, source_y, extent, &emitted, mass_scale, *a, *b, center,
                 ) {
                     add_spectrum(&mut spectrum, &contribution, 1.0);
                     perceptions.push(perception);
