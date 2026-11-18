@@ -2723,7 +2723,12 @@ mod tests {
             .organisms
             .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap())
-            .sum();
+            .sum::<f64>()
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
         let before_external = simulation.energy_ledger.total_external_energy_input;
         let before_heat = simulation.energy_ledger.total_heat_dissipated;
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
@@ -2738,7 +2743,12 @@ mod tests {
             .organisms
             .iter()
             .map(|organism| organism.resonant_energy.total_energy().unwrap())
-            .sum();
+            .sum::<f64>()
+            + simulation
+                .environment
+                .resonant_energy
+                .total_energy()
+                .unwrap();
         let ledger = &simulation.energy_ledger;
         assert!(
             retained > 0.0,
