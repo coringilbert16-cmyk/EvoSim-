@@ -482,6 +482,38 @@ mod tests {
     use crate::resources::{InternalBond, Material};
 
     #[test]
+    fn batched_shape_resolution_matches_individual_resolution() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![
+                    ("Carbon".into(), 1.0),
+                    ("Hydrogen".into(), 1.0),
+                    ("Oxygen".into(), 1.0),
+                ],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement { x: 10.0, y: 10.0, rotation_radians: 0.0 },
+                Placement { x: 12.0, y: 10.0, rotation_radians: 0.0 },
+                Placement { x: 14.0, y: 10.0, rotation_radians: 0.0 },
+            ],
+            &catalog,
+        )
+        .expect("the multi-part material should be realizable");
+
+        let individual = (0..physical.material.parts.len())
+            .map(|index| physical.realized_shape_for_part(index, &catalog))
+            .collect::<Option<Vec<_>>>()
+            .expect("each individual shape should resolve");
+        assert_eq!(
+            physical.realized_shapes_for_parts(&catalog),
+            Some(individual)
+        );
+        assert_eq!(physical.realized_shapes_for_parts(&[]), None);
+    }
+
+    #[test]
     fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {
         let catalog = crate::resources::default_catalog();
         let realize_pair = |separation: f64| {
