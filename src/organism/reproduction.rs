@@ -1408,7 +1408,7 @@ mod tests {
             max_y: 0.0,
         };
 
-        let (status, stress) = advance_construction(
+        let (status, stress, structure_changed) = advance_construction(
             &mut parent_structure,
             &mut parent_storage,
             &mut construction,
@@ -1422,6 +1422,7 @@ mod tests {
 
         assert_eq!(status, ConstructionStatus::Dead);
         assert_eq!(stress, None);
+        assert!(!structure_changed);
         assert_eq!(parent_energy, 25.0);
         assert_eq!(ledger, ledger_before);
         assert!(parent_storage.is_empty());
@@ -1845,7 +1846,7 @@ mod tests {
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
 
-        let (status, _) = advance_construction(
+        let (status, _, _) = advance_construction(
             &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
