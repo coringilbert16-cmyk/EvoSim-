@@ -689,7 +689,9 @@ fn structure_material_properties(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
 ) -> Option<Vec<(usize, ResourceProperties)>> {
-    let _profile = crate::property_profile::measure(crate::property_profile::Metric::WorldToneStructureProperties);
+    let _profile = crate::property_profile::measure(
+        crate::property_profile::Metric::WorldToneStructureProperties,
+    );
     structure
         .units
         .iter()
@@ -702,7 +704,9 @@ fn physical_material_properties(
     physical: &PhysicalMaterial,
     catalog: &[BaseResource],
 ) -> Option<Vec<(usize, ResourceProperties)>> {
-    let _profile = crate::property_profile::measure(crate::property_profile::Metric::WorldTonePhysicalProperties);
+    let _profile = crate::property_profile::measure(
+        crate::property_profile::Metric::WorldTonePhysicalProperties,
+    );
     physical
         .material
         .parts
