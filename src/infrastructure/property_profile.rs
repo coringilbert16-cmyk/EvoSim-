@@ -49,6 +49,11 @@ static COUNTERS: [Counter; METRIC_COUNT] = [
     Counter::new(),
     Counter::new(),
     Counter::new(),
+    Counter::new(),
+    Counter::new(),
+    Counter::new(),
+    Counter::new(),
+    Counter::new(),
 ];
 
 pub(crate) struct Scope {
