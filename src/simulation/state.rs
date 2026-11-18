@@ -320,7 +320,7 @@ pub(crate) struct Organism {
     #[serde(skip)]
     pub(crate) cached_cavity: Option<Option<crate::cavity::GenomeCavity>>,
     #[serde(skip)]
-    pub(crate) cached_developmental_revision: Option<u64>,
+    pub(crate) cached_developmental_revision: Option<(u64, u64, u64, u64, u64, u64, u64)>,
     #[serde(skip)]
     pub(crate) cached_developmental_realization:
         Option<crate::developmental_blueprint::DevelopmentalRealization>,
@@ -353,6 +353,7 @@ impl Organism {
 
     pub(crate) fn mark_position_changed(&mut self) {
         self.position_revision = self.position_revision.wrapping_add(1);
+        self.cached_developmental_revision = None;
         self.cached_harmonic_key = None;
     }
 
@@ -421,7 +422,16 @@ impl Organism {
         catalog: &[BaseResource],
         (seed_mass, seed_length): (f64, f64),
     ) -> Option<crate::developmental_blueprint::DevelopmentalRealization> {
-        if self.cached_developmental_revision != Some(self.structure_revision) {
+        let cache_key = (
+            self.structure_revision,
+            self.position_revision,
+            seed_mass.to_bits(),
+            seed_length.to_bits(),
+            self.developmental_origin.x.to_bits(),
+            self.developmental_origin.y.to_bits(),
+            self.developmental_orientation_radians.to_bits(),
+        );
+        if self.cached_developmental_revision != Some(cache_key) {
             let preferred_length = self
                 .genome
                 .developmental_blueprint
@@ -438,7 +448,7 @@ impl Organism {
                     self.developmental_orientation_radians,
                     preferred_length,
                 ));
-            self.cached_developmental_revision = Some(self.structure_revision);
+            self.cached_developmental_revision = Some(cache_key);
         }
         self.cached_developmental_realization
     }
@@ -1157,4 +1167,44 @@ mod genome_core_identity_tests {
             "cache refresh must not erase the independent additional core"
         );
     }
+
+    #[test]
+    fn developmental_realization_cache_tracks_all_live_inputs() {
+        let mut simulation = Simulation::new(32, 20.0);
+        let catalog = simulation.environment.catalog.clone();
+        let organism = &mut simulation.organisms[0];
+
+        let first_reference = crate::juvenile::confirmed_seed_scale_reference(&catalog).unwrap();
+        let _ = organism.developmental_realization_cached_for_reference(
+            &catalog,
+            first_reference,
+        );
+        let first_key = organism
+            .cached_developmental_revision
+            .expect("initial realization should establish a cache key");
+
+        organism.mark_position_changed();
+        let _ = organism.developmental_realization_cached_for_reference(
+            &catalog,
+            first_reference,
+        );
+        let moved_key = organism
+            .cached_developmental_revision
+            .expect("moved realization should establish a cache key");
+        assert_ne!(first_key, moved_key, "position changes affect spatial realization");
+
+        let alternate_reference = (first_reference.0 * 1.01, first_reference.1 * 1.01);
+        let _ = organism.developmental_realization_cached_for_reference(
+            &catalog,
+            alternate_reference,
+        );
+        let alternate_key = organism
+            .cached_developmental_revision
+            .expect("alternate reference should establish a cache key");
+        assert_ne!(
+            moved_key, alternate_key,
+            "seed-scale reference changes affect developmental realization"
+        );
+    }
+
 }
