@@ -2313,5 +2313,4 @@ mod tests {
         assert!(environment.field.cell_revisions[destination] > destination_revision);
         assert!(environment.field.revision > field_revision);
     }
-
 }
