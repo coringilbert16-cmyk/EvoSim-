@@ -2403,7 +2403,7 @@ mod tests {
         let resonant_before =
             crate::reproduction::total_resonant_energy_held(&simulation.organisms);
 
-        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::new(),
@@ -2479,7 +2479,7 @@ mod tests {
         let external_before = simulation.energy_ledger.total_external_energy_input;
         let heat_before = simulation.energy_ledger.total_heat_dissipated;
         let escaped_before = simulation.energy_ledger.total_world_tone_energy_escaped;
-        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([owner_id]),
@@ -2512,7 +2512,7 @@ mod tests {
     }
 
     #[test]
-    fn active_transformation_keeps_removed_stored_material_in_snapshot() {
+    fn active_transformation_material_remains_a_world_tone_recipient() {
         let mut simulation = Simulation::new(72, 1.0);
         clear_environment_physical_material(&mut simulation);
         let catalog = simulation.environment.catalog.clone();
@@ -2572,10 +2572,14 @@ mod tests {
                 combine_environmental_source_index: None,
             });
 
-        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
-            .expect("removed material remains a physical occluder during BREAK");
-        assert_eq!(snapshot.occluder_count, 2);
-        assert_eq!(snapshot.body_index_for_organism(0), Some(0));
+        let living_ids = HashSet::from([owner_id.clone()]);
+        let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &living_ids)
+            .expect("removed material remains a physical recipient during BREAK");
+        assert_eq!(snapshot.recipients.len(), 2);
+        assert!(
+            snapshot.recipients.iter().any(|recipient| recipient.resonance_owner.is_none()),
+            "in-transition stored material must not acquire the owner's resonance reservoir"
+        );
     }
     #[test]
     fn exposed_environmental_material_settles_heat_without_a_living_receiver() {
@@ -2616,7 +2620,7 @@ mod tests {
                 &simulation.decomposing_bodies,
             );
 
-        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::new(),
@@ -2649,7 +2653,7 @@ mod tests {
     }
 
     #[test]
-    fn ordered_living_and_environmental_receivers_conserve_one_travelling_signal() {
+    fn uniform_living_and_environmental_receivers_each_receive_full_source_input() {
         let mut simulation = Simulation::new(83, 1.0);
         clear_environment_physical_material(&mut simulation);
         for organism in &mut simulation.organisms {
@@ -2705,15 +2709,15 @@ mod tests {
         simulation.energy_ledger.total_heat_dissipated = 0.0;
         simulation.energy_ledger.total_world_tone_energy_escaped = 0.0;
 
-        let snapshot = WorldToneOccluderSnapshot::from_simulation(sample(), &simulation)
-            .expect("both physical receivers should be represented");
-        assert!(
-            snapshot.frame.interaction_paths().iter().any(|path| {
-                path.hits
-                    .windows(2)
-                    .any(|hits| hits[0] == (0, 0) && hits[1] == (1, 0))
-            }),
-            "at least one source lane must hit the living receiver before the environmental receiver"
+        let recipients = WorldToneRecipientSnapshot::from_simulation(
+            &simulation,
+            &HashSet::from([living_id.clone()]),
+        )
+        .expect("both material instances should be represented");
+        assert_eq!(
+            recipients.recipients.len(),
+            2,
+            "each physical material instance receives an independent uniform source input"
         );
 
         let before_retained: f64 = simulation
@@ -2725,7 +2729,7 @@ mod tests {
         let before_heat = simulation.energy_ledger.total_heat_dissipated;
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
 
-        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([living_id]),
@@ -2788,7 +2792,7 @@ mod tests {
         let before_escaped = simulation.energy_ledger.total_world_tone_energy_escaped;
         simulation.energy_ledger.total_heat_dissipated = f64::NAN;
 
-        WorldToneOccluderSnapshot::settle_living_organism_inputs(
+        WorldToneRecipientSnapshot::settle_living_organism_inputs(
             &mut simulation,
             sample(),
             &std::collections::HashSet::from([living_id]),
