@@ -329,7 +329,7 @@ pub(crate) struct Organism {
     #[serde(default)]
     pub(crate) peak_developmental_realization: f64,
     #[serde(skip)]
-    pub(crate) cached_harmonic_key: Option<(u64, u64, u64, u64)>,
+    pub(crate) cached_harmonic_key: Option<(u64, u64, u64, u64, bool)>,
     #[serde(skip)]
     pub(crate) last_movement_attempt: Option<MovementAttemptDiagnostic>,
 }
