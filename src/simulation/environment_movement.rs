@@ -26,7 +26,10 @@ pub(crate) fn apply_environmental_resonance_movement(
         if material.environmental_identity == 0
             || material.owner_relative_origin.is_some()
             || !material.is_realized()
-            || !material.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentalMovementValidationSite,
+                || material.material.is_valid_for_catalog(catalog),
+            )
             || material.material.is_empty()
         {
             continue;
