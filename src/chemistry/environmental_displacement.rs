@@ -3009,8 +3009,7 @@ mod tests {
         target_name: &str,
         catalog: &[BaseResource],
     ) -> Option<(OrganismStructure, usize, ConnectionPairCandidate, f64)> {
-        let mut best: Option<(OrganismStructure, usize, ConnectionPairCandidate, f64, f64)> =
-            None;
+        let mut best: Option<(OrganismStructure, usize, ConnectionPairCandidate, f64, f64)> = None;
         for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
