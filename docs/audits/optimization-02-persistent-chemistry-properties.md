@@ -102,3 +102,49 @@ The measurements are deliberately labeled **inclusive**. These paths nest (for e
 The PR's Rust workflow now runs one standard 60-second, seed-42 environmental chemistry experiment with profiling enabled, after ordinary CI and the existing smoke run. The log and raw diagnostic JSONL are uploaded as the material-property-profile artifact. The simulation code only reads the environment flag and updates diagnostic atomics/timers; no simulation inputs, branch decisions, candidate ordering, or energy calculations are changed.
 
 The next decision will use both call counts and elapsed time. If the profiled functions account for negligible wall time, the cache workstream should close without a production cache. If a single reusable value dominates, prototype only that value with exact output parity and a matched end-to-end comparison.
+
+## Validation-call audit — 2026-11-18
+
+### What the aggregate profiler count does and does not tell us
+
+The standard profiled run recorded **2,242,584 calls / 1,739.047 ms inclusive** in `Material::is_valid_for_catalog`. This is a real and significant repeated-work signal, but the current profiler records one aggregate counter inside the method. It does **not** attribute those calls to individual callers. We must not claim that all 2.24 million are redundant or assign them to a particular subsystem without call-site instrumentation.
+
+The other counters expose some nested duplication:
+
+- `Material::mass`: 666,423 calls. Each call invokes catalog validation.
+- `Material::weighted_properties`: 299,196 calls. Each call invokes catalog validation.
+- `StructuralUnit::properties`: 73,952 calls. It first invokes catalog validation, then calls `weighted_properties`, which validates the same material again. This path therefore performs two catalog validations per successful property calculation (147,904 validation invocations represented by those calls), absent early failure.
+- `ResourceBaselines::from_catalog`: 223,282 calls. This is catalog-wide aggregation, not material validation.
+
+These are nested counts, not disjoint work. In particular, the 2,242,584 validation count already includes the validation calls made by mass, weighted properties, and structural-unit properties.
+
+### Confirmed source-level validation call sites
+
+The branch source audit found validation at several different semantic boundaries:
+
+1. **Property derivation:** `Material::mass`, `Material::weighted_properties`, `Material::potential_energy`, and `StructuralUnit::properties`. The structural-unit path explicitly validates and then calls a method that validates again. This is the clearest provable duplicate validation.
+2. **Per-tick environmental movement selection:** `simulation/environment_movement.rs` validates each realized environmental material while building the movement input list.
+3. **Environmental broad-phase snapshot construction:** `chemistry/environmental_broad_phase.rs` validates indexed materials before restoring geometry for bounds.
+4. **Environmental field movement/snapshot and transfer boundaries:** `simulation/environment.rs` validates materials while building movement snapshots, checking moves/splits, and accepting deposits. These checks protect state mutation and ownership boundaries; they cannot simply be removed because another earlier scan happened to validate the object.
+5. **Material storage operations:** `materials/material_storage.rs` validates during store, batch preparation, selection, and removal. Some iterator predicates validate candidates and then delegate to a method that validates the selected object again. This is a second likely duplicate pattern worth measuring at call-site level.
+6. **COMBINE/displacement and restoration:** reaction source/product construction and material restoration validate inputs and outputs at transaction boundaries. These checks are correctness guards and should remain unless an authoritative validated-state contract spans the entire transaction.
+
+The code search also finds validation in expulsion, transfer, physical-material construction, and transformation code. Their frequency in the standard run is not yet known.
+
+### Why repeated validation is expensive
+
+`Material::is_valid_for_catalog` currently performs all of the following on each call:
+
+- `Material::is_valid`: checks nonempty names, integral positive constituent amounts, representable per-resource totals, valid bond endpoints, and duplicate/reversed bonds.
+- Scans the full catalog to reject empty or duplicate resource names.
+- For every material part, scans the catalog and counts matching resource names, requiring exactly one match.
+
+The checks are intentionally fail-closed. Any optimization must preserve duplicate catalog-name rejection, unknown-name rejection, integer/count overflow protection, ordered constituent identity, and bond-graph validity. A cache keyed only by a material's object identity would be insufficient because `Material` and its vectors are mutable and equality includes both ordered parts and internal bonds.
+
+### Audit conclusion and next measurement
+
+The audit has identified one definite local duplication in `StructuralUnit::properties`, plus likely repeated checks in environmental movement and storage selection. However, the existing aggregate profiler cannot tell us which call sites account for the remaining validation volume.
+
+**Next justified step:** add temporary, opt-in call-site counters around the major validation sites (movement input selection, broad-phase snapshot, environment snapshot/transfer, storage selection, and structural-unit derivation), then run the same standard 60-second seed-42 workload. Keep the existing aggregate validation counter as a reconciliation total. This will identify the dominant sources without changing validation semantics.
+
+Only after that attribution should we remove a proven same-scope duplicate or design a validated-material/cache boundary. Do not cache successful validation globally yet: there is no authoritative composition/catalog revision covering every mutation path, and transaction-boundary checks serve distinct correctness purposes.
