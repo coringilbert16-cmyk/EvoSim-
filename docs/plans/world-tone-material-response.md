@@ -7,8 +7,8 @@ Replace geometry-dependent world-tone propagation with direct, uniform exposure 
 ## Domain rules
 
 - World tone is a uniform environmental source: position, orientation, intervening material, and geometric occlusion do not change whether or how a material receives it.
-- Every eligible material instance receives the same source input for a given tick.
-- Total source input scales with the number of eligible material instances. The ledger must record that full input explicitly; no energy may be silently created, duplicated, or lost.
+- Every atomic constituent receives the same source input for a given tick. A material part with an integer amount of N contributes N independent atomic recipients.
+- Total source input scales with the number of eligible atomic constituents. The ledger must record that full input explicitly; no energy may be silently created, duplicated, or lost.
 - Identical material-property signatures have identical responses and share one response calculation.
 - Distinct molecular/material structures remain distinct when their harmonic properties differ.
 - Keep harmonic response equations, resonance storage semantics, heat accounting, and ownership rules unless tests expose a necessary correction.
@@ -23,7 +23,7 @@ Replace geometry-dependent world-tone propagation with direct, uniform exposure 
 
 2. **Replace geometry-based exposure**
    - Remove ray/path construction, occlusion, projected-width discovery, and downstream signal propagation from world-tone settlement.
-   - Build the eligible recipient list directly from authoritative physical material state.
+   - Build the eligible atomic-recipient list directly from authoritative physical material state, expanding each validated integer constituent count.
    - Ensure position, orientation, and intervening bodies cannot affect world-tone receipt.
 
 3. **Introduce shared material-response evaluation**
@@ -43,7 +43,7 @@ Replace geometry-dependent world-tone propagation with direct, uniform exposure 
    - Identical property signatures reuse the same response.
    - Different property signatures produce their correct distinct responses.
    - Translation, rotation, and intervening material do not affect receipt or response.
-   - Every eligible instance is settled exactly once, including environmental and nonliving material.
+   - Every eligible atomic constituent is settled exactly once, including environmental and nonliving material; aggregate counts expand to the correct number of recipients.
    - Stored, decomposing, attached/developing, and active-transformation material retains correct ownership/eligibility.
    - Invalid settlement does not partially commit.
    - Determinism, chemistry inventory, and full energy inventory remain valid.
