@@ -183,8 +183,11 @@ impl OrganismBodyGeometry {
             f64::NEG_INFINITY,
         );
         let shapes = physical.realized_shapes_for_parts(catalog)?;
-        for (unit_index, (placement, shape)) in
-            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+        for (unit_index, (placement, shape)) in placements
+            .iter()
+            .copied()
+            .zip(shapes.into_iter())
+            .enumerate()
         {
             if !placement.x.is_finite()
                 || !placement.y.is_finite()
