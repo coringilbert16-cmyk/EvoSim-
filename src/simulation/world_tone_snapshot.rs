@@ -56,6 +56,34 @@ pub(crate) struct WorldToneRecipientSnapshot {
 }
 
 impl WorldToneRecipientSnapshot {
+    fn append_material_constituents(
+        recipients: &mut Vec<WorldToneRecipient>,
+        material: &crate::resources::Material,
+        catalog: &[BaseResource],
+        resonance_owner: Option<usize>,
+        environment_reservoir: bool,
+    ) -> Option<()> {
+        if !material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        for (name, amount) in &material.parts {
+            let properties = catalog
+                .iter()
+                .find(|resource| resource.name == *name)?
+                .properties;
+            // Material counts are validated whole numbers. World tone acts on
+            // each atomic constituent, not once on a molecule or aggregate part.
+            for _ in 0..(*amount as u64) {
+                recipients.push(WorldToneRecipient {
+                    properties,
+                    resonance_owner,
+                    environment_reservoir,
+                });
+            }
+        }
+        Some(())
+    }
+
     fn append_physical(
         recipients: &mut Vec<WorldToneRecipient>,
         physical: &PhysicalMaterial,
@@ -63,17 +91,13 @@ impl WorldToneRecipientSnapshot {
         resonance_owner: Option<usize>,
         environment_reservoir: bool,
     ) -> Option<()> {
-        if !physical.material.is_valid_for_catalog(catalog) {
-            return None;
-        }
-        for (_, properties) in physical_material_properties(physical, catalog)? {
-            recipients.push(WorldToneRecipient {
-                properties,
-                resonance_owner,
-                environment_reservoir,
-            });
-        }
-        Some(())
+        Self::append_material_constituents(
+            recipients,
+            &physical.material,
+            catalog,
+            resonance_owner,
+            environment_reservoir,
+        )
     }
 
     fn from_simulation(simulation: &Simulation, living_ids: &HashSet<String>) -> Option<Self> {
@@ -84,13 +108,14 @@ impl WorldToneRecipientSnapshot {
         for (organism_index, organism) in simulation.organisms.iter().enumerate() {
             if !organism.structure.units.is_empty() {
                 let owner = living_ids.contains(&organism.id).then_some(organism_index);
-                for (_, properties) in structure_material_properties(&organism.structure, catalog)?
-                {
-                    recipients.push(WorldToneRecipient {
-                        properties,
-                        resonance_owner: owner,
-                        environment_reservoir: false,
-                    });
+                for unit in &organism.structure.units {
+                    Self::append_material_constituents(
+                        &mut recipients,
+                        &unit.material,
+                        catalog,
+                        owner,
+                        false,
+                    )?;
                 }
             }
             if let Some(construction) = &organism.reproductive_construction {
@@ -115,14 +140,14 @@ impl WorldToneRecipientSnapshot {
         // Legacy decomposing structures remain recipients but have no reservoir.
         for decomposing in &simulation.decomposing_bodies {
             if !decomposing.structure.units.is_empty() {
-                for (_, properties) in
-                    structure_material_properties(&decomposing.structure, catalog)?
-                {
-                    recipients.push(WorldToneRecipient {
-                        properties,
-                        resonance_owner: None,
-                        environment_reservoir: false,
-                    });
+                for unit in &decomposing.structure.units {
+                    Self::append_material_constituents(
+                        &mut recipients,
+                        &unit.material,
+                        catalog,
+                        None,
+                        false,
+                    )?;
                 }
             }
         }
@@ -2890,6 +2915,72 @@ mod tests {
         assert_eq!(
             reservoir, before,
             "failed capacity preflight must leave the reservoir untouched"
+        );
+    }
+
+    #[test]
+    fn world_tone_recipient_inventory_expands_every_atom_in_a_molecule() {
+        let mut simulation = Simulation::new(992, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        for organism in &mut simulation.organisms {
+            organism.structure = OrganismStructure::new();
+            organism.stored_material.entries.clear();
+            organism.reproductive_construction = None;
+        }
+        simulation.decomposing_bodies.clear();
+        simulation.active_transformations.clear();
+
+        let material = Material {
+            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 2.0)],
+            internal_bonds: Vec::new(),
+        };
+        let unit = StructuralUnit::from_material(
+            material,
+            Placement {
+                x: 0.0,
+                y: 0.0,
+                rotation_radians: 0.0,
+            },
+        )
+        .expect("integer-count molecule should be valid");
+        simulation.organisms[0].structure.add_unit(unit);
+        let living_ids = HashSet::from([simulation.organisms[0].id.clone()]);
+        let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &living_ids)
+            .expect("every atom in a valid molecule should be enumerated");
+
+        assert_eq!(
+            snapshot.recipients.len(),
+            3,
+            "one carbon and two hydrogen atoms must receive three independent source inputs"
+        );
+        let catalog = &simulation.environment.catalog;
+        let carbon = catalog
+            .iter()
+            .find(|resource| resource.name == "Carbon")
+            .expect("carbon catalog entry")
+            .properties;
+        let hydrogen = catalog
+            .iter()
+            .find(|resource| resource.name == "Hydrogen")
+            .expect("hydrogen catalog entry")
+            .properties;
+        let carbon_key = MaterialResponseKey::from(carbon);
+        let hydrogen_key = MaterialResponseKey::from(hydrogen);
+        assert_eq!(
+            snapshot
+                .recipients
+                .iter()
+                .filter(|recipient| MaterialResponseKey::from(recipient.properties) == carbon_key)
+                .count(),
+            1
+        );
+        assert_eq!(
+            snapshot
+                .recipients
+                .iter()
+                .filter(|recipient| MaterialResponseKey::from(recipient.properties) == hydrogen_key)
+                .count(),
+            2
         );
     }
 
