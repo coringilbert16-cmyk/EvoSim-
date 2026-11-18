@@ -904,6 +904,8 @@ impl ActiveMaterialField {
 
         let candidate_elapsed = candidate_started.elapsed();
         let mut original_collision_rejections = 0usize;
+        let mut original_aabb_candidates = 0usize;
+        let mut original_exact_geometry_checks = 0usize;
         let original_collision_started = std::time::Instant::now();
 
         // Preserve the existing transaction's conservative rule: a candidate
@@ -926,8 +928,14 @@ impl ActiveMaterialField {
                 if !candidate.bounds.overlaps(other_bounds) {
                     return false;
                 }
+                if profile_movement {
+                    original_aabb_candidates += 1;
+                }
                 candidate.parts.iter().any(|part| {
                     other_parts.iter().any(|other_part| {
+                        if profile_movement {
+                            original_exact_geometry_checks += 1;
+                        }
                         crate::material_geometry::placed_forms_penetrate(
                             part,
                             other_part,
@@ -943,11 +951,17 @@ impl ActiveMaterialField {
         }
         let original_collision_elapsed = original_collision_started.elapsed();
         let mut mover_overlap_rejections = 0usize;
+        let mut mover_pair_evaluations = 0usize;
+        let mut mover_aabb_candidates = 0usize;
+        let mut mover_exact_geometry_checks = 0usize;
         let mover_overlap_started = std::time::Instant::now();
 
         // Also reject both movers if their proposed final placements intersect.
         for a in 0..candidates.len() {
             for b in (a + 1)..candidates.len() {
+                if profile_movement {
+                    mover_pair_evaluations += 1;
+                }
                 let overlaps = {
                     let (Some(a_candidate), Some(b_candidate)) =
                         (candidates[a].as_ref(), candidates[b].as_ref())
@@ -957,8 +971,14 @@ impl ActiveMaterialField {
                     if !a_candidate.bounds.overlaps(b_candidate.bounds) {
                         continue;
                     }
+                    if profile_movement {
+                        mover_aabb_candidates += 1;
+                    }
                     a_candidate.parts.iter().any(|part| {
                         b_candidate.parts.iter().any(|other_part| {
+                            if profile_movement {
+                                mover_exact_geometry_checks += 1;
+                            }
                             crate::material_geometry::placed_forms_penetrate(
                                 part,
                                 other_part,
@@ -1022,12 +1042,17 @@ impl ActiveMaterialField {
         }
         if profile_movement {
             eprintln!(
-                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} mover_overlap_rejections={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns={} total_ns={}",
+                "MOVEMENT_PLACEMENT_PROFILE objects={} proposals={} candidates={} original_collision_rejections={} original_aabb_candidates={} original_exact_geometry_checks={} mover_overlap_rejections={} mover_pair_evaluations={} mover_aabb_candidates={} mover_exact_geometry_checks={} accepted={} snapshot_ns={} candidate_ns={} original_collision_ns={} mover_overlap_ns={} commit_ns={} total_ns={}" ,
                 snapshots.len(),
                 displacements.len(),
                 candidates_count_for_profile,
                 original_collision_rejections,
+                original_aabb_candidates,
+                original_exact_geometry_checks,
                 mover_overlap_rejections,
+                mover_pair_evaluations,
+                mover_aabb_candidates,
+                mover_exact_geometry_checks,
                 accepted_count,
                 snapshot_elapsed.as_nanos(),
                 candidate_elapsed.as_nanos(),
