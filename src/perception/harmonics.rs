@@ -2373,6 +2373,12 @@ fn environmental_movement_spatial_candidate_pairs(
         return Some(Vec::new());
     }
     let mut maximum_radius = 0.0_f64;
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+    );
     let mut x_order = Vec::with_capacity(emitters.len());
     for (index, emitter) in emitters.iter().enumerate() {
         if !emitter.x.is_finite()
@@ -2383,7 +2389,21 @@ fn environmental_movement_spatial_candidate_pairs(
             return None;
         }
         maximum_radius = maximum_radius.max(emitter.source_radius);
+        min_x = min_x.min(emitter.x);
+        max_x = max_x.max(emitter.x);
+        min_y = min_y.min(emitter.y);
+        max_y = max_y.max(emitter.y);
         x_order.push(index);
+    }
+    // Preserve the old all-pairs fail-closed behavior for coordinate
+    // differences whose Euclidean distance would overflow.
+    let maximum_dx = max_x - min_x;
+    let maximum_dy = max_y - min_y;
+    if !maximum_dx.is_finite()
+        || !maximum_dy.is_finite()
+        || !maximum_dx.hypot(maximum_dy).is_finite()
+    {
+        return None;
     }
     x_order.sort_by(|left, right| {
         emitters[*left]
@@ -2614,6 +2634,8 @@ pub(crate) fn environmental_resonance_displacements(
 ) -> Option<Vec<(f64, f64)>> {
     let profile =
         std::env::var("EVOSIM_PROFILE_MOVEMENT").is_ok_and(|value| value == "1" || value == "true");
+    let reference_all_pairs = std::env::var("EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS")
+        .is_ok_and(|value| value == "1" || value == "true");
     let total_started = std::time::Instant::now();
 
     let emitter_started = std::time::Instant::now();
@@ -2629,12 +2651,12 @@ pub(crate) fn environmental_resonance_displacements(
     // physically reach one another under the one-source-radius aura limit.
     let worker_count = environmental_movement_worker_count();
     let pair_count = environmental_movement_pair_count(emitters.len())?;
-    if !profile {
+    if !reference_all_pairs {
         let discovery_started = std::time::Instant::now();
         let candidate_pairs = environmental_movement_spatial_candidate_pairs(&emitters)?;
         let discovery_ns = discovery_started.elapsed().as_nanos();
         let pair_started = std::time::Instant::now();
-        let pair_forces = if worker_count > 1 && candidate_pairs.len() >= 4_096 {
+        let pair_forces = if !profile && worker_count > 1 && candidate_pairs.len() >= 4_096 {
             environmental_movement_parallel_spatial_candidate_pair_forces(
                 &emitters,
                 &candidate_pairs,
@@ -2652,8 +2674,9 @@ pub(crate) fn environmental_resonance_displacements(
                 &pair_forces,
             )?;
         let response_ns = response_started.elapsed().as_nanos();
-        if std::env::var("EVOSIM_PROFILE_MOVEMENT_CANDIDATES")
-            .is_ok_and(|value| value == "1" || value == "true")
+        if profile
+            || std::env::var("EVOSIM_PROFILE_MOVEMENT_CANDIDATES")
+                .is_ok_and(|value| value == "1" || value == "true")
         {
             eprintln!(
                 "MOVEMENT_SPATIAL_PROFILE tick={tick} objects={} possible_pairs={} candidate_pairs={} discovery_ns={} pair_eval_ns={} response_ns={} total_movement_ns={} emitter_ns={} workers={}",
