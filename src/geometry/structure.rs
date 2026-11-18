@@ -101,7 +101,10 @@ impl StructuralUnit {
                     return false;
                 };
                 if resource.physical_state != crate::resources::PhysicalState::Fluid
-                    || !self.material.is_valid_for_catalog(catalog)
+                    || !crate::property_profile::measure_call(
+                        crate::property_profile::Metric::StructuralUnitGeometryValidationSite,
+                        || self.material.is_valid_for_catalog(catalog),
+                    )
                 {
                     return false;
                 }
