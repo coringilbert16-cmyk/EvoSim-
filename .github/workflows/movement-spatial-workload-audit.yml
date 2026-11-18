@@ -20,7 +20,9 @@ jobs:
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: |
+          cargo fmt --all -- --check
+          rustfmt --edition 2021 --check tools/movement_bvh_research.rs
       - name: Run standard 60-second workload with spatial telemetry
         timeout-minutes: 10
         env:
@@ -35,7 +37,13 @@ jobs:
             --seed 42 \
             --diagnostics movement-spatial-audit.jsonl \
             --diagnostic-interval 100 2>&1 | tee movement-spatial-audit.log
-      - name: Upload spatial workload measurements
+      - name: Compile and run Rust BVH refit comparison
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          rustc --edition 2021 -O tools/movement_bvh_research.rs -o movement-bvh-research
+          ./movement-bvh-research movement-spatial-audit.log | tee movement-bvh-research-results.txt
+      - name: Upload spatial workload and BVH measurements
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -43,5 +51,6 @@ jobs:
           path: |
             movement-spatial-audit.log
             movement-spatial-audit.jsonl
+            movement-bvh-research-results.txt
           if-no-files-found: error
           retention-days: 30
