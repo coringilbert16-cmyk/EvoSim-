@@ -2352,7 +2352,9 @@ mod tests {
         assert!(environment.field.cell_revisions[destination] > destination_revision);
         assert!(environment.field.revision > field_revision);
         assert_eq!(
-            environment.field.environmental_bond_candidates(0, usize::MAX),
+            environment
+                .field
+                .environmental_bond_candidates(0, usize::MAX),
             vec![(destination, 0, 0)],
             "the maintained bond index must move with the physical material"
         );
