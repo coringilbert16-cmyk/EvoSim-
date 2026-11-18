@@ -2541,8 +2541,7 @@ mod fluid_coalescence_transaction_tests {
         simulation.organisms[0].usable_energy = 100.0;
         let revision_before = simulation.organisms[0].structure_revision;
         simulation.organisms[0].cached_cavity_revision = Some(revision_before);
-        simulation.organisms[0].cached_developmental_revision =
-            Some((0, 0, 0, 0, 0, 0, 0));
+        simulation.organisms[0].cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
         simulation.organisms[0].cached_harmonic_key = Some((0, 0, 0, 0));
 
         let mut cache = ConnectionCompatibilityCache;
