@@ -66,6 +66,7 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 
 - Use a stable x-axis sweep-and-prune over the source-specific bounds; only pairs within the conservative pair bound become candidates.
 - Use realized constituent shapes to derive conservative material extents; do not use a single global simulation radius.
+- The candidate path retains parallel force evaluation for large candidate sets and reduces forces in canonical pair order. Set `EVOSIM_PROFILE_MOVEMENT=1` to profile the optimized candidate path; set `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1` to run the original all-pairs reference path.
 - Generate every eligible unordered pair exactly once and sort by stable `(a, b)` identity before force accumulation.
 - Handle moving sources, world boundaries/wrapping, source extents, and degenerate/coincident positions.
 - Keep the all-pairs implementation as a reference oracle. Validate candidate discovery against an exhaustive application of the same source-specific support predicate.
@@ -82,10 +83,11 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 ## Current status
 
 - The movement bottleneck has been profiled.
-- The all-pairs implementation remains available as the profiled reference path.
-- PR #378 contains the reusable source-geometry foundation; this PR currently derives conservative source radii from realized constituent shapes without coupling to the geometry layer.
-- The first spatial candidate implementation uses the source-specific one-material-radius support bound and stable x-axis sweep-and-prune. It does not yet migrate live movement to exact source-perimeter reception or implement energy/heat settlement.
-- A tighter energy-derived support bound remains unimplemented; the current broadphase uses the full conservative source-specific maximum.
+- The original all-pairs implementation remains available behind `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1` as the reference path.
+- The normal live path now derives conservative source radii from realized constituent shapes and uses source-specific x-axis sweep-and-prune; large candidate sets retain deterministic parallel force evaluation.
+- `EVOSIM_PROFILE_MOVEMENT=1` profiles the optimized path rather than silently reverting the simulation to all-pairs behavior.
+- PR #378 contains the reusable exact source-geometry foundation; this PR's bounding radii are a broadphase only and do not replace exact source-perimeter reception.
+- The current broadphase uses the full conservative one-source-radius maximum. A tighter energy-derived support bound and propagation heat settlement remain unimplemented.
 - The independent resonance-field architecture is future work and is documented separately in `docs/design/resonance-field-architecture.md`.
 
 ## Acceptance criteria
