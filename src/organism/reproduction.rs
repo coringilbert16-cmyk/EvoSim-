@@ -951,6 +951,9 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>, bool) {
+    let original_unit_count = parent_structure.units.len();
+    let original_bond_count = parent_structure.bonds.len();
+    let mut structure_changed = false;
     // Stable IDs, not the cached developing graph, determine membership once
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
@@ -967,7 +970,7 @@ pub(crate) fn advance_construction(
     let Some(working_structure) = parent_structure
         .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
     else {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     };
 
     // Validate the authoritative transient view before any construction attempt
@@ -1017,9 +1020,10 @@ pub(crate) fn advance_construction(
         let Some((_, refreshed_view)) = parent_structure
             .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
         else {
-            return (ConstructionStatus::Dead, None);
+            return (ConstructionStatus::Dead, None, structure_changed);
         };
         child.structure = refreshed_view;
+        structure_changed = true;
     }
     *ledger = staged_ledger;
     *parent_energy = child.usable_energy;
@@ -1038,11 +1042,11 @@ pub(crate) fn advance_construction(
         &environment.catalog,
         seed_reference,
     ) {
-        return (ConstructionStatus::Ready, None, false);
+        return (ConstructionStatus::Ready, None, structure_changed);
     }
 
     if !parent_child_in_contact(parent_structure, &child.structure) {
-        return (ConstructionStatus::Detached, None, false);
+        return (ConstructionStatus::Detached, None, structure_changed);
     }
 
     let anchor_index = construction
@@ -1082,11 +1086,11 @@ pub(crate) fn advance_construction(
         ) {
             NextConstructionResourceStatus::Missing => {
                 construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None, false);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
             NextConstructionResourceStatus::Available => {
                 construction.needs_space = true;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
             NextConstructionResourceStatus::NoFit => {
                 // The inventory is real but none of the current physical
@@ -1112,7 +1116,9 @@ pub(crate) fn advance_construction(
         before_units,
         seed_reference,
     );
-    (status, None, parent_structure.units.len() > before_units)
+    let attachment_changed = parent_structure.units.len() != original_unit_count
+        || parent_structure.bonds.len() != original_bond_count;
+    (status, None, structure_changed || attachment_changed)
 }
 
 pub(crate) fn finish_reproduction(
