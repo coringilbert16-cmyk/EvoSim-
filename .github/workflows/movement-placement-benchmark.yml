@@ -17,7 +17,7 @@ permissions:
 jobs:
   matched-benchmark:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Check out benchmark revision
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Run ten matched pairs (60 seconds each, profiling disabled)
-        timeout-minutes: 30
+        timeout-minutes: 85
         run: |
           set -euo pipefail
           mkdir -p benchmark-artifacts
@@ -43,7 +43,7 @@ jobs:
             echo "=== START label=$label seed=$seed bvh_mode=$mode ==="
             cd "$pr_dir"
             if [[ "$mode" == "bvh" ]]; then
-              env -u EVOSIM_PROFILE_MOVEMENT EVOSIM_MOVEMENT_BVH_EXPERIMENT=1 timeout 100s cargo run --locked -- \
+              env -u EVOSIM_PROFILE_MOVEMENT EVOSIM_MOVEMENT_BVH_EXPERIMENT=1 timeout 240s cargo run --locked -- \
                 --headless \
                 --environment-chemistry-experiment \
                 --seconds 60 \
