@@ -2444,8 +2444,7 @@ fn environmental_movement_spatial_candidate_pairs(
             if dx > global_x_bound {
                 break;
             }
-            let reach =
-                environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
+            let reach = environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
             if dx <= reach {
                 let dy = emitters[b].y - emitters[a].y;
                 if !dy.is_finite() {
