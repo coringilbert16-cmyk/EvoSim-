@@ -72,3 +72,14 @@ PhysicalMaterial::environmental_identity is stable across transport, but it is n
 ## Current decision
 
 **Audit-first; no production cache implementation yet.** The code contains reusable inputs, but the largest candidate cost has not been quantified and production-wide invalidation signals are not yet established. Implementing a general persistent cache now would add stale-state risk without demonstrated end-to-end benefit.
+
+
+### 5. Environmental resonance repeatedly derives aggregate properties
+
+A closer inspection of src/perception/harmonics.rs found a more consequential candidate call path than the world-tone snapshot's direct physical-property mapping. environmental_material_resonance validates a PhysicalMaterial, derives its centroid from current placements, recomputes ResourceBaselines::from_catalog, and calls Material::weighted_properties before building the emitted spectrum. environmental_contribution then calls environmental_material_resonance and independently recomputes ResourceBaselines::from_catalog and Material::mass for the same source material.
+
+This work is not all reusable: centroid/extent depend on current placements, and the emitted spectrum phase depends on the current tick. But the aggregate ResourceProperties and mass are composition/catalog-derived, while ResourceBaselines are catalog-derived. Those inputs are candidates for reuse if this path is exercised frequently.
+
+Important boundary: the source inspection establishes repeated derivation within one environmental-contribution call, but does not yet establish how often the function is invoked in the standard simulation workload. Its call frequency and inclusive time must be measured before prioritizing it.
+
+This finding strengthens the case for a narrowly scoped profiling pass, not for immediate caching. A safe first prototype could prepare catalog baselines once per owning simulation pass and pass them down, then compare exact output and whole-run throughput. A material aggregate cache would require a proven composition/catalog key and mutation invalidation first.
