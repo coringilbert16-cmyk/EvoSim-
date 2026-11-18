@@ -189,3 +189,16 @@ Other inspected production field mutation paths use the central invalidation API
 - Per-material topology/state versions in the staged environmental interaction inventory remain pass-local/zero in the production snapshot adapter; they are not yet a general persistent invalidation contract.
 - No new persistent cache, spatial locality assumption, approximation, or reduced interaction set has been introduced.
 - The branch now contains focused regression tests for the identified organism structure/position invalidation routes. The full CI run is the next correctness gate; further optimization work remains blocked until it passes.
+
+
+### Developmental-realization cache dependency correction
+
+A deeper read of `DevelopmentalBlueprint::realization_at_length` showed that the cached realization depends on more than structure:
+
+- The live structure.
+- The developmental origin and orientation used to sample spatial preference fields.
+- The supplied seed mass and seed length, which determine preferred developmental length.
+
+The previous cache key contained only `structure_revision`. That meant movement or a different seed-scale reference could reuse a realization computed for different inputs. The cache key now includes structure and position revisions, the exact floating-point bit patterns of seed mass/length, and the exact origin/orientation bit patterns. Position changes also explicitly clear this cache key.
+
+A focused state test now verifies that moving an organism and changing the seed-scale reference each produce a distinct cache key. The catalog remains a fixed runtime dependency under the current code paths; any future catalog mutation must be incorporated into this key or trigger a full cache rebuild.
