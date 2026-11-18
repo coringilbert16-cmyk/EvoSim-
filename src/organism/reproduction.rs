@@ -833,6 +833,7 @@ pub(crate) fn begin_reproduction(
         *rng = staged_rng;
         parent.usable_energy = staged_energy;
         parent.structure = staged_structure;
+        parent.mark_structure_changed();
         parent.stored_material = parent_trial_storage;
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
@@ -949,7 +950,8 @@ pub(crate) fn advance_construction(
     _rng: &mut ChaCha8Rng,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
-) -> (ConstructionStatus, Option<f64>) {
+) -> (ConstructionStatus, Option<f64>, bool) {
+    let mut structure_changed = false;
     // Stable IDs, not the cached developing graph, determine membership once
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
@@ -958,21 +960,21 @@ pub(crate) fn advance_construction(
     // authoritative physical aggregate. Detached graph state is legacy data,
     // not a second valid owner; fail closed instead of advancing it independently.
     if !construction.is_aggregate_owned_by(parent_structure) {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, false);
     }
     let Some(anchor_id) = construction.anchor_physical_id else {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, false);
     };
     let Some(working_structure) = parent_structure
         .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
     else {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     };
 
     // Validate the authoritative transient view before any construction attempt
     // can spend energy from the parent's single usable-energy holder.
     if !developing_membership_is_valid(construction, &working_structure) {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
     let reproductive_energy_allocation = construction.child_genome.reproductive_energy_allocation;
     // Validate persisted accounting and genome parameters before candidate
@@ -990,7 +992,7 @@ pub(crate) fn advance_construction(
         || !parent_energy.is_finite()
         || *parent_energy < 0.0
     {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
 
     // Build a transient view from stable IDs. Its usable energy is then set to
@@ -1016,9 +1018,10 @@ pub(crate) fn advance_construction(
         let Some((_, refreshed_view)) = parent_structure
             .replace_subgraph_remapping_new_ids_and_extract(&old_ids, &child.structure)
         else {
-            return (ConstructionStatus::Dead, None);
+            return (ConstructionStatus::Dead, None, structure_changed);
         };
         child.structure = refreshed_view;
+        structure_changed = true;
     }
     *ledger = staged_ledger;
     *parent_energy = child.usable_energy;
@@ -1028,7 +1031,7 @@ pub(crate) fn advance_construction(
     construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = OrganismStructure::new();
     if dead {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
 
     if birth_ready_with_reference(
@@ -1037,11 +1040,11 @@ pub(crate) fn advance_construction(
         &environment.catalog,
         seed_reference,
     ) {
-        return (ConstructionStatus::Ready, None);
+        return (ConstructionStatus::Ready, None, structure_changed);
     }
 
     if !parent_child_in_contact(parent_structure, &child.structure) {
-        return (ConstructionStatus::Detached, None);
+        return (ConstructionStatus::Detached, None, structure_changed);
     }
 
     let anchor_index = construction
@@ -1081,22 +1084,24 @@ pub(crate) fn advance_construction(
         ) {
             NextConstructionResourceStatus::Missing => {
                 construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
             NextConstructionResourceStatus::Available => {
                 construction.needs_space = true;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
             NextConstructionResourceStatus::NoFit => {
                 // The inventory is real but none of the current physical
                 // candidates can make this bond. Keep the unfinished bond
                 // pending; new material may make it solvable later.
                 construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
         }
     };
 
+    let candidate_structure_changed = child.structure.units != original_working_structure.units
+        || child.structure.bonds != original_working_structure.bonds;
     let status = commit_candidate_attachment(
         parent_structure,
         parent_storage,
@@ -1111,7 +1116,11 @@ pub(crate) fn advance_construction(
         before_units,
         seed_reference,
     );
-    (status, None)
+    (
+        status,
+        None,
+        structure_changed || candidate_structure_changed,
+    )
 }
 
 pub(crate) fn finish_reproduction(
@@ -1407,7 +1416,7 @@ mod tests {
             max_y: 0.0,
         };
 
-        let (status, stress) = advance_construction(
+        let (status, stress, structure_changed) = advance_construction(
             &mut parent_structure,
             &mut parent_storage,
             &mut construction,
@@ -1421,6 +1430,7 @@ mod tests {
 
         assert_eq!(status, ConstructionStatus::Dead);
         assert_eq!(stress, None);
+        assert!(!structure_changed);
         assert_eq!(parent_energy, 25.0);
         assert_eq!(ledger, ledger_before);
         assert!(parent_storage.is_empty());
@@ -1660,6 +1670,7 @@ mod tests {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let parent_structure = parent.structure.clone();
+        let revision_before = parent.structure_revision;
         let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
@@ -1708,6 +1719,11 @@ mod tests {
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert!(parent.structure.units.len() > parent_structure.units.len());
+        assert_eq!(
+            parent.structure_revision,
+            revision_before.wrapping_add(1),
+            "anchor admission must invalidate structure-derived caches"
+        );
         assert!(
             parent.structure.bonds.iter().any(|bond| {
                 let a = construction
@@ -1844,7 +1860,7 @@ mod tests {
         let environment = simulation.environment.clone();
         let body = parent_body_geometry(&parent, &environment.catalog).unwrap();
 
-        let (status, _) = advance_construction(
+        let (status, _, _) = advance_construction(
             &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
@@ -2328,7 +2344,7 @@ mod tests {
         let energy_before_attachment = parent.usable_energy;
         let ledger_before_attachment = ledger;
 
-        let second_status = advance_construction(
+        let (second_status, _, structure_changed) = advance_construction(
             &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
@@ -2338,9 +2354,12 @@ mod tests {
             &mut simulation.rng,
             &body,
             None,
-        )
-        .0;
+        );
 
+        assert!(
+            structure_changed,
+            "successful growth must report its graph mutation"
+        );
         assert!(
             matches!(
                 second_status,

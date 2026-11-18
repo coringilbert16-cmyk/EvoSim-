@@ -722,16 +722,15 @@ fn apply_push_plan(
 
     plan.physical.sort_unstable_by(|a, b| b.cmp(a));
     let mut pushed = Vec::with_capacity(plan.physical.len());
+    let mut changed_cells = Vec::with_capacity(plan.physical.len() * 2);
     for (cell_index, material_index) in plan.physical {
         let physical = environment.field.cells[cell_index]
             .physical_materials
             .remove(material_index);
+        changed_cells.push(cell_index);
         let mut physical = physical;
         translate_physical(&mut physical, dx, dy, environment.height);
         pushed.push(physical);
-    }
-    if !pushed.is_empty() {
-        environment.field.revision = environment.field.revision.wrapping_add(1);
     }
     for physical in pushed {
         if let Some(placement) = physical
@@ -746,8 +745,14 @@ fn apply_push_plan(
                 environment.field.cells[index]
                     .physical_materials
                     .push(physical);
+                changed_cells.push(index);
             }
         }
+    }
+    changed_cells.sort_unstable();
+    changed_cells.dedup();
+    for cell_index in changed_cells {
+        environment.field.mark_changed_at_index(cell_index);
     }
 }
 
@@ -920,6 +925,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64, environment_hei
         unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
     }
     translate_reproductive_construction(organism, dx, dy, environment_height);
+    organism.mark_position_changed();
 }
 
 #[cfg(test)]
@@ -2233,6 +2239,122 @@ mod tests {
         assert!(
             (moved_physical.placements.as_ref().unwrap()[0].x - 11.5).abs() < 1e-9,
             "the realized field owner should move exactly once"
+        );
+    }
+
+    #[test]
+    fn pushed_organism_translation_invalidates_position_derived_cache() {
+        let mut simulation = crate::state::Simulation::new(0xB055, 10.0);
+        let organism = &mut simulation.organisms[0];
+        let revision_before = organism.position_revision;
+        organism.cached_harmonic_key = Some((0, 0, 0, 0, false));
+        organism.cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
+        translate_organism(organism, 1.0, 0.0, simulation.environment.height);
+        assert_eq!(
+            organism.position_revision,
+            revision_before.wrapping_add(1),
+            "pushed organisms must invalidate position-dependent harmonics"
+        );
+        assert!(organism.cached_harmonic_key.is_none());
+        assert!(organism.cached_developmental_revision.is_none());
+    }
+
+    #[test]
+    fn pushed_environmental_material_updates_source_and_destination_revisions() {
+        let simulation = Simulation::new(0xB056, 10.0);
+        let mut environment = simulation.environment.clone();
+        environment.field = crate::environment::ActiveMaterialField::new(
+            environment.width,
+            environment.height,
+            environment.field.cell_size,
+        );
+        let placement = Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial {
+            material: crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            environmental_identity: 77,
+            placements: Some(vec![
+                placement,
+                Placement {
+                    x: 11.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ]),
+            internal_connections: Some(vec![crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                bond_energy: 0.0,
+            }]),
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
+        let source = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+            .unwrap();
+        environment.field.cells[source]
+            .physical_materials
+            .push(physical);
+        environment.field.mark_changed_at_index(source);
+        assert_eq!(
+            environment
+                .field
+                .environmental_bond_candidates(0, usize::MAX),
+            vec![(source, 0, 0)]
+        );
+        let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
+        assert_ne!(source, destination);
+
+        let source_revision = environment.field.cell_revisions[source];
+        let destination_revision = environment.field.cell_revisions[destination];
+        let field_revision = environment.field.revision;
+        let organisms: Vec<Organism> = Vec::new();
+        let mut spatial_index = MovementSpatialIndex::new(&organisms, &environment);
+
+        apply_push_plan(
+            &mut [],
+            &mut [],
+            0,
+            &mut spatial_index,
+            &mut environment,
+            PushPlan {
+                organisms: Vec::new(),
+                physical: vec![(source, 0)],
+            },
+            30.0,
+            0.0,
+        );
+
+        assert!(environment.field.cells[source]
+            .physical_materials
+            .is_empty());
+        assert_eq!(
+            environment.field.cells[destination]
+                .physical_materials
+                .len(),
+            1
+        );
+        assert!(environment.field.cell_revisions[source] > source_revision);
+        assert!(environment.field.cell_revisions[destination] > destination_revision);
+        assert!(environment.field.revision > field_revision);
+        assert_eq!(
+            environment
+                .field
+                .environmental_bond_candidates(0, usize::MAX),
+            vec![(destination, 0, 0)],
+            "the maintained bond index must move with the physical material"
         );
     }
 }

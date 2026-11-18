@@ -2710,11 +2710,8 @@ pub(crate) fn update_organism_harmonics(
         organism.structure_revision,
         organism.position_revision,
         environment.field.revision,
-        if world_tone_sample.is_some() {
-            tick.wrapping_add(1)
-        } else {
-            0
-        },
+        tick,
+        world_tone_sample.is_some(),
     );
     if organism.cached_harmonic_key == Some(key) {
         return;
@@ -4801,6 +4798,8 @@ mod environmental_movement_parallel_tests {
         environmental_movement_phase_components, EnvironmentalMovementEmitter, ToneComponent,
         ToneSpectrum,
     };
+    use crate::harmonics::{environmental_material_resonance, update_organism_harmonics};
+    use crate::structure::Placement;
 
     #[test]
     fn parallel_pair_forces_match_sequential_reference_in_original_order() {
@@ -4921,5 +4920,56 @@ mod environmental_movement_parallel_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn environmental_material_resonance_changes_with_tick() {
+        let catalog = crate::resources::default_catalog();
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![Placement {
+                x: 10.0,
+                y: 10.0,
+                rotation_radians: 0.0,
+            }],
+            &catalog,
+        )
+        .expect("fixture material should realize");
+
+        let at_tick_zero = environmental_material_resonance(&physical, &catalog, 0)
+            .expect("valid material should emit")
+            .3;
+        let at_tick_one = environmental_material_resonance(&physical, &catalog, 1)
+            .expect("valid material should emit")
+            .3;
+
+        assert_ne!(
+            at_tick_zero, at_tick_one,
+            "environmental oscillator phase depends on the current tick"
+        );
+    }
+
+    #[test]
+    fn harmonic_cache_invalidates_each_tick_without_world_tone_sample() {
+        let mut simulation = crate::state::Simulation::new(0xB057, 10.0);
+        let environment = &simulation.environment;
+        let organism = &mut simulation.organisms[0];
+
+        update_organism_harmonics(organism, environment, None, 10);
+        let first_key = organism
+            .cached_harmonic_key
+            .expect("harmonic update should establish a cache key");
+
+        update_organism_harmonics(organism, environment, None, 11);
+        let second_key = organism
+            .cached_harmonic_key
+            .expect("second harmonic update should establish a cache key");
+
+        assert_ne!(
+            first_key, second_key,
+            "tick-dependent environmental resonance must not reuse a stale spectrum"
+        );
+        assert_eq!(second_key.3, 11);
+        assert!(!second_key.4);
     }
 }

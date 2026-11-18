@@ -1754,6 +1754,7 @@ fn try_combine_environmental(
         let mut attempt = attempt;
         attempt.environmental_source = Some((cell_index, removed));
         organism.structure = trial_structure;
+        organism.mark_structure_changed();
         organism.usable_energy = trial_energy;
         *ledger = trial_ledger;
         organism.add_transaction_stress(attempt.work_cost);
@@ -1867,6 +1868,7 @@ pub(crate) fn try_combine(
                 continue;
             }
             organism.structure = trial_structure;
+            organism.mark_structure_changed();
             organism.usable_energy = trial_energy;
             *ledger = trial_ledger;
             organism.add_transaction_stress(attempt.work_cost);
@@ -2523,5 +2525,43 @@ mod fluid_coalescence_transaction_tests {
             structure.genome_constituent_ids(),
             original_genome_ids.as_slice()
         );
+    }
+
+    #[test]
+    fn live_intra_organism_combine_invalidates_structure_derived_caches() {
+        let (mut structure, _, _) = build_bonded_pair(0.0, false);
+        structure.bonds.clear();
+
+        let mut simulation = crate::state::Simulation::new(0xC0B2, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
+        simulation.organisms[0].structure = structure;
+        simulation.organisms[0].usable_energy = 100.0;
+        let revision_before = simulation.organisms[0].structure_revision;
+        simulation.organisms[0].cached_cavity_revision = Some(revision_before);
+        simulation.organisms[0].cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
+        simulation.organisms[0].cached_harmonic_key = Some((0, 0, 0, 0, false));
+
+        let mut cache = ConnectionCompatibilityCache;
+        let attempt = try_combine(
+            &mut simulation.organisms[0],
+            &mut simulation.environment,
+            &mut cache,
+            &mut simulation.energy_ledger,
+            None,
+        );
+
+        assert!(attempt.is_some(), "the touching fluid pair should COMBINE");
+        let organism = &simulation.organisms[0];
+        assert_eq!(
+            organism.structure_revision,
+            revision_before.wrapping_add(1),
+            "successful COMBINE must invalidate structure-derived caches"
+        );
+        assert!(organism.cached_cavity_revision.is_none());
+        assert!(organism.cached_developmental_revision.is_none());
+        assert!(organism.cached_harmonic_key.is_none());
     }
 }
