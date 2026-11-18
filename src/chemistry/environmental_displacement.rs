@@ -3165,8 +3165,7 @@ mod tests {
             catalog_reactivity_baseline(),
         )
         .unwrap();
-        let first_minimum_increment =
-            first_barrier * crate::chemistry::CHEMICAL_DISSIPATION * 1.1;
+        let first_minimum_increment = first_barrier * crate::chemistry::CHEMICAL_DISSIPATION * 1.1;
         for carrier_partner in ["Hydrogen", "Phosphorus"] {
             let carrier = crate::environment_chemistry_experiment::realize_natural_molecule(
                 &["Oxygen".to_owned(), carrier_partner.to_owned()],
@@ -3247,7 +3246,10 @@ mod tests {
                     "Hydrogen",
                     crate::chemistry::activation_barrier_from_bond_properties(
                         intermediate_bond.strength,
-                        first_trial.structure.units[0].properties(&catalog).unwrap().reactivity,
+                        first_trial.structure.units[0]
+                            .properties(&catalog)
+                            .unwrap()
+                            .reactivity,
                         first_trial.structure.units[carrier_indices[0]]
                             .properties(&catalog)
                             .unwrap()
