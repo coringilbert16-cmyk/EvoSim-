@@ -1,6 +1,10 @@
-name: Movement Placement Matched Benchmark
+name: Movement BVH vs Sweep Matched Benchmark
 
 on:
+  push:
+    branches: [benchmark/**]
+    paths:
+      - .github/workflows/movement-placement-benchmark.yml
   pull_request:
     branches: [main]
     paths:
@@ -15,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check out PR revision
+      - name: Check out benchmark revision
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -24,45 +28,48 @@ jobs:
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Prepare current-main worktree
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          git worktree add --detach /tmp/evosim-main origin/main
-          mkdir -p benchmark-artifacts
-
-      - name: Run 10 matched pairs (60 seconds each, profiling disabled)
+      - name: Run five matched pairs (60 seconds each, profiling disabled)
         timeout-minutes: 25
         run: |
           set -euo pipefail
+          mkdir -p benchmark-artifacts
           pr_dir="$GITHUB_WORKSPACE"
-          main_dir="/tmp/evosim-main"
           run_one() {
             label="$1"
-            dir="$2"
-            seed="$3"
+            seed="$2"
+            mode="$3"
             log="$GITHUB_WORKSPACE/benchmark-artifacts/${label}-seed-${seed}.log"
             diagnostics="$GITHUB_WORKSPACE/benchmark-artifacts/${label}-seed-${seed}.jsonl"
-            echo "=== START label=$label seed=$seed source=$dir ==="
-            cd "$dir"
-            env -u EVOSIM_PROFILE_MOVEMENT timeout 100s cargo run --locked -- \
-              --headless \
-              --environment-chemistry-experiment \
-              --seconds 60 \
-              --seed "$seed" \
-              --diagnostics "$diagnostics" \
-              --diagnostic-interval 100 2>&1 | tee "$log"
+            echo "=== START label=$label seed=$seed bvh_mode=$mode ==="
+            cd "$pr_dir"
+            if [[ "$mode" == "bvh" ]]; then
+              env -u EVOSIM_PROFILE_MOVEMENT EVOSIM_MOVEMENT_BVH_EXPERIMENT=1 timeout 100s cargo run --locked -- \
+                --headless \
+                --environment-chemistry-experiment \
+                --seconds 60 \
+                --seed "$seed" \
+                --diagnostics "$diagnostics" \
+                --diagnostic-interval 100 2>&1 | tee "$log"
+            else
+              env -u EVOSIM_PROFILE_MOVEMENT -u EVOSIM_MOVEMENT_BVH_EXPERIMENT timeout 100s cargo run --locked -- \
+                --headless \
+                --environment-chemistry-experiment \
+                --seconds 60 \
+                --seed "$seed" \
+                --diagnostics "$diagnostics" \
+                --diagnostic-interval 100 2>&1 | tee "$log"
+            fi
             echo "=== FINISH label=$label seed=$seed ==="
           }
 
-          for seed in 42 43 44 45 46 47 48 49 50 51; do
-            # Alternate order between pairs to reduce systematic order/load bias.
+          for seed in 42 43 44 45 46; do
+            # Alternate order within matched pairs to reduce order/load bias.
             if (( seed % 2 == 0 )); then
-              run_one main "$main_dir" "$seed"
-              run_one pr365 "$pr_dir" "$seed"
+              run_one sweep "$seed" sweep
+              run_one bvh "$seed" bvh
             else
-              run_one pr365 "$pr_dir" "$seed"
-              run_one main "$main_dir" "$seed"
+              run_one bvh "$seed" bvh
+              run_one sweep "$seed" sweep
             fi
           done
 
@@ -74,7 +81,7 @@ jobs:
           rows = []
           for path in sorted(glob.glob("benchmark-artifacts/*.log")):
               name = os.path.basename(path)
-              label = "main" if name.startswith("main-") else "pr365"
+              label = "sweep" if name.startswith("sweep-") else "bvh"
               seed = int(re.search(r"seed-(\d+)", name).group(1))
               text = open(path, encoding="utf-8", errors="replace").read()
               matches = re.findall(r"SIMULATION_END[^\n]*?tick[= :]+(\d+)[^\n]*?elapsed[= :]+([0-9.]+)", text)
@@ -85,38 +92,38 @@ jobs:
                   continue
               ticks, seconds = matches[-1]
               ticks, seconds = int(ticks), float(seconds)
-              rows.append({"seed": seed, "revision": label, "ticks": ticks,
+              rows.append({"seed": seed, "mode": label, "ticks": ticks,
                            "seconds": seconds, "ticks_per_minute": ticks * 60.0 / seconds})
           with open("benchmark-artifacts/results.csv", "w", newline="") as f:
-              w = csv.DictWriter(f, fieldnames=["seed","revision","ticks","seconds","ticks_per_minute"])
+              w = csv.DictWriter(f, fieldnames=["seed","mode","ticks","seconds","ticks_per_minute"])
               w.writeheader()
-              w.writerows(sorted(rows, key=lambda r: (r["seed"], r["revision"])))
-          by = {(r["seed"], r["revision"]): r["ticks_per_minute"] for r in rows}
-          paired = [(by[s, "pr365"] / by[s, "main"] - 1.0) * 100.0
-                    for s in range(42, 52) if (s, "pr365") in by and (s, "main") in by]
-          print(f"Completed runs: {len(rows)} / 20; complete pairs: {len(paired)} / 10")
-          for seed in range(42, 52):
-              a, b = by.get((seed, "main")), by.get((seed, "pr365"))
-              print(f"seed={seed}: main={a if a is not None else 'MISSING'} ticks/min; "
-                    f"pr365={b if b is not None else 'MISSING'} ticks/min")
+              w.writerows(sorted(rows, key=lambda r: (r["seed"], r["mode"])))
+          by = {(r["seed"], r["mode"]): r["ticks_per_minute"] for r in rows}
+          paired = [(by[s, "bvh"] / by[s, "sweep"] - 1.0) * 100.0
+                    for s in range(42, 47) if (s, "bvh") in by and (s, "sweep") in by]
+          print(f"Completed runs: {len(rows)} / 10; complete pairs: {len(paired)} / 5")
+          for seed in range(42, 47):
+              a, b = by.get((seed, "sweep")), by.get((seed, "bvh"))
+              print(f"seed={seed}: sweep={a if a is not None else 'MISSING'} ticks/min; "
+                    f"bvh={b if b is not None else 'MISSING'} ticks/min")
           if paired:
               mean = statistics.mean(paired)
               sd = statistics.stdev(paired) if len(paired) > 1 else 0.0
               se = sd / math.sqrt(len(paired))
-              # 95% normal-approximation interval; report sample size alongside it.
-              print(f"Paired PR-vs-main mean change: {mean:.2f}%")
+              t_critical = 2.776445
+              print(f"Paired BVH-vs-sweep mean change: {mean:.2f}%")
               print(f"Paired change SD: {sd:.2f} percentage points; SE: {se:.2f}")
-              print(f"Approx. 95% CI: [{mean-1.96*se:.2f}%, {mean+1.96*se:.2f}%]")
+              print(f"95% t interval (df=4): [{mean-t_critical*se:.2f}%, {mean+t_critical*se:.2f}%]")
               print(f"Median paired change: {statistics.median(paired):.2f}%")
-          if len(rows) != 20 or len(paired) != 10:
-              raise SystemExit("Benchmark incomplete: inspect run logs and do not treat as acceptance evidence.")
+          if len(rows) != 10 or len(paired) != 5:
+              raise SystemExit("Benchmark incomplete: inspect run logs; do not treat as acceptance evidence.")
           PY
 
-      - name: Upload all benchmark logs and results
+      - name: Upload benchmark logs and results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: movement-placement-matched-10-pairs
+          name: movement-bvh-vs-sweep-matched-5-pairs
           path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 30
