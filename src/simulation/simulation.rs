@@ -2125,7 +2125,7 @@ impl Simulation {
                 else {
                     continue;
                 };
-                let (status, stress) = {
+                let (status, stress, structure_changed) = {
                     let construction = organism
                         .reproductive_construction
                         .as_mut()
@@ -2142,6 +2142,9 @@ impl Simulation {
                         self.seed_scale_reference,
                     )
                 };
+                if structure_changed {
+                    organism.mark_structure_changed();
+                }
                 if let Some(stress) = stress {
                     organism.add_transaction_stress(stress);
                 }
