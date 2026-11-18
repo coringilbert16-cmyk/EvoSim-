@@ -95,7 +95,7 @@ impl MaterialStorage {
             || instance.material.parts.is_empty()
             || !crate::property_profile::measure_call(
                 crate::property_profile::Metric::MaterialStorageValidationSite,
-                || instance.material.is_valid_for_catalog(catalog),
+                    || instance.material.is_valid_for_catalog(catalog),
             )
             || !Self::is_discrete(&instance.material)
         {
@@ -131,7 +131,7 @@ impl MaterialStorage {
                 || instance.material.parts.is_empty()
                 || !crate::property_profile::measure_call(
                     crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
+                        || instance.material.is_valid_for_catalog(catalog),
                 )
                 || !Self::is_discrete(&instance.material)
             {
@@ -165,7 +165,7 @@ impl MaterialStorage {
                 || instance.material.parts.is_empty()
                 || !crate::property_profile::measure_call(
                     crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
+                        || instance.material.is_valid_for_catalog(catalog),
                 )
                 || !Self::is_discrete(&instance.material)
             {
@@ -217,9 +217,9 @@ impl MaterialStorage {
         if !instance.is_realized()
             || instance.material.parts.is_empty()
             || !crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                crate::property_profile::Metric::MaterialStorageValidationSite,
                     || instance.material.is_valid_for_catalog(catalog),
-                )
+            )
             || !Self::is_discrete(&instance.material)
         {
             return Err(instance);
@@ -319,18 +319,19 @@ impl MaterialStorage {
         catalog: &[crate::resources::BaseResource],
     ) -> Option<PhysicalMaterial> {
         if !crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || target.is_valid_for_catalog(catalog),
-                ) || target.is_empty() {
+            crate::property_profile::Metric::MaterialStorageValidationSite,
+                || target.is_valid_for_catalog(catalog),
+                ) || target.is_empty()
+                {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
-                )
+                        crate::property_profile::Metric::MaterialStorageValidationSite,
+                            || instance.material.is_valid_for_catalog(catalog),
+                    )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
                     && !instance.material.is_empty())
@@ -347,9 +348,9 @@ impl MaterialStorage {
             StoredMaterial::Physical(instance)
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
-                )
+                        crate::property_profile::Metric::MaterialStorageValidationSite,
+                            || instance.material.is_valid_for_catalog(catalog),
+                    )
                     && Self::is_discrete(&instance.material) => {}
             _ => return None,
         }
@@ -367,18 +368,19 @@ impl MaterialStorage {
         // before mutating the authoritative holder, so downstream validation
         // cannot turn a failed COMBINE into lost source material.
         if !crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || target.is_valid_for_catalog(catalog),
-                ) || target.is_empty() {
+            crate::property_profile::Metric::MaterialStorageValidationSite,
+                || target.is_valid_for_catalog(catalog),
+                ) || target.is_empty()
+                {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
             matches!(entry, StoredMaterial::Physical(instance)
                 if instance.is_realized()
                     && crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
-                )
+                        crate::property_profile::Metric::MaterialStorageValidationSite,
+                            || instance.material.is_valid_for_catalog(catalog),
+                    )
                     && Self::is_discrete(&instance.material)
                     && instance.material == *target
                     && !instance.material.is_empty())
@@ -403,9 +405,9 @@ impl MaterialStorage {
                         && !instance.material.is_empty()
                         && instance.is_realized()
                         && crate::property_profile::measure_call(
-                    crate::property_profile::Metric::MaterialStorageValidationSite,
-                    || instance.material.is_valid_for_catalog(catalog),
-                )
+                            crate::property_profile::Metric::MaterialStorageValidationSite,
+                                || instance.material.is_valid_for_catalog(catalog),
+                        )
                         && Self::is_discrete(&instance.material) =>
                 {
                     Some(index)
