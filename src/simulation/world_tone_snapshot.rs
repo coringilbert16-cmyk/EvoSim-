@@ -210,13 +210,20 @@ impl WorldToneOccluderSnapshot {
         // Keeping the full set is necessary for world energy accounting: a lane
         // that never reaches a living organism still deposits response energy
         // as heat in physical material instead of silently omitting that input.
+        if body_properties.len() != bodies.len() {
+            return None;
+        }
         let mut remapped_indices = vec![None; bodies.len()];
         let mut relevant_bodies = Vec::with_capacity(bodies.len());
         let mut relevant_properties = Vec::with_capacity(body_properties.len());
-        for (original_index, body) in bodies.into_iter().enumerate() {
+        // These vectors are built in lockstep. Move each property vector into
+        // the final snapshot instead of cloning every body's constituent data.
+        for (original_index, (body, properties)) in
+            bodies.into_iter().zip(body_properties).enumerate()
+        {
             remapped_indices[original_index] = Some(relevant_bodies.len());
             relevant_bodies.push(body);
-            relevant_properties.push(body_properties[original_index].clone());
+            relevant_properties.push(properties);
         }
         let organism_body_indices: Vec<_> = organism_body_indices
             .into_iter()
@@ -251,10 +258,14 @@ impl WorldToneOccluderSnapshot {
         body_index: usize,
         unit_index: usize,
     ) -> Option<ResourceProperties> {
-        self.body_properties
-            .get(body_index)?
-            .iter()
-            .find_map(|(candidate, properties)| (*candidate == unit_index).then_some(*properties))
+        let properties = self.body_properties.get(body_index)?;
+        // Both structure and physical-material property builders enumerate
+        // constituents in ascending unit-index order. Use that invariant for
+        // logarithmic lookup on every interaction-path hit.
+        let index = properties
+            .binary_search_by_key(&unit_index, |(candidate, _)| *candidate)
+            .ok()?;
+        properties.get(index).map(|(_, properties)| *properties)
     }
 
     pub(crate) fn body_index_for_organism(&self, organism_index: usize) -> Option<usize> {
