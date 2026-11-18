@@ -2533,6 +2533,10 @@ mod fluid_coalescence_transaction_tests {
         structure.bonds.clear();
 
         let mut simulation = crate::state::Simulation::new(0xC0B2, 10.0);
+        for cell in &mut simulation.environment.field.cells {
+            cell.materials.clear();
+            cell.physical_materials.clear();
+        }
         simulation.organisms[0].structure = structure;
         simulation.organisms[0].usable_energy = 100.0;
         let revision_before = simulation.organisms[0].structure_revision;
