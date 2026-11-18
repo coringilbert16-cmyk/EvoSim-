@@ -2241,4 +2241,19 @@ mod tests {
             "the realized field owner should move exactly once"
         );
     }
+
+    #[test]
+    fn pushed_organism_translation_invalidates_position_derived_cache() {
+        let mut simulation = crate::state::Simulation::new(0xB055, 10.0);
+        let organism = &mut simulation.organisms[0];
+        let revision_before = organism.position_revision;
+        translate_organism(organism, 1.0, 0.0, simulation.environment.height);
+        assert_eq!(
+            organism.position_revision,
+            revision_before.wrapping_add(1),
+            "pushed organisms must invalidate position-dependent harmonics"
+        );
+        assert!(organism.cached_harmonic_key.is_none());
+    }
+
 }
