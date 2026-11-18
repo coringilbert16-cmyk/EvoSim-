@@ -1,4 +1,4 @@
-name: World Tone Matched Parallel Benchmark
+name: World Tone Same-Machine Paired Benchmark
 
 on:
   push:
@@ -12,53 +12,77 @@ permissions:
 
 jobs:
   benchmark:
-    name: seed-${{ matrix.seed }}-${{ matrix.revision }}
+    name: seed-${{ matrix.seed }}-same-runner
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     strategy:
       fail-fast: false
-      max-parallel: 20
+      max-parallel: 10
       matrix:
         seed: [42, 43, 44, 45, 46, 47, 48, 49, 50, 51]
-        revision: [main, pr]
     steps:
-      - name: Check out selected revision
+      - name: Check out main
         uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.revision == 'main' && 'main' || 'optimization/01-world-tone-exposure' }}
-          path: source
+          ref: main
+          path: main-source
+          fetch-depth: 1
+
+      - name: Check out PR revision
+        uses: actions/checkout@v4
+        with:
+          ref: optimization/01-world-tone-exposure
+          path: pr-source
           fetch-depth: 1
 
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run standard 60-second experiment
-        working-directory: source
-        timeout-minutes: 4
-        env:
-          EVOSIM_PROFILE_MOVEMENT: ''
-          EVOSIM_PROFILE_TICK: ''
+      - name: Build both revisions before timing
         run: |
           set -euo pipefail
-          mkdir -p ../benchmark-artifacts
-          log="../benchmark-artifacts/${{ matrix.revision }}-seed-${{ matrix.seed }}.log"
-          env -u EVOSIM_PROFILE_MOVEMENT -u EVOSIM_PROFILE_TICK timeout 180s cargo run --locked -- \
-            --headless \
-            --environment-chemistry-experiment \
-            --seconds 60 \
-            --seed '${{ matrix.seed }}' 2>&1 | tee "$log"
+          cargo build --locked --manifest-path main-source/Cargo.toml
+          cargo build --locked --manifest-path pr-source/Cargo.toml
 
-      - name: Upload run log
-        if: always() && hashFiles('benchmark-artifacts/*.log') != ''
+      - name: Run three alternating same-machine pairs
+        timeout-minutes: 26
+        run: |
+          set -euo pipefail
+          mkdir -p benchmark-artifacts
+          seed='${{ matrix.seed }}'
+          for repetition in 1 2 3; do
+            if (( (seed + repetition) % 2 == 0 )); then
+              order=(main pr)
+            else
+              order=(pr main)
+            fi
+            for revision in "${order[@]}"; do
+              source_dir="${revision}-source"
+              log="benchmark-artifacts/${revision}-seed-${seed}-rep-${repetition}.log"
+              echo "START revision=${revision} seed=${seed} repetition=${repetition} runner=${RUNNER_NAME}"
+              (
+                cd "${source_dir}"
+                env -u EVOSIM_PROFILE_MOVEMENT -u EVOSIM_PROFILE_TICK timeout 240s cargo run --no-build --locked -- \
+                  --headless \
+                  --environment-chemistry-experiment \
+                  --seconds 60 \
+                  --seed "${seed}"
+              ) 2>&1 | tee "${log}"
+              echo "END revision=${revision} seed=${seed} repetition=${repetition}"
+            done
+          done
+
+      - name: Upload same-runner logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: world-tone-${{ matrix.revision }}-seed-${{ matrix.seed }}
+          name: world-tone-same-runner-seed-${{ matrix.seed }}
           path: benchmark-artifacts/
           if-no-files-found: error
           retention-days: 30
 
   summarize:
-    name: paired-throughput-summary
+    name: same-machine-paired-summary
     runs-on: ubuntu-latest
     needs: benchmark
     if: always()
@@ -66,39 +90,47 @@ jobs:
       - name: Download all run logs
         uses: actions/download-artifact@v4
         with:
-          pattern: world-tone-*
+          pattern: world-tone-same-runner-seed-*
           path: benchmark-artifacts
           merge-multiple: true
 
-      - name: Calculate paired throughput
+      - name: Calculate seed-level paired medians
         run: |
           python3 - <<'PY'
           import glob, math, os, re, statistics, sys
-          rows = {}
+          samples = {}
           for path in glob.glob('benchmark-artifacts/*.log'):
               name = os.path.basename(path)
-              m = re.match(r'(main|pr)-seed-(\d+)\.log$', name)
+              m = re.match(r'(main|pr)-seed-(\d+)-rep-(\d+)\.log$', name)
               if not m:
                   continue
-              revision, seed = m.group(1), int(m.group(2))
+              revision, seed, rep = m.group(1), int(m.group(2)), int(m.group(3))
               data = open(path, encoding='utf-8', errors='replace').read()
               matches = re.findall(r'ENVIRONMENTAL CHEMISTRY END: tick=(\d+) elapsed_wall_seconds=([0-9.]+)', data)
               if matches:
                   ticks, seconds = matches[-1]
-                  rows[(seed, revision)] = int(ticks) * 60.0 / float(seconds)
-          paired = [(rows[(s, 'pr')] / rows[(s, 'main')] - 1.0) * 100.0
-                    for s in range(42, 52) if (s, 'pr') in rows and (s, 'main') in rows]
-          print(f'Valid runs: {len(rows)}/20; complete pairs: {len(paired)}/10')
+                  samples[(seed, rep, revision)] = int(ticks) * 60.0 / float(seconds)
+          seed_changes = []
+          print(f'Valid measurements: {len(samples)}/60')
           for seed in range(42, 52):
-              a, b = rows.get((seed, 'main')), rows.get((seed, 'pr'))
-              print(f'seed={seed}: main={a if a is not None else "MISSING"} ticks/min; pr={b if b is not None else "MISSING"} ticks/min')
-          if paired:
-              mean = statistics.mean(paired)
-              sd = statistics.stdev(paired) if len(paired) > 1 else 0.0
-              margin = 2.262 * sd / math.sqrt(len(paired)) if len(paired) == 10 else 1.96 * sd / math.sqrt(len(paired))
-              print(f'Mean paired change: {mean:.3f}%')
-              print(f'Median paired change: {statistics.median(paired):.3f}%')
-              print(f'95% CI: [{mean-margin:.3f}%, {mean+margin:.3f}%]')
-          if len(rows) != 20 or len(paired) != 10:
-              sys.exit('INCOMPLETE: all 20 runs and 10 matched pairs are required')
+              changes = []
+              for rep in (1, 2, 3):
+                  main = samples.get((seed, rep, 'main'))
+                  pr = samples.get((seed, rep, 'pr'))
+                  if main is not None and pr is not None:
+                      changes.append((pr / main - 1.0) * 100.0)
+                  print(f'seed={seed} rep={rep}: main={main if main is not None else "MISSING"} ticks/min; pr={pr if pr is not None else "MISSING"} ticks/min')
+              if len(changes) == 3:
+                  seed_changes.append(statistics.median(changes))
+                  print(f'seed={seed}: median paired change={statistics.median(changes):.3f}%')
+          print(f'Complete seeds: {len(seed_changes)}/10')
+          if seed_changes:
+              mean = statistics.mean(seed_changes)
+              sd = statistics.stdev(seed_changes) if len(seed_changes) > 1 else 0.0
+              margin = 2.262 * sd / math.sqrt(len(seed_changes)) if len(seed_changes) == 10 else 1.96 * sd / math.sqrt(len(seed_changes))
+              print(f'Mean of seed medians: {mean:.3f}%')
+              print(f'Median of seed medians: {statistics.median(seed_changes):.3f}%')
+              print(f'95% CI across independent seeds: [{mean-margin:.3f}%, {mean+margin:.3f}%]')
+          if len(samples) != 60 or len(seed_changes) != 10:
+              sys.exit('INCOMPLETE: requires 60 valid runs and 10 complete seed groups')
           PY
