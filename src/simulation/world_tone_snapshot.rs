@@ -272,28 +272,40 @@ impl WorldToneRecipientSnapshot {
                 let Some(reservoir) = staged_reservoirs.get_mut(owner_index) else {
                     return;
                 };
-                let before = reservoir.total_energy();
-                if !deposit_spectrum(reservoir, &response.retained_spectrum) {
-                    return;
+                if can_deposit_spectrum(reservoir, &response.retained_spectrum) {
+                    let before = reservoir.total_energy();
+                    for component in &response.retained_spectrum.components {
+                        let energy = component.amplitude * component.amplitude;
+                        if energy > f64::EPSILON
+                            && !reservoir.deposit(component.frequency_cycles_per_day, energy)
+                        {
+                            return;
+                        }
+                    }
+                    let Some(delta) = reservoir
+                        .total_energy()
+                        .zip(before)
+                        .map(|(after, before)| after - before)
+                    else {
+                        return;
+                    };
+                    if !delta.is_finite() || delta < 0.0 || delta > response_energy {
+                        return;
+                    }
+                    captured = delta;
                 }
-                let Some(delta) = reservoir
-                    .total_energy()
-                    .zip(before)
-                    .map(|(after, before)| after - before)
-                else {
-                    return;
-                };
-                if !delta.is_finite() || delta < 0.0 || delta > response_energy {
-                    return;
-                }
-                captured = delta;
-            } else if recipient.environment_reservoir {
+            } else if recipient.environment_reservoir
+                && can_deposit_spectrum(&staged_environment_resonance, &response.retained_spectrum)
+            {
                 let before = staged_environment_resonance.total_energy();
-                if !deposit_spectrum(
-                    &mut staged_environment_resonance,
-                    &response.retained_spectrum,
-                ) {
-                    return;
+                for component in &response.retained_spectrum.components {
+                    let energy = component.amplitude * component.amplitude;
+                    if energy > f64::EPSILON
+                        && !staged_environment_resonance
+                            .deposit(component.frequency_cycles_per_day, energy)
+                    {
+                        return;
+                    }
                 }
                 let Some(delta) = staged_environment_resonance
                     .total_energy()
@@ -379,14 +391,23 @@ impl WorldToneRecipientSnapshot {
     }
 }
 
-/// Deposit a retained spectrum into a staged reservoir. A partial deposit is
-/// safe: the caller discards all staged reservoirs if any component fails.
-fn deposit_spectrum(
-    reservoir: &mut crate::harmonics::ResonantEnergyReservoir,
+/// Preflight a retained spectrum without allocating a temporary heap buffer.
+/// If capacity is unavailable, that material's absorbed response becomes heat.
+fn can_deposit_spectrum(
+    reservoir: &crate::harmonics::ResonantEnergyReservoir,
     spectrum: &crate::harmonics::ToneSpectrum,
 ) -> bool {
     if reservoir.total_energy().is_none() {
         return false;
+    }
+    let mut projected = [(0.0, 0.0); crate::harmonics::MAX_SPECTRAL_COMPONENTS];
+    let mut projected_len = 0;
+    for component in &reservoir.components {
+        if projected_len == projected.len() {
+            return false;
+        }
+        projected[projected_len] = (component.frequency_cycles_per_day, component.energy);
+        projected_len += 1;
     }
     for component in &spectrum.components {
         let energy = component.amplitude * component.amplitude;
@@ -398,10 +419,22 @@ fn deposit_spectrum(
         {
             return false;
         }
-        if energy > f64::EPSILON
-            && !reservoir.deposit(component.frequency_cycles_per_day, energy)
-        {
-            return false;
+        if energy <= f64::EPSILON {
+            continue;
+        }
+        if let Some((_, current)) = projected[..projected_len].iter_mut().find(|entry| {
+            (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9
+        }) {
+            *current += energy;
+            if !current.is_finite() {
+                return false;
+            }
+        } else {
+            if projected_len == projected.len() {
+                return false;
+            }
+            projected[projected_len] = (component.frequency_cycles_per_day, energy);
+            projected_len += 1;
         }
     }
     true
@@ -2839,35 +2872,23 @@ mod tests {
     }
 
     #[test]
-    fn failed_staged_spectrum_deposit_never_commits_partial_resonance() {
-        let mut committed = crate::harmonics::ResonantEnergyReservoir::default();
+    fn response_spectrum_capacity_is_checked_without_heap_allocation() {
+        let mut reservoir = crate::harmonics::ResonantEnergyReservoir::default();
         for frequency in [440.0, 880.0, 1320.0, 1760.0] {
-            assert!(committed.deposit(frequency, 1.0));
+            assert!(reservoir.deposit(frequency, 1.0));
         }
-        let before = committed.clone();
-        let mut staged = committed.clone();
-        let spectrum = crate::harmonics::ToneSpectrum {
-            components: vec![
-                crate::harmonics::ToneComponent {
-                    frequency_cycles_per_day: 440.0,
-                    amplitude: 0.5,
-                    phase_radians: 0.0,
-                },
-                crate::harmonics::ToneComponent {
-                    frequency_cycles_per_day: 2200.0,
-                    amplitude: 1.0,
-                    phase_radians: 0.0,
-                },
-            ],
+        let before = reservoir.clone();
+        let fifth_component = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_cycles_per_day: 2200.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
         };
-        assert!(
-            !deposit_spectrum(&mut staged, &spectrum),
-            "the new fifth frequency must exceed the reservoir capacity"
-        );
-        assert_ne!(staged, before, "the failed staged copy may be partially changed");
+        assert!(!can_deposit_spectrum(&reservoir, &fifth_component));
         assert_eq!(
-            committed, before,
-            "partial staged deposits must never alter the committed reservoir"
+            reservoir, before,
+            "failed capacity preflight must leave the reservoir untouched"
         );
     }
 
