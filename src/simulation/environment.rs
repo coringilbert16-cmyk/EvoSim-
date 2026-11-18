@@ -397,7 +397,10 @@ impl ActiveMaterialField {
     ) -> bool {
         if !physical.is_realized()
             || physical.material.is_empty()
-            || !physical.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || physical.material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -407,20 +410,14 @@ impl ActiveMaterialField {
         if placements.len() != physical.material.parts.len() || placements.is_empty() {
             return false;
         }
+        let Some(shapes) = physical.realized_shapes_for_parts(catalog) else {
+            return false;
+        };
         regions.iter().any(|region| {
-            physical
-                .material
-                .parts
+            shapes
                 .iter()
                 .zip(placements.iter())
-                .enumerate()
-                .all(|(part_index, ((name, _), placement))| {
-                    if !catalog.iter().any(|resource| resource.name == *name) {
-                        return false;
-                    }
-                    let Some(shape) = physical.realized_shape_for_part(part_index, catalog) else {
-                        return false;
-                    };
+                .all(|(shape, placement)| {
                     Self::realized_form_fully_inside_region(&shape.form, *placement, region)
                 })
         })
@@ -777,28 +774,20 @@ impl ActiveMaterialField {
             for material in &cell.physical_materials {
                 let mut parts = Vec::new();
                 let valid = material.is_realized()
-                    && material.material.is_valid_for_catalog(catalog)
                     && !material.material.is_empty()
                     && material.placements.as_ref().is_some_and(|p| !p.is_empty());
                 if valid {
-                    for (part_index, placement) in material
-                        .placements
-                        .as_ref()
-                        .expect("validated placements")
-                        .iter()
-                        .copied()
-                        .enumerate()
-                    {
-                        let Some(shape) = material.realized_shape_for_part(part_index, catalog)
-                        else {
-                            parts.clear();
-                            break;
-                        };
-                        parts.push(crate::material_geometry::PlacedMaterialPart {
-                            part_index,
-                            form: shape.form,
-                            placement,
-                        });
+                    let placements = material.placements.as_ref().expect("validated placements");
+                    if let Some(shapes) = material.realized_shapes_for_parts(catalog) {
+                        for (part_index, (placement, shape)) in
+                            placements.iter().copied().zip(shapes).enumerate()
+                        {
+                            parts.push(crate::material_geometry::PlacedMaterialPart {
+                                part_index,
+                                form: shape.form,
+                                placement,
+                            });
+                        }
                     }
                 }
                 let original_parts = (valid && !parts.is_empty()).then_some(parts);
@@ -851,12 +840,10 @@ impl ActiveMaterialField {
             }
             candidate_material.placements = Some(placements.clone());
             let mut translated_parts = Vec::with_capacity(placements.len());
-            for (part_index, placement) in placements.into_iter().enumerate() {
-                let Some(shape) = candidate_material.realized_shape_for_part(part_index, catalog)
-                else {
-                    valid = false;
-                    break;
-                };
+            let Some(shapes) = candidate_material.realized_shapes_for_parts(catalog) else {
+                continue;
+            };
+            for (part_index, (placement, shape)) in placements.into_iter().zip(shapes).enumerate() {
                 let radius = shape.form.bounding_radius();
                 if !radius.is_finite()
                     || radius < 0.0
@@ -1068,7 +1055,10 @@ impl ActiveMaterialField {
         }
         let original = &self.cells[source_cell].physical_materials[source_index];
         if !original.is_realized()
-            || !original.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || original.material.is_valid_for_catalog(catalog),
+            )
             || original.material.is_empty()
         {
             return false;
@@ -1099,10 +1089,10 @@ impl ActiveMaterialField {
         let field_width = self.width_cells as f64 * self.cell_size;
         let field_height = self.height_cells as f64 * self.cell_size;
         let mut candidate_parts = Vec::with_capacity(placements.len());
-        for (part_index, placement) in placements.iter().copied().enumerate() {
-            let Some(shape) = candidate.realized_shape_for_part(part_index, catalog) else {
-                return false;
-            };
+        let Some(shapes) = candidate.realized_shapes_for_parts(catalog) else {
+            return false;
+        };
+        for (part_index, (placement, shape)) in placements.iter().copied().zip(shapes).enumerate() {
             let radius = shape.form.bounding_radius();
             if !radius.is_finite()
                 || radius < 0.0
@@ -1136,10 +1126,15 @@ impl ActiveMaterialField {
                 let Some(other_placements) = other.placements.as_ref() else {
                     return false;
                 };
-                for (part_index, placement) in other_placements.iter().copied().enumerate() {
-                    let Some(shape) = other.realized_shape_for_part(part_index, catalog) else {
-                        return false;
-                    };
+                let Some(other_shapes) = other.realized_shapes_for_parts(catalog) else {
+                    return false;
+                };
+                for (part_index, (placement, shape)) in other_placements
+                    .iter()
+                    .copied()
+                    .zip(other_shapes)
+                    .enumerate()
+                {
                     let other_part = crate::material_geometry::PlacedMaterialPart {
                         part_index,
                         form: shape.form,
@@ -1210,7 +1205,10 @@ impl ActiveMaterialField {
             piece.environmental_identity = 0;
             if !piece.is_realized()
                 || piece.material.is_empty()
-                || !piece.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                    || piece.material.is_valid_for_catalog(catalog),
+                )
             {
                 return false;
             }
@@ -1310,7 +1308,10 @@ impl ActiveMaterialField {
     ) -> bool {
         if index >= self.cells.len()
             || material.is_empty()
-            || !material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -1329,7 +1330,12 @@ impl ActiveMaterialField {
             .position(|existing| !existing.has_internal_structure());
         if let Some(existing_index) = existing_index {
             let existing = &self.cells[index].materials[existing_index];
-            if existing.is_empty() || !existing.is_valid_for_catalog(catalog) {
+            if existing.is_empty()
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                    || existing.is_valid_for_catalog(catalog),
+                )
+            {
                 return false;
             }
             let mut parts = existing.parts.clone();
@@ -1339,7 +1345,11 @@ impl ActiveMaterialField {
                 parts: merged_parts,
                 internal_bonds: Vec::new(),
             };
-            if !merged.is_valid_for_catalog(catalog) || merged.is_empty() {
+            if !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || merged.is_valid_for_catalog(catalog),
+            ) || merged.is_empty()
+            {
                 return false;
             }
             self.cells[index].materials[existing_index] = merged;
@@ -1361,7 +1371,10 @@ impl ActiveMaterialField {
         if index >= self.cells.len()
             || !material.is_realized()
             || material.material.is_empty()
-            || !material.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || material.material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -1398,7 +1411,10 @@ impl ActiveMaterialField {
             if index >= self.cells.len()
                 || !material.is_realized()
                 || material.material.is_empty()
-                || !material.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                    || material.material.is_valid_for_catalog(catalog),
+                )
             {
                 return false;
             }

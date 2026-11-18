@@ -602,7 +602,10 @@ impl EnvironmentalMaterialSnapshot {
                 if physical.environmental_identity != record.identity.0
                     || !physical.is_realized()
                     || physical.material.is_empty()
-                    || !physical.material.is_valid_for_catalog(catalog)
+                    || !crate::property_profile::measure_call(
+                        crate::property_profile::Metric::BroadPhaseValidationSite,
+                        || physical.material.is_valid_for_catalog(catalog),
+                    )
                 {
                     return None;
                 }

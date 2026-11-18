@@ -113,6 +113,8 @@ mod environmental_combine;
 mod environmental_displacement;
 #[path = "chemistry/environmental_interaction.rs"]
 mod environmental_interaction;
+#[path = "infrastructure/property_profile.rs"]
+mod property_profile;
 
 // Organism genome, behavior, and lifecycle.
 #[path = "organism/decision.rs"]

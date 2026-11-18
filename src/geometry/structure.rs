@@ -48,7 +48,13 @@ impl StructuralUnit {
         &self,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::ResourceProperties> {
-        if !self.material.is_valid_for_catalog(catalog) {
+        let _profile = crate::property_profile::measure(
+            crate::property_profile::Metric::StructuralUnitProperties,
+        );
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::StructuralUnitValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
             return None;
         }
         Some(self.material.weighted_properties(catalog))
@@ -95,7 +101,10 @@ impl StructuralUnit {
                     return false;
                 };
                 if resource.physical_state != crate::resources::PhysicalState::Fluid
-                    || !self.material.is_valid_for_catalog(catalog)
+                    || !crate::property_profile::measure_call(
+                        crate::property_profile::Metric::StructuralUnitGeometryValidationSite,
+                        || self.material.is_valid_for_catalog(catalog),
+                    )
                 {
                     return false;
                 }

@@ -73,6 +73,42 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
+      - name: Profile material-property derivation on the standard 60-second workload
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 370
+        timeout-minutes: 4
+        env:
+          EVOSIM_PROFILE_PROPERTIES: '1'
+        run: |
+          set -euo pipefail
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics property-profile.jsonl --diagnostic-interval 100 2>&1 | tee property-profile.log
+      - name: Upload material-property profile
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 370 && hashFiles('property-profile.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-property-profile
+          path: |
+            property-profile.log
+            property-profile.jsonl
+          if-no-files-found: error
+          retention-days: 30
+      - name: Run unprofiled material-property control on the same runner
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 370
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics property-control.jsonl --diagnostic-interval 100 2>&1 | tee property-control.log
+      - name: Upload material-property profiler calibration pair
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 370 && hashFiles('property-profile.log') != '' && hashFiles('property-control.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: material-property-profile-calibration
+          path: |
+            property-profile.log
+            property-profile.jsonl
+            property-control.log
+            property-control.jsonl
+          if-no-files-found: error
+          retention-days: 30
       - name: Analyze shared chemistry smoke output
         if: success()
         run: |

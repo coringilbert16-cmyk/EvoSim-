@@ -78,8 +78,10 @@ impl PhysicalMaterial {
         catalog: &[BaseResource],
         allow_aggregate_fluid: bool,
     ) -> Option<Self> {
-        if !material.is_valid_for_catalog(catalog)
-            || material.parts.is_empty()
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialConstructionValidationSite,
+            || material.is_valid_for_catalog(catalog),
+        ) || material.parts.is_empty()
             || placements.len() != material.parts.len()
         {
             return None;
@@ -209,9 +211,37 @@ impl PhysicalMaterial {
         part_index: usize,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::Shape> {
-        if !self.material.is_valid_for_catalog(catalog) {
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialShapeValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
             return None;
         }
+        self.realized_shape_for_part_validated(part_index, catalog)
+    }
+
+    /// Resolve every constituent shape after validating the material once.
+    /// The per-part checks below remain identical to the single-part API.
+    pub(crate) fn realized_shapes_for_parts(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Option<Vec<crate::resources::Shape>> {
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialShapeValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
+            return None;
+        }
+        (0..self.material.parts.len())
+            .map(|part_index| self.realized_shape_for_part_validated(part_index, catalog))
+            .collect()
+    }
+
+    fn realized_shape_for_part_validated(
+        &self,
+        part_index: usize,
+        catalog: &[BaseResource],
+    ) -> Option<crate::resources::Shape> {
         let (name, amount) = self.material.parts.get(part_index)?;
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let shape = match self.realized_shapes.as_ref() {
@@ -450,6 +480,50 @@ impl PhysicalMaterial {
 mod tests {
     use super::*;
     use crate::resources::{InternalBond, Material};
+
+    #[test]
+    fn batched_shape_resolution_matches_individual_resolution() {
+        let catalog = crate::resources::default_catalog();
+        let physical = PhysicalMaterial::realized(
+            Material {
+                parts: vec![
+                    ("Carbon".into(), 1.0),
+                    ("Hydrogen".into(), 1.0),
+                    ("Oxygen".into(), 1.0),
+                ],
+                internal_bonds: Vec::new(),
+            },
+            vec![
+                Placement {
+                    x: 10.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 12.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 14.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &catalog,
+        )
+        .expect("the multi-part material should be realizable");
+
+        let individual = (0..physical.material.parts.len())
+            .map(|index| physical.realized_shape_for_part(index, &catalog))
+            .collect::<Option<Vec<_>>>()
+            .expect("each individual shape should resolve");
+        assert_eq!(
+            physical.realized_shapes_for_parts(&catalog),
+            Some(individual)
+        );
+        assert_eq!(physical.realized_shapes_for_parts(&[]), None);
+    }
 
     #[test]
     fn internal_bond_boundary_allows_rounding_noise_but_not_real_separation() {

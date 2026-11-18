@@ -1198,18 +1198,15 @@ fn environmental_material_resonance(
 /// physical orientation is the antenna geometry, while the source remains the
 /// complete environmental material.
 fn environmental_contribution(
-    physical: &crate::physical_material::PhysicalMaterial,
-    catalog: &[crate::resources::BaseResource],
-    tick: u64,
+    source_x: f64,
+    source_y: f64,
+    extent: f64,
+    emitted: &ToneSpectrum,
+    mass_scale: f64,
     receiver_a: (f64, f64),
     receiver_b: (f64, f64),
     cavity_center: (f64, f64),
 ) -> Option<(ResonancePerception, ToneSpectrum)> {
-    let (source_x, source_y, extent, emitted) =
-        environmental_material_resonance(physical, catalog, tick)?;
-    let baselines = ResourceBaselines::from_catalog(catalog);
-    let mass_scale = environmental_mass_scale(physical.material.mass(catalog), baselines.mass);
-
     let rx = (receiver_a.0 + receiver_b.0) * 0.5;
     let ry = (receiver_a.1 + receiver_b.1) * 0.5;
     let dx = source_x - rx;
@@ -1252,7 +1249,7 @@ fn environmental_contribution(
     }
 
     let mut received = ToneSpectrum::empty();
-    add_spectrum(&mut received, &emitted, scale);
+    add_spectrum(&mut received, emitted, scale);
     let magnitude = spectrum_magnitude(&received);
     if magnitude <= f64::EPSILON {
         return None;
@@ -2611,10 +2608,22 @@ fn environmental_contributions(
             continue;
         }
         for physical in &cell.physical_materials {
+            // The source oscillator, geometry, catalog baselines, and mass
+            // scaling are invariant across this cavity's receiver segments.
+            // Derive them once per physical source rather than once per segment.
+            let Some((source_x, source_y, extent, emitted)) =
+                environmental_material_resonance(physical, catalog, tick)
+            else {
+                continue;
+            };
+            let baselines = ResourceBaselines::from_catalog(catalog);
+            let mass_scale =
+                environmental_mass_scale(physical.material.mass(catalog), baselines.mass);
+
             for (a, b, _) in &segments {
-                if let Some((perception, contribution)) =
-                    environmental_contribution(physical, catalog, tick, *a, *b, center)
-                {
+                if let Some((perception, contribution)) = environmental_contribution(
+                    source_x, source_y, extent, &emitted, mass_scale, *a, *b, center,
+                ) {
                     add_spectrum(&mut spectrum, &contribution, 1.0);
                     perceptions.push(perception);
                 }
