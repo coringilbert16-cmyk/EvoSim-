@@ -1,9 +1,9 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [42],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Inactive after one-off post-PR-376 whole-tick phase profile.",
-  "profile_movement": false,
+  "request_note": "One-off detailed resonance movement subphase profile; disable after dispatch.",
+  "profile_movement": true,
   "profile_tick": false
 }
