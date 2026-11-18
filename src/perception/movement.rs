@@ -2255,5 +2255,4 @@ mod tests {
         );
         assert!(organism.cached_harmonic_key.is_none());
     }
-
 }
