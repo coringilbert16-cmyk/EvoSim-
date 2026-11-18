@@ -1,11 +1,9 @@
 {
-  "run": false,
-  "seeds": [
-    42
-  ],
+  "run": true,
+  "seeds": [42],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Inactive after PR365 one-off placement profiling trigger; profiling disabled by default.",
+  "request_note": "One-off post-PR-376 whole-tick phase profile; disable after dispatch.",
   "profile_movement": false,
-  "profile_tick": false
+  "profile_tick": true
 }
