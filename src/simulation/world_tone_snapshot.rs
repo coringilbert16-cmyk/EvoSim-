@@ -422,9 +422,10 @@ fn can_deposit_spectrum(
         if energy <= f64::EPSILON {
             continue;
         }
-        if let Some((_, current)) = projected[..projected_len].iter_mut().find(|entry| {
-            (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9
-        }) {
+        if let Some((_, current)) = projected[..projected_len]
+            .iter_mut()
+            .find(|entry| (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9)
+        {
             *current += energy;
             if !current.is_finite() {
                 return false;
