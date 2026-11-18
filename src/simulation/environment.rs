@@ -934,19 +934,22 @@ impl ActiveMaterialField {
                 })
                 .count();
 
-            // Capture one real, deterministic workload snapshot for offline
-            // BVH benchmarking. This is audit-only and never feeds placement.
-            if pass == 1 {
+            // Capture ten consecutive real workload snapshots for persistent
+            // BVH refit research. Identity is included because field iteration
+            // order can change after accepted moves. This remains audit-only.
+            if pass <= 10 {
                 for (index, bounds) in &valid_targets {
                     eprintln!(
-                        "MOVEMENT_SPATIAL_BOUNDS pass=1 set=target index={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
-                        index, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
+                        "MOVEMENT_SPATIAL_BOUNDS pass={} set=target index={} identity={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
+                        pass, index, snapshots[*index].identity,
+                        bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
                     );
                 }
                 for (index, bounds) in &candidate_entries {
                     eprintln!(
-                        "MOVEMENT_SPATIAL_BOUNDS pass=1 set=candidate index={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
-                        index, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
+                        "MOVEMENT_SPATIAL_BOUNDS pass={} set=candidate index={} identity={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
+                        pass, index, snapshots[*index].identity,
+                        bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
                     );
                 }
             }
