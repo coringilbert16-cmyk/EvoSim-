@@ -34,23 +34,48 @@ impl Bounds {
 #[derive(Clone, Copy)]
 struct Event { min_x: f64, max_x: f64, id: usize, target: bool }
 
-fn parse_bounds(text: &str, set: &str) -> Vec<Bounds> {
-    let marker = format!("MOVEMENT_SPATIAL_BOUNDS pass=1 set={set} ");
-    let mut out = Vec::new();
-    for line in text.lines().filter(|line| line.contains(&marker)) {
-        let mut values = [0.0_f64; 5];
-        for (slot, key) in ["index=", "min_x=", "max_x=", "min_y=", "max_y="].iter().enumerate() {
-            let tail = line.split_once(key).expect("bound field").1;
-            let token = tail.split_whitespace().next().expect("bound value");
-            values[slot] = token.parse().expect("numeric bound");
+#[derive(Default)]
+struct PassBounds {
+    targets: Vec<(u64, Bounds)>,
+    candidates: Vec<(u64, Bounds)>,
+}
+fn parse_snapshots(text: &str) -> Vec<(Vec<Bounds>, Vec<Bounds>)> {
+    use std::collections::BTreeMap;
+    let mut by_pass: BTreeMap<usize, PassBounds> = BTreeMap::new();
+    for line in text.lines().filter(|line| line.contains("MOVEMENT_SPATIAL_BOUNDS ")) {
+        let field = |key: &str| line.split_once(key).expect("bound field").1.split_whitespace().next().expect("bound value");
+        let pass: usize = field("pass=").parse().expect("pass number");
+        let identity: u64 = field("identity=").parse().expect("material identity");
+        let bounds = Bounds {
+            id: 0,
+            min_x: field("min_x=").parse().expect("min_x"),
+            max_x: field("max_x=").parse().expect("max_x"),
+            min_y: field("min_y=").parse().expect("min_y"),
+            max_y: field("max_y=").parse().expect("max_y"),
+        };
+        let entry = by_pass.entry(pass).or_default();
+        if line.contains("set=target ") {
+            entry.targets.push((identity, bounds));
+        } else if line.contains("set=candidate ") {
+            entry.candidates.push((identity, bounds));
         }
-        out.push(Bounds {
-            id: values[0] as usize, min_x: values[1], max_x: values[2],
-            min_y: values[3], max_y: values[4],
-        });
     }
-    out.sort_by_key(|b| b.id);
-    out
+    let mut snapshots = Vec::new();
+    for (pass, mut sets) in by_pass {
+        sets.targets.sort_by_key(|(identity, _)| *identity);
+        sets.candidates.sort_by_key(|(identity, _)| *identity);
+        let target_ids: Vec<_> = sets.targets.iter().map(|(id, _)| *id).collect();
+        let candidate_ids: Vec<_> = sets.candidates.iter().map(|(id, _)| *id).collect();
+        assert_eq!(target_ids, candidate_ids, "target/candidate identity mismatch at pass {pass}");
+        let targets = sets.targets.into_iter().enumerate().map(|(id, (_, mut b))| {
+            b.id = id; b
+        }).collect();
+        let candidates = sets.candidates.into_iter().enumerate().map(|(id, (_, mut b))| {
+            b.id = id; b
+        }).collect();
+        snapshots.push((targets, candidates));
+    }
+    snapshots
 }
 
 #[derive(Clone, Copy)]
@@ -183,40 +208,42 @@ fn oracle(q: &[Bounds], t: &[Bounds]) -> (Vec<(usize,usize)>, Vec<(usize,usize)>
 fn main() {
     let path = env::args().nth(1).expect("usage: movement_bvh_research <movement-spatial-audit.log>");
     let text = fs::read_to_string(path).expect("read audit log");
-    let original_targets = parse_bounds(&text, "target");
-    let original_candidates = parse_bounds(&text, "candidate");
-    println!("captured_targets={} captured_candidates={}", original_targets.len(), original_candidates.len());
-    assert!(!original_targets.is_empty() && original_targets.len() == original_candidates.len());
-    let updates = 10usize;
-    for leaf in [8usize,16,32,64] {
-        let mut targets = original_targets.clone();
-        let mut candidates = original_candidates.clone();
-        let mut target_tree = Bvh::new(targets.clone(), leaf);
-        let mut candidate_tree = Bvh::new(candidates.clone(), leaf);
+    let snapshots = parse_snapshots(&text);
+    println!("captured_consecutive_passes={} first_pass_targets={} first_pass_candidates={}",
+        snapshots.len(), snapshots.first().map_or(0, |s| s.0.len()),
+        snapshots.first().map_or(0, |s| s.1.len()));
+    assert!(snapshots.len() >= 2, "need at least two consecutive captured passes");
+    let updates = snapshots.len() - 1;
+    for leaf in [8usize, 16, 32, 64] {
+        let build_started = Instant::now();
+        let mut target_tree = Bvh::new(snapshots[0].0.clone(), leaf);
+        let mut candidate_tree = Bvh::new(snapshots[0].1.clone(), leaf);
+        let build_ms = build_started.elapsed().as_secs_f64() * 1000.0;
         let mut target_refit = 0.0;
         let mut candidate_refit = 0.0;
         let mut bvh_query = 0.0;
         let mut sweep_query = 0.0;
         let mut visits_total = 0u64;
         let mut comparisons_total = 0u64;
+        let mut changed_targets_total = 0usize;
+        let mut changed_candidates_total = 0usize;
         let mut exact = true;
-        for step in 1..=updates {
-            let mut next_targets = targets.clone();
-            let mut next_candidates = candidates.clone();
-            for b in &mut next_targets {
-                if (b.id * 37) % 100 < 45 {
-                    let dx = (((b.id * 17 + step * 11) % 101) as f64 - 50.0) * 0.0007;
-                    let dy = (((b.id * 29 + step * 7) % 97) as f64 - 48.0) * 0.0007;
-                    b.min_x += dx; b.max_x += dx; b.min_y += dy; b.max_y += dy;
-                }
-            }
-            for b in &mut next_candidates {
-                let dx = (((b.id * 13 + step * 19) % 89) as f64 - 44.0) * 0.0011;
-                let dy = (((b.id * 31 + step * 23) % 83) as f64 - 41.0) * 0.0011;
-                b.min_x += dx; b.max_x += dx; b.min_y += dy; b.max_y += dy;
-            }
-            let t0 = Instant::now(); target_tree.refit(&next_targets); target_refit += t0.elapsed().as_secs_f64()*1000.0;
-            let t0 = Instant::now(); candidate_tree.refit(&next_candidates); candidate_refit += t0.elapsed().as_secs_f64()*1000.0;
+        let mut previous_targets = snapshots[0].0.clone();
+        let mut previous_candidates = snapshots[0].1.clone();
+        for (next_targets, next_candidates) in snapshots.iter().skip(1) {
+            changed_targets_total += next_targets.iter().zip(&previous_targets)
+                .filter(|(a,b)| a.min_x != b.min_x || a.max_x != b.max_x || a.min_y != b.min_y || a.max_y != b.max_y)
+                .count();
+            changed_candidates_total += next_candidates.iter().zip(&previous_candidates)
+                .filter(|(a,b)| a.min_x != b.min_x || a.max_x != b.max_x || a.min_y != b.min_y || a.max_y != b.max_y)
+                .count();
+            let t0 = Instant::now();
+            target_tree.refit(next_targets);
+            target_refit += t0.elapsed().as_secs_f64() * 1000.0;
+            let t0 = Instant::now();
+            candidate_tree.refit(next_candidates);
+            candidate_refit += t0.elapsed().as_secs_f64() * 1000.0;
+
             let mut bvh_cross = Vec::new();
             let mut bvh_self = Vec::new();
             let mut hits = Vec::new();
@@ -225,7 +252,7 @@ fn main() {
             for _ in 0..10 {
                 bvh_cross.clear();
                 bvh_self.clear();
-                for q in &next_candidates {
+                for q in next_candidates {
                     hits.clear();
                     target_tree.query_node(0, *q, &mut hits, &mut visits);
                     for &id in &hits {
@@ -240,25 +267,36 @@ fn main() {
                 bvh_cross.sort_unstable();
                 bvh_self.sort_unstable();
             }
-            bvh_query += t0.elapsed().as_secs_f64()*100.0;
+            bvh_query += t0.elapsed().as_secs_f64() * 100.0;
+
             let t0 = Instant::now();
-            let mut sweep_x = Vec::new(); let mut sweep_m = Vec::new(); let mut comparisons = 0;
+            let mut sweep_x = Vec::new();
+            let mut sweep_m = Vec::new();
+            let mut comparisons = 0;
             for _ in 0..10 {
-                let (x,cx) = sweep_cross(&next_candidates,&next_targets);
-                let (m,cm) = sweep_self(&next_candidates);
-                sweep_x = x; sweep_m = m; comparisons = cx+cm;
+                let (x, cx) = sweep_cross(next_candidates, next_targets);
+                let (m, cm) = sweep_self(next_candidates);
+                sweep_x = x;
+                sweep_m = m;
+                comparisons = cx + cm;
             }
-            sweep_query += t0.elapsed().as_secs_f64()*100.0;
-            let (oracle_x, oracle_m) = oracle(&next_candidates,&next_targets);
-            exact &= bvh_cross == oracle_x && bvh_self == oracle_m && sweep_x == oracle_x && sweep_m == oracle_m;
-            visits_total += visits/10;
+            sweep_query += t0.elapsed().as_secs_f64() * 100.0;
+            let (oracle_x, oracle_m) = oracle(next_candidates, next_targets);
+            exact &= bvh_cross == oracle_x
+                && bvh_self == oracle_m
+                && sweep_x == oracle_x
+                && sweep_m == oracle_m;
+            visits_total += visits / 10;
             comparisons_total += comparisons;
-            targets = next_targets; candidates = next_candidates;
+            previous_targets.clone_from(next_targets);
+            previous_candidates.clone_from(next_candidates);
         }
-        println!("leaf={} modeled_updates={} target_refit_avg_ms={:.5} candidate_refit_avg_ms={:.5} bvh_query_avg_ms={:.5} sweep_query_avg_ms={:.5} bvh_node_visits_avg={} sweep_comparisons_avg={} exact_all_updates={}",
-            leaf, updates, target_refit/updates as f64, candidate_refit/updates as f64,
-            bvh_query/updates as f64, sweep_query/updates as f64,
-            visits_total/updates as u64, comparisons_total/updates as u64, exact);
+        println!("leaf={} actual_refits={} initial_build_ms={:.5} target_refit_avg_ms={:.5} candidate_refit_avg_ms={:.5} bvh_query_avg_ms={:.5} sweep_query_avg_ms={:.5} changed_target_bounds_avg={:.1} changed_candidate_bounds_avg={:.1} bvh_node_visits_avg={} sweep_comparisons_avg={} exact_all_passes={}",
+            leaf, updates, build_ms, target_refit / updates as f64,
+            candidate_refit / updates as f64, bvh_query / updates as f64,
+            sweep_query / updates as f64, changed_targets_total as f64 / updates as f64,
+            changed_candidates_total as f64 / updates as f64,
+            visits_total / updates as u64, comparisons_total / updates as u64, exact);
         assert!(exact, "pair mismatch for leaf size {leaf}");
     }
 }
