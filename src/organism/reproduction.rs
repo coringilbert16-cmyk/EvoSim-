@@ -937,8 +937,7 @@ fn commit_candidate_attachment(
     *parent_storage = staged_parent_storage;
     *ledger = candidate_ledger;
     *construction = staged_construction;
-    let structure_changed = parent_structure.units.len() > before_units;
-    (status, None, structure_changed)
+    status
 }
 
 pub(crate) fn advance_construction(
@@ -963,7 +962,7 @@ pub(crate) fn advance_construction(
         return (ConstructionStatus::Dead, None, false);
     }
     let Some(anchor_id) = construction.anchor_physical_id else {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, false);
     };
     let Some(working_structure) = parent_structure
         .subgraph_for_physical_ids(&construction.developing_member_ids, &[anchor_id])
@@ -1039,11 +1038,11 @@ pub(crate) fn advance_construction(
         &environment.catalog,
         seed_reference,
     ) {
-        return (ConstructionStatus::Ready, None);
+        return (ConstructionStatus::Ready, None, false);
     }
 
     if !parent_child_in_contact(parent_structure, &child.structure) {
-        return (ConstructionStatus::Detached, None);
+        return (ConstructionStatus::Detached, None, false);
     }
 
     let anchor_index = construction
@@ -1083,7 +1082,7 @@ pub(crate) fn advance_construction(
         ) {
             NextConstructionResourceStatus::Missing => {
                 construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, false);
             }
             NextConstructionResourceStatus::Available => {
                 construction.needs_space = true;
@@ -1113,7 +1112,7 @@ pub(crate) fn advance_construction(
         before_units,
         seed_reference,
     );
-    (status, None)
+    (status, None, parent_structure.units.len() > before_units)
 }
 
 pub(crate) fn finish_reproduction(
