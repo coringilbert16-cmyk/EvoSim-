@@ -83,3 +83,22 @@ This work is not all reusable: centroid/extent depend on current placements, and
 Important boundary: the source inspection establishes repeated derivation within one environmental-contribution call, but does not yet establish how often the function is invoked in the standard simulation workload. Its call frequency and inclusive time must be measured before prioritizing it.
 
 This finding strengthens the case for a narrowly scoped profiling pass, not for immediate caching. A safe first prototype could prepare catalog baselines once per owning simulation pass and pass them down, then compare exact output and whole-run throughput. A material aggregate cache would require a proven composition/catalog key and mutation invalidation first.
+
+
+## Measurement implementation
+
+An opt-in profiler is now added on this PR branch. Set EVOSIM_PROFILE_PROPERTIES=1 to enable it; otherwise it performs no clock reads and emits no report. It records call counts and inclusive elapsed time for:
+
+- ResourceBaselines::from_catalog;
+- Material::is_valid_for_catalog;
+- Material::weighted_properties;
+- Material::mass;
+- StructuralUnit::properties;
+- world-tone physical-material property extraction;
+- world-tone structure-property extraction.
+
+The measurements are deliberately labeled **inclusive**. These paths nest (for example, StructuralUnit::properties calls catalog validation and weighted_properties, which validates again), so their times must not be summed as if they were disjoint. The call counts expose duplicated validation directly.
+
+The PR's Rust workflow now runs one standard 60-second, seed-42 environmental chemistry experiment with profiling enabled, after ordinary CI and the existing smoke run. The log and raw diagnostic JSONL are uploaded as the material-property-profile artifact. The simulation code only reads the environment flag and updates diagnostic atomics/timers; no simulation inputs, branch decisions, candidate ordering, or energy calculations are changed.
+
+The next decision will use both call counts and elapsed time. If the profiled functions account for negligible wall time, the cache workstream should close without a production cache. If a single reusable value dominates, prototype only that value with exact output parity and a matched end-to-end comparison.
