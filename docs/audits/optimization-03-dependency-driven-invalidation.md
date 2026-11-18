@@ -114,3 +114,27 @@ The inventory builder invalidates dependent bond/contact records when an upserte
 3. Determine whether catalog contents can change after simulation construction, and identify any cache keys that omit catalog dependencies.
 4. Trace the complete dependency footprint of organism harmonic spectra and cavity/world-tone contributions before considering per-cell invalidation.
 5. Identify expensive recalculations with a narrower, provable dependency set than the current global field revision.
+
+
+### Organism revision mutation-site findings
+
+A repository-wide code search identified the production call sites for the organism revision helpers. The main paths include transformation BREAK, COMBINE, movement, reproduction, and simulation-level construction/cleanup. The movement commit path calls `mark_position_changed` after translating the organism's occupied cells, developmental origin, and all structural-unit placements.
+
+However, the audit found a concrete invalidation concern that must be resolved before any new cache is designed:
+
+- In `src/chemistry/combine_runtime.rs`, the stored-material COMBINE path assigns a newly formed `trial_structure` to `organism.structure` (around line 1756) without a nearby `mark_structure_changed`.
+- The ordinary organism-to-organism COMBINE path also assigns `trial_structure` (around line 1869) without a nearby `mark_structure_changed`.
+- The simulation scheduler calls `try_combine` and, after a successful attempt, records consequences and experience; the inspected caller does not itself mark the structure changed.
+- Other COMBINE paths in the same module do call `mark_structure_changed` (around lines 948 and 1090), so invalidation behavior is not uniform across all structural mutation routes.
+
+These are not yet declared confirmed cache bugs: the precise branch semantics, any indirect mutation helpers, and the affected cached consumers still need a complete call-chain review. They are high-priority audit targets because the cavity, developmental-realization, and harmonic caches depend on structure revision.
+
+### Field mutation coverage findings
+
+GitHub code search found `mark_cell_changed` only inside `src/simulation/environment.rs`, which is a good encapsulation boundary. Other production mutation modules use the field's `mark_changed_at_index` wrapper after direct cell-vector changes. The inspected COMBINE and displacement commits explicitly mark every source/destination cell after their staged mutation.
+
+Direct `physical_materials.clear()` occurrences found in world-tone snapshot and chemistry modules are within test helpers/fixtures in the inspected locations; they are not evidence of production writes bypassing invalidation. A full search of every mutable borrow and mutation expression is still required before treating this as complete coverage.
+
+### Revised priority
+
+Before introducing new revision counters or event queues, first resolve the existing structure-revision inconsistencies. Adding more caching on top of incomplete invalidation would risk stale derived state. The safest next step is to trace every successful structural mutation to its owner and ensure one authoritative invalidation at the transaction commit boundary, with tests proving that cavity/developmental/harmonic consumers refresh after each mutation family.
