@@ -93,7 +93,10 @@ impl MaterialStorage {
     ) -> bool {
         if !instance.is_realized()
             || instance.material.parts.is_empty()
-            || !instance.material.is_valid_for_catalog(catalog)
+            || !instance.crate::property_profile::measure_call(
+                    crate::property_profile::Metric::MaterialStorageValidationSite,
+                    || material.is_valid_for_catalog(catalog),
+                )
             || !Self::is_discrete(&instance.material)
         {
             return false;
