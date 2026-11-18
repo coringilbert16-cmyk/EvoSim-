@@ -972,8 +972,24 @@ pub(crate) fn transform_signal_to_energy_budget(
     if outgoing_energy_budget <= f64::EPSILON {
         return Some(ToneSpectrum::empty());
     }
+    let transformed = material_response_spectrum(properties, baselines, incoming)?;
+    normalize_spectrum_to_energy_budget(transformed, outgoing_energy_budget)
+}
 
-    let mut transformed = material_response_spectrum(properties, baselines, incoming)?;
+/// Normalize an already-computed material response to a conserved energy
+/// budget. Callers that already have the response spectrum can avoid evaluating
+/// the same material response a second time.
+pub(crate) fn normalize_spectrum_to_energy_budget(
+    mut transformed: ToneSpectrum,
+    outgoing_energy_budget: f64,
+) -> Option<ToneSpectrum> {
+    if !outgoing_energy_budget.is_finite() || outgoing_energy_budget < 0.0 {
+        return None;
+    }
+    if outgoing_energy_budget <= f64::EPSILON {
+        return Some(ToneSpectrum::empty());
+    }
+
     let transformed_energy = spectrum_energy(&transformed)?;
     if !transformed_energy.is_finite() || transformed_energy <= f64::EPSILON {
         return None;
@@ -991,8 +1007,7 @@ pub(crate) fn transform_signal_to_energy_budget(
     if !scale.is_finite() || scale <= 0.0 {
         return None;
     }
-    // Bias the first scale very slightly downward. If floating-point rounding
-    // still lands above the budget, the correction loop below only scales down.
+    // Bias the first scale slightly downward to keep rounding conservative.
     let scale = scale * (1.0 - 2.0 * f64::EPSILON);
     for component in &mut transformed.components {
         component.amplitude *= scale;
