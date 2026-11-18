@@ -2931,22 +2931,43 @@ mod tests {
         simulation.active_transformations.clear();
 
         let material = Material {
-            parts: vec![("Carbon".into(), 1.0), ("Hydrogen".into(), 2.0)],
+            parts: vec![
+                ("Carbon".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+                ("Hydrogen".into(), 1.0),
+            ],
             internal_bonds: Vec::new(),
         };
-        let unit = StructuralUnit::from_material(
+        let physical = PhysicalMaterial::realized(
             material,
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
+            vec![
+                Placement {
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 2.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                Placement {
+                    x: 3.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            &simulation.environment.catalog,
         )
-        .expect("integer-count molecule should be valid");
-        simulation.organisms[0].structure.add_unit(unit);
-        let living_ids = HashSet::from([simulation.organisms[0].id.clone()]);
-        let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &living_ids)
-            .expect("every atom in a valid molecule should be enumerated");
+        .expect("three-constituent physical material should be valid");
+        assert!(simulation.environment.field.deposit_physical(
+            2.0,
+            0.0,
+            physical,
+            &simulation.environment.catalog,
+        ));
+        let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &HashSet::new())
+            .expect("every atom in a valid composite material should be enumerated");
 
         assert_eq!(
             snapshot.recipients.len(),
