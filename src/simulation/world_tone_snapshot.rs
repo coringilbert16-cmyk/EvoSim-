@@ -252,12 +252,10 @@ impl WorldToneRecipientSnapshot {
                     return;
                 }
                 let retained_budget = response_energy - response_energy * damping.clamp(0.0, 1.0);
-                let Some(retained_spectrum) =
-                    crate::harmonics::normalize_spectrum_to_energy_budget(
-                        response_spectrum,
-                        retained_budget,
-                    )
-                else {
+                let Some(retained_spectrum) = crate::harmonics::normalize_spectrum_to_energy_budget(
+                    response_spectrum,
+                    retained_budget,
+                ) else {
                     return;
                 };
                 entry.insert(CachedMaterialResponse {
@@ -2574,7 +2572,10 @@ mod tests {
             .expect("removed material remains a physical recipient during BREAK");
         assert_eq!(snapshot.recipients.len(), 2);
         assert!(
-            snapshot.recipients.iter().any(|recipient| recipient.resonance_owner.is_none()),
+            snapshot
+                .recipients
+                .iter()
+                .any(|recipient| recipient.resonance_owner.is_none()),
             "in-transition stored material must not acquire the owner's resonance reservoir"
         );
     }

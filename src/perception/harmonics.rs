@@ -1029,8 +1029,7 @@ pub(crate) fn normalize_spectrum_to_energy_budget(
     }
     if !final_energy.is_finite()
         || final_energy > outgoing_energy_budget
-        || (final_energy - outgoing_energy_budget).abs()
-            > 1e-9 * outgoing_energy_budget.max(1.0)
+        || (final_energy - outgoing_energy_budget).abs() > 1e-9 * outgoing_energy_budget.max(1.0)
     {
         return None;
     }
