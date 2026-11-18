@@ -138,3 +138,54 @@ Direct `physical_materials.clear()` occurrences found in world-tone snapshot and
 ### Revised priority
 
 Before introducing new revision counters or event queues, first resolve the existing structure-revision inconsistencies. Adding more caching on top of incomplete invalidation would risk stale derived state. The safest next step is to trace every successful structural mutation to its owner and ensure one authoritative invalidation at the transaction commit boundary, with tests proving that cavity/developmental/harmonic consumers refresh after each mutation family.
+
+
+## Expanded mutation-path audit and first exact invalidation fixes
+
+The broader call-chain review found additional production mutation paths that bypassed the organism/field revision contracts. These have been corrected on this branch; the changes are correctness/invalidation fixes, not a performance optimization.
+
+### Organism structure and position
+
+The cache consumers in `src/simulation/state.rs` depend on:
+
+- `structure_revision`: cavity analysis, developmental realization, and harmonic spectrum keys.
+- `position_revision`: harmonic spectrum keys.
+- `ActiveMaterialField.revision`: environmental dependency of harmonic spectra.
+
+The first pass's two COMBINE gaps were confirmed in the live `try_combine` transaction:
+- Environmental material admission committed a new structure without `mark_structure_changed`.
+- Intra-organism bond formation/coalescence committed a new structure without `mark_structure_changed`.
+
+Both successful commit boundaries now invalidate structure-derived caches. A regression test exercises live intra-organism COMBINE and checks the revision increment and cache invalidation.
+
+The reproduction lifecycle had two further gaps:
+- `begin_reproduction` appended the anchor graph and its physical bond to the parent aggregate without advancing `structure_revision`. It now marks the structure changed at the successful commit boundary; the existing anchor-admission test now asserts the revision increment.
+- `advance_construction` could replace the parent's aggregate subgraph during maintenance or attach a new physical unit/bond, but the simulation caller did not invalidate the parent caches. It now reports whether the authoritative graph changed, and the simulation caller advances `structure_revision` only when that report is true. The growth regression now asserts that successful attachment reports a graph change.
+
+Position movement also had an overlooked route:
+- The primary organism movement commit already called `mark_position_changed`.
+- Organisms moved as part of a push chain passed through `translate_organism`, which updated occupied cells, developmental origin, and every unit placement without advancing `position_revision`. The helper now invalidates position-dependent harmonics; a regression test covers this path.
+
+### Environmental field revision and bond-index maintenance
+
+The ordinary field mutation APIs centralize updates through `mark_changed_at_index`, which advances the global revision, the touched cell revision, and the maintained environmental bond index.
+
+A separate push-chain path in `src/perception/movement.rs::apply_push_plan` directly removed and reinserted physical materials and incremented only the global field revision. That left per-cell revisions and the incremental bond index stale. It now records every source and destination cell touched by the push, deduplicates those indices, and calls `mark_changed_at_index` for each after the physical transaction.
+
+Other inspected production field mutation paths use the central invalidation API:
+- Environment flow batches mark every changed cell after staged movement.
+- Environmental COMBINE and displacement mark their touched cells after commit.
+- Environmental BREAK and transformation source removal mark the source cell.
+- Field movement/transfer APIs mark source and destination cells.
+
+### Catalog mutation boundary
+
+`Environment.catalog` is a crate-visible `Vec<BaseResource>`, so immutability is not enforced by the type system. Repository-wide searches for runtime catalog mutation operations (`push`, `remove`, `insert`, `clear`, mutable iteration/access) found no production mutation path; the observed pushes are test fixtures/library construction. The current simulation therefore treats the catalog as fixed after environment construction, but any future catalog-edit feature must introduce an authoritative catalog revision or rebuild all catalog-derived state. Persistent catalog-dependent caches must not assume stronger immutability than this audit established.
+
+### Remaining boundaries and implementation status
+
+- The environmental broad-phase cursor is pass-local and rejects work when the global field revision changes; it is not a persistent cache.
+- The environmental bond index is incrementally maintained at changed-cell boundaries and rebuilt after deserialization.
+- Per-material topology/state versions in the staged environmental interaction inventory remain pass-local/zero in the production snapshot adapter; they are not yet a general persistent invalidation contract.
+- No new persistent cache, spatial locality assumption, approximation, or reduced interaction set has been introduced.
+- The branch now contains focused regression tests for the identified organism structure/position invalidation routes. The full CI run is the next correctness gate; further optimization work remains blocked until it passes.
