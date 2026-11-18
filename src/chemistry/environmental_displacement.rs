@@ -2979,6 +2979,13 @@ mod tests {
         target_name: &str,
         catalog: &[BaseResource],
     ) -> Option<(OrganismStructure, usize, ConnectionPairCandidate, f64)> {
+        let mut best: Option<(
+            OrganismStructure,
+            usize,
+            ConnectionPairCandidate,
+            f64,
+            f64,
+        )> = None;
         for x_step in -8..=8 {
             for y_step in -8..=8 {
                 for rotation_step in 0..16 {
@@ -3022,7 +3029,7 @@ mod tests {
                         {
                             continue;
                         }
-                        if let Some((_, _, investment, _)) =
+                        let Some((_, _, investment, _)) =
                             crate::combine_runtime::selected_candidate_evaluation(
                                 &topology,
                                 anchor_unit,
@@ -3030,14 +3037,37 @@ mod tests {
                                 candidate,
                                 catalog,
                             )
+                        else {
+                            continue;
+                        };
+                        let Some(activation_increment) = accumulate_incoming_activation(
+                            &topology.units[anchor_unit],
+                            &topology.units[incoming_unit],
+                            candidate,
+                            0.0,
+                            catalog,
+                        ) else {
+                            continue;
+                        };
+                        if best
+                            .as_ref()
+                            .map_or(true, |current| activation_increment > current.4)
                         {
-                            return Some((combined, incoming_unit, candidate, investment));
+                            best = Some((
+                                combined.clone(),
+                                incoming_unit,
+                                candidate,
+                                investment,
+                                activation_increment,
+                            ));
                         }
                     }
                 }
             }
         }
-        None
+        best.map(|(combined, incoming_unit, candidate, investment, _)| {
+            (combined, incoming_unit, candidate, investment)
+        })
     }
 
     /// Calculate activation from sustained ordinary contact, without seeding
@@ -3084,7 +3114,7 @@ mod tests {
             rotation_radians: 0.0,
         };
         let substrate = crate::environment_chemistry_experiment::realize_natural_molecule(
-            &["Hydrogen".to_owned(), "Sulfur".to_owned()],
+            &["Phosphorus".to_owned(), "Carbon".to_owned()],
             origin,
             &catalog,
         );
@@ -3099,20 +3129,19 @@ mod tests {
         let old_substrate_bond = *substrate_structure
             .bonds
             .first()
-            .expect("H-S substrate must contain its ordinary COMBINE bond");
+            .expect("P-C substrate must contain its ordinary COMBINE bond");
 
-        // Direct H-S + C -> H-C + S is the no-carrier control. A regenerated
-        // carrier is not useful catalysis unless its two-step route compares
-        // favorably with this ordinary one-step pathway.
+        // Direct P-C + H -> P-H + C is the no-carrier control. The weak P-H
+        // interaction should not activate the strong P-C bond by itself.
         let (direct_source, direct_target, direct_candidate, direct_investment) =
             catalyst_target_contact(
                 &substrate_structure,
                 old_substrate_bond,
                 0,
-                "Carbon",
+                "Hydrogen",
                 &catalog,
             )
-            .expect("direct H-C control must find a valid contact");
+            .expect("direct P-H control must find a valid contact");
         let direct_activation = catalyst_contact_activation(
             &direct_source.units[0],
             &direct_source.units[1],
@@ -3120,30 +3149,16 @@ mod tests {
             direct_candidate,
             old_substrate_bond,
             &catalog,
-        )
-        .expect("direct H-C control must activate within one simulated day");
-        let direct_trial = build_displacement_trial(
-            &direct_source,
-            0,
-            1,
-            direct_target,
-            old_substrate_bond,
-            direct_candidate,
-            direct_investment,
-            direct_activation.0,
-            catalog_reactivity_baseline(),
-            0.0,
-            &catalog,
-        )
-        .expect("direct H-C control must build a valid trial");
-        println!(
-            "CATALYST_DIRECT_CONTROL|H-S_to_H-C|activation_ticks={}|external_input={:.9}",
-            direct_activation.1, direct_trial.energy.required_external_input,
         );
+        assert!(
+            direct_activation.is_none(),
+            "direct P-C + H must remain below the P-C activation barrier for one simulated day"
+        );
+        println!("CATALYST_DIRECT_CONTROL|P-C_to_P-H|activated=false");
 
-        // O-H and O-P are the two strongest candidates for this role:
-        // oxygen binds the hydrogen anchor strongly, while the temporary H-O
-        // substrate bond has low integrity and can be displaced again.
+        // O-H and O-P are tested as oxygen carriers. Oxygen binds phosphorus
+        // strongly, while the temporary P-O bond is less intact and more
+        // reactive than the original P-C substrate bond.
         for carrier_partner in ["Hydrogen", "Phosphorus"] {
             let carrier = crate::environment_chemistry_experiment::realize_natural_molecule(
                 &["Oxygen".to_owned(), carrier_partner.to_owned()],
@@ -3161,7 +3176,7 @@ mod tests {
                 )
                 .unwrap_or_else(|| {
                     panic!(
-                        "Oxygen-{carrier_partner} carrier must find a valid H replacement contact"
+                        "Oxygen-{carrier_partner} carrier must find a valid P replacement contact"
                     )
                 });
             let catalyst_bond = combined
@@ -3188,7 +3203,7 @@ mod tests {
             )
             .unwrap_or_else(|| {
                 panic!(
-                    "Oxygen-{carrier_partner} first contact must activate within one simulated day"
+                    "Oxygen-{carrier_partner} first P-O contact must activate within one simulated day"
                 )
             });
             let first_trial = build_displacement_trial(
@@ -3220,10 +3235,10 @@ mod tests {
                     &first_trial.structure,
                     intermediate_bond,
                     0,
-                    "Carbon",
+                    "Hydrogen",
                     &catalog,
                 )
-                .expect("Carbon target must find a valid contact with the temporary H-O bond");
+                .expect("Hydrogen target must find a valid contact with the temporary P-O bond");
             let second_activation = catalyst_contact_activation(
                 &second_source.units[0],
                 &second_source.units[carrier_indices[0]],
@@ -3288,10 +3303,10 @@ mod tests {
                             .parts
                             .iter()
                             .any(|part| part.0 == "Hydrogen")
-                        && product.material.parts.iter().any(|part| part.0 == "Carbon")
+                        && product.material.parts.iter().any(|part| part.0 == "Phosphorus")
                         && product.material.internal_bonds.len() == 1
                 }),
-                "the net substrate transformation must produce a bonded H-C product"
+                "the net substrate transformation must produce a bonded P-H product"
             );
             assert!(first_trial.energy.required_external_input.is_finite());
             assert!(second_trial.energy.required_external_input.is_finite());
@@ -3300,16 +3315,14 @@ mod tests {
                     && second_trial.energy.required_external_input >= 0.0
             );
             println!(
-                "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|cycle_activation_ticks={}|direct_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|cycle_external_input={:.9}|direct_external_input={:.9}|regenerated=true",
+                "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|cycle_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|cycle_external_input={:.9}|direct_activation=false|regenerated=true",
                 first_activation.1,
                 second_activation.1,
                 first_activation.1 + second_activation.1,
-                direct_activation.1,
                 first_trial.energy.required_external_input,
                 second_trial.energy.required_external_input,
                 first_trial.energy.required_external_input
                     + second_trial.energy.required_external_input,
-                direct_trial.energy.required_external_input,
             );
         }
     }
