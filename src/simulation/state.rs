@@ -1175,10 +1175,7 @@ mod genome_core_identity_tests {
         let organism = &mut simulation.organisms[0];
 
         let first_reference = crate::juvenile::confirmed_seed_scale_reference(&catalog).unwrap();
-        let _ = organism.developmental_realization_cached_for_reference(
-            &catalog,
-            first_reference,
-        );
+        let _ = organism.developmental_realization_cached_for_reference(&catalog, first_reference);
         let first_key = organism
             .cached_developmental_revision
             .expect("initial realization should establish a cache key");
@@ -1191,13 +1188,14 @@ mod genome_core_identity_tests {
         let moved_key = organism
             .cached_developmental_revision
             .expect("moved realization should establish a cache key");
-        assert_ne!(first_key, moved_key, "position changes affect spatial realization");
+        assert_ne!(
+            first_key, moved_key,
+            "position changes affect spatial realization"
+        );
 
         let alternate_reference = (first_reference.0 * 1.01, first_reference.1 * 1.01);
-        let _ = organism.developmental_realization_cached_for_reference(
-            &catalog,
-            alternate_reference,
-        );
+        let _ =
+            organism.developmental_realization_cached_for_reference(&catalog, alternate_reference);
         let alternate_key = organism
             .cached_developmental_revision
             .expect("alternate reference should establish a cache key");
@@ -1206,5 +1204,4 @@ mod genome_core_identity_tests {
             "seed-scale reference changes affect developmental realization"
         );
     }
-
 }
