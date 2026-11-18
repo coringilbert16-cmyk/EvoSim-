@@ -4783,6 +4783,8 @@ mod tests {
 
 #[cfg(test)]
 mod environmental_movement_parallel_tests {
+    use crate::harmonics::{environmental_material_resonance, update_organism_harmonics};
+    use crate::structure::Placement;
     use super::{
         environmental_movement_displacements_from_pair_forces, environmental_movement_pair_count,
         environmental_movement_pair_force, environmental_movement_parallel_pair_forces,
@@ -4916,7 +4918,7 @@ mod environmental_movement_parallel_tests {
         let catalog = crate::resources::default_catalog();
         let physical = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
-            vec![crate::physical_material::Placement {
+            vec![Placement {
                 x: 10.0,
                 y: 10.0,
                 rotation_radians: 0.0,
