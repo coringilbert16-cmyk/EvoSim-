@@ -2358,6 +2358,24 @@ fn environmental_movement_worker_count() -> usize {
     })
 }
 
+/// Maximum center-to-center separation for either material's aura to reach
+/// the other's outer surface under the one-source-radius extension rule.
+fn environmental_movement_pair_support_radius(
+    a: &EnvironmentalMovementEmitter,
+    b: &EnvironmentalMovementEmitter,
+) -> Option<f64> {
+    if !a.source_radius.is_finite()
+        || a.source_radius < 0.0
+        || !b.source_radius.is_finite()
+        || b.source_radius < 0.0
+    {
+        return None;
+    }
+    let reach = (2.0 * a.source_radius + b.source_radius)
+        .max(2.0 * b.source_radius + a.source_radius);
+    reach.is_finite().then_some(reach)
+}
+
 /// Conservative source-specific spatial broadphase.
 ///
 /// The aura may extend outward by at most one radius of its emitting material.
@@ -2426,12 +2444,8 @@ fn environmental_movement_spatial_candidate_pairs(
             if dx > global_x_bound {
                 break;
             }
-            let radius_a = emitters[a].source_radius;
-            let radius_b = emitters[b].source_radius;
-            let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
-            if !reach.is_finite() {
-                return None;
-            }
+            let reach =
+                environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
             if dx <= reach {
                 let dy = emitters[b].y - emitters[a].y;
                 if !dy.is_finite() {
@@ -2715,6 +2729,12 @@ pub(crate) fn environmental_resonance_displacements(
             let distance = dx.hypot(dy);
             if !distance.is_finite() {
                 return None;
+            }
+            let support_radius =
+                environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
+            if distance > support_radius {
+                pair_count += 1;
+                continue;
             }
             if distance > f64::EPSILON {
                 // Validate each immutable spectrum only on its first actual
