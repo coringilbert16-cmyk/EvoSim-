@@ -1266,11 +1266,11 @@ impl ActiveMaterialField {
         let mut candidate_slot_by_identity = HashMap::new();
 
         let possible_collisions = if bvh_eligible {
-            snapshot_slot_by_identity = HashMap::with_capacity(valid_snapshot_indices.len());
+            snapshot_slot_by_identity.reserve(valid_snapshot_indices.len());
             for (slot, &index) in valid_snapshot_indices.iter().enumerate() {
                 snapshot_slot_by_identity.insert(snapshots[index].identity, slot);
             }
-            candidate_slot_by_identity = HashMap::with_capacity(candidate_indices.len());
+            candidate_slot_by_identity.reserve(candidate_indices.len());
             for (slot, &index) in candidate_indices.iter().enumerate() {
                 candidate_slot_by_identity.insert(snapshots[index].identity, slot);
             }
