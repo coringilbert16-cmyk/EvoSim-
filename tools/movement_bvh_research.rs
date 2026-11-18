@@ -2,7 +2,6 @@
 // Input: the movement-spatial-audit.log produced by PR #368.
 // This is research-only; it does not participate in simulation decisions.
 
-use std::collections::BTreeSet;
 use std::env;
 use std::fs;
 use std::time::Instant;
@@ -130,20 +129,15 @@ impl Bvh {
             for b in &self.items[n.lo..n.hi] { if b.overlaps(q) { out.push(b.id); } }
         }
     }
-    fn query(&self, q: Bounds, visits: &mut u64) -> Vec<usize> {
-        let mut out = Vec::new();
-        self.query_node(0, q, &mut out, visits);
-        out
-    }
 }
 
-fn sweep_cross(q: &[Bounds], t: &[Bounds]) -> (BTreeSet<(usize, usize)>, u64) {
+fn sweep_cross(q: &[Bounds], t: &[Bounds]) -> (Vec<(usize, usize)>, u64) {
     let mut events = Vec::with_capacity(q.len() + t.len());
     events.extend(q.iter().map(|b| Event { min_x: b.min_x, max_x: b.max_x, id: b.id, target: false }));
     events.extend(t.iter().map(|b| Event { min_x: b.min_x, max_x: b.max_x, id: b.id, target: true }));
     events.sort_by(|a,b| a.min_x.total_cmp(&b.min_x).then_with(|| b.target.cmp(&a.target)).then_with(|| a.id.cmp(&b.id)));
     let mut active: Vec<Event> = Vec::new();
-    let mut pairs = BTreeSet::new();
+    let mut pairs = Vec::new();
     let mut comparisons = 0;
     for e in events {
         active.retain(|x| x.max_x + 1.0e-9 >= e.min_x);
@@ -151,35 +145,39 @@ fn sweep_cross(q: &[Bounds], t: &[Bounds]) -> (BTreeSet<(usize, usize)>, u64) {
             if x.target == e.target || x.id == e.id { continue; }
             comparisons += 1;
             let (qb, tb) = if e.target { (&q[x.id], &t[e.id]) } else { (&q[e.id], &t[x.id]) };
-            if qb.overlaps(*tb) { pairs.insert((qb.id, tb.id)); }
+            if qb.overlaps(*tb) { pairs.push((qb.id, tb.id)); }
         }
         active.push(e);
     }
+    pairs.sort_unstable();
     (pairs, comparisons)
 }
-fn sweep_self(v: &[Bounds]) -> (BTreeSet<(usize, usize)>, u64) {
+fn sweep_self(v: &[Bounds]) -> (Vec<(usize, usize)>, u64) {
     let mut order: Vec<usize> = (0..v.len()).collect();
     order.sort_by(|&a,&b| v[a].min_x.total_cmp(&v[b].min_x).then_with(|| a.cmp(&b)));
     let mut active: Vec<usize> = Vec::new();
-    let mut pairs = BTreeSet::new();
+    let mut pairs = Vec::new();
     let mut comparisons = 0;
     for i in order {
         active.retain(|&j| v[j].max_x + 1.0e-9 >= v[i].min_x);
         for &j in &active {
             comparisons += 1;
-            if v[i].overlaps(v[j]) { pairs.insert((v[i].id.min(v[j].id), v[i].id.max(v[j].id))); }
+            if v[i].overlaps(v[j]) { pairs.push((v[i].id.min(v[j].id), v[i].id.max(v[j].id))); }
         }
         active.push(i);
     }
+    pairs.sort_unstable();
     (pairs, comparisons)
 }
-fn oracle(q: &[Bounds], t: &[Bounds]) -> (BTreeSet<(usize,usize)>, BTreeSet<(usize,usize)>) {
-    let mut cross = BTreeSet::new();
-    for a in q { for b in t { if a.id != b.id && a.overlaps(*b) { cross.insert((a.id,b.id)); } } }
-    let mut self_pairs = BTreeSet::new();
+fn oracle(q: &[Bounds], t: &[Bounds]) -> (Vec<(usize,usize)>, Vec<(usize,usize)>) {
+    let mut cross = Vec::new();
+    for a in q { for b in t { if a.id != b.id && a.overlaps(*b) { cross.push((a.id,b.id)); } } }
+    let mut self_pairs = Vec::new();
     for i in 0..q.len() { for j in i+1..q.len() { if q[i].overlaps(q[j]) {
-        self_pairs.insert((q[i].id.min(q[j].id), q[i].id.max(q[j].id)));
+        self_pairs.push((q[i].id.min(q[j].id), q[i].id.max(q[j].id)));
     }}}
+    cross.sort_unstable();
+    self_pairs.sort_unstable();
     (cross, self_pairs)
 }
 fn main() {
@@ -219,20 +217,32 @@ fn main() {
             }
             let t0 = Instant::now(); target_tree.refit(&next_targets); target_refit += t0.elapsed().as_secs_f64()*1000.0;
             let t0 = Instant::now(); candidate_tree.refit(&next_candidates); candidate_refit += t0.elapsed().as_secs_f64()*1000.0;
-            let mut bvh_cross = BTreeSet::new();
-            let mut bvh_self = BTreeSet::new();
+            let mut bvh_cross = Vec::new();
+            let mut bvh_self = Vec::new();
+            let mut hits = Vec::new();
             let mut visits = 0;
             let t0 = Instant::now();
             for _ in 0..10 {
-                bvh_cross.clear(); bvh_self.clear();
+                bvh_cross.clear();
+                bvh_self.clear();
                 for q in &next_candidates {
-                    for id in target_tree.query(*q, &mut visits) { if id != q.id { bvh_cross.insert((q.id,id)); } }
-                    for id in candidate_tree.query(*q, &mut visits) { if id > q.id { bvh_self.insert((q.id,id)); } }
+                    hits.clear();
+                    target_tree.query_node(0, *q, &mut hits, &mut visits);
+                    for &id in &hits {
+                        if id != q.id { bvh_cross.push((q.id, id)); }
+                    }
+                    hits.clear();
+                    candidate_tree.query_node(0, *q, &mut hits, &mut visits);
+                    for &id in &hits {
+                        if id > q.id { bvh_self.push((q.id, id)); }
+                    }
                 }
+                bvh_cross.sort_unstable();
+                bvh_self.sort_unstable();
             }
             bvh_query += t0.elapsed().as_secs_f64()*100.0;
             let t0 = Instant::now();
-            let mut sweep_x = BTreeSet::new(); let mut sweep_m = BTreeSet::new(); let mut comparisons = 0;
+            let mut sweep_x = Vec::new(); let mut sweep_m = Vec::new(); let mut comparisons = 0;
             for _ in 0..10 {
                 let (x,cx) = sweep_cross(&next_candidates,&next_targets);
                 let (m,cm) = sweep_self(&next_candidates);
