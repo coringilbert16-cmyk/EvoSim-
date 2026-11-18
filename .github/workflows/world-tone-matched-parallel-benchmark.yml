@@ -62,7 +62,8 @@ jobs:
               echo "START revision=${revision} seed=${seed} repetition=${repetition} runner=${RUNNER_NAME}"
               (
                 cd "${source_dir}"
-                env -u EVOSIM_PROFILE_MOVEMENT -u EVOSIM_PROFILE_TICK timeout 240s cargo run --no-build --locked -- \
+                test -x target/debug/evosim
+                env -u EVOSIM_PROFILE_MOVEMENT -u EVOSIM_PROFILE_TICK timeout 240s ./target/debug/evosim \
                   --headless \
                   --environment-chemistry-experiment \
                   --seconds 60 \
