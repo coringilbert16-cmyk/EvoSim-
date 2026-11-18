@@ -2557,5 +2557,4 @@ mod fluid_coalescence_transaction_tests {
         assert!(organism.cached_developmental_revision.is_none());
         assert!(organism.cached_harmonic_key.is_none());
     }
-
 }
