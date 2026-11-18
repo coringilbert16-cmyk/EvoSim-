@@ -951,8 +951,6 @@ pub(crate) fn advance_construction(
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
 ) -> (ConstructionStatus, Option<f64>, bool) {
-    let original_unit_count = parent_structure.units.len();
-    let original_bond_count = parent_structure.bonds.len();
     let mut structure_changed = false;
     // Stable IDs, not the cached developing graph, determine membership once
     // the child has been admitted into the parent's physical aggregate. Rebuild
@@ -1102,6 +1100,8 @@ pub(crate) fn advance_construction(
         }
     };
 
+    let candidate_structure_changed = child.structure.units != original_working_structure.units
+        || child.structure.bonds != original_working_structure.bonds;
     let status = commit_candidate_attachment(
         parent_structure,
         parent_storage,
@@ -1116,9 +1116,7 @@ pub(crate) fn advance_construction(
         before_units,
         seed_reference,
     );
-    let attachment_changed = parent_structure.units.len() != original_unit_count
-        || parent_structure.bonds.len() != original_bond_count;
-    (status, None, structure_changed || attachment_changed)
+    (status, None, structure_changed || candidate_structure_changed)
 }
 
 pub(crate) fn finish_reproduction(
