@@ -833,6 +833,7 @@ pub(crate) fn begin_reproduction(
         *rng = staged_rng;
         parent.usable_energy = staged_energy;
         parent.structure = staged_structure;
+        parent.mark_structure_changed();
         parent.stored_material = parent_trial_storage;
         parent.reproductive_construction = Some(ReproductiveConstruction {
             committed_material: child_storage,
@@ -936,7 +937,8 @@ fn commit_candidate_attachment(
     *parent_storage = staged_parent_storage;
     *ledger = candidate_ledger;
     *construction = staged_construction;
-    status
+    let structure_changed = parent_structure.units.len() > before_units;
+    (status, None, structure_changed)
 }
 
 pub(crate) fn advance_construction(
@@ -949,7 +951,7 @@ pub(crate) fn advance_construction(
     _rng: &mut ChaCha8Rng,
     parent_body: &crate::organism_geometry::OrganismBodyGeometry,
     seed_reference: Option<(f64, f64)>,
-) -> (ConstructionStatus, Option<f64>) {
+) -> (ConstructionStatus, Option<f64>, bool) {
     // Stable IDs, not the cached developing graph, determine membership once
     // the child has been admitted into the parent's physical aggregate. Rebuild
     // the working view before validation or chemistry so stale cached geometry
@@ -958,7 +960,7 @@ pub(crate) fn advance_construction(
     // authoritative physical aggregate. Detached graph state is legacy data,
     // not a second valid owner; fail closed instead of advancing it independently.
     if !construction.is_aggregate_owned_by(parent_structure) {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, false);
     }
     let Some(anchor_id) = construction.anchor_physical_id else {
         return (ConstructionStatus::Dead, None);
