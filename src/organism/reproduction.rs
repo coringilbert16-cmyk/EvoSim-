@@ -976,7 +976,7 @@ pub(crate) fn advance_construction(
     // Validate the authoritative transient view before any construction attempt
     // can spend energy from the parent's single usable-energy holder.
     if !developing_membership_is_valid(construction, &working_structure) {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
     let reproductive_energy_allocation = construction.child_genome.reproductive_energy_allocation;
     // Validate persisted accounting and genome parameters before candidate
@@ -994,7 +994,7 @@ pub(crate) fn advance_construction(
         || !parent_energy.is_finite()
         || *parent_energy < 0.0
     {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
 
     // Build a transient view from stable IDs. Its usable energy is then set to
@@ -1033,7 +1033,7 @@ pub(crate) fn advance_construction(
     construction.developing_member_ids = child.structure.physical_constituent_ids();
     construction.developing_structure = OrganismStructure::new();
     if dead {
-        return (ConstructionStatus::Dead, None);
+        return (ConstructionStatus::Dead, None, structure_changed);
     }
 
     if birth_ready_with_reference(
@@ -1097,7 +1097,7 @@ pub(crate) fn advance_construction(
                 // candidates can make this bond. Keep the unfinished bond
                 // pending; new material may make it solvable later.
                 construction.needs_space = false;
-                return (ConstructionStatus::Waiting, None);
+                return (ConstructionStatus::Waiting, None, structure_changed);
             }
         }
     };
