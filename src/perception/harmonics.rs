@@ -5240,3 +5240,111 @@ mod environmental_movement_parallel_tests {
         assert!(!second_key.4);
     }
 }
+
+
+#[cfg(test)]
+mod environmental_movement_candidate_tests {
+    use super::{
+        environmental_movement_candidate_pair_forces, environmental_movement_candidate_pairs,
+        environmental_movement_displacements_from_candidate_pair_forces,
+        environmental_movement_displacements_from_pair_forces,
+        environmental_movement_parallel_candidate_pair_forces,
+        environmental_movement_parallel_pair_forces, environmental_movement_phase_components,
+        EnvironmentalMovementEmitter, ToneComponent, ToneSpectrum,
+    };
+
+    fn emitter(x: f64, frequencies: &[(f64, f64)]) -> EnvironmentalMovementEmitter {
+        let spectrum = ToneSpectrum {
+            components: frequencies
+                .iter()
+                .map(|&(frequency_cycles_per_day, phase_radians)| ToneComponent {
+                    frequency_cycles_per_day,
+                    amplitude: 0.5,
+                    phase_radians,
+                })
+                .collect(),
+        };
+        let (phase_components, phase_component_count) =
+            environmental_movement_phase_components(&spectrum).unwrap();
+        EnvironmentalMovementEmitter {
+            x,
+            y: 0.25 * x,
+            mass_scale: 1.0,
+            spectrum,
+            phase_components,
+            phase_component_count,
+        }
+    }
+
+    #[test]
+    fn candidate_index_keeps_exact_frequency_matches_and_deduplicates_pairs() {
+        let emitters = vec![
+            emitter(0.0, &[(440.0, 0.1), (880.0, 0.2)]),
+            emitter(1.0, &[(440.0 + 0.5e-9, -0.3), (880.0, 0.4)]),
+            emitter(2.0, &[(660.0, 0.5)]),
+            emitter(3.0, &[(880.0 + 1.1e-9, 0.6)]),
+        ];
+
+        assert_eq!(
+            environmental_movement_candidate_pairs(&emitters).unwrap(),
+            vec![(0, 1)]
+        );
+    }
+
+    #[test]
+    fn candidate_index_preserves_all_pairs_at_the_frequency_tolerance_boundary() {
+        let emitters = vec![
+            emitter(0.0, &[(440.0, 0.0)]),
+            emitter(1.0, &[(440.0 + 1.0e-9, 0.2)]),
+            emitter(2.0, &[(440.0 + 1.0001e-9, 0.4)]),
+        ];
+
+        assert_eq!(
+            environmental_movement_candidate_pairs(&emitters).unwrap(),
+            vec![(0, 1)]
+        );
+    }
+
+    #[test]
+    fn candidate_forces_and_displacements_match_all_pairs_reference() {
+        let emitters = vec![
+            emitter(0.0, &[(440.0, 0.1), (880.0, 0.2)]),
+            emitter(1.0, &[(440.0 + 0.5e-9, -0.3)]),
+            emitter(2.0, &[(660.0, 0.5)]),
+            emitter(3.0, &[(880.0, 0.6)]),
+            emitter(4.0, &[(1320.0, -0.7)]),
+        ];
+        let candidates = environmental_movement_candidate_pairs(&emitters).unwrap();
+        let candidate_forces =
+            environmental_movement_candidate_pair_forces(&emitters, &candidates).unwrap();
+        let parallel_candidate_forces =
+            environmental_movement_parallel_candidate_pair_forces(&emitters, &candidates, 3)
+                .unwrap();
+        assert_eq!(candidate_forces, parallel_candidate_forces);
+
+        let all_pairs = environmental_movement_parallel_pair_forces(&emitters, 3).unwrap();
+        let all_pair_displacements =
+            environmental_movement_displacements_from_pair_forces(emitters.len(), &all_pairs)
+                .unwrap();
+        let candidate_displacements =
+            environmental_movement_displacements_from_candidate_pair_forces(
+                emitters.len(),
+                &candidates,
+                &candidate_forces,
+            )
+            .unwrap();
+        assert_eq!(candidate_displacements, all_pair_displacements);
+    }
+
+    #[test]
+    fn candidate_index_returns_empty_when_no_spectra_can_interact() {
+        let emitters = vec![
+            emitter(0.0, &[(440.0, 0.0)]),
+            emitter(1.0, &[(660.0, 0.2)]),
+            emitter(2.0, &[(880.0, 0.4)]),
+        ];
+        assert!(environmental_movement_candidate_pairs(&emitters)
+            .unwrap()
+            .is_empty());
+    }
+}
