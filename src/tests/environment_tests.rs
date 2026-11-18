@@ -862,3 +862,107 @@ fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atom
     assert!(!field.move_physical_material_by_identity(identity, -20.0, 0.0, &catalog));
     assert_eq!(field.cells, before);
 }
+
+
+#[test]
+fn persistent_movement_bvh_refits_match_brute_force_pair_sets() {
+    use std::collections::BTreeSet;
+
+    let mut targets: Vec<_> = (0..128)
+        .map(|index| {
+            let x = (index % 16) as f64 * 4.0;
+            let y = (index / 16) as f64 * 4.0;
+            MovementBvhItem {
+                identity: index as u64 + 1,
+                bounds: MovementBounds {
+                    min_x: x,
+                    max_x: x + 2.5,
+                    min_y: y,
+                    max_y: y + 2.5,
+                },
+            }
+        })
+        .collect();
+    let mut candidates = targets.clone();
+    for item in &mut candidates {
+        let offset = (item.identity % 5) as f64 * 0.35 - 0.7;
+        item.bounds.min_x += offset;
+        item.bounds.max_x += offset;
+        item.bounds.min_y -= offset * 0.5;
+        item.bounds.max_y -= offset * 0.5;
+    }
+
+    let mut target_tree = MovementBvh::new(targets.clone(), 8);
+    let mut candidate_tree = MovementBvh::new(candidates.clone(), 8);
+
+    for step in 0..6 {
+        for item in &mut targets {
+            let dx = ((item.identity as usize * 7 + step * 3) % 11) as f64 * 0.025 - 0.1;
+            let dy = ((item.identity as usize * 5 + step * 2) % 13) as f64 * 0.02 - 0.12;
+            item.bounds.min_x += dx;
+            item.bounds.max_x += dx;
+            item.bounds.min_y += dy;
+            item.bounds.max_y += dy;
+        }
+        for item in &mut candidates {
+            let dx = ((item.identity as usize * 3 + step * 5) % 9) as f64 * 0.03 - 0.12;
+            let dy = ((item.identity as usize * 11 + step) % 7) as f64 * 0.025 - 0.075;
+            item.bounds.min_x += dx;
+            item.bounds.max_x += dx;
+            item.bounds.min_y += dy;
+            item.bounds.max_y += dy;
+        }
+        if step == 3 {
+            targets[0].identity = 10_001;
+            candidates[0].identity = 10_001;
+        }
+
+        target_tree.update(&targets);
+        candidate_tree.update(&candidates);
+
+        let mut bvh_cross = BTreeSet::new();
+        let mut brute_cross = BTreeSet::new();
+        for candidate in &candidates {
+            let mut overlaps = Vec::new();
+            target_tree.query(candidate.bounds, &mut overlaps);
+            for identity in overlaps {
+                if identity != candidate.identity {
+                    bvh_cross.insert((candidate.identity, identity));
+                }
+            }
+            for target in &targets {
+                if candidate.identity != target.identity
+                    && candidate.bounds.overlaps(target.bounds)
+                {
+                    brute_cross.insert((candidate.identity, target.identity));
+                }
+            }
+        }
+        assert_eq!(bvh_cross, brute_cross, "cross-set pairs differ at update {step}");
+
+        let mut bvh_movers = BTreeSet::new();
+        let mut brute_movers = BTreeSet::new();
+        for candidate in &candidates {
+            let mut overlaps = Vec::new();
+            candidate_tree.query(candidate.bounds, &mut overlaps);
+            for identity in overlaps {
+                if identity > candidate.identity {
+                    bvh_movers.insert((candidate.identity, identity));
+                }
+            }
+        }
+        for left in 0..candidates.len() {
+            for right in (left + 1)..candidates.len() {
+                let a = candidates[left];
+                let b = candidates[right];
+                if a.bounds.overlaps(b.bounds) {
+                    brute_movers.insert((
+                        a.identity.min(b.identity),
+                        a.identity.max(b.identity),
+                    ));
+                }
+            }
+        }
+        assert_eq!(bvh_movers, brute_movers, "mover pairs differ at update {step}");
+    }
+}
