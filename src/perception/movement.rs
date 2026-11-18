@@ -2290,15 +2290,13 @@ mod tests {
                     rotation_radians: 0.0,
                 },
             ]),
-            internal_connections: Some(vec![
-                crate::physical_material::PhysicalMaterialBond {
-                    part_a: 0,
-                    endpoint_a: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
-                    part_b: 1,
-                    endpoint_b: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
-                    bond_energy: 0.0,
-                },
-            ]),
+            internal_connections: Some(vec![crate::physical_material::PhysicalMaterialBond {
+                part_a: 0,
+                endpoint_a: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                part_b: 1,
+                endpoint_b: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                bond_energy: 0.0,
+            }]),
             owner_relative_origin: None,
             realized_shapes: None,
         };
