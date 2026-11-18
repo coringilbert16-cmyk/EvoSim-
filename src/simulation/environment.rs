@@ -397,7 +397,10 @@ impl ActiveMaterialField {
     ) -> bool {
         if !physical.is_realized()
             || physical.material.is_empty()
-            || !physical.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || ||!physical.material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -1071,7 +1074,10 @@ impl ActiveMaterialField {
         }
         let original = &self.cells[source_cell].physical_materials[source_index];
         if !original.is_realized()
-            || !original.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || ||!original.material.is_valid_for_catalog(catalog),
+            )
             || original.material.is_empty()
         {
             return false;
@@ -1213,7 +1219,10 @@ impl ActiveMaterialField {
             piece.environmental_identity = 0;
             if !piece.is_realized()
                 || piece.material.is_empty()
-                || !piece.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                    || ||!piece.material.is_valid_for_catalog(catalog),
+                )
             {
                 return false;
             }
@@ -1313,7 +1322,10 @@ impl ActiveMaterialField {
     ) -> bool {
         if index >= self.cells.len()
             || material.is_empty()
-            || !material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || ||!material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -1332,7 +1344,10 @@ impl ActiveMaterialField {
             .position(|existing| !existing.has_internal_structure());
         if let Some(existing_index) = existing_index {
             let existing = &self.cells[index].materials[existing_index];
-            if existing.is_empty() || !existing.is_valid_for_catalog(catalog) {
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || ifexisting.is_empty() || !existing.is_valid_for_catalog(catalog) {,
+            )
                 return false;
             }
             let mut parts = existing.parts.clone();
@@ -1342,7 +1357,10 @@ impl ActiveMaterialField {
                 parts: merged_parts,
                 internal_bonds: Vec::new(),
             };
-            if !merged.is_valid_for_catalog(catalog) || merged.is_empty() {
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || if!merged.is_valid_for_catalog(catalog) || merged.is_empty() {,
+            )
                 return false;
             }
             self.cells[index].materials[existing_index] = merged;
@@ -1364,7 +1382,10 @@ impl ActiveMaterialField {
         if index >= self.cells.len()
             || !material.is_realized()
             || material.material.is_empty()
-            || !material.material.is_valid_for_catalog(catalog)
+            || !crate::property_profile::measure_call(
+                crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                || ||!material.material.is_valid_for_catalog(catalog),
+            )
         {
             return false;
         }
@@ -1401,7 +1422,10 @@ impl ActiveMaterialField {
             if index >= self.cells.len()
                 || !material.is_realized()
                 || material.material.is_empty()
-                || !material.material.is_valid_for_catalog(catalog)
+                || !crate::property_profile::measure_call(
+                    crate::property_profile::Metric::EnvironmentMutationValidationSite,
+                    || ||!material.material.is_valid_for_catalog(catalog),
+                )
             {
                 return false;
             }
