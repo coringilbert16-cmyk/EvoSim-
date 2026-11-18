@@ -2304,9 +2304,13 @@ mod tests {
             0.0,
         );
 
-        assert!(environment.field.cells[source].physical_materials.is_empty());
+        assert!(environment.field.cells[source]
+            .physical_materials
+            .is_empty());
         assert_eq!(
-            environment.field.cells[destination].physical_materials.len(),
+            environment.field.cells[destination]
+                .physical_materials
+                .len(),
             1
         );
         assert!(environment.field.cell_revisions[source] > source_revision);
