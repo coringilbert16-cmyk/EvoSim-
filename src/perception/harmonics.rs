@@ -2424,6 +2424,90 @@ fn environmental_movement_spatial_candidate_pairs(
     Some(candidates)
 }
 
+/// Parallel candidate evaluation preserves the sorted pair order when the
+/// force vector is reduced. It does not partition or reorder the physical
+/// accumulation.
+fn environmental_movement_parallel_spatial_candidate_pair_forces(
+    emitters: &[EnvironmentalMovementEmitter],
+    candidate_pairs: &[(usize, usize)],
+    worker_count: usize,
+) -> Option<Vec<(f64, f64)>> {
+    if candidate_pairs.is_empty() {
+        return Some(Vec::new());
+    }
+    let chunk_count = worker_count.max(1).min(candidate_pairs.len());
+    let base_size = candidate_pairs.len() / chunk_count;
+    let remainder = candidate_pairs.len() % chunk_count;
+    let mut start = 0;
+    let ranges: Vec<_> = (0..chunk_count)
+        .map(|chunk_index| {
+            let size = base_size + usize::from(chunk_index < remainder);
+            let range = EnvironmentalMovementPairRange {
+                start,
+                end: start + size,
+            };
+            start = range.end;
+            range
+        })
+        .collect();
+    let validated_spectra: Vec<std::sync::OnceLock<bool>> = (0..emitters.len())
+        .map(|_| std::sync::OnceLock::new())
+        .collect();
+    let ordered_forces =
+        crate::deterministic_parallel::map_ordered_chunks(&ranges, chunk_count, |_, chunk| {
+            let range = *chunk.first().ok_or(0_usize)?;
+            let mut forces = Vec::with_capacity(range.end - range.start);
+            let mut sampled_cross_energy_ns = 0_u128;
+            let mut sampled_matching_ns = 0_u128;
+            let mut sampled_frequency_comparisons = 0_u64;
+            let mut sampled_frequency_matches = 0_u64;
+            for pair_index in range.start..range.end {
+                let (a, b) = candidate_pairs[pair_index];
+                if a >= b || b >= emitters.len() {
+                    return Err(pair_index);
+                }
+                let dx = emitters[b].x - emitters[a].x;
+                let dy = emitters[b].y - emitters[a].y;
+                let distance = dx.hypot(dy);
+                if !distance.is_finite() {
+                    return Err(pair_index);
+                }
+                if distance <= f64::EPSILON {
+                    forces.push((0.0, 0.0));
+                    continue;
+                }
+                if !*validated_spectra[a]
+                    .get_or_init(|| spectrum_energy(&emitters[a].spectrum).is_some())
+                {
+                    return Err(a);
+                }
+                if !*validated_spectra[b]
+                    .get_or_init(|| spectrum_energy(&emitters[b].spectrum).is_some())
+                {
+                    return Err(b);
+                }
+                forces.push(
+                    environmental_movement_pair_force(
+                        &emitters[a],
+                        &emitters[b],
+                        dx,
+                        dy,
+                        distance,
+                        false,
+                        &mut sampled_cross_energy_ns,
+                        &mut sampled_matching_ns,
+                        &mut sampled_frequency_comparisons,
+                        &mut sampled_frequency_matches,
+                    )
+                    .ok_or(pair_index)?,
+                );
+            }
+            Ok(forces)
+        })
+        .ok()?;
+    (ordered_forces.len() == candidate_pairs.len()).then_some(ordered_forces)
+}
+
 /// Evaluate the spatially eligible pairs in canonical order. The pair force
 /// itself still uses the established spectrum, phase, mass, and attenuation
 /// calculation; only pairs outside the source-specific physical support are
@@ -2546,8 +2630,15 @@ pub(crate) fn environmental_resonance_displacements(
         let candidate_pairs = environmental_movement_spatial_candidate_pairs(&emitters)?;
         let discovery_ns = discovery_started.elapsed().as_nanos();
         let pair_started = std::time::Instant::now();
-        let pair_forces =
-            environmental_movement_spatial_candidate_pair_forces(&emitters, &candidate_pairs)?;
+        let pair_forces = if worker_count > 1 && candidate_pairs.len() >= 4_096 {
+            environmental_movement_parallel_spatial_candidate_pair_forces(
+                &emitters,
+                &candidate_pairs,
+                worker_count,
+            )?
+        } else {
+            environmental_movement_spatial_candidate_pair_forces(&emitters, &candidate_pairs)?
+        };
         let pair_ns = pair_started.elapsed().as_nanos();
         let response_started = std::time::Instant::now();
         let displacements =
@@ -3673,6 +3764,7 @@ mod tests {
             EnvironmentalMovementEmitter {
                 x: 0.0,
                 y: 0.0,
+                source_radius: 0.5,
                 mass_scale: 1.0,
                 spectrum,
                 phase_components,
@@ -5079,6 +5171,7 @@ mod environmental_movement_parallel_tests {
                 EnvironmentalMovementEmitter {
                     x,
                     y,
+                    source_radius: 0.5,
                     mass_scale: 1.0,
                     spectrum,
                     phase_components,
