@@ -348,6 +348,7 @@ pub struct ResourceBaselines {
 
 impl ResourceBaselines {
     pub fn from_catalog(catalog: &[BaseResource]) -> Self {
+        let _profile = crate::property_profile::measure(crate::property_profile::Metric::CatalogBaselines);
         if catalog.is_empty() {
             return Self {
                 mass: 0.0,
@@ -466,6 +467,7 @@ impl Material {
     /// one entry in the authoritative catalog. Duplicate catalog names are an
     /// ambiguous identity, not a valid fallback to the first matching entry.
     pub fn is_valid_for_catalog(&self, catalog: &[BaseResource]) -> bool {
+        let _profile = crate::property_profile::measure(crate::property_profile::Metric::MaterialCatalogValidation);
         self.is_valid()
             && catalog.iter().enumerate().all(|(index, resource)| {
                 !resource.name.is_empty()
@@ -509,6 +511,7 @@ impl Material {
     }
 
     pub fn mass(&self, catalog: &[BaseResource]) -> f64 {
+        let _profile = crate::property_profile::measure(crate::property_profile::Metric::MaterialMass);
         if !self.is_valid_for_catalog(catalog) {
             return f64::NAN;
         }
@@ -525,6 +528,7 @@ impl Material {
     }
 
     pub fn weighted_properties(&self, catalog: &[BaseResource]) -> ResourceProperties {
+        let _profile = crate::property_profile::measure(crate::property_profile::Metric::MaterialWeightedProperties);
         if !self.is_valid_for_catalog(catalog) {
             return ResourceProperties {
                 mass: f64::NAN,
