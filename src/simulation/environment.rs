@@ -934,6 +934,23 @@ impl ActiveMaterialField {
                 })
                 .count();
 
+            // Capture one real, deterministic workload snapshot for offline
+            // BVH benchmarking. This is audit-only and never feeds placement.
+            if pass == 1 {
+                for (index, bounds) in &valid_targets {
+                    eprintln!(
+                        "MOVEMENT_SPATIAL_BOUNDS pass=1 set=target index={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
+                        index, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
+                    );
+                }
+                for (index, bounds) in &candidate_entries {
+                    eprintln!(
+                        "MOVEMENT_SPATIAL_BOUNDS pass=1 set=candidate index={} min_x={:.17} max_x={:.17} min_y={:.17} max_y={:.17}",
+                        index, bounds.min_x, bounds.max_x, bounds.min_y, bounds.max_y
+                    );
+                }
+            }
+
             // Count cross-set pairs considered by an X-axis sweep, and the
             // subset surviving the full conservative 2D AABB predicate.
             let mut events = Vec::with_capacity(candidate_entries.len() + valid_targets.len());
