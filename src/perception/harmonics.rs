@@ -1249,7 +1249,7 @@ fn environmental_contribution(
     }
 
     let mut received = ToneSpectrum::empty();
-    add_spectrum(&mut received, &emitted, scale);
+    add_spectrum(&mut received, emitted, scale);
     let magnitude = spectrum_magnitude(&received);
     if magnitude <= f64::EPSILON {
         return None;
