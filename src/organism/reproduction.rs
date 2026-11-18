@@ -1116,7 +1116,11 @@ pub(crate) fn advance_construction(
         before_units,
         seed_reference,
     );
-    (status, None, structure_changed || candidate_structure_changed)
+    (
+        status,
+        None,
+        structure_changed || candidate_structure_changed,
+    )
 }
 
 pub(crate) fn finish_reproduction(
