@@ -2352,7 +2352,10 @@ mod tests {
             None,
         );
 
-        assert!(structure_changed, "successful growth must report its graph mutation");
+        assert!(
+            structure_changed,
+            "successful growth must report its graph mutation"
+        );
         assert!(
             matches!(
                 second_status,
