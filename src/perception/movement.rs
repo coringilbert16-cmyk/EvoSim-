@@ -2255,4 +2255,59 @@ mod tests {
         );
         assert!(organism.cached_harmonic_key.is_none());
     }
+
+    #[test]
+    fn pushed_environmental_material_updates_source_and_destination_revisions() {
+        let simulation = Simulation::new(0xB056, 10.0);
+        let mut environment = simulation.environment.clone();
+        let catalog = environment.catalog.clone();
+        let placement = Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        };
+        let physical = crate::physical_material::PhysicalMaterial::realized(
+            crate::resources::Material::free_base("Carbon", 1.0),
+            vec![placement],
+            &catalog,
+        )
+        .expect("fixture material should realize");
+        let source = environment
+            .field
+            .index_for_position(placement.x, placement.y)
+            .unwrap();
+        environment.field.cells[source].physical_materials.push(physical);
+        let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
+        assert_ne!(source, destination);
+
+        let source_revision = environment.field.cell_revisions[source];
+        let destination_revision = environment.field.cell_revisions[destination];
+        let field_revision = environment.field.revision;
+        let organisms: Vec<Organism> = Vec::new();
+        let mut spatial_index = MovementSpatialIndex::new(&organisms, &environment);
+
+        apply_push_plan(
+            &mut [],
+            &mut [],
+            0,
+            &mut spatial_index,
+            &mut environment,
+            PushPlan {
+                organisms: Vec::new(),
+                physical: vec![(source, 0)],
+            },
+            30.0,
+            0.0,
+        );
+
+        assert!(environment.field.cells[source].physical_materials.is_empty());
+        assert_eq!(
+            environment.field.cells[destination].physical_materials.len(),
+            1
+        );
+        assert!(environment.field.cell_revisions[source] > source_revision);
+        assert!(environment.field.cell_revisions[destination] > destination_revision);
+        assert!(environment.field.revision > field_revision);
+    }
+
 }
