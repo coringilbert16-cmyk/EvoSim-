@@ -186,7 +186,7 @@ impl OrganismBodyGeometry {
         for (unit_index, (placement, shape)) in placements
             .iter()
             .copied()
-            .zip(shapes.into_iter())
+            .zip(shapes)
             .enumerate()
         {
             if !placement.x.is_finite()
