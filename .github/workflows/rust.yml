@@ -79,7 +79,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
         timeout-minutes: 4
         env:
-          EVOSIM_PROFILE_MOVEMENT: '1'
+          EVOSIM_PROFILE_MOVEMENT_CANDIDATES: '1'
         run: |
           set -euo pipefail
           cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics movement-candidate.jsonl --diagnostic-interval 100 2>&1 | tee movement-candidate.log
@@ -87,7 +87,7 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
         timeout-minutes: 4
         env:
-          EVOSIM_PROFILE_MOVEMENT: '1'
+          EVOSIM_PROFILE_MOVEMENT_REFERENCE: '1'
           EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS: '1'
         run: |
           set -euo pipefail
