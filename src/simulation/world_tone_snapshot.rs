@@ -2408,4 +2408,68 @@ mod tests {
             "an impossible heat allocation must fail closed"
         );
     }
+    #[test]
+    fn identical_material_properties_share_the_same_response_key() {
+        let catalog = crate::resources::default_catalog();
+        let properties = catalog[0].properties;
+        assert_eq!(
+            MaterialResponseKey::from(properties),
+            MaterialResponseKey::from(properties)
+        );
+        let distinct = ResourceProperties {
+            cohesion: properties.cohesion + 0.125,
+            ..properties
+        };
+        assert_ne!(
+            MaterialResponseKey::from(properties),
+            MaterialResponseKey::from(distinct),
+            "a harmonic-property change must not reuse another material's response"
+        );
+    }
+
+    #[test]
+    fn response_spectrum_capacity_is_checked_before_reservoir_mutation() {
+        let mut reservoir = crate::harmonics::ResonantEnergyReservoir::default();
+        for frequency in [440.0, 880.0, 1320.0, 1760.0] {
+            assert!(reservoir.deposit(frequency, 1.0));
+        }
+        let before = reservoir.clone();
+        let fifth_component = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_cycles_per_day: 2200.0,
+                amplitude: 1.0,
+                phase_radians: 0.0,
+            }],
+        };
+        assert!(!can_deposit_spectrum(&reservoir, &fifth_component));
+        assert_eq!(
+            reservoir, before,
+            "failed capacity preflight must leave the reservoir untouched"
+        );
+    }
+
+    #[test]
+    fn material_recipient_snapshot_does_not_require_world_geometry() {
+        let mut simulation = Simulation::new(991, 1.0);
+        clear_environment_physical_material(&mut simulation);
+        let living_ids = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.id.clone())
+            .collect::<HashSet<_>>();
+        let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &living_ids)
+            .expect("valid material state should be enough to enumerate recipients");
+        assert!(
+            !snapshot.recipients.is_empty(),
+            "realized organism constituents should be world-tone recipients"
+        );
+        assert!(
+            snapshot.recipients.iter().all(|recipient| {
+                recipient.properties.mass.is_finite()
+                    && recipient.properties.mass > 0.0
+            }),
+            "recipient enumeration should validate material properties without geometry"
+        );
+    }
+
 }
