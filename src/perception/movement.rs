@@ -2280,7 +2280,9 @@ mod tests {
             .field
             .index_for_position(placement.x, placement.y)
             .unwrap();
-        environment.field.cells[source].physical_materials.push(physical);
+        environment.field.cells[source]
+            .physical_materials
+            .push(physical);
         let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
         assert_ne!(source, destination);
 
