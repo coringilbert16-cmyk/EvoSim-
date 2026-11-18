@@ -70,3 +70,31 @@ Replace geometry-dependent world-tone propagation with direct, uniform exposure 
 - [ ] No chemistry equations, reaction eligibility, geometry/contact rules, or unrelated simulation behavior are changed.
 
 This PR should remain cohesive: the uniform-source model, shared response evaluation, and atomic energy settlement are interdependent parts of the same redesign.
+
+
+## Initial source audit (Nov 18, 2026)
+
+The active tick call is `Simulation::step` -> `WorldToneOccluderSnapshot::settle_living_organism_inputs` in `src/simulation/simulation.rs`. The older lower-level receiver API in `world_tone.rs` is not the active production settlement path.
+
+The current settlement path confirms the main cost and model mismatch:
+
+- `WorldToneOccluderSnapshot::from_simulation_for_organisms` assembles organism, environment, decomposing, stored, reproductive-construction, and active-transformation material into geometry bodies.
+- It calls `OrganismBodyGeometry` construction and `WorldToneCaptureFrame::from_geometry_for_receivers_at_tick`, which invokes directional source exposure and interaction-path discovery.
+- Settlement validates first-hit projected widths against geometry exposure, then loops each ray path and each material hit.
+- Each hit constructs/uses a signal response, calls `material_response_spectrum`, evaluates damping, and transforms a downstream signal.
+- The settlement clones every organism reservoir once for staging, then clones a candidate reservoir again for each retaining material hit before depositing.
+- `ResourceBaselines::from_catalog` is rebuilt during each settlement.
+- The live ledger settles aggregate incident, retained, heat, and escaped energy through `settle_world_tone_paths`.
+
+Important existing ownership semantics to preserve:
+
+- Living organism structures credit that organism's resonance reservoir.
+- Environmental field material may retain resonance in the environment reservoir.
+- Stored material, legacy decomposing structures, committed reproductive-construction material, and active-transformation source material are physical recipients but do not currently own a resonance reservoir; their absorbed response becomes heat.
+- Attached/developing structure is part of the parent's authoritative aggregate and credits the parent's reservoir.
+- Invalid/ambiguous active-transformation ownership or malformed material currently fails the whole snapshot closed.
+- The active settlement stages all changes and commits the ledger before replacing the staged reservoirs.
+
+Existing tests include several that explicitly assert shadow geometry and ordered travelling-signal behavior. Those assertions must be replaced with uniform-exposure tests; they are not valid requirements under the approved model. Keep the ownership, nonliving heat, attached/developing, active-transformation, rejected-transaction, and inventory-reconciliation coverage.
+
+Implementation should introduce a material-only recipient snapshot rather than calling the existing geometry snapshot and merely ignoring its paths. This prevents the expensive geometry construction from remaining on the live tick path. The old geometry utilities may remain for other systems or legacy isolated tests, but the production world-tone settlement path must no longer call them.
