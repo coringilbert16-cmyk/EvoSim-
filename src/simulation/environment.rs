@@ -1405,7 +1405,7 @@ impl ActiveMaterialField {
                         continue;
                     }
                     if let Some(&b_slot) = candidate_slot_by_identity.get(&b_identity) {
-                        pairs.push((a_slot, b_slot));
+                        pairs.push((a_slot.min(b_slot), a_slot.max(b_slot)));
                     }
                 }
             }
