@@ -2273,12 +2273,35 @@ mod tests {
             y: 10.0,
             rotation_radians: 0.0,
         };
-        let physical = crate::physical_material::PhysicalMaterial::realized(
-            crate::resources::Material::free_base("Carbon", 1.0),
-            vec![placement],
-            &catalog,
-        )
-        .expect("fixture material should realize");
+        let physical = crate::physical_material::PhysicalMaterial {
+            material: crate::resources::Material {
+                parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],
+                internal_bonds: vec![crate::resources::InternalBond {
+                    part_a: 0,
+                    part_b: 1,
+                }],
+            },
+            environmental_identity: 77,
+            placements: Some(vec![
+                placement,
+                Placement {
+                    x: 11.0,
+                    y: 10.0,
+                    rotation_radians: 0.0,
+                },
+            ]),
+            internal_connections: Some(vec![
+                crate::physical_material::PhysicalMaterialBond {
+                    part_a: 0,
+                    endpoint_a: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                    part_b: 1,
+                    endpoint_b: crate::structure::ConnectionEndpoint::Fluid { x: 0.0, y: 0.0 },
+                    bond_energy: 0.0,
+                },
+            ]),
+            owner_relative_origin: None,
+            realized_shapes: None,
+        };
         let source = environment
             .field
             .index_for_position(placement.x, placement.y)
@@ -2286,6 +2309,11 @@ mod tests {
         environment.field.cells[source]
             .physical_materials
             .push(physical);
+        environment.field.mark_changed_at_index(source);
+        assert_eq!(
+            environment.field.environmental_bond_candidates(0, usize::MAX),
+            vec![(source, 0, 0)]
+        );
         let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
         assert_ne!(source, destination);
 
@@ -2321,5 +2349,10 @@ mod tests {
         assert!(environment.field.cell_revisions[source] > source_revision);
         assert!(environment.field.cell_revisions[destination] > destination_revision);
         assert!(environment.field.revision > field_revision);
+        assert_eq!(
+            environment.field.environmental_bond_candidates(0, usize::MAX),
+            vec![(destination, 0, 0)],
+            "the maintained bond index must move with the physical material"
+        );
     }
 }
