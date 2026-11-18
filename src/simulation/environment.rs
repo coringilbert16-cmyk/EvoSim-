@@ -779,8 +779,11 @@ impl ActiveMaterialField {
                 if valid {
                     let placements = material.placements.as_ref().expect("validated placements");
                     if let Some(shapes) = material.realized_shapes_for_parts(catalog) {
-                        for (part_index, (placement, shape)) in
-                            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+                        for (part_index, (placement, shape)) in placements
+                            .iter()
+                            .copied()
+                            .zip(shapes.into_iter())
+                            .enumerate()
                         {
                             parts.push(crate::material_geometry::PlacedMaterialPart {
                                 part_index,
@@ -1094,8 +1097,11 @@ impl ActiveMaterialField {
         let Some(shapes) = candidate.realized_shapes_for_parts(catalog) else {
             return false;
         };
-        for (part_index, (placement, shape)) in
-            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+        for (part_index, (placement, shape)) in placements
+            .iter()
+            .copied()
+            .zip(shapes.into_iter())
+            .enumerate()
         {
             let radius = shape.form.bounding_radius();
             if !radius.is_finite()
@@ -1133,8 +1139,11 @@ impl ActiveMaterialField {
                 let Some(other_shapes) = other.realized_shapes_for_parts(catalog) else {
                     return false;
                 };
-                for (part_index, (placement, shape)) in
-                    other_placements.iter().copied().zip(other_shapes.into_iter()).enumerate()
+                for (part_index, (placement, shape)) in other_placements
+                    .iter()
+                    .copied()
+                    .zip(other_shapes.into_iter())
+                    .enumerate()
                 {
                     let other_part = crate::material_geometry::PlacedMaterialPart {
                         part_index,
