@@ -1262,22 +1262,25 @@ impl ActiveMaterialField {
             .is_ok_and(|value| value == "1" || value == "true");
         let mut bvh_update_ns = 0u128;
         let mut bvh_query_ns = 0u128;
-        let bvh_eligible = valid_snapshot_indices
-            .iter()
-            .all(|&index| snapshots[index].identity != 0)
+        let bvh_eligible = use_persistent_bvh
+            && valid_snapshot_indices
+                .iter()
+                .all(|&index| snapshots[index].identity != 0)
             && candidate_indices
                 .iter()
                 .all(|&index| snapshots[index].identity != 0);
-        let mut snapshot_slot_by_identity = HashMap::with_capacity(valid_snapshot_indices.len());
-        for (slot, &index) in valid_snapshot_indices.iter().enumerate() {
-            snapshot_slot_by_identity.insert(snapshots[index].identity, slot);
-        }
-        let mut candidate_slot_by_identity = HashMap::with_capacity(candidate_indices.len());
-        for (slot, &index) in candidate_indices.iter().enumerate() {
-            candidate_slot_by_identity.insert(snapshots[index].identity, slot);
-        }
+        let mut snapshot_slot_by_identity = HashMap::new();
+        let mut candidate_slot_by_identity = HashMap::new();
 
-        let possible_collisions = if use_persistent_bvh && bvh_eligible {
+        let possible_collisions = if bvh_eligible {
+            snapshot_slot_by_identity = HashMap::with_capacity(valid_snapshot_indices.len());
+            for (slot, &index) in valid_snapshot_indices.iter().enumerate() {
+                snapshot_slot_by_identity.insert(snapshots[index].identity, slot);
+            }
+            candidate_slot_by_identity = HashMap::with_capacity(candidate_indices.len());
+            for (slot, &index) in candidate_indices.iter().enumerate() {
+                candidate_slot_by_identity.insert(snapshots[index].identity, slot);
+            }
             let target_items: Vec<_> = valid_snapshot_indices
                 .iter()
                 .enumerate()
@@ -1383,7 +1386,7 @@ impl ActiveMaterialField {
                 mover_bounds.push(candidate.bounds);
             }
         }
-        let possible_mover_overlaps = if use_persistent_bvh && bvh_eligible {
+        let possible_mover_overlaps = if bvh_eligible {
             let spatial_index = self
                 .movement_spatial_index
                 .as_ref()
