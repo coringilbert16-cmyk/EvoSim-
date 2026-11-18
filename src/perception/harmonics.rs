@@ -5295,3 +5295,189 @@ mod environmental_movement_parallel_tests {
         assert!(!second_key.4);
     }
 }
+
+
+#[cfg(test)]
+mod environmental_movement_spatial_candidate_tests {
+    use super::{
+        environmental_movement_displacements_from_spatial_candidate_pair_forces,
+        environmental_movement_pair_force, environmental_movement_phase_components,
+        environmental_movement_spatial_candidate_pair_forces,
+        environmental_movement_parallel_spatial_candidate_pair_forces,
+        environmental_movement_spatial_candidate_pairs, EnvironmentalMovementEmitter,
+        ToneComponent, ToneSpectrum,
+    };
+
+    fn emitter(
+        x: f64,
+        y: f64,
+        source_radius: f64,
+        phase: f64,
+    ) -> EnvironmentalMovementEmitter {
+        let spectrum = ToneSpectrum {
+            components: vec![ToneComponent {
+                frequency_cycles_per_day: 440.0,
+                amplitude: 0.5,
+                phase_radians: phase,
+            }],
+        };
+        let (phase_components, phase_component_count) =
+            environmental_movement_phase_components(&spectrum).unwrap();
+        EnvironmentalMovementEmitter {
+            x,
+            y,
+            source_radius,
+            mass_scale: 1.0,
+            spectrum,
+            phase_components,
+            phase_component_count,
+        }
+    }
+
+    #[test]
+    fn spatial_candidates_use_pair_specific_material_radius_bounds() {
+        let emitters = vec![
+            emitter(0.0, 0.0, 0.5, 0.0),
+            emitter(1.2, 0.0, 0.25, 0.2),
+            emitter(1.3, 0.0, 0.25, 0.4),
+            emitter(10.0, 0.0, 0.1, 0.6),
+        ];
+
+        assert_eq!(
+            environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
+            vec![(0, 1)]
+        );
+    }
+
+    #[test]
+    fn spatial_candidates_include_pairs_at_the_support_boundary() {
+        let emitters = vec![
+            emitter(0.0, 0.0, 0.5, 0.0),
+            emitter(1.25, 0.0, 0.25, 0.2),
+        ];
+
+        assert_eq!(
+            environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
+            vec![(0, 1)]
+        );
+    }
+
+    #[test]
+    fn sweep_and_prune_matches_exhaustive_source_radius_oracle() {
+        let emitters = vec![
+            emitter(0.0, 0.0, 0.2, 0.0),
+            emitter(0.5, 0.1, 0.1, 0.2),
+            emitter(1.0, 0.0, 0.3, 0.4),
+            emitter(2.0, 0.4, 0.2, 0.6),
+            emitter(4.0, 0.0, 0.5, 0.8),
+            emitter(-1.0, -0.2, 0.1, 1.0),
+        ];
+        let actual = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
+        let mut expected = Vec::new();
+        for a in 0..emitters.len() {
+            for b in (a + 1)..emitters.len() {
+                let radius_a = emitters[a].source_radius;
+                let radius_b = emitters[b].source_radius;
+                let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
+                let distance =
+                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                if distance <= reach {
+                    expected.push((a, b));
+                }
+            }
+        }
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn candidate_forces_match_filtered_all_pairs_reference_and_parallel_order() {
+        let emitters = vec![
+            emitter(0.0, 0.0, 0.5, 0.1),
+            emitter(1.0, 0.0, 0.25, 0.4),
+            emitter(4.0, 0.0, 0.2, 0.7),
+            emitter(5.0, 0.0, 0.3, 1.0),
+        ];
+        let candidates = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
+        let sequential =
+            environmental_movement_spatial_candidate_pair_forces(&emitters, &candidates)
+                .unwrap();
+        let parallel =
+            environmental_movement_parallel_spatial_candidate_pair_forces(&emitters, &candidates, 3)
+                .unwrap();
+        assert_eq!(sequential, parallel);
+
+        let mut oracle_pairs = Vec::new();
+        let mut oracle_forces = Vec::new();
+        let mut sampled_cross_energy_ns = 0;
+        let mut sampled_matching_ns = 0;
+        let mut sampled_frequency_comparisons = 0;
+        let mut sampled_frequency_matches = 0;
+        for a in 0..emitters.len() {
+            for b in (a + 1)..emitters.len() {
+                let radius_a = emitters[a].source_radius;
+                let radius_b = emitters[b].source_radius;
+                let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
+                let dx = emitters[b].x - emitters[a].x;
+                let dy = emitters[b].y - emitters[a].y;
+                let distance = dx.hypot(dy);
+                if distance > reach {
+                    continue;
+                }
+                oracle_pairs.push((a, b));
+                let force = if distance <= f64::EPSILON {
+                    (0.0, 0.0)
+                } else {
+                    environmental_movement_pair_force(
+                        &emitters[a],
+                        &emitters[b],
+                        dx,
+                        dy,
+                        distance,
+                        false,
+                        &mut sampled_cross_energy_ns,
+                        &mut sampled_matching_ns,
+                        &mut sampled_frequency_comparisons,
+                        &mut sampled_frequency_matches,
+                    )
+                    .unwrap()
+                };
+                oracle_forces.push(force);
+            }
+        }
+        assert_eq!(candidates, oracle_pairs);
+        assert_eq!(sequential, oracle_forces);
+        assert_eq!(
+            environmental_movement_displacements_from_spatial_candidate_pair_forces(
+                emitters.len(),
+                &candidates,
+                &sequential,
+            )
+            .unwrap(),
+            environmental_movement_displacements_from_spatial_candidate_pair_forces(
+                emitters.len(),
+                &oracle_pairs,
+                &oracle_forces,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn spatial_candidate_discovery_fails_closed_on_invalid_radius_or_position() {
+        let mut invalid_radius = emitter(0.0, 0.0, 0.5, 0.0);
+        invalid_radius.source_radius = f64::NAN;
+        assert!(environmental_movement_spatial_candidate_pairs(&[
+            invalid_radius,
+            emitter(1.0, 0.0, 0.5, 0.2),
+        ])
+        .is_none());
+
+        let mut invalid_position = emitter(0.0, 0.0, 0.5, 0.0);
+        invalid_position.x = f64::INFINITY;
+        assert!(environmental_movement_spatial_candidate_pairs(&[
+            invalid_position,
+            emitter(1.0, 0.0, 0.5, 0.2),
+        ])
+        .is_none());
+    }
+}
