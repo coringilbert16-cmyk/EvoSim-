@@ -215,3 +215,55 @@ The cache key now contains both:
 The presence bit is a separate dependency because the same tick can produce different spectra with and without the additional world-tone contribution. Focused tests verify that environmental material emission changes across ticks and that a no-world-tone harmonic update establishes a distinct key on the next tick.
 
 This correction deliberately retains per-tick harmonic evaluation. The underlying oscillator phase is continuous/tick-dependent, so converting this calculation to event-only work would change behavior. The safe optimization boundary here is limited to avoiding duplicate recalculation within the same exact dependency key.
+
+
+## Dependency inventory and recalculation classification
+
+The audit now distinguishes inputs that are stable for an organism's lifetime from inputs that are dynamic every simulation tick.
+
+| Derived state / work | Exact dependencies identified | Safe recalculation boundary |
+|---|---|---|
+| Genome cavity | Physical structure and established genome-core identity; catalog geometry/properties | Reuse while structure revision and catalog remain unchanged |
+| Developmental realization | Physical structure; developmental origin/orientation; seed mass/length reference; genome blueprint and preferred mass; catalog geometry/properties | Reuse while all of those inputs remain unchanged. Existing-organism genome is immutable in the production lifecycle: mutation is applied to a staged child genome during reproduction, then the new genome is installed only on the newly created offspring |
+| Organism harmonic spectrum | Structure/cavity, organism position, environmental field contents/geometry, current tick-dependent environmental oscillator phase, and optional tick-scoped world-tone sample | Reuse only for the same structure revision, position revision, global field revision, tick, and sample-presence state |
+| Environmental bond locator index | Per-cell physical-material identities and internal bonds | Incrementally rebuild only each committed changed cell; full rebuild after deserialization |
+| Environmental chemistry snapshot/candidate inventory | Current field state and immutable pass-local material/bond snapshot | Pass-local reuse only while global field revision matches; reject stale snapshots |
+| Resonance movement forces and placement validation | Current geometry, placements, velocities/proposals, field/occluder state, and tick-dependent resonance | Re-evaluate each movement pass; no safe event-only substitute established |
+| World-tone exposure and settlement | Current world-tone sample, material/organism geometry, exposure/occlusion, resonant state, and energy ledger | Re-evaluate each tick; it is a continuous external input and accounting boundary |
+| Environmental reaction discovery/resolution | Current contacts/topology, resonance/activation, energy availability, candidate ordering/work budget, and transaction state | Re-evaluate according to the existing per-tick discovery/resolution schedule; no event-only replacement established |
+
+### Harmonic key completeness and tick semantics
+
+The runtime computes one optional world-tone sample once per simulation tick and passes the same sample to each living organism. The environmental cavity spectrum is independently tick-dependent even when that optional sample is absent: each environmental material's emitted spectrum uses `phase_at_tick(WORLD_TONE_CYCLES_PER_DAY, tick)`.
+
+Accordingly, the harmonic key now includes the tick unconditionally and a separate boolean for world-tone sample presence. The cache still permits exact reuse for repeated calls with identical dependencies within the same tick; it no longer reuses the previous tick's environmental oscillator phase.
+
+### Mutation-path coverage summary
+
+Repository-wide searches and source review covered the production paths that can mutate the audited dependencies:
+
+- Organism physical graph commits: transformation BREAK, all live COMBINE commit routes, reproduction anchor admission, reproduction growth/aggregate replacement, and reproduction division.
+- Organism spatial state: ordinary movement commit and push-chain translation, including developmental origin and all structural-unit placements.
+- Environmental physical field: field movement/transfer, split/deposit, flow batches, environmental COMBINE, environmental displacement, transformation source removal, and movement push-chain removal/insertion.
+- Catalog and genome mutation: no production path mutates an existing simulation catalog; genome mutation is staged on the child genome during reproduction and the parent genome remains unchanged.
+
+Every audited production physical-field commit path now reaches the centralized changed-cell contract, including the formerly missed push-chain path. That contract advances global and per-cell revisions and updates the changed cell's portion of the maintained environmental bond index. Test fixtures intentionally mutate cells directly to construct controlled states; they are not runtime mutation paths.
+
+The mutation audit is complete for the production writer paths found in the repository at this revision. This is not a promise that future code can write these fields directly: new mutation APIs must preserve the same commit/invalidation contract, and future catalog-edit support must add a catalog revision or rebuild catalog-derived caches.
+
+### What this workstream has and has not established
+
+- Exact stale-cache defects were found and corrected on this branch.
+- Focused tests cover COMBINE, reproduction, pushed-organism movement, pushed-material cell/index movement, developmental input changes, and tick-dependent harmonic invalidation.
+- The work has not demonstrated a throughput improvement. The harmonic correction intentionally preserves per-tick evaluation because its input phase changes every tick.
+- No new persistent cache or event queue has been introduced. The current evidence does not justify converting movement, world-tone settlement, or reaction discovery into event-only processing.
+- Remaining performance opportunity is therefore narrower than initially expected: avoid duplicate work only within a proven unchanged dependency key, or measure a separate exact sub-operation before proposing a new cache. No such candidate is promoted without a focused profile and matched end-to-end benchmark.
+
+## Updated audit checklist
+
+- [x] Source-backed dependency inventory for existing derived caches and major dynamic phases.
+- [x] Production mutation-path review for organism structure/position and environmental physical-field revisions at this branch revision.
+- [x] Recalculation classification: stable-until-mutation, incrementally maintained, pass-local, or inherently tick-/phase-dependent.
+- [x] Focused regression coverage added for identified invalidation defects.
+- [ ] Latest full CI green on the final branch head.
+- [ ] Decide whether any narrowly scoped, exact duplicate-work reduction is justified by profiling; otherwise close this workstream with findings and no performance optimization claim.
