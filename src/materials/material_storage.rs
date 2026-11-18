@@ -321,8 +321,8 @@ impl MaterialStorage {
         if !crate::property_profile::measure_call(
             crate::property_profile::Metric::MaterialStorageValidationSite,
             || target.is_valid_for_catalog(catalog),
-                ) || target.is_empty()
-                {
+        ) || target.is_empty()
+        {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
@@ -370,8 +370,8 @@ impl MaterialStorage {
         if !crate::property_profile::measure_call(
             crate::property_profile::Metric::MaterialStorageValidationSite,
             || target.is_valid_for_catalog(catalog),
-                ) || target.is_empty()
-                {
+        ) || target.is_empty()
+        {
             return None;
         }
         let index = self.entries.iter().position(|entry| {
