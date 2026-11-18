@@ -930,7 +930,8 @@ fn persistent_movement_bvh_refits_match_brute_force_pair_sets() {
                 }
             }
             for target in &targets {
-                if candidate.identity != target.identity && candidate.bounds.overlaps(target.bounds) {
+                if candidate.identity != target.identity && candidate.bounds.overlaps(target.bounds)
+                {
                     brute_cross.insert((candidate.identity, target.identity));
                 }
             }
