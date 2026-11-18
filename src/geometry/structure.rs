@@ -48,7 +48,9 @@ impl StructuralUnit {
         &self,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::ResourceProperties> {
-        let _profile = crate::property_profile::measure(crate::property_profile::Metric::StructuralUnitProperties);
+        let _profile = crate::property_profile::measure(
+            crate::property_profile::Metric::StructuralUnitProperties,
+        );
         if !self.material.is_valid_for_catalog(catalog) {
             return None;
         }
