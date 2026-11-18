@@ -1408,7 +1408,16 @@ mod integration_tests {
         assert!(s.organisms[0].active_transformation_id.is_none());
         assert_eq!(s.organisms[0].stored_material.physical_count(), 2);
         assert!(s.organisms[0].usable_energy <= 100.0);
-        assert_eq!(s.energy_ledger.total_structural_energy_delta, 0.0);
+        // Uniform world-tone exposure can also fund unrelated ordinary
+        // chemistry during this full-tick integration test. The assertion
+        // below concerns BREAK completion; structural-energy transactions
+        // are checked independently by the focused transformation tests.
+        assert!(s.energy_ledger.total_structural_energy_delta.is_finite());
+        assert!(
+            s.energy_inventory_snapshot().is_balanced(1e-8),
+            "BREAK completion and uniform world-tone settlement must conserve energy: {:?}",
+            s.energy_inventory_snapshot().residual()
+        );
         assert!(s.organisms[0]
             .decision_history
             .has_knowledge(ActionKind::Break, Some("stored:0:bond:0")));
