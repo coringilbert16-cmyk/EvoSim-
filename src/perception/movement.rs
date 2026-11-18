@@ -2247,6 +2247,8 @@ mod tests {
         let mut simulation = crate::state::Simulation::new(0xB055, 10.0);
         let organism = &mut simulation.organisms[0];
         let revision_before = organism.position_revision;
+        organism.cached_harmonic_key = Some((0, 0, 0, 0));
+        organism.cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
         translate_organism(organism, 1.0, 0.0, simulation.environment.height);
         assert_eq!(
             organism.position_revision,
@@ -2254,6 +2256,7 @@ mod tests {
             "pushed organisms must invalidate position-dependent harmonics"
         );
         assert!(organism.cached_harmonic_key.is_none());
+        assert!(organism.cached_developmental_revision.is_none());
     }
 
     #[test]
