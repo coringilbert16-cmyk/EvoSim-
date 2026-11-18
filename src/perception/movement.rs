@@ -2311,7 +2311,9 @@ mod tests {
             .push(physical);
         environment.field.mark_changed_at_index(source);
         assert_eq!(
-            environment.field.environmental_bond_candidates(0, usize::MAX),
+            environment
+                .field
+                .environmental_bond_candidates(0, usize::MAX),
             vec![(source, 0, 0)]
         );
         let destination = environment.field.index_for_position(40.0, 10.0).unwrap();
