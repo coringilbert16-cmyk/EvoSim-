@@ -2572,7 +2572,7 @@ mod tests {
                 combine_environmental_source_index: None,
             });
 
-        let living_ids = HashSet::from([owner_id.clone()]);
+        let living_ids = HashSet::from([simulation.organisms[0].id.clone()]);
         let snapshot = WorldToneRecipientSnapshot::from_simulation(&simulation, &living_ids)
             .expect("removed material remains a physical recipient during BREAK");
         assert_eq!(snapshot.recipients.len(), 2);
