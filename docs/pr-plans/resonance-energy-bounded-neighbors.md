@@ -69,7 +69,7 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 - The candidate path retains parallel force evaluation for large candidate sets and reduces forces in canonical pair order. Set `EVOSIM_PROFILE_MOVEMENT=1` to profile the optimized candidate path; set `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1` to run the original all-pairs reference path.
 - Generate every eligible unordered pair exactly once and sort by stable `(a, b)` identity before force accumulation.
 - Handle moving sources, world boundaries/wrapping, source extents, and degenerate/coincident positions.
-- Keep the all-pairs implementation as a reference oracle. Validate candidate discovery against an exhaustive application of the same source-specific support predicate.
+- Keep the all-pairs implementation as a reference oracle. It must enumerate every unordered pair, apply the same source-specific support predicate, and preserve canonical accumulation. Validate candidate discovery against this exhaustive reference.
 
 ### Phase E — validation and performance
 
@@ -83,7 +83,7 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 ## Current status
 
 - The movement bottleneck has been profiled.
-- The original all-pairs implementation remains available behind `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1` as the reference path.
+- The exhaustive all-pairs reference remains available behind `EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS=1`; it enumerates every pair and applies the same source-specific support predicate before force evaluation.
 - The normal live path now derives conservative source radii from realized constituent shapes and uses source-specific x-axis sweep-and-prune; large candidate sets retain deterministic parallel force evaluation.
 - `EVOSIM_PROFILE_MOVEMENT=1` profiles the optimized path rather than silently reverting the simulation to all-pairs behavior.
 - PR #378 contains the reusable exact source-geometry foundation; this PR's bounding radii are a broadphase only and do not replace exact source-perimeter reception.
