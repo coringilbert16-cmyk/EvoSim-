@@ -61,3 +61,56 @@ No production behavior change until the dependency graph and mutation coverage a
 - [ ] Complete mutation-path/revision coverage audit.
 - [ ] Recalculation classification and implementation proposal.
 - [ ] Focused correctness tests and performance evidence.
+
+
+## Source audit — first pass (main at `f2d77bd`)
+
+### Existing exact cache worth studying
+
+`update_organism_harmonics` in `src/perception/harmonics.rs` already has a dependency key:
+
+- `Organism::structure_revision`
+- `Organism::position_revision`
+- `ActiveMaterialField::revision`
+- The current tick when a world-tone sample is present (otherwise zero)
+
+It returns without rebuilding the harmonic spectrum when the key is unchanged. Organism structure and position mutation helpers clear this key and increment their respective revisions. This is an existing example of dependency-based recalculation, not a new cache proposal.
+
+Important limitation: the field dependency is the single global field revision. Any marked field mutation invalidates every organism's harmonic result, even if the mutation is spatially unrelated. Whether that can be narrowed depends on the exact spatial dependencies of cavity/environment resonance; no local invalidation is justified yet.
+
+### Environmental field revision contract
+
+`ActiveMaterialField` maintains a global `revision` and per-cell `cell_revisions`. `mark_cell_changed` increments both the touched cell revision and global revision, and updates the maintained environmental bond index for that cell.
+
+The main field mutation APIs inspected so far consistently call the invalidation path:
+
+- Complete-object movement marks source and destination cells.
+- Atomic split marks the source and every destination.
+- Logical and physical deposits mark their destination.
+- Batch physical deposits mark each committed destination.
+- Environmental COMBINE and displacement commit paths mutate cell vectors directly, then explicitly mark every touched cell.
+- Movement batches similarly mark every changed cell.
+
+The field also has `local_revision_for_positions`, which folds revisions for cells containing supplied positions. This is a possible exact dependency token only if the caller can prove that the supplied positions cover every field cell that can influence the derived result. It is not automatically safe for interactions with global reach or occlusion.
+
+### Staged interaction versions are not production invalidation
+
+`EnvironmentalMaterialSnapshot::from_field` currently assigns `topology_generation = 0` and `state_version = 0` to every snapshot material. Its own comment explicitly scopes topology generation to the immutable pass snapshot. The versioned `MaterialRecord`/`ConstituentRef` inventory supports stale-reference rejection within that inventory, but these zero-valued fields are not persistent per-material mutation versions.
+
+The inventory builder invalidates dependent bond/contact records when an upserted material's topology generation changes. That behavior is useful as a model for a revision contract, but it does not establish that production field mutations currently maintain such generations.
+
+### Early classification
+
+- Organism harmonic spectra: already dependency-cached; global field revision may over-invalidate. Tick remains a dependency when world-tone input is present.
+- Genome cavity and developmental realization: already cached against organism structure revision. Developmental realization also uses a seed-scale reference derived from the catalog; catalog mutability and whether that reference can change need separate verification.
+- Environmental chemistry broad-phase cursors: pass-local snapshots are guarded by field revision equality. This is stale-snapshot rejection, not a persistent cache.
+- Environmental bond index: incrementally maintained per changed cell, with a full rebuild after deserialization. This is an established example of safe incremental maintenance tied to centralized mutation paths.
+- Resonance movement pair forces, world-tone exposure, and environmental reaction discovery: remain tick-/phase-/spatially dependent in important ways. No event-driven replacement is proposed without a complete dependency proof.
+
+### Open audit questions
+
+1. Enumerate all production writes to `ActiveMaterialField.cells` and confirm each successful write reaches `mark_cell_changed`; distinguish test-only direct mutation.
+2. Confirm all organism structure and position mutation sites call the corresponding revision helper.
+3. Determine whether catalog contents can change after simulation construction, and identify any cache keys that omit catalog dependencies.
+4. Trace the complete dependency footprint of organism harmonic spectra and cavity/world-tone contributions before considering per-cell invalidation.
+5. Identify expensive recalculations with a narrower, provable dependency set than the current global field revision.
