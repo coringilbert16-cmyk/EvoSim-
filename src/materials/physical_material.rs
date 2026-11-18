@@ -217,6 +217,31 @@ impl PhysicalMaterial {
         ) {
             return None;
         }
+        self.realized_shape_for_part_validated(part_index, catalog)
+    }
+
+    /// Resolve every constituent shape after validating the material once.
+    /// The per-part checks below remain identical to the single-part API.
+    pub(crate) fn realized_shapes_for_parts(
+        &self,
+        catalog: &[BaseResource],
+    ) -> Option<Vec<crate::resources::Shape>> {
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialShapeValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
+            return None;
+        }
+        (0..self.material.parts.len())
+            .map(|part_index| self.realized_shape_for_part_validated(part_index, catalog))
+            .collect()
+    }
+
+    fn realized_shape_for_part_validated(
+        &self,
+        part_index: usize,
+        catalog: &[BaseResource],
+    ) -> Option<crate::resources::Shape> {
         let (name, amount) = self.material.parts.get(part_index)?;
         let resource = catalog.iter().find(|resource| resource.name == *name)?;
         let shape = match self.realized_shapes.as_ref() {
