@@ -115,7 +115,7 @@ pub(crate) fn report() {
         "structural_unit_validation_site",
         "environmental_movement_validation_site",
         "broad_phase_validation_site",
-            "material_storage_validation_site",
+        "material_storage_validation_site",
         "physical_material_shape_validation_site",
         "physical_material_construction_validation_site",
         "structural_unit_geometry_validation_site",
