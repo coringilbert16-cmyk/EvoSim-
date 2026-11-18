@@ -1091,7 +1091,7 @@ impl Simulation {
                 })
             });
         if let Some(sample) = world_tone_sample {
-            crate::world_tone_snapshot::WorldToneOccluderSnapshot::settle_living_organism_inputs(
+            crate::world_tone_snapshot::WorldToneRecipientSnapshot::settle_living_organism_inputs(
                 self,
                 sample,
                 &living_ids,

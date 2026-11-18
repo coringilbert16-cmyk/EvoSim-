@@ -15,6 +15,430 @@ use crate::state::{Organism, Simulation};
 use crate::structure::Placement;
 use crate::world_tone::{WorldToneCaptureFrame, WorldToneSample};
 
+
+/// One material constituent exposed to the spatially uniform world tone.
+/// No geometry or spatial data is needed to determine its response.
+#[derive(Clone, Copy, Debug)]
+struct WorldToneRecipient {
+    properties: ResourceProperties,
+    resonance_owner: Option<usize>,
+    environment_reservoir: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+struct MaterialResponseKey {
+    mass: u64,
+    potential_energy: u64,
+    reactivity: u64,
+    chemical_position: Option<u64>,
+    cohesion: u64,
+}
+
+impl From<ResourceProperties> for MaterialResponseKey {
+    fn from(value: ResourceProperties) -> Self {
+        Self {
+            mass: value.mass.to_bits(),
+            potential_energy: value.potential_energy.to_bits(),
+            reactivity: value.reactivity.to_bits(),
+            chemical_position: value.chemical_position.map(f64::to_bits),
+            cohesion: value.cohesion.to_bits(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CachedMaterialResponse {
+    response_energy: f64,
+    retained_spectrum: crate::harmonics::ToneSpectrum,
+}
+
+/// Geometry-free production inventory and settlement for world-tone input.
+pub(crate) struct WorldToneRecipientSnapshot {
+    recipients: Vec<WorldToneRecipient>,
+}
+
+impl WorldToneRecipientSnapshot {
+    fn append_physical(
+        recipients: &mut Vec<WorldToneRecipient>,
+        physical: &PhysicalMaterial,
+        catalog: &[BaseResource],
+        resonance_owner: Option<usize>,
+        environment_reservoir: bool,
+    ) -> Option<()> {
+        if !physical.material.is_valid_for_catalog(catalog) {
+            return None;
+        }
+        for (_, properties) in physical_material_properties(physical, catalog)? {
+            recipients.push(WorldToneRecipient {
+                properties,
+                resonance_owner,
+                environment_reservoir,
+            });
+        }
+        Some(())
+    }
+
+    fn from_simulation(simulation: &Simulation, living_ids: &HashSet<String>) -> Option<Self> {
+        let catalog = &simulation.environment.catalog;
+        let mut recipients = Vec::new();
+
+        // The primary and developing structure is one authoritative aggregate.
+        for (organism_index, organism) in simulation.organisms.iter().enumerate() {
+            if !organism.structure.units.is_empty() {
+                let owner = living_ids.contains(&organism.id).then_some(organism_index);
+                for (_, properties) in structure_material_properties(&organism.structure, catalog)? {
+                    recipients.push(WorldToneRecipient {
+                        properties,
+                        resonance_owner: owner,
+                        environment_reservoir: false,
+                    });
+                }
+            }
+            if let Some(construction) = &organism.reproductive_construction {
+                if !construction.is_aggregate_owned_by(&organism.structure) {
+                    return None;
+                }
+                for entry in &construction.committed_material.entries {
+                    let StoredMaterial::Physical(physical) = entry;
+                    Self::append_physical(&mut recipients, physical, catalog, None, false)?;
+                }
+            }
+        }
+
+        // Every field constituent receives the same source input and may retain
+        // energy in the environment reservoir.
+        for cell in &simulation.environment.field.cells {
+            for physical in &cell.physical_materials {
+                Self::append_physical(&mut recipients, physical, catalog, None, true)?;
+            }
+        }
+
+        // Legacy decomposing structures remain recipients but have no reservoir.
+        for decomposing in &simulation.decomposing_bodies {
+            if !decomposing.structure.units.is_empty() {
+                for (_, properties) in structure_material_properties(&decomposing.structure, catalog)? {
+                    recipients.push(WorldToneRecipient {
+                        properties,
+                        resonance_owner: None,
+                        environment_reservoir: false,
+                    });
+                }
+            }
+        }
+
+        // Stored material remains physical but does not retain resonance.
+        // Validate the owner anchor for storage integrity only; never use it
+        // to calculate exposure or material response.
+        for organism in &simulation.organisms {
+            if organism.stored_material.entries.is_empty() {
+                continue;
+            }
+            let _ = owner_anchor(organism)?;
+            for entry in &organism.stored_material.entries {
+                let StoredMaterial::Physical(physical) = entry;
+                Self::append_physical(&mut recipients, physical, catalog, None, false)?;
+            }
+        }
+
+        // Pending transformation sources remain physical recipients. Preserve
+        // the old fail-closed ownership and duplicate-source validation.
+        for transformation in &simulation.active_transformations {
+            if transformation.stored_material.is_some()
+                && transformation.combine_environmental_source.is_some()
+            {
+                return None;
+            }
+            if transformation.stored_material.is_none()
+                && transformation.combine_environmental_source.is_none()
+            {
+                continue;
+            }
+            let owner = simulation
+                .organisms
+                .iter()
+                .find(|organism| organism.id == transformation.organism_id)?;
+            if owner.active_transformation_id != Some(transformation.id) {
+                return None;
+            }
+            if let Some(physical) = &transformation.stored_material {
+                Self::append_physical(&mut recipients, physical, catalog, None, false)?;
+            }
+            if let Some((cell_index, physical)) = &transformation.combine_environmental_source {
+                let _ = simulation.environment.field.cells.get(*cell_index)?;
+                Self::append_physical(&mut recipients, physical, catalog, None, false)?;
+            }
+        }
+
+        (!recipients.is_empty()).then_some(Self { recipients })
+    }
+
+    pub(crate) fn settle_living_organism_inputs(
+        simulation: &mut Simulation,
+        sample: WorldToneSample,
+        living_ids: &HashSet<String>,
+    ) {
+        let Some(snapshot) = Self::from_simulation(simulation, living_ids) else {
+            return;
+        };
+
+        // Uniform source semantics: one normalized unit of source width per
+        // material constituent. Total incident energy scales with recipient count.
+        let Some(incident_per_recipient) = sample.incident_energy_for_projected_width(1.0) else {
+            return;
+        };
+        if !incident_per_recipient.is_finite() || incident_per_recipient < 0.0 {
+            return;
+        }
+        let signal = crate::harmonics::ToneSpectrum {
+            components: vec![crate::harmonics::ToneComponent {
+                frequency_cycles_per_day: sample.frequency_cycles_per_day,
+                amplitude: incident_per_recipient.sqrt(),
+                phase_radians: crate::harmonics::phase_at_tick(
+                    sample.frequency_cycles_per_day,
+                    simulation.tick,
+                ),
+            }],
+        };
+        let baselines =
+            crate::resources::ResourceBaselines::from_catalog(&simulation.environment.catalog);
+
+        // Responses are calculated once per exact harmonic-property signature.
+        let mut response_cache = HashMap::<MaterialResponseKey, CachedMaterialResponse>::new();
+        // Clone each owner reservoir once for transaction staging, never once per
+        // material hit. Per-recipient deposits are preflighted before mutation.
+        let mut staged_reservoirs: Vec<_> = simulation
+            .organisms
+            .iter()
+            .map(|organism| organism.resonant_energy.clone())
+            .collect();
+        let mut staged_environment_resonance = simulation.environment.resonant_energy.clone();
+        let initial_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>()
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
+        if !initial_resonant_energy.is_finite() || initial_resonant_energy < 0.0 {
+            return;
+        }
+
+        let mut total_incident = 0.0;
+        let mut total_captured = 0.0;
+        let mut total_heat = 0.0;
+        let mut total_escaped = 0.0;
+
+        for recipient in &snapshot.recipients {
+            let key = MaterialResponseKey::from(recipient.properties);
+            if !response_cache.contains_key(&key) {
+                let Some(response_spectrum) =
+                    crate::harmonics::material_response_spectrum(recipient.properties, baselines, &signal)
+                else {
+                    return;
+                };
+                let Some(response_energy) = spectrum_energy(&response_spectrum) else {
+                    return;
+                };
+                if response_energy > incident_per_recipient + 1e-9 {
+                    return;
+                }
+                let damping = crate::harmonics::damping_ratio(recipient.properties, baselines);
+                if !damping.is_finite() || damping < 0.0 {
+                    return;
+                }
+                let retained_budget =
+                    response_energy - response_energy * damping.clamp(0.0, 1.0);
+                let Some(retained_spectrum) =
+                    crate::harmonics::transform_signal_to_energy_budget(
+                        recipient.properties,
+                        baselines,
+                        &signal,
+                        retained_budget,
+                    )
+                else {
+                    return;
+                };
+                response_cache.insert(
+                    key,
+                    CachedMaterialResponse {
+                        response_energy: response_energy.min(incident_per_recipient),
+                        retained_spectrum,
+                    },
+                );
+            }
+            let Some(response) = response_cache.get(&key) else {
+                return;
+            };
+            let response_energy = response.response_energy;
+            let mut captured = 0.0;
+
+            if let Some(owner_index) = recipient.resonance_owner {
+                let Some(reservoir) = staged_reservoirs.get_mut(owner_index) else {
+                    return;
+                };
+                if can_deposit_spectrum(reservoir, &response.retained_spectrum) {
+                    let before = reservoir.total_energy();
+                    for component in &response.retained_spectrum.components {
+                        let energy = component.amplitude * component.amplitude;
+                        if energy > f64::EPSILON
+                            && !reservoir.deposit(component.frequency_cycles_per_day, energy)
+                        {
+                            return;
+                        }
+                    }
+                    let Some(delta) = reservoir
+                        .total_energy()
+                        .zip(before)
+                        .map(|(after, before)| after - before)
+                    else {
+                        return;
+                    };
+                    if !delta.is_finite() || delta < 0.0 || delta > response_energy {
+                        return;
+                    }
+                    captured = delta;
+                }
+            } else if recipient.environment_reservoir
+                && can_deposit_spectrum(&staged_environment_resonance, &response.retained_spectrum)
+            {
+                let before = staged_environment_resonance.total_energy();
+                for component in &response.retained_spectrum.components {
+                    let energy = component.amplitude * component.amplitude;
+                    if energy > f64::EPSILON
+                        && !staged_environment_resonance
+                            .deposit(component.frequency_cycles_per_day, energy)
+                    {
+                        return;
+                    }
+                }
+                let Some(delta) = staged_environment_resonance
+                    .total_energy()
+                    .zip(before)
+                    .map(|(after, before)| after - before)
+                else {
+                    return;
+                };
+                if !delta.is_finite() || delta < 0.0 || delta > response_energy {
+                    return;
+                }
+                captured = delta;
+            }
+
+            // Any response not retained by the owning reservoir becomes heat.
+            // The unabsorbed part escapes; it is not propagated through neighbors.
+            let heat = response_energy - captured;
+            let escaped = incident_per_recipient - response_energy;
+            if !heat.is_finite() || heat < 0.0 || !escaped.is_finite() || escaped < 0.0 {
+                return;
+            }
+            total_incident += incident_per_recipient;
+            total_captured += captured;
+            total_heat += heat;
+            total_escaped += escaped;
+            if ![total_incident, total_captured, total_heat, total_escaped]
+                .iter()
+                .all(|value| value.is_finite())
+            {
+                return;
+            }
+        }
+
+        // The staged holder delta is authoritative after repeated deposits.
+        let staged_resonant_energy = staged_reservoirs
+            .iter()
+            .map(|reservoir| reservoir.total_energy().unwrap_or(f64::NAN))
+            .sum::<f64>()
+            + staged_environment_resonance
+                .total_energy()
+                .unwrap_or(f64::NAN);
+        let authoritative_capture = staged_resonant_energy - initial_resonant_energy;
+        let capture_correction = authoritative_capture - total_captured;
+        let tolerance = 1e-8 * total_incident.max(1.0);
+        if !staged_resonant_energy.is_finite()
+            || staged_resonant_energy < 0.0
+            || !authoritative_capture.is_finite()
+            || authoritative_capture < 0.0
+            || !capture_correction.is_finite()
+            || capture_correction.abs() > tolerance
+        {
+            return;
+        }
+        if capture_correction > 0.0 {
+            if total_heat < capture_correction {
+                return;
+            }
+            total_heat -= capture_correction;
+        } else {
+            total_heat += -capture_correction;
+        }
+        total_captured = authoritative_capture;
+
+        let aggregate_escaped = total_incident - (total_captured + total_heat);
+        if !aggregate_escaped.is_finite()
+            || aggregate_escaped < 0.0
+            || (aggregate_escaped - total_escaped).abs() > tolerance
+        {
+            return;
+        }
+        if !simulation.energy_ledger.settle_world_tone_paths(
+            total_incident,
+            total_captured,
+            total_heat,
+            aggregate_escaped,
+        ) {
+            return;
+        }
+        for (organism, reservoir) in simulation.organisms.iter_mut().zip(staged_reservoirs) {
+            organism.resonant_energy = reservoir;
+        }
+        simulation.environment.resonant_energy = staged_environment_resonance;
+    }
+}
+
+/// Preflight a whole retained spectrum so capacity failure cannot leave a
+/// partially deposited material response. This avoids per-hit reservoir clones.
+fn can_deposit_spectrum(
+    reservoir: &crate::harmonics::ResonantEnergyReservoir,
+    spectrum: &crate::harmonics::ToneSpectrum,
+) -> bool {
+    if reservoir.total_energy().is_none() {
+        return false;
+    }
+    let mut projected: Vec<(f64, f64)> = reservoir
+        .components
+        .iter()
+        .map(|component| (component.frequency_cycles_per_day, component.energy))
+        .collect();
+    for component in &spectrum.components {
+        let energy = component.amplitude * component.amplitude;
+        if !component.frequency_cycles_per_day.is_finite()
+            || component.frequency_cycles_per_day <= 0.0
+            || !component.amplitude.is_finite()
+            || component.amplitude < 0.0
+            || !energy.is_finite()
+        {
+            return false;
+        }
+        if energy <= f64::EPSILON {
+            continue;
+        }
+        if let Some((_, current)) = projected.iter_mut().find(|entry| {
+            (entry.0 / component.frequency_cycles_per_day).ln().abs() <= 1e-9
+        }) {
+            *current += energy;
+            if !current.is_finite() {
+                return false;
+            }
+        } else {
+            if projected.len() >= crate::harmonics::MAX_SPECTRAL_COMPONENTS {
+                return false;
+            }
+            projected.push((component.frequency_cycles_per_day, energy));
+        }
+    }
+    true
+}
+
 #[derive(Debug)]
 pub(crate) struct WorldToneOccluderSnapshot {
     /// Frame-wide exposure cache; organism indices below map into this frame.
