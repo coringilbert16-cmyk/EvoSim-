@@ -54,7 +54,7 @@ pub(crate) struct Scope {
 pub(crate) fn measure(metric: Metric) -> Option<Scope> {
     if *ENABLED.get_or_init(|| {
         std::env::var_os("EVOSIM_PROFILE_PROPERTIES")
-            .is_some_and(|value| value == "1")
+            .is_some_and(|value| value == std::ffi::OsStr::new("1"))
     }) {
         Some(Scope {
             metric,
@@ -77,7 +77,7 @@ impl Drop for Scope {
 pub(crate) fn report() {
     if !*ENABLED.get_or_init(|| {
         std::env::var_os("EVOSIM_PROFILE_PROPERTIES")
-            .is_some_and(|value| value == "1")
+            .is_some_and(|value| value == std::ffi::OsStr::new("1"))
     }) {
         return;
     }
