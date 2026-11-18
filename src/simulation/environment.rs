@@ -779,11 +779,8 @@ impl ActiveMaterialField {
                 if valid {
                     let placements = material.placements.as_ref().expect("validated placements");
                     if let Some(shapes) = material.realized_shapes_for_parts(catalog) {
-                        for (part_index, (placement, shape)) in placements
-                            .iter()
-                            .copied()
-                            .zip(shapes)
-                            .enumerate()
+                        for (part_index, (placement, shape)) in
+                            placements.iter().copied().zip(shapes).enumerate()
                         {
                             parts.push(crate::material_geometry::PlacedMaterialPart {
                                 part_index,
@@ -846,9 +843,7 @@ impl ActiveMaterialField {
             let Some(shapes) = candidate_material.realized_shapes_for_parts(catalog) else {
                 continue;
             };
-            for (part_index, (placement, shape)) in
-                placements.into_iter().zip(shapes).enumerate()
-            {
+            for (part_index, (placement, shape)) in placements.into_iter().zip(shapes).enumerate() {
                 let radius = shape.form.bounding_radius();
                 if !radius.is_finite()
                     || radius < 0.0
@@ -1097,12 +1092,7 @@ impl ActiveMaterialField {
         let Some(shapes) = candidate.realized_shapes_for_parts(catalog) else {
             return false;
         };
-        for (part_index, (placement, shape)) in placements
-            .iter()
-            .copied()
-            .zip(shapes)
-            .enumerate()
-        {
+        for (part_index, (placement, shape)) in placements.iter().copied().zip(shapes).enumerate() {
             let radius = shape.form.bounding_radius();
             if !radius.is_finite()
                 || radius < 0.0
