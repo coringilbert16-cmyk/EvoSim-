@@ -1,11 +1,11 @@
 {
-  "run": false,
+  "run": true,
   "seeds": [
     42
   ],
   "duration_seconds": 60,
   "diagnostic_interval": 100,
-  "request_note": "Inactive after one-off detailed movement and full-tick profiling run; profiling disabled by default.",
-  "profile_movement": false,
-  "profile_tick": false
+  "request_note": "One-off geometry-check counter run; disable after capture.",
+  "profile_movement": true,
+  "profile_tick": true
 }
