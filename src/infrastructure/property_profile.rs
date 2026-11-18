@@ -17,9 +17,14 @@ pub(crate) enum Metric {
     StructuralUnitProperties = 4,
     WorldTonePhysicalProperties = 5,
     WorldToneStructureProperties = 6,
+    StructuralUnitValidationSite = 7,
+    EnvironmentalMovementValidationSite = 8,
+    BroadPhaseValidationSite = 9,
+    EnvironmentSnapshotValidationSite = 10,
+    MaterialStorageValidationSite = 11,
 }
 
-const METRIC_COUNT: usize = 7;
+const METRIC_COUNT: usize = 12;
 
 struct Counter {
     calls: AtomicU64,
@@ -49,6 +54,13 @@ static COUNTERS: [Counter; METRIC_COUNT] = [
 pub(crate) struct Scope {
     metric: Metric,
     started: Instant,
+}
+
+pub(crate) fn measure_call<T>(metric: Metric, operation: impl FnOnce() -> T) -> T {
+    let profile = measure(metric);
+    let result = operation();
+    drop(profile);
+    result
 }
 
 pub(crate) fn measure(metric: Metric) -> Option<Scope> {
@@ -89,6 +101,11 @@ pub(crate) fn report() {
         "structural_unit_properties",
         "world_tone_physical_properties",
         "world_tone_structure_properties",
+        "structural_unit_validation_site",
+        "environmental_movement_validation_site",
+        "broad_phase_validation_site",
+        "environment_snapshot_validation_site",
+        "material_storage_validation_site",
     ];
     println!("PROPERTY_PROFILE_BEGIN");
     for (name, counter) in NAMES.iter().zip(COUNTERS.iter()) {
