@@ -722,16 +722,15 @@ fn apply_push_plan(
 
     plan.physical.sort_unstable_by(|a, b| b.cmp(a));
     let mut pushed = Vec::with_capacity(plan.physical.len());
+    let mut changed_cells = Vec::with_capacity(plan.physical.len() * 2);
     for (cell_index, material_index) in plan.physical {
         let physical = environment.field.cells[cell_index]
             .physical_materials
             .remove(material_index);
+        changed_cells.push(cell_index);
         let mut physical = physical;
         translate_physical(&mut physical, dx, dy, environment.height);
         pushed.push(physical);
-    }
-    if !pushed.is_empty() {
-        environment.field.revision = environment.field.revision.wrapping_add(1);
     }
     for physical in pushed {
         if let Some(placement) = physical
@@ -746,8 +745,14 @@ fn apply_push_plan(
                 environment.field.cells[index]
                     .physical_materials
                     .push(physical);
+                changed_cells.push(index);
             }
         }
+    }
+    changed_cells.sort_unstable();
+    changed_cells.dedup();
+    for cell_index in changed_cells {
+        environment.field.mark_changed_at_index(cell_index);
     }
 }
 
@@ -920,6 +925,7 @@ fn translate_organism(organism: &mut Organism, dx: f64, dy: f64, environment_hei
         unit.placement.y = wrap_y(unit.placement.y + dy, environment_height);
     }
     translate_reproductive_construction(organism, dx, dy, environment_height);
+    organism.mark_position_changed();
 }
 
 #[cfg(test)]
