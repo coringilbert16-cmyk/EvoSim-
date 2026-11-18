@@ -14,8 +14,8 @@ This work depends on the source-shape geometry foundation tracked separately in 
 - The aura carries the same harmonics/resonance energy already represented by the existing simulation. It is not a new source, a second field, or a second energy store.
 - The energy no longer carried by propagation becomes environmental heat exactly once. Receiver count and overlapping observations must not multiply the same propagation loss.
 - Energy is allocated linearly over the complete exposed source perimeter: `dE = E_source × dℓ / L_source`. Receiver-visible portions use the complete source-global perimeter as the denominator; they are never renormalized to each receiver's visible subset.
-- The aura has a finite effective support only where the complete movement calculation establishes that the received contribution can no longer produce a physically meaningful change. This is an exact-zero physical rule, not machine epsilon, floating-point underflow, or a guessed threshold.
-- Do not add an arbitrary interaction radius, fixed distance cap, or independent decay coefficient.
+- The aura extends outward from the complete source boundary by at most one radius of the emitting material. This is a source-specific physical maximum, not a world-wide interaction radius. Energy attenuation remains continuous inside that support; an energy-derived tighter support may reduce the candidate region but may never exceed this material-relative maximum.
+- Do not add a global interaction radius, guessed energy threshold, machine-epsilon cutoff, floating-point-underflow rule, or independent decay coefficient.
 - Preserve frequency, harmonic, phase, attraction/repulsion, equal-and-opposite interaction, deterministic accumulation, and movement/placement semantics unless an explicit physical-model decision authorizes a change.
 
 ## Current reference profile
@@ -55,25 +55,24 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 - Account the difference between incoming and outgoing propagated energy as environmental heat once, independent of receiver count.
 - Preserve existing source totals and ledger invariants. Do not create a persistent second reservoir or count the same signal as both aura energy and a separate pair-energy source.
 
-### Phase C — derive effective support
+### Phase C — establish source-specific support
 
-- Derive the effective-zero boundary from the complete movement accumulation and final state update.
-- Prove that omitted contributions cannot change the resulting physical movement state.
-- Do not use a guessed radius, arbitrary energy threshold, machine epsilon, or floating-point underflow as the physical rule.
-- If a conservative finite support cannot be proven, retain the all-pairs path as the correctness authority and do not enable spatial omission.
+- Define each material's conservative radius from its movement center to the outermost realized constituent surface, including constituent shape extent.
+- The aura may extend no farther than one additional source-material radius beyond that source boundary.
+- For source radii `Ra` and `Rb`, a conservative center-distance candidate bound is `d <= max(2*Ra + Rb, 2*Rb + Ra)`. This includes either direction of source-to-receiver influence and uses no global radius.
+- The current broadphase uses this maximum support. A tighter energy-derived bound is a later refinement only if it can be derived from the existing energy and movement model without an arbitrary threshold.
 
 ### Phase D — spatial candidate discovery
 
-- Build conservative spatial bounds from the proven effective support and complete source geometry.
-- Use a uniform spatial grid if it provides a complete and efficient candidate set; use a spatial tree only if needed.
-- Generate every eligible unordered pair exactly once using stable identities.
+- Use a stable x-axis sweep-and-prune over the source-specific bounds; only pairs within the conservative pair bound become candidates.
+- Use realized constituent shapes to derive conservative material extents; do not use a single global simulation radius.
+- Generate every eligible unordered pair exactly once and sort by stable `(a, b)` identity before force accumulation.
 - Handle moving sources, world boundaries/wrapping, source extents, and degenerate/coincident positions.
-- Preserve canonical pair order before floating-point force accumulation.
-- Keep the all-pairs implementation available as a test oracle and safe fallback.
+- Keep the all-pairs implementation as a reference oracle. Validate candidate discovery against an exhaustive application of the same source-specific support predicate.
 
 ### Phase E — validation and performance
 
-- Compare candidate pairs, propagated signal, forces, and final movement against the all-pairs/reference calculation.
+- Compare the candidate set against an exhaustive source-specific support oracle, then compare candidate forces and ordered accumulation against the same all-pairs reference filtered by that support rule.
 - Test sparse and dense arrangements, varied source sizes, multiple harmonics, near-equal frequencies, occlusion, boundary cases, moving sources, and coincident positions.
 - Verify deterministic output, no missed meaningful interactions, no duplicate pairs, and conservative energy/heat settlement.
 - Run full tests, formatting, and Clippy.
@@ -83,9 +82,10 @@ If the existing transaction cannot provide a conservative, source-attributed pro
 ## Current status
 
 - The movement bottleneck has been profiled.
-- The current all-pairs implementation remains unchanged and authoritative.
-- PR #378 contains the reusable source-geometry foundation.
-- No finite cutoff, energy debit, propagation-heat settlement, live movement migration, or spatial neighbor pruning has been implemented.
+- The all-pairs implementation remains available as the profiled reference path.
+- PR #378 contains the reusable source-geometry foundation; this PR currently derives conservative source radii from realized constituent shapes without coupling to the geometry layer.
+- The first spatial candidate implementation uses the source-specific one-material-radius support bound and stable x-axis sweep-and-prune. It does not yet migrate live movement to exact source-perimeter reception or implement energy/heat settlement.
+- A tighter energy-derived support bound remains unimplemented; the current broadphase uses the full conservative source-specific maximum.
 - The independent resonance-field architecture is future work and is documented separately in `docs/design/resonance-field-architecture.md`.
 
 ## Acceptance criteria
