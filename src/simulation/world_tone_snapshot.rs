@@ -252,12 +252,12 @@ impl WorldToneRecipientSnapshot {
                     return;
                 }
                 let retained_budget = response_energy - response_energy * damping.clamp(0.0, 1.0);
-                let Some(retained_spectrum) = crate::harmonics::transform_signal_to_energy_budget(
-                    recipient.properties,
-                    baselines,
-                    &signal,
-                    retained_budget,
-                ) else {
+                let Some(retained_spectrum) =
+                    crate::harmonics::normalize_spectrum_to_energy_budget(
+                        response_spectrum,
+                        retained_budget,
+                    )
+                else {
                     return;
                 };
                 response_cache.insert(
