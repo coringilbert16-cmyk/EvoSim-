@@ -3344,6 +3344,20 @@ mod tests {
                 first_trial.energy.required_external_input >= 0.0
                     && second_trial.energy.required_external_input >= 0.0
             );
+            assert!(
+                first_trial
+                    .energy
+                    .residual(first_trial.energy.required_external_input)
+                    .is_some_and(|residual| residual.abs() <= 1e-12),
+                "first displacement must conserve energy at its calculated input"
+            );
+            assert!(
+                second_trial
+                    .energy
+                    .residual(second_trial.energy.required_external_input)
+                    .is_some_and(|residual| residual.abs() <= 1e-12),
+                "second displacement must conserve energy at its calculated input"
+            );
             println!(
                 "CATALYST_CYCLE|Oxygen-{carrier_partner}|first_activation_ticks={}|second_activation_ticks={}|cycle_activation_ticks={}|first_external_input={:.9}|second_external_input={:.9}|cycle_external_input={:.9}|direct_activation=false|regenerated=true",
                 first_activation.1,
