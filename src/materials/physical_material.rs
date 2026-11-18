@@ -78,8 +78,10 @@ impl PhysicalMaterial {
         catalog: &[BaseResource],
         allow_aggregate_fluid: bool,
     ) -> Option<Self> {
-        if !material.is_valid_for_catalog(catalog)
-            || material.parts.is_empty()
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialConstructionValidationSite,
+            || material.is_valid_for_catalog(catalog),
+        ) || material.parts.is_empty()
             || placements.len() != material.parts.len()
         {
             return None;
@@ -209,7 +211,10 @@ impl PhysicalMaterial {
         part_index: usize,
         catalog: &[BaseResource],
     ) -> Option<crate::resources::Shape> {
-        if !self.material.is_valid_for_catalog(catalog) {
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::PhysicalMaterialShapeValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
             return None;
         }
         let (name, amount) = self.material.parts.get(part_index)?;
