@@ -777,7 +777,10 @@ impl ActiveMaterialField {
             for material in &cell.physical_materials {
                 let mut parts = Vec::new();
                 let valid = material.is_realized()
-                    && material.material.is_valid_for_catalog(catalog)
+                    && crate::property_profile::measure_call(
+                        crate::property_profile::Metric::EnvironmentSnapshotValidationSite,
+                        || material.material.is_valid_for_catalog(catalog),
+                    )
                     && !material.material.is_empty()
                     && material.placements.as_ref().is_some_and(|p| !p.is_empty());
                 if valid {
