@@ -1666,6 +1666,7 @@ mod tests {
         let mut simulation = Simulation::new(7, 20.0);
         let mut parent = simulation.organisms.remove(0);
         let parent_structure = parent.structure.clone();
+        let revision_before = parent.structure_revision;
         let mut ledger = EnergyLedger::default();
         assert!(parent.store_material(Material::free_base("Carbon", 1.0)));
         assert!(begin_reproduction(
@@ -1714,6 +1715,11 @@ mod tests {
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert!(parent.structure.units.len() > parent_structure.units.len());
+        assert_eq!(
+            parent.structure_revision,
+            revision_before.wrapping_add(1),
+            "anchor admission must invalidate structure-derived caches"
+        );
         assert!(
             parent.structure.bonds.iter().any(|bond| {
                 let a = construction
@@ -2334,7 +2340,7 @@ mod tests {
         let energy_before_attachment = parent.usable_energy;
         let ledger_before_attachment = ledger;
 
-        let second_status = advance_construction(
+        let (second_status, _, structure_changed) = advance_construction(
             &mut parent.structure,
             &mut parent.stored_material,
             &mut construction,
@@ -2344,9 +2350,9 @@ mod tests {
             &mut simulation.rng,
             &body,
             None,
-        )
-        .0;
+        );
 
+        assert!(structure_changed, "successful growth must report its graph mutation");
         assert!(
             matches!(
                 second_status,
