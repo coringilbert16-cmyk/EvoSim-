@@ -782,7 +782,7 @@ impl ActiveMaterialField {
                         for (part_index, (placement, shape)) in placements
                             .iter()
                             .copied()
-                            .zip(shapes.into_iter())
+                            .zip(shapes)
                             .enumerate()
                         {
                             parts.push(crate::material_geometry::PlacedMaterialPart {
@@ -847,7 +847,7 @@ impl ActiveMaterialField {
                 continue;
             };
             for (part_index, (placement, shape)) in
-                placements.into_iter().zip(shapes.into_iter()).enumerate()
+                placements.into_iter().zip(shapes).enumerate()
             {
                 let radius = shape.form.bounding_radius();
                 if !radius.is_finite()
@@ -1100,7 +1100,7 @@ impl ActiveMaterialField {
         for (part_index, (placement, shape)) in placements
             .iter()
             .copied()
-            .zip(shapes.into_iter())
+            .zip(shapes)
             .enumerate()
         {
             let radius = shape.form.bounding_radius();
@@ -1142,7 +1142,7 @@ impl ActiveMaterialField {
                 for (part_index, (placement, shape)) in other_placements
                     .iter()
                     .copied()
-                    .zip(other_shapes.into_iter())
+                    .zip(other_shapes)
                     .enumerate()
                 {
                     let other_part = crate::material_geometry::PlacedMaterialPart {
