@@ -2247,7 +2247,7 @@ mod tests {
         let mut simulation = crate::state::Simulation::new(0xB055, 10.0);
         let organism = &mut simulation.organisms[0];
         let revision_before = organism.position_revision;
-        organism.cached_harmonic_key = Some((0, 0, 0, 0));
+        organism.cached_harmonic_key = Some((0, 0, 0, 0, false));
         organism.cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
         translate_organism(organism, 1.0, 0.0, simulation.environment.height);
         assert_eq!(
