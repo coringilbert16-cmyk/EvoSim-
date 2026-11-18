@@ -5330,24 +5330,18 @@ mod environmental_movement_parallel_tests {
     }
 }
 
-
 #[cfg(test)]
 mod environmental_movement_spatial_candidate_tests {
     use super::{
         environmental_movement_displacements_from_spatial_candidate_pair_forces,
-        environmental_movement_pair_force, environmental_movement_phase_components,
-        environmental_movement_spatial_candidate_pair_forces,
+        environmental_movement_pair_force,
         environmental_movement_parallel_spatial_candidate_pair_forces,
+        environmental_movement_phase_components, environmental_movement_spatial_candidate_pair_forces,
         environmental_movement_spatial_candidate_pairs, EnvironmentalMovementEmitter,
         ToneComponent, ToneSpectrum,
     };
 
-    fn emitter(
-        x: f64,
-        y: f64,
-        source_radius: f64,
-        phase: f64,
-    ) -> EnvironmentalMovementEmitter {
+    fn emitter(x: f64, y: f64, source_radius: f64, phase: f64) -> EnvironmentalMovementEmitter {
         let spectrum = ToneSpectrum {
             components: vec![ToneComponent {
                 frequency_cycles_per_day: 440.0,
@@ -5385,10 +5379,7 @@ mod environmental_movement_spatial_candidate_tests {
 
     #[test]
     fn spatial_candidates_include_pairs_at_the_support_boundary() {
-        let emitters = vec![
-            emitter(0.0, 0.0, 0.5, 0.0),
-            emitter(1.25, 0.0, 0.25, 0.2),
-        ];
+        let emitters = vec![emitter(0.0, 0.0, 0.5, 0.0), emitter(1.25, 0.0, 0.25, 0.2)];
 
         assert_eq!(
             environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
@@ -5413,8 +5404,7 @@ mod environmental_movement_spatial_candidate_tests {
                 let radius_a = emitters[a].source_radius;
                 let radius_b = emitters[b].source_radius;
                 let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
-                let distance =
-                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                let distance = (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
                 if distance <= reach {
                     expected.push((a, b));
                 }
@@ -5433,11 +5423,13 @@ mod environmental_movement_spatial_candidate_tests {
         ];
         let candidates = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
         let sequential =
-            environmental_movement_spatial_candidate_pair_forces(&emitters, &candidates)
-                .unwrap();
-        let parallel =
-            environmental_movement_parallel_spatial_candidate_pair_forces(&emitters, &candidates, 3)
-                .unwrap();
+            environmental_movement_spatial_candidate_pair_forces(&emitters, &candidates).unwrap();
+        let parallel = environmental_movement_parallel_spatial_candidate_pair_forces(
+            &emitters,
+            &candidates,
+            3,
+        )
+        .unwrap();
         assert_eq!(sequential, parallel);
 
         let mut oracle_pairs = Vec::new();
@@ -5515,7 +5507,6 @@ mod environmental_movement_spatial_candidate_tests {
         .is_none());
     }
 }
-
 
 #[cfg(test)]
 mod environmental_material_radius_tests {
