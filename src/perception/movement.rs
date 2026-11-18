@@ -2267,7 +2267,6 @@ mod tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
-        let catalog = environment.catalog.clone();
         let placement = Placement {
             x: 10.0,
             y: 10.0,
