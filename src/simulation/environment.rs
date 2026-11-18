@@ -410,20 +410,14 @@ impl ActiveMaterialField {
         if placements.len() != physical.material.parts.len() || placements.is_empty() {
             return false;
         }
+        let Some(shapes) = physical.realized_shapes_for_parts(catalog) else {
+            return false;
+        };
         regions.iter().any(|region| {
-            physical
-                .material
-                .parts
+            shapes
                 .iter()
                 .zip(placements.iter())
-                .enumerate()
-                .all(|(part_index, ((name, _), placement))| {
-                    if !catalog.iter().any(|resource| resource.name == *name) {
-                        return false;
-                    }
-                    let Some(shape) = physical.realized_shape_for_part(part_index, catalog) else {
-                        return false;
-                    };
+                .all(|(shape, placement)| {
                     Self::realized_form_fully_inside_region(&shape.form, *placement, region)
                 })
         })
@@ -780,31 +774,20 @@ impl ActiveMaterialField {
             for material in &cell.physical_materials {
                 let mut parts = Vec::new();
                 let valid = material.is_realized()
-                    && crate::property_profile::measure_call(
-                        crate::property_profile::Metric::EnvironmentSnapshotValidationSite,
-                        || material.material.is_valid_for_catalog(catalog),
-                    )
                     && !material.material.is_empty()
                     && material.placements.as_ref().is_some_and(|p| !p.is_empty());
                 if valid {
-                    for (part_index, placement) in material
-                        .placements
-                        .as_ref()
-                        .expect("validated placements")
-                        .iter()
-                        .copied()
-                        .enumerate()
-                    {
-                        let Some(shape) = material.realized_shape_for_part(part_index, catalog)
-                        else {
-                            parts.clear();
-                            break;
-                        };
-                        parts.push(crate::material_geometry::PlacedMaterialPart {
-                            part_index,
-                            form: shape.form,
-                            placement,
-                        });
+                    let placements = material.placements.as_ref().expect("validated placements");
+                    if let Some(shapes) = material.realized_shapes_for_parts(catalog) {
+                        for (part_index, (placement, shape)) in
+                            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+                        {
+                            parts.push(crate::material_geometry::PlacedMaterialPart {
+                                part_index,
+                                form: shape.form,
+                                placement,
+                            });
+                        }
                     }
                 }
                 let original_parts = (valid && !parts.is_empty()).then_some(parts);
@@ -857,12 +840,12 @@ impl ActiveMaterialField {
             }
             candidate_material.placements = Some(placements.clone());
             let mut translated_parts = Vec::with_capacity(placements.len());
-            for (part_index, placement) in placements.into_iter().enumerate() {
-                let Some(shape) = candidate_material.realized_shape_for_part(part_index, catalog)
-                else {
-                    valid = false;
-                    break;
-                };
+            let Some(shapes) = candidate_material.realized_shapes_for_parts(catalog) else {
+                continue;
+            };
+            for (part_index, (placement, shape)) in
+                placements.into_iter().zip(shapes.into_iter()).enumerate()
+            {
                 let radius = shape.form.bounding_radius();
                 if !radius.is_finite()
                     || radius < 0.0
@@ -1108,10 +1091,12 @@ impl ActiveMaterialField {
         let field_width = self.width_cells as f64 * self.cell_size;
         let field_height = self.height_cells as f64 * self.cell_size;
         let mut candidate_parts = Vec::with_capacity(placements.len());
-        for (part_index, placement) in placements.iter().copied().enumerate() {
-            let Some(shape) = candidate.realized_shape_for_part(part_index, catalog) else {
-                return false;
-            };
+        let Some(shapes) = candidate.realized_shapes_for_parts(catalog) else {
+            return false;
+        };
+        for (part_index, (placement, shape)) in
+            placements.iter().copied().zip(shapes.into_iter()).enumerate()
+        {
             let radius = shape.form.bounding_radius();
             if !radius.is_finite()
                 || radius < 0.0
@@ -1145,10 +1130,12 @@ impl ActiveMaterialField {
                 let Some(other_placements) = other.placements.as_ref() else {
                     return false;
                 };
-                for (part_index, placement) in other_placements.iter().copied().enumerate() {
-                    let Some(shape) = other.realized_shape_for_part(part_index, catalog) else {
-                        return false;
-                    };
+                let Some(other_shapes) = other.realized_shapes_for_parts(catalog) else {
+                    return false;
+                };
+                for (part_index, (placement, shape)) in
+                    other_placements.iter().copied().zip(other_shapes.into_iter()).enumerate()
+                {
                     let other_part = crate::material_geometry::PlacedMaterialPart {
                         part_index,
                         form: shape.form,
