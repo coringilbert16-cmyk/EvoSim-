@@ -51,7 +51,10 @@ impl StructuralUnit {
         let _profile = crate::property_profile::measure(
             crate::property_profile::Metric::StructuralUnitProperties,
         );
-        if !self.material.is_valid_for_catalog(catalog) {
+        if !crate::property_profile::measure_call(
+            crate::property_profile::Metric::StructuralUnitValidationSite,
+            || self.material.is_valid_for_catalog(catalog),
+        ) {
             return None;
         }
         Some(self.material.weighted_properties(catalog))
