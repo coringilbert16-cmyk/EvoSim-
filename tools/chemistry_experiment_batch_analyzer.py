@@ -51,8 +51,8 @@ def load_seed(root: Path, seed: int, duration: int) -> dict[str, Any]:
         raise ValueError(f"seed {seed}: expected 1,200 independent resources and 80 starting molecules")
     if source.get("initial_constituent_count") != 1360:
         raise ValueError(f"seed {seed}: expected 1,360 starting constituents")
-    if coverage.get("excluded_resources") != ["Water"]:
-        raise ValueError(f"seed {seed}: active chemistry must exclude Water")
+    if coverage.get("excluded_resources") != []:
+        raise ValueError(f"seed {seed}: active catalog must not declare excluded resources")
     if set(coverage.get("required_resources", [])) != set(ACTIVE_ELEMENTS):
         raise ValueError(f"seed {seed}: expected all six active elements")
     if not coverage.get("all_required_present_at_start"):
@@ -257,7 +257,7 @@ def build_report(root: Path, seeds: list[int], duration: int) -> dict[str, Any]:
             "duration_seconds_per_seed": duration,
             "total_simulated_seconds": duration * len(seeds),
             "condition": "ordinary environmental chemistry; local resonance enabled; no control or forced reactions",
-            "initial_environment": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents; six active elements; Water excluded",
+            "initial_environment": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents; six active elements; no ambient medium",
             "simulation_rules_changed": False,
         },
         "validation": {
