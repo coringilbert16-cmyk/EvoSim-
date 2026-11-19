@@ -377,7 +377,9 @@ async fn reset(
     let replacement =
         Laboratory::new(config).map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
     let snapshot = replacement.snapshot();
-    *state.0.lock().await = replacement;
+    let mut current = state.0.lock().await;
+    replacement.run_generation = current.run_generation.wrapping_add(1);
+    *current = replacement;
     Ok(Json(snapshot))
 }
 
