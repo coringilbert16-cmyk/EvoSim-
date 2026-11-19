@@ -234,7 +234,8 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
     # Initial inventory establishes the baseline; novelty counts only structures
     # first produced by reactions after the experiment begins.
     family_first_seen: dict[str, int] = {
-        row["fingerprint"]: 0 for row in rows if not row["is_product"]
+        row["fingerprint"]: 0 for row in rows
+        if row["is_compound"] and not row["is_reaction_product"]
     }
     reaction_first_seen: dict[str, int] = {}
     transition_events: list[tuple[int, str, str, str]] = []
