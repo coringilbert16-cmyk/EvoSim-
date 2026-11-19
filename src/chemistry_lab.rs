@@ -120,6 +120,14 @@ impl LaboratoryConfig {
         {
             return Err("ticks_per_second must be in (0, 10000]");
         }
+        let width_cells = (self.width / self.cell_size).ceil();
+        let height_cells = (self.height / self.cell_size).ceil();
+        if !width_cells.is_finite()
+            || !height_cells.is_finite()
+            || width_cells * height_cells > 1_000_000.0
+        {
+            return Err("laboratory grid cannot exceed 1000000 cells");
+        }
         self.flow.validate()?;
         if self.world_tone_enabled
             && crate::world_tone::WorldToneRuntimeConfig::default_for_world(self.width, self.height)
@@ -975,6 +983,15 @@ mod tests {
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
         laboratory.step(1).expect("first tick");
         assert!(laboratory.place_element("Carbon", 10.0, 10.0).is_err());
+    }
+
+    #[test]
+    fn laboratory_rejects_oversized_grid_allocations() {
+        let mut config = LaboratoryConfig::default();
+        config.width = 10_000.0;
+        config.height = 10_000.0;
+        config.cell_size = 1.0;
+        assert!(Laboratory::new(config).is_err());
     }
 
     #[test]
