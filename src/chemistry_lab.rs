@@ -902,7 +902,9 @@ mod tests {
     fn experiment_document_round_trips_config_and_initial_molecular_geometry() {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
-        laboratory.place_element("Carbon", 15.0, 18.0).expect("place carbon");
+        laboratory
+            .place_element("Carbon", 15.0, 18.0)
+            .expect("place carbon");
         laboratory
             .place_molecule(
                 vec!["Carbon".into(), "Hydrogen".into()],
@@ -928,7 +930,11 @@ mod tests {
         assert!(snapshot.world_tone_enabled);
         assert!(!snapshot.hotspot_enabled);
         assert_eq!(
-            snapshot.materials.iter().map(|m| m.bond_count).sum::<usize>(),
+            snapshot
+                .materials
+                .iter()
+                .map(|m| m.bond_count)
+                .sum::<usize>(),
             1
         );
     }
