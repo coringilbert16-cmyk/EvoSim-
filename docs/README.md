@@ -1,52 +1,56 @@
-# Documentation index
+# Documentation
 
-This index is the entry point for repository documentation. It classifies documents by purpose without moving files or rewriting historical evidence. The repository-stabilization PR is deliberately using an index-first approach: establish ownership and discoverability, audit links, then move files only when the benefit is clear.
+The root [README](../README.md) is the project entry point and getting-started guide. This index is the map to technical material; documents are grouped by purpose rather than accumulated in one directory.
 
-## Current repository and architecture
+## Architecture and design
 
-- [Repository organization plan](architecture/repository-organization.md) — source boundaries, migration rules, and ownership.
-- [Large-module responsibility audit](architecture/large-module-boundaries.md) — audited candidate boundaries for source exposure, capillary geometry, and Bob's library; no code moved.
-- [Main-branch organization audit (2026-10-22)](architecture/main-organization-audit-2026-10-22.md) — audited the post-PR #202 main tree and ranked further cleanup opportunities.
-- [Construction runtime boundaries](architecture/construction-runtime-boundaries.md) — audited the 126 KB construction runtime; maps responsibility clusters and a low-risk extraction order without changing constructor behavior.
-- [Repository stabilization audit](repository-stabilization-audit.md) — current-state correction at the top; older sections are historical audit evidence. Read the dated current-state correction first.
-- [PR audit and consolidation (2026-10-13)](pr-audit-consolidation-2026-10-13.md) — historical cross-PR audit; verify every status against the current README before relying on it.
-- [Local viewer / runner implementation audit](LOCAL_VIEWER_IMPLEMENTATION_AUDIT.md) — UI, runner, and integration audit.
+- [Repository organization](architecture/repository-organization.md) — source boundaries, ownership, and integration policy.
+- [Large-module boundaries](architecture/large-module-boundaries.md) — audited Rust module responsibilities.
+- [Construction runtime boundaries](architecture/construction-runtime-boundaries.md) — construction subsystem responsibilities.
+- [Resonance-field architecture](design/resonance-field-architecture.md) — high-level field model.
+- [Resonance-field implementation roadmap](design/resonance-field-implementation-roadmap.md) — controlling detailed roadmap; read before any resonance-field work.
 
-## Physical geometry and structure
+## Chemistry and physical models
 
-- [Phase 3 physical structure authority audit](PHASE3_AUTHORITY_AUDIT.md) — authority and structural ownership.
-- [Fluid coalescence transaction](fluid-coalescence-transaction.md) — transaction and restoration behavior for fluid-to-fluid coalescence.
-- [Phase 4 movement and physical interaction plan](PHASE4_PLAN.md) — planned movement and interaction mechanics.
+- [Material and chemistry model](chemistry/material-chemistry-model-spec.md) — material descriptors and intended chemical interaction behavior.
+- [Chemistry unification contract](chemistry/CHEMISTRY_UNIFICATION_CONTRACT.md) — chemistry, ownership, and energy invariants.
+- [Chemistry audit and unification plan](chemistry/chemistry-audit-unification-plan.md) — historical and technical audit register; use current source and CI for implementation status.
+- [Current chemistry handoff](chemistry/chemistry-audit-current-handoff.md) — dated checkpoint; verify PR and CI status against GitHub.
+- [Chemistry organization analysis](chemistry/chemistry-organization-analysis.md) — analysis of chemical organization.
+- [Reaction energy semantics](chemistry/reaction-energy-semantics-plan.md) — energy-settlement design.
+- [Fluid coalescence transaction](chemistry/fluid-coalescence-transaction.md) — transaction and restoration notes.
+- [Experiment instructions](../experiments/README.md) — how to request and interpret environmental chemistry runs.
 
-## Chemistry and material handling
+## Audits and implementation investigations
 
-- [Material and chemical interaction model specification](material-chemistry-model-spec.md) — approved design direction and staged implementation roadmap for adhesion, intrinsic cohesion, bond integrity, emergent cohesion, COMBINE, BREAK, DISPLACEMENT, and energy accounting. This is the design reference for the next chemistry implementation sequence; it describes intended behavior, not yet-implemented runtime behavior.
-- Chemistry implementation and authority are documented in the source tree and current README; use the focused code/audit before making claims about conservation.
-- [Fluid coalescence transaction](fluid-coalescence-transaction.md) also covers material-state changes that cross geometry and chemistry boundaries.
+- [Local viewer implementation audit](audits/LOCAL_VIEWER_IMPLEMENTATION_AUDIT.md) — viewer and runner architecture.
+- [Repository stabilization audit](audits/repository-stabilization-audit.md) — dated repository audit; validate its current-state section against the live repository.
+- [Main organization audit](architecture/main-organization-audit-2026-10-22.md) — previous repository inventory.
+- [Bob geometry storage audit](audits/bob-geometry-storage-audit.md), [integration audit](audits/bob-geometry-storage-integration-audit.md), and [regeneration audit](audits/bob-regeneration-pipeline-audit.md).
+- [Constructor/library dependency audit](audits/constructor-library-dependency-audit.md).
+- [Phase 3 authority audit](audits/PHASE3_AUTHORITY_AUDIT.md).
+- [PR audit consolidation](audits/pr-audit-consolidation-2026-10-13.md) — historical cross-PR record.
+- Additional focused audits live in `audits/`.
 
-## Bob and persistent geometry knowledge
+## Plans and phase records
 
-- [Bob geometry storage audit](bob-geometry-storage-audit.md) — earlier compact-storage proposal; historical context.
-- [Bob geometry storage integration audit](bob-geometry-storage-integration-audit.md) — integration analysis; check its checkpoint date and current README before treating plans as active.
-- [Bob regeneration pipeline audit](bob-regeneration-pipeline-audit.md) — regeneration and library workflow.
-- [Constructor/library dependency audit](constructor-library-dependency-audit.md) — constructor-to-library dependencies. Constructor implementation work remains separate from repository stabilization.
+- [Phase 4](plans/PHASE4_PLAN.md), [Phase 5](plans/PHASE5_PLAN.md), and [Phase 6](plans/PHASE6_PLAN.md).
+- [Phase 6 blueprint specification](plans/PHASE6_BLUEPRINT_SPEC.md).
+- [World-tone material response](plans/world-tone-material-response.md).
+- [Scoped PR plans](pr-plans/) — historical or scoped implementation plans; presence here does not mean work is currently approved or active.
 
-## Organism lifecycle and development plans
+## Project operating guidance
 
-- [Phase 5 single-cell maintenance and survival](PHASE5_PLAN.md) — planning document; verify completion status against the current README.
-- [Phase 6 growth and development](PHASE6_PLAN.md) — development plan.
-- [Phase 6.1 developmental field blueprint specification](PHASE6_BLUEPRINT_SPEC.md) — detailed blueprint specification.
+- [Agent protocol](operations/AGENT_PROTOCOL.md) — repository-specific constraints for automated coding agents.
 
-## How to use this documentation
+## Historical archive
 
-1. Start with the root [README](../README.md) for the current repository state and verified test/lint checkpoint.
-2. Use this index to locate focused technical evidence.
-3. Treat plans and audits as evidence of what was proposed or observed at their checkpoint, not proof that code currently implements it.
-4. Before changing a subsystem, inspect the current code and the most recent relevant audit; update status and links after the change.
-5. Historical handoffs remain in the root archive. Do not copy old status statements into current documentation without re-verification.
+- [README handoff archive](archive/README_HANDOFF_ARCHIVE_2026-10-22.md) — preserved dated development handoffs. It is historical evidence, not the current project guide.
 
-## Organization policy
+## Reading rules
 
-- This index does not change source behavior or move existing documents.
-- Future document moves should be small, audited for incoming relative links, and performed atomically with all link updates.
-- Once a document has been moved, retain a clear canonical location and avoid duplicate copies that can drift.
+1. Start with the root README for setup and the current high-level project map.
+2. Prefer source code and exact-head CI for claims about implemented behavior.
+3. Treat specifications and roadmaps as design intent, not proof of implementation.
+4. Treat dated audits, handoffs, and PR plans as historical unless independently revalidated.
+5. If documents conflict, follow the applicable current design authority and explicit user-approved decisions; do not silently revive older assumptions.

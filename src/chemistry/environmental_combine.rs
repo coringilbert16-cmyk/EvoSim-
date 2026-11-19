@@ -241,7 +241,7 @@ fn restored_source(
         return None;
     }
     let mut structure = OrganismStructure::new();
-    let indices = crate::material_restoration::restore_material(
+    let indices = crate::physical_material::restore_material(
         &mut structure,
         source,
         origin(),
@@ -1059,7 +1059,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
                         continue;
                     }
                     let mut trial_structure = source_structure.clone();
-                    let Some(indices_b) = crate::material_restoration::restore_material(
+                    let Some(indices_b) = crate::physical_material::restore_material(
                         &mut trial_structure,
                         &source_b,
                         origin(),
@@ -1319,7 +1319,7 @@ pub(crate) fn resolve_environmental(
     else {
         return false;
     };
-    let Some(indices_b) = crate::material_restoration::restore_material(
+    let Some(indices_b) = crate::physical_material::restore_material(
         &mut trial_structure,
         &operation.source_b,
         origin(),
@@ -1582,7 +1582,7 @@ mod tests {
                         else {
                             continue;
                         };
-                        let Some(indices_b) = crate::material_restoration::restore_material(
+                        let Some(indices_b) = crate::physical_material::restore_material(
                             &mut structure,
                             &source_b,
                             origin(),
@@ -1776,7 +1776,7 @@ mod tests {
                     )
                     .expect("each canonical base resource must realize");
                     let mut structure = compound_structure.clone();
-                    let Some(base_indices) = crate::material_restoration::restore_material(
+                    let Some(base_indices) = crate::physical_material::restore_material(
                         &mut structure,
                         &base,
                         origin(),
@@ -2286,7 +2286,7 @@ mod tests {
                     let (mut structure, restored_a) =
                         restored_source(&compound_a, &simulation.environment)
                             .expect("first compound must restore for each external pose");
-                    let Some(restored_b) = crate::material_restoration::restore_material(
+                    let Some(restored_b) = crate::physical_material::restore_material(
                         &mut structure,
                         &base,
                         origin(),
@@ -2783,7 +2783,7 @@ mod tests {
                     let (mut structure, indices_a) =
                         restored_source(&carbon_compound, &simulation.environment)
                             .expect("carbon dimer must restore for each pose");
-                    let Some(indices_b) = crate::material_restoration::restore_material(
+                    let Some(indices_b) = crate::physical_material::restore_material(
                         &mut structure,
                         &base,
                         origin(),
@@ -2975,7 +2975,7 @@ mod tests {
                     )
                     .expect("canonical base resource must realize");
                     let mut structure = compound_structure.clone();
-                    let Some(base_indices) = crate::material_restoration::restore_material(
+                    let Some(base_indices) = crate::physical_material::restore_material(
                         &mut structure,
                         &base,
                         origin(),
@@ -3246,7 +3246,7 @@ mod tests {
                         else {
                             continue;
                         };
-                        let Some(indices_b) = crate::material_restoration::restore_material(
+                        let Some(indices_b) = crate::physical_material::restore_material(
                             &mut structure,
                             &source_b,
                             origin(),
@@ -3313,7 +3313,7 @@ mod tests {
         let (mut direct_structure, direct_indices_a) =
             restored_source(&source_a, &simulation.environment)
                 .expect("selected source A must restore for diagnostic");
-        let direct_indices_b = crate::material_restoration::restore_material(
+        let direct_indices_b = crate::physical_material::restore_material(
             &mut direct_structure,
             &source_b,
             origin(),
@@ -3822,7 +3822,7 @@ mod tests {
                     let (mut structure, indices_a) =
                         restored_source(&compound, &simulation.environment)
                             .expect("heterogeneous compound must restore for each contact pose");
-                    let Some(indices_b) = crate::material_restoration::restore_material(
+                    let Some(indices_b) = crate::physical_material::restore_material(
                         &mut structure,
                         &base,
                         origin(),
@@ -4122,13 +4122,9 @@ mod tests {
         );
 
         let mut restored = OrganismStructure::new();
-        let restored_indices = crate::material_restoration::restore_material(
-            &mut restored,
-            &stored,
-            origin(),
-            &catalog,
-        )
-        .expect("stored product must restore its physical bond graph");
+        let restored_indices =
+            crate::physical_material::restore_material(&mut restored, &stored, origin(), &catalog)
+                .expect("stored product must restore its physical bond graph");
         assert_eq!(restored_indices.len(), 2);
         assert_eq!(restored.bonds.len(), 1);
         assert_eq!(restored.bonds[0].bond_energy, 2.5);
@@ -4152,7 +4148,7 @@ mod tests {
             let Some((mut structure, indices_a)) = restored_source(source_a, environment) else {
                 return false;
             };
-            let Some(indices_b) = crate::material_restoration::restore_material(
+            let Some(indices_b) = crate::physical_material::restore_material(
                 &mut structure,
                 source_b,
                 origin(),

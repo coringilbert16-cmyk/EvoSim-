@@ -13,7 +13,7 @@ fi
 # by the dedicated restoration authority and are not new COMBINE events.
 while IFS= read -r file; do
   case "$file" in
-    src/geometry/contact.rs|src/geometry/structure.rs|src/chemistry/combine_runtime.rs|src/materials/material_restoration.rs) continue ;;
+    src/geometry/contact.rs|src/geometry/structure.rs|src/chemistry/combine_runtime.rs|src/materials/physical_material.rs) continue ;;
   esac
   if awk '/#\[cfg\(test\)\]/{exit} /(\.add_bond|::add_bond|try_add_bond)[[:space:]]*\(/ {print; found=1} END{exit found ? 0 : 1}' "$file"; then
     echo "ERROR: production raw bond-admission path found in $file"
@@ -56,7 +56,7 @@ if ! grep -q 'pub(crate) fn combine_specific_pair' src/chemistry/combine_runtime
   fail=1
 fi
 
-if ! grep -q 'pub(crate) fn restore_material' src/materials/material_restoration.rs; then
+if ! grep -q 'pub(crate) fn restore_material' src/materials/physical_material.rs; then
   echo "ERROR: physical material restoration authority is missing"
   fail=1
 fi

@@ -610,7 +610,7 @@ impl EnvironmentalMaterialSnapshot {
                     return None;
                 }
                 let mut structure = crate::structure::OrganismStructure::new();
-                crate::material_restoration::restore_material(
+                crate::physical_material::restore_material(
                     &mut structure,
                     physical,
                     crate::structure::Placement {

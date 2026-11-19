@@ -192,7 +192,7 @@ fn environmental_break_local_resonance_sample(
         y: 0.0,
         rotation_radians: 0.0,
     };
-    let endpoint_points = crate::material_restoration::restore_material(
+    let endpoint_points = crate::physical_material::restore_material(
         &mut restored,
         &operation.source_material,
         origin,

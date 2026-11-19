@@ -47,7 +47,7 @@ where
     let mut direction = if organism.experience_memory.spatial.is_empty() {
         None
     } else {
-        crate::movement_direction::movement_direction_periodic(organism, environment.height, &[])
+        crate::movement::movement_direction_periodic(organism, environment.height, &[])
     };
     if direction.is_none() {
         let Some(stored) = organism.stored_material.entries.get(storage_index) else {

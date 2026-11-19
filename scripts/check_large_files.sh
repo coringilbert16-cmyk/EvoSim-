@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Report source files above the review-safe threshold for visibility.
-# File size is advisory only and must never block CI or development.
+# Report larger source files as an advisory review signal only.
+# This threshold is not an architectural limit and never blocks CI or development.
 MAX_BYTES=30000
 
 while IFS= read -r -d '' file; do

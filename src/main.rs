@@ -19,8 +19,6 @@ mod expulsion;
 mod hotspot;
 #[path = "geometry/material_geometry.rs"]
 mod material_geometry;
-#[path = "materials/material_restoration.rs"]
-mod material_restoration;
 #[path = "materials/material_storage.rs"]
 mod material_storage;
 #[path = "materials/material_transfer.rs"]
@@ -131,8 +129,6 @@ mod harmonics;
 mod memory;
 #[path = "perception/movement.rs"]
 mod movement;
-#[path = "perception/movement_direction.rs"]
-mod movement_direction;
 #[path = "perception/observation.rs"]
 mod observation;
 #[path = "chemistry/recycling.rs"]

@@ -147,7 +147,7 @@ pub(crate) fn realize_natural_molecule(
         .expect("exported molecule must retain its physical bond");
     assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
     let mut restored = OrganismStructure::new();
-    let restored_indices = crate::material_restoration::restore_material(
+    let restored_indices = crate::physical_material::restore_material(
         &mut restored,
         &molecule,
         Placement {
@@ -652,7 +652,7 @@ mod tests {
             );
 
             let mut restored = OrganismStructure::new();
-            let indices = crate::material_restoration::restore_material(
+            let indices = crate::physical_material::restore_material(
                 &mut restored,
                 molecule,
                 Placement {

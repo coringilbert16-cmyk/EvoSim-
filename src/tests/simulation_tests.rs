@@ -209,7 +209,7 @@ mod integration_tests {
             .stored_material
             .take_matching_physical(&Material::free_base("Hydrogen", 1.0), &catalog)
             .expect("stored Hydrogen should be removable for restoration");
-        let restored = crate::material_restoration::restore_material(
+        let restored = crate::physical_material::restore_material(
             &mut simulation.organisms[0].structure,
             &stored,
             Placement {
@@ -272,7 +272,7 @@ mod integration_tests {
             .expect("stored compound should be available for validation");
         malformed.internal_connections = Some(Vec::new());
 
-        assert!(crate::material_restoration::restore_material(
+        assert!(crate::physical_material::restore_material(
             &mut simulation.organisms[0].structure,
             &malformed,
             Placement {
@@ -363,7 +363,7 @@ mod integration_tests {
         connection.part_a = 1;
         connection.part_b = 2;
 
-        assert!(crate::material_restoration::restore_material(
+        assert!(crate::physical_material::restore_material(
             &mut simulation.organisms[0].structure,
             &malformed,
             Placement {
@@ -423,7 +423,7 @@ mod integration_tests {
             .peek_matching_physical(&material)
             .expect("stored Carbon should be available for validation");
 
-        assert!(crate::material_restoration::restore_material(
+        assert!(crate::physical_material::restore_material(
             &mut simulation.organisms[0].structure,
             &stored,
             Placement {
