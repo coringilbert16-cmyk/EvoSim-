@@ -11,7 +11,6 @@ import argparse
 import csv
 import hashlib
 import json
-import math
 import statistics
 import sys
 from collections import Counter, defaultdict
@@ -183,7 +182,6 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         raise ValueError(f"seed {seed}: no molecular history")
     end_tick = max((int(row.get("created_tick", 0)) + int(row.get("observed_lifetime_ticks", 0))
                     for row in molecules), default=0)
-    end_tick = max(end_tick, int(source.get("planned_ticks") or 0))
     if end_tick <= 0:
         raise ValueError(f"seed {seed}: invalid observation tick range")
 
