@@ -238,7 +238,7 @@ impl OrganismBodyGeometry {
     }
 }
 
-fn form_contains_point(
+pub(crate) fn form_contains_point(
     form: &Form,
     origin_x: f64,
     origin_y: f64,
