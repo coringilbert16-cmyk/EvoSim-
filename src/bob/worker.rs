@@ -1,10 +1,10 @@
 use crate::geometry_reference_library::{
     expand_formation_candidates, fluid_formations_from_boundaries,
     generate_collinear_multi_contact_formations,
-    generate_fluid_boundary_families_from_contact_families, generate_rigid_contact_families,
+    generate_fluid_boundary_families_from_contact_families,
+    generate_fluid_contact_families_with_diagnostics, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
-    generate_fluid_contact_families_with_diagnostics, open_default_library, seed_base_catalogue,
-    GeometryFrontierState, GeometryLibrary,
+    open_default_library, seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
