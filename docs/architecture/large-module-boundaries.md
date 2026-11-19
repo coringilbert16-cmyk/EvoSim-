@@ -61,3 +61,21 @@ For each future split:
 ## Decision
 
 Do not perform these splits as part of the current Clippy cleanup. This audit records candidate boundaries for a later, separately verifiable organization pass. The immediate low-risk work is documentation discoverability and targeted lint fixes.
+
+
+## Updated direction — module cohesion over size (2026-11-19)
+
+The original audit correctly identified responsibility groups, but its historical context predates the removal of the source-context truncation constraint. The former preference for keeping modules below roughly 30 KB is retired. Do not use that threshold when planning new code or deciding whether to extract existing code.
+
+The next source-organization pass should integrate fragmented implementation into cohesive subsystem modules and split only where the responsibility boundary is real. The three candidate boundaries above remain hypotheses, not instructions to split: dependency tracing may show that some groups belong together as one module. In particular, Bob's persistence, family models, indexing, generation, and validation share types and invariants; preserve their cohesion unless a genuinely independent API emerges. Likewise, keep projection/visibility/parallel-ray calculations together where their shared geometry contracts make that the clearest design.
+
+No source file should be split or merged just to hit a target size. A larger file is acceptable when it tells one coherent subsystem story. Reviewability comes from meaningful internal sections, clear types/functions, and tests—not an arbitrary byte ceiling.
+
+## Integration execution rules
+
+1. Start with a dependency map of the current flat crate-level module registry and identify fragments that are parts of one domain operation.
+2. Prefer moving related code under an owning module namespace while preserving public and crate-visible names during the transition.
+3. Do not combine unrelated domains merely to reduce file count.
+4. Keep each integration behavior-preserving; do not tune algorithms, alter physics, or change persistence semantics in the same patch.
+5. Run focused tests after each subsystem integration, then formatting, Clippy, and the full test suite before accepting the pass.
+6. Update the module registry and architecture map in the same change as the code move.
