@@ -1209,7 +1209,9 @@ fn environmental_material_resonance_with_baselines(
     source_x /= count;
     source_y /= count;
 
-    let properties = physical.material.weighted_properties_after_catalog_validation(catalog);
+    let properties = physical
+        .material
+        .weighted_properties_after_catalog_validation(catalog);
     let spectrum = material_response(
         properties,
         baselines,
