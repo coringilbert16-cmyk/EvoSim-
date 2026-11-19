@@ -131,8 +131,6 @@ mod harmonics;
 mod memory;
 #[path = "perception/movement.rs"]
 mod movement;
-#[path = "perception/movement_direction.rs"]
-mod movement_direction;
 #[path = "perception/observation.rs"]
 mod observation;
 #[path = "chemistry/recycling.rs"]
