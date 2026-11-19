@@ -291,7 +291,7 @@ fn seed_randomized_molecular_resources(
     assert_eq!(
         resource_names.len(),
         6,
-        "active chemistry experiments exclude Water until it is explicitly revisited"
+        "active chemistry experiments use exactly the six active elements"
     );
 
     let molecule_prototypes: Vec<PhysicalMaterial> = if include_molecules {
@@ -458,7 +458,7 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
                 .parts
                 .iter()
                 .all(|(name, _)| name != "Water")),
-        "active environmental chemistry experiments must not seed Water"
+        "active environmental chemistry experiments must use only the six elements"
     );
 
     // Establish stable IDs for the complete tick-zero inventory before any
