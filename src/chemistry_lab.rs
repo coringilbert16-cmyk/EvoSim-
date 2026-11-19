@@ -4,8 +4,7 @@ use crate::{
     environment::ActiveMaterialField,
     physical_material::PhysicalMaterial,
     resources::{InternalBond, Material},
-    simulation::Simulation,
-    state::{EnergyLedger, Environment},
+    state::{EnergyLedger, Environment, Simulation},
     structure::Placement,
 };
 use axum::{
