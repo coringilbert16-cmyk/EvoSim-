@@ -1457,6 +1457,10 @@ fn material_aura_receptions_with_geometry(
     let (source_x, source_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
 
+    // Staged limitation: receiver-side visibility is still selected from the
+    // aggregate source centroid here. The later nearest-perimeter lookup only
+    // corrects the distance/origin for these samples; it does not yet union
+    // receiver visibility over the complete extended source surface.
     let target_body_indices = [0];
     let receiver_geometry = receiver_bodies.first()?;
     let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
@@ -1478,6 +1482,17 @@ fn material_aura_receptions_with_geometry(
         Vec::new()
     };
 
+    // For each already-selected receiver sample, resolve the nearest
+    // visible point on the complete composite source perimeter. This does not
+    // yet make the receiver sample set independent of the centroid viewpoint
+    // above, nor does it allocate energy over the perimeter.
+    let mut source_bodies = Vec::with_capacity(receiver_bodies.len() + 1);
+    source_bodies.push(source_geometry.clone());
+    // The receiver is the viewpoint, not an intervening blocker: each
+    // query starts on its own exposed boundary. Keep only third-party bodies
+    // in the source-visibility occluder set.
+    source_bodies.extend(receiver_bodies.iter().skip(1).cloned());
+
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
     let source_mass_scale = environmental_mass_scale(source.material.mass(catalog), baselines.mass);
@@ -1495,7 +1510,12 @@ fn material_aura_receptions_with_geometry(
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
-        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+        let source_surface = crate::source_exposure::nearest_visible_material_perimeter_point(
+            (receiver_x, receiver_y),
+            &source_bodies,
+            0,
+        )?;
+        let distance = source_surface.distance;
         if !distance.is_finite() || distance <= f64::EPSILON {
             return Some(());
         }
@@ -1515,8 +1535,8 @@ fn material_aura_receptions_with_geometry(
         // and the receiver's own response spectrum is empty.
         if spectrum_magnitude(&incident) > f64::EPSILON {
             receptions.push(MaterialAuraReception {
-                source_x,
-                source_y,
+                source_x: source_surface.x,
+                source_y: source_surface.y,
                 source_extent,
                 receiver_x,
                 receiver_y,
@@ -3906,6 +3926,18 @@ mod tests {
         assert!(!left_to_right.is_empty());
         assert!(!right_to_left.is_empty());
         assert!(!left_to_farther.is_empty());
+        assert!(
+            left_to_right
+                .iter()
+                .all(|sample| sample.source_x.hypot(sample.source_y) > 0.0),
+            "source origin must lie on the exposed material perimeter, not its centroid"
+        );
+        assert!(
+            right_to_left
+                .iter()
+                .all(|sample| (sample.source_x - 4.0).hypot(sample.source_y) > 0.0),
+            "reverse source origin must also lie on its exposed perimeter"
+        );
         assert!(left_to_right.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
