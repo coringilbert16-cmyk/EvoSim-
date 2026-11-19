@@ -1,2 +1,4 @@
 #[tokio::main]
-async fn main() { evosim::chemistry_lab::run().await; }
+async fn main() {
+    evosim::chemistry_lab::run().await;
+}
