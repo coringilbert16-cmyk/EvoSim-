@@ -1,6 +1,6 @@
 use crate::combine_runtime::{combine_specific_pair, try_combine_stored_unit};
 use crate::contact::ConnectionCompatibilityCache;
-use crate::material_restoration::restore_material;
+use crate::physical_material::restore_material;
 use crate::physical_material::PhysicalMaterial;
 use crate::resources::{
     BaseResource, Form, InternalBond, Material, PhysicalState, ResourceProperties, Shape,
