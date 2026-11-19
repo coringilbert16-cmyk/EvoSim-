@@ -2436,8 +2436,10 @@ fn environmental_movement_spatial_candidate_pairs(
         // every component on the other emitter within the frequency tolerance.
         // The L1/L2 bound therefore uses the maximum component count as a
         // conservative multiplicity factor. strength_bound includes mass scale.
-        let maximum_pair_strength =
-            2.0 * MAX_SPECTRAL_COMPONENTS as f64 * emitters[a].strength_bound * maximum_strength_bound;
+        let maximum_pair_strength = 2.0
+            * MAX_SPECTRAL_COMPONENTS as f64
+            * emitters[a].strength_bound
+            * maximum_strength_bound;
         if !maximum_pair_strength.is_finite() {
             return None;
         }
@@ -5390,10 +5392,7 @@ mod environmental_movement_spatial_candidate_tests {
         let reach = environmental_movement_pair_support_radius(&a, &b_at_boundary).unwrap();
         assert!(reach > 0.0);
 
-        let at_boundary = vec![
-            emitter(0.0, 0.0, 0.5, 0.0),
-            emitter(reach, 0.0, 0.5, 0.0),
-        ];
+        let at_boundary = vec![emitter(0.0, 0.0, 0.5, 0.0), emitter(reach, 0.0, 0.5, 0.0)];
         assert_eq!(
             environmental_movement_spatial_candidate_pairs(&at_boundary).unwrap(),
             vec![(0, 1)]
@@ -5437,8 +5436,7 @@ mod environmental_movement_spatial_candidate_tests {
             phase_component_count,
         };
         let emitters = vec![make_emitter(0.0), make_emitter(20.0)];
-        let reach = environmental_movement_pair_support_radius(&emitters[0], &emitters[1])
-            .unwrap();
+        let reach = environmental_movement_pair_support_radius(&emitters[0], &emitters[1]).unwrap();
         assert!(reach > 20.0);
         assert_eq!(
             environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
