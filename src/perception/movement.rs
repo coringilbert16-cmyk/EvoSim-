@@ -243,12 +243,8 @@ impl Simulation {
         let realized_mass = organism.structural_mass(&environment.catalog);
         let movement_efficiency = organism.genome.movement_efficiency();
         let usable_energy = organism.usable_energy;
-        let direction = movement_direction_periodic(
-            organism,
-            environment.height,
-            perceptions,
-        )
-        .ok_or(crate::state::MovementFailureReason::NoDirection)?;
+        let direction = movement_direction_periodic(organism, environment.height, perceptions)
+            .ok_or(crate::state::MovementFailureReason::NoDirection)?;
         let (x, y) = direction;
         let distance = select_movement_distance(
             organism,
@@ -2361,7 +2357,6 @@ mod tests {
         );
     }
 }
-
 
 // Direction selection is part of the movement model; keep its periodic-world
 // geometry and resonance-memory scoring beside the movement implementation.
