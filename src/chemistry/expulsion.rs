@@ -227,13 +227,13 @@ mod tests {
     #[test]
     fn expulsion_boundary_uses_authoritative_realized_fluid_shape() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
-        let legacy fluid = catalog
+        let fluid = catalog
             .iter()
             .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &legacy fluid.shape.form {
+        let area = match &fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default legacy fluid shape should have a measurable area"),
+            _ => panic!("default fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
@@ -277,13 +277,13 @@ mod tests {
             cell.physical_materials.clear();
         }
         let catalog = crate::resources::legacy_fluid_test_catalog();
-        let legacy fluid = catalog
+        let fluid = catalog
             .iter()
             .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &legacy fluid.shape.form {
+        let area = match &fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default legacy fluid shape should have a measurable area"),
+            _ => panic!("default fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
@@ -513,13 +513,13 @@ mod tests {
             .expect("test material should realize")
         };
         let before = make("Nitrogen", 0.0);
-        let legacy fluid = catalog
+        let fluid = catalog
             .iter()
             .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &legacy fluid.shape.form {
+        let area = match &fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default legacy fluid shape should have a measurable area"),
+            _ => panic!("default fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
