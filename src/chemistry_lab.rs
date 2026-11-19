@@ -1079,8 +1079,10 @@ mod tests {
 
     #[test]
     fn laboratory_rejects_invalid_dimensions_and_out_of_bounds_placement() {
-        let mut invalid = LaboratoryConfig::default();
-        invalid.width = f64::NAN;
+        let invalid = LaboratoryConfig {
+            width: f64::NAN,
+            ..LaboratoryConfig::default()
+        };
         assert!(Laboratory::new(invalid).is_err());
 
         let mut laboratory =
