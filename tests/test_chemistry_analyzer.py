@@ -60,12 +60,12 @@ def fixture_records():
 
 
 class ChemistryAnalyzerTests(unittest.TestCase):
-    def test_checks_all_seven_resources_without_reaction_bias(self):
+    def test_checks_all_six_active_elements_without_reaction_bias(self):
         report = analyze(fixture_records())
         self.assertEqual(report["resource_coverage"]["canonical_resources"],
                          list(CANONICAL_RESOURCES))
-        self.assertTrue(report["resource_coverage"]["all_seven_present_at_start"])
-        self.assertEqual(len(report["resource_coverage"]["initial_inventory"]), 7)
+        self.assertTrue(report["resource_coverage"]["all_six_present_at_start"])
+        self.assertEqual(len(report["resource_coverage"]["initial_inventory"]), 6)
 
     def test_reports_missing_resource_instead_of_silently_ignoring_it(self):
         records = fixture_records()
@@ -74,20 +74,15 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         self.assertFalse(report["resource_coverage"]["all_seven_present_at_start"])
         self.assertEqual(report["resource_coverage"]["missing_at_start"], ["Oxygen"])
 
-    def test_accepts_explicit_water_exclusion_for_active_experiments(self):
-        records = fixture_records()
-        records[0]["excluded_resources"] = ["Water"]
-        del records[0]["initial_material_inventory"]["Water"]
-
-        report = analyze(records)
+    def test_active_catalog_has_no_excluded_resources(self):
+        report = analyze(fixture_records())
         coverage = report["resource_coverage"]
         self.assertEqual(coverage["canonical_resources"], list(CANONICAL_RESOURCES))
-        self.assertEqual(coverage["excluded_resources"], ["Water"])
+        self.assertEqual(coverage["excluded_resources"], [])
         self.assertEqual(len(coverage["required_resources"]), 6)
         self.assertTrue(coverage["all_required_present_at_start"])
-        self.assertFalse(coverage["all_seven_present_at_start"])
+        self.assertTrue(coverage["all_six_present_at_start"])
         self.assertEqual(coverage["missing_at_start"], [])
-        self.assertEqual(report["resource_coverage"]["snapshots"][0]["missing_resources"], [])
 
     def test_uses_summary_totals_and_reaction_events(self):
         report = analyze(fixture_records())
