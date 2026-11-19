@@ -20,8 +20,8 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
 - Select and inspect individual molecules by tapping them; inspect stable identity, constituent composition, exact coordinates, rotations, and bond graph.
-- Observe bounded environmental reaction history, outcomes, work requirements, products, and molecular creation/parent lineage.
-- Inspect the authoritative energy-ledger counters for external input, usable/resonant/structural holdings, pair potential, work, heat, and world-tone unabsorbed/escaped energy. History is collected from the shared engine's committed/rejected event records; no reaction is forced for display.
+- Observe bounded environmental reaction history, outcomes, work requirements, products, and molecular creation/parent lineage. History is collected from the shared engine's committed/rejected event records; no reaction is forced for display.
+- Inspect the authoritative energy-ledger counters for external input, usable/resonant/structural holdings, pair potential, work, heat, and world-tone unabsorbed/escaped energy.
 - Zoom with the mouse wheel or the on-screen zoom controls; pan by dragging the field and restore the full-world view with Fit World.
 - Export or import a reproducible experiment setup, including world dimensions, seed, flow/source settings, and all tick-zero element/molecule placements. Import rebuilds the initial state through the engine's normal geometry and validation path.
 
@@ -44,4 +44,4 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 
 ## Scope of this milestone
 
-This is the laboratory foundation, not the complete experimental workbench. The next milestones add configurable flow and energy sources, richer material/bond rendering and inspection, removal and editing operations, persistent experiment files, and reaction/lineage/energy diagnostics. Current energy sources are disabled by default so the empty starting state does not receive an unaccounted energy grant. Pre-placed molecular bond potential is included in the tick-zero structural-energy baseline; adding material after the first tick is currently rejected until explicit material-injection energy transactions are implemented.
+This is the laboratory foundation, not the complete experimental workbench. Remaining milestones include accounted material extraction/repositioning, configurable boundary and obstacle interventions after topology is reconciled with Master Spec 2.4, molecule-family and reaction-network analysis, comparative experiment runs, and persistent runtime snapshots beyond tick-zero setup files. Current energy sources are disabled by default so the empty starting state does not receive an unaccounted energy grant. Pre-placed molecular bond potential is included in the tick-zero structural-energy baseline; adding material after the first tick is currently rejected until explicit material-injection energy transactions are implemented.
