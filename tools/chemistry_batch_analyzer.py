@@ -371,7 +371,7 @@ def build_report(root: Path) -> dict[str, Any]:
                 for row in seed_rows for mode in MODES
             ),
             "all_runs_have_six_initial_resources": all(
-                row[mode]["all_seven_resources_present"]
+                row[mode]["all_six_resources_present"]
                 for row in seed_rows for mode in MODES
             ),
             "no_snapshot_resource_gaps": all(
@@ -552,7 +552,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         "",
         f"- Ten matched runs present: {report['validation']['all_ten_runs_present']}",
         f"- Every run completed 300 seconds: {report['validation']['all_runs_300_seconds']}",
-        f"- All six active elements present initially in every run: {report['validation']['all_runs_have_seven_initial_resources']}",
+        f"- All six active elements present initially in every run: {report['validation']['all_runs_have_six_initial_resources']}",
         f"- No snapshot resource gaps: {report['validation']['no_snapshot_resource_gaps']}",
         "",
         "## Interpretation limits",
