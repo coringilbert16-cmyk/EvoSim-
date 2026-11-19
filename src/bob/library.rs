@@ -5764,7 +5764,7 @@ mod bob_lookup_contract_tests {
 
     #[test]
     fn empty_library_proposes_rigid_edge_placements_without_persisting_families() {
-        let catalog = default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon = catalog
             .iter()
             .find(|resource| resource.name == "Carbon")
@@ -5789,7 +5789,7 @@ mod bob_lookup_contract_tests {
         assert!(!suggestions.is_empty());
         let water = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
         assert!(
             library
@@ -6444,12 +6444,12 @@ mod compact_family_storage_tests {
     }
 
     #[test]
-    fn water_generator_reports_unsupported_anchor_geometry() {
-        let catalog = default_catalog();
+    fn fluid_generator_reports_unsupported_anchor_geometry() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let formation = GeometryFormation::single("UnknownResource");
         let water = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
 
         let (families, diagnostics) =
@@ -6462,8 +6462,8 @@ mod compact_family_storage_tests {
     }
 
     #[test]
-    fn water_generator_reports_known_but_unsupported_anchor_shape() {
-        let mut catalog = default_catalog();
+    fn fluid_generator_reports_known_but_unsupported_anchor_shape() {
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon = catalog
             .iter_mut()
             .find(|resource| resource.name == "Carbon")
@@ -6472,7 +6472,7 @@ mod compact_family_storage_tests {
         let formation = GeometryFormation::single("Carbon");
         let water = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
 
         let (families, diagnostics) =
@@ -6486,7 +6486,7 @@ mod compact_family_storage_tests {
 
     #[test]
     fn fluid_boundary_interface_resolves_persisted_family_after_reopen() {
-        let catalog = default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let root =
             std::env::temp_dir().join(format!("evosim-bob-fluid-query-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
@@ -6496,7 +6496,7 @@ mod compact_family_storage_tests {
 
         let water = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
         let carbon = catalog
             .iter()
@@ -6511,7 +6511,7 @@ mod compact_family_storage_tests {
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
                 .unwrap();
         // Exercise Bob's real fluid-contact calculation rather than manually
-        // fabricating a persistence row. The Water/Carbon capillary solution
+        // fabricating a persistence row. The legacy fluid/Carbon capillary solution
         // must produce an exposed-edge family before it can be stored.
         let (contact_families, diagnostics) =
             generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
@@ -6528,7 +6528,7 @@ mod compact_family_storage_tests {
                     && family.edge_parameter_start <= 0.5
                     && family.edge_parameter_end >= 0.5
             }),
-            "expected the capillary solver to find Water contact on Carbon edge 0"
+            "expected the capillary solver to find legacy fluid contact on Carbon edge 0"
         );
         let families =
             generate_fluid_boundary_families_from_contact_families(water, &contact_families);
@@ -6561,7 +6561,7 @@ mod compact_family_storage_tests {
         assert_eq!(
             library.insert_contact_families(contact_families).unwrap(),
             families.len(),
-            "each generated Water contact must be persisted once"
+            "each generated legacy fluid contact must be persisted once"
         );
         assert_eq!(
             library
@@ -6573,7 +6573,7 @@ mod compact_family_storage_tests {
         let fluid_formations = fluid_formations_from_boundaries(&families);
         assert!(
             !fluid_formations.is_empty(),
-            "expected explicit Water-inclusive formations"
+            "expected explicit legacy fluid-inclusive formations"
         );
         let expected_fluid_formation_signatures: BTreeMap<_, _> = fluid_formations
             .iter()
@@ -6584,17 +6584,17 @@ mod compact_family_storage_tests {
                 .insert_fluid_formations(fluid_formations.clone(), &catalog)
                 .unwrap(),
             fluid_formations.len(),
-            "each valid Water-inclusive formation must be persisted"
+            "each valid legacy fluid-inclusive formation must be persisted"
         );
         assert_eq!(library.fluid_formations().count(), fluid_formations.len());
         let parent_signature = GeometryFormation::single("Carbon").signature;
         let parent_suggestions: Vec<_> = library
-            .fluid_formations_for_parent(&parent_signature, "Water")
+            .fluid_formations_for_parent(&parent_signature, "LegacyFluidFixture")
             .collect();
         assert!(!parent_suggestions.is_empty());
         assert!(parent_suggestions.iter().all(|formation| {
             formation.parent_formation_signature == parent_signature
-                && formation.fluid_resource == "Water"
+                && formation.fluid_resource == "LegacyFluidFixture"
         }));
         let realized = parent_suggestions
             .iter()
@@ -6610,7 +6610,7 @@ mod compact_family_storage_tests {
         ));
         assert_eq!(
             library
-                .fluid_formations_for_parent("missing-parent", "Water")
+                .fluid_formations_for_parent("missing-parent", "LegacyFluidFixture")
                 .count(),
             0,
             "the fluid query must not silently match an unresolved parent"
@@ -6679,7 +6679,7 @@ mod compact_family_storage_tests {
             interface_class: "fluid_boundary",
             signature: "test-fluid-boundary".to_string(),
             query: Some(LiveGeometryQuery::FluidBoundary {
-                fluid_material: "Water".to_string(),
+                fluid_material: "LegacyFluidFixture".to_string(),
                 solid_material: "Carbon".to_string(),
                 solid_edge: 0,
                 edge_parameter: quantize(0.5),
@@ -6720,7 +6720,7 @@ mod compact_family_storage_tests {
         // library is closed and reopened; a successful interface lookup alone
         // is not enough to prove the constructor-facing geometry survived.
         let reopened_realized = reopened
-            .fluid_formations_for_parent(&parent_signature, "Water")
+            .fluid_formations_for_parent(&parent_signature, "LegacyFluidFixture")
             .find_map(|suggestion| suggestion.realize_against_parent(&formation, &catalog, true))
             .expect("reopened Bob fluid formation should reconstruct its exact shape and pose");
         assert!(reopened_realized.0.is_valid());
@@ -6744,7 +6744,7 @@ mod compact_family_storage_tests {
             expected_fluid_formation_signatures
         );
         assert!(reopened_fluid_formations.values().all(|formation| {
-            formation.fluid_resource == "Water"
+            formation.fluid_resource == "LegacyFluidFixture"
                 && formation.parent_formation_signature
                     == GeometryFormation::single("Carbon").signature
                 && formation.area.is_finite()
@@ -6763,7 +6763,7 @@ mod fluid_contact_constraint_schema_tests {
         GeometryFluidFormation {
             schema_version: GEOMETRY_LIBRARY_SCHEMA_VERSION,
             parent_formation_signature: "parent-signature".to_string(),
-            fluid_resource: "Water".to_string(),
+            fluid_resource: "LegacyFluidFixture".to_string(),
             anchor_constituent: 0,
             anchor_edge: 1,
             area: 1.0,
@@ -6960,10 +6960,10 @@ mod fluid_contact_constraint_schema_tests {
     fn two_piece_multi_contact_record_survives_reopen_and_realizes_exact_area() {
         use crate::resources::Form;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let water = catalog
             .iter()
-            .find(|item| item.name == "Water")
+            .find(|item| item.name == "LegacyFluidFixture")
             .unwrap()
             .clone();
         let carbon = catalog
@@ -6974,7 +6974,7 @@ mod fluid_contact_constraint_schema_tests {
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water must expose a conserved fluid area"),
+            _ => panic!("legacy fluid must expose a conserved fluid area"),
         };
         let family =
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
@@ -7052,7 +7052,7 @@ mod fluid_contact_constraint_schema_tests {
 
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         let stored = reopened
-            .fluid_formations_for_parent(&parent.signature, "Water")
+            .fluid_formations_for_parent(&parent.signature, "LegacyFluidFixture")
             .find(|candidate| candidate.contact_constraints.len() == 2)
             .expect("reopened Bob library must return the persisted two-contact record");
         assert_eq!(stored.signature(), expected_signature);
@@ -7086,10 +7086,10 @@ mod fluid_contact_constraint_schema_tests {
     fn simultaneous_collinear_solution_persists_and_reloads_three_parent_contacts() {
         use crate::resources::Form;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let water = catalog
             .iter()
-            .find(|item| item.name == "Water")
+            .find(|item| item.name == "LegacyFluidFixture")
             .unwrap()
             .clone();
         let carbon = catalog
@@ -7100,7 +7100,7 @@ mod fluid_contact_constraint_schema_tests {
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water must expose a conserved fluid area"),
+            _ => panic!("legacy fluid must expose a conserved fluid area"),
         };
         let family =
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
@@ -7203,7 +7203,7 @@ mod fluid_contact_constraint_schema_tests {
         }
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         let stored = reopened
-            .fluid_formations_for_parent(&parent.signature, "Water")
+            .fluid_formations_for_parent(&parent.signature, "LegacyFluidFixture")
             .collect::<Vec<_>>();
         assert_eq!(stored.len(), 1);
         assert_eq!(stored[0].signature(), record.signature());
