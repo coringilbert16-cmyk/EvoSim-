@@ -140,7 +140,10 @@ mod tests {
     #[test]
     fn k4_is_rejected_by_the_physical_contact_graph_oracle() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
-        let fluid = catalog.iter().find(|r| r.name == "LegacyFluidFixture").unwrap();
+        let fluid = catalog
+            .iter()
+            .find(|r| r.name == "LegacyFluidFixture")
+            .unwrap();
         let Form::Circle { radius } = fluid.shape.form else {
             panic!("water diagnostic requires circular default geometry")
         };
