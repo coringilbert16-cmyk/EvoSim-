@@ -277,6 +277,7 @@ mod tests {
             cell.physical_materials.clear();
         }
         let catalog = crate::resources::legacy_fluid_test_catalog();
+        simulation.environment.catalog = catalog.clone();
         let fluid = catalog
             .iter()
             .find(|resource| resource.name == "LegacyFluidFixture")
@@ -500,6 +501,7 @@ mod tests {
     fn missing_destination_index_preserves_expulsion_source_and_neighbor_order() {
         let mut simulation = Simulation::new(928, 10.0);
         let catalog = crate::resources::legacy_fluid_test_catalog();
+        simulation.environment.catalog = catalog.clone();
         let make = |name: &str, x: f64| {
             PhysicalMaterial::realized(
                 Material::free_base(name, 1.0),
