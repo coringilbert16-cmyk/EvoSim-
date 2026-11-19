@@ -214,12 +214,16 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         molecule = row.get("molecule", {})
         metrics = graph_metrics(molecule)
         fingerprint = structural_fingerprint(molecule)
+        reaction_product = str(row.get("reaction", "UNKNOWN")) != "INITIAL"
+        is_compound = metrics["constituents"] > 1 or metrics["bonds"] > 0
         item = {
             "molecule_id": molecule_id, "created_tick": created,
             "destroyed_tick": destroyed, "reaction": str(row.get("reaction", "UNKNOWN")),
             "parents": [int(value) for value in row.get("parent_ids", [])],
             "fingerprint": fingerprint, "metrics": metrics,
-            "is_product": str(row.get("reaction", "UNKNOWN")) != "INITIAL",
+            "is_reaction_product": reaction_product,
+            "is_compound": is_compound,
+            "is_product": reaction_product and is_compound,
         }
         rows.append(item)
         by_id[molecule_id] = item
@@ -286,7 +290,8 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         temporal_rows.append({
             "window": index + 1, "start_tick_exclusive": start,
             "end_tick_inclusive": finish,
-            "created_reaction_products": len(product_rows),
+            "created_reaction_product_identities": sum(row["is_reaction_product"] for row in created_here),
+            "created_compound_products": len(product_rows),
             "active_molecule_identities": len(active),
             "active_reaction_products": len(active_products),
             "new_structural_fingerprints": new_families,
@@ -317,7 +322,8 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         "seed": seed, "requested_duration_seconds": duration,
         "observation_end_tick": end_tick, "window_count": windows,
         "molecule_identity_count": len(rows),
-        "reaction_created_product_count": sum(row["is_product"] for row in rows),
+        "reaction_created_identity_count": sum(row["is_reaction_product"] for row in rows),
+        "reaction_created_compound_count": sum(row["is_product"] for row in rows),
         "unique_product_structural_fingerprints": len(family_counts),
         "recurrent_product_fingerprints": sum(count > 1 for count in family_counts.values()),
         "max_product_constituents": max_product_size,
@@ -404,12 +410,12 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
             f"{row['reaction_network_cyclic_scc_count_mean_across_seeds']:.2f} |"
         )
     lines += ["", "## Per-seed summary", "",
-              "| Seed | Products | Unique product fingerprints | Recurrent fingerprints | Max constituents | Reaction patterns | Cyclic SCCs at end |",
+              "| Seed | Compound products | Unique compound fingerprints | Recurrent fingerprints | Max constituents | Reaction patterns | Cyclic SCCs at end |",
               "|---:|---:|---:|---:|---:|---:|---:|"]
     for run in report["per_seed"]:
         last = run["temporal_windows"][-1]
         lines.append(
-            f"| {run['seed']} | {run['reaction_created_product_count']} | "
+            f"| {run['seed']} | {run['reaction_created_compound_count']} | "
             f"{run['unique_product_structural_fingerprints']} | "
             f"{run['recurrent_product_fingerprints']} | {run['max_product_constituents']} | "
             f"{run['distinct_reaction_pattern_fingerprints']} | "
