@@ -82,6 +82,10 @@ pub struct LaboratoryConfig {
     pub seed: u64,
     #[serde(default)]
     pub flow: LaboratoryFlowConfig,
+    #[serde(default)]
+    pub world_tone_enabled: bool,
+    #[serde(default)]
+    pub hotspot_enabled: bool,
 }
 
 impl Default for LaboratoryConfig {
@@ -93,6 +97,8 @@ impl Default for LaboratoryConfig {
             ticks_per_second: 20.0,
             seed: 42,
             flow: LaboratoryFlowConfig::default(),
+            world_tone_enabled: false,
+            hotspot_enabled: false,
         }
     }
 }
@@ -115,6 +121,17 @@ impl LaboratoryConfig {
             return Err("ticks_per_second must be in (0, 10000]");
         }
         self.flow.validate()?;
+        if self.world_tone_enabled
+            && crate::world_tone::WorldToneRuntimeConfig::default_for_world(self.width, self.height)
+                .is_none()
+        {
+            return Err("world-tone source is invalid for these dimensions");
+        }
+        if self.hotspot_enabled
+            && crate::hotspot::RadialHotspot::right_bend_for_world(self.width, self.height).is_none()
+        {
+            return Err("hotspot source is invalid for these dimensions");
+        }
         Ok(())
     }
 }
@@ -153,9 +170,34 @@ impl Laboratory {
             rng: ChaCha8Rng::seed_from_u64(config.seed),
             decision_parameters: crate::decision::DecisionParameters::default(),
             seed_scale_reference: None,
-            world_tone: None,
-            world_tone_cycle: None,
-            hotspot: None,
+            world_tone: if config.world_tone_enabled {
+                crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+                    config.width,
+                    config.height,
+                )
+            } else {
+                None
+            },
+            world_tone_cycle: if config.world_tone_enabled {
+                crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+                    config.width,
+                    config.height,
+                )
+                .and_then(|source| {
+                    crate::world_tone::WorldToneCycle::precompute(
+                        source,
+                        config.width,
+                        config.height,
+                    )
+                })
+            } else {
+                None
+            },
+            hotspot: if config.hotspot_enabled {
+                crate::hotspot::RadialHotspot::right_bend_for_world(config.width, config.height)
+            } else {
+                None
+            },
             environmental_chemistry_diagnostics: Default::default(),
             environmental_chemistry_events: Vec::new(),
             environmental_local_resonance_samples: Vec::new(),
@@ -168,6 +210,53 @@ impl Laboratory {
             simulation,
             run_generation: 0,
         })
+    }
+
+    /// Enable or disable the existing, ledger-settled external energy sources.
+    /// This selects established source models; it does not create a lab-only energy grant.
+    pub fn configure_energy_sources(
+        &mut self,
+        world_tone_enabled: bool,
+        hotspot_enabled: bool,
+    ) -> Result<(), &'static str> {
+        let world_tone = if world_tone_enabled {
+            Some(
+                crate::world_tone::WorldToneRuntimeConfig::default_for_world(
+                    self.config.width,
+                    self.config.height,
+                )
+                .ok_or("world-tone source is invalid for these dimensions")?,
+            )
+        } else {
+            None
+        };
+        let world_tone_cycle = world_tone.and_then(|source| {
+            crate::world_tone::WorldToneCycle::precompute(
+                source,
+                self.config.width,
+                self.config.height,
+            )
+        });
+        if world_tone.is_some() && world_tone_cycle.is_none() {
+            return Err("world-tone cycle could not be prepared");
+        }
+        let hotspot = if hotspot_enabled {
+            Some(
+                crate::hotspot::RadialHotspot::right_bend_for_world(
+                    self.config.width,
+                    self.config.height,
+                )
+                .ok_or("hotspot source is invalid for these dimensions")?,
+            )
+        } else {
+            None
+        };
+        self.simulation.world_tone = world_tone;
+        self.simulation.world_tone_cycle = world_tone_cycle;
+        self.simulation.hotspot = hotspot;
+        self.config.world_tone_enabled = world_tone_enabled;
+        self.config.hotspot_enabled = hotspot_enabled;
+        Ok(())
     }
 
     /// Replace the ambient vector field immediately, including during a live run.
@@ -380,6 +469,8 @@ impl Laboratory {
             resonant_energy: self.simulation.environment.resonant_energy.total_energy(),
             organisms: self.simulation.organisms.len(),
             flow: self.config.flow,
+            world_tone_enabled: self.config.world_tone_enabled,
+            hotspot_enabled: self.config.hotspot_enabled,
         }
     }
 }
@@ -397,6 +488,8 @@ pub struct LaboratorySnapshot {
     pub resonant_energy: Option<f64>,
     pub organisms: usize,
     pub flow: LaboratoryFlowConfig,
+    pub world_tone_enabled: bool,
+    pub hotspot_enabled: bool,
 }
 
 #[derive(Serialize)]
@@ -423,6 +516,12 @@ struct MoleculeRequest {
     parts: Vec<String>,
     bonds: Vec<[usize; 2]>,
     placements: Vec<[f64; 3]>,
+}
+
+#[derive(Deserialize)]
+struct EnergySourcesRequest {
+    world_tone_enabled: bool,
+    hotspot_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -518,6 +617,17 @@ async fn pause(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
     Json(laboratory.snapshot())
 }
 
+async fn configure_energy_sources(
+    State(state): State<LabState>,
+    Json(request): Json<EnergySourcesRequest>,
+) -> Result<Json<LaboratorySnapshot>, (StatusCode, String)> {
+    let mut laboratory = state.0.lock().await;
+    laboratory
+        .configure_energy_sources(request.world_tone_enabled, request.hotspot_enabled)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+    Ok(Json(laboratory.snapshot()))
+}
+
 async fn configure_flow(
     State(state): State<LabState>,
     Json(flow): Json<LaboratoryFlowConfig>,
@@ -554,6 +664,7 @@ pub async fn run() {
         .route("/api/pause", post(pause))
         .route("/api/step", post(step))
         .route("/api/flow", post(configure_flow))
+        .route("/api/sources", post(configure_energy_sources))
         .with_state(app_state);
     let address = std::env::var("EVOSIM_LAB_ADDRESS")
         .unwrap_or_else(|_| "127.0.0.1:3030".into())
