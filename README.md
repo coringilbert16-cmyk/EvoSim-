@@ -163,6 +163,8 @@ The approved target is an independent, persistent, continuous-in-space, multi-fr
 
 **Required reference for every resonance-field task:** [Formal implementation roadmap](docs/design/resonance-field-implementation-roadmap.md). This roadmap defines the physics decisions, phases, invariants, test gates, standard benchmark, and the performance target (break-even after optimization; no physics shortcuts). The high-level architecture is in [resonance-field-architecture.md](docs/design/resonance-field-architecture.md).
 
+**Phase 0 audit and PR delivery plan:** [resonance-field-phase-0-audit.md](docs/audits/resonance-field-phase-0-audit.md). The code/ledger/geometry audit is complete; the canonical 60-second seed-42 current-main performance baseline remains to be recorded before Phase 1.
+
 ## Environmental discovery experiments — PR #335
 
 This section records the measured outcomes of the isolated environmental-discovery research extracted from PR #321. These experiments did not change production reaction execution. BREAK, COMBINE, and DISPLACEMENT remain on their original sequential paths.
