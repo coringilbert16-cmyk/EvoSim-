@@ -755,7 +755,7 @@ mod fitted_legacy_fluid_tests {
     fn fitted_legacy_fluid_boundary_is_part_of_field_integration() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
         let mut structure = OrganismStructure::new();
-        let mut water = StructuralUnit::new(
+        let mut fluid = StructuralUnit::new(
             "LegacyFluidFixture",
             Placement {
                 x: 0.0,
@@ -763,7 +763,7 @@ mod fitted_legacy_fluid_tests {
                 rotation_radians: 0.0,
             },
         );
-        assert!(water.realize_default_geometry(&catalog));
+        assert!(fluid.realize_default_geometry(&catalog));
         // Keep the fitted boundary consistent with one legacy fluid unit's nominal
         // area instead of assigning four square units to half a unit of legacy fluid.
         let half_side = NOMINAL_UNIT_AREA.sqrt() / 2.0;
@@ -780,8 +780,8 @@ mod fitted_legacy_fluid_tests {
                 multi_contact_boundary: None,
             },
         };
-        assert!(water.realize_fluid_geometry(fitted, &catalog));
-        let index = structure.add_unit(water);
+        assert!(fluid.realize_fluid_geometry(fitted, &catalog));
+        let index = structure.add_unit(fluid);
         let form = &structure.units[index]
             .geometry
             .as_ref()
