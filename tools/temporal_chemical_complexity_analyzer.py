@@ -330,6 +330,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
             "Structural fingerprints use iterative Weisfeiler-Lehman refinement plus composition and degree summaries; they are scalable descriptors, not exact graph-isomorphism proofs.",
             "A reaction pattern is reconstructed from lineage parent and child family fingerprints and reaction label; it is not a balanced thermodynamic equation.",
             "A directed cycle in the family-transition graph is a candidate network cycle, not proof of autocatalysis or net self-sustainability.",
+            "Graph diameter is exact for connected molecules up to 128 constituents; larger molecules use a two-sweep lower-bound estimate, flagged by graph_diameter_exact.",
             "Only recorded molecular identities and lineage are analyzed; unrecorded transient contacts are not inferred.",
             "Active product measurements are snapshots at window boundaries; molecules destroyed and recreated between boundaries are represented through lifecycle events.",
         ],
@@ -387,8 +388,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         "",
         "## Temporal development (mean across seeds)",
         "",
-        "| Window | New structural fingerprints | Cumulative fingerprints | New reaction patterns | Cumulative reaction patterns | Active product mean size | Active product max size | Network edges | Cyclic SCCs |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Window | New structural fingerprints | Cumulative fingerprints | New reaction patterns | Cumulative reaction patterns | Active product mean size | Active product max size | Max diameter estimate | Network edges | Cyclic SCCs |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
@@ -398,6 +399,7 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
             f"{row['cumulative_reaction_patterns_mean_across_seeds']:.2f} | "
             f"{row['active_product_mean_constituents_mean_across_seeds']:.2f} | "
             f"{row['active_product_max_constituents_mean_across_seeds']:.2f} | "
+            f"{row['active_product_max_graph_diameter_mean_across_seeds']:.2f} | "
             f"{row['reaction_network_edges_cumulative_mean_across_seeds']:.2f} | "
             f"{row['reaction_network_cyclic_scc_count_mean_across_seeds']:.2f} |"
         )
