@@ -1539,10 +1539,8 @@ pub(crate) fn combine_specific_pair(
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return None;
     }
-    if !material_contains_only_rigid_resources(
-        &structure.units[unit_a].material,
-        catalog,
-    ) || !material_contains_only_rigid_resources(&structure.units[unit_b].material, catalog)
+    if !material_contains_only_rigid_resources(&structure.units[unit_a].material, catalog)
+        || !material_contains_only_rigid_resources(&structure.units[unit_b].material, catalog)
     {
         return None;
     }
