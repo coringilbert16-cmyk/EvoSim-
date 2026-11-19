@@ -1805,14 +1805,17 @@ pub(crate) fn try_combine(
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
-    if organism.structure.units.iter().any(|unit| {
-        !material_contains_only_rigid_resources(&unit.material, &environment.catalog)
-    }) || organism
-        .stored_material
-        .first_material()
-        .is_some_and(|material| {
-            !material_contains_only_rigid_resources(material, &environment.catalog)
-        })
+    if organism
+        .structure
+        .units
+        .iter()
+        .any(|unit| !material_contains_only_rigid_resources(&unit.material, &environment.catalog))
+        || organism
+            .stored_material
+            .first_material()
+            .is_some_and(|material| {
+                !material_contains_only_rigid_resources(material, &environment.catalog)
+            })
     {
         return None;
     }
