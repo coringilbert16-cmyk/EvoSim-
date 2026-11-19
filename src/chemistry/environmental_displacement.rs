@@ -2859,13 +2859,8 @@ mod tests {
             assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
 
             let mut restored = OrganismStructure::new();
-            crate::physical_material::restore_material(
-                &mut restored,
-                &molecule,
-                origin,
-                &catalog,
-            )
-            .expect("ordinary-COMBINE molecule must restore");
+            crate::physical_material::restore_material(&mut restored, &molecule, origin, &catalog)
+                .expect("ordinary-COMBINE molecule must restore");
             assert_eq!(restored.bonds.len(), 1);
             assert_eq!(restored.bonds[0].bond_energy, connection.bond_energy);
             let resource_a = catalog
