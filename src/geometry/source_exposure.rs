@@ -5246,20 +5246,39 @@ mod source_global_perimeter_tests {
     fn source_global_perimeter_unions_overlapping_rectangle_and_circle_exactly() {
         let body = OrganismBodyGeometry {
             parts: vec![
-                PlacedForm { unit_index: 0, form: Form::Rectangle { width: 2.0, height: 2.0 }, x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 1.5, y: 0.0, rotation_radians: 0.0 },
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Rectangle {
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Circle { radius: 1.0 },
+                    x: 1.5,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
             ],
-            min_x: -1.0, max_x: 2.5, min_y: -1.0, max_y: 1.0,
+            min_x: -1.0,
+            max_x: 2.5,
+            min_y: -1.0,
+            max_y: 1.0,
         };
-        let perimeter=disjoint_source_global_material_perimeter(&body,0).unwrap();
-        let length=visible_material_perimeter_length(&perimeter).unwrap();
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let length = visible_material_perimeter_length(&perimeter).unwrap();
         // The rectangle's right edge is hidden between the two circle
         // intersections. The circle's 120-degree interior arc is hidden.
-        let expected=8.0-3.0_f64.sqrt()+4.0*std::f64::consts::PI/3.0;
-        assert!((length-expected).abs()<1e-9);
-        assert_eq!(perimeter.straight.len(),5);
-        assert_eq!(perimeter.curved.len(),2);
+        let expected = 8.0 - 3.0_f64.sqrt() + 4.0 * std::f64::consts::PI / 3.0;
+        assert!((length - expected).abs() < 1e-9);
+        assert_eq!(perimeter.straight.len(), 5);
+        assert_eq!(perimeter.curved.len(), 2);
     }
+
     #[test]
     fn source_global_perimeter_unions_intersecting_circles_exactly() {
         let body = OrganismBodyGeometry {
