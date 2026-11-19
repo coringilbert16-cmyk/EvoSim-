@@ -11,9 +11,9 @@ mod tests {
     use crate::structural_blueprint::{BlueprintElement, BlueprintPlacement, StructuralBlueprint};
     use crate::structure::{Placement, StructuralUnit};
 
-    fn water_element(x: f64, y: f64) -> BlueprintElement {
+    fn fluid_element(x: f64, y: f64) -> BlueprintElement {
         BlueprintElement {
-            material: Material::free_base("Water", 1.0),
+            material: Material::free_base("LegacyFluidFixture", 1.0),
             placement: BlueprintPlacement {
                 x,
                 y,
@@ -60,8 +60,8 @@ mod tests {
 
     #[test]
     fn legacy_and_explicit_orientation_round_trip() {
-        let legacy = r#"{"material":{"parts":[["Water",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0}}"#;
-        let explicit = r#"{"material":{"parts":[["Water",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0,"rotation_radians":1.25}}"#;
+        let legacy = r#"{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0}}"#;
+        let explicit = r#"{"material":{"parts":[["Carbon",1.0]],"internal_bonds":[]},"placement":{"x":2.0,"y":3.0,"rotation_radians":1.25}}"#;
         let legacy: BlueprintElement =
             serde_json::from_str(legacy).expect("legacy blueprint must deserialize");
         let explicit: BlueprintElement =
@@ -74,7 +74,7 @@ mod tests {
     fn blueprint_orientation_is_realized_as_element_frame() {
         let angle = std::f64::consts::FRAC_PI_3;
         let element = BlueprintElement {
-            material: Material::free_base("Water", 1.0),
+            material: Material::free_base("Carbon", 1.0),
             placement: BlueprintPlacement {
                 x: 4.0,
                 y: -2.0,
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn blueprint_orientation_must_be_finite() {
-        let element = water_element(0.0, 0.0);
+        let element = fluid_element(0.0, 0.0);
         let mut oriented = element.clone();
         oriented.placement.rotation_radians = f64::NAN;
         let blueprint = StructuralBlueprint::new(vec![oriented], Vec::new());
@@ -139,16 +139,16 @@ mod tests {
 
     #[test]
     fn k4_is_rejected_by_the_physical_contact_graph_oracle() {
-        let catalog = default_catalog();
-        let water = catalog.iter().find(|r| r.name == "Water").unwrap();
-        let Form::Circle { radius } = water.shape.form else {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let fluid = catalog.iter().find(|r| r.name == "LegacyFluidFixture").unwrap();
+        let Form::Circle { radius } = fluid.shape.form else {
             panic!("water diagnostic requires circular default geometry")
         };
         let d = 2.0 * radius;
         let h = d * (3.0_f64).sqrt() / 2.0;
         let units = [
             StructuralUnit::new(
-                "Water",
+                "LegacyFluidFixture",
                 Placement {
                     x: 0.0,
                     y: 0.0,
@@ -156,7 +156,7 @@ mod tests {
                 },
             ),
             StructuralUnit::new(
-                "Water",
+                "LegacyFluidFixture",
                 Placement {
                     x: d,
                     y: 0.0,
@@ -164,7 +164,7 @@ mod tests {
                 },
             ),
             StructuralUnit::new(
-                "Water",
+                "LegacyFluidFixture",
                 Placement {
                     x: d / 2.0,
                     y: h,
@@ -172,7 +172,7 @@ mod tests {
                 },
             ),
             StructuralUnit::new(
-                "Water",
+                "LegacyFluidFixture",
                 Placement {
                     x: d / 2.0,
                     y: h / 3.0,
