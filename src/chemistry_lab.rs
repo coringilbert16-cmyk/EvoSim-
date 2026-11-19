@@ -1010,10 +1010,8 @@ mod tests {
     fn laboratory_observation_captures_reaction_and_molecular_lineage_events() {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
-        laboratory
-            .simulation
-            .environmental_chemistry_events
-            .push(crate::state::EnvironmentalChemistryEvent {
+        laboratory.simulation.environmental_chemistry_events.push(
+            crate::state::EnvironmentalChemistryEvent {
                 tick: 7,
                 reaction: "COMBINE".into(),
                 source_cells: vec![2],
@@ -1039,7 +1037,8 @@ mod tests {
                     reaction: "COMBINE".into(),
                     molecule: None,
                 }],
-            });
+            },
+        );
         laboratory.capture_current_tick_events();
         let history = laboratory.snapshot().reaction_history;
         assert_eq!(history.len(), 1);
