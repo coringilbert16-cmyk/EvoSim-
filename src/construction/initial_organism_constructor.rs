@@ -706,8 +706,9 @@ pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruct
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
     let (structure, _ledger, _energy) = construct_scaffold(catalog, &bob_library)?;
     let acquired_resource_placements =
-        valid_construction(&structure, catalog, &acquisition_candidates)
-            .ok_or_else(|| "deterministic construction scaffold did not satisfy viability".to_string())?;
+        valid_construction(&structure, catalog, &acquisition_candidates).ok_or_else(|| {
+            "deterministic construction scaffold did not satisfy viability".to_string()
+        })?;
 
     Ok(ValidConstruction {
         structure,
