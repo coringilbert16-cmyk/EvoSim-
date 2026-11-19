@@ -2714,20 +2714,13 @@ pub(crate) fn environmental_resonance_displacements(
         return Some(displacements);
     }
 
-    // Cache validity lazily: coincident pairs skip cross-energy entirely, so
-    // their spectra retain the existing behavior of not being validated.
-    let mut validated_spectra = vec![false; emitters.len()];
-    let mut validation_ns = 0_u128;
-
-    let mut accumulated = vec![(0.0, 0.0); emitters.len()];
-    let pair_started = std::time::Instant::now();
-    let mut pair_count = 0_u64;
-    let mut sampled_cross_energy_ns = 0_u128;
-    let mut sampled_matching_ns = 0_u128;
-    let mut sampled_frequency_comparisons = 0_u64;
-    let mut sampled_frequency_matches = 0_u64;
-    const CROSS_ENERGY_SAMPLE_STRIDE: u64 = 256;
-
+    // Exhaustive reference: enumerate every unordered pair, retain only
+    // pairs inside the same source-specific support predicate, then use the
+    // exact same deterministic force evaluator as the spatial candidate path.
+    // This isolates spatial discovery without comparing parallel work to a
+    // sequential reference implementation.
+    let discovery_started = std::time::Instant::now();
+    let mut reference_pairs = Vec::new();
     for a in 0..emitters.len() {
         for b in (a + 1)..emitters.len() {
             let dx = emitters[b].x - emitters[a].x;
@@ -2738,95 +2731,50 @@ pub(crate) fn environmental_resonance_displacements(
             }
             let support_radius =
                 environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
-            if distance > support_radius {
-                pair_count += 1;
-                continue;
+            if distance <= support_radius {
+                reference_pairs.push((a, b));
             }
-            if distance > f64::EPSILON {
-                // Validate each immutable spectrum only on its first actual
-                // cross-energy use. This preserves the coincident-pair rule
-                // while removing two indexed mutable borrows per pair.
-                if !validated_spectra[a] {
-                    let started = profile.then(std::time::Instant::now);
-                    spectrum_energy(&emitters[a].spectrum)?;
-                    if let Some(started) = started {
-                        validation_ns += started.elapsed().as_nanos();
-                    }
-                    validated_spectra[a] = true;
-                }
-                if !validated_spectra[b] {
-                    let started = profile.then(std::time::Instant::now);
-                    spectrum_energy(&emitters[b].spectrum)?;
-                    if let Some(started) = started {
-                        validation_ns += started.elapsed().as_nanos();
-                    }
-                    validated_spectra[b] = true;
-                }
-
-                let sample = pair_count % CROSS_ENERGY_SAMPLE_STRIDE == 0;
-                let (on_b_x, on_b_y) = environmental_movement_pair_force(
-                    &emitters[a],
-                    &emitters[b],
-                    dx,
-                    dy,
-                    distance,
-                    sample && profile,
-                    &mut sampled_cross_energy_ns,
-                    &mut sampled_matching_ns,
-                    &mut sampled_frequency_comparisons,
-                    &mut sampled_frequency_matches,
-                )?;
-                accumulated[a].0 -= on_b_x;
-                accumulated[a].1 -= on_b_y;
-                accumulated[b].0 += on_b_x;
-                accumulated[b].1 += on_b_y;
-            }
-            pair_count += 1;
         }
     }
+    let discovery_ns = discovery_started.elapsed().as_nanos();
+
+    let pair_started = std::time::Instant::now();
+    let pair_forces = if worker_count > 1 && reference_pairs.len() >= 4_096 {
+        environmental_movement_parallel_spatial_candidate_pair_forces(
+            &emitters,
+            &reference_pairs,
+            worker_count,
+        )?
+    } else {
+        environmental_movement_spatial_candidate_pair_forces(&emitters, &reference_pairs)?
+    };
     let pair_ns = pair_started.elapsed().as_nanos();
 
     let response_started = std::time::Instant::now();
-    let result = accumulated
-        .into_iter()
-        .map(|(x, y)| {
-            let magnitude = x.hypot(y);
-            if !magnitude.is_finite() {
-                return None;
-            }
-            let factor = RESONANCE_MOVEMENT_RESPONSE_SCALE
-                / (1.0 + RESONANCE_MOVEMENT_RESPONSE_SCALE * magnitude);
-            let displacement = (x * factor, y * factor);
-            (displacement.0.is_finite() && displacement.1.is_finite()).then_some(displacement)
-        })
-        .collect();
+    let displacements =
+        environmental_movement_displacements_from_spatial_candidate_pair_forces(
+            emitters.len(),
+            &reference_pairs,
+            &pair_forces,
+        )?;
     let response_ns = response_started.elapsed().as_nanos();
 
-    if profile || profile_reference_timing {
-        let sampled_pairs = pair_count.div_ceil(CROSS_ENERGY_SAMPLE_STRIDE);
+    if profile_reference_timing {
         eprintln!(
-            "MOVEMENT_RESONANCE_PROFILE tick={tick} objects={} pairs={} emitters_ns={} validation_ns={} pair_loop_ns={} response_ns={} sampled_cross_energy_ns={} sampled_validation_ns=0 sampled_matching_ns={} sampled_frequency_comparisons={} sampled_frequency_matches={} sampled_pairs={} estimated_cross_energy_total_ns={} estimated_validation_total_ns={} estimated_matching_total_ns={} estimated_frequency_comparisons_total={} estimated_frequency_matches_total={}",
+            "MOVEMENT_REFERENCE_PROFILE tick={tick} objects={} possible_pairs={} eligible_pairs={} discovery_ns={} pair_eval_ns={} response_ns={} total_movement_ns={} emitter_ns={} workers={}",
             materials.len(),
             pair_count,
-            emitter_ns,
-            validation_ns,
+            reference_pairs.len(),
+            discovery_ns,
             pair_ns,
             response_ns,
-            sampled_cross_energy_ns,
-            sampled_matching_ns,
-            sampled_frequency_comparisons,
-            sampled_frequency_matches,
-            sampled_pairs,
-            sampled_cross_energy_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
-            validation_ns,
-            sampled_matching_ns.saturating_mul(pair_count as u128) / sampled_pairs.max(1) as u128,
-            sampled_frequency_comparisons.saturating_mul(pair_count) / sampled_pairs.max(1),
-            sampled_frequency_matches.saturating_mul(pair_count) / sampled_pairs.max(1)
+            total_started.elapsed().as_nanos(),
+            emitter_ns,
+            worker_count,
         );
     }
 
-    let _ = total_started;
-    result
+
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
