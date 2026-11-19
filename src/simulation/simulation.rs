@@ -420,15 +420,6 @@ impl Simulation {
         let construction = crate::initial_organism_constructor::construct_valid(&catalog)
             .expect("initial organism constructor must find a valid organism");
         let mut structure = construction.structure;
-        let acquired_resource_shapes = construction.acquired_resource_shapes;
-        let fluid_geometry_status = construction.fluid_geometry_status;
-        debug_assert_eq!(
-            fluid_geometry_status
-                == crate::initial_organism_constructor::FluidGeometryStatus::BobSuggestionAccepted,
-            !acquired_resource_shapes.is_empty(),
-            "only live-validated Bob suggestions may attach an acquired fluid shape"
-        );
-
         let anchor = Position { x: 125.0, y: 125.0 };
         for unit in &mut structure.units {
             unit.placement.x += anchor.x;
@@ -445,15 +436,6 @@ impl Simulation {
                 &catalog,
             )
             .expect("constructor-validated resource must have a physical realization");
-            let physical = match acquired_resource_shapes
-                .iter()
-                .find(|(shape_name, _)| shape_name == &name)
-            {
-                Some((_, shape)) => physical
-                    .with_single_fluid_shape(shape.clone(), &catalog)
-                    .expect("constructor-validated fluid shape must preserve resource area"),
-                None => physical,
-            };
             assert!(stored_material.store_physical_instance_at_owner_anchor(
                 physical,
                 Placement {
@@ -1053,8 +1035,8 @@ impl Simulation {
         // Environmental medium transport is intentionally disconnected.
         // No ambient current or water-mediated movement acts on active materials.
 
-        // Resonance movement runs after ambient transport and before reaction
-        // discovery, so chemistry sees the updated environmental contacts.
+        // Resonance movement runs before reaction discovery, so chemistry sees
+        // the updated environmental contacts.
         crate::environmental_movement::apply_environmental_resonance_movement(
             &mut self.environment.field,
             &self.environment.catalog,
