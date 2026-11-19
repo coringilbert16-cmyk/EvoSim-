@@ -1500,7 +1500,7 @@ fn material_aura_receptions_with_geometry(
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
-        let distance = source_surface.distance;
+        let distance = (receiver_x - source_surface.x).hypot(receiver_y - source_surface.y);
         if !distance.is_finite() || distance <= f64::EPSILON {
             return Some(());
         }
