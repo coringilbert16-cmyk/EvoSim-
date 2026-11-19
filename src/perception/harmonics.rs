@@ -4278,7 +4278,7 @@ mod tests {
     }
 
     #[test]
-    fn circular_legacy fluid_boundary_contributes_to_pair_reception() {
+    fn circular_fluid_boundary_contributes_to_pair_reception() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
         let source = crate::physical_material::PhysicalMaterial::realized(
             crate::resources::Material::free_base("Carbon", 1.0),
@@ -4299,7 +4299,7 @@ mod tests {
             }],
             &catalog,
         )
-        .expect("legacy fluid should have a valid realized circular physical shape");
+        .expect("fluid should have a valid realized circular physical shape");
 
         let receptions = material_aura_receptions(&source, &receiver, &catalog, 0)
             .expect("circular receiver should support aura reception");
