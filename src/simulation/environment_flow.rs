@@ -891,13 +891,7 @@ mod tests {
         for (x, y) in [(0.0, 0.0), (20.0, 30.0), (75.0, 55.0), (99.0, 79.0)] {
             assert_eq!(
                 background_velocity(x, y, 100.0, 80.0),
-                background_velocity_with_config(
-                    x,
-                    y,
-                    100.0,
-                    80.0,
-                    FlowFieldConfig::default()
-                )
+                background_velocity_with_config(x, y, 100.0, 80.0, FlowFieldConfig::default())
             );
         }
     }
