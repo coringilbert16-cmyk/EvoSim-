@@ -6,7 +6,7 @@
 //! will replace this fixed scaffold with local free-form construction while
 //! retaining the same physical bond authority.
 
-use crate::resources::{BaseResource, Form, Material, PhysicalState, Shape};
+use crate::resources::{BaseResource, Material};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
@@ -22,15 +22,6 @@ const SQRT_3: f64 = 1.732_050_807_568_877_2;
 pub(crate) struct ValidConstruction {
     pub structure: crate::structure::OrganismStructure,
     pub acquired_resource_placements: Vec<(String, Placement)>,
-    pub acquired_resource_shapes: Vec<(String, Shape)>,
-    pub fluid_geometry_status: FluidGeometryStatus,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum FluidGeometryStatus {
-    BobSuggestionAccepted,
-    CoverageMiss,
-    CandidatesRejected,
 }
 
 /// Axial hex coordinates are used only as a deterministic geometric
@@ -648,7 +639,6 @@ fn placement_fits_resource(
 fn available_acquisition_resources(catalog: &[BaseResource]) -> Vec<&BaseResource> {
     catalog
         .iter()
-        .filter(|resource| resource.name != "Water")
         .filter(|resource| resource.shape.is_valid())
         .collect()
 }
@@ -683,308 +673,12 @@ fn find_acquisition_set(
     None
 }
 
-fn resource_area(resource: &BaseResource) -> Option<f64> {
-    match &resource.shape.form {
-        Form::Circle { radius } => Some(std::f64::consts::PI * radius * radius),
-        Form::Fluid { nominal_area, .. } => Some(*nominal_area),
-        _ => None,
-    }
-}
-
-fn fluid_free_boundary_probe_points(shape: &Shape, placement: Placement) -> Vec<(f64, f64)> {
-    let local_points: Vec<(f64, f64)> = match &shape.form {
-        Form::Fluid {
-            multi_contact_boundary: Some(boundary),
-            ..
-        } => boundary
-            .pieces
-            .iter()
-            .filter_map(|piece| match piece {
-                crate::capillary_geometry::FluidBoundaryPiece::FreeArc(arc) => {
-                    let angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
-                    Some((
-                        arc.center_x + arc.radius * angle.cos(),
-                        arc.center_y + arc.radius * angle.sin(),
-                    ))
-                }
-                crate::capillary_geometry::FluidBoundaryPiece::SolidContact { .. } => None,
-            })
-            .collect(),
-        Form::Fluid {
-            arc_boundary: Some(arc),
-            ..
-        } => {
-            let angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
-            vec![(
-                arc.center_x + arc.radius * angle.cos(),
-                arc.center_y + arc.radius * angle.sin(),
-            )]
-        }
-        _ => Vec::new(),
-    };
-    let (sin, cos) = placement.rotation_radians.sin_cos();
-    local_points
-        .into_iter()
-        .map(|(x, y)| {
-            (
-                placement.x + x * cos - y * sin,
-                placement.y + x * sin + y * cos,
-            )
-        })
-        .collect()
-}
-
-fn fluid_segment_contains_world_point(shape: &Shape, placement: Placement, x: f64, y: f64) -> bool {
-    let dx = x - placement.x;
-    let dy = y - placement.y;
-    let (sin, cos) = placement.rotation_radians.sin_cos();
-    let local_x = dx * cos + dy * sin;
-    let local_y = -dx * sin + dy * cos;
-    match &shape.form {
-        Form::Fluid {
-            multi_contact_boundary: Some(boundary),
-            ..
-        } => boundary.contains_point(local_x, local_y),
-        Form::Fluid {
-            arc_boundary: Some(arc),
-            ..
-        } => {
-            let start = arc.start_point();
-            let end = arc.end_point();
-            let chord_side =
-                (end.0 - start.0) * (local_y - start.1) - (end.1 - start.1) * (local_x - start.0);
-            let midpoint_angle = arc.start_angle_radians + arc.sweep_radians * 0.5;
-            let midpoint = (
-                arc.center_x + arc.radius * midpoint_angle.cos(),
-                arc.center_y + arc.radius * midpoint_angle.sin(),
-            );
-            let arc_side = (end.0 - start.0) * (midpoint.1 - start.1)
-                - (end.1 - start.1) * (midpoint.0 - start.0);
-            chord_side * arc_side >= -1e-9
-                && (local_x - arc.center_x).hypot(local_y - arc.center_y) <= arc.radius + 1e-9
-        }
-        _ => false,
-    }
-}
-
-fn rigid_form_contains_world_point(form: &Form, placement: Placement, x: f64, y: f64) -> bool {
-    let dx = x - placement.x;
-    let dy = y - placement.y;
-    let (sin, cos) = placement.rotation_radians.sin_cos();
-    let local_x = dx * cos + dy * sin;
-    let local_y = -dx * sin + dy * cos;
-    match form {
-        Form::Circle { radius } => local_x.hypot(local_y) <= *radius + 1e-9,
-        Form::Line { length } => local_y.abs() <= 1e-9 && local_x.abs() <= length * 0.5 + 1e-9,
-        _ => {
-            let Some(vertices) = form.polygon_vertices() else {
-                return false;
-            };
-            let mut inside = false;
-            for index in 0..vertices.len() {
-                let (x1, y1) = vertices[index];
-                let (x2, y2) = vertices[(index + 1) % vertices.len()];
-                let cross = (local_x - x1) * (y2 - y1) - (local_y - y1) * (x2 - x1);
-                if cross.abs() <= 1e-9
-                    && local_x >= x1.min(x2) - 1e-9
-                    && local_x <= x1.max(x2) + 1e-9
-                    && local_y >= y1.min(y2) - 1e-9
-                    && local_y <= y1.max(y2) + 1e-9
-                {
-                    return true;
-                }
-                if (y1 > local_y) != (y2 > local_y)
-                    && local_x < (x2 - x1) * (local_y - y1) / (y2 - y1) + x1
-                {
-                    inside = !inside;
-                }
-            }
-            inside
-        }
-    }
-}
-
-fn rigid_part_world_points(form: &Form, placement: Placement) -> Vec<(f64, f64)> {
-    let local = match form {
-        Form::Circle { .. } => vec![(0.0, 0.0)],
-        Form::Line { length } => vec![(-length * 0.5, 0.0), (length * 0.5, 0.0)],
-        _ => form.polygon_vertices().unwrap_or_default(),
-    };
-    let (sin, cos) = placement.rotation_radians.sin_cos();
-    local
-        .into_iter()
-        .map(|(x, y)| {
-            (
-                placement.x + x * cos - y * sin,
-                placement.y + x * sin + y * cos,
-            )
-        })
-        .collect()
-}
-
-/// Query persisted singleton-parent fluid records, realize each candidate exactly,
-/// and accept only a pose that passes live region and structure validation.
-/// The boolean reports whether Bob had any matching records, so a coverage miss
-/// cannot be confused with suggestions that were rejected by live geometry.
-fn bob_fluid_acquisition_candidate(
-    structure: &crate::structure::OrganismStructure,
-    regions: &[crate::interior_geometry::EnclosedRegion],
-    water: &BaseResource,
-    library: &crate::geometry_reference_library::GeometryLibrary,
-    catalog: &[BaseResource],
-) -> (Option<(Shape, Placement)>, bool) {
-    let Some(water_area) = resource_area(water) else {
-        return (None, false);
-    };
-    let mut had_records = false;
-    for (anchor_index, anchor_unit) in structure.units.iter().enumerate() {
-        let Some((anchor_name, _)) = anchor_unit.material.parts.first() else {
-            continue;
-        };
-        let Some(anchor_resource) = catalog
-            .iter()
-            .find(|resource| resource.name == *anchor_name)
-        else {
-            continue;
-        };
-        if anchor_resource.physical_state == PhysicalState::Fluid {
-            continue;
-        }
-        let parent = crate::geometry_reference_library::GeometryFormation::single(
-            anchor_resource.name.clone(),
-        );
-        let suggestions: Vec<_> = library
-            .fluid_formations_for_parent(&parent.signature, &water.name)
-            .collect();
-        if !suggestions.is_empty() {
-            had_records = true;
-        }
-        for suggestion in suggestions {
-            if suggestion.anchor_constituent != 0
-                || (suggestion.area - water_area).abs() > 1e-9 * water_area.max(1.0)
-            {
-                continue;
-            }
-            for bulge_left in [true, false] {
-                let Some((shape, relative_pose)) =
-                    suggestion.realize_against_parent(&parent, catalog, bulge_left)
-                else {
-                    continue;
-                };
-                let (sin, cos) = anchor_unit.placement.rotation_radians.sin_cos();
-                let placement = Placement {
-                    x: anchor_unit.placement.x + relative_pose.x * cos - relative_pose.y * sin,
-                    y: anchor_unit.placement.y + relative_pose.x * sin + relative_pose.y * cos,
-                    rotation_radians: anchor_unit.placement.rotation_radians
-                        + relative_pose.rotation_radians,
-                };
-                if !shape.is_valid() {
-                    continue;
-                }
-
-                let mut candidate_catalog = catalog.to_vec();
-                let Some(candidate_water) = candidate_catalog
-                    .iter_mut()
-                    .find(|resource| resource.name == water.name)
-                else {
-                    continue;
-                };
-                candidate_water.shape = shape.clone();
-                let Some(physical) = crate::physical_material::PhysicalMaterial::realized(
-                    Material::free_base(water.name.clone(), 1.0),
-                    vec![placement],
-                    &candidate_catalog,
-                ) else {
-                    continue;
-                };
-                if !crate::environment::ActiveMaterialField::physical_is_fully_inside_any_region(
-                    &physical,
-                    regions,
-                    &candidate_catalog,
-                ) {
-                    continue;
-                }
-
-                let fluid_part = crate::material_geometry::PlacedMaterialPart {
-                    part_index: 0,
-                    form: shape.form.clone(),
-                    placement,
-                };
-                let mut valid = true;
-                for (other_index, other_unit) in structure.units.iter().enumerate() {
-                    let Some(other_shape) = other_unit.shape(catalog) else {
-                        valid = false;
-                        break;
-                    };
-                    let other_part = crate::material_geometry::PlacedMaterialPart {
-                        part_index: other_index,
-                        form: other_shape.form.clone(),
-                        placement: other_unit.placement,
-                    };
-                    let rigid_points =
-                        rigid_part_world_points(&other_shape.form, other_unit.placement);
-                    let free_boundary_probes = fluid_free_boundary_probe_points(&shape, placement);
-                    if free_boundary_probes.is_empty() {
-                        valid = false;
-                        break;
-                    }
-                    if free_boundary_probes.iter().any(|&(x, y)| {
-                        rigid_form_contains_world_point(
-                            &other_shape.form,
-                            other_unit.placement,
-                            x,
-                            y,
-                        )
-                    }) || fluid_segment_contains_world_point(
-                        &shape,
-                        placement,
-                        other_unit.placement.x,
-                        other_unit.placement.y,
-                    ) || rigid_points
-                        .iter()
-                        .any(|&(x, y)| fluid_segment_contains_world_point(&shape, placement, x, y))
-                    {
-                        valid = false;
-                        break;
-                    }
-                    if other_index == anchor_index {
-                        if !crate::material_geometry::placed_forms_rigid_contact(
-                            &fluid_part,
-                            &other_part,
-                            crate::material_geometry::GEOMETRY_EPSILON,
-                        ) {
-                            valid = false;
-                            break;
-                        }
-                    } else if crate::material_geometry::placed_forms_boundary_contact(
-                        &fluid_part,
-                        &other_part,
-                        crate::material_geometry::GEOMETRY_EPSILON,
-                    ) {
-                        valid = false;
-                        break;
-                    }
-                }
-                if valid {
-                    return (Some((shape, placement)), true);
-                }
-            }
-        }
-    }
-    (None, had_records)
-}
-
-type ValidConstructionDetails = (
-    Vec<(String, Placement)>,
-    Vec<(String, Shape)>,
-    FluidGeometryStatus,
-);
+type ValidConstructionDetails = Vec<(String, Placement)>;
 
 fn valid_construction(
     structure: &crate::structure::OrganismStructure,
     catalog: &[BaseResource],
     acquisition_candidates: &[&BaseResource],
-    bob_library: &crate::geometry_reference_library::GeometryLibrary,
 ) -> Option<ValidConstructionDetails> {
     let cavity = crate::cavity::analyze_genome_cavity(structure, catalog)
         .ok()
@@ -999,61 +693,25 @@ fn valid_construction(
         return None;
     }
 
-    let mut acquired = find_acquisition_set(acquisition_candidates, &regions, catalog)?;
-    let water = catalog.iter().find(|resource| resource.name == "Water")?;
-    let (water_candidate, had_bob_records) =
-        bob_fluid_acquisition_candidate(structure, &regions, water, bob_library, catalog);
-    let (water_shape, water_placement, fluid_geometry_status) =
-        match (water_candidate, had_bob_records) {
-            (Some((shape, placement)), _) => (
-                Some(shape),
-                placement,
-                FluidGeometryStatus::BobSuggestionAccepted,
-            ),
-            (None, true) => (
-                None,
-                regions
-                    .iter()
-                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
-                FluidGeometryStatus::CandidatesRejected,
-            ),
-            (None, false) => (
-                None,
-                regions
-                    .iter()
-                    .find_map(|region| placement_fits_resource(water, region, catalog))?,
-                FluidGeometryStatus::CoverageMiss,
-            ),
-        };
-    acquired.push((water.name.clone(), water_placement));
-    let acquired_shapes = water_shape
-        .map(|shape| vec![(water.name.clone(), shape)])
-        .unwrap_or_default();
-    Some((acquired, acquired_shapes, fluid_geometry_status))
+    find_acquisition_set(acquisition_candidates, &regions, catalog)
 }
 
 pub(crate) fn construct_valid(catalog: &[BaseResource]) -> Result<ValidConstruction, String> {
     let acquisition_candidates = available_acquisition_resources(catalog);
     if acquisition_candidates.len() < 3 {
-        return Err("catalog does not contain three non-water acquisition resources".into());
-    }
-    if !catalog.iter().any(|resource| resource.name == "Water") {
-        return Err("catalog does not contain Water".into());
+        return Err("catalog does not contain three acquisition resources".into());
     }
 
     let bob_library = crate::geometry_reference_library::open_default_library()
         .map_err(|error| format!("failed to open persistent Bob geometry library: {error}"))?;
     let (structure, _ledger, _energy) = construct_scaffold(catalog, &bob_library)?;
-    let (acquired_resource_placements, acquired_resource_shapes, fluid_geometry_status) =
-        valid_construction(&structure, catalog, &acquisition_candidates, &bob_library).ok_or_else(
-            || "deterministic construction scaffold did not satisfy viability".to_string(),
-        )?;
+    let acquired_resource_placements =
+        valid_construction(&structure, catalog, &acquisition_candidates)
+            .ok_or_else(|| "deterministic construction scaffold did not satisfy viability".to_string())?;
 
     Ok(ValidConstruction {
         structure,
         acquired_resource_placements,
-        acquired_resource_shapes,
-        fluid_geometry_status,
     })
 }
 
@@ -1157,86 +815,6 @@ mod tests {
     }
 
     #[test]
-    fn persisted_bob_fluid_suggestion_reaches_live_constructor_validation() {
-        let catalog = crate::resources::default_catalog();
-        let root =
-            std::env::temp_dir().join(format!("evosim-constructor-fluid-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let mut library = crate::geometry_reference_library::GeometryLibrary::open(&root, &catalog)
-            .expect("isolated Bob library should open");
-        let parent = crate::geometry_reference_library::GeometryFormation::single("Carbon");
-        library
-            .insert(parent.clone(), &catalog)
-            .expect("Carbon singleton should persist");
-
-        let water = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .expect("Water exists in catalog");
-        let (contacts, diagnostics) =
-            crate::geometry_reference_library::generate_water_contact_families_with_diagnostics(
-                &parent, water, &catalog,
-            );
-        assert_eq!(diagnostics.capillary_solver_failures, 0);
-        assert!(!contacts.is_empty());
-        let boundaries =
-            crate::geometry_reference_library::generate_fluid_boundary_families_from_contact_families(
-                water, &contacts,
-            );
-        let formations =
-            crate::geometry_reference_library::fluid_formations_from_boundaries(&boundaries);
-        assert!(!formations.is_empty());
-        assert_eq!(
-            library
-                .insert_fluid_formations(formations.clone(), &catalog)
-                .unwrap(),
-            formations.len()
-        );
-
-        let carbon = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .unwrap();
-        let mut structure = crate::structure::OrganismStructure::new();
-        add_unit(&mut structure, carbon, (0.0, 0.0), None, None, &catalog)
-            .expect("Carbon anchor should realize");
-        let region = crate::interior_geometry::EnclosedRegion {
-            area: 400.0,
-            boundary_units: vec![],
-            sample_point: (0.0, 0.0),
-            boundary: vec![(-10.0, -10.0), (10.0, -10.0), (10.0, 10.0), (-10.0, 10.0)],
-        };
-        let (candidate, had_records) = bob_fluid_acquisition_candidate(
-            &structure,
-            std::slice::from_ref(&region),
-            water,
-            &library,
-            &catalog,
-        );
-        assert!(
-            had_records,
-            "construction must query the persisted Bob fluid records"
-        );
-        let (shape, placement) =
-            candidate.expect("at least one exact fluid suggestion should pass live validation");
-        assert!(shape.is_valid());
-        let expected_area = match &water.shape.form {
-            Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water must have a fluid-compatible default shape"),
-        };
-        assert!(matches!(
-            &shape.form,
-            Form::Fluid {
-                nominal_area,
-                boundary: None,
-                arc_boundary: Some(_), ..} if (*nominal_area - expected_area).abs() < 1e-9
-        ));
-        assert!(placement.x.is_finite() && placement.y.is_finite());
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
     fn axial_hex_ring_contains_only_unique_perimeter_cells() {
         for radius in 1..=5 {
             let ring = hex_ring(radius);
@@ -1262,7 +840,7 @@ mod tests {
         let cavity = crate::cavity::analyze_genome_cavity(&result.structure, &catalog)
             .expect("genome analysis should succeed");
         assert!(cavity.is_some_and(|cavity| cavity.qualifies()));
-        assert_eq!(result.acquired_resource_placements.len(), 4);
+        assert_eq!(result.acquired_resource_placements.len(), 3);
     }
 
     #[test]
@@ -1274,7 +852,7 @@ mod tests {
             .iter()
             .map(|(name, _)| name.as_str())
             .collect::<Vec<_>>();
-        assert!(names.contains(&"Water"));
-        assert_eq!(names.len(), 4);
+        assert!(!names.contains(&"Water"));
+        assert_eq!(names.len(), 3);
     }
 }
