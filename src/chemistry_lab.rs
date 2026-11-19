@@ -247,10 +247,8 @@ impl Laboratory {
         if !initial_structural_energy.is_finite() {
             return Err("initial structural energy is not finite");
         }
-        self.simulation.energy_ledger.total_structural_energy_held =
-            initial_structural_energy;
-        self.simulation.energy_ledger.initial_structural_energy_held =
-            initial_structural_energy;
+        self.simulation.energy_ledger.total_structural_energy_held = initial_structural_energy;
+        self.simulation.energy_ledger.initial_structural_energy_held = initial_structural_energy;
         Ok(identity)
     }
 
