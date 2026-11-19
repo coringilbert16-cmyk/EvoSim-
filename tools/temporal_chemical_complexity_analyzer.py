@@ -368,8 +368,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         "",
         "## Temporal development (mean across seeds)",
         "",
-        "| Window | New structural fingerprints | Cumulative fingerprints | Active product mean size | Active product max size | Cumulative reaction patterns | Network edges | Cyclic SCCs |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| Window | New structural fingerprints | Cumulative fingerprints | New reaction patterns | Cumulative reaction patterns | Active product mean size | Active product max size | Network edges | Cyclic SCCs |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
