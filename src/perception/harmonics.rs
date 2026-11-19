@@ -1399,6 +1399,7 @@ fn geometry_bounds_may_occlude_source_points(
         || candidate.min_y > max_y)
 }
 
+#[cfg(test)]
 fn receiver_has_straight_boundary(
     receiver: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
@@ -1408,6 +1409,7 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
+#[cfg(test)]
 fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
@@ -1454,29 +1456,54 @@ fn material_aura_receptions_with_geometry(
     {
         return None;
     }
-    let (source_x, source_y, source_extent, emitted) =
+    let (source_center_x, source_center_y, source_extent, emitted) =
         environmental_material_resonance(source, catalog, tick)?;
 
-    let target_body_indices = [0];
     let receiver_geometry = receiver_bodies.first()?;
-    let straight_intervals = if receiver_has_straight_boundary(receiver_geometry) {
-        crate::source_exposure::visible_polygonal_intervals_for_targets(
+    // Start from the nearest source-perimeter point as viewed from the
+    // receiver. If the receiver center lies inside the source, use the source
+    // center because an external perimeter point is not defined from there.
+    let receiver_center = (
+        (receiver_geometry.min_x + receiver_geometry.max_x) * 0.5,
+        (receiver_geometry.min_y + receiver_geometry.max_y) * 0.5,
+    );
+    let source_point = if source_geometry.contains_point(receiver_center.0, receiver_center.1) {
+        (source_center_x, source_center_y)
+    } else {
+        let source_surface = crate::source_exposure::nearest_visible_material_perimeter_point(
+            receiver_center,
+            std::slice::from_ref(source_geometry),
+            0,
+        )?;
+        (source_surface.x, source_surface.y)
+    };
+
+    // At contact or shallow overlap, the nearest source-surface point can be
+    // on or inside the receiver. A viewpoint there makes the visibility query
+    // correctly fail closed, but the pair itself remains geometrically valid.
+    // Recenter the emitter; use its visible receiver perimeter whenever the
+    // source center is still outside the receiver, and the complete receiver
+    // perimeter only for fully interpenetrating centers.
+    let (source_x, source_y) = if receiver_geometry.contains_point(source_point.0, source_point.1) {
+        (source_center_x, source_center_y)
+    } else {
+        source_point
+    };
+    let receiver_perimeter = if receiver_geometry.contains_point(source_x, source_y) {
+        crate::source_exposure::disjoint_source_global_material_perimeter(receiver_geometry, 0)?
+    } else {
+        crate::source_exposure::visible_material_perimeter_from_point(
             (source_x, source_y),
             receiver_bodies,
-            &target_body_indices,
+            0,
         )?
-    } else {
-        Vec::new()
     };
-    let curved_intervals = if receiver_has_curved_boundary(receiver_geometry) {
-        crate::source_exposure::visible_circular_arc_intervals_for_targets(
-            (source_x, source_y),
-            receiver_bodies,
-            &target_body_indices,
-        )?
-    } else {
-        Vec::new()
-    };
+
+    // Blocker silhouettes and boundary intersections split straight and
+    // curved intervals before reception is evaluated; no whole-interval
+    // midpoint can discard a visible shoulder.
+    let straight_intervals = receiver_perimeter.straight;
+    let curved_intervals = receiver_perimeter.curved;
 
     let baselines = ResourceBaselines::from_catalog(catalog);
     let receiver_properties = receiver.material.weighted_properties(catalog);
@@ -1495,7 +1522,7 @@ fn material_aura_receptions_with_geometry(
         if !projected_extent.is_finite() || projected_extent <= f64::EPSILON {
             return Some(());
         }
-        let distance = (source_x - receiver_x).hypot(source_y - receiver_y);
+        let distance = (receiver_x - source_x).hypot(receiver_y - source_y);
         if !distance.is_finite() || distance <= f64::EPSILON {
             return Some(());
         }
@@ -1533,10 +1560,10 @@ fn material_aura_receptions_with_geometry(
     };
 
     for interval in straight_intervals {
-        let projected_extent =
-            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
         receive_at(
             receiver_x,
             receiver_y,
@@ -1552,14 +1579,14 @@ fn material_aura_receptions_with_geometry(
     }
 
     for interval in curved_intervals {
-        let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
-            interval.arc,
-            (source_x, source_y),
-        )?;
         let midpoint_angle = interval.arc.start_angle_radians + interval.arc.sweep_radians * 0.5;
         let (normal_y, normal_x) = midpoint_angle.sin_cos();
         let receiver_x = interval.arc.center_x + interval.arc.radius * normal_x;
         let receiver_y = interval.arc.center_y + interval.arc.radius * normal_y;
+        let projected_extent = crate::source_exposure::point_source_projected_arc_extent(
+            interval.arc,
+            (source_x, source_y),
+        )?;
         receive_at(
             receiver_x,
             receiver_y,
@@ -1572,7 +1599,6 @@ fn material_aura_receptions_with_geometry(
 
     Some(receptions)
 }
-
 /// One tick-local emitter prepared for repeated chemistry-field queries.
 /// Source position, mass scaling, and emitted spectrum are shared by every
 /// candidate sample during the tick instead of being rebuilt per reaction.
@@ -3906,6 +3932,18 @@ mod tests {
         assert!(!left_to_right.is_empty());
         assert!(!right_to_left.is_empty());
         assert!(!left_to_farther.is_empty());
+        assert!(
+            left_to_right
+                .iter()
+                .all(|sample| sample.source_x.hypot(sample.source_y) > 0.0),
+            "source origin must lie on the exposed material perimeter, not its centroid"
+        );
+        assert!(
+            right_to_left
+                .iter()
+                .all(|sample| (sample.source_x - 4.0).hypot(sample.source_y) > 0.0),
+            "reverse source origin must also lie on its exposed perimeter"
+        );
         assert!(left_to_right.iter().all(|sample| {
             sample.receiver_x.is_finite()
                 && sample.receiver_y.is_finite()
