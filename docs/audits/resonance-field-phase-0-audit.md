@@ -168,17 +168,19 @@ PR #377 established a matched spatial-discovery-versus-exhaustive-discovery comp
 
 The sequence below deliberately keeps each PR reviewable and avoids stacking multiple architectural changes together. The roadmap remains the authority; each PR should link both the roadmap and this audit.
 
-### PR 0 — Phase 0 audit record and reproducible baseline
+### PR 0 — Reproducible current-main performance baseline
+
+**Documentation already committed:** This Phase 0 audit, the corrected controlling roadmap, and the README links are committed on `main`. Do not open a duplicate documentation-only PR for those changes.
 
 **Scope**
-- Commit this audit record and correct any stale roadmap statements.
 - Record the canonical current-main 60-second seed-42 baseline and its exact command/artifacts.
-- Confirm which existing diagnostic phases can be reused and which small instrumentation gaps remain.
+- Capture wall-clock runtime, simulated ticks/throughput, peak memory if available, movement phase cost, local resonance snapshot cost, world-tone/hotspot settlement cost, and energy residual.
+- Reuse existing opt-in phase timing where possible; add only the smallest missing diagnostic needed to measure the baseline.
 
 **Not included:** Any physics or production behavior change.
 
 **Acceptance**
-- Audit and baseline are reproducible from the repository.
+- Baseline command and artifact are reproducible from the repository.
 - No benchmark result is inferred from PR #377's neighbor-discovery comparison.
 - Phase 0 is marked complete only after the baseline is recorded.
 
