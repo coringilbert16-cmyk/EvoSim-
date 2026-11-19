@@ -319,7 +319,7 @@ fn process_one_frontier(
                 continue;
             }
 
-            if resource.name == "Water" {
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
                 // Persist solved Water/rigid contact families and aggregate
                 // per-anchor outcomes so empty results are actionable.
                 let (families, diagnostics) =
@@ -420,7 +420,7 @@ mod tests {
 
     #[test]
     fn worker_generates_fluid_records_for_parent_at_constituent_limit() {
-        let catalog = default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon = catalog
             .iter()
             .find(|resource| resource.name == "Carbon")
@@ -444,7 +444,7 @@ mod tests {
         assert!(
             library.fluid_formations().any(|formation| {
                 formation.parent_formation_signature == signature
-                    && formation.fluid_resource == "Water"
+                    && formation.fluid_resource == "LegacyFluidFixture"
             }),
             "the parent at the rigid-constituent limit must still receive fluid formations"
         );
@@ -511,10 +511,10 @@ mod tests {
     }
 
     #[test]
-    fn worker_persists_water_inclusive_formations_and_reopens_them() {
-        let catalog = default_catalog();
+    fn worker_persists_legacy_fluid_formations_and_reopens_them() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let root =
-            std::env::temp_dir().join(format!("evosim-bob-water-worker-{}", std::process::id()));
+            std::env::temp_dir().join(format!("evosim-bob-legacy-fluid-worker-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let carbon = GeometryFormation::single("Carbon");
@@ -547,9 +547,9 @@ mod tests {
             .get(&carbon_signature)
             .expect("the canonical parent formation must survive reopening");
         let (realized_shape, realized_pose) = reopened
-            .fluid_formations_for_parent(&carbon_signature, "Water")
+            .fluid_formations_for_parent(&carbon_signature, "LegacyFluidFixture")
             .find_map(|suggestion| suggestion.realize_against_parent(parent, &catalog, true))
-            .expect("a generated, reopened Water formation must realize against its parent");
+            .expect("a generated, reopened legacy fluid formation must realize against its parent");
         assert!(realized_shape.is_valid());
         assert!(matches!(
             realized_shape.form,
