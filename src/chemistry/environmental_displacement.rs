@@ -2888,4 +2888,135 @@ mod tests {
             assert!((restored.bonds[0].bond_energy - expected_energy).abs() <= 1e-9);
         }
     }
+
+    #[test]
+    fn six_resource_displacement_preflight_matrix_reports_only_preflight_facts() {
+        let catalog = default_catalog();
+        let resources = catalog
+            .iter()
+            .filter(|resource| resource.name != "Water")
+            .collect::<Vec<_>>();
+        assert_eq!(
+            resources.len(),
+            6,
+            "chemistry matrix covers the six chemical resources"
+        );
+        let baseline = catalog_reactivity_baseline();
+        let mut cases = 0usize;
+        let mut stronger = 0usize;
+        let mut weaker_or_tied = 0usize;
+
+        for anchor_index in 0..resources.len() {
+            for displaced_index in 0..resources.len() {
+                if anchor_index == displaced_index {
+                    continue;
+                }
+                let anchor = crate::resources::Material::free_base(
+                    resources[anchor_index].name.clone(),
+                    1.0,
+                )
+                .weighted_properties(&catalog);
+                let displaced = crate::resources::Material::free_base(
+                    resources[displaced_index].name.clone(),
+                    1.0,
+                )
+                .weighted_properties(&catalog);
+                let old_strength = crate::combine::bond_strength(anchor, displaced);
+                for incoming_index in 0..resources.len() {
+                    if incoming_index == anchor_index || incoming_index == displaced_index {
+                        continue;
+                    }
+                    let incoming = crate::resources::Material::free_base(
+                        resources[incoming_index].name.clone(),
+                        1.0,
+                    )
+                    .weighted_properties(&catalog);
+                    // Synthetic activation isolates preflight energy feasibility.
+                    // It is not an estimate of naturally accumulated environmental activation.
+                    let synthetic_activation_probe = 1_000.0;
+                    let preflight = evaluate_displacement_preflight(
+                        anchor,
+                        displaced,
+                        incoming,
+                        old_strength,
+                        synthetic_activation_probe,
+                        baseline,
+                        0.0,
+                        0.0,
+                    )
+                    .expect("every six-resource unlike replacement must have finite preflight");
+                    let replacement_is_stronger =
+                        preflight.replacement_bond_energy > preflight.old_bond_energy;
+                    assert!(preflight.is_activated());
+                    if replacement_is_stronger {
+                        stronger += 1;
+                    } else {
+                        weaker_or_tied += 1;
+                    }
+                    println!(
+                        "DISPLACEMENT_PREFLIGHT_MATRIX|anchor={}|displaced={}|incoming={}|old_energy={:.9}|replacement_energy={:.9}|required_input={:.9}|activation_mode=synthetic_probe|activation_input={:.9}|synthetic_activation_passed={}|replacement_stronger={}",
+                        resources[anchor_index].name,
+                        resources[displaced_index].name,
+                        resources[incoming_index].name,
+                        preflight.old_bond_energy,
+                        preflight.replacement_bond_energy,
+                        preflight.energy.required_external_input,
+                        synthetic_activation_probe,
+                        preflight.is_activated(),
+                        replacement_is_stronger
+                    );
+                    cases += 1;
+                }
+            }
+        }
+
+        assert_eq!(cases, 120);
+        assert!(stronger > 0);
+        assert!(weaker_or_tied > 0);
+        println!(
+            "DISPLACEMENT_PREFLIGHT_MATRIX_SUMMARY|cases={cases}|stronger={stronger}|weaker_or_tied={weaker_or_tied}|activation_mode=synthetic_probe|activation_input=1000.0"
+        );
+    }
+
+    #[test]
+    fn displacement_trial_control_exercises_builder_and_atomic_commit() {
+        let catalog = default_catalog();
+        let (mut source, old_bond, candidate, investment) = three_participant_fixture(&catalog);
+        let trial = build_displacement_trial(
+            &source,
+            0,
+            1,
+            2,
+            old_bond,
+            candidate,
+            investment,
+            10.0,
+            catalog_reactivity_baseline(),
+            0.0,
+            &catalog,
+        )
+        .expect("the known Carbon-Hydrogen-Oxygen control must pass the real trial builder");
+
+        let required_input = trial.energy.required_external_input;
+        assert!(required_input.is_finite() && required_input > 0.0);
+        let mut ledger = crate::state::EnergyLedger {
+            total_structural_energy_held: crate::energy_ledger::structural_potential(&source)
+                .expect("source graph has valid structural potential"),
+            total_usable_energy_held: required_input,
+            ..Default::default()
+        };
+        let mut available_energy = required_input;
+        let products =
+            commit_displacement_trial(&mut source, trial, &mut ledger, &mut available_energy)
+                .expect("funded real trial must commit atomically");
+
+        assert_eq!(source.bonds.len(), 1);
+        assert_eq!(products.len(), 2);
+        assert!(available_energy.is_finite() && available_energy >= 0.0);
+        assert!(available_energy < required_input);
+        assert!((ledger.total_structural_energy_held + source.bonds[0].bond_energy).abs() <= 1e-9);
+        println!(
+            "DISPLACEMENT_TRIAL_CONTROL|anchor=Carbon|displaced=Hydrogen|incoming=Oxygen|builder=accepted|commit=accepted|required_input={required_input:.9}"
+        );
+    }
 }

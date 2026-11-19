@@ -61,6 +61,20 @@ jobs:
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
+      - name: Emit displacement preflight matrix diagnostics
+        if: success()
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          cargo test --locked six_resource_displacement_preflight_matrix_reports_only_preflight_facts -- --nocapture 2>&1 | tee displacement-preflight-matrix.log
+      - name: Upload displacement preflight matrix diagnostics
+        if: always() && hashFiles('displacement-preflight-matrix.log') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: displacement-preflight-matrix-diagnostics
+          path: displacement-preflight-matrix.log
+          if-no-files-found: error
+          retention-days: 30
       - name: Run shared environmental chemistry smoke simulation
         if: success()
         timeout-minutes: 3
