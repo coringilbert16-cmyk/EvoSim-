@@ -141,6 +141,7 @@ pub struct Laboratory {
     pub config: LaboratoryConfig,
     simulation: Simulation,
     run_generation: u64,
+    initial_placements: Vec<LaboratoryInitialPlacement>,
 }
 
 impl Laboratory {
@@ -210,7 +211,37 @@ impl Laboratory {
             config,
             simulation,
             run_generation: 0,
+            initial_placements: Vec::new(),
         })
+    }
+
+    pub fn document(&self) -> LaboratoryDocument {
+        LaboratoryDocument {
+            config: self.config.clone(),
+            initial_placements: self.initial_placements.clone(),
+        }
+    }
+
+    pub fn from_document(document: LaboratoryDocument) -> Result<Self, &'static str> {
+        if document.initial_placements.len() > 10_000 {
+            return Err("experiment setup cannot contain more than 10000 placements");
+        }
+        let mut laboratory = Self::new(document.config)?;
+        for placement in document.initial_placements {
+            match placement {
+                LaboratoryInitialPlacement::Element { resource, x, y } => {
+                    laboratory.place_element(&resource, x, y)?;
+                }
+                LaboratoryInitialPlacement::Molecule {
+                    parts,
+                    bonds,
+                    placements,
+                } => {
+                    laboratory.place_molecule(parts, bonds, placements)?;
+                }
+            }
+        }
+        Ok(laboratory)
     }
 
     /// Enable or disable the existing, ledger-settled external energy sources.
@@ -278,7 +309,7 @@ impl Laboratory {
         {
             return Err("placement must be inside laboratory bounds");
         }
-        self.place_material(
+        let identity = self.place_material(
             Material::free_base(resource.to_string(), 1.0),
             vec![Placement {
                 x,
@@ -287,7 +318,14 @@ impl Laboratory {
             }],
             x,
             y,
-        )
+        )?;
+        self.initial_placements
+            .push(LaboratoryInitialPlacement::Element {
+                resource: resource.to_string(),
+                x,
+                y,
+            });
+        Ok(identity)
     }
 
     pub fn place_molecule(
@@ -321,6 +359,9 @@ impl Laboratory {
             return Err("all constituent placements must be inside laboratory bounds");
         }
 
+        let saved_parts = parts.clone();
+        let saved_bonds = bonds.clone();
+        let saved_placements = placements.clone();
         let mut internal_bonds = Vec::with_capacity(bonds.len());
         for [part_a, part_b] in bonds {
             let bond = InternalBond { part_a, part_b };
@@ -349,7 +390,14 @@ impl Laboratory {
             .collect::<Vec<_>>();
         let anchor = placements.first().ok_or("molecule has no placement")?;
         let (anchor_x, anchor_y) = (anchor.x, anchor.y);
-        self.place_material(material, placements, anchor_x, anchor_y)
+        let identity = self.place_material(material, placements, anchor_x, anchor_y)?;
+        self.initial_placements
+            .push(LaboratoryInitialPlacement::Molecule {
+                parts: saved_parts,
+                bonds: saved_bonds,
+                placements: saved_placements,
+            });
+        Ok(identity)
     }
 
     fn place_material(
@@ -476,6 +524,27 @@ impl Laboratory {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LaboratoryDocument {
+    pub config: LaboratoryConfig,
+    pub initial_placements: Vec<LaboratoryInitialPlacement>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum LaboratoryInitialPlacement {
+    Element {
+        resource: String,
+        x: f64,
+        y: f64,
+    },
+    Molecule {
+        parts: Vec<String>,
+        bonds: Vec<[usize; 2]>,
+        placements: Vec<[f64; 3]>,
+    },
+}
+
 #[derive(Serialize)]
 pub struct LaboratorySnapshot {
     pub tick: u64,
@@ -536,6 +605,22 @@ async fn index() -> Html<&'static str> {
 
 async fn state(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
     Json(state.0.lock().await.snapshot())
+}
+
+async fn export_experiment(State(state): State<LabState>) -> Json<LaboratoryDocument> {
+    Json(state.0.lock().await.document())
+}
+
+async fn import_experiment(
+    State(state): State<LabState>,
+    Json(document): Json<LaboratoryDocument>,
+) -> Result<Json<LaboratorySnapshot>, (StatusCode, String)> {
+    let mut replacement = Laboratory::from_document(document)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+    let mut current = state.0.lock().await;
+    replacement.run_generation = current.run_generation.wrapping_add(1);
+    *current = replacement;
+    Ok(Json(current.snapshot()))
 }
 
 async fn reset(
@@ -658,6 +743,7 @@ pub async fn run() {
     let app = Router::new()
         .route("/", get(index))
         .route("/api/state", get(state))
+        .route("/api/experiment", get(export_experiment).post(import_experiment))
         .route("/api/reset", post(reset))
         .route("/api/place", post(place))
         .route("/api/molecule", post(molecule))
