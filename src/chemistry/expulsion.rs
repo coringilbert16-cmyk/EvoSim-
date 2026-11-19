@@ -334,9 +334,8 @@ mod tests {
             storage_index + 1,
             "a dormant fluid material must remain owned rather than enter the active environment"
         );
-        let retained = match &simulation.organisms[0].stored_material.entries[storage_index] {
-            StoredMaterial::Physical(retained) => retained,
-        };
+        let StoredMaterial::Physical(retained) =
+            &simulation.organisms[0].stored_material.entries[storage_index];
         assert_eq!(
             retained.realized_shape_for_part(0, &catalog),
             Some(realized_shape),
