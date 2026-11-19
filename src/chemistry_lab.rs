@@ -87,6 +87,7 @@ pub struct LaboratoryConfig {
     #[serde(default)]
     pub hotspot_enabled: bool,
     pub reaction_history: Vec<ReactionEventSnapshot>,
+    pub energy: EnergyLedgerSnapshot,
 }
 
 impl Default for LaboratoryConfig {
@@ -562,8 +563,43 @@ impl Laboratory {
             world_tone_enabled: self.config.world_tone_enabled,
             hotspot_enabled: self.config.hotspot_enabled,
             reaction_history: self.reaction_history.clone(),
+            energy: EnergyLedgerSnapshot {
+                external_input: self.simulation.energy_ledger.total_external_energy_input,
+                usable_energy_gained: self.simulation.energy_ledger.total_usable_energy_gained,
+                work_expended: self.simulation.energy_ledger.total_work_expended,
+                heat_dissipated: self.simulation.energy_ledger.total_heat_dissipated,
+                usable_energy_held: self.simulation.energy_ledger.total_usable_energy_held,
+                resonant_energy_held: self.simulation.energy_ledger.total_resonant_energy_held,
+                structural_energy_held: self.simulation.energy_ledger.total_structural_energy_held,
+                pair_interaction_potential_held: self
+                    .simulation
+                    .energy_ledger
+                    .total_pair_interaction_potential_held,
+                world_tone_unabsorbed: self
+                    .simulation
+                    .energy_ledger
+                    .total_world_tone_energy_unabsorbed,
+                world_tone_escaped: self
+                    .simulation
+                    .energy_ledger
+                    .total_world_tone_energy_escaped,
+            },
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct EnergyLedgerSnapshot {
+    pub external_input: f64,
+    pub usable_energy_gained: f64,
+    pub work_expended: f64,
+    pub heat_dissipated: f64,
+    pub usable_energy_held: f64,
+    pub resonant_energy_held: f64,
+    pub structural_energy_held: f64,
+    pub pair_interaction_potential_held: f64,
+    pub world_tone_unabsorbed: f64,
+    pub world_tone_escaped: f64,
 }
 
 #[derive(Clone, Debug, Serialize)]
