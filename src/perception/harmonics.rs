@@ -1533,13 +1533,11 @@ fn material_aura_receptions_with_geometry(
     for interval in straight_intervals {
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
-        let Some(source_surface) =
-            crate::source_exposure::nearest_visible_material_perimeter_point(
-                (receiver_x, receiver_y),
-                &source_bodies,
-                0,
-            )
-        else {
+        let Some(source_surface) = crate::source_exposure::nearest_visible_material_perimeter_point(
+            (receiver_x, receiver_y),
+            &source_bodies,
+            0,
+        ) else {
             continue;
         };
         let projected_extent = crate::source_exposure::point_source_projected_extent(
