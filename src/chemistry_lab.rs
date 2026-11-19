@@ -971,6 +971,50 @@ mod tests {
     }
 
     #[test]
+    fn laboratory_observation_captures_reaction_and_molecular_lineage_events() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        laboratory
+            .simulation
+            .environmental_chemistry_events
+            .push(crate::state::EnvironmentalChemistryEvent {
+                tick: 7,
+                reaction: "COMBINE".into(),
+                source_cells: vec![2],
+                source_material_indices: vec![0, 1],
+                source_materials: vec![vec![("Carbon".into(), 1.0)]],
+                work_required: 0.5,
+                reaction_frequency_hz: None,
+                activation_signal: None,
+                accumulated_reaction: Some(1.0),
+                broken_bond_index: None,
+                outcome: "committed".into(),
+                failure_reason: None,
+                product_material: Some(vec![("Carbon".into(), 2.0)]),
+                product_internal_bond_count: Some(1),
+                post_commit_source_cell_materials: Vec::new(),
+                molecular_lifecycle: vec![crate::state::EnvironmentalMoleculeLifecycleEvent {
+                    event: "molecular_lifecycle".into(),
+                    action: "created".into(),
+                    tick: 7,
+                    molecule_id: 42,
+                    parent_ids: vec![11, 12],
+                    reaction_id: "7-0".into(),
+                    reaction: "COMBINE".into(),
+                    molecule: None,
+                }],
+            });
+        laboratory.capture_current_tick_events();
+        let history = laboratory.snapshot().reaction_history;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].tick, 7);
+        assert_eq!(history[0].reaction, "COMBINE");
+        assert_eq!(history[0].outcome, "committed");
+        assert_eq!(history[0].molecular_lifecycle[0].molecule_id, 42);
+        assert_eq!(history[0].molecular_lifecycle[0].parent_ids, vec![11, 12]);
+    }
+
+    #[test]
     fn experiment_document_round_trips_config_and_initial_molecular_geometry() {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
