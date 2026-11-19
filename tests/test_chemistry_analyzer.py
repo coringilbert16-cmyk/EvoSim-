@@ -71,7 +71,7 @@ class ChemistryAnalyzerTests(unittest.TestCase):
         records = fixture_records()
         del records[0]["initial_material_inventory"]["Oxygen"]
         report = analyze(records)
-        self.assertFalse(report["resource_coverage"]["all_seven_present_at_start"])
+        self.assertFalse(report["resource_coverage"]["all_six_present_at_start"])
         self.assertEqual(report["resource_coverage"]["missing_at_start"], ["Oxygen"])
 
     def test_active_catalog_has_no_excluded_resources(self):
