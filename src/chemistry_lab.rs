@@ -20,6 +20,61 @@ use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::Mutex;
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LaboratoryFlowConfig {
+    /// Mean current direction in degrees; zero points right and 90 points down.
+    pub direction_degrees: f64,
+    /// Flow speed multiplier. Zero disables ambient transport.
+    pub speed: f64,
+    /// Blend between a uniform current (0) and the native S-shaped field (1).
+    pub strength: f64,
+    /// Local recirculation intensity around the two S-bend vortices.
+    pub vortex_strength: f64,
+}
+
+impl Default for LaboratoryFlowConfig {
+    fn default() -> Self {
+        Self {
+            direction_degrees: 0.0,
+            speed: 1.0,
+            strength: 1.0,
+            vortex_strength: 1.0,
+        }
+    }
+}
+
+impl LaboratoryFlowConfig {
+    fn validate(self) -> Result<(), &'static str> {
+        if !self.direction_degrees.is_finite()
+            || !(-360.0..=360.0).contains(&self.direction_degrees)
+        {
+            return Err("flow direction must be in [-360, 360] degrees");
+        }
+        if !self.speed.is_finite() || !(0.0..=10.0).contains(&self.speed) {
+            return Err("flow speed must be in [0, 10]");
+        }
+        if !self.strength.is_finite() || !(0.0..=1.0).contains(&self.strength) {
+            return Err("flow strength must be in [0, 1]");
+        }
+        if !self.vortex_strength.is_finite()
+            || !(0.0..=2.0).contains(&self.vortex_strength)
+        {
+            return Err("local vortex strength must be in [0, 2]");
+        }
+        Ok(())
+    }
+
+    fn engine_config(self) -> crate::environment_flow::FlowFieldConfig {
+        crate::environment_flow::FlowFieldConfig {
+            direction_degrees: self.direction_degrees,
+            speed: self.speed,
+            strength: self.strength,
+            vortex_strength: self.vortex_strength,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LaboratoryConfig {
     pub width: f64,
@@ -27,6 +82,8 @@ pub struct LaboratoryConfig {
     pub cell_size: f64,
     pub ticks_per_second: f64,
     pub seed: u64,
+    #[serde(default)]
+    pub flow: LaboratoryFlowConfig,
 }
 
 impl Default for LaboratoryConfig {
@@ -37,6 +94,7 @@ impl Default for LaboratoryConfig {
             cell_size: 5.0,
             ticks_per_second: 20.0,
             seed: 42,
+            flow: LaboratoryFlowConfig::default(),
         }
     }
 }
@@ -58,6 +116,7 @@ impl LaboratoryConfig {
         {
             return Err("ticks_per_second must be in (0, 10000]");
         }
+        self.flow.validate()?;
         Ok(())
     }
 }
@@ -104,12 +163,21 @@ impl Laboratory {
             environmental_local_resonance_samples: Vec::new(),
             record_local_resonance_diagnostics: false,
             record_environmental_molecular_history: true,
+            flow_field: config.flow.engine_config(),
         };
         Ok(Self {
             config,
             simulation,
             run_generation: 0,
         })
+    }
+
+    /// Replace the ambient vector field immediately, including during a live run.
+    pub fn configure_flow(&mut self, flow: LaboratoryFlowConfig) -> Result<(), &'static str> {
+        flow.validate()?;
+        self.config.flow = flow;
+        self.simulation.flow_field = flow.engine_config();
+        Ok(())
     }
 
     pub fn place_element(&mut self, resource: &str, x: f64, y: f64) -> Result<u64, &'static str> {
@@ -313,6 +381,7 @@ impl Laboratory {
             chemistry_usable_energy: self.simulation.environment.chemistry_usable_energy,
             resonant_energy: self.simulation.environment.resonant_energy.total_energy(),
             organisms: self.simulation.organisms.len(),
+            flow: self.config.flow,
         }
     }
 }
@@ -329,6 +398,7 @@ pub struct LaboratorySnapshot {
     pub chemistry_usable_energy: f64,
     pub resonant_energy: Option<f64>,
     pub organisms: usize,
+    pub flow: LaboratoryFlowConfig,
 }
 
 #[derive(Serialize)]
@@ -450,6 +520,17 @@ async fn pause(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
     Json(laboratory.snapshot())
 }
 
+async fn configure_flow(
+    State(state): State<LabState>,
+    Json(flow): Json<LaboratoryFlowConfig>,
+) -> Result<Json<LaboratorySnapshot>, (StatusCode, String)> {
+    let mut laboratory = state.0.lock().await;
+    laboratory
+        .configure_flow(flow)
+        .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+    Ok(Json(laboratory.snapshot()))
+}
+
 async fn step(
     State(state): State<LabState>,
     Json(request): Json<StepRequest>,
@@ -474,6 +555,7 @@ pub async fn run() {
         .route("/api/run", post(start))
         .route("/api/pause", post(pause))
         .route("/api/step", post(step))
+        .route("/api/flow", post(configure_flow))
         .with_state(app_state);
     let address = std::env::var("EVOSIM_LAB_ADDRESS")
         .unwrap_or_else(|_| "127.0.0.1:3030".into())
