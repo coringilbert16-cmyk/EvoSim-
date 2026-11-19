@@ -466,7 +466,7 @@ document.querySelector('#run').onclick=async()=>{await fetch('/api/run',{method:
 document.querySelector('#pause').onclick=async()=>{await fetch('/api/pause',{method:'POST'});await refresh()};
 document.querySelector('#step').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":1}'});await refresh()};
 document.querySelector('#step100').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":100}'});await refresh()};
-(async()=>{await refresh();document.querySelector('#element').innerHTML=state.resources.map(n=>'<option>'+n+'</option>').join('');new ResizeObserver(resize).observe(canvas)})();
+(async()=>{await refresh();document.querySelector('#element').innerHTML=state.resources.map(n=>'<option>'+n+'</option>').join('');new ResizeObserver(resize).observe(canvas);setInterval(()=>{if(state&&state.running)refresh()},250)})();
 </script></body></html>"#;
 
 #[cfg(test)]
