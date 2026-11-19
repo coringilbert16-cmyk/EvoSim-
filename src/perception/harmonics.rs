@@ -1399,6 +1399,7 @@ fn geometry_bounds_may_occlude_source_points(
         || candidate.min_y > max_y)
 }
 
+#[cfg(test)]
 fn receiver_has_straight_boundary(
     receiver: &crate::organism_geometry::OrganismBodyGeometry,
 ) -> bool {
@@ -1408,6 +1409,7 @@ fn receiver_has_straight_boundary(
         .any(|part| part.form.polygon_vertices().is_some())
 }
 
+#[cfg(test)]
 fn receiver_has_curved_boundary(receiver: &crate::organism_geometry::OrganismBodyGeometry) -> bool {
     receiver.parts.iter().any(|part| match &part.form {
         crate::resources::Form::Circle { .. } => true,
@@ -1540,8 +1542,8 @@ fn material_aura_receptions_with_geometry(
         // and the receiver's own response spectrum is empty.
         if spectrum_magnitude(&incident) > f64::EPSILON {
             receptions.push(MaterialAuraReception {
-                source_x: source_x,
-                source_y: source_y,
+                source_x,
+                source_y,
                 source_extent,
                 receiver_x,
                 receiver_y,
