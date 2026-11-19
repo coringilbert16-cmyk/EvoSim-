@@ -15,7 +15,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Set world width and height, then reset the experiment. Grid allocation is bounded to one million cells to keep experimental setups manageable.
 - Set the deterministic random seed for a reset.
 - Configure ambient flow direction, speed, S-field strength, and local vortex intensity; changes apply immediately while paused or running, and the renderer displays the configured vector field.
-- Enable or disable the existing 440-cycle/day world tone and 880-cycle/day localized hotspot. Both are off by default and use the simulator's existing source settlement and energy ledger.
+- Enable or disable the existing 440 Hz world tone and 880 Hz localized hotspot. Both are off by default and use the simulator's existing source settlement and energy ledger.
 - Place catalog elements by selecting an element and tapping the field (initial placement is restricted to paused tick zero).
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
