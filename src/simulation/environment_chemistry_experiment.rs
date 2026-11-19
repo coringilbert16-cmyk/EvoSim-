@@ -434,15 +434,8 @@ pub(crate) fn build(seed: u64) -> EnvironmentalChemistryFixture {
         simulation.environment.height,
         DEFAULT_CELL_SIZE,
     );
-    // Keep Water in the authoritative catalog and all historical data, but
-    // omit it from active chemistry experiment inventories until revisited.
-    let catalog: Vec<_> = simulation
-        .environment
-        .catalog
-        .iter()
-        .filter(|resource| resource.name != "Water")
-        .cloned()
-        .collect();
+    // The authoritative catalog already contains only the six active elements.
+    let catalog = simulation.environment.catalog.clone();
 
     let pile_sizes = seed_randomized_molecular_resources(
         &mut simulation.environment.field,
