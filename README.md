@@ -51,7 +51,7 @@ The separate controlled workbench uses the same Rust chemistry engine and starts
 cargo run --bin chemistry-lab
 ```
 
-Open http://127.0.0.1:3030/. See the [laboratory guide](docs/chemistry-laboratory.md) for controls and its current API/scope.
+Open http://127.0.0.1:3030/. The workbench supports exact-coordinate element/molecule placement, live flow and established energy-source controls, molecule inspection, bounded reaction/lineage history, energy-ledger diagnostics, and reproducible setup import/export. See the [laboratory guide](docs/chemistry-laboratory.md) for controls and current API/scope.
 
 ### Build and test
 
