@@ -14,8 +14,8 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 
 - Set world width and height, then reset the experiment.
 - Set the deterministic random seed for a reset.
-- Place catalog elements by selecting an element and tapping the field.
-- Place a realized molecule by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
+- Place catalog elements by selecting an element and tapping the field (initial placement is restricted to paused tick zero).
+- Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
 - Inspect material identities, constituent coordinates, and recorded internal bonds.
 
@@ -33,4 +33,4 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 
 ## Scope of this milestone
 
-This is the laboratory foundation, not the complete experimental workbench. The next milestones add configurable flow and energy sources, richer material/bond rendering and inspection, removal and editing operations, persistent experiment files, and reaction/lineage/energy diagnostics. Current energy sources are disabled by default so the empty starting state does not receive an unaccounted energy grant.
+This is the laboratory foundation, not the complete experimental workbench. The next milestones add configurable flow and energy sources, richer material/bond rendering and inspection, removal and editing operations, persistent experiment files, and reaction/lineage/energy diagnostics. Current energy sources are disabled by default so the empty starting state does not receive an unaccounted energy grant. Pre-placed molecular bond potential is included in the tick-zero structural-energy baseline; adding material after the first tick is currently rejected until explicit material-injection energy transactions are implemented.
