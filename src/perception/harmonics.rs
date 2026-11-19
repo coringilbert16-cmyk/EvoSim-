@@ -2751,12 +2751,11 @@ pub(crate) fn environmental_resonance_displacements(
     let pair_ns = pair_started.elapsed().as_nanos();
 
     let response_started = std::time::Instant::now();
-    let displacements =
-        environmental_movement_displacements_from_spatial_candidate_pair_forces(
-            emitters.len(),
-            &reference_pairs,
-            &pair_forces,
-        )?;
+    let displacements = environmental_movement_displacements_from_spatial_candidate_pair_forces(
+        emitters.len(),
+        &reference_pairs,
+        &pair_forces,
+    )?;
     let response_ns = response_started.elapsed().as_nanos();
 
     if profile_reference_timing {
@@ -2773,8 +2772,6 @@ pub(crate) fn environmental_resonance_displacements(
             worker_count,
         );
     }
-
-
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
