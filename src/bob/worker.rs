@@ -513,8 +513,10 @@ mod tests {
     #[test]
     fn worker_persists_legacy_fluid_formations_and_reopens_them() {
         let catalog = crate::resources::legacy_fluid_test_catalog();
-        let root =
-            std::env::temp_dir().join(format!("evosim-bob-legacy-fluid-worker-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-legacy-fluid-worker-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let carbon = GeometryFormation::single("Carbon");
