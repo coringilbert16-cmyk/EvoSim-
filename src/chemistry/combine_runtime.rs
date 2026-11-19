@@ -792,7 +792,7 @@ pub(crate) fn instantiate_one_unit(
         .map(|p| (p.x, p.y))
         .unwrap_or((0.0, 0.0));
     let mut trial = organism.structure.clone();
-    let indices = crate::material_restoration::restore_material(
+    let indices = crate::physical_material::restore_material(
         &mut trial,
         &instance,
         Placement {
@@ -845,7 +845,7 @@ pub(crate) fn try_combine_stored_unit(
                 &environment.catalog,
             ) {
                 let mut hypothetical = organism.structure.clone();
-                let indices = crate::material_restoration::restore_material(
+                let indices = crate::physical_material::restore_material(
                     &mut hypothetical,
                     &instance,
                     origin,
@@ -935,7 +935,7 @@ pub(crate) fn try_combine_stored_unit(
                 continue;
             }
             let mut hypothetical = organism.structure.clone();
-            let indices = crate::material_restoration::restore_material(
+            let indices = crate::physical_material::restore_material(
                 &mut hypothetical,
                 &instance,
                 origin,
@@ -996,7 +996,7 @@ pub(crate) fn try_combine_stored_unit(
             &environment.catalog,
         ) {
             let mut hypothetical = organism.structure.clone();
-            let indices = crate::material_restoration::restore_material(
+            let indices = crate::physical_material::restore_material(
                 &mut hypothetical,
                 &physical_instance,
                 placement,
@@ -1080,7 +1080,7 @@ pub(crate) fn try_combine_stored_unit(
             continue;
         }
         let mut hypothetical = organism.structure.clone();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut hypothetical,
             &physical_instance,
             placement,
@@ -1621,7 +1621,7 @@ fn try_combine_environmental(
                 continue;
             }
             let mut hypothetical = organism.structure.clone();
-            let Some(indices) = crate::material_restoration::restore_material(
+            let Some(indices) = crate::physical_material::restore_material(
                 &mut hypothetical,
                 &instance,
                 Placement {
@@ -1732,7 +1732,7 @@ fn try_combine_environmental(
             continue;
         };
         let mut trial_structure = organism.structure.clone();
-        let Some(indices) = crate::material_restoration::restore_material(
+        let Some(indices) = crate::physical_material::restore_material(
             &mut trial_structure,
             &instance,
             Placement {
