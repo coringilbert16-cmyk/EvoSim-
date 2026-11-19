@@ -203,22 +203,55 @@ impl Laboratory {
         x: f64,
         y: f64,
     ) -> Result<u64, &'static str> {
-        let catalog = &self.simulation.environment.catalog;
-        let physical = PhysicalMaterial::realized(material, placements, catalog)
-            .ok_or("physical realization or bond geometry validation failed")?;
-        let field = &mut self.simulation.environment.field;
-        if !field.deposit_physical(x, y, physical, catalog) {
-            return Err("environment rejected material");
+        if self.simulation.tick != 0 || self.simulation.running {
+            return Err("initial material placement requires a paused tick-zero experiment");
         }
-        field.assign_missing_material_identities();
-        let index = field
-            .index_for_position(x, y)
-            .ok_or("invalid destination")?;
-        field.cells[index]
-            .physical_materials
-            .last()
-            .map(|material| material.environmental_identity)
-            .ok_or("identity assignment failed")
+        let identity = {
+            let catalog = &self.simulation.environment.catalog;
+            let physical = PhysicalMaterial::realized(material, placements, catalog)
+                .ok_or("physical realization or bond geometry validation failed")?;
+            let field = &mut self.simulation.environment.field;
+            if !field.deposit_physical(x, y, physical, catalog) {
+                return Err("environment rejected material");
+            }
+            field.assign_missing_material_identities();
+            let index = field
+                .index_for_position(x, y)
+                .ok_or("invalid destination")?;
+            field.cells[index]
+                .physical_materials
+                .last()
+                .map(|material| material.environmental_identity)
+                .ok_or("identity assignment failed")?
+        };
+
+        // Placed bonded molecules are part of the experiment's initial
+        // condition, not a reaction. Move the tick-zero structural baseline
+        // with that explicitly supplied initial material so its bond potential
+        // is not mistaken for energy created by the simulator.
+        let initial_structural_energy = self
+            .simulation
+            .environment
+            .field
+            .cells
+            .iter()
+            .flat_map(|cell| cell.physical_materials.iter())
+            .map(|material| {
+                material
+                    .internal_connections
+                    .as_ref()
+                    .map(|bonds| -bonds.iter().map(|bond| bond.bond_energy).sum::<f64>())
+                    .unwrap_or(0.0)
+            })
+            .sum::<f64>();
+        if !initial_structural_energy.is_finite() {
+            return Err("initial structural energy is not finite");
+        }
+        self.simulation.energy_ledger.total_structural_energy_held =
+            initial_structural_energy;
+        self.simulation.energy_ledger.initial_structural_energy_held =
+            initial_structural_energy;
+        Ok(identity)
     }
 
     pub fn step(&mut self, count: u32) -> Result<(), &'static str> {
@@ -522,6 +555,21 @@ mod tests {
         assert_eq!(molecule.bonds, vec![[0, 1]]);
         assert_eq!(molecule.bond_count, 1);
         assert_eq!(molecule.placements.len(), 2);
+        assert!(
+            laboratory
+                .simulation
+                .energy_inventory_snapshot()
+                .is_balanced(1e-9),
+            "pre-placed bond potential belongs to the tick-zero initial condition"
+        );
+    }
+
+    #[test]
+    fn laboratory_rejects_material_injection_after_the_experiment_starts() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        laboratory.step(1).expect("first tick");
+        assert!(laboratory.place_element("Carbon", 10.0, 10.0).is_err());
     }
 
     #[test]
