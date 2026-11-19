@@ -4929,6 +4929,8 @@ fn add_global_intersection_cuts(
             let dx = center_b.0 - center_a.0;
             let dy = center_b.1 - center_a.1;
             let distance = dx.hypot(dy);
+            let radius_a = *radius_a;
+            let radius_b = *radius_b;
             if distance <= 1e-12 && (radius_a - radius_b).abs() <= 1e-10 {
                 return None;
             }
