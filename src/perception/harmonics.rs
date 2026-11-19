@@ -2772,6 +2772,7 @@ pub(crate) fn environmental_resonance_displacements(
             worker_count,
         );
     }
+    Some(displacements)
 }
 
 #[allow(dead_code)] // Used by the staged numerical-gradient force implementation.
