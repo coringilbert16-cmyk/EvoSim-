@@ -5411,6 +5411,44 @@ mod environmental_movement_spatial_candidate_tests {
     }
 
     #[test]
+    fn broadphase_bound_covers_all_near_frequency_component_matches() {
+        let spectrum = ToneSpectrum {
+            components: (0..4)
+                .map(|index| ToneComponent {
+                    frequency_cycles_per_day: 440.0 + index as f64 * 1e-10,
+                    amplitude: 0.5,
+                    phase_radians: 0.0,
+                })
+                .collect(),
+        };
+        let (phase_components, phase_component_count) =
+            environmental_movement_phase_components(&spectrum).unwrap();
+        let strength_bound = spectrum
+            .components
+            .iter()
+            .map(|component| component.amplitude * component.amplitude)
+            .sum::<f64>()
+            .sqrt();
+        let make_emitter = |x| EnvironmentalMovementEmitter {
+            x,
+            y: 0.0,
+            strength_bound,
+            mass_scale: 1.0,
+            spectrum: spectrum.clone(),
+            phase_components,
+            phase_component_count,
+        };
+        let emitters = vec![make_emitter(0.0), make_emitter(20.0)];
+        let reach = environmental_movement_pair_support_radius(&emitters[0], &emitters[1])
+            .unwrap();
+        assert!(reach > 20.0);
+        assert_eq!(
+            environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
+            vec![(0, 1)]
+        );
+    }
+
+    #[test]
     fn sweep_and_prune_matches_exhaustive_energy_cutoff_oracle() {
         let emitters = vec![
             emitter(0.0, 0.0, 0.5, 0.0),
