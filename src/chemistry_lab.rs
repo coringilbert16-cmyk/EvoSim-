@@ -242,13 +242,7 @@ impl Laboratory {
                     .clone()
                     .unwrap_or_default()
                     .iter()
-                    .map(|placement| {
-                        [
-                            placement.x,
-                            placement.y,
-                            placement.rotation_radians,
-                        ]
-                    })
+                    .map(|placement| [placement.x, placement.y, placement.rotation_radians])
                     .collect(),
                 bond_count: material.internal_connections.as_ref().map_or(0, Vec::len),
                 bonds: material
@@ -371,9 +365,7 @@ async fn molecule(
     Ok(Json(serde_json::json!({ "identity": identity })))
 }
 
-async fn start(
-    State(state): State<LabState>,
-) -> Json<LaboratorySnapshot> {
+async fn start(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
     let should_start = {
         let mut laboratory = state.0.lock().await;
         if laboratory.simulation.running {
@@ -392,9 +384,7 @@ async fn start(
                     if !laboratory.simulation.running {
                         break;
                     }
-                    std::time::Duration::from_secs_f64(
-                        1.0 / laboratory.config.ticks_per_second,
-                    )
+                    std::time::Duration::from_secs_f64(1.0 / laboratory.config.ticks_per_second)
                 };
                 tokio::time::sleep(interval).await;
                 let mut laboratory = shared.lock().await;
