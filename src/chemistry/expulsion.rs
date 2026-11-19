@@ -226,14 +226,14 @@ mod tests {
 
     #[test]
     fn expulsion_boundary_uses_authoritative_realized_fluid_shape() {
-        let catalog = crate::resources::default_catalog();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &water.shape.form {
+        let area = match &legacy fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default legacy fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
@@ -251,7 +251,7 @@ mod tests {
             },
         };
         let physical = PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -276,14 +276,14 @@ mod tests {
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
         }
-        let catalog = simulation.environment.catalog.clone();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &water.shape.form {
+        let area = match &legacy fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default legacy fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
@@ -301,7 +301,7 @@ mod tests {
             },
         };
         let mut physical = PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -344,7 +344,7 @@ mod tests {
                     .material
                     .parts
                     .first()
-                    .is_some_and(|part| part.0 == "Water")
+                    .is_some_and(|part| part.0 == "LegacyFluidFixture")
             })
             .collect();
         assert_eq!(
@@ -499,7 +499,7 @@ mod tests {
     #[test]
     fn missing_destination_index_preserves_expulsion_source_and_neighbor_order() {
         let mut simulation = Simulation::new(928, 10.0);
-        let catalog = simulation.environment.catalog.clone();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let make = |name: &str, x: f64| {
             PhysicalMaterial::realized(
                 Material::free_base(name, 1.0),
@@ -513,13 +513,13 @@ mod tests {
             .expect("test material should realize")
         };
         let before = make("Nitrogen", 0.0);
-        let water = catalog
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let area = match &water.shape.form {
+        let area = match &legacy fluid.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default legacy fluid shape should have a measurable area"),
         };
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
             area,
@@ -537,7 +537,7 @@ mod tests {
             },
         };
         let mut source = PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
