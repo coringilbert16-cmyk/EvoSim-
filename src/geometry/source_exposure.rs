@@ -4650,7 +4650,7 @@ mod complete_visible_material_perimeter_tests {
             2.5,
             0.0,
         );
-        let clear = visible_material_perimeter_from_point((0.0, 0.0), &[source.clone()], 0)
+        let clear = visible_material_perimeter_from_point((0.0, 0.0), std::slice::from_ref(&source), 0)
             .expect("unblocked circle visibility");
         let blocked = visible_material_perimeter_from_point((0.0, 0.0), &[source, blocker], 0)
             .expect("remaining visible arcs survive the blocker");
