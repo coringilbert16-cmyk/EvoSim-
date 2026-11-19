@@ -30,6 +30,10 @@ jobs:
         with:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies and build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - name: Check formatting
         timeout-minutes: 5
         run: cargo fmt --all -- --check
@@ -38,43 +42,21 @@ jobs:
         run: |
           bash scripts/check_large_files.sh
           bash scripts/check_combine_architecture.sh
-      - name: Test offline chemistry analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
-      - name: Test offline chemical organization analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
-      - name: Test offline chemistry experiment batch analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_chemistry_experiment_batch_analyzer.py'
-      - name: Test offline topology-aware reaction network analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_reaction_network_analyzer.py'
-      - name: Test offline instance-level geometry-aware reaction network analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
-      - name: Test offline contact-opportunity analyzer
-        timeout-minutes: 2
-        run: python3 -m unittest discover -s tests -p 'test_contact_opportunity_analyzer.py'
+      - name: Test offline analyzers
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_chemistry_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_chemistry_organization_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_chemistry_experiment_batch_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_reaction_network_analyzer.py'
+          python3 -m unittest discover -s tests -p 'test_geometry_aware_reaction_network.py'
+          python3 -m unittest discover -s tests -p 'test_contact_opportunity_analyzer.py'
       - name: Run Rust tests
         if: success()
         # Preserve full-suite coverage; the current all-targets suite can exceed six minutes.
         timeout-minutes: 10
         run: cargo test --locked --all-targets
-      - name: Emit displacement preflight matrix diagnostics
-        if: success()
-        timeout-minutes: 2
-        run: |
-          set -euo pipefail
-          cargo test --locked six_resource_displacement_preflight_matrix_reports_only_preflight_facts -- --nocapture 2>&1 | tee displacement-preflight-matrix.log
-      - name: Upload displacement preflight matrix diagnostics
-        if: always() && hashFiles('displacement-preflight-matrix.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: displacement-preflight-matrix-diagnostics
-          path: displacement-preflight-matrix.log
-          if-no-files-found: error
-          retention-days: 30
       - name: Run shared environmental chemistry smoke simulation
         if: success()
         timeout-minutes: 3
@@ -87,83 +69,6 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
-      # PR #377: compare spatial discovery with exhaustive discovery using
-      # the same response-resolution cutoff and the same physical implementation.
-      - name: Prepare matched resonance movement worktree
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          git worktree add --detach /tmp/evosim-resonance-cutoff "$HEAD_SHA"
-          mkdir -p movement-benchmark
-      - name: Profile spatially discovered movement on the standard 60-second workload
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
-        timeout-minutes: 5
-        env:
-          EVOSIM_PROFILE_MOVEMENT: '1'
-          CARGO_TARGET_DIR: ${{ runner.temp }}/evosim-movement-benchmark-target
-        run: |
-          set -euo pipefail
-          cd /tmp/evosim-resonance-cutoff
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics "$GITHUB_WORKSPACE/movement-benchmark/spatial.jsonl" --diagnostic-interval 100 2>&1 | tee "$GITHUB_WORKSPACE/movement-benchmark/spatial.log"
-      - name: Profile exhaustive same-cutoff movement reference
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
-        timeout-minutes: 5
-        env:
-          EVOSIM_PROFILE_MOVEMENT: '1'
-          EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS: '1'
-          EVOSIM_PROFILE_MOVEMENT_REFERENCE: '1'
-          CARGO_TARGET_DIR: ${{ runner.temp }}/evosim-movement-benchmark-target
-        run: |
-          set -euo pipefail
-          cd /tmp/evosim-resonance-cutoff
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics "$GITHUB_WORKSPACE/movement-benchmark/exhaustive.jsonl" --diagnostic-interval 100 2>&1 | tee "$GITHUB_WORKSPACE/movement-benchmark/exhaustive.log"
-      - name: Upload PR #377 spatial-versus-exhaustive movement comparison
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 377 && hashFiles('movement-benchmark/spatial.log') != '' && hashFiles('movement-benchmark/exhaustive.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: resonance-movement-spatial-vs-exhaustive
-          path: movement-benchmark/
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Profile material-property derivation on the standard 60-second workload
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 370
-        timeout-minutes: 4
-        env:
-          EVOSIM_PROFILE_PROPERTIES: '1'
-        run: |
-          set -euo pipefail
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics property-profile.jsonl --diagnostic-interval 100 2>&1 | tee property-profile.log
-      - name: Upload material-property profile
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 370 && hashFiles('property-profile.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: material-property-profile
-          path: |
-            property-profile.log
-            property-profile.jsonl
-          if-no-files-found: error
-          retention-days: 30
-      - name: Run unprofiled material-property control on the same runner
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 370
-        timeout-minutes: 4
-        run: |
-          set -euo pipefail
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics property-control.jsonl --diagnostic-interval 100 2>&1 | tee property-control.log
-      - name: Upload material-property profiler calibration pair
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 370 && hashFiles('property-profile.log') != '' && hashFiles('property-control.log') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: material-property-profile-calibration
-          path: |
-            property-profile.log
-            property-profile.jsonl
-            property-control.log
-            property-control.jsonl
-          if-no-files-found: error
-          retention-days: 30
       - name: Analyze shared chemistry smoke output
         if: success()
         run: |
@@ -189,48 +94,8 @@ jobs:
             environmental-chemistry-smoke-organization.md
           if-no-files-found: error
           retention-days: 14
-      - name: Capture rustfmt correction patch
-        if: always()
-        run: |
-          cargo fmt --all
-          git diff --binary -- src/simulation/state.rs src/simulation/simulation.rs src/simulation/environment.rs src/chemistry/environmental_combine.rs src/simulation/environment_chemistry_experiment.rs src/infrastructure/diagnostics.rs src/tests/environment_tests.rs src/perception/harmonics.rs > rustfmt-corrections.patch
-          cat rustfmt-corrections.patch
-      - name: Upload rustfmt correction patch
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rustfmt-corrections
-          path: rustfmt-corrections.patch
-          if-no-files-found: error
-          retention-days: 7
       - name: Run Clippy
         timeout-minutes: 5
         if: success()
         run: cargo clippy --locked --all-targets --all-features -- -D warnings -A clippy::unnecessary_sort_by -A clippy::unnecessary_map_or -A clippy::manual_is_multiple_of
-
-  pr335-discovery-benchmark:
-    if: github.event_name == 'pull_request' && github.event.pull_request.number == 335
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Verify extracted modules remain isolated from production reaction execution
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: bash scripts/verify_pr335_performance.sh --isolation-only
-      - name: Run isolated discovery scaling benchmark
-        run: |
-          set -euo pipefail
-          cargo test --release --locked environmental_discovery_scaling_benchmark -- --ignored --nocapture | tee pr335-discovery-benchmark.csv
-      - name: Upload isolated discovery benchmark
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr335-isolated-discovery-benchmark
-          path: pr335-discovery-benchmark.csv
-          if-no-files-found: error
-          retention-days: 30
 
