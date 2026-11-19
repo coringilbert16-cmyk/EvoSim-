@@ -393,18 +393,14 @@ async fn start(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
             loop {
                 let interval = {
                     let laboratory = shared.lock().await;
-                    if !laboratory.simulation.running
-                        || laboratory.run_generation != generation
-                    {
+                    if !laboratory.simulation.running || laboratory.run_generation != generation {
                         break;
                     }
                     std::time::Duration::from_secs_f64(1.0 / laboratory.config.ticks_per_second)
                 };
                 tokio::time::sleep(interval).await;
                 let mut laboratory = shared.lock().await;
-                if !laboratory.simulation.running
-                    || laboratory.run_generation != generation
-                {
+                if !laboratory.simulation.running || laboratory.run_generation != generation {
                     break;
                 }
                 laboratory.simulation.step();
