@@ -46,6 +46,12 @@ struct BondFormationRequest {
     investment: f64,
 }
 
+fn catalog_contains_only_rigid_resources(catalog: &[BaseResource]) -> bool {
+    catalog
+        .iter()
+        .all(|resource| resource.physical_state == crate::resources::PhysicalState::Rigid)
+}
+
 fn material_contains_only_rigid_resources(
     material: &crate::resources::Material,
     catalog: &[BaseResource],
@@ -1555,9 +1561,7 @@ pub(crate) fn combine_specific_pair(
 
 pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> bool {
     if organism.active_transformation_id.is_some()
-        || organism.structure.units.iter().any(|unit| {
-            !material_contains_only_rigid_resources(&unit.material, &environment.catalog)
-        })
+        || !catalog_contains_only_rigid_resources(&environment.catalog)
         || organism
             .stored_material
             .first_material()
@@ -1805,11 +1809,7 @@ pub(crate) fn try_combine(
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
-    if organism
-        .structure
-        .units
-        .iter()
-        .any(|unit| !material_contains_only_rigid_resources(&unit.material, &environment.catalog))
+    if !catalog_contains_only_rigid_resources(&environment.catalog)
         || organism
             .stored_material
             .first_material()
