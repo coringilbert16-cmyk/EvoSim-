@@ -2050,6 +2050,7 @@ mod fluid_coalescence_transaction_tests {
         structure.bonds.clear();
 
         let mut simulation = crate::state::Simulation::new(0xC0B1, 10.0);
+        simulation.environment.catalog = catalog.clone();
         simulation.organisms[0].structure = structure;
         // The test replaces the constructor's initial structure with a bond-free
         // fixture. Reset only the corresponding structural-energy baseline so the
@@ -2535,10 +2536,11 @@ mod fluid_coalescence_transaction_tests {
 
     #[test]
     fn live_intra_organism_combine_invalidates_structure_derived_caches() {
-        let (mut structure, _, _) = build_bonded_pair(0.0, false);
+        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
         structure.bonds.clear();
 
         let mut simulation = crate::state::Simulation::new(0xC0B2, 10.0);
+        simulation.environment.catalog = catalog;
         for cell in &mut simulation.environment.field.cells {
             cell.materials.clear();
             cell.physical_materials.clear();
