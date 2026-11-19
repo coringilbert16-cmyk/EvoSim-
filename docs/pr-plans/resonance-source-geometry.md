@@ -30,7 +30,8 @@ It does not own live movement pair discovery, finite interaction support, propag
 - Existing visibility solvers split and occlude boundary pieces against supplied bodies.
 - Receiver bodies are excluded as blockers for rays that begin on their own boundary; third-party bodies remain occluders.
 - Complete visible-boundary queries preserve all visible pieces rather than collapsing them to one nearest point.
-- Source-global perimeter primitives enumerate exact straight edges and circular arcs without a receiver viewpoint for a conservative supported subset.
+- Source-global union geometry splits exact polygon edges and circular arcs at line/line, line/circle, and circle/circle intersections, then removes intervals covered by other constituents.
+- Intersecting convex polygon and circle constituents are supported without tessellation; coincident/collinear boundary overlap and fluid/line union arrangements still fail closed.
 
 ### Perimeter measurement and allocation
 - Exact straight-segment and circular-arc measures are available.
@@ -44,13 +45,10 @@ The staged geometry-aware reception path uses the nearest visible source-perimet
 This integration is intentionally limited. Receiver-side sample selection still begins from centroid-derived intervals in the current path, so it does not yet represent every receiver patch visible from any part of the source surface. The nearest-point query is not a continuous source-perimeter energy integral.
 
 ## Remaining geometry work
-1. Complete the source-global union boundary for intersecting and touching realized constituents.
-   - Enumerate exact world-space line and curved boundary primitives with identity and outward normal.
-   - Split primitives at line/line, line/circle, circle/circle, tangency, and supported fluid-boundary intersections.
-   - Classify each open interval against the interiors of all other constituents.
-   - Remove internal/covered intervals and count shared physical boundaries exactly once.
-   - Return deterministic, disjoint straight intervals and exact circular arcs.
-   - Fail closed for invalid or unsupported geometry; do not substitute bounding circles or tessellation.
+1. Complete the source-global union boundary for all supported realized constituents.
+   - Current implementation handles intersecting convex polygons and circles with exact line/line, line/circle, and circle/circle splitting and midpoint interior classification.
+   - Add exact handling for shared/coincident edges, touching polygon boundaries, fluid arcs/chords, multi-contact fluid boundaries, and line forms where their geometry is well-defined.
+   - Preserve fail-closed behavior for ambiguous coincident or unsupported arrangements; do not substitute bounding circles or tessellation.
 
 2. Generalize visibility over the complete source-global boundary.
    - Keep source-global boundary discovery separate from receiver-relative visibility.
