@@ -189,8 +189,8 @@ pub(crate) fn seed_randomized_resources(
         .collect::<Vec<_>>();
     assert_eq!(
         resource_names.len(),
-        7,
-        "the default environment retains all seven canonical resources"
+        6,
+        "the default environment contains exactly six active elements"
     );
 
     let mut identities = resource_names.clone();
