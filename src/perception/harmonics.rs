@@ -1458,37 +1458,44 @@ fn material_aura_receptions_with_geometry(
         environmental_material_resonance(source, catalog, tick)?;
 
     let receiver_geometry = receiver_bodies.first()?;
-    // Select the emitting point from the actual source perimeter, nearest the
-    // receiver's world-space bounds center. For contact or shallow overlap,
-    // that center can lie inside the source; use the source center and the
-    // receiver's exact global perimeter rather than rejecting a valid pair.
+    // Start from the nearest source-perimeter point as viewed from the
+    // receiver. If the receiver center lies inside the source, use the source
+    // center because an external perimeter point is not defined from there.
     let receiver_center = (
         (receiver_geometry.min_x + receiver_geometry.max_x) * 0.5,
         (receiver_geometry.min_y + receiver_geometry.max_y) * 0.5,
     );
-    let (source_x, source_y, receiver_perimeter) =
-        if source_geometry.contains_point(receiver_center.0, receiver_center.1) {
-            (
-                source_center_x,
-                source_center_y,
-                crate::source_exposure::disjoint_source_global_material_perimeter(
-                    receiver_geometry,
-                    0,
-                )?,
-            )
-        } else {
-            let source_surface = crate::source_exposure::nearest_visible_material_perimeter_point(
-                receiver_center,
-                std::slice::from_ref(source_geometry),
-                0,
-            )?;
-            let perimeter = crate::source_exposure::visible_material_perimeter_from_point(
-                (source_surface.x, source_surface.y),
-                receiver_bodies,
-                0,
-            )?;
-            (source_surface.x, source_surface.y, perimeter)
-        };
+    let source_point = if source_geometry.contains_point(receiver_center.0, receiver_center.1) {
+        (source_center_x, source_center_y)
+    } else {
+        let source_surface = crate::source_exposure::nearest_visible_material_perimeter_point(
+            receiver_center,
+            std::slice::from_ref(source_geometry),
+            0,
+        )?;
+        (source_surface.x, source_surface.y)
+    };
+
+    // At contact or shallow overlap, the nearest source-surface point can be
+    // on or inside the receiver. A viewpoint there makes the visibility query
+    // correctly fail closed, but the pair itself remains geometrically valid.
+    // Recenter the emitter; use its visible receiver perimeter whenever the
+    // source center is still outside the receiver, and the complete receiver
+    // perimeter only for fully interpenetrating centers.
+    let (source_x, source_y) = if receiver_geometry.contains_point(source_point.0, source_point.1) {
+        (source_center_x, source_center_y)
+    } else {
+        source_point
+    };
+    let receiver_perimeter = if receiver_geometry.contains_point(source_x, source_y) {
+        crate::source_exposure::disjoint_source_global_material_perimeter(receiver_geometry, 0)?
+    } else {
+        crate::source_exposure::visible_material_perimeter_from_point(
+            (source_x, source_y),
+            receiver_bodies,
+            0,
+        )?
+    };
 
     // Blocker silhouettes and boundary intersections split straight and
     // curved intervals before reception is evaluated; no whole-interval
