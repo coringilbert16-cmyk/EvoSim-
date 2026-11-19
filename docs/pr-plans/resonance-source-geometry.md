@@ -40,9 +40,9 @@ It does not own live movement pair discovery, finite interaction support, propag
 - Receiver-visible subsets are measured against a source-global denominator; they must not be renormalized per receiver.
 
 ### Aura-reception integration
-The staged geometry-aware reception path uses the nearest visible source-perimeter point to determine propagation distance for selected receiver-boundary samples. It retains the existing emitted spectrum, mass scaling, receiver projected extent, and continuous inverse-distance amplitude attenuation.
+The geometry-aware reception path now enumerates the receiver's complete source-global perimeter rather than choosing receiver intervals from the source centroid. For each receiver-boundary sample it resolves the nearest visible point on the complete source perimeter and uses that point for distance and point-source projected extent. It retains the existing emitted spectrum, mass scaling, and continuous inverse-distance amplitude attenuation.
 
-This integration is intentionally limited. Receiver-side sample selection still begins from centroid-derived intervals in the current path, so it does not yet represent every receiver patch visible from any part of the source surface. The nearest-point query is not a continuous source-perimeter energy integral.
+This integration is intentionally limited. Visibility is evaluated at each receiver-boundary sample; the boundary intervals are not yet split at every source-surface-dependent visibility transition, so partial occlusion within one sampled interval still needs exact treatment. The nearest-point query is not a continuous source-perimeter energy integral.
 
 ## Remaining geometry work
 1. Complete the source-global union boundary for all supported realized constituents.
@@ -50,10 +50,11 @@ This integration is intentionally limited. Receiver-side sample selection still 
    - Add exact handling for shared/coincident edges, touching polygon boundaries, fluid arcs/chords, multi-contact fluid boundaries, and line forms where their geometry is well-defined.
    - Preserve fail-closed behavior for ambiguous coincident or unsupported arrangements; do not substitute bounding circles or tessellation.
 
-2. Generalize visibility over the complete source-global boundary.
-   - Keep source-global boundary discovery separate from receiver-relative visibility.
-   - Determine receiver visibility from the full source surface, not from centroid-selected receiver intervals.
+2. Complete perimeter-to-perimeter visibility.
+   - Current receiver sampling enumerates the receiver's source-global perimeter and queries the nearest visible point on the source perimeter at each sample.
+   - Split receiver intervals at exact visibility transitions as the nearest source point and third-party occlusion change along the receiver boundary.
    - Preserve third-party occlusion and exclude only the receiver's own body where rays originate on its boundary.
+   - Avoid centroid-derived sample selection and avoid tessellating curved boundaries.
 
 3. Complete supported shape coverage.
    - Integrate fluid and line boundary forms into the same exact boundary arrangement.
