@@ -22,7 +22,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Select and inspect individual molecules by tapping them; inspect stable identity, constituent composition, exact coordinates, rotations, and bond graph.
 - Observe bounded environmental reaction history, outcomes, work requirements, products, and molecular creation/parent lineage.
 - Inspect the authoritative energy-ledger counters for external input, usable/resonant/structural holdings, pair potential, work, heat, and world-tone unabsorbed/escaped energy. History is collected from the shared engine's committed/rejected event records; no reaction is forced for display.
-- Zoom with the mouse wheel/pinch and pan by dragging the field.
+- Zoom with the mouse wheel or the on-screen zoom controls; pan by dragging the field and restore the full-world view with Fit World.
 - Export or import a reproducible experiment setup, including world dimensions, seed, flow/source settings, and all tick-zero element/molecule placements. Import rebuilds the initial state through the engine's normal geometry and validation path.
 
 Molecule placement is validated by the existing `PhysicalMaterial::realized` geometry and bond rules. Invalid geometry is rejected; the lab does not invent bond endpoints or force a reaction.
