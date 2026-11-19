@@ -173,7 +173,7 @@ fn combine_energy_transaction_with_rounding(
 /// Resolve the adhesion at the actual structural-unit interface.
 /// Structural units represent individual physical constituents; compound-wide
 /// weighted properties are deliberately not used for pair adhesion.
-/// Water remains on its existing compatibility path during this staged migration.
+/// legacy fluid remains on its existing compatibility path during this staged migration.
 fn active_pair_potential(
     structure: &crate::structure::OrganismStructure,
     unit_a: usize,
@@ -208,7 +208,7 @@ fn active_pair_potential(
         .ok_or("interface resource B is missing from catalog")?;
 
     // The new multidimensional model is explicitly scoped to the six
-    // migrated non-Water resources. Legacy/custom catalog entries retain their
+    // migrated non-legacy fluid resources. Legacy/custom catalog entries retain their
     // existing interaction adapter until they receive approved descriptors.
     let active_resource = |name: &str| {
         matches!(
@@ -295,8 +295,8 @@ fn evaluate_candidate(
     }
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
-    // Non-Water chemistry uses the actual resource pair at this interface.
-    // Water remains on the legacy path until its fluid/capillary adapter is migrated.
+    // Non-legacy fluid chemistry uses the actual resource pair at this interface.
+    // legacy fluid remains on the legacy path until its fluid/capillary adapter is migrated.
     let pair_potential = active_pair_potential(structure, ua, ub, candidate, catalog).ok()?;
     if pair_potential.is_none() && a.chemical_position.is_some() && b.chemical_position.is_some() {
         let interaction = crate::combine::chemical_interaction(
@@ -1929,15 +1929,15 @@ mod fluid_coalescence_transaction_tests {
         second_x: f64,
         with_rigid_contact: bool,
     ) -> (OrganismStructure, Vec<BaseResource>, f64) {
-        let catalog = default_catalog();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let unit_area = match &water.shape.form {
+        let unit_area = match &legacy fluid.shape.form {
             Form::Circle { radius } => PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water test fixture requires a measurable fluid area"),
+            _ => panic!("legacy fluid test fixture requires a measurable fluid area"),
         };
         let radius = (2.0 * unit_area / PI).sqrt();
         let placement_a = Placement {
@@ -1951,9 +1951,9 @@ mod fluid_coalescence_transaction_tests {
             rotation_radians: 0.0,
         };
         let mut upper =
-            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_a).unwrap();
+            StructuralUnit::from_material(Material::free_base("LegacyFluidFixture", 1.0), placement_a).unwrap();
         let mut lower =
-            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_b).unwrap();
+            StructuralUnit::from_material(Material::free_base("LegacyFluidFixture", 1.0), placement_b).unwrap();
         assert!(upper.realize_fluid_geometry(semicircle_shape(radius, true), &catalog));
         assert!(lower.realize_fluid_geometry(semicircle_shape(radius, false), &catalog));
 
@@ -2102,7 +2102,7 @@ mod fluid_coalescence_transaction_tests {
         assert!(attempt.is_some(), "supported fluid pair should COMBINE");
         assert_eq!(structure.units.len(), 1);
         assert_eq!(structure.physical_id(0), Some(survivor_id));
-        assert_eq!(structure.units[0].material.parts[0].0, "Water");
+        assert_eq!(structure.units[0].material.parts[0].0, "LegacyFluidFixture");
         assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
         assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
         assert!(
@@ -2163,7 +2163,7 @@ mod fluid_coalescence_transaction_tests {
             rotation_radians: 0.0,
         };
         let stored = crate::physical_material::PhysicalMaterial::realized_with_single_fluid_shape(
-            Material::free_base("Water", 2.0),
+            Material::free_base("LegacyFluidFixture", 2.0),
             origin,
             shape.clone(),
             &catalog,
@@ -2202,7 +2202,7 @@ mod fluid_coalescence_transaction_tests {
         ));
         assert_eq!(structure.units.len(), 2);
         assert_eq!(structure.units[0].physical_id, survivor_id);
-        assert_eq!(structure.units[0].material.parts[0].0, "Water");
+        assert_eq!(structure.units[0].material.parts[0].0, "LegacyFluidFixture");
         assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
         assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
         assert_eq!(structure.bonds.len(), 1);
@@ -2224,7 +2224,7 @@ mod fluid_coalescence_transaction_tests {
             ..
         } = &merged_shape.form
         else {
-            panic!("merged water must retain its exact multi-contact boundary");
+            panic!("merged legacy fluid must retain its exact multi-contact boundary");
         };
         assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
         assert!(boundary.is_valid());
@@ -2252,14 +2252,14 @@ mod fluid_coalescence_transaction_tests {
             .map(|(index, vertex)| (index, *vertex))
             .unwrap();
         let carbon_radius = vx.hypot(vy);
-        let water = catalog
+        let legacy fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let fluid_radius = match &water.shape.form {
+        let fluid_radius = match &legacy fluid.shape.form {
             Form::Circle { radius } => *radius,
             Form::Fluid { nominal_area, .. } => (*nominal_area / PI).sqrt(),
-            _ => panic!("Water test fixture requires a measurable fluid area"),
+            _ => panic!("legacy fluid test fixture requires a measurable fluid area"),
         };
         let carbon_placement = Placement {
             x: 0.0,
