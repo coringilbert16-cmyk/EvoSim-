@@ -1553,10 +1553,8 @@ fn material_aura_receptions_with_geometry(
     for interval in straight_intervals {
         let receiver_x = (interval.start.0 + interval.end.0) * 0.5;
         let receiver_y = (interval.start.1 + interval.end.1) * 0.5;
-        let projected_extent = crate::source_exposure::point_source_projected_extent(
-            interval,
-            (source_x, source_y),
-        )?;
+        let projected_extent =
+            crate::source_exposure::point_source_projected_extent(interval, (source_x, source_y))?;
         receive_at(
             receiver_x,
             receiver_y,
