@@ -569,6 +569,10 @@ impl Laboratory {
             world_tone_enabled: self.config.world_tone_enabled,
             hotspot_enabled: self.config.hotspot_enabled,
             reaction_history: self.reaction_history.clone(),
+            molecular_network: molecular_network_snapshot(
+                &self.simulation,
+                &self.reaction_history,
+            ),
             energy: EnergyLedgerSnapshot {
                 external_input: self.simulation.energy_ledger.total_external_energy_input,
                 usable_energy_gained: self.simulation.energy_ledger.total_usable_energy_gained,
@@ -591,6 +595,84 @@ impl Laboratory {
                     .total_world_tone_energy_escaped,
             },
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct MolecularNetworkSnapshot {
+    pub molecule_nodes: usize,
+    pub lineage_edges: usize,
+    pub family_count: usize,
+    pub largest_family_size: usize,
+    pub reaction_types: Vec<String>,
+    pub edges: Vec<[u64; 2]>,
+}
+
+fn molecular_network_snapshot(
+    simulation: &Simulation,
+    history: &[ReactionEventSnapshot],
+) -> MolecularNetworkSnapshot {
+    let mut nodes = std::collections::BTreeSet::new();
+    let mut edges = std::collections::BTreeSet::new();
+    let mut reaction_types = std::collections::BTreeSet::new();
+
+    for material in simulation
+        .environment
+        .field
+        .cells
+        .iter()
+        .flat_map(|cell| cell.physical_materials.iter())
+    {
+        nodes.insert(material.environmental_identity);
+    }
+
+    for event in history {
+        reaction_types.insert(event.reaction.clone());
+        for lifecycle in &event.molecular_lifecycle {
+            nodes.insert(lifecycle.molecule_id);
+            for parent_id in &lifecycle.parent_ids {
+                nodes.insert(*parent_id);
+                edges.insert((*parent_id, lifecycle.molecule_id));
+            }
+        }
+    }
+
+    let mut adjacency: std::collections::BTreeMap<u64, Vec<u64>> =
+        std::collections::BTreeMap::new();
+    for (parent, child) in &edges {
+        adjacency.entry(*parent).or_default().push(*child);
+        adjacency.entry(*child).or_default().push(*parent);
+    }
+    let mut visited = std::collections::BTreeSet::new();
+    let mut family_count = 0;
+    let mut largest_family_size = 0;
+    for node in &nodes {
+        if !visited.insert(*node) {
+            continue;
+        }
+        family_count += 1;
+        let mut pending = vec![*node];
+        let mut family_size = 0;
+        while let Some(current) = pending.pop() {
+            family_size += 1;
+            if let Some(neighbors) = adjacency.get(&current) {
+                for neighbor in neighbors {
+                    if visited.insert(*neighbor) {
+                        pending.push(*neighbor);
+                    }
+                }
+            }
+        }
+        largest_family_size = largest_family_size.max(family_size);
+    }
+
+    MolecularNetworkSnapshot {
+        molecule_nodes: nodes.len(),
+        lineage_edges: edges.len(),
+        family_count,
+        largest_family_size,
+        reaction_types: reaction_types.into_iter().collect(),
+        edges: edges.into_iter().map(|(parent, child)| [parent, child]).collect(),
     }
 }
 
@@ -673,6 +755,7 @@ pub struct LaboratorySnapshot {
     pub world_tone_enabled: bool,
     pub hotspot_enabled: bool,
     pub reaction_history: Vec<ReactionEventSnapshot>,
+    pub molecular_network: MolecularNetworkSnapshot,
     pub energy: EnergyLedgerSnapshot,
 }
 
@@ -1066,6 +1149,11 @@ mod tests {
         assert_eq!(history[0].outcome, "committed");
         assert_eq!(history[0].molecular_lifecycle[0].molecule_id, 42);
         assert_eq!(history[0].molecular_lifecycle[0].parent_ids, vec![11, 12]);
+        let network = laboratory.snapshot().molecular_network;
+        assert_eq!(network.molecule_nodes, 3);
+        assert_eq!(network.lineage_edges, 2);
+        assert_eq!(network.family_count, 1);
+        assert_eq!(network.largest_family_size, 3);
     }
 
     #[test]
