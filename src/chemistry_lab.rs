@@ -559,7 +559,7 @@ mod tests {
             laboratory
                 .simulation
                 .energy_inventory_snapshot()
-                .is_balanced(1e-9),
+                .is_balanced_without_creation(1e-9),
             "pre-placed bond potential belongs to the tick-zero initial condition"
         );
     }
