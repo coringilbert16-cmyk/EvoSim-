@@ -1973,9 +1973,9 @@ struct EnvironmentalMovementPhaseComponent {
 struct EnvironmentalMovementEmitter {
     x: f64,
     y: f64,
-    /// Conservative radius from the material's movement center to its
-    /// outermost realized constituent surface.
-    source_radius: f64,
+    /// Conservative amplitude bound for this emitter's pair cross-energy,
+    /// including its material mass scale.
+    strength_bound: f64,
     mass_scale: f64,
     spectrum: ToneSpectrum,
     phase_components: [EnvironmentalMovementPhaseComponent; MAX_SPECTRAL_COMPONENTS],
@@ -2056,36 +2056,6 @@ fn environmental_movement_cross_energy_profiled(
     Some(energy)
 }
 
-fn environmental_material_source_radius(
-    physical: &crate::physical_material::PhysicalMaterial,
-    catalog: &[crate::resources::BaseResource],
-    center_x: f64,
-    center_y: f64,
-) -> Option<f64> {
-    let placements = physical.placements.as_ref()?;
-    let shapes = physical.realized_shapes_for_parts(catalog)?;
-    if placements.is_empty() || placements.len() != shapes.len() {
-        return None;
-    }
-    let mut radius = 0.0_f64;
-    for (placement, shape) in placements.iter().zip(shapes) {
-        let shape_radius = shape.form.bounding_radius();
-        if !placement.x.is_finite()
-            || !placement.y.is_finite()
-            || !shape_radius.is_finite()
-            || shape_radius < 0.0
-        {
-            return None;
-        }
-        let extent = (placement.x - center_x).hypot(placement.y - center_y) + shape_radius;
-        if !extent.is_finite() {
-            return None;
-        }
-        radius = radius.max(extent);
-    }
-    radius.is_finite().then_some(radius)
-}
-
 fn environmental_movement_emitter(
     physical: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
@@ -2094,14 +2064,24 @@ fn environmental_movement_emitter(
 ) -> Option<EnvironmentalMovementEmitter> {
     let (x, y, _, spectrum, material_mass) =
         environmental_material_resonance_with_baselines(physical, catalog, tick, baselines)?;
-    let source_radius = environmental_material_source_radius(physical, catalog, x, y)?;
     let (phase_components, phase_component_count) =
         environmental_movement_phase_components(&spectrum)?;
     let mass_scale = environmental_mass_scale(material_mass, baselines.mass);
-    (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
+    let spectral_norm = spectrum
+        .components
+        .iter()
+        .map(|component| component.amplitude * component.amplitude)
+        .sum::<f64>()
+        .sqrt();
+    let strength_bound = mass_scale * spectral_norm;
+    (mass_scale.is_finite()
+        && mass_scale >= 0.0
+        && strength_bound.is_finite()
+        && strength_bound >= 0.0)
+        .then_some(EnvironmentalMovementEmitter {
         x,
         y,
-        source_radius,
+        strength_bound,
         mass_scale,
         spectrum,
         phase_components,
@@ -2375,39 +2355,42 @@ fn environmental_movement_worker_count() -> usize {
     })
 }
 
-/// Maximum center-to-center separation for either material's aura to reach
-/// the other's outer surface under the one-source-radius extension rule.
+/// Convert the configured minimum per-pair displacement into the minimum
+/// interaction strength that can produce it through the existing bounded
+/// movement response.
+const MIN_RESONANCE_PAIR_STRENGTH: f64 = MIN_RESONANCE_PAIR_DISPLACEMENT
+    / (RESONANCE_MOVEMENT_RESPONSE_SCALE * (1.0 - MIN_RESONANCE_PAIR_DISPLACEMENT));
+
+/// Exact pair-specific support distance from the existing inverse-square
+/// interaction. The cutoff is reached when the pair's single-interaction
+/// displacement falls below the configured movement-resolution floor.
 fn environmental_movement_pair_support_radius(
     a: &EnvironmentalMovementEmitter,
     b: &EnvironmentalMovementEmitter,
 ) -> Option<f64> {
-    if !a.source_radius.is_finite()
-        || a.source_radius < 0.0
-        || !b.source_radius.is_finite()
-        || b.source_radius < 0.0
-    {
+    let cross_energy = environmental_movement_cross_energy(a, b)?;
+    let numerator = cross_energy.abs() * a.mass_scale * b.mass_scale;
+    if !numerator.is_finite() || numerator < 0.0 {
         return None;
     }
-    let reach =
-        (2.0 * a.source_radius + b.source_radius).max(2.0 * b.source_radius + a.source_radius);
-    reach.is_finite().then_some(reach)
+    let maximum_distance = (numerator / MIN_RESONANCE_PAIR_STRENGTH).sqrt() - 1.0;
+    maximum_distance.is_finite().then_some(maximum_distance)
 }
 
-/// Conservative source-specific spatial broadphase.
-///
-/// The aura may extend outward by at most one radius of its emitting material.
-/// For material radii ra and rb, a pair can therefore interact if either
-/// source's aura can reach the other material's outer surface:
-/// d <= max(2*ra + rb, 2*rb + ra). The bound is pair-specific; no world-wide
-/// interaction radius or arbitrary cell size is introduced. The exact
-/// centroid-based force kernel remains unchanged for every discovered pair.
+/// Conservative amplitude-bounded spatial broadphase followed by an exact
+/// phase-aware support check. The Cauchy-Schwarz bound avoids evaluating every
+/// pair merely to discover its possible range; the exact cross-energy check
+/// then removes pairs whose frequency/phase interaction is below resolution.
 fn environmental_movement_spatial_candidate_pairs(
     emitters: &[EnvironmentalMovementEmitter],
 ) -> Option<Vec<(usize, usize)>> {
     if emitters.len() < 2 {
         return Some(Vec::new());
     }
-    let mut maximum_radius = 0.0_f64;
+    let maximum_strength_bound = emitters
+        .iter()
+        .map(|emitter| emitter.strength_bound)
+        .fold(0.0_f64, f64::max);
     let (mut min_x, mut max_x, mut min_y, mut max_y) = (
         f64::INFINITY,
         f64::NEG_INFINITY,
@@ -2418,20 +2401,19 @@ fn environmental_movement_spatial_candidate_pairs(
     for (index, emitter) in emitters.iter().enumerate() {
         if !emitter.x.is_finite()
             || !emitter.y.is_finite()
-            || !emitter.source_radius.is_finite()
-            || emitter.source_radius < 0.0
+            || !emitter.strength_bound.is_finite()
+            || emitter.strength_bound < 0.0
+            || !emitter.mass_scale.is_finite()
+            || emitter.mass_scale < 0.0
         {
             return None;
         }
-        maximum_radius = maximum_radius.max(emitter.source_radius);
         min_x = min_x.min(emitter.x);
         max_x = max_x.max(emitter.x);
         min_y = min_y.min(emitter.y);
         max_y = max_y.max(emitter.y);
         x_order.push(index);
     }
-    // Preserve the old all-pairs fail-closed behavior for coordinate
-    // differences whose Euclidean distance would overflow.
     let maximum_dx = max_x - min_x;
     let maximum_dy = max_y - min_y;
     if !maximum_dx.is_finite()
@@ -2450,21 +2432,26 @@ fn environmental_movement_spatial_candidate_pairs(
     let mut candidates = Vec::new();
     for left_position in 0..x_order.len() {
         let a = x_order[left_position];
-        // For any later emitter b, its radius cannot exceed maximum_radius.
-        // Therefore max(2*Ra + Rb, 2*Rb + Ra) is bounded by
-        // 2*maximum_radius + Ra. This tighter per-source sweep limit avoids
-        // scanning the full global 3*maximum_radius window for small sources.
-        let source_x_bound = 2.0 * maximum_radius + emitters[a].source_radius;
-        if !source_x_bound.is_finite() {
+        // |cross_energy| <= 2 * ||spectrum_a|| * ||spectrum_b||.
+        // strength_bound already includes each emitter's mass scale.
+        let maximum_pair_strength =
+            2.0 * emitters[a].strength_bound * maximum_strength_bound;
+        if !maximum_pair_strength.is_finite() {
             return None;
         }
+        let maximum_distance =
+            (maximum_pair_strength / MIN_RESONANCE_PAIR_STRENGTH).sqrt() - 1.0;
+        if !maximum_distance.is_finite() {
+            return None;
+        }
+        let source_x_bound = maximum_distance.max(0.0);
         for &b in &x_order[left_position + 1..] {
             let dx = emitters[b].x - emitters[a].x;
             if dx > source_x_bound {
                 break;
             }
             let reach = environmental_movement_pair_support_radius(&emitters[a], &emitters[b])?;
-            if dx <= reach {
+            if reach >= 0.0 && dx <= reach {
                 let dy = emitters[b].y - emitters[a].y;
                 if !dy.is_finite() {
                     return None;
@@ -2571,8 +2558,8 @@ fn environmental_movement_parallel_spatial_candidate_pair_forces(
 
 /// Evaluate the spatially eligible pairs in canonical order. The pair force
 /// itself still uses the established spectrum, phase, mass, and attenuation
-/// calculation; only pairs outside the source-specific physical support are
-/// omitted.
+/// calculation; only pairs below the configured per-pair movement resolution
+/// are omitted.
 fn environmental_movement_spatial_candidate_pair_forces(
     emitters: &[EnvironmentalMovementEmitter],
     candidate_pairs: &[(usize, usize)],
@@ -2685,9 +2672,9 @@ pub(crate) fn environmental_resonance_displacements(
         .collect::<Option<Vec<_>>>()?;
     let emitter_ns = emitter_started.elapsed().as_nanos();
 
-    // The profiled path remains the all-pairs reference. Normal execution
-    // uses the source-specific spatial support bound to omit pairs that cannot
-    // physically reach one another under the one-source-radius aura limit.
+    // The profiled path remains the exhaustive reference. Normal execution
+    // uses the conservative amplitude bound plus exact pair-specific energy
+    // support to omit interactions below the configured movement resolution.
     let worker_count = environmental_movement_worker_count();
     let pair_count = environmental_movement_pair_count(emitters.len())?;
     if !reference_all_pairs {
@@ -2734,8 +2721,8 @@ pub(crate) fn environmental_resonance_displacements(
     }
 
     // Exhaustive reference: enumerate every unordered pair, retain only
-    // pairs inside the same source-specific support predicate, then use the
-    // exact same deterministic force evaluator as the spatial candidate path.
+    // pairs above the same pair-specific movement-resolution threshold, then
+    // use the exact same deterministic force evaluator as the spatial path.
     // This isolates spatial discovery without comparing parallel work to a
     // sequential reference implementation.
     let discovery_started = std::time::Instant::now();
@@ -2820,6 +2807,9 @@ fn translated_physical_material(
 /// but never reaches, one world unit for arbitrarily large input.
 #[allow(dead_code)] // Consumed by the environmental movement integration in PR 3.
 const RESONANCE_MOVEMENT_RESPONSE_SCALE: f64 = 0.1;
+/// Ignore an individual pair when its maximum one-pair displacement is below
+/// 1% of the 0.1-unit hydrogen constituent width.
+const MIN_RESONANCE_PAIR_DISPLACEMENT: f64 = 0.001;
 
 type ResonancePairMovementContribution = (usize, usize, ((f64, f64), (f64, f64)));
 
@@ -3789,7 +3779,7 @@ mod tests {
             EnvironmentalMovementEmitter {
                 x: 0.0,
                 y: 0.0,
-                source_radius: 0.5,
+                strength_bound: 0.5,
                 mass_scale: 1.0,
                 spectrum,
                 phase_components,
@@ -5196,7 +5186,7 @@ mod environmental_movement_parallel_tests {
                 EnvironmentalMovementEmitter {
                     x,
                     y,
-                    source_radius: 0.5,
+                    strength_bound: 0.5,
                     mass_scale: 1.0,
                     spectrum,
                     phase_components,
@@ -5326,18 +5316,20 @@ mod environmental_movement_spatial_candidate_tests {
     use super::{
         environmental_movement_displacements_from_spatial_candidate_pair_forces,
         environmental_movement_pair_force,
+        environmental_movement_pair_support_radius,
         environmental_movement_parallel_spatial_candidate_pair_forces,
         environmental_movement_phase_components,
         environmental_movement_spatial_candidate_pair_forces,
         environmental_movement_spatial_candidate_pairs, EnvironmentalMovementEmitter,
-        ToneComponent, ToneSpectrum,
+        ToneComponent, ToneSpectrum, MIN_RESONANCE_PAIR_DISPLACEMENT,
+        MIN_RESONANCE_PAIR_STRENGTH,
     };
 
-    fn emitter(x: f64, y: f64, source_radius: f64, phase: f64) -> EnvironmentalMovementEmitter {
+    fn emitter(x: f64, y: f64, amplitude: f64, phase: f64) -> EnvironmentalMovementEmitter {
         let spectrum = ToneSpectrum {
             components: vec![ToneComponent {
                 frequency_cycles_per_day: 440.0,
-                amplitude: 0.5,
+                amplitude,
                 phase_radians: phase,
             }],
         };
@@ -5346,7 +5338,7 @@ mod environmental_movement_spatial_candidate_tests {
         EnvironmentalMovementEmitter {
             x,
             y,
-            source_radius,
+            strength_bound: amplitude,
             mass_scale: 1.0,
             spectrum,
             phase_components,
@@ -5355,49 +5347,63 @@ mod environmental_movement_spatial_candidate_tests {
     }
 
     #[test]
-    fn spatial_candidates_use_pair_specific_material_radius_bounds() {
+    fn cutoff_is_derived_from_the_configured_minimum_pair_displacement() {
+        let expected_strength = MIN_RESONANCE_PAIR_DISPLACEMENT
+            / (0.1 * (1.0 - MIN_RESONANCE_PAIR_DISPLACEMENT));
+        assert!((MIN_RESONANCE_PAIR_STRENGTH - expected_strength).abs() < 1e-12);
+
+        let a = emitter(0.0, 0.0, 0.5, 0.0);
+        let b = emitter(0.0, 0.0, 0.5, 0.0);
+        let reach = environmental_movement_pair_support_radius(&a, &b).unwrap();
+        let strength_at_boundary = (2.0 * 0.5 * 0.5) / ((1.0 + reach) * (1.0 + reach));
+        assert!((strength_at_boundary - MIN_RESONANCE_PAIR_STRENGTH).abs() < 1e-12);
+        let displacement = 0.1 * strength_at_boundary / (1.0 + 0.1 * strength_at_boundary);
+        assert!((displacement - MIN_RESONANCE_PAIR_DISPLACEMENT).abs() < 1e-12);
+    }
+
+    #[test]
+    fn spatial_candidates_use_pair_specific_phase_and_amplitude_support() {
         let emitters = vec![
             emitter(0.0, 0.0, 0.5, 0.0),
-            emitter(1.2, 0.0, 0.25, 0.2),
-            emitter(1.3, 0.0, 0.25, 0.4),
+            emitter(2.0, 0.0, 0.5, 0.2),
+            emitter(3.0, 0.0, 0.5, std::f64::consts::FRAC_PI_2),
             emitter(10.0, 0.0, 0.1, 0.6),
         ];
-
-        assert_eq!(
-            environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
-            vec![(0, 1), (1, 2)]
-        );
+        let actual = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
+        let mut expected = Vec::new();
+        for a in 0..emitters.len() {
+            for b in (a + 1)..emitters.len() {
+                let reach =
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
+                let distance =
+                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                if reach >= 0.0 && distance <= reach {
+                    expected.push((a, b));
+                }
+            }
+        }
+        assert_eq!(actual, expected);
     }
 
     #[test]
-    fn spatial_candidates_include_pairs_at_the_support_boundary() {
-        let emitters = vec![emitter(0.0, 0.0, 0.5, 0.0), emitter(1.25, 0.0, 0.25, 0.2)];
-
-        assert_eq!(
-            environmental_movement_spatial_candidate_pairs(&emitters).unwrap(),
-            vec![(0, 1)]
-        );
-    }
-
-    #[test]
-    fn sweep_and_prune_matches_exhaustive_source_radius_oracle() {
+    fn sweep_and_prune_matches_exhaustive_energy_cutoff_oracle() {
         let emitters = vec![
-            emitter(0.0, 0.0, 0.2, 0.0),
-            emitter(0.5, 0.1, 0.1, 0.2),
-            emitter(1.0, 0.0, 0.3, 0.4),
-            emitter(2.0, 0.4, 0.2, 0.6),
-            emitter(4.0, 0.0, 0.5, 0.8),
+            emitter(0.0, 0.0, 0.5, 0.0),
+            emitter(1.0, 0.1, 0.4, 0.2),
+            emitter(3.0, 0.0, 0.3, 0.4),
+            emitter(6.0, 0.4, 0.2, 0.6),
+            emitter(10.0, 0.0, 0.5, 0.8),
             emitter(-1.0, -0.2, 0.1, 1.0),
         ];
         let actual = environmental_movement_spatial_candidate_pairs(&emitters).unwrap();
         let mut expected = Vec::new();
         for a in 0..emitters.len() {
             for b in (a + 1)..emitters.len() {
-                let radius_a = emitters[a].source_radius;
-                let radius_b = emitters[b].source_radius;
-                let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
-                let distance = (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
-                if distance <= reach {
+                let reach =
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b]).unwrap();
+                let distance =
+                    (emitters[b].x - emitters[a].x).hypot(emitters[b].y - emitters[a].y);
+                if reach >= 0.0 && distance <= reach {
                     expected.push((a, b));
                 }
             }
@@ -5432,13 +5438,13 @@ mod environmental_movement_spatial_candidate_tests {
         let mut sampled_frequency_matches = 0;
         for a in 0..emitters.len() {
             for b in (a + 1)..emitters.len() {
-                let radius_a = emitters[a].source_radius;
-                let radius_b = emitters[b].source_radius;
-                let reach = (2.0 * radius_a + radius_b).max(2.0 * radius_b + radius_a);
+                let reach =
+                    environmental_movement_pair_support_radius(&emitters[a], &emitters[b])
+                        .unwrap();
                 let dx = emitters[b].x - emitters[a].x;
                 let dy = emitters[b].y - emitters[a].y;
                 let distance = dx.hypot(dy);
-                if distance > reach {
+                if reach < 0.0 || distance > reach {
                     continue;
                 }
                 oracle_pairs.push((a, b));
@@ -5481,11 +5487,11 @@ mod environmental_movement_spatial_candidate_tests {
     }
 
     #[test]
-    fn spatial_candidate_discovery_fails_closed_on_invalid_radius_or_position() {
-        let mut invalid_radius = emitter(0.0, 0.0, 0.5, 0.0);
-        invalid_radius.source_radius = f64::NAN;
+    fn spatial_candidate_discovery_fails_closed_on_invalid_strength_or_position() {
+        let mut invalid_strength = emitter(0.0, 0.0, 0.5, 0.0);
+        invalid_strength.strength_bound = f64::NAN;
         assert!(environmental_movement_spatial_candidate_pairs(&[
-            invalid_radius,
+            invalid_strength,
             emitter(1.0, 0.0, 0.5, 0.2),
         ])
         .is_none());
@@ -5497,54 +5503,5 @@ mod environmental_movement_spatial_candidate_tests {
             emitter(1.0, 0.0, 0.5, 0.2),
         ])
         .is_none());
-    }
-}
-
-#[cfg(test)]
-mod environmental_material_radius_tests {
-    use super::environmental_material_source_radius;
-    use crate::physical_material::PhysicalMaterial;
-    use crate::resources::Material;
-    use crate::structure::Placement;
-
-    #[test]
-    fn material_radius_includes_realized_constituent_surface_extent() {
-        let catalog = crate::resources::default_catalog();
-        let physical = PhysicalMaterial::realized(
-            Material {
-                parts: vec![("Carbon".to_owned(), 1.0), ("Hydrogen".to_owned(), 1.0)],
-                internal_bonds: Vec::new(),
-            },
-            vec![
-                Placement {
-                    x: 10.0,
-                    y: 10.0,
-                    rotation_radians: 0.0,
-                },
-                Placement {
-                    x: 13.0,
-                    y: 10.0,
-                    rotation_radians: 0.0,
-                },
-            ],
-            &catalog,
-        )
-        .expect("physical material fixture should realize");
-        let center = (11.5, 10.0);
-        let shapes = physical.realized_shapes_for_parts(&catalog).unwrap();
-        let placements = physical.placements.as_ref().unwrap();
-        let expected = placements
-            .iter()
-            .zip(shapes)
-            .map(|(placement, shape)| {
-                (placement.x - center.0).hypot(placement.y - center.1)
-                    + shape.form.bounding_radius()
-            })
-            .fold(0.0_f64, f64::max);
-
-        assert_eq!(
-            environmental_material_source_radius(&physical, &catalog, center.0, center.1),
-            Some(expected)
-        );
     }
 }
