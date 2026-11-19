@@ -42,7 +42,7 @@ This is an explicit model-resolution parameter, not a mathematically derived zer
 
 ## Efficient candidate discovery
 
-Each emitter carries a conservative amplitude-norm bound including its existing mass scale. Cauchy-Schwarz provides a conservative maximum pair-strength bound for the x-axis sweep. Each broadphase candidate then receives an exact frequency- and phase-aware support check using its actual cross-energy and mass scales.
+Each emitter carries a conservative amplitude-norm bound including its existing mass scale. The Cauchy-Schwarz bound includes the maximum four-component near-frequency match multiplicity, so it remains conservative even when several components fall within the frequency-match tolerance. Each broadphase candidate then receives an exact frequency- and phase-aware support check using its actual cross-energy and mass scales.
 
 The candidate set is canonical and contains each eligible unordered pair once. The exhaustive reference enumerates all unordered pairs and applies the identical support predicate. Both paths use the same force evaluator and can be run sequentially for a matched comparison.
 
