@@ -748,7 +748,7 @@ fn point_in_form(
 #[cfg(test)]
 mod fitted_legacy_fluid_tests {
     use super::*;
-    use crate::resources::{default_catalog, Form, Shape, NOMINAL_UNIT_AREA};
+    use crate::resources::{Form, Shape, NOMINAL_UNIT_AREA};
     use crate::structure::{OrganismStructure, Placement, StructuralUnit};
 
     #[test]
@@ -896,7 +896,6 @@ pub fn default_developmental_blueprint() -> DevelopmentalFieldBlueprint {
             ("Sulfur", 0.0),
             ("Hydrogen", 0.0),
             ("Oxygen", 0.0),
-            ("LegacyFluidFixture", 0.0),
         ]
         .into_iter()
         .map(
