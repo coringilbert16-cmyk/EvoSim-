@@ -6919,7 +6919,7 @@ mod fluid_contact_constraint_schema_tests {
         let reopened = GeometryLibrary::open(&root, &catalog).unwrap();
         assert_eq!(
             reopened
-                .fluid_formations_for_parent(&parent.signature, "Water")
+                .fluid_formations_for_parent(&parent.signature, "LegacyFluidFixture")
                 .count(),
             0
         );
