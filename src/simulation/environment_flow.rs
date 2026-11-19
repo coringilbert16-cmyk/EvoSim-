@@ -226,6 +226,7 @@ fn mobility(mass: f64) -> f64 {
 
 /// Smooth S-shaped background flow with outward speed falloff and two small
 /// vortices at the bends. The same query is used for every material type.
+#[cfg(test)]
 fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     background_velocity_with_config(x, y, width, height, FlowFieldConfig::default())
 }
@@ -672,6 +673,7 @@ fn transport_field(
 /// Advance the field by one small deterministic transport slice. All candidate
 /// destinations are computed from a snapshot, then committed together so
 /// iteration order cannot change which current an object samples.
+#[cfg(test)]
 pub(crate) fn transport_field_with_singleton_center_velocity_reuse<
     const REUSE_SINGLETON_CENTER_VELOCITY: bool,
 >(
