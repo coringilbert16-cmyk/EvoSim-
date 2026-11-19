@@ -4950,15 +4950,15 @@ mod source_global_perimeter_tests {
         let body = OrganismBodyGeometry {
             parts: vec![
                 PlacedForm { unit_index: 0, form: Form::Rectangle { width: 2.0, height: 2.0 }, x: 0.0, y: 0.0, rotation_radians: 0.0 },
-                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 2.0, y: 0.0, rotation_radians: 0.0 },
+                PlacedForm { unit_index: 1, form: Form::Circle { radius: 1.0 }, x: 1.5, y: 0.0, rotation_radians: 0.0 },
             ],
-            min_x: -1.0, max_x: 3.0, min_y: -1.0, max_y: 1.0,
+            min_x: -1.0, max_x: 2.5, min_y: -1.0, max_y: 1.0,
         };
         let perimeter=disjoint_source_global_material_perimeter(&body,0).unwrap();
         let length=visible_material_perimeter_length(&perimeter).unwrap();
-        // Shared interior half of the circle is hidden; its exposed arc is
-        // the right semicircle. The rectangle's right edge is internal.
-        let expected=6.0+std::f64::consts::PI;
+        // The rectangle's right edge is hidden between the two circle
+        // intersections. The circle's 120-degree interior arc is hidden.
+        let expected=8.0-3.0_f64.sqrt()+4.0*std::f64::consts::PI/3.0;
         assert!((length-expected).abs()<1e-9);
         assert_eq!(perimeter.straight.len(),3);
         assert_eq!(perimeter.curved.len(),1);
