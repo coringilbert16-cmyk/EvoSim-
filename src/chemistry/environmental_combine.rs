@@ -452,8 +452,7 @@ fn constituent_pair_static_potential(
     }
     let resource_a = catalog.iter().find(|resource| resource.name == *name_a)?;
     let resource_b = catalog.iter().find(|resource| resource.name == *name_b)?;
-    if is_active_element_resource(&resource_a.name)
-        && is_active_element_resource(&resource_b.name)
+    if is_active_element_resource(&resource_a.name) && is_active_element_resource(&resource_b.name)
     {
         return crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
             .map(|adhesion| adhesion.net)
