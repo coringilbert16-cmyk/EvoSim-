@@ -109,7 +109,7 @@ fn bob_validated_neighbor_placement(
         };
         let mut trial = structure.clone();
         let Some(indices) =
-            crate::material_restoration::restore_material(&mut trial, &instance, proposed, catalog)
+            crate::physical_material::restore_material(&mut trial, &instance, proposed, catalog)
         else {
             continue;
         };
@@ -226,7 +226,7 @@ fn add_unit(
             y: center.1,
             rotation_radians: 0.0,
         });
-    let indices = crate::material_restoration::restore_material(
+    let indices = crate::physical_material::restore_material(
         structure,
         &instance,
         proposed_placement,
@@ -770,7 +770,7 @@ mod tests {
         )
         .expect("candidate material should realize");
         let mut trial = structure.clone();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut trial, &instance, proposed, &catalog,
         )
         .expect("accepted Bob pose should restore into the trial structure");
