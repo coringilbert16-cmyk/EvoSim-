@@ -464,9 +464,9 @@ mod tests {
 
     #[test]
     fn connection_endpoint_accessibility_is_point_based() {
-        let catalog = crate::resources::default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let unit = crate::structure::StructuralUnit::new(
-            "Water",
+            "LegacyFluidFixture",
             crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,
