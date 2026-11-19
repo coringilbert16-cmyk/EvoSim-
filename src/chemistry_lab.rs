@@ -192,7 +192,8 @@ impl Laboratory {
             })
             .collect::<Vec<_>>();
         let anchor = placements.first().ok_or("molecule has no placement")?;
-        self.place_material(material, placements, anchor.x, anchor.y)
+        let (anchor_x, anchor_y) = (anchor.x, anchor.y);
+        self.place_material(material, placements, anchor_x, anchor_y)
     }
 
     fn place_material(
