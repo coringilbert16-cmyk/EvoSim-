@@ -374,7 +374,7 @@ async fn reset(
     State(state): State<LabState>,
     Json(config): Json<LaboratoryConfig>,
 ) -> Result<Json<LaboratorySnapshot>, (StatusCode, String)> {
-    let replacement =
+    let mut replacement =
         Laboratory::new(config).map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
     let snapshot = replacement.snapshot();
     let mut current = state.0.lock().await;
