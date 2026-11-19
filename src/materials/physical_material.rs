@@ -959,7 +959,7 @@ mod tests {
         .with_single_fluid_shape(shape.clone(), &catalog)
         .unwrap();
         let mut structure = OrganismStructure::new();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut structure,
             &instance,
             Placement {
@@ -1204,6 +1204,9 @@ mod tests {
         assert!(!physical.is_realized());
     }
 }
+
+const EPSILON: f64 = 1e-9;
+const DEBUG_RESTORATION_ENV: &str = "EVOSIM_DEBUG_MATERIAL_RESTORATION";
 
 // Restoration belongs beside the stored physical-material representation:
 // it reconstructs the exact realized constituents and bonds owned by this type.
