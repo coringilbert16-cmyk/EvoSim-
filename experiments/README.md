@@ -34,7 +34,7 @@ nonnegative seeds, 30–3,600 seconds per seed, and a diagnostic interval of
   identified across the preceding five-seed experiment, distributed as evenly
   as possible (4 or 5 molecules per type).
 - Active elements: Carbon, Hydrogen, Nitrogen, Oxygen, Phosphorus, and Sulfur.
-- Water is excluded from the active inventory.
+- The active inventory contains only the six elemental resources; Water is not a resource or medium.
 - Ordinary reaction discovery and energy rules remain enabled and unchanged.
 - No forced reactions, no disabled-resonance control, and no second comparison
   condition. Seeds are independent observations of the same baseline.

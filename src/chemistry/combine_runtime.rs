@@ -46,6 +46,26 @@ struct BondFormationRequest {
     investment: f64,
 }
 
+fn catalog_contains_only_rigid_resources(catalog: &[BaseResource]) -> bool {
+    catalog
+        .iter()
+        .all(|resource| resource.physical_state == crate::resources::PhysicalState::Rigid)
+}
+
+fn material_contains_only_rigid_resources(
+    material: &crate::resources::Material,
+    catalog: &[BaseResource],
+) -> bool {
+    material.parts.iter().all(|(name, _)| {
+        catalog
+            .iter()
+            .find(|resource| resource.name == *name)
+            .is_some_and(|resource| {
+                resource.physical_state == crate::resources::PhysicalState::Rigid
+            })
+    })
+}
+
 fn transient_fluid_pair(
     structure: &crate::structure::OrganismStructure,
     unit_a: usize,
@@ -173,7 +193,7 @@ fn combine_energy_transaction_with_rounding(
 /// Resolve the adhesion at the actual structural-unit interface.
 /// Structural units represent individual physical constituents; compound-wide
 /// weighted properties are deliberately not used for pair adhesion.
-/// Water remains on its existing compatibility path during this staged migration.
+/// fluid remains on its existing compatibility path during this staged migration.
 fn active_pair_potential(
     structure: &crate::structure::OrganismStructure,
     unit_a: usize,
@@ -208,7 +228,7 @@ fn active_pair_potential(
         .ok_or("interface resource B is missing from catalog")?;
 
     // The new multidimensional model is explicitly scoped to the six
-    // migrated non-Water resources. Legacy/custom catalog entries retain their
+    // migrated non-fluid resources. Legacy/custom catalog entries retain their
     // existing interaction adapter until they receive approved descriptors.
     let active_resource = |name: &str| {
         matches!(
@@ -295,8 +315,8 @@ fn evaluate_candidate(
     }
     let a = structure.units.get(ua)?.properties(catalog)?;
     let b = structure.units.get(ub)?.properties(catalog)?;
-    // Non-Water chemistry uses the actual resource pair at this interface.
-    // Water remains on the legacy path until its fluid/capillary adapter is migrated.
+    // Non-fluid chemistry uses the actual resource pair at this interface.
+    // fluid remains on the legacy path until its fluid/capillary adapter is migrated.
     let pair_potential = active_pair_potential(structure, ua, ub, candidate, catalog).ok()?;
     if pair_potential.is_none() && a.chemical_position.is_some() && b.chemical_position.is_some() {
         let interaction = crate::combine::chemical_interaction(
@@ -797,7 +817,10 @@ pub(crate) fn try_combine_stored_unit(
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
     let raw = organism.stored_material.first_material()?;
-    if !raw.is_valid() || raw.is_empty() {
+    if !raw.is_valid()
+        || raw.is_empty()
+        || !material_contains_only_rigid_resources(&raw, &environment.catalog)
+    {
         return None;
     }
 
@@ -1522,6 +1545,11 @@ pub(crate) fn combine_specific_pair(
     if unit_a >= structure.units.len() || unit_b >= structure.units.len() || unit_a == unit_b {
         return None;
     }
+    if !material_contains_only_rigid_resources(&structure.units[unit_a].material, catalog)
+        || !material_contains_only_rigid_resources(&structure.units[unit_b].material, catalog)
+    {
+        return None;
+    }
 
     // Bond direction is a biological choice. Try the requested orientation first,
     // then let the same physical pair form in the reverse orientation if the
@@ -1531,8 +1559,16 @@ pub(crate) fn combine_specific_pair(
     )
 }
 
-pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
-    if organism.active_transformation_id.is_some() {
+pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> bool {
+    if organism.active_transformation_id.is_some()
+        || !catalog_contains_only_rigid_resources(&environment.catalog)
+        || organism
+            .stored_material
+            .first_material()
+            .is_some_and(|material| {
+                !material_contains_only_rigid_resources(&material, &environment.catalog)
+            })
+    {
         return false;
     }
 
@@ -1578,7 +1614,10 @@ fn try_combine_environmental(
             .map(|cell| cell.physical_materials.clone())
             .unwrap_or_default();
         for (material_index, instance) in physicals.into_iter().enumerate() {
-            if !instance.is_realized() || instance.material.is_empty() {
+            if !instance.is_realized()
+                || instance.material.is_empty()
+                || !material_contains_only_rigid_resources(&instance.material, &environment.catalog)
+            {
                 continue;
             }
             let mut hypothetical = organism.structure.clone();
@@ -1770,6 +1809,17 @@ pub(crate) fn try_combine(
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
+    if !catalog_contains_only_rigid_resources(&environment.catalog)
+        || organism
+            .stored_material
+            .first_material()
+            .is_some_and(|material| {
+                !material_contains_only_rigid_resources(&material, &environment.catalog)
+            })
+    {
+        return None;
+    }
+
     if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
         if let Some(attempt) =
             try_combine_stored_unit(organism, environment, cache, ledger, developmental)
@@ -1884,7 +1934,7 @@ mod fluid_coalescence_transaction_tests {
     use crate::capillary_geometry::{
         CircularArcBoundary, FluidBoundaryPiece, MultiContactFluidBoundary,
     };
-    use crate::resources::{default_catalog, Form, Material, Shape};
+    use crate::resources::{Form, Material, Shape};
     use crate::structure::{
         Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
     };
@@ -1929,15 +1979,15 @@ mod fluid_coalescence_transaction_tests {
         second_x: f64,
         with_rigid_contact: bool,
     ) -> (OrganismStructure, Vec<BaseResource>, f64) {
-        let catalog = default_catalog();
-        let water = catalog
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let fluid = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let unit_area = match &water.shape.form {
+        let unit_area = match &fluid.shape.form {
             Form::Circle { radius } => PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water test fixture requires a measurable fluid area"),
+            _ => panic!("fluid test fixture requires a measurable fluid area"),
         };
         let radius = (2.0 * unit_area / PI).sqrt();
         let placement_a = Placement {
@@ -1950,10 +2000,16 @@ mod fluid_coalescence_transaction_tests {
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let mut upper =
-            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_a).unwrap();
-        let mut lower =
-            StructuralUnit::from_material(Material::free_base("Water", 1.0), placement_b).unwrap();
+        let mut upper = StructuralUnit::from_material(
+            Material::free_base("LegacyFluidFixture", 1.0),
+            placement_a,
+        )
+        .unwrap();
+        let mut lower = StructuralUnit::from_material(
+            Material::free_base("LegacyFluidFixture", 1.0),
+            placement_b,
+        )
+        .unwrap();
         assert!(upper.realize_fluid_geometry(semicircle_shape(radius, true), &catalog));
         assert!(lower.realize_fluid_geometry(semicircle_shape(radius, false), &catalog));
 
@@ -2038,501 +2094,12 @@ mod fluid_coalescence_transaction_tests {
     }
 
     #[test]
-    fn successful_live_combine_reconciles_independent_world_energy_inventory() {
-        let (structure, catalog, _) = build_bonded_pair(0.0, false);
-        let mut structure = structure;
-        structure.bonds.clear();
-
-        let mut simulation = crate::state::Simulation::new(0xC0B1, 10.0);
-        simulation.organisms[0].structure = structure;
-        // The test replaces the constructor's initial structure with a bond-free
-        // fixture. Reset only the corresponding structural-energy baseline so the
-        // independent inventory starts from the fixture's actual state.
-        simulation.energy_ledger.initial_structural_energy_held = 0.0;
-        simulation.energy_ledger.total_structural_energy_held = 0.0;
-
-        let before = simulation.energy_inventory_snapshot();
-        assert!(
-            before.is_balanced_without_creation(1e-9),
-            "fixture must start with a balanced world-energy inventory: {:?}",
-            before.residual()
-        );
-
-        let mut cache = ConnectionCompatibilityCache;
-        let organism = &mut simulation.organisms[0];
-        let attempt = combine_specific_pair(
-            &mut organism.structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
-            &mut simulation.energy_ledger,
-            &mut organism.usable_energy,
-        )
-        .expect("the touching fluid pair should COMBINE");
-
-        assert!(attempt.work_cost.is_finite() && attempt.work_cost >= 0.0);
-        let after = simulation.energy_inventory_snapshot();
-        assert!(
-            after.is_balanced_without_creation(1e-9),
-            "successful COMBINE must reconcile the independent world-energy inventory: residual={:?}, inventory={after:?}",
-            after.residual()
-        );
-        assert_eq!(simulation.organisms[0].structure.units.len(), 1);
-    }
-
-    #[test]
-    fn live_combine_coalesces_fluid_pair_atomically() {
-        let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        structure.bonds.clear();
-        let survivor_id = structure.physical_id(0).unwrap();
-        let mut cache = ConnectionCompatibilityCache;
-        let mut ledger = EnergyLedger::default();
-        let mut energy = 100.0;
-
-        let attempt = combine_specific_pair(
-            &mut structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
-            &mut ledger,
-            &mut energy,
-        );
-        assert!(attempt.is_some(), "supported fluid pair should COMBINE");
-        assert_eq!(structure.units.len(), 1);
-        assert_eq!(structure.physical_id(0), Some(survivor_id));
-        assert_eq!(structure.units[0].material.parts[0].0, "Water");
-        assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
-        assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
-        assert!(
-            structure.bonds.is_empty(),
-            "consumed fluid-fluid bond must not persist"
-        );
-        let shape = structure.units[0].shape(&catalog).unwrap();
-        let Form::Fluid {
-            nominal_area,
-            multi_contact_boundary: Some(boundary),
-            ..
-        } = &shape.form
-        else {
-            panic!("live COMBINE must install the merged exact fluid boundary");
-        };
-        assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
-        assert!(boundary.is_valid());
-        assert!(energy.is_finite() && energy >= 0.0);
-        let residual = energy - 100.0
-            + ledger.total_structural_energy_delta
-            + ledger.total_work_expended
-            + ledger.total_heat_dissipated
-            - ledger.total_external_energy_input
-            - ledger.total_potential_energy_released;
-        assert!(
-            residual.abs() <= 1e-9,
-            "live fluid COMBINE must reconcile energy; residual={residual}, ledger={ledger:?}"
-        );
-    }
-
-    #[test]
-    fn coalesced_fluid_boundary_survives_physical_material_roundtrip_and_restore() {
-        // Coalescence is triggered by a successful fluid-fluid bond, not by touch.
-        // The transaction consumes this internal bond while preserving the merged shape.
-        let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        assert!(coalesce_fluid_pair_after_bond(
-            &mut structure,
-            0,
-            1,
-            &catalog
-        ));
-
-        let shape = structure.units[0].shape(&catalog).unwrap();
-        let Form::Fluid {
-            nominal_area,
-            multi_contact_boundary: Some(boundary),
-            ..
-        } = &shape.form
-        else {
-            panic!("coalesced fluid must retain its exact multi-contact boundary");
-        };
-        assert!((nominal_area - 2.0 * unit_area).abs() < 1e-9);
-        assert!(boundary.is_valid());
-
-        let origin = Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        };
-        let stored = crate::physical_material::PhysicalMaterial::realized_with_single_fluid_shape(
-            Material::free_base("Water", 2.0),
-            origin,
-            shape.clone(),
-            &catalog,
-        )
-        .expect("merged shape should be accepted as a realized single-fluid material");
-        let encoded = serde_json::to_string(&stored).unwrap();
-        let decoded: crate::physical_material::PhysicalMaterial =
-            serde_json::from_str(&encoded).unwrap();
-
-        let mut restored = OrganismStructure::new();
-        assert_eq!(
-            crate::material_restoration::restore_material(
-                &mut restored,
-                &decoded,
-                origin,
-                &catalog,
-            ),
-            Some(vec![0])
-        );
-        assert_eq!(restored.units[0].shape(&catalog), Some(shape));
-        assert_eq!(restored.units[0].material.parts[0].1, 2.0);
-        assert!(restored.units[0].shape(&catalog).unwrap().is_valid());
-    }
-
-    #[test]
-    fn bonded_fluid_pair_merges_area_and_preserves_rigid_bond() {
-        let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, true);
-        let survivor_id = structure.physical_id(0).unwrap();
-        let rigid_id = structure.physical_id(2).unwrap();
-
-        assert!(coalesce_fluid_pair_after_bond(
-            &mut structure,
-            0,
-            1,
-            &catalog
-        ));
-        assert_eq!(structure.units.len(), 2);
-        assert_eq!(structure.units[0].physical_id, survivor_id);
-        assert_eq!(structure.units[0].material.parts[0].0, "Water");
-        assert!((structure.units[0].material.parts[0].1 - 2.0).abs() < 1e-9);
-        assert_eq!(structure.genome_constituent_ids(), &[survivor_id]);
-        assert_eq!(structure.bonds.len(), 1);
-        let retained = structure.bonds[0];
-        assert!(
-            retained.endpoint_a.constituent_id == survivor_id
-                || retained.endpoint_b.constituent_id == survivor_id
-        );
-        assert!(
-            retained.endpoint_a.constituent_id == rigid_id
-                || retained.endpoint_b.constituent_id == rigid_id
-        );
-        assert!(structure.is_valid_bond(&retained, &catalog));
-
-        let merged_shape = structure.units[0].shape(&catalog).unwrap();
-        let Form::Fluid {
-            nominal_area,
-            multi_contact_boundary: Some(boundary),
-            ..
-        } = &merged_shape.form
-        else {
-            panic!("merged water must retain its exact multi-contact boundary");
-        };
-        assert!((*nominal_area - 2.0 * unit_area).abs() < 1e-9);
-        assert!(boundary.is_valid());
-        assert_eq!(boundary.pieces.len(), 2);
-        assert!(boundary
-            .pieces
-            .iter()
-            .all(|piece| matches!(piece, FluidBoundaryPiece::FreeArc(_))));
-    }
-
-    #[test]
-    fn coalescence_remaps_rigid_bonds_from_both_fluid_constituents() {
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
-        let second_fluid_id = structure.physical_id(1).unwrap();
-
-        let carbon = catalog
-            .iter()
-            .find(|resource| resource.name == "Carbon")
-            .unwrap();
-        let vertices = carbon.shape.form.polygon_vertices().unwrap();
-        let (vertex_index, (vx, vy)) = vertices
-            .iter()
-            .enumerate()
-            .max_by(|(_, left), (_, right)| left.1.total_cmp(&right.1))
-            .map(|(index, vertex)| (index, *vertex))
-            .unwrap();
-        let carbon_radius = vx.hypot(vy);
-        let water = catalog
-            .iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap();
-        let fluid_radius = match &water.shape.form {
-            Form::Circle { radius } => *radius,
-            Form::Fluid { nominal_area, .. } => (*nominal_area / PI).sqrt(),
-            _ => panic!("Water test fixture requires a measurable fluid area"),
-        };
-        let carbon_placement = Placement {
-            x: 0.0,
-            y: -fluid_radius - carbon_radius,
-            rotation_radians: PI * 0.5 - vy.atan2(vx),
-        };
-        let mut lower_rigid = StructuralUnit::new("Carbon", carbon_placement);
-        assert!(lower_rigid.realize_default_geometry(&catalog));
-        structure.add_unit(lower_rigid);
-        let lower_rigid_id = structure.physical_id(3).unwrap();
-        structure.bonds.push(Bond {
-            endpoint_a: BondEndpoint::new(
-                second_fluid_id,
-                ConnectionEndpoint::Boundary {
-                    angle_radians: -PI * 0.5,
-                },
-            ),
-            endpoint_b: BondEndpoint::new(
-                lower_rigid_id,
-                ConnectionEndpoint::Corner {
-                    point_index: vertex_index,
-                },
-            ),
-            strength: 0.75,
-            bond_energy: 0.0,
-        });
-        assert!(structure.is_valid_bond(structure.bonds.last().unwrap(), &catalog));
-
-        assert!(coalesce_fluid_pair_after_bond(
-            &mut structure,
-            0,
-            1,
-            &catalog
-        ));
-        let survivor_id = structure.physical_id(0).unwrap();
-        assert_eq!(structure.units.len(), 3);
-        assert_eq!(structure.bonds.len(), 2);
-        for retained in &structure.bonds {
-            assert!(structure.is_valid_bond(retained, &catalog));
-            let fluid_endpoints = [retained.endpoint_a, retained.endpoint_b]
-                .into_iter()
-                .filter(|endpoint| endpoint.constituent_id == survivor_id)
-                .count();
-            assert_eq!(
-                fluid_endpoints, 1,
-                "each retained rigid bond must attach once to the merged fluid"
-            );
-        }
-        assert!(structure.bonds.iter().any(|bond| {
-            bond.endpoint_a.constituent_id == lower_rigid_id
-                || bond.endpoint_b.constituent_id == lower_rigid_id
-        }));
-        assert!(structure.bonds.iter().all(|bond| {
-            bond.endpoint_a.constituent_id != second_fluid_id
-                && bond.endpoint_b.constituent_id != second_fluid_id
-        }));
-    }
-
-    #[test]
-    fn fluid_bond_off_shared_interface_rejects_coalescence_atomically() {
-        let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (2.0 * unit_area / PI).sqrt();
-        structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid { x: 0.0, y: radius };
-        let original_units = structure.units.clone();
-        let original_bonds = structure.bonds.clone();
-        let original_genome_ids = structure.genome_constituent_ids().to_vec();
-
-        assert!(
-            !coalesce_fluid_pair_after_bond(&mut structure, 0, 1, &catalog),
-            "a bond away from the shared solid-contact interface must not authorize coalescence"
-        );
-        assert_eq!(structure.units, original_units);
-        assert_eq!(structure.bonds, original_bonds);
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_genome_ids.as_slice()
-        );
-    }
-
-    #[test]
-    fn separated_bond_endpoints_on_shared_segment_reject_coalescence_atomically() {
-        let (mut structure, catalog, unit_area) = build_bonded_pair(0.0, false);
-        let radius = (2.0 * unit_area / PI).sqrt();
-        structure.bonds[0].endpoint_a.location = ConnectionEndpoint::Fluid {
-            x: -0.4 * radius,
-            y: 0.0,
-        };
-        structure.bonds[0].endpoint_b.location = ConnectionEndpoint::Fluid {
-            x: 0.4 * radius,
-            y: 0.0,
-        };
-        let original_units = structure.units.clone();
-        let original_bonds = structure.bonds.clone();
-        let original_genome_ids = structure.genome_constituent_ids().to_vec();
-
-        assert!(
-            !coalesce_fluid_pair_after_bond(&mut structure, 0, 1, &catalog),
-            "bond endpoints separated along the shared segment must not authorize coalescence"
-        );
-        assert_eq!(structure.units, original_units);
-        assert_eq!(structure.bonds, original_bonds);
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_genome_ids.as_slice()
-        );
-    }
-
-    #[test]
-    fn unsupported_fluid_corner_and_line_endpoints_reject_coalescence_atomically() {
-        for unsupported in [
-            ConnectionEndpoint::Corner { point_index: 0 },
-            ConnectionEndpoint::LineEndpoint { point_index: 0 },
-        ] {
-            let (mut structure, catalog, _) = build_bonded_pair(0.0, true);
-            let first_id = structure.physical_id(0).unwrap();
-            let rigid_id = structure.physical_id(2).unwrap();
-            let bond = structure
-                .bonds
-                .iter_mut()
-                .find(|bond| {
-                    (bond.endpoint_a.constituent_id == first_id
-                        && bond.endpoint_b.constituent_id == rigid_id)
-                        || (bond.endpoint_b.constituent_id == first_id
-                            && bond.endpoint_a.constituent_id == rigid_id)
-                })
-                .expect("fixture must contain a fluid-to-rigid bond");
-            if bond.endpoint_a.constituent_id == first_id {
-                bond.endpoint_a.location = unsupported;
-            } else {
-                bond.endpoint_b.location = unsupported;
-            }
-
-            let original_units = structure.units.clone();
-            let original_bonds = structure.bonds.clone();
-            let original_genome_ids = structure.genome_constituent_ids().to_vec();
-            assert!(
-                !coalesce_fluid_pair_after_bond(&mut structure, 0, 1, &catalog),
-                "unsupported fluid endpoint representation must fail closed"
-            );
-            assert_eq!(structure.units, original_units);
-            assert_eq!(structure.bonds, original_bonds);
-            assert_eq!(
-                structure.genome_constituent_ids(),
-                original_genome_ids.as_slice()
-            );
-        }
-    }
-
-    #[test]
-    fn fluid_coalescence_costs_energy_but_stable_bond_formation_releases_binding_energy() {
-        let fluid_tx = combine_energy_transaction(3.0, 4.0, true, 0.0, 0.0).unwrap();
-        // Existing bonds contribute equally to both states and must cancel;
-        // only the new bond's product-minus-reactant potential funds the costs.
-        let rigid_tx = combine_energy_transaction(3.0, 4.0, false, -10.0, -13.0).unwrap();
-
-        assert!(fluid_tx.balanced());
-        assert!(rigid_tx.balanced());
-        assert_eq!(fluid_tx.usable_delta, -4.0);
-        assert_eq!(fluid_tx.structural_delta, 0.0);
-        assert_eq!(fluid_tx.work_expended, 4.0);
-        assert_eq!(fluid_tx.heat_dissipated, 0.0);
-        assert_eq!(rigid_tx.usable_delta, -1.0);
-        assert_eq!(rigid_tx.structural_delta, -3.0);
-        assert_eq!(rigid_tx.work_expended, 4.0);
-        assert_eq!(rigid_tx.heat_dissipated, 0.0);
-    }
-
-    #[test]
-    fn touching_fluid_boundaries_without_a_bond_do_not_coalesce() {
+    fn dormant_fluid_fixture_cannot_enter_live_intra_organism_combine() {
         let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
-        structure.bonds.clear();
-        let original_units = structure.units.clone();
-        let original_genome_ids = structure.genome_constituent_ids().to_vec();
-
-        assert!(!coalesce_fluid_pair_after_bond(
-            &mut structure,
-            0,
-            1,
-            &catalog
-        ));
-        assert_eq!(structure.units, original_units);
-        assert!(structure.bonds.is_empty());
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_genome_ids.as_slice()
-        );
-    }
-
-    #[test]
-    fn failed_live_combine_rolls_back_energy_and_ledger_when_union_is_unsupported() {
-        // A small relative rotation keeps the physical candidate within
-        // COMBINE tolerance while making the two chord interfaces non-identical.
-        // Candidate formation should succeed; exact union must then reject.
-        let (mut structure, catalog, _) = build_bonded_pair(0.0, false);
-        structure.units[1].placement.rotation_radians = 0.01;
-        structure.bonds.clear();
-        let mut cache = ConnectionCompatibilityCache;
-        let candidates = eligible_candidates(&structure, 0, 1, &catalog, &mut cache);
-        assert!(!candidates.is_empty());
-        assert!(candidates
-            .iter()
-            .copied()
-            .any(|candidate| evaluate_candidate(&structure, 0, 1, candidate, &catalog).is_some()));
-
-        let original_units = structure.units.clone();
-        let original_bonds = structure.bonds.clone();
-        let original_genome_ids = structure.genome_constituent_ids().to_vec();
-        let mut ledger = EnergyLedger::default();
-        let original_ledger = ledger;
-        let mut energy = 100.0;
-
-        assert!(combine_specific_pair(
-            &mut structure,
-            0,
-            1,
-            &catalog,
-            &mut cache,
-            &mut ledger,
-            &mut energy,
-        )
-        .is_none());
-        assert_eq!(structure.units, original_units);
-        assert_eq!(structure.bonds, original_bonds);
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_genome_ids.as_slice()
-        );
-        assert_eq!(energy, 100.0);
-        assert_eq!(
-            ledger.total_potential_energy_released,
-            original_ledger.total_potential_energy_released
-        );
-        assert_eq!(
-            ledger.total_usable_energy_gained,
-            original_ledger.total_usable_energy_gained
-        );
-        assert_eq!(
-            ledger.total_work_expended,
-            original_ledger.total_work_expended
-        );
-        assert_eq!(
-            ledger.total_heat_dissipated,
-            original_ledger.total_heat_dissipated
-        );
-    }
-
-    #[test]
-    fn unsupported_fluid_union_rolls_back_structure_and_bond() {
-        let (mut structure, catalog, _) = build_bonded_pair(4.0, false);
-        let original_units = structure.units.clone();
-        let original_bonds = structure.bonds.clone();
-        let original_genome_ids = structure.genome_constituent_ids().to_vec();
-
-        assert!(!coalesce_fluid_pair_after_bond(
-            &mut structure,
-            0,
-            1,
-            &catalog
-        ));
-        assert_eq!(structure.units, original_units);
-        assert_eq!(structure.bonds, original_bonds);
-        assert_eq!(
-            structure.genome_constituent_ids(),
-            original_genome_ids.as_slice()
-        );
-    }
-
-    #[test]
-    fn live_intra_organism_combine_invalidates_structure_derived_caches() {
-        let (mut structure, _, _) = build_bonded_pair(0.0, false);
         structure.bonds.clear();
 
         let mut simulation = crate::state::Simulation::new(0xC0B2, 10.0);
+        simulation.environment.catalog = catalog;
         for cell in &mut simulation.environment.field.cells {
             cell.materials.clear();
             cell.physical_materials.clear();
@@ -2544,6 +2111,11 @@ mod fluid_coalescence_transaction_tests {
         simulation.organisms[0].cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
         simulation.organisms[0].cached_harmonic_key = Some((0, 0, 0, 0, false));
 
+        assert!(!can_combine(
+            &simulation.organisms[0],
+            &simulation.environment,
+        ));
+
         let mut cache = ConnectionCompatibilityCache;
         let attempt = try_combine(
             &mut simulation.organisms[0],
@@ -2553,15 +2125,17 @@ mod fluid_coalescence_transaction_tests {
             None,
         );
 
-        assert!(attempt.is_some(), "the touching fluid pair should COMBINE");
-        let organism = &simulation.organisms[0];
-        assert_eq!(
-            organism.structure_revision,
-            revision_before.wrapping_add(1),
-            "successful COMBINE must invalidate structure-derived caches"
+        assert!(
+            attempt.is_none(),
+            "dormant fluid fixtures must not enter active COMBINE discovery"
         );
-        assert!(organism.cached_cavity_revision.is_none());
-        assert!(organism.cached_developmental_revision.is_none());
-        assert!(organism.cached_harmonic_key.is_none());
+        let organism = &simulation.organisms[0];
+        assert_eq!(organism.structure_revision, revision_before);
+        assert_eq!(organism.cached_cavity_revision, Some(revision_before));
+        assert_eq!(
+            organism.cached_developmental_revision,
+            Some((0, 0, 0, 0, 0, 0, 0))
+        );
+        assert_eq!(organism.cached_harmonic_key, Some((0, 0, 0, 0, false)));
     }
 }

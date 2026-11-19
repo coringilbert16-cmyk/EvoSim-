@@ -96,10 +96,10 @@ Guardrails for that experiment:
 The default simulation now uses the established renderer configuration; this is the normal environment, not an opt-in experiment:
 
 - World dimensions: **250 × 250**.
-- Starting inventory: **1,280 individual base resources**, represented across all seven canonical resource types.
+- Starting inventory: **1,280 individual base resources**, represented across the six active elements: nitrogen, phosphorus, carbon, sulfur, hydrogen, and oxygen.
 - Resources are seeded deterministically from the simulation seed into **3–10 randomly sized piles**. Pile sizes are a random partition of 1,280 and are not constrained to 6–20.
 - One right-bend hotspot with a smooth radial falloff, **1,000 energy per simulated second** (3,600 energy per physics tick at 24,000 ticks per 86,400-second simulated day), and a **2,000-cycle/day** signal.
-- S-shaped left-to-right flow with its renderer-tested response doubled; the existing speed falloff, bend vortices, mass mobility, and obstacle wakes are retained.
+- **No active Water resource or ambient medium:** no environmental current, medium transport, Water-mediated forces, or Water-specific material behavior. The generic finite-fluid geometry implementation remains preserved but disconnected and dormant.
 - The 2,400-tick day/night world-tone cycle remains independent of runtime playback speed.
 
 The default simulation starts with 1,280 independent resources. The organism-free chemistry experiment uses the same 1,280 physical-material footprint, seeded as 1,200 independent resources plus 80 intact two-constituent molecules, distributed through randomized piles.
@@ -112,6 +112,7 @@ The default simulation starts with 1,280 independent resources. The organism-fre
 - **World tone / sunlight:** source output is deterministic and directional; visibility and occlusion matter. Reflected tone means onward propagation with a potentially transformed frequency composition, not literal mirror-ray tracing. Live capture is active through the precomputed world-tone frame and energy ledger; whole-world conservation across all holders, death transitions, and reaction paths is not yet proven.
 - **Resonance time / phase:** one simulated day is 24,000 physics ticks; the reference tone is 440 oscillations per simulated day. Every oscillator starts at phase zero (peak) at tick zero, and phase is derived analytically from the shared simulation tick when a signal is evaluated. Runtime `ticks_per_second` controls execution pacing only. The 2,400-tick world-source orbital cycle is separate from carrier oscillation.
 - **Geometry ownership:** a structural unit represents one physical constituent. Composite materials must retain per-constituent placements and bond identity; never invent transforms from a cached composite shape.
+- **No active Water:** the active resource catalog contains exactly six elements. Water is neither a resource nor an environmental medium; legacy finite-fluid geometry remains dormant and cannot participate in active simulation.
 - **Bob is a geometry library worker/viewer.** Prefer stored/reusable library results over repeated runtime geometry discovery. Preserve the corner-free 12-piece nitrogen seed; do not revert to the obsolete 16-piece ring.
 - **Repository safety:** audit before each change, keep changes small, verify the exact PR head, compare test failure identities against the known baseline, and do not delete dead code until its architectural role is understood.
 

@@ -321,7 +321,7 @@
       ctx.strokeRect(a.x - pad, a.y - pad, b.x - a.x + pad * 2, b.y - a.y + pad * 2);
       ctx.restore();
     }
-    function renderWaterField(world, viewport) {
+    function renderAmbientFlow(world, viewport) {
       const width = Number(world.width) || 1;
       const height = Number(world.height) || 1;
       ctx.save();
@@ -385,7 +385,7 @@
 
     function renderWorld() {
       const world = worldPayload(), viewport = viewportSize(); if (!world) return;
-      renderWaterField(world, viewport);
+      renderAmbientFlow(world, viewport);
       renderHotspot(world.hotspot, viewport);
       for (const organism of world.organisms || []) {
         const physical = organism.physical;

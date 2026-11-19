@@ -159,9 +159,9 @@ pub fn find_enclosed_regions(
         line_segments.push((index, (transform(-half, 0.0), transform(half, 0.0))));
     }
 
-    // A fitted Water constituent can itself be part of the organism's outer
+    // A fitted fluid constituent can itself be part of the organism's outer
     // boundary. It participates in the enclosure topology for interior
-    // detection, but interior Water must not become a second artificial wall.
+    // detection, but interior fluid must not become a second artificial wall.
     if !fluid_polygons.is_empty() {
         let mut min_x = f64::INFINITY;
         let mut max_x = f64::NEG_INFINITY;
@@ -464,9 +464,9 @@ mod tests {
 
     #[test]
     fn connection_endpoint_accessibility_is_point_based() {
-        let catalog = crate::resources::default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let unit = crate::structure::StructuralUnit::new(
-            "Water",
+            "LegacyFluidFixture",
             crate::structure::Placement {
                 x: 0.0,
                 y: 0.0,

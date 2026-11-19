@@ -268,25 +268,19 @@ mod tests {
     /// COMBINE: geometry, contact, interface engagement, activation, and energy
     /// settlement are tested separately by the environmental chemistry suite.
     #[test]
-    fn static_pair_matrix_characterizes_active_non_water_resource_pairs() {
-        let catalog: Vec<_> = crate::resources::default_catalog()
-            .into_iter()
-            .filter(|resource| resource.name != "Water")
-            .collect();
+    fn static_pair_matrix_characterizes_all_six_active_elements() {
+        let catalog = crate::resources::default_catalog();
         assert_eq!(
             catalog.len(),
             6,
-            "active chemistry diagnostics exclude Water until it is revisited"
+            "the active catalog contains exactly six elements"
         );
 
-        // Use the production catalog-wide baseline while excluding Water
-        // from every pair tested in this matrix.
-        let full_catalog = crate::resources::default_catalog();
-        let reactivity_baseline = full_catalog
+        let reactivity_baseline = catalog
             .iter()
             .map(|resource| resource.properties.reactivity)
             .sum::<f64>()
-            / full_catalog.len() as f64;
+            / catalog.len() as f64;
         let mut pair_count = 0usize;
         for i in 0..catalog.len() {
             for j in i..catalog.len() {
@@ -314,7 +308,7 @@ mod tests {
                     b.properties.reactivity,
                     reactivity_baseline,
                 )
-                .expect("non-Water pair must have a finite BREAK barrier");
+                .expect("element pair must have a finite BREAK barrier");
 
                 assert!(forward.is_finite() && (0.0..=1.0).contains(&forward));
                 assert!(structural_strength > 0.0);

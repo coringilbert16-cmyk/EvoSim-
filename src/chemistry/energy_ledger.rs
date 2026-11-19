@@ -476,15 +476,27 @@ impl EnergyInventorySnapshot {
         let structural_delta = self.current_structural_energy - self.initial_structural_energy;
         let pair_potential_delta =
             self.current_pair_interaction_potential - self.initial_pair_interaction_potential;
-        let residual = usable_delta
-            + resonant_delta
-            + structural_delta
-            + pair_potential_delta
-            + self.work_expended
-            + self.heat_dissipated
-            + self.world_tone_energy_escaped
-            - self.external_energy_input
-            - self.other_energy_released;
+        // Compensated summation keeps one-ULP positive roundoff from being
+        // mistaken for created energy when large world totals nearly cancel.
+        let terms = [
+            usable_delta,
+            resonant_delta,
+            structural_delta,
+            pair_potential_delta,
+            self.work_expended,
+            self.heat_dissipated,
+            self.world_tone_energy_escaped,
+            -self.external_energy_input,
+            -self.other_energy_released,
+        ];
+        let mut residual = 0.0;
+        let mut compensation = 0.0;
+        for term in terms {
+            let adjusted = term - compensation;
+            let next = residual + adjusted;
+            compensation = (next - residual) - adjusted;
+            residual = next;
+        }
         residual.is_finite().then_some(residual)
     }
 

@@ -1,10 +1,10 @@
 use crate::geometry_reference_library::{
     expand_formation_candidates, fluid_formations_from_boundaries,
     generate_collinear_multi_contact_formations,
-    generate_fluid_boundary_families_from_contact_families, generate_rigid_contact_families,
+    generate_fluid_boundary_families_from_contact_families,
+    generate_fluid_contact_families_with_diagnostics, generate_rigid_contact_families,
     generate_rigid_point_contact_families, generate_rigid_vertex_contact_families,
-    generate_water_contact_families_with_diagnostics, open_default_library, seed_base_catalogue,
-    GeometryFrontierState, GeometryLibrary,
+    open_default_library, seed_base_catalogue, GeometryFrontierState, GeometryLibrary,
 };
 use crate::resources::{default_catalog, BaseResource};
 use std::thread;
@@ -62,7 +62,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
     let mut edge_added = 0usize;
     let mut point_added = 0usize;
     let mut vertex_added = 0usize;
-    let mut water_added = 0usize;
+    let mut fluid_added = 0usize;
     let mut fluid_boundary_added = 0usize;
     let mut fluid_formations_added = 0usize;
     let mut multi_contact_fluid_formations = 0usize;
@@ -76,7 +76,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         edge_added += metrics.rigid_edge_families_added;
         point_added += metrics.rigid_point_families_added;
         vertex_added += metrics.rigid_vertex_families_added;
-        water_added += metrics.water_families_added;
+        fluid_added += metrics.fluid_families_added;
         fluid_boundary_added += metrics.fluid_boundary_families_added;
         fluid_formations_added += metrics.fluid_formations_added;
         multi_contact_fluid_formations += metrics.multi_contact_fluid_formations;
@@ -106,7 +106,7 @@ pub fn run_to_completion(max_constituents: usize) -> std::io::Result<()> {
         .count();
 
     eprintln!(
-        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} water_families_added={water_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} multi_contact_fluid_formations={multi_contact_fluid_formations} multi_contact_fluid_formations_added={multi_contact_fluid_formations_added} multi_contact_not_added={} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
+        "geometry worker complete: max_constituents={max_constituents} seeded={seeded} passes={processed} generated_candidates={generated} added_formations={added} not_added={} edge_families_added={edge_added} point_families_added={point_added} vertex_families_added={vertex_added} fluid_families_added={fluid_added} fluid_boundary_families_added={fluid_boundary_added} fluid_formations_added={fluid_formations_added} multi_contact_fluid_formations={multi_contact_fluid_formations} multi_contact_fluid_formations_added={multi_contact_fluid_formations_added} multi_contact_not_added={} fluid_formations_before_reopen={fluid_formations_before_reopen} fluid_formations_after_reopen={fluid_formations_after_reopen} formations_before_reopen={formations_before_reopen} formations_after_reopen={} oversized_formations={oversized} unfinished_frontiers={unfinished} elapsed_ms={}",
         generated.saturating_sub(added),
         multi_contact_fluid_formations.saturating_sub(multi_contact_fluid_formations_added),
         reopened.len(),
@@ -193,17 +193,17 @@ struct WorkerPassMetrics {
     rigid_point_families_added: usize,
     rigid_vertex_families: usize,
     rigid_vertex_families_added: usize,
-    water_families: usize,
-    water_families_added: usize,
+    fluid_families: usize,
+    fluid_families_added: usize,
     fluid_boundary_families: usize,
     fluid_boundary_families_added: usize,
-    water_frontiers_without_boundary_candidates: usize,
-    water_unresolved_anchor_resources: usize,
-    water_unsupported_anchor_geometry: usize,
-    water_capillary_solver_failures: usize,
-    water_anchors_without_exposed_intervals: usize,
-    water_invalid_contact_intervals: usize,
-    water_anchors_without_valid_contact_overlap: usize,
+    fluid_frontiers_without_boundary_candidates: usize,
+    fluid_unresolved_anchor_resources: usize,
+    fluid_unsupported_anchor_geometry: usize,
+    fluid_capillary_solver_failures: usize,
+    fluid_anchors_without_exposed_intervals: usize,
+    fluid_invalid_contact_intervals: usize,
+    fluid_anchors_without_valid_contact_overlap: usize,
     fluid_formations: usize,
     fluid_formations_added: usize,
     multi_contact_fluid_formations: usize,
@@ -217,7 +217,7 @@ impl std::fmt::Display for WorkerPassMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} water_families={} water_added={} fluid_boundary_families={} fluid_boundary_added={} water_frontiers_without_boundary_candidates={} water_unresolved_anchor_resources={} water_unsupported_anchor_geometry={} water_capillary_solver_failures={} water_anchors_without_exposed_intervals={} water_invalid_contact_intervals={} water_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} multi_contact_fluid_formations={} multi_contact_fluid_formations_added={} multi_contact_fluid_formations_not_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
+            "geometry worker pass: size={} generated={} added={} not_added={} edge_families={} edge_added={} point_families={} point_added={} vertex_families={} vertex_added={} fluid_families={} fluid_added={} fluid_boundary_families={} fluid_boundary_added={} fluid_frontiers_without_boundary_candidates={} fluid_unresolved_anchor_resources={} fluid_unsupported_anchor_geometry={} fluid_capillary_solver_failures={} fluid_anchors_without_exposed_intervals={} fluid_invalid_contact_intervals={} fluid_anchors_without_valid_contact_overlap={} fluid_formations={} fluid_formations_added={} multi_contact_fluid_formations={} multi_contact_fluid_formations_added={} multi_contact_fluid_formations_not_added={} total_formations={} expansion_limit_reached={} elapsed_ms={}",
             self.formation_size,
             self.generated_candidates,
             self.added_formations,
@@ -228,17 +228,17 @@ impl std::fmt::Display for WorkerPassMetrics {
             self.rigid_point_families_added,
             self.rigid_vertex_families,
             self.rigid_vertex_families_added,
-            self.water_families,
-            self.water_families_added,
+            self.fluid_families,
+            self.fluid_families_added,
             self.fluid_boundary_families,
             self.fluid_boundary_families_added,
-            self.water_frontiers_without_boundary_candidates,
-            self.water_unresolved_anchor_resources,
-            self.water_unsupported_anchor_geometry,
-            self.water_capillary_solver_failures,
-            self.water_anchors_without_exposed_intervals,
-            self.water_invalid_contact_intervals,
-            self.water_anchors_without_valid_contact_overlap,
+            self.fluid_frontiers_without_boundary_candidates,
+            self.fluid_unresolved_anchor_resources,
+            self.fluid_unsupported_anchor_geometry,
+            self.fluid_capillary_solver_failures,
+            self.fluid_anchors_without_exposed_intervals,
+            self.fluid_invalid_contact_intervals,
+            self.fluid_anchors_without_valid_contact_overlap,
             self.fluid_formations,
             self.fluid_formations_added,
             self.multi_contact_fluid_formations,
@@ -319,27 +319,27 @@ fn process_one_frontier(
                 continue;
             }
 
-            if resource.name == "Water" {
-                // Persist solved Water/rigid contact families and aggregate
+            if resource.physical_state == crate::resources::PhysicalState::Fluid {
+                // Persist solved fluid/rigid contact families and aggregate
                 // per-anchor outcomes so empty results are actionable.
                 let (families, diagnostics) =
-                    generate_water_contact_families_with_diagnostics(&formation, resource, catalog);
-                metrics.water_unresolved_anchor_resources +=
+                    generate_fluid_contact_families_with_diagnostics(&formation, resource, catalog);
+                metrics.fluid_unresolved_anchor_resources +=
                     diagnostics.unresolved_anchor_resources;
-                metrics.water_unsupported_anchor_geometry +=
+                metrics.fluid_unsupported_anchor_geometry +=
                     diagnostics.unsupported_anchor_geometry;
-                metrics.water_capillary_solver_failures += diagnostics.capillary_solver_failures;
-                metrics.water_anchors_without_exposed_intervals +=
+                metrics.fluid_capillary_solver_failures += diagnostics.capillary_solver_failures;
+                metrics.fluid_anchors_without_exposed_intervals +=
                     diagnostics.anchors_without_exposed_intervals;
-                metrics.water_invalid_contact_intervals += diagnostics.invalid_contact_intervals;
-                metrics.water_anchors_without_valid_contact_overlap +=
+                metrics.fluid_invalid_contact_intervals += diagnostics.invalid_contact_intervals;
+                metrics.fluid_anchors_without_valid_contact_overlap +=
                     diagnostics.anchors_without_valid_contact_overlap;
-                metrics.water_families += families.len();
+                metrics.fluid_families += families.len();
                 let boundary_states =
                     generate_fluid_boundary_families_from_contact_families(resource, &families);
                 metrics.fluid_boundary_families += boundary_states.len();
                 if boundary_states.is_empty() {
-                    metrics.water_frontiers_without_boundary_candidates += 1;
+                    metrics.fluid_frontiers_without_boundary_candidates += 1;
                 }
                 // The configured limit bounds rigid parent formations, not the
                 // additional deformable fluid body. Generate fluid records for
@@ -350,7 +350,7 @@ fn process_one_frontier(
                     generate_collinear_multi_contact_formations(&formation, resource, catalog);
                 metrics.fluid_formations += fluid_formations.len() + multi_contact_formations.len();
                 metrics.multi_contact_fluid_formations += multi_contact_formations.len();
-                metrics.water_families_added += library.insert_contact_families(families)?;
+                metrics.fluid_families_added += library.insert_contact_families(families)?;
                 metrics.fluid_boundary_families_added +=
                     library.insert_fluid_boundary_families(boundary_states)?;
                 let (fluid_added, multi_contact_added) = library
@@ -420,7 +420,7 @@ mod tests {
 
     #[test]
     fn worker_generates_fluid_records_for_parent_at_constituent_limit() {
-        let catalog = default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon = catalog
             .iter()
             .find(|resource| resource.name == "Carbon")
@@ -444,7 +444,7 @@ mod tests {
         assert!(
             library.fluid_formations().any(|formation| {
                 formation.parent_formation_signature == signature
-                    && formation.fluid_resource == "Water"
+                    && formation.fluid_resource == "LegacyFluidFixture"
             }),
             "the parent at the rigid-constituent limit must still receive fluid formations"
         );
@@ -511,10 +511,12 @@ mod tests {
     }
 
     #[test]
-    fn worker_persists_water_inclusive_formations_and_reopens_them() {
-        let catalog = default_catalog();
-        let root =
-            std::env::temp_dir().join(format!("evosim-bob-water-worker-{}", std::process::id()));
+    fn worker_persists_legacy_fluid_formations_and_reopens_them() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let root = std::env::temp_dir().join(format!(
+            "evosim-bob-legacy-fluid-worker-{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&root);
         let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
         let carbon = GeometryFormation::single("Carbon");
@@ -528,7 +530,7 @@ mod tests {
         assert!(metrics.fluid_formations_added > 0);
         assert!(library.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
-                && formation.fluid_resource == "Water"
+                && formation.fluid_resource == "LegacyFluidFixture"
         }));
         drop(library);
 
@@ -540,16 +542,16 @@ mod tests {
         assert!(!persisted_signatures.is_empty());
         assert!(reopened.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
-                && formation.fluid_resource == "Water"
+                && formation.fluid_resource == "LegacyFluidFixture"
         }));
 
         let parent = reopened
             .get(&carbon_signature)
             .expect("the canonical parent formation must survive reopening");
         let (realized_shape, realized_pose) = reopened
-            .fluid_formations_for_parent(&carbon_signature, "Water")
+            .fluid_formations_for_parent(&carbon_signature, "LegacyFluidFixture")
             .find_map(|suggestion| suggestion.realize_against_parent(parent, &catalog, true))
-            .expect("a generated, reopened Water formation must realize against its parent");
+            .expect("a generated, reopened legacy fluid formation must realize against its parent");
         assert!(realized_shape.is_valid());
         assert!(matches!(
             realized_shape.form,

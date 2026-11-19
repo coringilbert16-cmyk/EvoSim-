@@ -18,7 +18,7 @@ pub const CHEMISTRY_LIBRARY_SCHEMA_VERSION: u32 = 5;
 /// Increment this fingerprint whenever chemistry equations, constants, or
 /// resource-chemistry semantics change. Existing derived cache rows are never
 /// relabeled or migrated across fingerprints.
-pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v2|chemical-position=quantized-key-v2|finite-representable-only";
+pub const CHEMISTRY_EQUATION_FINGERPRINT: &str = "evosim-chemistry-v1|potential=exp-k-dmax|contact=(1-d/r)^2|Dmax=13|k=1/13|contact_radius=1|max_force=1|energy_distance=contact_radius|energy_scale=max_force*energy_distance|reaction_dissipation=0.1/tick|catalog=resource-chemistry-v3|chemical-position=quantized-key-v2|finite-representable-only";
 
 /// Bind persistent cache compatibility to the canonical resource chemistry
 /// positions as well as the equation implementation. Names are sorted so

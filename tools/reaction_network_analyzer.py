@@ -246,7 +246,7 @@ def analyze(root, seeds, duration):
         "schema_version": 1,
         "experiment": {
             "seeds": seeds, "duration_seconds_per_seed": duration,
-            "starting_inventory": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents; six active elements; Water excluded",
+            "starting_inventory": "1,200 independent resources plus 80 established two-constituent molecules; 1,360 constituents; six active elements; no ambient medium",
             "family_definition": "exact constituent composition plus undirected bond topology; excludes bond energy, endpoint geometry, placement, and environmental identity",
         },
         "validation": {"all_seeds_present": len(seed_rows) == len(seeds), "all_runs_match_1280_molecule_start": True, "all_lifecycle_checks_pass": True},

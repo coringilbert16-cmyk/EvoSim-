@@ -425,7 +425,7 @@ fn select_best_contact(
     .next()
 }
 
-fn is_active_non_water_resource(name: &str) -> bool {
+fn is_active_element_resource(name: &str) -> bool {
     matches!(
         name,
         "Carbon" | "Oxygen" | "Hydrogen" | "Sulfur" | "Nitrogen" | "Phosphorus"
@@ -452,8 +452,7 @@ fn constituent_pair_static_potential(
     }
     let resource_a = catalog.iter().find(|resource| resource.name == *name_a)?;
     let resource_b = catalog.iter().find(|resource| resource.name == *name_b)?;
-    if is_active_non_water_resource(&resource_a.name)
-        && is_active_non_water_resource(&resource_b.name)
+    if is_active_element_resource(&resource_a.name) && is_active_element_resource(&resource_b.name)
     {
         return crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
             .map(|adhesion| adhesion.net)
@@ -687,8 +686,8 @@ fn chemical_step(
     else {
         reject_step!();
     };
-    let static_potential = if is_active_non_water_resource(&resource_a.name)
-        && is_active_non_water_resource(&resource_b.name)
+    let static_potential = if is_active_element_resource(&resource_a.name)
+        && is_active_element_resource(&resource_b.name)
     {
         let Some(adhesion) =
             crate::resources::pair_adhesion(resource_a.adhesion, resource_b.adhesion)
@@ -1539,19 +1538,13 @@ mod tests {
     }
 
     #[test]
-    fn controlled_physical_pair_matrix_classifies_non_water_resource_pairs() {
+    fn controlled_physical_pair_matrix_classifies_six_element_pairs() {
         let mut simulation = crate::state::Simulation::new(23029, 10.0);
         for cell in &mut simulation.environment.field.cells {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
-        let catalog: Vec<_> = simulation
-            .environment
-            .catalog
-            .iter()
-            .filter(|resource| resource.name != "Water")
-            .cloned()
-            .collect();
+        let catalog = simulation.environment.catalog.clone();
         let mut pair_count = 0usize;
         let mut contact_count = 0usize;
 
@@ -1715,7 +1708,7 @@ mod tests {
 
         assert_eq!(
             pair_count, 21,
-            "controlled matrix must classify all 21 unordered pairs among the six active non-Water resources"
+            "controlled matrix must classify all 21 unordered pairs among the six active six active elements"
         );
         assert!(
             contact_count > 0,
@@ -1734,13 +1727,7 @@ mod tests {
             cell.materials.clear();
             cell.physical_materials.clear();
         }
-        let catalog: Vec<_> = simulation
-            .environment
-            .catalog
-            .iter()
-            .filter(|resource| resource.name != "Water")
-            .cloned()
-            .collect();
+        let catalog = simulation.environment.catalog.clone();
         let compound = PhysicalMaterial::realized(
             Material {
                 parts: vec![("Carbon".into(), 1.0), ("Carbon".into(), 1.0)],

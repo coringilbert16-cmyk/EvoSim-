@@ -6,7 +6,7 @@ from pathlib import Path
 from tools.chemistry_experiment_batch_analyzer import ACTIVE_ELEMENTS, build_report
 
 
-def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
+def write_run(root: Path, seed: int) -> None:
     chemistry = {
         "input": {
             "seed": seed,
@@ -18,8 +18,8 @@ def write_run(root: Path, seed: int, water_excluded: bool = True) -> None:
             "initial_constituent_count": 1360,
         },
         "resource_coverage": {
-            "excluded_resources": ["Water"] if water_excluded else [],
-            "required_resources": list(ACTIVE_ELEMENTS) if water_excluded else [*ACTIVE_ELEMENTS, "Water"],
+            "excluded_resources": [],
+            "required_resources": list(ACTIVE_ELEMENTS),
             "all_required_present_at_start": True,
             "snapshots_missing_resources": [],
         },
@@ -123,11 +123,15 @@ class ChemistryExperimentBatchAnalyzerTests(unittest.TestCase):
         self.assertTrue(report["elemental_bond_pairs"]["inventory_reconciliation_all_seeds_match"])
         self.assertTrue(report["validation"]["all_runs_pass_inventory_and_lifecycle_checks"])
 
-    def test_rejects_water_in_the_active_chemistry_inventory(self):
+    def test_rejects_excluded_resources_in_the_active_catalog(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            write_run(root, 42, water_excluded=False)
-            with self.assertRaisesRegex(ValueError, "exclude Water"):
+            write_run(root, 42)
+            chemistry_path = root / "seed-42-chemistry.json"
+            chemistry = json.loads(chemistry_path.read_text(encoding="utf-8"))
+            chemistry["resource_coverage"]["excluded_resources"] = ["Water"]
+            chemistry_path.write_text(json.dumps(chemistry), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must not declare excluded resources"):
                 build_report(root, [42], 300)
 
 

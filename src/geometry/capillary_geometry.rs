@@ -1356,28 +1356,28 @@ pub fn effective_contact_angle(fluid_cohesion: f64, solid_cohesion: f64) -> Opti
     Some((PI * 0.5 - contrast * PI * 0.25).clamp(EPS, PI - EPS))
 }
 
-/// Exact capillary solution for the current EvoSim water/solid pair.
+/// Exact capillary solution for the current EvoSim fluid/solid pair.
 ///
-/// The amount of water is represented by conserved area. The contacted
+/// The amount of fluid is represented by conserved area. The contacted
 /// resource supplies the effective wetting parameter through the existing
 /// cohesion field.
-pub fn solve_water_against_solid(
-    water_area: f64,
-    water_cohesion: f64,
+pub fn solve_fluid_against_solid(
+    fluid_area: f64,
+    fluid_cohesion: f64,
     solid_cohesion: f64,
 ) -> Option<CapillaryContactFamily> {
-    let angle = effective_contact_angle(water_cohesion, solid_cohesion)?;
-    CapillaryContactFamily::solve(water_area, angle)
+    let angle = effective_contact_angle(fluid_cohesion, solid_cohesion)?;
+    CapillaryContactFamily::solve(fluid_area, angle)
 }
 
-/// Solve one constant-curvature water boundary whose straight contact chord is
+/// Solve one constant-curvature fluid boundary whose straight contact chord is
 /// split across multiple contiguous, collinear solid surfaces. This is one
 /// simultaneous capillary solution (one conserved area and one free arc), not
 /// a union of independently solved pairwise contacts. The caller supplies the
 /// ordered solid intervals in the target coordinate frame and must associate
 /// each returned SolidContact piece with its parent edge before persistence.
 #[allow(dead_code)] // Public primitive used by Bob's staged parent-edge integration.
-pub fn solve_water_against_collinear_contacts(
+pub fn solve_fluid_against_collinear_contacts(
     area: f64,
     contact_angle_radians: f64,
     ordered_segments: &[ContactSegment],
@@ -2280,15 +2280,15 @@ mod tests {
     }
 
     #[test]
-    fn water_cohesion_adapter_is_deterministic() {
+    fn fluid_cohesion_adapter_is_deterministic() {
         let angle = effective_contact_angle(0.0, 0.95).unwrap();
         assert!(angle < PI * 0.5);
         assert!((effective_contact_angle(0.5, 0.5).unwrap() - PI * 0.5).abs() < 1e-12);
     }
 
     #[test]
-    fn water_against_carbon_has_a_finite_exact_solution() {
-        let family = solve_water_against_solid(0.5, 0.0, 0.95).unwrap();
+    fn fluid_against_carbon_has_a_finite_exact_solution() {
+        let family = solve_fluid_against_solid(0.5, 0.0, 0.95).unwrap();
         assert!(family.curvature_radius.is_finite());
         assert!((family.enclosed_area - 0.5).abs() < 1e-10);
     }
@@ -2617,7 +2617,7 @@ mod tests {
             ((third, 0.0), (2.0 * third, 0.0)),
             ((2.0 * third, 0.0), (family.contact_length, 0.0)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments).unwrap();
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments).unwrap();
         assert!(boundary.is_valid());
         assert_eq!(boundary.contact_count(), 3);
         assert_eq!(boundary.free_arc_count(), 1);
@@ -2651,7 +2651,7 @@ mod tests {
             (point(third), point(2.0 * third)),
             (point(2.0 * third), point(family.contact_length)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments).unwrap();
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments).unwrap();
         assert!(boundary.is_valid());
         assert_eq!(boundary.contact_count(), 3);
         assert!((boundary.nominal_area - area).abs() < 1e-12);
@@ -2671,7 +2671,7 @@ mod tests {
                 (family.contact_length, 0.0),
             ),
         ];
-        assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &segments).is_none());
+        assert!(solve_fluid_against_collinear_contacts(0.5, PI / 2.0, &segments).is_none());
         let short = [
             ((0.0, 0.0), (family.contact_length * 0.25, 0.0)),
             (
@@ -2679,7 +2679,7 @@ mod tests {
                 (family.contact_length * 0.5, 0.0),
             ),
         ];
-        assert!(solve_water_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
+        assert!(solve_fluid_against_collinear_contacts(0.5, PI / 2.0, &short).is_none());
     }
 
     #[test]
@@ -2687,7 +2687,7 @@ mod tests {
         let area = 0.5;
         let family = CapillaryContactFamily::solve(area, PI / 2.0).unwrap();
         let midpoint = family.contact_length * 0.5;
-        let boundary = solve_water_against_collinear_contacts(
+        let boundary = solve_fluid_against_collinear_contacts(
             area,
             PI / 2.0,
             &[
@@ -2728,7 +2728,7 @@ mod tests {
     fn multi_contact_boundary_transform_rejects_invalid_transforms_and_source() {
         let family = CapillaryContactFamily::solve(0.5, PI / 2.0).unwrap();
         let midpoint = family.contact_length * 0.5;
-        let boundary = solve_water_against_collinear_contacts(
+        let boundary = solve_fluid_against_collinear_contacts(
             0.5,
             PI / 2.0,
             &[

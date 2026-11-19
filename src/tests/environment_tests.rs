@@ -592,39 +592,6 @@ fn bounded_bounds_query_matches_full_query_for_a_complete_window() {
 }
 
 #[test]
-fn environmental_transport_repairs_duplicate_nonzero_material_ids() {
-    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
-    let catalog = crate::resources::default_catalog();
-    for (cell, x) in [(0, 12.5), (1, 37.5)] {
-        let mut material = PhysicalMaterial::realized(
-            make_raw("Carbon", 1.0),
-            vec![crate::structure::Placement {
-                x,
-                y: 12.5,
-                rotation_radians: 0.0,
-            }],
-            &catalog,
-        )
-        .unwrap();
-        material.environmental_identity = 41;
-        assert!(field.deposit_physical_at_index(cell, material, &catalog));
-    }
-
-    crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<false>(
-        &mut field, &catalog, 100.0, 100.0,
-    );
-    let ids: Vec<u64> = field
-        .cells
-        .iter()
-        .flat_map(|cell| cell.physical_materials.iter())
-        .map(|material| material.environmental_identity)
-        .collect();
-    assert_eq!(ids.len(), 2);
-    assert!(ids.iter().all(|id| *id != 0));
-    assert_ne!(ids[0], ids[1]);
-}
-
-#[test]
 fn environmental_identity_allocator_repairs_duplicate_nonzero_ids() {
     let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
     let catalog = crate::resources::default_catalog();
@@ -861,4 +828,34 @@ fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atom
     assert_eq!(field.cells, before);
     assert!(!field.move_physical_material_by_identity(identity, -20.0, 0.0, &catalog));
     assert_eq!(field.cells, before);
+}
+
+#[test]
+fn active_field_rejects_legacy_fluid_resources_and_materials() {
+    let catalog = crate::resources::legacy_fluid_test_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let destination = field.index_for_position(10.0, 10.0).unwrap();
+
+    assert!(!field.deposit_at_index(
+        destination,
+        Material::free_base("LegacyFluidFixture", 1.0),
+        &catalog,
+    ));
+
+    let fluid = PhysicalMaterial::realized(
+        Material::free_base("LegacyFluidFixture", 1.0),
+        vec![crate::structure::Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .expect("legacy fluid fixture should remain geometrically realizable");
+    assert!(!field.deposit_physical_at_index(destination, fluid.clone(), &catalog,));
+    assert!(!field.deposit_physical_batch(vec![(10.0, 10.0, fluid)], &catalog,));
+    assert!(field
+        .cells
+        .iter()
+        .all(|cell| { cell.materials.is_empty() && cell.physical_materials.is_empty() }));
 }

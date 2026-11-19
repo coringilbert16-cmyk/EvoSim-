@@ -653,17 +653,10 @@ mod integration_tests {
         assert!(!o.structure.units.is_empty());
         assert!(!o.stored_material.is_empty());
         let stored = o.stored_material.materials_snapshot();
-        assert_eq!(stored.len(), 4);
+        assert_eq!(stored.len(), 3);
         assert!(stored
             .iter()
-            .any(|material| { material.parts.iter().any(|(name, _)| name == "Water") }));
-        assert_eq!(
-            stored
-                .iter()
-                .filter(|material| { material.parts.iter().all(|(name, _)| name != "Water") })
-                .count(),
-            3
-        );
+            .all(|material| { material.parts.iter().all(|(name, _)| name != "Water") }));
         assert!(o.usable_energy >= o.genome.reproductive_energy_allocation);
         assert!(o.decision_history.entries.is_empty());
     }
@@ -865,7 +858,7 @@ mod integration_tests {
         assert_eq!(o.stored_material.count_structured(), before_structured + 1,);
     }
     #[test]
-    fn accessible_interior_starts_without_synthetic_water() {
+    fn accessible_interior_starts_without_fluid_materials() {
         let s = Simulation::new(22, 10.0);
         let catalog = s.environment.catalog.clone();
         let blueprint = crate::juvenile::confirmed_seed_baseline(&catalog)
@@ -876,22 +869,17 @@ mod integration_tests {
             crate::interior_geometry::find_accessible_interior_regions(&structure, &catalog)
                 .expect("initial seed should expose accessible topology");
         assert!(!regions.is_empty());
-        // Boundary Water is ordinary realized structure; no Water is synthesized
-        // into the accessible interior.
+        assert!(catalog
+            .iter()
+            .all(|resource| { resource.physical_state == crate::resources::PhysicalState::Rigid }));
         assert!(structure.units.iter().all(|unit| {
-            let Some((name, _)) = unit.material.parts.first() else {
-                return true;
-            };
-            if name != "Water" {
-                return true;
-            }
-            matches!(
-                unit.shape(&catalog).map(|shape| &shape.form),
-                Some(crate::resources::Form::Fluid {
-                    boundary: Some(_),
-                    ..
+            unit.material
+                .parts
+                .first()
+                .and_then(|(name, _)| catalog.iter().find(|resource| resource.name == *name))
+                .is_some_and(|resource| {
+                    resource.physical_state == crate::resources::PhysicalState::Rigid
                 })
-            )
         }));
     }
 

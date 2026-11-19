@@ -1826,11 +1826,6 @@ fn construct_blueprint_bond_driven_internal(
                 }
                 candidates.push((usize::MAX, candidate.name.clone(), 0.0));
             }
-            // Water is the final developmental construction fallback after
-            // all rigid material alternatives have failed.
-            if resource(catalog, "Water").is_some() {
-                candidates.push((usize::MAX, "Water".to_string(), 0.0));
-            }
             candidates
         };
 
@@ -2240,96 +2235,6 @@ mod tests {
     }
 
     #[test]
-    fn bob_fluid_suggestion_transforms_and_restores_as_exact_fluid_geometry() {
-        use crate::geometry_reference_library::{
-            fluid_formations_from_boundaries,
-            generate_fluid_boundary_families_from_contact_families,
-            generate_water_contact_families_with_diagnostics, GeometryFormation, GeometryLibrary,
-        };
-        use crate::resources::Material;
-
-        let catalog = crate::resources::default_catalog();
-        let root =
-            std::env::temp_dir().join(format!("evosim-runtime-bob-fluid-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let mut library = GeometryLibrary::open(&root, &catalog).unwrap();
-        let parent = GeometryFormation::single("Carbon");
-        library.insert(parent.clone(), &catalog).unwrap();
-        let water = resource(&catalog, "Water").unwrap();
-        let (contacts, _) =
-            generate_water_contact_families_with_diagnostics(&parent, water, &catalog);
-        let boundaries = generate_fluid_boundary_families_from_contact_families(water, &contacts);
-        let fluid_formations = fluid_formations_from_boundaries(&boundaries);
-        assert!(!fluid_formations.is_empty());
-        library.insert_contact_families(contacts).unwrap();
-        library.insert_fluid_boundary_families(boundaries).unwrap();
-        library
-            .insert_fluid_formations(fluid_formations, &catalog)
-            .unwrap();
-
-        let anchor_pose = Placement {
-            x: 3.0,
-            y: -2.0,
-            rotation_radians: 0.37,
-        };
-        let relative_fluid_pose = Placement {
-            x: 0.0,
-            y: 0.0,
-            rotation_radians: 0.0,
-        };
-        let mut live_structure = OrganismStructure::new();
-        let anchor_index = live_structure.add_unit(StructuralUnit::new("Carbon", anchor_pose));
-        let anchor_id = live_structure.physical_id(anchor_index).unwrap();
-        let live_parent = canonical_live_rigid_parent(&live_structure, &catalog)
-            .expect("single rigid parent should map into Bob's canonical frame");
-        let suggestions = bob_fluid_origins_for_live_parent(
-            &library,
-            &live_parent,
-            anchor_id,
-            water,
-            relative_fluid_pose,
-            &catalog,
-        );
-        assert!(!suggestions.is_empty());
-        for (origin, shape) in suggestions {
-            assert!(origin.x.is_finite());
-            assert!(origin.y.is_finite());
-            assert!(origin.rotation_radians.is_finite());
-            assert!(matches!(
-                &shape.form,
-                crate::resources::Form::Fluid {
-                    nominal_area,
-                    boundary: None,
-                    arc_boundary: Some(_), ..} if (*nominal_area - crate::resources::NOMINAL_UNIT_AREA).abs() < 1e-9
-            ));
-
-            let material = crate::physical_material::PhysicalMaterial::realized(
-                Material::free_base("Water", 1.0),
-                vec![relative_fluid_pose],
-                &catalog,
-            )
-            .expect("default Water material should have a valid physical realization")
-            .with_single_fluid_shape(shape.clone(), &catalog)
-            .expect("Bob's conserved-area arc should fit the physical Water material");
-            let mut restored = OrganismStructure::new();
-            let restored_indices = crate::material_restoration::restore_material(
-                &mut restored,
-                &material,
-                origin,
-                &catalog,
-            )
-            .expect("the Bob fluid shape should survive physical material restoration");
-            assert_eq!(
-                restored.units[restored_indices[0]].shape(&catalog),
-                Some(&shape)
-            );
-            assert_eq!(material.realized_shape_for_part(0, &catalog), Some(shape));
-        }
-        drop(library);
-        let _ = std::fs::remove_dir_all(root);
-    }
-
-    #[test]
     fn reopened_two_piece_bob_record_maps_into_transformed_live_parent() {
         use crate::geometry_reference_library::{
             generate_collinear_multi_contact_formations, GeometryLibrary,
@@ -2337,20 +2242,20 @@ mod tests {
         use crate::resources::{Form, Material};
         use crate::structure::{Bond, BondEndpoint, StructuralUnit};
 
-        let mut catalog = crate::resources::default_catalog();
-        let water = resource(&catalog, "Water").unwrap().clone();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
+        let fluid = resource(&catalog, "LegacyFluidFixture").unwrap().clone();
         let carbon = resource(&catalog, "Carbon").unwrap().clone();
-        let area = match &water.shape.form {
+        let area = match &fluid.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("Water must expose a conserved fluid area"),
+            _ => panic!("legacy fluid must expose a conserved fluid area"),
         };
-        let family = crate::capillary_geometry::solve_water_against_solid(
+        let family = crate::capillary_geometry::solve_fluid_against_solid(
             area,
-            water.properties.cohesion,
+            fluid.properties.cohesion,
             carbon.properties.cohesion,
         )
-        .expect("default Water and Carbon should have an equilibrium contact family");
+        .expect("default legacy fluid and Carbon should have an equilibrium contact family");
         let wall_length = family.contact_length * 0.5;
         for name in ["TestWallA", "TestWallB"] {
             let mut wall = carbon.clone();
@@ -2402,11 +2307,11 @@ mod tests {
             .expect("bonded two-piece line parent should map into Bob's canonical frame");
         assert_eq!(live_parent.formation.constituents.len(), 2);
         let generated =
-            generate_collinear_multi_contact_formations(&live_parent.formation, &water, &catalog);
+            generate_collinear_multi_contact_formations(&live_parent.formation, &fluid, &catalog);
         let record = generated
             .into_iter()
             .find(|candidate| candidate.contact_constraints.len() == 2)
-            .expect("two-piece parent should yield a two-contact Water record");
+            .expect("two-piece parent should yield a two-contact legacy fluid record");
         // The fluid's origin is offset from the rigid parent's center by its
         // solved contact geometry. Compute both valid bulge orientations in
         // canonical coordinates, then transform them into the live frame.
@@ -2449,7 +2354,7 @@ mod tests {
             &library,
             &live_parent,
             left_id,
-            &water,
+            &fluid,
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2493,8 +2398,8 @@ mod tests {
         // Continue the exact reopened-record path into the same staged bond
         // transaction used by construction. The pre-existing rigid bond is
         // retained, while both fluid-to-rigid contacts must commit together.
-        let water_material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+        let fluid_material = crate::physical_material::PhysicalMaterial::realized(
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2508,7 +2413,7 @@ mod tests {
         let mut trial = live.clone();
         let fluid_index = crate::material_restoration::restore_material(
             &mut trial,
-            &water_material,
+            &fluid_material,
             origin,
             &catalog,
         )
@@ -2590,12 +2495,12 @@ mod tests {
     #[test]
     fn multi_contact_fluid_forms_multiple_bonds_to_one_rigid_edge() {
         use crate::capillary_geometry::{
-            solve_water_against_collinear_contacts, CapillaryContactFamily,
+            solve_fluid_against_collinear_contacts, CapillaryContactFamily,
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon_index = catalog
             .iter()
             .position(|resource| resource.name == "Carbon")
@@ -2609,7 +2514,7 @@ mod tests {
             ((-third, 0.0), (third, 0.0)),
             ((third, 0.0), (family.contact_length * 0.5, 0.0)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments)
             .expect("three collinear segments should form one conserved boundary");
         let shape = crate::resources::Shape {
             form: Form::Fluid {
@@ -2620,7 +2525,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -2776,12 +2681,12 @@ mod tests {
     #[test]
     fn multi_contact_fluid_commits_all_three_rigid_bonds_together() {
         use crate::capillary_geometry::{
-            solve_water_against_collinear_contacts, CapillaryContactFamily,
+            solve_fluid_against_collinear_contacts, CapillaryContactFamily,
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon_index = catalog
             .iter()
             .position(|resource| resource.name == "Carbon")
@@ -2800,7 +2705,7 @@ mod tests {
             ((-third, 0.0), (third, 0.0)),
             ((third, 0.0), (family.contact_length * 0.5, 0.0)),
         ];
-        let boundary = solve_water_against_collinear_contacts(area, angle, &segments)
+        let boundary = solve_fluid_against_collinear_contacts(area, angle, &segments)
             .expect("the three collinear contacts should form one conserved boundary");
         let shape = crate::resources::Shape {
             form: Form::Fluid {
@@ -2811,7 +2716,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,
@@ -3041,7 +2946,7 @@ mod tests {
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
 
-        let catalog = crate::resources::default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let half = NOMINAL_UNIT_AREA.sqrt() * 0.5;
         let angle = std::f64::consts::FRAC_PI_2;
         let boundary = MultiContactFluidBoundary {
@@ -3087,7 +2992,7 @@ mod tests {
             },
         };
         let material = crate::physical_material::PhysicalMaterial::realized(
-            Material::free_base("Water", 1.0),
+            Material::free_base("LegacyFluidFixture", 1.0),
             vec![Placement {
                 x: 0.0,
                 y: 0.0,

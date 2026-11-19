@@ -629,42 +629,6 @@ mod tests {
         let decoded: Bond = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, b)
     }
-    #[test]
-    fn water_water_contact_can_offer_a_bond_candidate_without_merging() {
-        let catalog = default_catalog();
-        let mut s = OrganismStructure::new();
-        s.add_unit(StructuralUnit::new(
-            "Water",
-            Placement {
-                x: 0.0,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        s.add_unit(StructuralUnit::new(
-            "Water",
-            Placement {
-                x: 0.8,
-                y: 0.0,
-                rotation_radians: 0.0,
-            },
-        ));
-        let mut cache = ConnectionCompatibilityCache::new();
-        let candidates = eligible_candidates(&s, 0, 1, &catalog, &mut cache);
-        assert!(
-            !candidates.is_empty(),
-            "touching water may be evaluated for a bond; it is not connected until the bond transaction succeeds"
-        );
-        assert!(
-            s.bonds.is_empty(),
-            "candidate generation must not create a bond or merge fluid"
-        );
-        assert_eq!(
-            s.units.len(),
-            2,
-            "candidate generation must not coalesce fluid units"
-        );
-    }
 
     #[test]
     fn continuous_candidates_are_supported_by_combine() {

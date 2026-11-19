@@ -1,7 +1,7 @@
 # EvoSim material and chemical interaction model
 
 **Status:** Proposed implementation contract  
-**Scope:** Six active non-Water resources; Water remains in the catalog and outside the active chemistry experiment matrix.  
+**Scope:** Six active elemental resources only: Nitrogen, Phosphorus, Carbon, Sulfur, Hydrogen, and Oxygen. Water is not an active resource or environmental medium. Generic finite-fluid geometry remains preserved as dormant legacy code.  
 **Branch:** `chemistry-material-model-spec`
 
 ## 1. Design contract
@@ -45,7 +45,7 @@ These are explicit starting hypotheses for the simulation's designed chemistry, 
 | Nitrogen | 0.65 | 0.15 | 0.75 | 0.70 | 0.70 |
 | Phosphorus | 0.85 | 0.55 | 0.45 | 0.35 | 0.60 |
 
-The current cohesion values are retained as intrinsic cohesion for the first pass. They must no longer influence pair adhesion or stored bond energy. Water remains excluded from the active six-resource matrix; its fluid/capillary behavior needs a separate compatibility migration before Water is returned to active chemistry.
+The current cohesion values are retained as intrinsic cohesion for the first pass. They must no longer influence pair adhesion or stored bond energy. Water has been removed from the active catalog and all active simulation paths. Generic fluid/capillary geometry is retained only as dormant, reusable legacy physics.
 
 ## 3. Symmetric pair calculation
 
@@ -167,7 +167,7 @@ Consequences are intentional:
 
 Reactivity may lower or raise the activation barrier according to the existing approved activation equation. It must not change (J), (E^{bond}), or (I).
 
-Cohesion also currently participates in non-chemical systems (notably resonance response and capillary/contact-angle adapters). Keep those call sites explicit during migration. Where cohesion is being used as a surface-wetting proxy, replace that dependency with a pair-specific adhesion/wetting adapter rather than silently making structural cohesion control adhesion again. Preserve existing fluid geometry behavior while Water remains excluded from the active chemistry experiments.
+Cohesion also currently participates in non-chemical systems (notably resonance response and capillary/contact-angle adapters). Keep those call sites explicit during migration. Where cohesion is being used as a surface-wetting proxy, replace that dependency with a pair-specific adhesion/wetting adapter rather than silently making structural cohesion control adhesion again. Preserve generic finite-fluid geometry as dormant legacy code; it must not participate in active simulation.
 
 ## 6. Emergent cohesion from compound topology
 
@@ -218,7 +218,7 @@ A weaker replacement may proceed when activation is sufficient and a legitimate 
 
 1. Add validated adhesion descriptors to catalog resources, with serialization defaults/migration behavior explicitly tested.
 2. Implement the symmetric pair calculation and a diagnostic record exposing (D,P^+,P^-,H^+,H^-,A,R,J).
-3. Validate all 21 unordered non-Water pairs, including the six homonuclear pairs. Assert symmetry, finite ranges, deterministic output, and descriptor independence.
+3. Validate all 21 unordered pairs among the six active elements, including the six homonuclear pairs. Assert symmetry, finite ranges, deterministic output, and descriptor independence.
 4. Replace chemical-position-based COMBINE attraction, formation work, and bond-energy assignment with the single conservative pair potential.
 5. Retain cohesion only for intrinsic/local structural integrity; audit every cohesion call site and separate surface wetting where required.
 6. Add graph-derived emergent cohesion and topology tests for chains, rings, branches, redundant edges, and fragmentation.
@@ -235,7 +235,7 @@ A weaker replacement may proceed when activation is sufficient and a legitimate 
 - No forced zero for same-element interactions.
 - No compound-wide cohesion scalar used as every bond's BREAK threshold.
 - No inference that a favorable pair must react without geometry, activation, and energy.
-- No Water reintroduction into the active six-resource experiments in this migration.
+- No Water resource, ambient medium, or Water-mediated interaction exists in the active simulation.
 - Do not tune descriptors and reaction thresholds simultaneously. First validate pair predictions, then validate mechanics, then run broader chemistry.
 
 ## 10. Acceptance criteria

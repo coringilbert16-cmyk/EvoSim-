@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 CANONICAL_RESOURCES = (
-    "Water", "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
+    "Nitrogen", "Phosphorus", "Carbon", "Sulfur", "Hydrogen", "Oxygen"
 )
 
 
@@ -617,7 +617,7 @@ def analyze(records: list[dict[str, Any]]) -> dict[str, Any]:
             "initial_inventory": {name: initial_inventory.get(name) for name in CANONICAL_RESOURCES},
             "missing_at_start": missing_resources,
             "all_required_present_at_start": not missing_resources,
-            "all_seven_present_at_start": not missing_resources and not excluded_resources,
+            "all_six_present_at_start": not missing_resources and not excluded_resources,
             "snapshots": snapshot_rows,
             "snapshots_missing_resources": [
                 {"label": row["label"], "tick": row["tick"], "missing": row["missing_resources"]}

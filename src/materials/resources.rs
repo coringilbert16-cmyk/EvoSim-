@@ -958,24 +958,32 @@ pub fn default_catalog() -> Vec<BaseResource> {
                 },
             },
         },
-        BaseResource {
-            name: "Water".into(),
-            adhesion: AdhesionDescriptors::default(),
-            properties: ResourceProperties {
-                mass: 1.00,
-                potential_energy: 0.0,
-                reactivity: 0.0,
-                chemical_position: Some(7.0),
-                cohesion: 0.00,
-            },
-            physical_state: PhysicalState::Fluid,
-            shape: Shape {
-                form: Form::Circle {
-                    radius: (NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt(),
-                },
+    ]
+}
+
+/// Test-only catalog extension for exercising preserved legacy finite-fluid
+/// geometry. It is never part of the active resource catalog or simulation.
+#[cfg(test)]
+pub(crate) fn legacy_fluid_test_catalog() -> Vec<BaseResource> {
+    let mut catalog = default_catalog();
+    catalog.push(BaseResource {
+        name: "LegacyFluidFixture".into(),
+        adhesion: AdhesionDescriptors::default(),
+        properties: ResourceProperties {
+            mass: 1.0,
+            potential_energy: 0.0,
+            reactivity: 0.0,
+            chemical_position: None,
+            cohesion: 0.0,
+        },
+        physical_state: PhysicalState::Fluid,
+        shape: Shape {
+            form: Form::Circle {
+                radius: (NOMINAL_UNIT_AREA / std::f64::consts::PI).sqrt(),
             },
         },
-    ]
+    });
+    catalog
 }
 
 pub fn fresh_energy(catalog: &[BaseResource], name: &str, amount: f64) -> f64 {
@@ -1029,9 +1037,9 @@ mod shape_tests {
     }
 
     #[test]
-    fn catalog_still_constructs_with_seven_resources() {
+    fn catalog_contains_only_the_six_active_elements() {
         let catalog = default_catalog();
-        assert_eq!(catalog.len(), 7);
+        assert_eq!(catalog.len(), 6);
         let expected_names = [
             "Carbon",
             "Oxygen",
@@ -1039,7 +1047,6 @@ mod shape_tests {
             "Sulfur",
             "Nitrogen",
             "Phosphorus",
-            "Water",
         ];
         for name in expected_names {
             assert!(catalog.iter().any(|r| r.name == name));
@@ -1110,8 +1117,6 @@ mod shape_tests {
         assert!(
             matches!(&find("Phosphorus").shape.form, Form::Polygon { vertices } if vertices.len() == 4)
         );
-        assert!(matches!(find("Water").shape.form, Form::Circle { .. }));
-        assert_eq!(find("Water").physical_state, PhysicalState::Fluid);
         assert_eq!(find("Hydrogen").physical_state, PhysicalState::Rigid);
     }
 
@@ -1232,18 +1237,6 @@ mod shape_tests {
         assert!((phosphorus[2].0 + phosphorus[3].0).abs() < 1e-9);
         assert!((phosphorus[0].1 + phosphorus[2].1).abs() < 1e-9);
         assert!((phosphorus[1].1 + phosphorus[3].1).abs() < 1e-9);
-    }
-
-    #[test]
-    fn water_preserves_the_nominal_unit_area() {
-        let water = default_catalog()
-            .into_iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap();
-        let Form::Circle { radius } = water.shape.form else {
-            panic!("water must retain its fluid circle geometry");
-        };
-        assert!((std::f64::consts::PI * radius * radius - NOMINAL_UNIT_AREA).abs() < 1e-12);
     }
 
     #[test]
@@ -1667,13 +1660,12 @@ mod adhesion_descriptor_tests {
     }
 
     #[test]
-    fn historical_water_catalog_entry_is_retained_but_not_assigned_active_adhesion() {
+    fn water_is_absent_from_the_active_resource_catalog() {
         let catalog = default_catalog();
-        let water = catalog
+        assert_eq!(catalog.len(), 6);
+        assert!(catalog.iter().all(|resource| resource.name != "Water"));
+        assert!(catalog
             .iter()
-            .find(|resource| resource.name == "Water")
-            .unwrap();
-        assert_eq!(water.adhesion, AdhesionDescriptors::default());
-        assert_eq!(catalog.len(), 7);
+            .all(|resource| resource.physical_state == PhysicalState::Rigid));
     }
 }

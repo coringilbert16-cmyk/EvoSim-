@@ -655,7 +655,7 @@ impl EnvironmentalChemistryDiagnosticsRecorder {
             "initial_molecule_count": initial_molecule_count,
             "initial_constituent_count": initial_constituent_count,
             "initial_material_inventory": environmental_material_inventory(simulation),
-            "excluded_resources": ["Water"],
+            "excluded_resources": [],
             "pile_sizes": pile_sizes,
             "hotspot": simulation.hotspot,
             "diagnostic_interval": recorder.interval,

@@ -178,25 +178,25 @@ mod tests {
 
     #[test]
     fn release_finished_material_preserves_aggregate_fluid_shape() {
-        let catalog = default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let placement = Placement {
             x: 0.0,
             y: 0.0,
             rotation_radians: 0.0,
         };
-        let mut water_unit = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Water", 2.0),
+        let mut legacy_fluid_unit = StructuralUnit::from_material(
+            crate::resources::Material::free_base("LegacyFluidFixture", 2.0),
             placement,
         )
         .unwrap();
-        assert!(water_unit.realize_default_geometry(&catalog));
-        let water_resource = catalog
+        assert!(legacy_fluid_unit.realize_default_geometry(&catalog));
+        let legacy_fluid_resource = catalog
             .iter()
-            .find(|resource| resource.name == "Water")
+            .find(|resource| resource.name == "LegacyFluidFixture")
             .unwrap();
-        let unit_area = match &water_resource.shape.form {
+        let unit_area = match &legacy_fluid_resource.shape.form {
             crate::resources::Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-            _ => panic!("default Water shape should have a measurable area"),
+            _ => panic!("default fluid shape should have a measurable area"),
         };
         let merged_area = 2.0 * unit_area;
         let family = crate::capillary_geometry::CapillaryContactFamily::solve(
@@ -214,9 +214,9 @@ mod tests {
                 multi_contact_boundary: None,
             },
         };
-        assert!(water_unit.realize_fluid_geometry(shape.clone(), &catalog));
+        assert!(legacy_fluid_unit.realize_fluid_geometry(shape.clone(), &catalog));
         let mut structure = OrganismStructure::new();
-        structure.add_unit(water_unit);
+        structure.add_unit(legacy_fluid_unit);
         let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
 
         let released = body
@@ -238,9 +238,9 @@ mod tests {
 
     #[test]
     fn finished_release_rejects_aggregate_fluid_without_exact_geometry() {
-        let catalog = default_catalog();
-        let mut water = StructuralUnit::from_material(
-            crate::resources::Material::free_base("Water", 2.0),
+        let catalog = crate::resources::legacy_fluid_test_catalog();
+        let mut legacy_fluid = StructuralUnit::from_material(
+            crate::resources::Material::free_base("LegacyFluidFixture", 2.0),
             Placement {
                 x: 0.0,
                 y: 0.0,
@@ -248,9 +248,9 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(water.realize_default_geometry(&catalog));
+        assert!(legacy_fluid.realize_default_geometry(&catalog));
         let mut structure = OrganismStructure::new();
-        structure.add_unit(water);
+        structure.add_unit(legacy_fluid);
         let mut body = DecomposingBody::new(structure, 0.0, Position { x: 0.0, y: 0.0 }).unwrap();
 
         assert!(
