@@ -6511,7 +6511,7 @@ mod compact_family_storage_tests {
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
                 .unwrap();
         // Exercise Bob's real fluid-contact calculation rather than manually
-        // fabricating a persistence row. The legacy fluid/Carbon capillary solution
+        // fabricating a persistence row. The fluid/Carbon capillary solution
         // must produce an exposed-edge family before it can be stored.
         let (contact_families, diagnostics) =
             generate_water_contact_families_with_diagnostics(&formation, water, &catalog);
@@ -6528,7 +6528,7 @@ mod compact_family_storage_tests {
                     && family.edge_parameter_start <= 0.5
                     && family.edge_parameter_end >= 0.5
             }),
-            "expected the capillary solver to find legacy fluid contact on Carbon edge 0"
+            "expected the capillary solver to find fluid contact on Carbon edge 0"
         );
         let families =
             generate_fluid_boundary_families_from_contact_families(water, &contact_families);
@@ -6561,7 +6561,7 @@ mod compact_family_storage_tests {
         assert_eq!(
             library.insert_contact_families(contact_families).unwrap(),
             families.len(),
-            "each generated legacy fluid contact must be persisted once"
+            "each generated fluid contact must be persisted once"
         );
         assert_eq!(
             library
@@ -6573,7 +6573,7 @@ mod compact_family_storage_tests {
         let fluid_formations = fluid_formations_from_boundaries(&families);
         assert!(
             !fluid_formations.is_empty(),
-            "expected explicit legacy fluid-inclusive formations"
+            "expected explicit fluid-inclusive formations"
         );
         let expected_fluid_formation_signatures: BTreeMap<_, _> = fluid_formations
             .iter()
@@ -6584,7 +6584,7 @@ mod compact_family_storage_tests {
                 .insert_fluid_formations(fluid_formations.clone(), &catalog)
                 .unwrap(),
             fluid_formations.len(),
-            "each valid legacy fluid-inclusive formation must be persisted"
+            "each valid fluid-inclusive formation must be persisted"
         );
         assert_eq!(library.fluid_formations().count(), fluid_formations.len());
         let parent_signature = GeometryFormation::single("Carbon").signature;
@@ -6974,7 +6974,7 @@ mod fluid_contact_constraint_schema_tests {
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("legacy fluid must expose a conserved fluid area"),
+            _ => panic!("fluid must expose a conserved fluid area"),
         };
         let family =
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
@@ -7100,7 +7100,7 @@ mod fluid_contact_constraint_schema_tests {
         let area = match &water.shape.form {
             Form::Circle { radius } => std::f64::consts::PI * radius * radius,
             Form::Fluid { nominal_area, .. } => *nominal_area,
-            _ => panic!("legacy fluid must expose a conserved fluid area"),
+            _ => panic!("fluid must expose a conserved fluid area"),
         };
         let family =
             solve_water_against_solid(area, water.properties.cohesion, carbon.properties.cohesion)
