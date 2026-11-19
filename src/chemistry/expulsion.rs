@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn expulsion_preserves_deformed_fluid_shape_through_environment_transfer() {
+    fn active_expulsion_rejects_dormant_fluid_materials() {
         let mut simulation = Simulation::new(929, 10.0);
         for cell in &mut simulation.environment.field.cells {
             cell.physical_materials.clear();
@@ -324,41 +324,35 @@ mod tests {
             .push(StoredMaterial::Physical(physical));
         let storage_index = simulation.organisms[0].stored_material.entries.len() - 1;
 
-        assert!(expel_physical_material(
+        assert!(!expel_physical_material(
             &mut simulation.organisms[0],
             &mut simulation.environment,
             storage_index,
         ));
         assert_eq!(
             simulation.organisms[0].stored_material.entries.len(),
-            storage_index,
-            "successful expulsion must remove exactly the source entry"
+            storage_index + 1,
+            "a dormant fluid material must remain owned rather than enter the active environment"
         );
-        let deposited: Vec<_> = simulation
-            .environment
-            .field
-            .cells
-            .iter()
-            .flat_map(|cell| cell.physical_materials.iter())
-            .filter(|material| {
+        let StoredMaterial::Physical(retained) =
+            &simulation.organisms[0].stored_material.entries[storage_index]
+        else {
+            panic!("rejected fluid expulsion must preserve the physical source");
+        };
+        assert_eq!(
+            retained.realized_shape_for_part(0, &catalog),
+            Some(realized_shape),
+            "rejected expulsion must preserve the exact legacy fluid geometry"
+        );
+        assert!(simulation.environment.field.cells.iter().all(|cell| {
+            cell.physical_materials.iter().all(|material| {
                 material
                     .material
                     .parts
                     .first()
-                    .is_some_and(|part| part.0 == "LegacyFluidFixture")
+                    .is_none_or(|part| part.0 != "LegacyFluidFixture")
             })
-            .collect();
-        assert_eq!(
-            deposited.len(),
-            1,
-            "the transferred fluid must remain a single object"
-        );
-        assert_eq!(
-            deposited[0].realized_shape_for_part(0, &catalog),
-            Some(realized_shape),
-            "expulsion must not replace the realized fluid boundary with the catalog default"
-        );
-    }
+        }));
 
     #[test]
     fn rejected_destination_restores_expulsion_source_and_neighbor_order() {
