@@ -251,8 +251,16 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
     for event in events.values():
         parent_families = sorted({by_id[i]["fingerprint"] for i in event["parents"] if i in by_id})
         child_families = sorted({by_id[i]["fingerprint"] for i in event["children"] if i in by_id})
-        for parent in parent_families:
-            for child in child_families:
+        compound_parents = sorted({
+            by_id[i]["fingerprint"] for i in event["parents"]
+            if i in by_id and by_id[i]["is_compound"]
+        })
+        compound_children = sorted({
+            by_id[i]["fingerprint"] for i in event["children"]
+            if i in by_id and by_id[i]["is_compound"]
+        })
+        for parent in compound_parents:
+            for child in compound_children:
                 transition_events.append((event["tick"], parent, child, event["reaction"]))
         signature = _stable((event["reaction"], parent_families, child_families))
         event["signature"] = hashlib.sha256(signature.encode()).hexdigest()
