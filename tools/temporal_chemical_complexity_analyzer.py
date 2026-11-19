@@ -268,7 +268,11 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
     temporal_rows = []
     for index in range(windows):
         start, finish = boundaries[index], boundaries[index + 1]
-        created_here = [row for row in rows if row["is_product"] and start < row["created_tick"] <= finish]
+        created_reaction_identities = [
+            row for row in rows
+            if row["is_reaction_product"] and start < row["created_tick"] <= finish
+        ]
+        created_here = [row for row in created_reaction_identities if row["is_product"]]
         active = [row for row in rows if row["created_tick"] <= finish and
                   (row["destroyed_tick"] is None or row["destroyed_tick"] > finish)]
         new_families = 0
@@ -299,7 +303,7 @@ def analyze_seed(path: Path, seed: int, duration: int, windows: int) -> dict[str
         temporal_rows.append({
             "window": index + 1, "start_tick_exclusive": start,
             "end_tick_inclusive": finish,
-            "created_reaction_product_identities": sum(row["is_reaction_product"] for row in created_here),
+            "created_reaction_product_identities": len(created_reaction_identities),
             "created_compound_products": len(product_rows),
             "active_molecule_identities": len(active),
             "active_reaction_products": len(active_products),
