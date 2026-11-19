@@ -2242,7 +2242,7 @@ mod tests {
         use crate::resources::{Form, Material};
         use crate::structure::{Bond, BondEndpoint, StructuralUnit};
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let water = resource(&catalog, "LegacyFluidFixture").unwrap().clone();
         let carbon = resource(&catalog, "Carbon").unwrap().clone();
         let area = match &water.shape.form {
@@ -2500,7 +2500,7 @@ mod tests {
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon_index = catalog
             .iter()
             .position(|resource| resource.name == "Carbon")
@@ -2686,7 +2686,7 @@ mod tests {
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
         use crate::structure::StructuralUnit;
 
-        let mut catalog = crate::resources::default_catalog();
+        let mut catalog = crate::resources::legacy_fluid_test_catalog();
         let carbon_index = catalog
             .iter()
             .position(|resource| resource.name == "Carbon")
@@ -2946,7 +2946,7 @@ mod tests {
         };
         use crate::resources::{Form, Material, NOMINAL_UNIT_AREA};
 
-        let catalog = crate::resources::default_catalog();
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let half = NOMINAL_UNIT_AREA.sqrt() * 0.5;
         let angle = std::f64::consts::FRAC_PI_2;
         let boundary = MultiContactFluidBoundary {
