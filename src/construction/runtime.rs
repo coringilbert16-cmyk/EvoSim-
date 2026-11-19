@@ -1112,7 +1112,7 @@ pub(crate) fn try_attach_physical_material_bond_driven(
                 *nodes += 1;
 
                 let mut trial = structure.clone();
-                let Some(indices) = crate::material_restoration::restore_material(
+                let Some(indices) = crate::physical_material::restore_material(
                     &mut trial,
                     new_material,
                     candidate_origin,
@@ -1462,7 +1462,7 @@ fn realize_next_bond_driven(
                         rejection_counts.restore_failures += 1;
                         continue;
                     };
-                    let Some(indices) = crate::material_restoration::restore_material(
+                    let Some(indices) = crate::physical_material::restore_material(
                         &mut trial,
                         &candidate_material,
                         candidate_origin,
@@ -1734,7 +1734,7 @@ fn construct_blueprint_bond_driven_internal(
     };
 
     let anchor_origin = placement(anchor_element.placement);
-    let anchor_indices = crate::material_restoration::restore_material(
+    let anchor_indices = crate::physical_material::restore_material(
         &mut structure,
         &anchor_instance,
         anchor_origin,
@@ -2411,7 +2411,7 @@ mod tests {
         .with_single_fluid_shape(shape.clone(), &catalog)
         .unwrap();
         let mut trial = live.clone();
-        let fluid_index = crate::material_restoration::restore_material(
+        let fluid_index = crate::physical_material::restore_material(
             &mut trial,
             &fluid_material,
             origin,
@@ -2537,7 +2537,7 @@ mod tests {
         .with_single_fluid_shape(shape, &catalog)
         .unwrap();
         let mut structure = OrganismStructure::new();
-        let fluid_index = crate::material_restoration::restore_material(
+        let fluid_index = crate::physical_material::restore_material(
             &mut structure,
             &material,
             Placement {
@@ -2729,7 +2729,7 @@ mod tests {
         .unwrap();
 
         let mut structure = OrganismStructure::new();
-        let fluid_index = crate::material_restoration::restore_material(
+        let fluid_index = crate::physical_material::restore_material(
             &mut structure,
             &material,
             Placement {
@@ -3010,7 +3010,7 @@ mod tests {
             rotation_radians: 0.41,
         };
         let mut restored = OrganismStructure::new();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut restored,
             &material,
             origin,
