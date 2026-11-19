@@ -335,10 +335,7 @@ mod tests {
             "a dormant fluid material must remain owned rather than enter the active environment"
         );
         let StoredMaterial::Physical(retained) =
-            &simulation.organisms[0].stored_material.entries[storage_index]
-        else {
-            panic!("rejected fluid expulsion must preserve the physical source");
-        };
+            &simulation.organisms[0].stored_material.entries[storage_index];
         assert_eq!(
             retained.realized_shape_for_part(0, &catalog),
             Some(realized_shape),
