@@ -2931,12 +2931,15 @@ mod tests {
                         1.0,
                     )
                     .weighted_properties(&catalog);
+                    // Synthetic activation isolates preflight energy feasibility.
+                    // It is not an estimate of naturally accumulated environmental activation.
+                    let synthetic_activation_probe = 1_000.0;
                     let preflight = evaluate_displacement_preflight(
                         anchor,
                         displaced,
                         incoming,
                         old_strength,
-                        1_000.0,
+                        synthetic_activation_probe,
                         baseline,
                         0.0,
                         0.0,
@@ -2951,13 +2954,14 @@ mod tests {
                         weaker_or_tied += 1;
                     }
                     println!(
-                        "DISPLACEMENT_PREFLIGHT_MATRIX|anchor={}|displaced={}|incoming={}|old_energy={:.9}|replacement_energy={:.9}|required_input={:.9}|activation_ready={}|replacement_stronger={}",
+                        "DISPLACEMENT_PREFLIGHT_MATRIX|anchor={}|displaced={}|incoming={}|old_energy={:.9}|replacement_energy={:.9}|required_input={:.9}|activation_mode=synthetic_probe|activation_input={:.9}|synthetic_activation_passed={}|replacement_stronger={}",
                         resources[anchor_index].name,
                         resources[displaced_index].name,
                         resources[incoming_index].name,
                         preflight.old_bond_energy,
                         preflight.replacement_bond_energy,
                         preflight.energy.required_external_input,
+                        synthetic_activation_probe,
                         preflight.is_activated(),
                         replacement_is_stronger
                     );
@@ -2970,7 +2974,7 @@ mod tests {
         assert!(stronger > 0);
         assert!(weaker_or_tied > 0);
         println!(
-            "DISPLACEMENT_PREFLIGHT_MATRIX_SUMMARY|cases={cases}|stronger={stronger}|weaker_or_tied={weaker_or_tied}"
+            "DISPLACEMENT_PREFLIGHT_MATRIX_SUMMARY|cases={cases}|stronger={stronger}|weaker_or_tied={weaker_or_tied}|activation_mode=synthetic_probe|activation_input=1000.0"
         );
     }
 
