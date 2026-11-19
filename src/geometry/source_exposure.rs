@@ -5261,6 +5261,38 @@ mod source_global_perimeter_tests {
         assert_eq!(perimeter.curved.len(),2);
     }
     #[test]
+    fn source_global_perimeter_unions_intersecting_circles_exactly() {
+        let body = OrganismBodyGeometry {
+            parts: vec![
+                PlacedForm {
+                    unit_index: 0,
+                    form: Form::Circle { radius: 1.0 },
+                    x: 0.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+                PlacedForm {
+                    unit_index: 1,
+                    form: Form::Circle { radius: 1.0 },
+                    x: 1.0,
+                    y: 0.0,
+                    rotation_radians: 0.0,
+                },
+            ],
+            min_x: -1.0,
+            max_x: 2.0,
+            min_y: -1.0,
+            max_y: 1.0,
+        };
+        let perimeter = disjoint_source_global_material_perimeter(&body, 0).unwrap();
+        let length = visible_material_perimeter_length(&perimeter).unwrap();
+        let expected = 8.0 * std::f64::consts::PI / 3.0;
+        assert!((length - expected).abs() < 1e-9);
+        assert!(perimeter.straight.is_empty());
+        assert_eq!(perimeter.curved.len(), 4);
+    }
+
+    #[test]
     fn source_global_perimeter_rejects_unsupported_fluid_boundary_instead_of_approximating() {
         let body = OrganismBodyGeometry {
             parts: vec![PlacedForm {
