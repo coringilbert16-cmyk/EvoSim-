@@ -324,12 +324,12 @@ mod tests {
     }
 
     #[test]
-    fn below_threshold_material_is_not_used_as_a_water_fallback() {
-        let catalog = default_catalog();
+    fn fluid_material_is_not_used_as_a_construction_fallback() {
+        let catalog = crate::resources::legacy_fluid_test_catalog();
         let blueprint = two_carbon_bond_blueprint();
         let mut storage = crate::material_storage::MaterialStorage::default();
 
-        for name in ["Carbon", "Water"] {
+        for name in ["Carbon", "LegacyFluidFixture"] {
             assert!(storage.store_physical(
                 Material::free_base(name, 1.0),
                 vec![crate::structure::Placement {
