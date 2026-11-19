@@ -2108,6 +2108,11 @@ mod fluid_coalescence_transaction_tests {
         simulation.organisms[0].cached_developmental_revision = Some((0, 0, 0, 0, 0, 0, 0));
         simulation.organisms[0].cached_harmonic_key = Some((0, 0, 0, 0, false));
 
+        assert!(!can_combine(
+            &simulation.organisms[0],
+            &simulation.environment,
+        ));
+
         let mut cache = ConnectionCompatibilityCache;
         let attempt = try_combine(
             &mut simulation.organisms[0],
