@@ -962,7 +962,7 @@ mod tests {
             ConnectionEndpoint::Boundary { .. }
         ));
         let mut structure = OrganismStructure::new();
-        let indices = crate::material_restoration::restore_material(
+        let indices = crate::physical_material::restore_material(
             &mut structure,
             &molecule,
             Placement {
