@@ -1664,5 +1664,8 @@ mod adhesion_descriptor_tests {
         let catalog = default_catalog();
         assert_eq!(catalog.len(), 6);
         assert!(catalog.iter().all(|resource| resource.name != "Water"));
+        assert!(catalog
+            .iter()
+            .all(|resource| resource.physical_state == PhysicalState::Rigid));
     }
 }
