@@ -654,7 +654,7 @@ pub(crate) fn accumulate_environmental_with_diagnostics(
             restored_materials.entry(material_key)
         {
             let mut hypothetical = crate::structure::OrganismStructure::new();
-            let restored = crate::material_restoration::restore_material(
+            let restored = crate::physical_material::restore_material(
                 &mut hypothetical,
                 instance,
                 crate::structure::Placement {
