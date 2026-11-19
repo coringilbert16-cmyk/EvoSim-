@@ -54,3 +54,16 @@ Authority boundaries:
 Generated library data is runtime knowledge, not source code.
 Bob owns persistent geometry knowledge and lookup/generation machinery. Live construction remains authoritative for physical validity.
 Chemistry owns chemical calculations and transitions. Its persistent knowledge store remains separate from live chemistry implementation.
+
+
+## Module integration policy
+
+There is no fixed source-file size ceiling. The former sub-30 KB target was a temporary workaround for context and truncation limits, not an architectural requirement, and must not drive new module boundaries.
+
+- Integrate implementation into the owning subsystem as it is developed; avoid creating thin one-purpose files solely to stay below a byte or line threshold.
+- Split a module only at a stable conceptual boundary: distinct domain responsibility, independently meaningful lifecycle, clear ownership boundary, or a cohesive algorithm family with a useful private API.
+- Prefer a cohesive larger module over fragmented files that require readers to jump between files for one operation.
+- Keep genuinely independent subsystems separate even when they are small; this is not a mandate to merge unrelated code.
+- Keep tests with the implementation when they rely on private internals; otherwise group contract tests by behavior.
+- Do not perform a mechanical mass-merge. Audit callers, imports, visibility, tests, and cyclic dependencies; integrate one coherent area at a time with behavior-preserving diffs.
+- File size may be monitored as a review signal, but it is never an acceptance threshold or a reason by itself to split or merge.
