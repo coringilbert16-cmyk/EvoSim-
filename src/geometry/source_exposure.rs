@@ -4958,7 +4958,6 @@ mod source_global_perimeter_tests {
     }
 
     #[test]
-    #[test]
     fn source_global_perimeter_unions_overlapping_rectangle_and_circle_exactly() {
         let body = OrganismBodyGeometry {
             parts: vec![
