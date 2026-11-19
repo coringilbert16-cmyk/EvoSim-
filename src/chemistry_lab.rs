@@ -261,7 +261,13 @@ impl Laboratory {
         LaboratorySnapshot {
             tick: self.simulation.tick,
             running: self.simulation.running,
-            resources: self.simulation.environment.catalog.iter().map(|resource| resource.name.clone()).collect(),
+            resources: self
+                .simulation
+                .environment
+                .catalog
+                .iter()
+                .map(|resource| resource.name.clone())
+                .collect(),
             width: self.config.width,
             height: self.config.height,
             material_count: self
