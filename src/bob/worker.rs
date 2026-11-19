@@ -530,7 +530,7 @@ mod tests {
         assert!(metrics.fluid_formations_added > 0);
         assert!(library.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
-                && formation.fluid_resource == "Water"
+                && formation.fluid_resource == "LegacyFluidFixture"
         }));
         drop(library);
 
@@ -542,7 +542,7 @@ mod tests {
         assert!(!persisted_signatures.is_empty());
         assert!(reopened.fluid_formations().all(|formation| {
             formation.parent_formation_signature == carbon_signature
-                && formation.fluid_resource == "Water"
+                && formation.fluid_resource == "LegacyFluidFixture"
         }));
 
         let parent = reopened
