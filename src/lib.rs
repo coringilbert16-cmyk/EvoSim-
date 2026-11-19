@@ -141,6 +141,9 @@ mod structural_blueprint;
 #[path = "chemistry/transformation.rs"]
 mod transformation;
 
+// Dedicated laboratory application, sharing the authoritative chemistry engine.
+pub mod chemistry_lab;
+
 // Simulation and application runtime.
 #[path = "infrastructure/deterministic_parallel.rs"]
 mod deterministic_parallel;
