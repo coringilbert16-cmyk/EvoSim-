@@ -506,6 +506,29 @@ mod tests {
     }
 
     #[test]
+    fn molecule_placement_preserves_the_requested_physical_bond_graph() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        let identity = laboratory
+            .place_molecule(
+                vec!["Carbon".into(), "Hydrogen".into()],
+                vec![[0, 1]],
+                vec![[20.0, 20.0, 0.1], [21.0, 20.0, 0.4]],
+            )
+            .expect("valid carbon-hydrogen geometry");
+        let snapshot = laboratory.snapshot();
+        let molecule = snapshot
+            .materials
+            .iter()
+            .find(|material| material.identity == identity)
+            .expect("placed molecule is observable");
+        assert_eq!(molecule.parts.len(), 2);
+        assert_eq!(molecule.bonds, vec![[0, 1]]);
+        assert_eq!(molecule.bond_count, 1);
+        assert_eq!(molecule.placements.len(), 2);
+    }
+
+    #[test]
     fn laboratory_rejects_invalid_dimensions_and_out_of_bounds_placement() {
         let mut invalid = LaboratoryConfig::default();
         invalid.width = f64::NAN;
