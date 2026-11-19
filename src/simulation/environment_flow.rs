@@ -226,7 +226,6 @@ fn mobility(mass: f64) -> f64 {
 
 /// Smooth S-shaped background flow with outward speed falloff and two small
 /// vortices at the bends. The same query is used for every material type.
-#[cfg(test)]
 fn background_velocity(x: f64, y: f64, width: f64, height: f64) -> Velocity {
     background_velocity_with_config(x, y, width, height, FlowFieldConfig::default())
 }
