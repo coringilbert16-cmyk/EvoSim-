@@ -1041,7 +1041,6 @@ impl Simulation {
             finish_profile_phase("ambient_transport");
         }
 
-
         // Resonance movement runs after ambient transport and before reaction
         // discovery, so chemistry sees the updated environmental contacts.
         crate::environmental_movement::apply_environmental_resonance_movement(
