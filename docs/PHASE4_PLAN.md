@@ -18,7 +18,7 @@ Movement must remain an emergent physical behavior rather than a predefined loco
 - Organism membership follows physical connectivity to the genome.
 - ACQUIRE, Storage, COMBINE, BREAK, construction, and decomposition do not gain new rules from movement work.
 - The blueprint remains structural intent; it is not a movement controller.
-- Water remains fluid with deformable realization and is not converted into a rigid-circle movement object.
+- Historical note: finite-fluid geometry remains preserved as dormant legacy code; Water is no longer an active resource or interaction.
 
 ## Phase 4 scope
 
