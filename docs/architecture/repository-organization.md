@@ -76,3 +76,14 @@ There is no fixed source-file size ceiling. The former sub-30 KB target was a te
 This is the first example of the revised policy, not a target-size rule. Further integrations should be selected from dependency and responsibility audits, not from a list of the smallest files.
 
 - [x] Integrated `material_restoration.rs` into `src/materials/physical_material.rs`. Restoration is an operation on an already-realized `PhysicalMaterial`: it restores that value's authoritative constituent arrangement and pre-existing internal bonds. All callers now use `crate::physical_material::restore_material`; the standalone file and root module declaration were removed. This does not change COMBINE, energy settlement, or material-transfer semantics.
+
+## Small modules intentionally kept separate
+
+The source audit also identified small files that should not be merged merely because they are adjacent or short:
+
+- `material_storage.rs` owns the organism inventory container and its storage transactions; `material_transfer.rs` extracts whole unstructured units from ecological aggregates. Neither is the same operation as restoring a realized `PhysicalMaterial`.
+- `connection_faces.rs` models eligible chemical connection faces; `connection_geometry.rs` transforms already-derived physical connection points. Their contracts are deliberately distinct.
+- `decision.rs` defines decision-policy data and rules; `decision_runtime.rs` adapts that policy to runtime candidates; `developmental_decision.rs` previews physical developmental actions. They may integrate further when the staged developmental path becomes active, but currently represent separate layers.
+- `structure_authority.rs` is an audit/reporting boundary, not part of the structure mutation API.
+
+These remain separate based on responsibility, not file size. Revisit only when implementation sharing or an actual dependency boundary shows that a different grouping is clearer.
