@@ -5,7 +5,7 @@ use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize,Serialize};
 use std::{net::SocketAddr,sync::Arc};
 use tokio::sync::Mutex;
-use crate::{environment::ActiveMaterialField,physical_material::PhysicalMaterial,resources::Material,simulation::Simulation,state::{EnergyLedger,Environment},structure::Placement};
+use crate::{environment::ActiveMaterialField,physical_material::PhysicalMaterial,resources::{InternalBond,Material},simulation::Simulation,state::{EnergyLedger,Environment},structure::Placement};
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct LaboratoryConfig { pub width:f64,pub height:f64,pub cell_size:f64,pub ticks_per_second:f64,pub seed:u64 }
@@ -28,11 +28,28 @@ impl Laboratory {
  }
  pub fn place_element(&mut self,resource:&str,x:f64,y:f64)->Result<u64,&'static str>{
   if !x.is_finite()||!y.is_finite()||x<0.0||y<0.0||x>=self.config.width||y>=self.config.height{return Err("placement must be inside laboratory bounds")}
+  self.place_material(Material::free_base(resource.to_string(),1.0),vec![Placement{x,y,rotation_radians:0.0}],x,y)
+ }
+ pub fn place_molecule(&mut self,parts:Vec<String>,bonds:Vec<[usize;2]>,placements:Vec<[f64;3]>)->Result<u64,&'static str>{
+  if parts.is_empty()||parts.len()>64||placements.len()!=parts.len(){return Err("molecule needs 1–64 parts and one placement per part")}
+  if parts.iter().any(|name|!self.simulation.environment.catalog.iter().any(|r|r.name==*name)){return Err("molecule contains an unknown resource type")}
+  if placements.iter().any(|p|!p[0].is_finite()||!p[1].is_finite()||!p[2].is_finite()||p[0]<0.0||p[1]<0.0||p[0]>=self.config.width||p[1]>=self.config.height){return Err("all constituent placements must be inside laboratory bounds")}
+  let mut internal_bonds=Vec::with_capacity(bonds.len());
+  for [a,b] in bonds{
+   let bond=InternalBond{part_a:a,part_b:b};
+   if !bond.is_valid_for(parts.len())||internal_bonds.contains(&bond)||internal_bonds.iter().any(|prior:&InternalBond|prior.part_a==b&&prior.part_b==a){return Err("molecule contains an invalid or duplicate bond")}
+   internal_bonds.push(bond);
+  }
+  let material=Material{parts:parts.into_iter().map(|name|(name,1.0)).collect(),internal_bonds};
+  let placements=placements.into_iter().map(|p|Placement{x:p[0],y:p[1],rotation_radians:p[2]}).collect::<Vec<_>>();
+  let anchor=placements.first().ok_or("molecule has no placement")?;
+  self.place_material(material,placements,anchor.x,anchor.y)
+ }
+ fn place_material(&mut self,material:Material,placements:Vec<Placement>,x:f64,y:f64)->Result<u64,&'static str>{
   let catalog=&self.simulation.environment.catalog;
-  if !catalog.iter().any(|r|r.name==resource){return Err("unknown resource type")}
-  let material=PhysicalMaterial::realized(Material::free_base(resource.to_string(),1.0),vec![Placement{x,y,rotation_radians:0.0}],catalog).ok_or("physical realization failed")?;
+  let physical=PhysicalMaterial::realized(material,placements,catalog).ok_or("physical realization or bond geometry validation failed")?;
   let field=&mut self.simulation.environment.field;
-  if !field.deposit_physical(x,y,material,catalog){return Err("environment rejected material")}
+  if !field.deposit_physical(x,y,physical,catalog){return Err("environment rejected material")}
   field.assign_missing_material_identities();
   let index=field.index_for_position(x,y).ok_or("invalid destination")?;
   field.cells[index].physical_materials.last().map(|m|m.environmental_identity).ok_or("identity assignment failed")
@@ -48,13 +65,15 @@ impl Laboratory {
 #[derive(Clone)] struct LabState(Arc<Mutex<Laboratory>>);
 #[derive(Deserialize)] struct PlaceRequest{resource:String,x:f64,y:f64}
 #[derive(Deserialize)] struct StepRequest{count:Option<u32>}
+#[derive(Deserialize)] struct MoleculeRequest{parts:Vec<String>,bonds:Vec<[usize;2]>,placements:Vec<[f64;3]>}
 async fn index()->Html<&'static str>{Html(INDEX_HTML)}
 async fn state(State(s):State<LabState>)->Json<LaboratorySnapshot>{Json(s.0.lock().await.snapshot())}
 async fn place(State(s):State<LabState>,Json(r):Json<PlaceRequest>)->Result<Json<serde_json::Value>,(StatusCode,String)>{let id=s.0.lock().await.place_element(&r.resource,r.x,r.y).map_err(|e|(StatusCode::BAD_REQUEST,e.to_string()))?;Ok(Json(serde_json::json!({"identity":id})))}
+async fn molecule(State(s):State<LabState>,Json(r):Json<MoleculeRequest>)->Result<Json<serde_json::Value>,(StatusCode,String)>{let id=s.0.lock().await.place_molecule(r.parts,r.bonds,r.placements).map_err(|e|(StatusCode::BAD_REQUEST,e.to_string()))?;Ok(Json(serde_json::json!({"identity":id})))}
 async fn step(State(s):State<LabState>,Json(r):Json<StepRequest>)->Result<Json<LaboratorySnapshot>,(StatusCode,String)>{let mut lab=s.0.lock().await;lab.step(r.count.unwrap_or(1)).map_err(|e|(StatusCode::BAD_REQUEST,e.to_string()))?;Ok(Json(lab.snapshot()))}
 pub async fn run(){
  let lab=Laboratory::new(LaboratoryConfig::default()).expect("default lab config valid");let state=LabState(Arc::new(Mutex::new(lab)));
- let app=Router::new().route("/",get(index)).route("/api/state",get(state)).route("/api/place",post(place)).route("/api/step",post(step)).with_state(state);
+ let app=Router::new().route("/",get(index)).route("/api/state",get(state)).route("/api/place",post(place)).route("/api/molecule",post(molecule)).route("/api/step",post(step)).with_state(state);
  let addr=std::env::var("EVOSIM_LAB_ADDRESS").unwrap_or_else(|_|"127.0.0.1:3030".into()).parse::<SocketAddr>().expect("valid EVOSIM_LAB_ADDRESS");
  let listener=tokio::net::TcpListener::bind(addr).await.expect("lab listener binds");println!("EvoSim Chemical Laboratory: http://{addr}");axum::serve(listener,app).await.expect("lab server failed");
 }
