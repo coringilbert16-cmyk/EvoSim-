@@ -4233,17 +4233,12 @@ pub fn generate_water_contact_families_with_diagnostics(
     WaterContactGenerationDiagnostics,
 ) {
     let mut diagnostics = WaterContactGenerationDiagnostics::default();
-    if candidate_resource.name != "Water"
-        || candidate_resource.physical_state != crate::resources::PhysicalState::Fluid
-    {
+    if candidate_resource.physical_state != crate::resources::PhysicalState::Fluid {
         return (Vec::new(), diagnostics);
     }
-    let Some(water) = catalog.iter().find(|r| r.name == "Water") else {
-        return (Vec::new(), diagnostics);
-    };
-    let water_area = match water.shape.form {
+    let fluid_area = match &candidate_resource.shape.form {
         Form::Circle { radius } => std::f64::consts::PI * radius * radius,
-        Form::Fluid { nominal_area, .. } => nominal_area,
+        Form::Fluid { nominal_area, .. } => *nominal_area,
         _ => return (Vec::new(), diagnostics),
     };
 
@@ -4274,8 +4269,8 @@ pub fn generate_water_contact_families_with_diagnostics(
         }
 
         let Some(family) = solve_water_against_solid(
-            water_area,
-            water.properties.cohesion,
+            fluid_area,
+            candidate_resource.properties.cohesion,
             resource.properties.cohesion,
         ) else {
             diagnostics.capillary_solver_failures += 1;
