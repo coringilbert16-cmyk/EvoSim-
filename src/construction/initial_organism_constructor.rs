@@ -6,7 +6,7 @@
 //! will replace this fixed scaffold with local free-form construction while
 //! retaining the same physical bond authority.
 
-use crate::resources::{BaseResource, Material};
+use crate::resources::{BaseResource, Material, PhysicalState};
 use crate::state::EnergyLedger;
 use crate::structure::Placement;
 
