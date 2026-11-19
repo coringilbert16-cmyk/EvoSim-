@@ -5,7 +5,9 @@
 //! those bonds without inventing connection endpoints at the organism boundary.
 use crate::contact::connection_pair_candidates;
 use crate::resources::{BaseResource, Material};
-use crate::structure::{Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit};
+use crate::structure::{
+    Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
+};
 use serde::{Deserialize, Serialize};
 
 // Allows only accumulated floating-point noise at the unit-length bond boundary.
@@ -1202,7 +1204,6 @@ mod tests {
         assert!(!physical.is_realized());
     }
 }
-
 
 // Restoration belongs beside the stored physical-material representation:
 // it reconstructs the exact realized constituents and bonds owned by this type.
