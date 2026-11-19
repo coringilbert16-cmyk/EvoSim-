@@ -1026,11 +1026,24 @@ impl Simulation {
             finish_profile_phase("tick_prelude");
         }
 
-        // Environmental medium transport is intentionally disconnected.
-        // No ambient-medium transport or movement acts on active materials.
+        // Ambient transport runs before environmental reaction discovery. Flow is
+        // allowed to change contacts and interrupt activation naturally; chemistry
+        // rules are not relaxed to guarantee any particular reaction.
+        crate::environment_flow::transport_field_with_singleton_center_velocity_reuse::<
+            REUSE_SINGLETON_CENTER_VELOCITY,
+        >(
+            &mut self.environment.field,
+            &self.environment.catalog,
+            self.environment.width,
+            self.environment.height,
+        );
+        if profile_tick {
+            finish_profile_phase("ambient_transport");
+        }
 
-        // Resonance movement runs before reaction discovery, so chemistry sees
-        // the updated environmental contacts.
+
+        // Resonance movement runs after ambient transport and before reaction
+        // discovery, so chemistry sees the updated environmental contacts.
         crate::environmental_movement::apply_environmental_resonance_movement(
             &mut self.environment.field,
             &self.environment.catalog,
