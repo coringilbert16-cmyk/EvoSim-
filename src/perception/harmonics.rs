@@ -2436,10 +2436,8 @@ fn environmental_movement_spatial_candidate_pairs(
         // every component on the other emitter within the frequency tolerance.
         // The L1/L2 bound therefore uses the maximum component count as a
         // conservative multiplicity factor. strength_bound includes mass scale.
-        let maximum_pair_strength = 2.0
-            * MAX_SPECTRAL_COMPONENTS as f64
-            * emitters[a].strength_bound
-            * maximum_strength_bound;
+        let maximum_pair_strength =
+            2.0 * MAX_SPECTRAL_COMPONENTS as f64 * emitters[a].strength_bound * maximum_strength_bound;
         if !maximum_pair_strength.is_finite() {
             return None;
         }
