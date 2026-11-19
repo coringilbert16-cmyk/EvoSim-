@@ -1012,7 +1012,7 @@ mod tests {
         catalog: &[crate::resources::BaseResource],
         placement: Placement,
     ) -> crate::structure::StructuralUnit {
-        let mut water = crate::structure::StructuralUnit::new("LegacyFluidFixture", placement);
+        let mut fluid = crate::structure::StructuralUnit::new("LegacyFluidFixture", placement);
         let half_width = 1.0;
         let half_height = 0.125;
         let shape = crate::resources::Shape {
@@ -1029,10 +1029,10 @@ mod tests {
             },
         };
         assert!(
-            water.realize_fluid_geometry(shape, catalog),
+            fluid.realize_fluid_geometry(shape, catalog),
             "test fluid must have an explicit, area-conserving fluid boundary"
         );
-        water
+        fluid
     }
 
     #[test]
@@ -1048,15 +1048,15 @@ mod tests {
                 rotation_radians: 0.0,
             },
         );
-        let water = fluid_unit.shape(&environment.catalog).expect("legacy fluid shape");
-        let boundary_vertex = match &water.form {
+        let fluid = fluid_unit.shape(&environment.catalog).expect("legacy fluid shape");
+        let boundary_vertex = match &fluid.form {
             crate::resources::Form::Fluid {
                 boundary: Some(vertices),
                 ..
             } => vertices
                 .get(1)
                 .copied()
-                .expect("water boundary should have a right-side vertex"),
+                .expect("fluid boundary should have a right-side vertex"),
             _ => panic!("test fluid must retain its realized boundary geometry"),
         };
         let carbon = crate::physical_material::PhysicalMaterial::realized(
@@ -1075,7 +1075,7 @@ mod tests {
             .expect("carbon geometry");
         let fluid_part = PlacedMaterialPart {
             part_index: 0,
-            form: water.form.clone(),
+            form: fluid.form.clone(),
             placement: fluid_unit.placement,
         };
         assert!(crate::material_geometry::placed_forms_boundary_contact(
