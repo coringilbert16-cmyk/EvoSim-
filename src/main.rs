@@ -7,6 +7,8 @@ mod developmental_blueprint;
 mod environment;
 #[path = "simulation/environment_chemistry_experiment.rs"]
 mod environment_chemistry_experiment;
+#[path = "simulation/environment_flow.rs"]
+mod environment_flow;
 #[path = "materials/environmental_materials.rs"]
 mod environmental_materials;
 #[path = "simulation/environment_movement.rs"]
