@@ -73,35 +73,43 @@ jobs:
             --seed 42 \
             --diagnostics environmental-chemistry-smoke.jsonl \
             --diagnostic-interval 100
-      # PR #377: matched 60-second seed-42 comparison of spatial discovery
-      # against exhaustive enumeration using the same source-support predicate.
-      - name: Profile optimized resonance movement on the standard 60-second workload
+      # PR #377: compare the revision immediately before the emitter/sweep
+      # refinements with the revised implementation under identical conditions.
+      - name: Prepare matched before-and-after worktrees
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
-        timeout-minutes: 4
         env:
-          EVOSIM_PROFILE_MOVEMENT_CANDIDATES: '1'
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics movement-candidate.jsonl --diagnostic-interval 100 2>&1 | tee movement-candidate.log
-      - name: Profile exhaustive resonance movement reference on the same workload
+          git worktree add --detach /tmp/evosim-before-refinements 51f8b0681a2c49e30a30633e4e83b63e02c06290
+          git worktree add --detach /tmp/evosim-after-refinements "$HEAD_SHA"
+          mkdir -p movement-benchmark
+      - name: Profile pre-refinement movement on the standard 60-second workload
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
-        timeout-minutes: 4
+        timeout-minutes: 5
         env:
-          EVOSIM_PROFILE_MOVEMENT_REFERENCE: '1'
-          EVOSIM_REFERENCE_MOVEMENT_ALL_PAIRS: '1'
+          EVOSIM_PROFILE_MOVEMENT: '1'
+          CARGO_TARGET_DIR: ${{ runner.temp }}/evosim-movement-benchmark-target
         run: |
           set -euo pipefail
-          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics movement-reference.jsonl --diagnostic-interval 100 2>&1 | tee movement-reference.log
-      - name: Upload PR #377 movement comparison
-        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 377 && hashFiles('movement-candidate.log') != '' && hashFiles('movement-reference.log') != ''
+          cd /tmp/evosim-before-refinements
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics "$GITHUB_WORKSPACE/movement-benchmark/before.jsonl" --diagnostic-interval 100 2>&1 | tee "$GITHUB_WORKSPACE/movement-benchmark/before.log"
+      - name: Profile refined movement on the same 60-second workload
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 377
+        timeout-minutes: 5
+        env:
+          EVOSIM_PROFILE_MOVEMENT: '1'
+          CARGO_TARGET_DIR: ${{ runner.temp }}/evosim-movement-benchmark-target
+        run: |
+          set -euo pipefail
+          cd /tmp/evosim-after-refinements
+          cargo run --locked -- --headless --environment-chemistry-experiment --seconds 60 --seed 42 --diagnostics "$GITHUB_WORKSPACE/movement-benchmark/after.jsonl" --diagnostic-interval 100 2>&1 | tee "$GITHUB_WORKSPACE/movement-benchmark/after.log"
+      - name: Upload PR #377 before-and-after movement comparison
+        if: always() && github.event_name == 'pull_request' && github.event.pull_request.number == 377 && hashFiles('movement-benchmark/before.log') != '' && hashFiles('movement-benchmark/after.log') != ''
         uses: actions/upload-artifact@v4
         with:
-          name: resonance-movement-comparison
-          path: |
-            movement-candidate.log
-            movement-reference.log
-            movement-candidate.jsonl
-            movement-reference.jsonl
+          name: resonance-movement-before-after
+          path: movement-benchmark/
           if-no-files-found: error
           retention-days: 30
 
