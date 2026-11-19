@@ -21,6 +21,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 - Run, pause, step once, or advance 100 ticks.
 - Select and inspect individual molecules by tapping them; inspect stable identity, constituent composition, exact coordinates, rotations, and bond graph.
 - Zoom with the mouse wheel/pinch and pan by dragging the field.
+- Export or import a reproducible experiment setup, including world dimensions, seed, flow/source settings, and all tick-zero element/molecule placements. Import rebuilds the initial state through the engine's normal geometry and validation path.
 
 Molecule placement is validated by the existing `PhysicalMaterial::realized` geometry and bond rules. Invalid geometry is rejected; the lab does not invent bond endpoints or force a reaction.
 
@@ -35,6 +36,8 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 - `POST /api/step` — step a bounded number of ticks. Body: `{"count":1}`.
 - `POST /api/flow` — change the live ambient field. Body: `{"direction_degrees":90,"speed":2,"strength":0.5,"vortex_strength":1}`. Direction is measured clockwise from right; speed is a multiplier, strength blends uniform flow (0) with the S-shaped field (1), and vortex strength ranges from 0 to 2.
 - `POST /api/sources` — enable or disable the established external sources. Body: `{"world_tone_enabled":true,"hotspot_enabled":true}`. Source capture is determined by existing physical material response and is settled through the authoritative energy ledger; enabling a source does not grant energy directly.
+- `GET /api/experiment` — export the reproducible tick-zero setup document.
+- `POST /api/experiment` — validate and load a setup document. Invalid dimensions, placements, material names, or molecular geometry reject the entire import without replacing the current experiment.
 
 ## Scope of this milestone
 
