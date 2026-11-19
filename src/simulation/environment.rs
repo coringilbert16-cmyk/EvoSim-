@@ -111,6 +111,20 @@ impl From<PhysicalMaterial> for FieldDeposit {
     }
 }
 
+fn material_contains_only_active_elements(
+    material: &Material,
+    catalog: &[crate::resources::BaseResource],
+) -> bool {
+    material.parts.iter().all(|(name, _)| {
+        catalog
+            .iter()
+            .find(|resource| resource.name == *name)
+            .is_some_and(|resource| {
+                resource.physical_state == crate::resources::PhysicalState::Rigid
+            })
+    })
+}
+
 impl ActiveMaterialField {
     pub fn new(world_width: f64, world_height: f64, cell_size: f64) -> Self {
         let cell_size = cell_size.max(1.0);
@@ -1312,6 +1326,7 @@ impl ActiveMaterialField {
                 crate::property_profile::Metric::EnvironmentMutationValidationSite,
                 || material.is_valid_for_catalog(catalog),
             )
+            || !material_contains_only_active_elements(&material, catalog)
         {
             return false;
         }
@@ -1375,6 +1390,7 @@ impl ActiveMaterialField {
                 crate::property_profile::Metric::EnvironmentMutationValidationSite,
                 || material.material.is_valid_for_catalog(catalog),
             )
+            || !material_contains_only_active_elements(&material.material, catalog)
         {
             return false;
         }
@@ -1415,6 +1431,7 @@ impl ActiveMaterialField {
                     crate::property_profile::Metric::EnvironmentMutationValidationSite,
                     || material.material.is_valid_for_catalog(catalog),
                 )
+                || !material_contains_only_active_elements(&material.material, catalog)
             {
                 return false;
             }
