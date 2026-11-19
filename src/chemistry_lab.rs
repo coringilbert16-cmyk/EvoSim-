@@ -672,6 +672,41 @@ mod tests {
     }
 
     #[test]
+    fn laboratory_flow_can_be_changed_while_running_and_is_reflected_in_state() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        laboratory.simulation.running = true;
+        let flow = LaboratoryFlowConfig {
+            direction_degrees: 90.0,
+            speed: 2.5,
+            strength: 0.0,
+            vortex_strength: 0.0,
+        };
+        laboratory
+            .configure_flow(flow)
+            .expect("valid live flow change");
+        assert_eq!(laboratory.snapshot().flow, flow);
+        assert_eq!(
+            laboratory.simulation.flow_field,
+            flow.engine_config()
+        );
+        assert!(laboratory.simulation.running);
+    }
+
+    #[test]
+    fn laboratory_rejects_invalid_flow_without_changing_the_current_field() {
+        let mut laboratory =
+            Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
+        let original = laboratory.config.flow;
+        let invalid = LaboratoryFlowConfig {
+            speed: f64::NAN,
+            ..original
+        };
+        assert!(laboratory.configure_flow(invalid).is_err());
+        assert_eq!(laboratory.config.flow, original);
+    }
+
+    #[test]
     fn laboratory_steps_the_shared_simulation_without_creating_an_organism() {
         let mut laboratory =
             Laboratory::new(LaboratoryConfig::default()).expect("valid lab config");
