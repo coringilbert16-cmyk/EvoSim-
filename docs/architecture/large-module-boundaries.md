@@ -4,7 +4,7 @@ Audit checkpoint: PR #203 head `455439db2cda9a22b6e969d78221b4cee0d67ddb` (2026-
 
 ## Findings
 
-Three implementation files are materially larger than the repository's current source-size guideline and contain multiple cohesive responsibility groups. File size alone does not justify extraction; boundaries must preserve ownership, visibility, test coverage, and runtime behavior.
+At the time of this audit, three implementation files exceeded the repository's then-current source-size guideline. That guideline has since been retired; the responsibility observations below remain useful, but file size is not a current architectural concern. File size alone does not justify extraction; boundaries must preserve ownership, visibility, test coverage, and runtime behavior.
 
 ### `src/geometry/source_exposure.rs` (~162 KB)
 
@@ -54,7 +54,7 @@ For each future split:
 1. Audit imports, callers, visibility, tests, and module cycles at the current head.
 2. Select one responsibility group and document the exact symbols that move.
 3. Move code without semantic edits; retain or relocate its tests in the same change.
-4. Run formatting, the architecture/source-size guards, focused tests, then the full suite and Clippy.
+4. Run formatting, architecture guards, focused tests, then the full suite and Clippy.
 5. Compare failures by test identity against the accepted baseline; never count a baseline failure as a new regression.
 6. Review the diff for accidental formatting or unrelated changes before beginning another extraction.
 
