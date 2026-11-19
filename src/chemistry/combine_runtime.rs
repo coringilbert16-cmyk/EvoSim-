@@ -1553,8 +1553,18 @@ pub(crate) fn combine_specific_pair(
     )
 }
 
-pub(crate) fn can_combine(organism: &Organism, _environment: &Environment) -> bool {
-    if organism.active_transformation_id.is_some() {
+pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> bool {
+    if organism.active_transformation_id.is_some()
+        || organism.structure.units.iter().any(|unit| {
+            !material_contains_only_rigid_resources(&unit.material, &environment.catalog)
+        })
+        || organism
+            .stored_material
+            .first_material()
+            .is_some_and(|material| {
+                !material_contains_only_rigid_resources(material, &environment.catalog)
+            })
+    {
         return false;
     }
 
@@ -1795,6 +1805,18 @@ pub(crate) fn try_combine(
     ledger: &mut EnergyLedger,
     developmental: Option<DevelopmentalContext<'_>>,
 ) -> Option<CombineAttempt> {
+    if organism.structure.units.iter().any(|unit| {
+        !material_contains_only_rigid_resources(&unit.material, &environment.catalog)
+    }) || organism
+        .stored_material
+        .first_material()
+        .is_some_and(|material| {
+            !material_contains_only_rigid_resources(material, &environment.catalog)
+        })
+    {
+        return None;
+    }
+
     if !organism.structure.units.is_empty() && !organism.stored_material.is_empty() {
         if let Some(attempt) =
             try_combine_stored_unit(organism, environment, cache, ledger, developmental)
