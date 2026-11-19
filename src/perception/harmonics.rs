@@ -2743,7 +2743,7 @@ pub(crate) fn environmental_resonance_displacements(
     let discovery_ns = discovery_started.elapsed().as_nanos();
 
     let pair_started = std::time::Instant::now();
-    let pair_forces = if worker_count > 1 && reference_pairs.len() >= 4_096 {
+    let pair_forces = if !profile && worker_count > 1 && reference_pairs.len() >= 4_096 {
         environmental_movement_parallel_spatial_candidate_pair_forces(
             &emitters,
             &reference_pairs,
