@@ -2087,23 +2087,15 @@ fn environmental_material_source_radius(
 fn environmental_movement_emitter(
     physical: &crate::physical_material::PhysicalMaterial,
     catalog: &[crate::resources::BaseResource],
-    baseline_mass: f64,
+    baselines: ResourceBaselines,
     tick: u64,
 ) -> Option<EnvironmentalMovementEmitter> {
     let (x, y, _, spectrum, material_mass) =
-        environmental_material_resonance_with_baselines(
-            physical,
-            catalog,
-            tick,
-            ResourceBaselines {
-                mass: baseline_mass,
-                ..ResourceBaselines::from_catalog(catalog)
-            },
-        )?;
+        environmental_material_resonance_with_baselines(physical, catalog, tick, baselines)?;
     let source_radius = environmental_material_source_radius(physical, catalog, x, y)?;
     let (phase_components, phase_component_count) =
         environmental_movement_phase_components(&spectrum)?;
-    let mass_scale = environmental_mass_scale(material_mass, baseline_mass);
+    let mass_scale = environmental_mass_scale(material_mass, baselines.mass);
     (mass_scale.is_finite() && mass_scale >= 0.0).then_some(EnvironmentalMovementEmitter {
         x,
         y,
@@ -2169,9 +2161,9 @@ pub(crate) fn resonance_pair_push_pull(
     if std::ptr::eq(a, b) {
         return Some(((0.0, 0.0), (0.0, 0.0)));
     }
-    let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
-    let a = environmental_movement_emitter(a, catalog, baseline_mass, tick)?;
-    let b = environmental_movement_emitter(b, catalog, baseline_mass, tick)?;
+    let baselines = ResourceBaselines::from_catalog(catalog);
+    let a = environmental_movement_emitter(a, catalog, baselines, tick)?;
+    let b = environmental_movement_emitter(b, catalog, baselines, tick)?;
     let dx = b.x - a.x;
     let dy = b.y - a.y;
     let distance = dx.hypot(dy);
@@ -2684,10 +2676,10 @@ pub(crate) fn environmental_resonance_displacements(
     let total_started = std::time::Instant::now();
 
     let emitter_started = std::time::Instant::now();
-    let baseline_mass = ResourceBaselines::from_catalog(catalog).mass;
+    let baselines = ResourceBaselines::from_catalog(catalog);
     let emitters = materials
         .iter()
-        .map(|material| environmental_movement_emitter(material, catalog, baseline_mass, tick))
+        .map(|material| environmental_movement_emitter(material, catalog, baselines, tick))
         .collect::<Option<Vec<_>>>()?;
     let emitter_ns = emitter_started.elapsed().as_nanos();
 
