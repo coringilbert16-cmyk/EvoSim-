@@ -1,0 +1,36 @@
+# EvoSim Chemical Laboratory
+
+The Chemical Laboratory is a separate application backed by the same Rust engine as the main EvoSim simulator. It starts with an empty environment and no organism; it does not introduce a second chemistry implementation or laboratory-only reaction rules.
+
+## Run
+
+```bash
+cargo run --bin chemistry-lab
+```
+
+The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind another socket address, for example `0.0.0.0:3030`.
+
+## Current workbench controls
+
+- Set world width and height, then reset the experiment.
+- Set the deterministic random seed for a reset.
+- Place catalog elements by selecting an element and tapping the field.
+- Place a realized molecule by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
+- Run, pause, step once, or advance 100 ticks.
+- Inspect material identities, constituent coordinates, and recorded internal bonds.
+
+Molecule placement is validated by the existing `PhysicalMaterial::realized` geometry and bond rules. Invalid geometry is rejected; the lab does not invent bond endpoints or force a reaction.
+
+## HTTP API
+
+- `GET /api/state` — current tick, environment dimensions, material inventory, identities, placements, and bond graph.
+- `POST /api/reset` — replace the experiment with a new empty environment. Body: `{"width":100,"height":100,"cell_size":5,"ticks_per_second":20,"seed":42}`.
+- `POST /api/place` — place one catalog element. Body: `{"resource":"Carbon","x":20,"y":30}`.
+- `POST /api/molecule` — place one physically realized molecular graph. Body: `{"parts":["Carbon","Oxygen"],"bonds":[[0,1]],"placements":[[45,50,0],[47,50,0]]}`. The sample coordinates are illustrative; geometry must satisfy the engine's actual bond validation.
+- `POST /api/run` — begin real-time stepping at the configured tick rate.
+- `POST /api/pause` — pause real-time stepping.
+- `POST /api/step` — step a bounded number of ticks. Body: `{"count":1}`.
+
+## Scope of this milestone
+
+This is the laboratory foundation, not the complete experimental workbench. The next milestones add configurable flow and energy sources, richer material/bond rendering and inspection, removal and editing operations, persistent experiment files, and reaction/lineage/energy diagnostics. Current energy sources are disabled by default so the empty starting state does not receive an unaccounted energy grant.
