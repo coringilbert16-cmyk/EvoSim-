@@ -1562,7 +1562,7 @@ pub(crate) fn can_combine(organism: &Organism, environment: &Environment) -> boo
             .stored_material
             .first_material()
             .is_some_and(|material| {
-                !material_contains_only_rigid_resources(material, &environment.catalog)
+                !material_contains_only_rigid_resources(&material, &environment.catalog)
             })
     {
         return false;
