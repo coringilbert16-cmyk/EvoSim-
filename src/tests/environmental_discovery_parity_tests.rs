@@ -25,7 +25,7 @@ fn eligible_combine_contacts(
             &field.cells[right.locator.cell_index].physical_materials[right.locator.material_index];
 
         let mut structure = OrganismStructure::new();
-        let Some(indices_a) = crate::material_restoration::restore_material(
+        let Some(indices_a) = crate::physical_material::restore_material(
             &mut structure,
             source_a,
             Placement {
@@ -37,7 +37,7 @@ fn eligible_combine_contacts(
         ) else {
             continue;
         };
-        let Some(indices_b) = crate::material_restoration::restore_material(
+        let Some(indices_b) = crate::physical_material::restore_material(
             &mut structure,
             source_b,
             Placement {
