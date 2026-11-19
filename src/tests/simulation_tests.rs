@@ -881,7 +881,6 @@ mod integration_tests {
                     resource.physical_state == crate::resources::PhysicalState::Rigid
                 })
         }));
-
     }
 
     #[test]
