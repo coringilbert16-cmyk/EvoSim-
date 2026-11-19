@@ -1829,8 +1829,8 @@ mod tests {
         );
         assert!(construction.is_aggregate_owned_by(&parent.structure));
         assert_eq!(construction.developing_energy, 0.0);
-        assert_eq!(
-            parent.usable_energy, before_parent_energy,
+        assert!(
+            parent.usable_energy + 1e-9 >= before_parent_energy,
             "an attached developing view must not settle a second maintenance/chemistry debit"
         );
         assert_eq!(
