@@ -1818,11 +1818,8 @@ mod tests {
     /// triple among the six active resources. Runtime displacement uses recorded
     /// bond allocations and settles the signed change on the complete trial graph.
     #[test]
-    fn non_water_displacement_preflight_matrix_classifies_all_ordered_triples() {
-        let catalog = default_catalog()
-            .into_iter()
-            .filter(|resource| resource.name != "Water")
-            .collect::<Vec<_>>();
+    fn six_element_displacement_preflight_matrix_classifies_all_ordered_triples() {
+        let catalog = default_catalog();
         let baseline = catalog_reactivity_baseline();
         let mut triples = 0usize;
         let mut valid_preflights = 0usize;
