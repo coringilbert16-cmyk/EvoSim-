@@ -67,3 +67,10 @@ There is no fixed source-file size ceiling. The former sub-30 KB target was a te
 - Keep tests with the implementation when they rely on private internals; otherwise group contract tests by behavior.
 - Do not perform a mechanical mass-merge. Audit callers, imports, visibility, tests, and cyclic dependencies; integrate one coherent area at a time with behavior-preserving diffs.
 - File size may be monitored as a review signal, but it is never an acceptance threshold or a reason by itself to split or merge.
+
+
+## Completed source integrations
+
+- [x] Moved periodic movement-direction selection into `src/perception/movement.rs`, beside the movement behavior that owns its scoring and direction-selection policy. Updated the expulsion caller to use the movement subsystem and removed the standalone `src/perception/movement_direction.rs` module. This was a behavior-preserving consolidation; existing movement tests remain colocated in the movement implementation.
+
+This is the first example of the revised policy, not a target-size rule. Further integrations should be selected from dependency and responsibility audits, not from a list of the smallest files.
