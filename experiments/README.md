@@ -60,7 +60,7 @@ seed-42 chemistry smoke baseline and focused correctness/feasibility tests.
 
 ## Time-resolved complexity analysis
 
-The aggregate workflow also runs `tools/temporal_chemical_complexity_analyzer.py` over the per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed structural fingerprints, cumulative fingerprint diversity, repeated product identities, active-product size and topology, reaction-pattern diversity, and strongly connected components in the cumulative family-transition graph. The analysis is offline and does not change simulation behavior.
+The aggregate workflow also runs `tools/temporal_chemical_complexity_analyzer.py` over the per-seed chemistry reports. It divides each run into twelve equal-duration windows and reports newly observed compound fingerprints, cumulative compound diversity, repeated compound products, all reaction-created identities, active-compound size and topology, reaction-pattern novelty, and strongly connected components in the cumulative compound-to-compound family-transition graph. Unbonded single-resource fragments are counted as reaction-created identities but excluded from compound novelty and active-compound complexity. The analysis is offline and does not change simulation behavior.
 
 Structural fingerprints use iterative Weisfeiler-Lehman refinement with composition and degree summaries. They are scalable descriptors, not exact graph-isomorphism proofs. A directed cycle in the family-transition graph is a candidate network cycle, not evidence by itself of autocatalysis, energy coupling, or self-sustainability. The report includes these limitations explicitly.
 
