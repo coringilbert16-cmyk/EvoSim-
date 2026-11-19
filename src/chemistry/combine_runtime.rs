@@ -1884,7 +1884,7 @@ mod fluid_coalescence_transaction_tests {
     use crate::capillary_geometry::{
         CircularArcBoundary, FluidBoundaryPiece, MultiContactFluidBoundary,
     };
-    use crate::resources::{default_catalog, Form, Material, Shape};
+    use crate::resources::{Form, Material, Shape};
     use crate::structure::{
         Bond, BondEndpoint, ConnectionEndpoint, OrganismStructure, Placement, StructuralUnit,
     };
