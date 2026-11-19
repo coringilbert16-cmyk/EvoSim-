@@ -917,6 +917,12 @@ impl Simulation {
     }
 
     pub(crate) fn step(&mut self) {
+        self.step_with_transport_reuse::<true>();
+    }
+
+    pub(crate) fn step_with_transport_reuse<const REUSE_SINGLETON_CENTER_VELOCITY: bool>(
+        &mut self,
+    ) {
         self.environmental_chemistry_diagnostics =
             crate::state::EnvironmentalChemistryTickDiagnostics {
                 tick: self.tick,
