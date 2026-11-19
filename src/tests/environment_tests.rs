@@ -829,3 +829,39 @@ fn environmental_material_translation_rejects_overlap_and_boundary_crossing_atom
     assert!(!field.move_physical_material_by_identity(identity, -20.0, 0.0, &catalog));
     assert_eq!(field.cells, before);
 }
+
+#[test]
+fn active_field_rejects_legacy_fluid_resources_and_materials() {
+    let catalog = crate::resources::legacy_fluid_test_catalog();
+    let mut field = ActiveMaterialField::new(100.0, 100.0, 25.0);
+    let destination = field.index_for_position(10.0, 10.0).unwrap();
+
+    assert!(!field.deposit_at_index(
+        destination,
+        Material::free_base("LegacyFluidFixture", 1.0),
+        &catalog,
+    ));
+
+    let fluid = PhysicalMaterial::realized(
+        Material::free_base("LegacyFluidFixture", 1.0),
+        vec![crate::structure::Placement {
+            x: 10.0,
+            y: 10.0,
+            rotation_radians: 0.0,
+        }],
+        &catalog,
+    )
+    .expect("legacy fluid fixture should remain geometrically realizable");
+    assert!(!field.deposit_physical_at_index(
+        destination,
+        fluid.clone(),
+        &catalog,
+    ));
+    assert!(!field.deposit_physical_batch(
+        vec![(10.0, 10.0, fluid)],
+        &catalog,
+    ));
+    assert!(field.cells.iter().all(|cell| {
+        cell.materials.is_empty() && cell.physical_materials.is_empty()
+    }));
+}
