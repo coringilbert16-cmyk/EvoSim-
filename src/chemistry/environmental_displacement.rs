@@ -632,7 +632,7 @@ fn restore_displacement_source(
         return None;
     }
     let mut structure = OrganismStructure::new();
-    let indices = crate::material_restoration::restore_material(
+    let indices = crate::physical_material::restore_material(
         &mut structure,
         source,
         crate::structure::Placement {
@@ -1055,7 +1055,7 @@ pub(crate) fn accumulate_environmental_with_resonance(
                     let source_b =
                         environment.field.cells[cell_b].physical_materials[material_b].clone();
                     let mut combined = source_structure.clone();
-                    let Some(indices_b) = crate::material_restoration::restore_material(
+                    let Some(indices_b) = crate::physical_material::restore_material(
                         &mut combined,
                         &source_b,
                         crate::structure::Placement {
@@ -1503,7 +1503,7 @@ pub(crate) fn resolve_environmental_diagnosed(
     else {
         return Err("source_material_restoration_failed");
     };
-    let Some(indices_b) = crate::material_restoration::restore_material(
+    let Some(indices_b) = crate::physical_material::restore_material(
         &mut combined,
         &operation.source_b,
         crate::structure::Placement {
@@ -2511,7 +2511,7 @@ mod tests {
         let (mut combined, indices_a) =
             restore_displacement_source(&reactants[0], &simulation.environment)
                 .expect("bonded field source should restore");
-        let indices_b = crate::material_restoration::restore_material(
+        let indices_b = crate::physical_material::restore_material(
             &mut combined,
             &reactants[1],
             crate::structure::Placement {
@@ -2859,7 +2859,7 @@ mod tests {
             assert!(connection.bond_energy.is_finite() && connection.bond_energy > 0.0);
 
             let mut restored = OrganismStructure::new();
-            crate::material_restoration::restore_material(
+            crate::physical_material::restore_material(
                 &mut restored,
                 &molecule,
                 origin,
