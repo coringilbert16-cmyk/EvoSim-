@@ -1483,11 +1483,11 @@ fn material_aura_receptions_with_geometry(
                 0,
             )?;
             let perimeter = crate::source_exposure::visible_material_perimeter_from_point(
-                (source_x, source_y),
+                (source_surface.x, source_surface.y),
                 receiver_bodies,
                 0,
             )?;
-            (source_x, source_y, perimeter)
+            (source_surface.x, source_surface.y, perimeter)
         };
 
     // Blocker silhouettes and boundary intersections split straight and
