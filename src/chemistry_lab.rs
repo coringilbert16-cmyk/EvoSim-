@@ -373,6 +373,49 @@ async fn molecule(
     Ok(Json(serde_json::json!({ "identity": identity })))
 }
 
+async fn start(
+    State(state): State<LabState>,
+) -> Json<LaboratorySnapshot> {
+    let should_start = {
+        let mut laboratory = state.0.lock().await;
+        if laboratory.simulation.running {
+            false
+        } else {
+            laboratory.simulation.running = true;
+            true
+        }
+    };
+    if should_start {
+        let shared = state.0.clone();
+        tokio::spawn(async move {
+            loop {
+                let interval = {
+                    let laboratory = shared.lock().await;
+                    if !laboratory.simulation.running {
+                        break;
+                    }
+                    std::time::Duration::from_secs_f64(
+                        1.0 / laboratory.config.ticks_per_second,
+                    )
+                };
+                tokio::time::sleep(interval).await;
+                let mut laboratory = shared.lock().await;
+                if !laboratory.simulation.running {
+                    break;
+                }
+                laboratory.simulation.step();
+            }
+        });
+    }
+    Json(state.0.lock().await.snapshot())
+}
+
+async fn pause(State(state): State<LabState>) -> Json<LaboratorySnapshot> {
+    let mut laboratory = state.0.lock().await;
+    laboratory.simulation.running = false;
+    Json(laboratory.snapshot())
+}
+
 async fn step(
     State(state): State<LabState>,
     Json(request): Json<StepRequest>,
@@ -394,6 +437,8 @@ pub async fn run() {
         .route("/api/reset", post(reset))
         .route("/api/place", post(place))
         .route("/api/molecule", post(molecule))
+        .route("/api/run", post(start))
+        .route("/api/pause", post(pause))
         .route("/api/step", post(step))
         .with_state(state);
     let address = std::env::var("EVOSIM_LAB_ADDRESS")
@@ -411,7 +456,7 @@ pub async fn run() {
 
 const INDEX_HTML: &str = r#"<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EvoSim Chemical Laboratory</title><style>
 :root{color-scheme:dark;font:15px system-ui;background:#081b2a;color:#e7f3fa}body{margin:0;display:grid;grid-template-rows:auto 1fr;min-height:100vh}header{padding:12px 18px;background:#102b40;border-bottom:1px solid #28506a;display:flex;gap:18px;align-items:center;flex-wrap:wrap}main{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:0}canvas{width:100%;height:100%;background:#0b3147;display:block;touch-action:manipulation}aside{padding:16px;background:#102638;border-left:1px solid #28506a}button,select,input,textarea{background:#173c54;color:#e7f3fa;border:1px solid #46718a;border-radius:5px;padding:8px}#status{color:#9ec8df}#materials{font-size:13px;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}textarea{width:95%}@media(max-width:650px){main{grid-template-columns:1fr;grid-template-rows:minmax(55vh,1fr) auto}aside{border-left:0;border-top:1px solid #28506a}}
-</style></head><body><header><strong>EvoSim · Chemical Laboratory</strong><button id="step">Step ×1</button><button id="step100">Step ×100</button><label>Width <input id="width" type="number" value="100" min="1" max="10000" style="width:65px"></label><label>Height <input id="height" type="number" value="100" min="1" max="10000" style="width:65px"></label><label>Seed <input id="seed" type="number" value="42" style="width:75px"></label><button id="reset">Reset world</button><label>Element <select id="element"></select></label><span id="status">Loading…</span></header><main><canvas id="world"></canvas><aside><h3>Experiment state</h3><div id="summary"></div><h3>Physical materials</h3><div id="materials"></div><h3>Place molecule (JSON)</h3><textarea id="molecule" rows="5">{"parts":["Carbon","Oxygen"],"bonds":[[0,1]],"placements":[[45,50,0],[47,50,0]]}</textarea><button id="placeMolecule">Place molecule</button><p>Tap the field to place the selected element. Molecules use the exact constituent coordinates in the editor above.</p></aside></main><script>
+</style></head><body><header><strong>EvoSim · Chemical Laboratory</strong><button id="run">Run</button><button id="pause">Pause</button><button id="step">Step ×1</button><button id="step100">Step ×100</button><label>Width <input id="width" type="number" value="100" min="1" max="10000" style="width:65px"></label><label>Height <input id="height" type="number" value="100" min="1" max="10000" style="width:65px"></label><label>Seed <input id="seed" type="number" value="42" style="width:75px"></label><button id="reset">Reset world</button><label>Element <select id="element"></select></label><span id="status">Loading…</span></header><main><canvas id="world"></canvas><aside><h3>Experiment state</h3><div id="summary"></div><h3>Physical materials</h3><div id="materials"></div><h3>Place molecule (JSON)</h3><textarea id="molecule" rows="5">{"parts":["Carbon","Oxygen"],"bonds":[[0,1]],"placements":[[45,50,0],[47,50,0]]}</textarea><button id="placeMolecule">Place molecule</button><p>Tap the field to place the selected element. Molecules use the exact constituent coordinates in the editor above.</p></aside></main><script>
 const canvas=document.querySelector('#world'),ctx=canvas.getContext('2d');let state=null;const palette={Carbon:'#9aa5ae',Oxygen:'#e04444',Hydrogen:'#dce8ee',Water:'#328ed0',Nitrogen:'#9b7045',Phosphorus:'#e3a34c',Sulfur:'#e2d34b'};
 function resize(){const r=canvas.getBoundingClientRect(),d=devicePixelRatio||1;canvas.width=r.width*d;canvas.height=r.height*d;draw()}
 function draw(){if(!state)return;const sx=canvas.width/state.width,sy=canvas.height/state.height;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.strokeStyle='#17465d';ctx.lineWidth=1;for(let x=0;x<=state.width;x+=10){ctx.beginPath();ctx.moveTo(x*sx,0);ctx.lineTo(x*sx,canvas.height);ctx.stroke()}for(let y=0;y<=state.height;y+=10){ctx.beginPath();ctx.moveTo(0,y*sy);ctx.lineTo(canvas.width,y*sy);ctx.stroke()}for(const m of state.materials){ctx.strokeStyle='#a7d8ed';ctx.lineWidth=Math.max(1,Math.min(sx,sy)*.12);for(const bond of m.bonds){const a=m.placements[bond[0]],b=m.placements[bond[1]];if(!a||!b)continue;ctx.beginPath();ctx.moveTo(a[0]*sx,a[1]*sy);ctx.lineTo(b[0]*sx,b[1]*sy);ctx.stroke()}for(let i=0;i<m.parts.length;i++){const p=m.placements[i];if(!p)continue;ctx.beginPath();ctx.arc(p[0]*sx,p[1]*sy,Math.max(3,Math.min(sx,sy)*.65),0,Math.PI*2);ctx.fillStyle=palette[m.parts[i][0]]||'#ddd';ctx.fill();ctx.strokeStyle='#071521';ctx.stroke()}}}
@@ -419,6 +464,8 @@ async function refresh(){state=await(await fetch('/api/state')).json();document.
 canvas.addEventListener('click',async e=>{const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*state.width,y=(e.clientY-r.top)/r.height*state.height;const response=await fetch('/api/place',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({resource:document.querySelector('#element').value,x,y})});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()});
 document.querySelector('#placeMolecule').onclick=async()=>{try{const payload=JSON.parse(document.querySelector('#molecule').value);const response=await fetch('/api/molecule',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()}catch(error){document.querySelector('#status').textContent='Invalid molecule JSON: '+error.message}};
 document.querySelector('#reset').onclick=async()=>{const payload={width:Number(document.querySelector('#width').value),height:Number(document.querySelector('#height').value),cell_size:5,ticks_per_second:20,seed:Number(document.querySelector('#seed').value)};const response=await fetch('/api/reset',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});if(!response.ok){document.querySelector('#status').textContent=await response.text();return}await refresh()};
+document.querySelector('#run').onclick=async()=>{await fetch('/api/run',{method:'POST'});await refresh()};
+document.querySelector('#pause').onclick=async()=>{await fetch('/api/pause',{method:'POST'});await refresh()};
 document.querySelector('#step').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":1}'});await refresh()};
 document.querySelector('#step100').onclick=async()=>{await fetch('/api/step',{method:'POST',headers:{'content-type':'application/json'},body:'{"count":100}'});await refresh()};
 (async()=>{const names=['Carbon','Oxygen','Hydrogen','Water','Nitrogen','Phosphorus','Sulfur'];document.querySelector('#element').innerHTML=names.map(n=>'<option>'+n+'</option>').join('');await refresh();new ResizeObserver(resize).observe(canvas)})();
