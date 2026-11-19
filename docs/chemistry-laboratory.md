@@ -14,6 +14,7 @@ The default address is `http://127.0.0.1:3030`. Set `EVOSIM_LAB_ADDRESS` to bind
 
 - Set world width and height, then reset the experiment.
 - Set the deterministic random seed for a reset.
+- Configure ambient flow direction, speed, S-field strength, and local vortex intensity; changes apply immediately while paused or running, and the renderer displays the configured vector field.
 - Place catalog elements by selecting an element and tapping the field (initial placement is restricted to paused tick zero).
 - Place a realized molecule at paused tick zero by submitting JSON with constituent resource names, bond index pairs, and one exact `[x, y, rotation_radians]` placement per constituent.
 - Run, pause, step once, or advance 100 ticks.
@@ -26,10 +27,11 @@ Molecule placement is validated by the existing `PhysicalMaterial::realized` geo
 - `GET /api/state` — current tick, environment dimensions, material inventory, identities, placements, and bond graph.
 - `POST /api/reset` — replace the experiment with a new empty environment. Body: `{"width":100,"height":100,"cell_size":5,"ticks_per_second":20,"seed":42}`.
 - `POST /api/place` — place one catalog element. Body: `{"resource":"Carbon","x":20,"y":30}`.
-- `POST /api/molecule` — place one physically realized molecular graph. Body: `{"parts":["Carbon","Oxygen"],"bonds":[[0,1]],"placements":[[45,50,0],[47,50,0]]}`. The sample coordinates are illustrative; geometry must satisfy the engine's actual bond validation.
+- `POST /api/molecule` — place one physically realized molecular graph. Body: `{"parts":["Carbon","Oxygen"],"bonds":[[0,1]],"placements":[[45,50,0],[47,50,0]]}`. The sample coordinates are illustrative; geometry must satisfy the engine's actual bond validation. Flow defaults preserve the existing S-shaped field exactly.
 - `POST /api/run` — begin real-time stepping at the configured tick rate.
 - `POST /api/pause` — pause real-time stepping.
 - `POST /api/step` — step a bounded number of ticks. Body: `{"count":1}`.
+- `POST /api/flow` — change the live ambient field. Body: `{"direction_degrees":90,"speed":2,"strength":0.5,"vortex_strength":1}`. Direction is measured clockwise from right; speed is a multiplier, strength blends uniform flow (0) with the S-shaped field (1), and vortex strength ranges from 0 to 2.
 
 ## Scope of this milestone
 
