@@ -1027,7 +1027,7 @@ impl Simulation {
         }
 
         // Environmental medium transport is intentionally disconnected.
-        // No ambient current or water-mediated movement acts on active materials.
+        // No ambient-medium transport or movement acts on active materials.
 
         // Resonance movement runs before reaction discovery, so chemistry sees
         // the updated environmental contacts.
