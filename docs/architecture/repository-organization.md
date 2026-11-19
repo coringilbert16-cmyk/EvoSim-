@@ -74,3 +74,5 @@ There is no fixed source-file size ceiling. The former sub-30 KB target was a te
 - [x] Moved periodic movement-direction selection into `src/perception/movement.rs`, beside the movement behavior that owns its scoring and direction-selection policy. Updated the expulsion caller to use the movement subsystem and removed the standalone `src/perception/movement_direction.rs` module. This was a behavior-preserving consolidation; existing movement tests remain colocated in the movement implementation.
 
 This is the first example of the revised policy, not a target-size rule. Further integrations should be selected from dependency and responsibility audits, not from a list of the smallest files.
+
+- [x] Integrated `material_restoration.rs` into `src/materials/physical_material.rs`. Restoration is an operation on an already-realized `PhysicalMaterial`: it restores that value's authoritative constituent arrangement and pre-existing internal bonds. All callers now use `crate::physical_material::restore_material`; the standalone file and root module declaration were removed. This does not change COMBINE, energy settlement, or material-transfer semantics.
